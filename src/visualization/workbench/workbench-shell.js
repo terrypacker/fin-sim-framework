@@ -301,9 +301,21 @@ export class WorkbenchShell {
 
   // ── Tab event handlers ──────────────────────────────────────────────────────
 
+  /**
+   * A tab became active — by a click, or programmatically via `activatePlugin()`.
+   *
+   * The publish is what lets the Help panel follow the workbench with no user action
+   * (design 108 §8). It is announced from HERE rather than from `TabGroup` so that both
+   * routes into activation report it: `activatePlugin()` is how a drill-down opens the
+   * journal report, and a panel that follows only hand-clicked tabs would fall silently
+   * out of step exactly when the user was sent somewhere.
+   */
   _onActivate(tab, pane) {
     this.layout.setActive(pane, tab);
     this._tabGroups.get(pane)?.setActive(tab);
+
+    this.runtime.activeTab = { tab, pane };
+    this.runtime.bus.publish({ type: WB_EVENTS.TAB_ACTIVATED, tab, pane });
   }
 
   _onClose(tab, pane) {
@@ -376,8 +388,7 @@ export class WorkbenchShell {
     for (const pane of this._activePanes) {
       const cfg = this.layout.layout[pane];
       if (cfg?.tabs.includes(id)) {
-        this.layout.setActive(pane, id);
-        this._tabGroups.get(pane)?.setActive(id);
+        this._onActivate(id, pane);
         return true;
       }
     }

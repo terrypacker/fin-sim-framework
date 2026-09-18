@@ -1,6 +1,7 @@
 # 108 — The help system: generated reference, stamped prose, two surfaces
 
-**Status:** proposed, and **fully specified bar one seam** — §12 records the seven decisions
+**Status:** phases 1-5 BUILT; phase 6 (retiring the drifted copies) remains. Originally
+proposed, and **fully specified bar one seam** — §12 records the seven decisions
 taken with the user on 17 Sep 2026, and §13 holds the single remaining question (Q4, which
 phase 4 settles against the real topic list rather than in advance). This design touches no
 reducer, no handler and no scenario param, so it moves no golden. Its whole cost is tooling,
@@ -260,8 +261,9 @@ A 33rd plugin, `help`, default pane `right`.
 | | a new `FINANCE_PLUGINS` entry with no topic fails |
 | | a script under `scripts/` with no `parseFlags` spec fails once D6 has landed |
 | `cli-migration.test.mjs` ✅ | every entry point under `scripts/` parses `--help` and exits 0; an unknown flag exits 2 rather than running the default |
-| `help-plugin.test.mjs` (viz) | `TAB_ACTIVATED` renders the matching topic; a tab with no topic renders the fallback, not a throw |
+| `help-plugin.test.mjs` (viz) ✅ | `TAB_ACTIVATED` renders the matching topic; a tab with no topic renders the fallback, not a throw |
 | | the `?` affordance renders the full description for the longest param in the schema without truncation |
+| | and: every registered panel resolves to a topic; activating Help does not clobber what Help was asked to show; following a tab does not push history; a missing index reports how to build one rather than rendering empty |
 
 ## 11. Build order
 
@@ -311,9 +313,24 @@ Original plan: 32 panel topics, then 21 group concepts. The gate flips to
 failing per-kind as each kind completes, so `panel` can be enforced while `concept` is still
 being written. Q4 is settled here, against the real list.
 
-**Phase 5 — the in-app panel.** `TAB_ACTIVATED`, the `help` plugin, the `?` affordance,
-`marked` pre-rendering. Last, because it is the only phase that cannot start until the prose
-it renders exists.
+**Phase 5 — the in-app panel. ✅ DONE 2026-09-18.** A 33rd plugin, `help`, in the right
+pane. `WorkbenchShell._onActivate()` publishes `WB_EVENTS.TAB_ACTIVATED` and the panel
+renders that tab's topic with no user action; `activatePlugin()` was routed through the same
+method so a programmatic activation (a drill-down) is announced too. The `?` beside a param
+label and on each group header publishes `WB_EVENTS.HELP_OPEN`, and the 1,901-character
+description renders in full — asserted character for character against the schema, because a
+panel that also truncated would be the same bug with more markup. `marked` is a
+devDependency: `collectTopics()` pre-renders every topic into `topics[]`, so the browser
+bundle carries no markdown renderer (checked in `dist/`). Additions the real tree demanded:
+`topics[]` in the index and a Topics section in `REFERENCE.md` (frontmatter only — a topic
+may not be restated, so there is nothing to duplicate); `--kind topics` in `npm run help`,
+with a param or panel hit now naming the topic that explains it, which §7 asked for and
+phase 1 could not do; a vite dev plugin that regenerates the index JSON when a topic
+changes; and the toolbar's `#btnHelp`, wired to something for the first time — it had been
+listening to nothing since before the workbench existed.
+
+The gate's own test had hard-coded `32 panel`, and the 33rd panel broke it. That literal was
+a small drifting index of exactly the §2.1 kind, so it now counts `FINANCE_PLUGINS`.
 
 **Phase 6 — retire the copies.** Replace the README plugin table and design-doc list with
 pointers; fold `public/help/main.htm` into the `event-sourcing` concept.

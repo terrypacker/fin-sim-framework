@@ -35,10 +35,10 @@ import { join }                     from 'node:path';
 import { parseFlags }     from '../lib/cli.mjs';
 import { buildHelpIndex, ROOT } from '../lib/help-index.mjs';
 
-const KINDS = ['all', 'params', 'panels', 'actions', 'tools', 'state'];
+const KINDS = ['all', 'params', 'panels', 'actions', 'tools', 'state', 'topics'];
 
 const opts = parseFlags(process.argv.slice(2), {
-  usage: 'npm run help -- --find <text> [--kind params|panels|actions|tools|state] [--limit n]',
+  usage: 'npm run help -- --find <text> [--kind params|panels|actions|tools|state|topics] [--limit n]',
   find:  { type: 'string',                     help: 'text to search for (case-insensitive)' },
   kind:  { type: 'string', default: 'all', choices: KINDS, help: 'restrict to one surface' },
   limit: { type: 'number', default: 25,        help: 'max matches per surface' },
@@ -59,6 +59,10 @@ const needle = opts.find.toLowerCase();
 const hit    = (...fields) => fields.some(f => String(f ?? '').toLowerCase().includes(needle));
 const want   = (kind) => opts.kind === 'all' || opts.kind === kind;
 
+/** The topics citing a thing, as `title (path)` — tier 2 reached from a tier-1 hit. */
+const citedBy = (pred) => (index.topics ?? []).filter(pred)
+  .map(t => `${t.title} (${t.path})`).join(', ');
+
 /** Print a surface's matches, or say plainly that it has none. */
 function section(kind, title, matches, render) {
   if (!want(kind)) return 0;
@@ -78,11 +82,19 @@ total += section('params', 'PARAMETERS',
       + `  ${p.group ?? ''} · via ${p.contributedBy}${sweep ? ` · sweep: ${sweep}` : ''}`);
     if (p.options?.length) console.log(`      one of: ${p.options.join(', ')}`);
     if (!opts.brief && p.description) console.log(`      ${p.description}`);
+    // The tier-2 half of the answer (design 108 §7): what to read when the description
+    // says what the param DOES and the question was why you would move it.
+    const cites = citedBy(t => t.params.includes(p.key));
+    if (cites) console.log(`      explained in: ${cites}`);
   });
 
 total += section('panels', 'PANELS',
   index.panels.filter(p => hit(p.id, p.title, p.component)),
-  (p) => console.log(`  ${p.id}  "${p.title}"  pane: ${p.layoutPane ?? '—'}\n      ${p.source ?? ''}`));
+  (p) => {
+    console.log(`  ${p.id}  "${p.title}"  pane: ${p.layoutPane ?? '—'}\n      ${p.source ?? ''}`);
+    const cites = citedBy(t => t.panels.includes(p.id));
+    if (cites) console.log(`      explained in: ${cites}`);
+  });
 
 total += section('tools', 'TOOLS',
   index.tools.filter(t => hit(t.path, t.purpose, t.npmScript)),
@@ -96,6 +108,16 @@ total += section('actions', 'ACTION TYPES',
   index.actions.filter(a => hit(a.type, Object.keys(a.fields).join(' '), a.declaredBy.join(' '))),
   (a) => console.log(`  ${a.type}  {${Object.entries(a.fields).map(([n, k]) => `${n}: ${k}`).join(', ')}}`
     + `\n      declared by ${a.declaredBy.join(', ')}`));
+
+total += section('topics', 'TOPICS',
+  (index.topics ?? []).filter(t => hit(t.id, t.title, t.kind, t.path)),
+  (t) => {
+    console.log(`  ${t.path}  "${t.title}"  [${t.kind}, ${t.words} words]`);
+    const cites = [t.panels.length && `${t.panels.length} panels`,
+      t.params.length && `${t.params.length} params`,
+      t.design.length && `design ${t.design.join(', ')}`].filter(Boolean).join(' · ');
+    if (!opts.brief && cites) console.log(`      cites: ${cites}`);
+  });
 
 total += section('state', 'STATE FIELDS',
   index.state.filter(s => hit(s.path, s.kind)),

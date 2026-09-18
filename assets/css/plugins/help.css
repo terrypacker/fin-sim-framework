@@ -1,0 +1,160 @@
+/* ── HELP PANEL (design 108 §8) ──
+   The in-app half of the help system: a topic reader that follows the active tab, plus
+   the param card the `?` beside a parameter opens. `.help-topic` styles HTML produced by
+   `marked` at BUILD time, so the selectors here are plain markdown output — h1..h3, p,
+   ul, code, blockquote — and nothing the panel itself emits. */
+
+.help-plugin {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  font-size: 12px;
+}
+
+.help-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.help-back {
+  padding: 0 6px;
+  line-height: 1.6;
+}
+.help-back:disabled { opacity: 0.35; cursor: default; }
+
+.help-crumb {
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  font-size: 0.72em;
+  letter-spacing: 0.05em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.help-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 10px 16px;
+  line-height: 1.55;
+  color: var(--text-primary);
+}
+
+.help-empty,
+.help-meta { color: var(--text-muted); }
+.help-meta { font-size: 0.92em; }
+
+/* ── Rendered topic markdown ── */
+
+.help-topic > :first-child { margin-top: 0; }
+.help-topic h1,
+.help-topic h2,
+.help-topic h3 {
+  font-size: 0.95em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  margin: 14px 0 4px;
+}
+.help-topic p  { margin: 0 0 9px; }
+.help-topic ul,
+.help-topic ol { margin: 0 0 9px; padding-left: 18px; }
+.help-topic li { margin-bottom: 3px; }
+.help-topic strong { color: var(--text-primary); font-weight: 600; }
+.help-topic blockquote {
+  margin: 0 0 9px;
+  padding-left: 9px;
+  border-left: 2px solid var(--border);
+  color: var(--text-muted);
+}
+.help-topic table { border-collapse: collapse; margin: 0 0 9px; }
+.help-topic th,
+.help-topic td { border: 1px solid var(--border); padding: 2px 6px; text-align: left; }
+
+.help-body code {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.92em;
+  background: var(--bg-inset, var(--bg-panel2));
+  border-radius: 2px;
+  padding: 0 3px;
+}
+.help-body pre {
+  overflow-x: auto;
+  padding: 6px 8px;
+  background: var(--bg-inset, var(--bg-panel2));
+  border-radius: 3px;
+}
+.help-body pre code { background: none; padding: 0; }
+
+.help-body a { color: var(--accent); cursor: pointer; text-decoration: none; }
+.help-body a:hover { text-decoration: underline; }
+
+/* ── The param card — the fix for the truncated tooltip ── */
+
+.help-param-title { margin: 0 0 2px; font-size: 1.05em; color: var(--text-primary); }
+.help-param-key   { margin: 0 0 8px; color: var(--text-muted); font-size: 0.92em; }
+.help-param-desc  { margin: 0 0 10px; white-space: pre-wrap; }
+
+.help-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0 0 10px;
+}
+.help-facts dt {
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-size: 0.72em;
+  letter-spacing: 0.04em;
+  align-self: center;
+}
+.help-facts dd { margin: 0; overflow-wrap: anywhere; }
+
+.help-param-list { margin: 4px 0 0; padding-left: 16px; }
+.help-param-list li { margin-bottom: 2px; }
+
+/* ── What a topic cites, from its frontmatter ── */
+
+.help-cites {
+  margin-top: 14px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.help-cites-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+.help-cites-row > span {
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-size: 0.72em;
+  letter-spacing: 0.04em;
+  flex: 0 0 auto;
+}
+
+/* ── The `?` affordance, in the Parameters panel (scenario-tab-view) ── */
+
+.param-help-btn {
+  margin-left: 4px;
+  padding: 0 4px;
+  font-size: 10px;
+  line-height: 1;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.param-help-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+/* On a group header the button sits at the far right, away from the fold caret. */
+.param-help-btn--group { margin-left: auto; }

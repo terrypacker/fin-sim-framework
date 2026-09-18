@@ -37,6 +37,7 @@ import { SpendingPlugin }          from './spending-plugin.js';
 import { LiquidityPoolsPlugin }    from './liquidity-pools-plugin.js';
 import { PaychequePlugin }         from './paycheque-plugin.js';
 import { MpcCockpitPlugin }        from './mpc-cockpit-plugin.js';
+import { HelpPlugin }              from './help-plugin.js';
 
 export { ScenarioPlugin, ParametersPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin,
          TimelinePlugin, ChartPlugin, StatePanelPlugin, WatchlistPlugin, DashboardPlugin,
@@ -45,7 +46,7 @@ export { ScenarioPlugin, ParametersPlugin, ConfigGraphPlugin, ConfigListPlugin, 
          ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin,
          JournalReportPlugin, ScenarioComparePlugin,
          DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, HoldingsPlugin,
-         AllocationPlugin, SecuritiesPlugin, SpendingPlugin, LiquidityPoolsPlugin, PaychequePlugin, MpcCockpitPlugin };
+         AllocationPlugin, SecuritiesPlugin, SpendingPlugin, LiquidityPoolsPlugin, PaychequePlugin, MpcCockpitPlugin, HelpPlugin };
 
 /** All finance plugin descriptors — pass directly to WorkbenchShell `plugins` option. */
 export const FINANCE_PLUGINS = [
@@ -81,6 +82,9 @@ export const FINANCE_PLUGINS = [
   { id: 'mpc-cockpit', title: 'MPC Cockpit',   component: MpcCockpitPlugin  },
   { id: 'dashboard',    title: 'Dashboard',     component: DashboardPlugin   },
   { id: 'perf',         title: 'Performance',   component: PerfPlugin        },
+  // Last in the list, first in the right pane's tab order: the Help panel follows the
+  // active tab (design 108 §8), so it is useful from boot rather than after a setup step.
+  { id: 'help',         title: 'Help',          component: HelpPlugin        },
 ];
 
 /** Default production layout — matches the pre-workbench left/center/right arrangement. */
@@ -95,7 +99,7 @@ export const FINANCE_DEFAULT_LAYOUT = {
     active: 'config-graph',
   },
   right: {
-    tabs: ['state-panel', 'watchlist', 'action-detail', 'mc-runs', 'opt-runs', 'exec-history', 'lineage'],
+    tabs: ['state-panel', 'watchlist', 'help', 'action-detail', 'mc-runs', 'opt-runs', 'exec-history', 'lineage'],
     active: 'state-panel',
   },
   bottom: {

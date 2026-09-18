@@ -22,6 +22,14 @@ export const WB_EVENTS = {
   // Any panel asks for a field's history modal (design 101 W-D7). Payload: { path }.
   // The State panel owns the modal; WorkbenchApp routes this to it.
   FIELD_HISTORY_OPEN:         'workbench.field.history.open',
+  // A tab became the active one in its pane (design 108 §8). Payload: { tab, pane }.
+  // The Help panel follows this, which is what makes help ambient rather than something
+  // you have to go and ask for.
+  TAB_ACTIVATED:              'workbench.tab.activated',
+  // Someone asked for help on ONE thing rather than on the active tab (design 108 §8) —
+  // today the `?` next to a param label or a param group header. Payload is exactly one
+  // of { param } | { group } | { topic }.
+  HELP_OPEN:                  'workbench.help.open',
 };
 
 /**
@@ -38,6 +46,12 @@ export class WorkbenchRuntime {
     this.selection  = null;     // { type, id, data } | null
     this.sim        = { running: false, time: 0 };
     this.breakpoints = new Set();
+
+    // The tab most recently activated, as { tab, pane } — the shell's TAB_ACTIVATED
+    // publish also records it here. A panel that mounts LATER (the Help panel is opened
+    // by hand, long after boot) has no event to replay, and a help panel whose first
+    // impression is "nothing here" teaches people not to open it again.
+    this.activeTab = null;
 
     this._simAdapter = null;    // set by WorkbenchShell after scenario is ready
     this._paneHosts  = new Map();   // see paneHost()

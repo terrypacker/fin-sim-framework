@@ -281,6 +281,26 @@ export class WorkbenchApp extends BaseComponent {
       });
     });
 
+    // The `?` beside a param label or group header → the Help panel (design 108 §8).
+    // Wired here rather than in ScenarioTabPresenter because the presenter holds the
+    // SERVICE bus, and this is a workbench-UI event; the view stays ignorant of both.
+    // Activate BEFORE publishing: the panel subscribes on its first mount, so a publish
+    // to a never-mounted Help tab would be delivered to nobody. Activating first also
+    // means the TAB_ACTIVATED it triggers (which the panel ignores for its own id)
+    // cannot land after the HELP_OPEN and overwrite it.
+    this._scenarioTabView.onOpenHelp = (ref) => {
+      this._wbShell.activatePlugin('help');
+      this._wbShell.runtime.bus.publish({ type: WB_EVENTS.HELP_OPEN, ...ref });
+    };
+
+    // The toolbar's `? HELP` button, which until now was wired to nothing at all — it
+    // has sat in the markup since before the workbench, pointing at the five-line
+    // `public/help/main.htm` that nothing ever referenced (design 108 §2). It opens the
+    // Help panel on the active tab.
+    document.getElementById('btnHelp')?.addEventListener('click', () => {
+      this._wbShell.activatePlugin('help');
+    });
+
     // Bind scenario tab view now that ScenarioPlugin DOM exists
     this._scenarioTabView.bind();
 

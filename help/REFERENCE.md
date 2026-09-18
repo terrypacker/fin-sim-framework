@@ -6,9 +6,10 @@ this file by hand creates exactly the second copy that design 108 §2.1 exists t
 
 This is tier 1 of the help system (design 108): the complete, exact surface, with no
 prose about it. For *why* a mechanic exists and when to reach for it, follow the design
-doc named in the relevant parameter description, or read `help/` once tier 2 lands.
+doc named in the relevant parameter description, or read the tier-2 topic under `help/`
+that cites it — the last section of this file lists every one.
 
-221 parameters · 32 panels · 173 action types · 79 tools · 266 state field types
+221 parameters · 33 panels · 173 action types · 79 tools · 266 state field types · 58 topics
 
 ---
 
@@ -526,7 +527,7 @@ scenario's own schema), which is where to go to change it.
 
 ---
 
-## Workbench panels (32)
+## Workbench panels (33)
 
 From `FINANCE_PLUGINS`. **Pane** is where the default layout opens the tab.
 Every `category` is empty because these descriptors are plain object literals that
@@ -567,6 +568,7 @@ true statement about the registry, not a gap in this file.
 | `mpc-cockpit` | MPC Cockpit | center | `src/visualization/workbench/plugins/finance/mpc-cockpit-plugin.js` |
 | `dashboard` | Dashboard | bottom | `src/visualization/workbench/plugins/finance/dashboard-plugin.js` |
 | `perf` | Performance | bottom | `src/visualization/workbench/plugins/finance/perf-plugin.js` |
+| `help` | Help | right | `src/visualization/workbench/plugins/finance/help-plugin.js` |
 
 ---
 
@@ -1565,4 +1567,75 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `yieldCurve.*.*.spread` | rate |
 | `yieldCurve.*.*.tenor` | decimal |
 | `yieldCurveLevelDev.*` | rate |
+
+---
+
+## Topics (58)
+
+Tier 2 — the hand-written prose under `help/`, listed by what it CITES rather than
+summarised. A topic may not restate a param description (design 108 §3), so there is
+nothing here to duplicate: the row points at the file, and the file says the thing
+tier 1 cannot. **Cites** is the frontmatter, which is also what the gate checks and
+what the in-app panel keys on.
+
+| topic | kind | words | cites |
+|---|---|---|---|
+| [Action Detail](panels/action-detail.md) | panel | 172 | 1 panel · design 91 |
+| [Allocation](panels/allocation.md) | panel | 185 | 1 panel · design 82 |
+| [Allocation and Rebalancing](concepts/allocation-and-rebalancing.md) | concept | 266 | 2 panels · 14 params · design 61, 82 |
+| [AU Tax and PAYG Instalments](concepts/au-tax.md) | concept | 236 | 2 panels · 6 params · design 107 |
+| [Behavioral Strategies](concepts/behavioral-strategies.md) | concept | 232 | 2 panels · 5 params · design 29 |
+| [Bond Ladders](concepts/bond-ladders.md) | concept | 237 | 1 panel · 7 params · design 66 |
+| [Chart](panels/chart.md) | panel | 199 | 1 panel |
+| [Graph](panels/config-graph.md) | panel | 197 | 1 panel |
+| [Nodes](panels/config-list.md) | panel | 173 | 1 panel |
+| [Contributions and Payroll](concepts/contributions-and-payroll.md) | concept | 242 | 1 panel · 13 params · design 95 |
+| [Cost Basis and Company Equity](concepts/cost-basis-and-equity.md) | concept | 247 | 2 panels · 4 params · design 94, 72 |
+| [Field × Action](panels/cross-action-query.md) | panel | 196 | 1 panel |
+| [Cross-Border Residency](concepts/cross-border-residency.md) | concept | 238 | 2 panels · 4 params · design 36, 52 |
+| [Dashboard](panels/dashboard.md) | panel | 183 | 1 panel |
+| [Decision Graph](panels/dg-config.md) | panel | 168 | 1 panel · design 30 |
+| [DG Results](panels/dg-results.md) | panel | 162 | 1 panel · design 30 |
+| [Drawdown Order](concepts/drawdown-order.md) | concept | 272 | 2 panels · 22 params · design 44, 65, 97 |
+| [Early Withdrawal](concepts/early-withdrawal.md) | concept | 228 | 1 panel · 8 params |
+| [Economic Shocks](concepts/economic-shocks.md) | concept | 242 | 2 panels · 3 params |
+| [Event Sourcing](concepts/event-sourcing.md) | concept | 381 | 3 panels · design 2, 16, 91 |
+| [Node History](panels/exec-history.md) | panel | 191 | 1 panel |
+| [Funding and Instalments](concepts/funding-and-instalments.md) | concept | 248 | 2 panels · 3 params · design 107 |
+| [FX](concepts/fx.md) | concept | 257 | 2 panels · 5 params · design 47, 87 |
+| [Help](panels/help.md) | panel | 223 | 1 panel · design 108 |
+| [Holdings](panels/holdings.md) | panel | 188 | 1 panel · design 82 |
+| [Inflation](concepts/inflation.md) | concept | 261 | 2 panels · 18 params · design 103 |
+| [Edit](panels/inspector.md) | panel | 182 | 1 panel |
+| [Interest Rates and the Yield Curve](concepts/interest-rates.md) | concept | 250 | 2 panels · 23 params · design 56, 67 |
+| [Journal Report](panels/journal-report.md) | panel | 193 | 1 panel · design 16 |
+| [Lineage](panels/lineage.md) | panel | 196 | 1 panel · design 30 |
+| [Liquidity Pools](concepts/liquidity-pools.md) | concept | 259 | 1 panel · 6 params · design 97 |
+| [Monte Carlo](panels/mc-config.md) | panel | 194 | 1 panel · design 100 |
+| [MC Results](panels/mc-results.md) | panel | 202 | 1 panel · design 100, 89 |
+| [MC Runs](panels/mc-runs.md) | panel | 196 | 1 panel · design 100 |
+| [Mortality and Survivorship](concepts/mortality.md) | concept | 253 | 2 panels · 5 params |
+| [MPC Cockpit](panels/mpc-cockpit.md) | panel | 200 | 1 panel · design 39, 80 |
+| [Optimize](panels/opt-config.md) | panel | 186 | 1 panel |
+| [OPT Results](panels/opt-results.md) | panel | 186 | 1 panel |
+| [OPT Runs](panels/opt-runs.md) | panel | 139 | 1 panel |
+| [Objectives and After-Tax Value](concepts/optimizer-objectives.md) | concept | 258 | 3 panels · 7 params · design 40 |
+| [Parameters](panels/parameters.md) | panel | 188 | 1 panel · design 98 |
+| [Paycheque](panels/paycheque.md) | panel | 197 | 1 panel · design 95, 107 |
+| [Performance](panels/perf.md) | panel | 201 | 1 panel · design 78 |
+| [Liquidity Pools](panels/pools.md) | panel | 217 | 1 panel · design 97 |
+| [Randomness and Seeds](concepts/randomness-and-seeds.md) | concept | 251 | 2 panels · 2 params · design 74 |
+| [Return Assumptions](concepts/return-assumptions.md) | concept | 266 | 2 panels · 13 params · design 99, 106 |
+| [Roth Conversions](concepts/roth-conversions.md) | concept | 242 | 2 panels · 12 params · design 29 |
+| [Scenario](panels/scenario.md) | panel | 201 | 1 panel |
+| [Scenario Compare](panels/scenario-compare.md) | panel | 205 | 1 panel |
+| [Securities](panels/securities.md) | panel | 188 | 1 panel · design 94 |
+| [Spending](panels/spending.md) | panel | 209 | 1 panel · design 89 |
+| [The Spending Rule](concepts/spending-rule.md) | concept | 296 | 1 panel · 17 params · design 89 |
+| [State](panels/state-panel.md) | panel | 181 | 1 panel |
+| [Stochastic Return Paths](concepts/stochastic-return-paths.md) | concept | 268 | 2 panels · 15 params · design 74, 90, 102 |
+| [Tax Harvesting and Asset Location](concepts/tax-harvesting.md) | concept | 235 | 2 panels · 3 params · design 29, 94 |
+| [Timeline](panels/timeline.md) | panel | 203 | 1 panel |
+| [US Tax](concepts/us-tax.md) | concept | 244 | 1 panel · 9 params · design 71 |
+| [Watchlist](panels/watchlist.md) | panel | 209 | 1 panel · design 101 |
 

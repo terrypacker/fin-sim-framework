@@ -3,7 +3,8 @@ Use the README.md file in the root of this project to understand the architectur
 Use `help/REFERENCE.md` for the complete parameter, panel, journal-action, CLI-tool and
 state-field surface. It is generated from the code by `npm run help:build`, so it is exact
 and never stale — read it instead of grepping `src/` to find a parameter or a tool.
-Narrow searches: `npm run help -- --find <text> [--kind params|panels|actions|tools|state]`.
+Narrow searches: `npm run help -- --find <text> [--kind params|panels|actions|tools|state|topics]`;
+a param or panel hit also names the `help/` topic that explains it.
 Never hand-edit it; change the `description` in the toolset and regenerate.
 
 Hand-written explanations live in `help/*.md` as stamped topics (design 108 §5-6). If you

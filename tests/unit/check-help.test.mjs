@@ -32,6 +32,8 @@ import { fileURLToPath }                 from 'node:url';
 import {
   parseFrontmatter, readTopics, checkTopics, stampFor, sharedRun, countWords, BUDGETS,
 } from '../../scripts/lib/help-topics.mjs';
+import { FINANCE_PLUGINS }
+  from '../../src/visualization/workbench/plugins/finance/finance-plugin-package.js';
 
 /* ─────────────────────────────── the fixture ─────────────────────────────── */
 
@@ -332,7 +334,10 @@ describe('check-help — the committed help/ tree', () => {
     const gate = execFileSync(process.execPath,
       [fileURLToPath(new URL('../../scripts/dev/check-help.mjs', import.meta.url)),
        '--quiet', '--enforce', 'panel,concept'], { encoding: 'utf8' });
-    assert.match(gate, /32 panel/);
+    // Counted from the registry, never written down: a literal here would be its own
+    // little drifting index, and it did drift — the design-108 Help panel took the count
+    // from 32 to 33 and this line failed for being a copy rather than for being wrong.
+    assert.match(gate, new RegExp(`${FINANCE_PLUGINS.length} panel`));
     assert.match(gate, /0 structural · 0 stamp/);
     assert.match(gate, /0 params uncited/,
       'Q4 settled on per-mechanic topics covering the whole param surface');
