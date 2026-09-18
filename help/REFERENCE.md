@@ -574,7 +574,7 @@ true statement about the registry, not a gap in this file.
 
 Command-line entry points under `scripts/`. **Purpose** is harvested from each script's
 docblock, not re-authored here. Arguments are listed only for scripts on the declarative
-`parseFlags` spec — 3 of 64 entry points today;
+`parseFlags` spec — 7 of 64 entry points today;
 design 108 D6 migrates the rest, after which a missing spec is a gate failure.
 6 scripts carry no docblock naming themselves and show `(undocumented)`.
 
@@ -749,8 +749,21 @@ design 108 D6 migrates the rest, after which a missing spec is a gate failure.
 
 - **`scripts/scenario/audit-scenario.mjs`**
   Headless scenario *auditor* — a QA/sanity-check companion to run-scenario.mjs
+    - `<file>` (string, required) — scenario export to audit
+    - `--accounts` (list, default ``) — per-action balance-change ledgers for these state keys ("*" = all)
+    - `--to` (string) — stop at this YYYY-MM-DD instead of the scenario's simEnd
+    - `--first` (flag) — audit only the first scenario if the file holds several
+    - `--json` (flag) — emit machine-readable JSON (e.g. to save a regression baseline)
 - **`scripts/scenario/diff-scenarios.mjs`** — `npm run diff`
   Answers "where and when do these two scenarios diverge?" — the question run-scenario.mjs cannot, because it only compares *final* summary rows and account balances
+    - `<files>` (list, repeatable) — exactly two scenario exports
+    - `--at` (string) — point-diff date YYYY-MM-DD (default: simEnd)
+    - `--track` (flag) — annual delta series instead of a point diff
+    - `--from` (number) — track start year (default: simStart's year)
+    - `--fields` (list) — track these dotted state paths (default: net worth, net liquidity, cumulative taxes, cumulative consumption)
+    - `--top` (number, default `25`) — point mode: show N largest deltas
+    - `--eps` (number, default `1`) — ignore deltas smaller than this
+    - `--json` (flag) — machine-readable output
 - **`scripts/scenario/import-quicken.mjs`** — `npm run import:quicken`
   a Quicken portfolio export becomes a scenario's accounts
     - `--csv` (string) — Quicken portfolio export, WITH lots (required)
@@ -765,8 +778,22 @@ design 108 D6 migrates the rest, after which a missing spec is a gate failure.
     - `--force` (flag) — write even though errors were reported
 - **`scripts/scenario/run-scenario.mjs`** — `npm run scenario`
   Headless scenario runner + comparator
+    - `<files>` (list, repeatable) — scenario export(s) to run; two or more are compared side-by-side
+    - `--to` (string) — stop at this YYYY-MM-DD instead of the scenario's simEnd
+    - `--params` (flag) — also table the input params that differ across scenarios
+    - `--first` (flag) — run only the first scenario in each file (default: all)
+    - `--verbose` (flag) — show the simulation's own console output (e.g. OUT_OF_FUNDS)
+    - `--json` (flag) — emit machine-readable JSON instead of tables
+    - `--fast` (flag) — drop journal/snapshot/bus telemetry (~12x); disables sim.journal readers
 - **`scripts/scenario/sweep-scenario.mjs`** — `npm run sweep`
   Vary ONE scenario param across a range, run the scenario once per value, and table the terminal metrics
+    - `<file>` (string, required) — scenario export to sweep
+    - `--param` (string) — param to vary (must exist in the scenario's params)
+    - `--range` (string) — inclusive numeric range, a:b
+    - `--step` (number, default `1`) — range step
+    - `--values` (list) — explicit values instead of --range
+    - `--to` (string) — stop at this YYYY-MM-DD instead of simEnd
+    - `--json` (flag) — machine-readable output
 
 ### scripts/tax/
 

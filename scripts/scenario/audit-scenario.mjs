@@ -55,39 +55,19 @@ import { ServiceRegistry } from '../../src/services/service-registry.js';
 import { BaseScenario }    from '../../src/scenarios/base-scenario.js';
 import { ScenarioLoader }  from '../../src/scenarios/scenario-loader.js';
 import { computeNetWorth } from '../../src/finance/derived-metrics/net-worth.js';
+import { parseFlags }      from '../lib/cli.mjs';
 
 // ─── CLI parsing ──────────────────────────────────────────────────────────────
 
-function parseArgs(argv) {
-  const opts = { file: null, accounts: [], to: null, first: false, json: false };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    switch (a) {
-      case '--accounts': opts.accounts = (argv[++i] ?? '').split(',').map(s => s.trim()).filter(Boolean); break;
-      case '--to':       opts.to = argv[++i]; break;
-      case '--first':    opts.first = true; break;
-      case '--json':     opts.json = true; break;
-      case '-h': case '--help': opts.help = true; break;
-      default:
-        if (a.startsWith('-')) { console.error(`Unknown option: ${a}`); process.exit(2); }
-        else if (!opts.file) opts.file = a;
-        else { console.error(`Unexpected extra argument: ${a}`); process.exit(2); }
-    }
-  }
-  return opts;
-}
-
-const HELP = `audit-scenario — headless scenario auditor / sanity checker
-
-Usage:
-  node scripts/audit-scenario.mjs <file.json> [options]
-
-Options:
-  --accounts <k1,k2>  Per-action balance-change ledgers for these state keys ("*" = all).
-  --to <YYYY-MM-DD>   Stop at this date instead of the scenario's simEnd.
-  --first             Only audit the first scenario if the file holds several.
-  --json              Emit machine-readable JSON (e.g. to save a regression baseline).
-  -h, --help          Show this help.`;
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/scenario/audit-scenario.mjs <file.json> [options]\n\n'
+       + 'audit-scenario — headless scenario auditor / sanity checker.',
+  positional: { name: 'file', type: 'string', required: true, help: 'scenario export to audit' },
+  accounts: { type: 'list', default: [], help: 'per-action balance-change ledgers for these state keys ("*" = all)' },
+  to:       { type: 'string', help: "stop at this YYYY-MM-DD instead of the scenario's simEnd" },
+  first:    { type: 'flag',   help: 'audit only the first scenario if the file holds several' },
+  json:     { type: 'flag',   help: 'emit machine-readable JSON (e.g. to save a regression baseline)' },
+});
 
 // ─── Running ────────────────────────────────────────────────────────────────
 
@@ -284,12 +264,6 @@ function printAudit(a) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 function main() {
-  const opts = parseArgs(process.argv.slice(2));
-  if (opts.help || !opts.file) {
-    console.log(HELP);
-    process.exit(opts.help ? 0 : 1);
-  }
-
   let parsed;
   try {
     parsed = JSON.parse(readFileSync(opts.file, 'utf8'));

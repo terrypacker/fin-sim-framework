@@ -64,6 +64,7 @@ import { ServiceRegistry }     from '../../src/services/service-registry.js';
 import { BaseScenario }        from '../../src/scenarios/base-scenario.js';
 import { ScenarioLoader }      from '../../src/scenarios/scenario-loader.js';
 import { computeNetLiquidity } from '../../src/finance/derived-metrics/net-liquidity.js';
+import { parseFlags }          from '../lib/cli.mjs';
 
 const DEFAULT_TRACK_FIELDS = [
   'metrics.netWorth',
@@ -74,42 +75,18 @@ const DEFAULT_TRACK_FIELDS = [
 
 // ─── CLI parsing ──────────────────────────────────────────────────────────────
 
-function parseArgs(argv) {
-  const opts = { files: [], at: null, track: false, from: null, fields: null, top: 25, eps: 1, json: false };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    switch (a) {
-      case '--at':     opts.at = argv[++i]; break;
-      case '--track':  opts.track = true; break;
-      case '--from':   opts.from = Number(argv[++i]); break;
-      case '--fields': opts.fields = argv[++i].split(',').map(s => s.trim()).filter(Boolean); break;
-      case '--top':    opts.top = Number(argv[++i]); break;
-      case '--eps':    opts.eps = Number(argv[++i]); break;
-      case '--json':   opts.json = true; break;
-      case '-h': case '--help': opts.help = true; break;
-      default:
-        if (a.startsWith('-')) { console.error(`Unknown option: ${a}`); process.exit(2); }
-        opts.files.push(a);
-    }
-  }
-  return opts;
-}
-
-const HELP = `diff-scenarios — find where and when two scenarios diverge
-
-Usage:
-  node scripts/diff-scenarios.mjs <a.json> <b.json> [options]
-
-Options:
-  --at <YYYY-MM-DD>  Point-diff date (default: simEnd).
-  --track            Annual delta series instead of a point diff.
-  --from <YYYY>      Track start year (default: simStart's year).
-  --fields <a,b,c>   Track these dotted state paths (default: net worth,
-                     net liquidity, cumulative taxes, cumulative consumption).
-  --top <N>          Point mode: show N largest deltas (default 25).
-  --eps <N>          Ignore deltas smaller than this (default 1).
-  --json             Machine-readable output.
-  -h, --help         Show this help.`;
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'npm run diff -- <a.json> <b.json> [options]\n\n'
+       + 'diff-scenarios — find where and when two scenarios diverge.',
+  positional: { name: 'files', type: 'list', variadic: true, help: 'exactly two scenario exports' },
+  at:     { type: 'string', help: 'point-diff date YYYY-MM-DD (default: simEnd)' },
+  track:  { type: 'flag',   help: 'annual delta series instead of a point diff' },
+  from:   { type: 'number', help: "track start year (default: simStart's year)" },
+  fields: { type: 'list',   help: 'track these dotted state paths (default: net worth, net liquidity, cumulative taxes, cumulative consumption)' },
+  top:    { type: 'number', default: 25, help: 'point mode: show N largest deltas' },
+  eps:    { type: 'number', default: 1,  help: 'ignore deltas smaller than this' },
+  json:   { type: 'flag',   help: 'machine-readable output' },
+});
 
 // ─── Running ────────────────────────────────────────────────────────────────
 
@@ -250,10 +227,10 @@ function trackDiff(files, opts) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 function main() {
-  const opts = parseArgs(process.argv.slice(2));
-  if (opts.help || opts.files.length !== 2) {
-    console.log(HELP);
-    process.exit(opts.help ? 0 : 1);
+  if (opts.files.length !== 2) {
+    console.error(`\ndiff-scenarios needs exactly two scenario files, got ${opts.files.length}.`
+      + '  (-h for options)\n');
+    process.exit(1);
   }
   if (opts.track) trackDiff(opts.files, opts);
   else            pointDiff(opts.files, opts);

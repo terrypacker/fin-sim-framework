@@ -34,46 +34,26 @@
 import { readFileSync } from 'node:fs';
 import { basename }     from 'node:path';
 
+import { parseFlags }   from '../lib/cli.mjs';
+
 import { ServiceRegistry } from '../../src/services/service-registry.js';
 import { BaseScenario }    from '../../src/scenarios/base-scenario.js';
 import { ScenarioLoader }  from '../../src/scenarios/scenario-loader.js';
 
 // ─── CLI parsing ──────────────────────────────────────────────────────────────
 
-function parseArgs(argv) {
-  const opts = { files: [], to: null, params: false, verbose: false, json: false, first: false, fast: false };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    switch (a) {
-      case '--to':      opts.to = argv[++i]; break;
-      case '--params':  opts.params = true; break;
-      case '--verbose': opts.verbose = true; break;
-      case '--json':    opts.json = true; break;
-      case '--first':   opts.first = true; break;
-      case '--fast':    opts.fast = true; break;
-      case '-h': case '--help': opts.help = true; break;
-      default:
-        if (a.startsWith('-')) { console.error(`Unknown option: ${a}`); process.exit(2); }
-        opts.files.push(a);
-    }
-  }
-  return opts;
-}
-
-const HELP = `run-scenario — headless scenario runner + comparator
-
-Usage:
-  node scripts/run-scenario.mjs <file.json> [more.json ...] [options]
-
-Options:
-  --to <YYYY-MM-DD>  Stop at this date instead of the scenario's simEnd.
-  --params           Also print a table of input params that differ across scenarios.
-  --first            Only run the first scenario in each file (default: run all).
-  --verbose          Show the simulation's own console output (e.g. OUT_OF_FUNDS).
-  --json             Emit machine-readable JSON instead of tables.
-  --fast             Drop journal/snapshots/bus telemetry (~12x faster). Safe for
-                     the tables below; disables anything reading sim.journal.
-  -h, --help         Show this help.`;
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'npm run scenario -- <file.json> [more.json …] [options]\n\n'
+       + 'run-scenario — headless scenario runner + comparator.',
+  positional: { name: 'files', type: 'list', variadic: true,
+                help: 'scenario export(s) to run; two or more are compared side-by-side' },
+  to:      { type: 'string', help: "stop at this YYYY-MM-DD instead of the scenario's simEnd" },
+  params:  { type: 'flag',   help: 'also table the input params that differ across scenarios' },
+  first:   { type: 'flag',   help: 'run only the first scenario in each file (default: all)' },
+  verbose: { type: 'flag',   help: "show the simulation's own console output (e.g. OUT_OF_FUNDS)" },
+  json:    { type: 'flag',   help: 'emit machine-readable JSON instead of tables' },
+  fast:    { type: 'flag',   help: 'drop journal/snapshot/bus telemetry (~12x); disables sim.journal readers' },
+});
 
 // ─── Running ────────────────────────────────────────────────────────────────
 
@@ -207,10 +187,9 @@ const unionKeys = maps => [...new Set(maps.flatMap(Object.keys))].sort();
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 function main() {
-  const opts = parseArgs(process.argv.slice(2));
-  if (opts.help || opts.files.length === 0) {
-    console.log(HELP);
-    process.exit(opts.help ? 0 : 1);
+  if (opts.files.length === 0) {
+    console.error('\nnpm run scenario -- <file.json> [more.json …]   (-h for options)\n');
+    process.exit(1);
   }
 
   const endDate = opts.to ? new Date(opts.to) : null;
