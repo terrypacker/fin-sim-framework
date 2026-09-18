@@ -45,24 +45,35 @@ import { buildScenario, GROWTH, OFFSET, LOAN, CASH, DEFAULTS } from './scenario.
 import { arms } from './arms.mjs';
 import { exportArms } from './export-json.mjs';
 import { openSim, quiet } from '../../lib/run.mjs';
+import { parseFlags }     from '../../lib/cli.mjs';
 import { computeAfterTaxNetWorth, afterTaxOptionsFromParams } from '../../../src/finance/derived-metrics/after-tax.js';
 import { SHOCK_LIBRARY } from '../../../src/finance/economic-shocks/shock-library.js';
 
-const argv = process.argv.slice(2);
-const flag = (n, d) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
-const CRASH    = Number(flag('crash', 2032));
-const SHOCK    = flag('shock', 'MARKET_CRASH_2008_LITE');
-const NO_SHOCK = argv.includes('--no-shock');
-const FROM     = Number(flag('from', CRASH - 2));
-const TO       = Number(flag('to', CRASH + 6));
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/lab/sequence-risk/run-deterministic.mjs [options]\n\n'
+       + 'run-deterministic — the sequence-risk arms on one fixed crash path.',
+  crash:      { type: 'number', default: 2032, help: 'crash year' },
+  shock:      { type: 'string', default: 'MARKET_CRASH_2008_LITE', help: 'shock preset' },
+  noShock:    { type: 'flag',   help: 'run the arms with no shock at all' },
+  from:       { type: 'number', help: 'first reported year (default: crash − 2)' },
+  to:         { type: 'number', help: 'last reported year (default: crash + 6)' },
+  exportJson: { type: 'flag',   help: 'export the arms as scenario JSON instead of reporting' },
+  exportTo:   { type: 'string', help: 'path for --export-json (default: derived from the arms and shock)' },
+  exportArms: { type: 'list',   default: ['A', 'B', 'C', 'D'], help: 'arms to export' },
+});
 
-// `--export-json`'s path is OPTIONAL, which `flag()` cannot express: it reads the next argv
-// slot positionally, so a bare `--export-json --export-arms C` would take `--export-arms` as
-// the filename. A value starting with `--` is the next flag, not a path.
-const EXPORTING   = argv.includes('--export-json');
-const EXPORT_ARG  = EXPORTING ? flag('export-json', null) : null;
-const EXPORT_FILE = (EXPORT_ARG && !EXPORT_ARG.startsWith('--')) ? EXPORT_ARG : null;
-const EXPORT_ARMS = String(flag('export-arms', 'A,B,C,D')).split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+const CRASH    = opts.crash;
+const SHOCK    = opts.shock;
+const NO_SHOCK = opts.noShock;
+const FROM     = opts.from ?? CRASH - 2;
+const TO       = opts.to   ?? CRASH + 6;
+
+// `--export-json` used to take an OPTIONAL path, which the old `flag()` could not
+// express: it read the next argv slot positionally, so `--export-json --export-arms C`
+// took "--export-arms" as the filename. The path is its own flag now.
+const EXPORTING   = opts.exportJson;
+const EXPORT_FILE = opts.exportTo ?? null;
+const EXPORT_ARMS = opts.exportArms.map(s => s.toUpperCase()).filter(Boolean);
 
 if (!NO_SHOCK && !SHOCK_LIBRARY[SHOCK]) {
   console.error(`unknown --shock '${SHOCK}'. Known: ${Object.keys(SHOCK_LIBRARY).join(', ')}`);

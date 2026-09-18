@@ -37,22 +37,29 @@ import { readFileSync } from 'node:fs';
 import { OPTIMIZATION_OBJECTIVES, objectivePrimaryMetric }
   from '../../src/finance/optimization/optimization-objectives.js';
 import { replayDecisions } from '../../src/finance/mpc/replay.js';
+import { parseFlags }       from '../lib/cli.mjs';
 import { loadScenario, withParams, readParams, runCfg, cloneCfg, fmtUsd }
   from '../lib/scenario-probe.mjs';
 
-const argv = process.argv.slice(2);
-const flag = (n, d) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/lab/replay-vs-bake.mjs [--decisions <f>] [--scenario <f>]\n\n'
+       + 'replay-vs-bake — does replaying the decision log reproduce the baked plan?',
+  decisions:    { type: 'string', default: 'scenarios/fin-sim-decisions.json', help: 'decision record file' },
+  scenario:     { type: 'string', default: 'scenarios/fin-sim-die-with.json',  help: 'scenario export' },
+  scenarioName: { type: 'string', help: 'scenario NAME inside that file (default: the first)' },
+  run:          { type: 'string', help: 'runId to replay (default: the last recorded)' },
+});
 
-const decFile = flag('decisions', 'scenarios/fin-sim-decisions.json');
-const scnFile = flag('scenario',  'scenarios/fin-sim-die-with.json');
+const decFile = opts.decisions;
+const scnFile = opts.scenario;
 
 const doc = JSON.parse(readFileSync(decFile, 'utf8'));
 const all = Array.isArray(doc.records) ? doc.records : Object.values(doc.records ?? doc);
-const runId = flag('run', null) ?? all[all.length - 1]?.runId ?? null;
+const runId = opts.run ?? all[all.length - 1]?.runId ?? null;
 const recs = all.filter(r => runId == null || r.runId === runId)
   .sort((a, b) => new Date(a.asOfDate) - new Date(b.asOfDate));
 
-const saved    = loadScenario(scnFile, flag('scenario-name', null));
+const saved    = loadScenario(scnFile, opts.scenarioName ?? null);
 const simStart = new Date(recs[0].simStart ?? saved.simStart);
 const simEnd   = new Date(recs[0].simEnd   ?? saved.simEnd);
 

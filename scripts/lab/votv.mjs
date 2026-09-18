@@ -44,14 +44,22 @@
  */
 
 import { harvestLab, report, OBJECTIVES } from '../lib/harvest-lab.mjs';
+import { parseFlags } from '../lib/cli.mjs';
 
-const argv = process.argv.slice(2);
-const flag = (name, dflt) => {
-  const i = argv.indexOf(`--${name}`);
-  return i >= 0 && argv[i + 1] != null ? argv[i + 1] : dflt;
-};
-const levers = (argv.find(a => !a.startsWith('--')) ?? 'SPENDING')
-  .split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/lab/votv.mjs [LEVER[,LEVER…]] [options]\n\n'
+       + 'votv — the value of the true value: what re-solving is worth per lever.',
+  positional: { name: 'levers', type: 'list', default: ['SPENDING'],
+                help: 'lever keys to price' },
+  goal:   { type: 'string', default: 'MAX_NET_WORTH', help: 'optimization objective key' },
+  seeds:  { type: 'list',   default: [1], help: 'RNG seeds' },
+  epochs: { type: 'number', default: 5,  help: 'decision epochs' },
+  budget: { type: 'number', default: 24, help: 'solver budget per epoch' },
+  solver: { type: 'string', default: 'CEM', help: 'solver key' },
+  birth:  { type: 'string', default: '1978-04-15', help: 'birth date the ages are taken from' },
+});
+
+const levers = opts.levers.map(s => s.toUpperCase()).filter(Boolean);
 
 const SIM_START = new Date(Date.UTC(2026, 0, 1));
 const SIM_END   = new Date(Date.UTC(2050, 0, 1));
@@ -66,17 +74,17 @@ const BASE = {
   ...(levers.includes('ROTH')             ? { rothConversionEnabled: true }  : {}),
 };
 
-const objective = OBJECTIVES[flag('goal', 'MAX_NET_WORTH')] ?? OBJECTIVES.MAX_NET_WORTH;
-const seeds  = String(flag('seeds', '1')).split(',').map(Number).filter(Number.isFinite);
-const epochs = Number(flag('epochs', 5));
-const budget = Number(flag('budget', 24));
+const objective = OBJECTIVES[opts.goal] ?? OBJECTIVES.MAX_NET_WORTH;
+const seeds  = opts.seeds.map(Number).filter(Number.isFinite);
+const epochs = opts.epochs;
+const budget = opts.budget;
 
 const rows = [];
 for (const seed of seeds) {
   const out = await harvestLab({
     levers, baseParams: BASE, objective,
-    simStart: SIM_START, simEnd: SIM_END, asOf: NOW, birthDate: flag('birth', '1978-04-15'),
-    solverKey: flag('solver', 'CEM'), budget, seed, epochs, resolve: true,
+    simStart: SIM_START, simEnd: SIM_END, asOf: NOW, birthDate: opts.birth,
+    solverKey: opts.solver, budget, seed, epochs, resolve: true,
   });
   report({ title: `VoTV · levers ${levers.join('+')} · seed ${seed}`, out });
   rows.push({ seed, ...out.terminals, voTV: out.voTV, voFB: out.voFB });

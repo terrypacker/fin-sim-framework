@@ -28,19 +28,28 @@
  */
 
 import { loadScenario, withParams, readParams, runCfg, fmtUsd } from '../lib/scenario-probe.mjs';
+import { parseFlags } from '../lib/cli.mjs';
 
-const argv = process.argv.slice(2);
-const flag = (n, d) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
-const file  = argv.find(a => !a.startsWith('--')) ?? 'scenarios/fin-sim-die-with.json';
-const iters = Number(flag('iters', 7));
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/lab/spend-ceiling.mjs [<file.json>] [--from-age 47] [--iters 7]\n\n'
+       + 'spend-ceiling — the highest spend the MPC-decided bands still survive.',
+  positional: { name: 'file', type: 'string', default: 'scenarios/fin-sim-die-with.json',
+                help: 'scenario export to search' },
+  iters:    { type: 'number', default: 7, help: 'bisection iterations' },
+  fromAge:  { type: 'number', help: 'treat bands from this age as MPC-decided (default: by amount)' },
+  scenario: { type: 'string', help: 'scenario NAME inside that file (default: the first)' },
+});
 
-const cfg   = loadScenario(file, flag('scenario', null));
+const file  = opts.file;
+const iters = opts.iters;
+
+const cfg   = loadScenario(file, opts.scenario ?? null);
 const bands = readParams(cfg, ['spendingExpenseBands']).spendingExpenseBands ?? [];
 if (!bands.length) { console.error('no spendingExpenseBands in this scenario'); process.exit(2); }
 
 // The MPC-decided bands start where the amounts stop matching the pre-run plan.
 // Default: everything above the first band's amount. `--from-age` overrides.
-const fromAge = flag('from-age', null);
+const fromAge = opts.fromAge ?? null;
 const preAmt  = bands[0]?.monthlyAmount;
 const isDecided = b => (fromAge != null ? b.startAge >= Number(fromAge) : b.monthlyAmount !== preAmt);
 

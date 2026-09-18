@@ -574,7 +574,7 @@ true statement about the registry, not a gap in this file.
 
 Command-line entry points under `scripts/`. **Purpose** is harvested from each script's
 docblock, not re-authored here. Arguments are listed only for scripts on the declarative
-`parseFlags` spec — 22 of 64 entry points today;
+`parseFlags` spec — 39 of 64 entry points today;
 design 108 D6 migrates the rest, after which a missing spec is a gate failure.
 6 scripts carry no docblock naming themselves and show `(undocumented)`.
 
@@ -628,36 +628,111 @@ design 108 D6 migrates the rest, after which a missing spec is a gate failure.
     - `--open` (flag) — open the result when done (macOS)
 - **`scripts/lab/attribute-ruin.mjs`**
   WHICH harvested lever made the baked plan insolvent?
+    - `<file>` (string, default `scenarios/fin-sim-die-with.json`) — scenario export to attribute
+    - `--only` (list) — run only these arm keys
+    - `--scenario` (string) — scenario NAME inside that file (default: the first)
 - **`scripts/lab/calibrate-fx.mjs`** — `npm run calibrate:fx`
   estimate the FX process parameters from the packaged historical
+    - `--from` (string) — window start YYYY-MM (default: the post-float month)
+    - `--to` (string) — window end YYYY-MM (default: the last observation)
+    - `--compare` (flag) — fit the standard window set instead of one window
+    - `--json` (flag) — machine-readable output
 - **`scripts/lab/epoch-solvency.mjs`**
   did the CONTROLLER ever project ruin? (design/80 Q5)
+    - `<file>` (string, default `scenarios/fin-sim-die-with.json`) — scenario export to re-decide
+    - `--levers` (list, default `SPENDING`) — lever keys the solver may move
+    - `--epochs` (number, default `10`) — decision epochs
+    - `--budget` (number, default `24`) — solver budget per epoch
+    - `--seed` (number, default `1`) — RNG seed
+    - `--step-years` (number, default `1`) — years between epochs
+    - `--goal` (string, default `DIE_WITH_TARGET`) — optimization objective key
+    - `--solver` (string, default `CEM`) — solver key
+    - `--spend-range` (string) — lo:hi[:step] bound on the spending lever
+    - `--scenario` (string) — scenario NAME inside that file (default: the first)
+    - `--no-feasibility-first` (flag) — reproduce PRE-design-80-U2 ranking
+    - `--no-harvest` (flag) — skip the harvest step at the end
 - **`scripts/lab/frontier.mjs`**
   find the edge of solvency along ONE lever
+    - `<mode>` (string, required) — which frontier to trace
+    - `--lo` (number) — range low (default: the mode's own)
+    - `--hi` (number) — range high (default: the mode's own)
+    - `--step` (number) — range step (default: the mode's own)
+    - `--bisect` (flag) — bisect to the edge instead of stepping the whole range
+    - `--person` (string, default `primary`) — person the mode applies to
+    - `--levers` (string) — lever bag applied to every case: inline JSON or a file
+    - `--scenario` (string) — base scenario export; omitted ⇒ the synthetic default
+    - `--index` (number, default `0`) — scenario index in that file
+    - `--json` (flag) — machine-readable output
 - **`scripts/lab/glidepath-corners.mjs`**
   audit a baked glidepath for anchors that zero an asset
+    - `--scenario` (string, default `scenarios/fin-sim-scenarios.json`) — workbench export
+    - `--name` (string) — scenario inside that file (default: the first with a glidepath)
+    - `--run` (flag) — price each corner against a smoothed counterfactual
+    - `--seeds` (number, default `0`) — re-price over n stochastic seeds (implies --run)
+    - `--material` (number, default `0.05`) — share at or above which a class counts as a position
 - **`scripts/lab/paired-delta.mjs`**
   re-report a `variant-grid` run as PAIRED DIFFERENCES
+    - `--spec` (string) — the grid spec
+    - `--results` (string) — what `variant-grid --out` wrote
+    - `--pair` (string) — axis name to pair on
+    - `--metric` (string, default `afterTaxNW`) — metric to difference
 - **`scripts/lab/replay-vs-bake.mjs`**
   did the RUN go broke, or did the HARVEST of it? (design/80 F6)
+    - `--decisions` (string, default `scenarios/fin-sim-decisions.json`) — decision record file
+    - `--scenario` (string, default `scenarios/fin-sim-die-with.json`) — scenario export
+    - `--scenario-name` (string) — scenario NAME inside that file (default: the first)
+    - `--run` (string) — runId to replay (default: the last recorded)
 - **`scripts/lab/roth-ledger.mjs`**
   what does the Roth actually COST, year by year? (design 84 P3 / G3)
+    - `--scenario` (string) — base scenario export; omitted ⇒ the synthetic default
+    - `--index` (number, default `0`) — scenario index in that file
+    - `--levers` (string) — lever bag as inline JSON (see lib/variant.mjs)
+    - `--csv` (string) — also write the rows here as CSV
 - **`scripts/lab/score-decomposition.mjs`**
   WHY did the controller commit an infeasible plan?
+    - `<file>` (string, default `scenarios/fin-sim-die-with.json`) — scenario export to decompose
+    - `--epochs` (number, default `24`) — decision epochs
+    - `--budget` (number, default `20`) — solver budget per epoch
+    - `--seed` (number, default `1`) — RNG seed
+    - `--levers` (list, default `SPENDING,ROTH,ALLOCATION_MIX,DRAWDOWN_WEIGHTS,DRAWDOWN_SLEEVE,DRAWDOWN_XBORDER,DRAWDOWN_WITHINTIER,BOND_LADDER`) — lever keys the solver may move
+    - `--spend-range` (string, default `7000:10000`) — lo:hi[:step] bound on the spending lever
+    - `--goal` (string, default `DIE_WITH_TARGET_LIQUID`) — optimization objective key
+    - `--solver` (string, default `CEM`) — solver key
+    - `--scenario` (string) — scenario NAME inside that file (default: the first)
 - **`scripts/lab/sequence-risk/arms.mjs`**
   design 97 §20.7, the four arms
 - **`scripts/lab/sequence-risk/export-json.mjs`**
   write an arm's cfg as a workbench-importable scenario export
 - **`scripts/lab/sequence-risk/mc-worker.mjs`**
   one shard of design 97 §20's paired run
+    - `<files>` (list, repeatable, required) — the jobs file to read and the rows file to write
 - **`scripts/lab/sequence-risk/run-deterministic.mjs`**
   design 97 §20.6/§20.7, the readable case
+    - `--crash` (number, default `2032`) — crash year
+    - `--shock` (string, default `MARKET_CRASH_2008_LITE`) — shock preset
+    - `--no-shock` (flag) — run the arms with no shock at all
+    - `--from` (number) — first reported year (default: crash − 2)
+    - `--to` (number) — last reported year (default: crash + 6)
+    - `--export-json` (flag) — export the arms as scenario JSON instead of reporting
+    - `--export-to` (string) — path for --export-json (default: derived from the arms and shock)
+    - `--export-arms` (list, default `A,B,C,D`) — arms to export
 - **`scripts/lab/sequence-risk/run-mc.mjs`**
   design 97 §20.7/§20.8, the study
+    - `--n` (number, default `300`) — paths per arm
+    - `--vol` (number, default `0.18`) — equity return volatility
+    - `--shock` (string) — shock preset to land on the crash year
+    - `--crash` (number, default `2032`) — crash year
+    - `--out` (string) — directory to write per-arm JSON into
+    - `--spend` (number) — monthly spend override (§20.6's calibration, re-checkable)
+    - `--workers` (number, default `8`) — worker processes
 - **`scripts/lab/sequence-risk/scenario.mjs`**
   design 97 §20.6, the MINIMAL scenario
 - **`scripts/lab/spend-ceiling.mjs`**
   how far over the open-loop affordable line did the harvest
+    - `<file>` (string, default `scenarios/fin-sim-die-with.json`) — scenario export to search
+    - `--iters` (number, default `7`) — bisection iterations
+    - `--from-age` (number) — treat bands from this age as MPC-decided (default: by amount)
+    - `--scenario` (string) — scenario NAME inside that file (default: the first)
 - **`scripts/lab/spending-mc.mjs`**
   what the plan costs, as a DISTRIBUTION
     - `--scenario` (string) — workbench export to run (default: the built-in synthetic scenario)
@@ -693,12 +768,35 @@ design 108 D6 migrates the rest, after which a missing spec is a gate failure.
     - `--open` (flag) — open the result when done (macOS)
 - **`scripts/lab/variant-grid.mjs`**
   run an N-dimensional grid of scenario variants and table it
+    - `--spec` (string) — the grid spec
+    - `--out` (string) — write the results JSON here (what paired-delta reads)
+    - `--workers` (number, default `8`) — worker processes
+    - `--scenario` (string) — base scenario export; omitted ⇒ the synthetic default
+    - `--index` (number, default `0`) — scenario index in that file
+    - `--json` (flag) — machine-readable output
 - **`scripts/lab/verify-harvest.mjs`** — `npm run verify:harvest`
   does the baked scenario reproduce the run? (design/39 §13.7)
+    - `<levers>` (list, default `SPENDING`) — lever keys to harvest
+    - `--goal` (string, default `MAX_NET_WORTH`) — optimization objective key
+    - `--seeds` (list, default `1`) — RNG seeds
+    - `--epochs` (number, default `5`) — decision epochs
+    - `--budget` (number, default `24`) — solver budget per epoch
+    - `--solver` (string, default `CEM`) — solver key
+    - `--birth` (string, default `1978-04-15`) — birth date the ages are taken from
+    - `--resolve` (flag) — re-solve at each epoch (the VoTV arm)
+    - `--votv` (flag) — alias for --resolve
 - **`scripts/lab/verify-mpc-lever.mjs`**
   Headless verification harness for the design-58 MPC / online-control levers
+    - `<lever>` (string, default `all`) — which lever to verify
 - **`scripts/lab/votv.mjs`** — `npm run votv`
   is time-variation actually worth anything? (design/39 §13.13.3)
+    - `<levers>` (list, default `SPENDING`) — lever keys to price
+    - `--goal` (string, default `MAX_NET_WORTH`) — optimization objective key
+    - `--seeds` (list, default `1`) — RNG seeds
+    - `--epochs` (number, default `5`) — decision epochs
+    - `--budget` (number, default `24`) — solver budget per epoch
+    - `--solver` (string, default `CEM`) — solver key
+    - `--birth` (string, default `1978-04-15`) — birth date the ages are taken from
 
 ### scripts/montecarlo/
 

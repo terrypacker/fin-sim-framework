@@ -43,31 +43,34 @@
  *   node scripts/lab/glidepath-corners.mjs --run                 # + counterfactual
  *   node scripts/lab/glidepath-corners.mjs --run --seeds 12      # + stochastic
  *
- *   --scenario <file>  Workbench export (default scenarios/fin-sim-scenarios.json).
- *   --name <name>      Scenario inside that file (default: first with a glidepath).
- *   --run              Price each corner against a smoothed counterfactual.
- *   --seeds <n>        Re-price over n stochastic seeds (implies --run).
- *   --material <f>     Share at or above which a class counts as a position (0.05).
+ *   Run `--help` for the flags; the spec in this file is the only copy of them.
  */
 
 import { loadScenario, withParams } from '../lib/scenario-probe.mjs';
 import { run } from '../lib/run.mjs';
+import { parseFlags } from '../lib/cli.mjs';
 
-const argv = process.argv.slice(2);
-const flag = (n, d) => { const i = argv.indexOf(`--${n}`); return i >= 0 && argv[i + 1] != null ? argv[i + 1] : d; };
-const has  = n => argv.includes(`--${n}`);
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/lab/glidepath-corners.mjs [--run] [--seeds 12]\n\n'
+       + 'glidepath-corners — audit a glidepath\'s corners, and price them if asked.',
+  scenario: { type: 'string', default: 'scenarios/fin-sim-scenarios.json', help: 'workbench export' },
+  name:     { type: 'string', help: 'scenario inside that file (default: the first with a glidepath)' },
+  run:      { type: 'flag',   help: 'price each corner against a smoothed counterfactual' },
+  seeds:    { type: 'number', default: 0, help: 're-price over n stochastic seeds (implies --run)' },
+  material: { type: 'number', default: 0.05, help: 'share at or above which a class counts as a position' },
+});
 
-const FILE     = flag('scenario', 'scenarios/fin-sim-scenarios.json');
-const SEEDS    = Number(flag('seeds', 0));
-const MATERIAL = Number(flag('material', 0.05));
-const DO_RUN   = has('run') || SEEDS > 0;
+const FILE     = opts.scenario;
+const SEEDS    = opts.seeds;
+const MATERIAL = opts.material;
+const DO_RUN   = opts.run || SEEDS > 0;
 
 const CLASSES = ['EQUITY', 'BOND', 'CASH', 'GOLD'];
 const clone   = o => JSON.parse(JSON.stringify(o));
 const pct     = v => `${Math.round(v * 100)}%`;
 
 // ── load ────────────────────────────────────────────────────────────────────
-const cfg = loadScenario(FILE, flag('name', null));
+const cfg = loadScenario(FILE, opts.name ?? null);
 const gp  = (cfg.params ?? []).find(p => (p.key ?? p.name) === 'allocationGlidepath');
 if (!gp?.value?.length) {
   console.error(`no allocationGlidepath in ${cfg.name ?? FILE} — nothing to audit.`);

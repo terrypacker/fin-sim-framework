@@ -23,8 +23,16 @@ import { openSim, quiet } from '../../lib/run.mjs';
 import { computeAfterTaxNetWorth, afterTaxOptionsFromParams }
   from '../../../src/finance/derived-metrics/after-tax.js';
 import { computeNetLiquidity } from '../../../src/finance/derived-metrics/net-liquidity.js';
+import { parseFlags }          from '../../lib/cli.mjs';
 
-const [, , inF, outF] = process.argv;
+// Spawned by run-mc.mjs, not typed by hand — but it is still a process with a command
+// line, and a silently wrong argument here produces an empty result file, not an error.
+const { files: [inF, outF] } = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/lab/sequence-risk/mc-worker.mjs <jobs-in.json> <rows-out.json>\n\n'
+       + 'mc-worker — one worker process for the sequence-risk Monte Carlo.',
+  positional: { name: 'files', type: 'list', variadic: true, required: true,
+                help: 'the jobs file to read and the rows file to write' },
+});
 const { jobs } = JSON.parse(readFileSync(inF, 'utf8'));
 
 const ARMS = Object.fromEntries(arms().map(a => [a.key, a]));

@@ -48,19 +48,36 @@ import { makeInitialSnapshot }      from '../../src/finance/mpc/mpc-controller.j
 import { readDecisionRecords }      from '../../src/finance/mpc/apply-forward.js';
 import { harvestDecisions }         from '../../src/finance/mpc/harvest.js';
 import { applyHarvestPlan }         from '../../src/finance/mpc/harvest-apply.js';
+import { parseFlags }              from '../lib/cli.mjs';
 import { loadScenario, readParams, runCfg, withParams, fmtUsd, cloneCfg }
   from '../lib/scenario-probe.mjs';
 
-const argv = process.argv.slice(2);
-const flag = (n, d) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
-const file   = argv.find(a => !a.startsWith('--')) ?? 'scenarios/fin-sim-die-with.json';
-const levers = String(flag('levers', 'SPENDING')).split(',').map(s => s.trim().toUpperCase());
-const epochsN = Number(flag('epochs', 10));
-const budget  = Number(flag('budget', 24));
-const seed    = Number(flag('seed', 1));
-const stepYears = Number(flag('step-years', 1));
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/lab/epoch-solvency.mjs [<file.json>] [--epochs 12] [--levers SPENDING]\n\n'
+       + 'epoch-solvency — re-run the MPC decision epoch by epoch and price each one.',
+  positional: { name: 'file', type: 'string', default: 'scenarios/fin-sim-die-with.json',
+                help: 'scenario export to re-decide' },
+  levers:              { type: 'list',   default: ['SPENDING'], help: 'lever keys the solver may move' },
+  epochs:              { type: 'number', default: 10, help: 'decision epochs' },
+  budget:              { type: 'number', default: 24, help: 'solver budget per epoch' },
+  seed:                { type: 'number', default: 1,  help: 'RNG seed' },
+  stepYears:           { type: 'number', default: 1,  help: 'years between epochs' },
+  goal:                { type: 'string', default: 'DIE_WITH_TARGET', help: 'optimization objective key' },
+  solver:              { type: 'string', default: 'CEM', help: 'solver key' },
+  spendRange:          { type: 'string', help: 'lo:hi[:step] bound on the spending lever' },
+  scenario:            { type: 'string', help: 'scenario NAME inside that file (default: the first)' },
+  noFeasibilityFirst:  { type: 'flag',   help: 'reproduce PRE-design-80-U2 ranking' },
+  noHarvest:           { type: 'flag',   help: 'skip the harvest step at the end' },
+});
 
-const cfg = loadScenario(file, flag('scenario', null));
+const file      = opts.file;
+const levers    = opts.levers.map(s => s.toUpperCase());
+const epochsN   = opts.epochs;
+const budget    = opts.budget;
+const seed      = opts.seed;
+const stepYears = opts.stepYears;
+
+const cfg = loadScenario(file, opts.scenario ?? null);
 const simStart = new Date(cfg.simStart);
 const simEnd   = new Date(cfg.simEnd);
 
@@ -82,7 +99,7 @@ const preRunCfg = withParams(cfg, { spendingExpenseBands: preRunBands });
 const baseParams = Object.fromEntries(
   (preRunCfg.params ?? []).map(p => [p.key ?? p.name, p.value]));
 
-const objective = OPTIMIZATION_OBJECTIVES[flag('goal', 'DIE_WITH_TARGET')]
+const objective = OPTIMIZATION_OBJECTIVES[opts.goal]
   ?? OPTIMIZATION_OBJECTIVES.DIE_WITH_TARGET;
 const metric = objectivePrimaryMetric(objective);
 
@@ -91,7 +108,7 @@ const birth  = person?.birthDate ? new Date(person.birthDate) : null;
 const ageAt  = d => (birth ? (d - birth) / (365.2425 * 864e5) : null);
 
 console.log(`\n=== epoch solvency · ${file} ===`);
-console.log(`  levers ${levers.join('+')} · goal ${flag('goal', 'DIE_WITH_TARGET')} (${metric.key})`
+console.log(`  levers ${levers.join('+')} · goal ${opts.goal} (${metric.key})`
   + ` · ${epochsN} epochs · budget ${budget} · seed ${seed}`);
 console.log(`  sim ${cfg.simStart.slice(0, 10)} → ${cfg.simEnd.slice(0, 10)}`
   + ` · primary ${person?.name ?? '?'} b${(person?.birthDate ?? '').slice(0, 10)}`);
@@ -137,7 +154,7 @@ const snapshot = quiet(() => makeInitialSnapshot({
 // This is load-bearing, not cosmetic: the lever cannot commit outside its range, so
 // a floor set above the plan's affordable level forces every epoch to over-commit
 // and there is no in-range feasible answer left for the controller to find.
-const sr = flag('spend-range', null);
+const sr = opts.spendRange ?? null;
 const controlRanges = sr
   ? { SPENDING: (([min, max, step]) => ({ min: +min, max: +max, step: +(step ?? 500) }))(sr.split(':')) }
   : null;
@@ -148,7 +165,7 @@ if (controlRanges) {
 
 // `--no-feasibility-first` reproduces PRE-design-80-U2 ranking, so a run can be
 // compared against the behaviour the user actually saw in the browser.
-const feasibilityFirst = !argv.includes('--no-feasibility-first');
+const feasibilityFirst = !opts.noFeasibilityFirst;
 console.log(`  feasibilityFirst: ${feasibilityFirst ? 'ON (design 80 U2)' : 'OFF (pre-U2 behaviour)'}\n`);
 
 const controller = new CockpitController({
@@ -159,7 +176,7 @@ controller.setSnapshot(snapshot);
 
 let n = 0;
 await quietAsync(() => controller.autoRun({
-  solverKey: flag('solver', 'CEM'),
+  solverKey: opts.solver,
   solverOptions: { budget, seed },
   stepYears,
   shouldStop: () => n >= epochsN,
@@ -213,7 +230,7 @@ console.log(`  distinct band indices targeted across ${records.length} epochs: `
 // scenario rather than a synthetic params bag. If the epochs all project solvent
 // and the bake does not, the gap is the harvest's; if the bake is solvent too, the
 // saved scenario was never what this run produced.
-if (!argv.includes('--no-harvest')) {
+if (!opts.noHarvest) {
   const plan = harvestDecisions(records, {
     controlsByKey: COCKPIT_CONTROLS, baseParams,
     birth: { birthDate: person?.birthDate }, simStart,
