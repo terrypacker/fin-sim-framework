@@ -104,8 +104,19 @@ function holdingsValue(account, sleeves) {
  * authority for cash-like accounts (savings, offset), which hold no lots. The two can
  * disagree on a brokerage (`holdings-balance-desync`); the pool follows what a draw would
  * really find.
+ *
+ * EXPORTED for design 110 §4.2 item 2 — the graph editor's "what this claim holds today"
+ * readout. It is exported rather than reimplemented because a second reading of "what a claim
+ * is worth" is exactly the two-derivations failure §17.2 forbids, and because the sleeve rule
+ * on line 111 is the non-obvious half: a sleeve-narrowed claim on an account with no lots
+ * holds NOTHING, and a reader who guessed would have written `balance`.
+ *
+ * It reads only `account.holdings[].{allocation,marketValue}` and `account.balance`, so a
+ * caller may pass a narrowed projection of an account rather than the live record — which is
+ * what `accountsProvider` does. It returns the account's OWN currency and never converts;
+ * every caller owns that decision (the editor's answer is to report per claim and not sum).
  */
-function claimValueNative(account, sleeves) {
+export function claimValueNative(account, sleeves) {
   const fromHoldings = holdingsValue(account, sleeves);
   if (fromHoldings != null) return fromHoldings;
   if (sleeves) return 0;      // a sleeve-narrowed claim on an account with no lots holds nothing

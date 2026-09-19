@@ -1053,10 +1053,61 @@
   color: var(--text-muted);
 }
 
+/* A DERIVED cell sits in a grid track next to real inputs, so it needs the grid-item
+   defaults an <input> gets for free: without `min-width: 0` a long claims summary widens
+   its own track and pushes every column of the row out of line with the header above it
+   (design 109 §15b's lesson, from the other direction). The full text is on `title`. */
+.age-band-row > .row-list-note {
+  align-self: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ── LiquidityGraph editor (design 97 Part II) ──
    Three stacked row lists (pools, claims, flows) under their own headings. */
 .liquidity-graph-editor { display: flex; flex-direction: column; gap: 4px; }
 .liquidity-graph-editor > .age-band-col-label { margin-top: 4px; }
+
+/* ── The derived readouts under the tables (design 110 §4.2) ──
+   Read-only prose, deliberately not styled as controls: nothing here is authored, and a
+   block that looked editable would invite an edit that goes nowhere. */
+.liquidity-graph-readouts {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-subtle, rgba(128, 128, 128, 0.25));
+}
+
+/* §10.5's provenance line. It states which of three states the graph is in, so it reads
+   ABOVE the readouts it qualifies and is the one line here that is not muted — a readout
+   that describes an order the run will not use must not be quieter than the order. */
+.pool-readout-provenance {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary, var(--text-muted));
+}
+
+.pool-readout {
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+/* §3.1 rule 3 — a standing rule about the order above, not part of it. */
+.pool-readout--rule { font-style: italic; }
+
+/* An ADVISORY (design 110 §4.3) — the graph compiles and something in it is almost certainly
+   not what the author meant. Distinct from `--problem`, because the difference between "this
+   will not load" and "this loads and does nothing" is the whole content of the two severities. */
+.pool-readout--warn { color: var(--warn, #d08b1e); }
+
+/* The compiler's own sentence, when the graph does not compile. Same words the Rebuild
+   refusal uses (§17.2: the UI never re-implements the compiler, it shows what it said). */
+.pool-readout--problem { color: var(--danger, #e5534b); }
 
 /* ── ExpenseEventList param editor (design 86 G8; was HealthcareEventList) ── */
 .healthcare-event-list-editor {

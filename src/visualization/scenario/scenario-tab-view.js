@@ -627,10 +627,28 @@ export class ScenarioTabView {
         valueInput = buildRateKeyMapEditor(param);
       } else if (param.type === 'DrawdownSequence') {
         valueInput = buildDrawdownSequenceEditor(param, this._accounts());
-      } else if (param.type === 'LiquidityGraph') {
-        valueInput = buildLiquidityGraphEditor(param, this._accounts());
-      } else if (param.type === 'LiquidityShapes') {
-        valueInput = buildLiquidityShapesEditor(param, this._accounts());
+      } else if (param.type === 'LiquidityGraph' || param.type === 'LiquidityShapes') {
+        // Design 110 §10.5 / CTRL-15. The two master switches are SIBLING params, and the
+        // readouts under the graph tables have to name which of them is in force: a compiled
+        // spend order rendered under `liquidityGraphEnabled: false` describes an order the
+        // run will not use, and hiding the readout instead would make the switch a way to
+        // stop seeing the graph you are editing (validation already refuses to do that).
+        //
+        // Read LIVE off `scenario.params`, for the reason the schedule editor reads its shape
+        // ids live below: a switch toggled without a full re-render would otherwise leave the
+        // line stating the state the graph was in when the editor was built.
+        const graphFlags = () => ({
+          liquidityGraphEnabled: scenario.params.find(x => x.name === 'liquidityGraphEnabled')?.value,
+          poolFlowsEnabled:      scenario.params.find(x => x.name === 'poolFlowsEnabled')?.value,
+          // §4.3's advisories. They are about the SHAPES and the SCHEDULE, which are sibling
+          // params this editor cannot see, so they arrive from the one authority that reads
+          // the whole bag (`collectAuthoredGraphProblems`) rather than being re-derived here.
+          problems: typeof this.graphProblemsProvider === 'function'
+            ? this.graphProblemsProvider() : [],
+        });
+        valueInput = param.type === 'LiquidityGraph'
+          ? buildLiquidityGraphEditor(param, this._accounts(), graphFlags)
+          : buildLiquidityShapesEditor(param, this._accounts(), graphFlags);
       } else if (param.type === 'LiquidityGraphSchedule') {
         // The shape ids are read LIVE off the sibling param rather than captured, so a shape
         // added or renamed without a full re-render still offers the right options here.

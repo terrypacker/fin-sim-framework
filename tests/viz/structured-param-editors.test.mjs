@@ -750,6 +750,312 @@ test('LiquidityGraph: an opaque `ui` blob survives an edit (effort 2 needs it)',
   assert.deepStrictEqual(param.value.pools[0].ui, { x: 40, y: 200 });
 });
 
+/*
+ * CTRL-1 (design 110 §9). §14's `ui` constraint says the engine ignores the blob and every
+ * surface that touches a graph preserves it. `normalizeLiquidityGraph` carries `raw.ui` on
+ * BOTH pools and flows; design 110 §2.2 recorded that the promise was never asserted, and
+ * the first assertion found the flow half missing — a layout authored on an EDGE was dropped
+ * by the first edit to any cell, silently, with the graph still loading and still running.
+ * That is `mortgagePaymentSourceKey`'s shape exactly, which is why §2.2 asked for the test
+ * before anything draws a layout.
+ */
+test('LiquidityGraph CTRL-1: `ui` survives an edit on a flow as well as on a pool', () => {
+  const param = { name: 'liquidityGraph', value: {
+    pools: [
+      { id: 'cash',   spendOrder: 10, ui: { x: 40, y: 200 }, claims: [{ key: 'usSavingsAccount' }] },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [{ id: 'g2c', from: 'growth', to: 'cash', ui: { bend: 0.3, label: 'refill' } }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  type(cell(host, 'label'), 'Bucket 1', 'change');
+  assert.deepStrictEqual(param.value.pools[0].ui, { x: 40, y: 200 });
+  assert.deepStrictEqual(param.value.flows[0].ui, { bend: 0.3, label: 'refill' },
+    'a flow layout is dropped by the first edit — the normalizer carries it, the editor must too');
+});
+
+test('LiquidityGraph CTRL-1: a `ui` blob inside a named shape survives an edit', () => {
+  // Design 109 §9 makes the pool id the identity across a switch, so a shape is where a
+  // layout MOST needs to survive: the same node drawn in the same place in every shape is
+  // what makes a switch legible. The shapes editor mounts the SAME graph editor per shape,
+  // so this fails and passes with the case above — asserted anyway, because "the same
+  // component" is the claim, not the guarantee.
+  const param = { name: 'liquidityShapes', value: {
+    bridge: {
+      pools: [{ id: 'cash', spendOrder: 10, ui: { x: 1, y: 2 }, claims: [{ key: 'usSavingsAccount' }] },
+              { id: 'bonds', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }] }],
+      flows: [{ id: 'b2c', from: 'bonds', to: 'cash', ui: { bend: 0.3 } }],
+    },
+  } };
+  const host = mount(buildLiquidityShapesEditor(param, ACCOUNTS));
+  type(cell(host, 'label'), 'Bucket 1', 'change');
+  assert.deepStrictEqual(param.value.bridge.pools[0].ui, { x: 1, y: 2 });
+  assert.deepStrictEqual(param.value.bridge.flows[0].ui, { bend: 0.3 });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Design 110 §4.2 — the derived readouts (CTRL-2, CTRL-3, CTRL-15)
+//
+// Every one of these is a property of a DERIVATION, not of a layout. The objection §4.2
+// answers is that a second derivation is where one surface starts disagreeing with another
+// (§23.6's `_seriesSpecs` exists because of exactly that), so the assertions are all of the
+// form "the readout equals what the compiler says" rather than "the text contains a word".
+// ═════════════════════════════════════════════════════════════════════════════
+
+// Balances and lots, which `accountsProvider` carries for the "Holds today" readout and the
+// narrow pre-design-110 projection did not. `usStockAccount` deliberately has a `balance`
+// that DISAGREES with its lots: `claimValueNative` follows the holdings when an account has
+// any, because that is what a draw really consumes (`holdings-balance-desync`).
+const VALUED_ACCOUNTS = [
+  { stateKey: 'usSavingsAccount', name: 'US Savings', type: 'savings',   balance: 50000,
+    currency: 'USD' },
+  { stateKey: 'usStockAccount',   name: 'US Stock',   type: 'brokerage', balance: 999,
+    currency: 'USD',
+    holdings: [{ allocation: 'EQUITY', marketValue: 300000 },
+               { allocation: 'BOND',   marketValue: 120000 }] },
+  { stateKey: 'auOffsetAccount',  name: 'Offset',     type: 'offset',    balance: 80000,
+    currency: 'AUD' },
+];
+
+// jsdom's global has no `structuredClone`. These fixtures are plain JSON, so this is the
+// same thing for them — and each test needs its own copy, because the editor mutates.
+const copy = (v) => JSON.parse(JSON.stringify(v));
+
+const GRAPH_FOR_READOUTS = {
+  pools: [
+    { id: 'cash',    label: 'Bucket 1', spendOrder: 10,
+      claims: [{ key: 'usSavingsAccount' }] },
+    { id: 'bonds',   label: 'Bucket 2', spendOrder: 20,
+      target: { mode: 'YEARS_OF_SPEND', value: 4 },
+      claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }] },
+    // Multi-claim, and multi-currency — the case §4.2 item 2 says must NOT be summed onto
+    // the pool, because `claimValueNative` returns each account's own currency.
+    { id: 'growth',  label: 'Bucket 3', spendOrder: 30,
+      claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }, { key: 'auOffsetAccount' }] },
+  ],
+  flows: [{ id: 'g2b', from: 'growth', to: 'bonds',
+            gate: { sourceDrawdownUnder: 0.05, drawdownBasis: 'INDEX' } }],
+};
+
+test('LiquidityGraph CTRL-2: the compiled-order readout equals compileToDrawdownSequence', async () => {
+  const { normalizeLiquidityGraph, compileToDrawdownSequence } =
+    await import('../../src/finance/pools/liquidity-graph.js');
+
+  const param = { name: 'liquidityGraph', value: copy(GRAPH_FOR_READOUTS) };
+  const host  = mount(buildLiquidityGraphEditor(param, VALUED_ACCOUNTS));
+
+  // The authority, computed independently of the editor and from the SAVED value.
+  const want = compileToDrawdownSequence(normalizeLiquidityGraph(param.value, VALUED_ACCOUNTS));
+  const text = cell(host, 'compiled-order').textContent;
+
+  assert.ok(want.length === 4, 'the fixture is multi-claim, or this test is not testing one');
+  // Every entry, in order, with its sleeve narrowing — the join §4.2 item 3 makes visible.
+  want.forEach((e, i) => {
+    assert.ok(text.includes(`${i + 1}. ${e.key}`),
+      `position ${i + 1} must name ${e.key}; readout was: ${text}`);
+  });
+  assert.ok(text.indexOf('1. usSavingsAccount') < text.indexOf('2. usStockAccount'),
+    'the readout must be in compiled order, not table order');
+  // §3.1 rule 3, stated rather than documented — and on its OWN line: appended to the list
+  // it reads as one sentence, because the spaces meant to separate them collapse in HTML.
+  assert.match(cell(host, 'compiled-order-rule').textContent, /drawdownPriority/);
+  assert.ok(!/drawdownPriority/.test(text), 'the rule is a separate element, not a tail');
+});
+
+test('LiquidityGraph CTRL-2: a pool with no Spend # is shown as never spent from', () => {
+  // §22.5 trap 1's other half. `spendOrder` starts BLANK, so a pool the author added and did
+  // not place compiles to nothing — and from every other surface that looks identical to the
+  // graph having failed to load. The readout has to say which it is.
+  const graph = copy(GRAPH_FOR_READOUTS);
+  delete graph.pools[2].spendOrder;
+  const param = { name: 'liquidityGraph', value: graph };
+  const host  = mount(buildLiquidityGraphEditor(param, VALUED_ACCOUNTS));
+  const text  = cell(host, 'compiled-order').textContent;
+  assert.match(text, /never spent from: growth/);
+  assert.ok(!text.includes('3. '), 'growth has no spendOrder, so it is not a position in the order');
+});
+
+test('LiquidityGraph CTRL-2: no pool with a Spend # reads as the drawdownPriority fallback', () => {
+  const graph = copy(GRAPH_FOR_READOUTS);
+  for (const p of graph.pools) delete p.spendOrder;
+  const param = { name: 'liquidityGraph', value: graph };
+  const host  = mount(buildLiquidityGraphEditor(param, VALUED_ACCOUNTS));
+  assert.match(cell(host, 'compiled-order').textContent, /nothing is drawn from the graph/);
+});
+
+test('LiquidityGraph CTRL-2: "Holds today" reads claimValueNative, per claim and per currency', async () => {
+  const { claimValueNative } = await import('../../src/finance/pools/pool-metrics.js');
+  const param = { name: 'liquidityGraph', value: copy(GRAPH_FOR_READOUTS) };
+  const host  = mount(buildLiquidityGraphEditor(param, VALUED_ACCOUNTS));
+
+  const shown = cells(host, 'holdsNow').map(n => n.textContent);
+  assert.strictEqual(shown.length, 4, 'one readout per CLAIM row');
+
+  // The savings claim is the balance; the sleeve-narrowed brokerage claims are their LOTS,
+  // not the account's (disagreeing) balance of 999 — the property `claimValueNative` owns.
+  const stock = VALUED_ACCOUNTS.find(a => a.stateKey === 'usStockAccount');
+  assert.strictEqual(claimValueNative(stock, ['BOND']), 120000, 'the authority, restated');
+  assert.strictEqual(shown[0], '50,000 USD');
+  assert.strictEqual(shown[1], '120,000 USD');
+  assert.strictEqual(shown[2], '300,000 USD');
+  // The AUD claim keeps its OWN currency and is not converted or summed with the two USD
+  // ones beside it — §4.2 item 2's whole reason for living on the claim row.
+  assert.strictEqual(shown[3], '80,000 AUD');
+});
+
+test('LiquidityGraph CTRL-2: a sleeve-narrowed claim on an account with no lots holds nothing', () => {
+  // The half of `claimValueNative` a reader who guessed would have got wrong: it is 0, not
+  // the account's cash balance. A savings account cannot be narrowed (the normalizer refuses
+  // it), so this is the shape of a misauthored claim — and the readout is what shows it.
+  const param = { name: 'liquidityGraph', value: {
+    pools: [{ id: 'cash', spendOrder: 10,
+              claims: [{ key: 'usSavingsAccount', sleeves: ['BOND'] }] }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, VALUED_ACCOUNTS));
+  assert.strictEqual(cell(host, 'holdsNow').textContent, '0 USD');
+});
+
+test('LiquidityGraph CTRL-2: each pool\u2019s claims are the join, done once', () => {
+  // Under the tables rather than as a cell on the Pools row — see the readout's own comment.
+  // Measured in the running app: a twelfth column took ~13% off every authoring cell in a
+  // table whose cells already truncate a mode name to three characters.
+  const param = { name: 'liquidityGraph', value: copy(GRAPH_FOR_READOUTS) };
+  const host  = mount(buildLiquidityGraphEditor(param, VALUED_ACCOUNTS));
+  assert.strictEqual(cell(host, 'pool-claims-cash').textContent,
+    'cash: usSavingsAccount (whole account)');
+  assert.strictEqual(cell(host, 'pool-claims-bonds').textContent,
+    'bonds: usStockAccount (BOND)');
+  // The multi-claim, multi-currency pool: both claims named, neither summed.
+  assert.strictEqual(cell(host, 'pool-claims-growth').textContent,
+    'growth: usStockAccount (EQUITY), auOffsetAccount (whole account)');
+});
+
+test('LiquidityGraph CTRL-2: a pool with no claims says so rather than rendering blank', () => {
+  // "A pool with no claims holds nothing" is already the claims table's empty text; a BLANK
+  // cell on the pool row reads as a control that failed to draw, which is the same mistake
+  // `row-list-note` was introduced for on the sleeves checkset.
+  const param = { name: 'liquidityGraph', value: {
+    pools: [{ id: 'cash', spendOrder: 10, claims: [] }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, VALUED_ACCOUNTS));
+  assert.strictEqual(cell(host, 'pool-claims-cash').textContent, 'cash: holds nothing');
+});
+
+test('LiquidityGraph CTRL-2: the readouts track an edit — they are not a first-render snapshot', () => {
+  // The reason every table's `onChange` refreshes them. A readout that was right when the
+  // editor was built and stale thereafter is worse than none: it is a confident wrong answer
+  // about the graph the author is looking at.
+  const param = { name: 'liquidityGraph', value: copy(GRAPH_FOR_READOUTS) };
+  const host  = mount(buildLiquidityGraphEditor(param, VALUED_ACCOUNTS));
+  assert.ok(cell(host, 'compiled-order').textContent.includes('1. usSavingsAccount'));
+
+  // Push `cash` to the back of the queue. It lands at position FOUR, not three: `growth`
+  // holds two claims, and the compiled sequence is one entry per CLAIM rather than per pool
+  // — which is the join §4.2 item 3 exists to make visible.
+  type(cells(host, 'spendOrder')[0], '99', 'change');
+  assert.ok(cell(host, 'compiled-order').textContent.includes('4. usSavingsAccount'),
+    'the compiled order must follow the edit');
+});
+
+test('LiquidityGraph CTRL-3: the gate prose names the clause, its basis, its scope and its dwell', () => {
+  const param = { name: 'liquidityGraph', value: {
+    pools: [{ id: 'growth', spendOrder: 10, claims: [{ key: 'usStockAccount' }] },
+            { id: 'cash',   spendOrder: 20, target: { mode: 'YEARS_OF_SPEND', value: 1 },
+              claims: [{ key: 'usSavingsAccount' }] }],
+    flows: [{ id: 'g2c', from: 'growth', to: 'cash',
+              gate: { scope: 'EDGE', sourceDrawdownUnder: 0.05,
+                      drawdownBasis: 'INDEX', sustainedYears: 2 } }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, VALUED_ACCOUNTS));
+  const text = cell(host, 'gate-prose-g2c').textContent;
+
+  assert.match(text, /source within 0\.05 of its high/, 'the clause');
+  assert.match(text, /return index/,                    'the basis (§20.14: it changes the behaviour)');
+  assert.match(text, /filling the destination pool/,    'the scope (§12.4c)');
+  assert.match(text, /for 2 consecutive years/,         'the dwell (§20.13: the lever that moves the answer)');
+});
+
+test('LiquidityGraph CTRL-3: a two-branch gate renders as an OR of ANDs', () => {
+  const param = { name: 'liquidityGraph', value: {
+    pools: [{ id: 'growth', spendOrder: 10, claims: [{ key: 'usStockAccount' }] },
+            { id: 'cash',   spendOrder: 20, target: { mode: 'YEARS_OF_SPEND', value: 1 },
+              claims: [{ key: 'usSavingsAccount' }] }],
+    flows: [{ id: 'g2c', from: 'growth', to: 'cash', gate: { anyOf: [
+      { sourceDrawdownUnder: 0.05, drawdownBasis: 'INDEX', sustainedYears: 1 },
+      { sourceDrawdownUnder: 0.01, drawdownBasis: 'INDEX', sustainedYears: 2 },
+    ] } }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, VALUED_ACCOUNTS));
+  const text = cell(host, 'gate-prose-g2c').textContent;
+  // Each branch is parenthesised and the branches are ORed — disjunctive normal form, said
+  // aloud. (A loose `[^)]*` cannot match here: the basis clause nests its own parentheses.)
+  assert.ok(text.includes(') OR ('), `two branches must read as an OR: ${text}`);
+  assert.match(text, /\(source within 0\.05 of its high \(measured against its return index\)\) OR /);
+  assert.match(text, /for 2 consecutive years/);
+});
+
+test('LiquidityGraph CTRL-3: a rawGate renders as "authored directly", never as half a sentence', () => {
+  // §20.15's escape hatch. The clause table does not DRAW a gate outside DNF, so the prose
+  // must not pretend to describe one — a partial sentence about a gate the author cannot see
+  // in the table is exactly the "silently dropped half a gate" failure `rawGate` exists for.
+  const param = { name: 'liquidityGraph', value: {
+    pools: [{ id: 'growth', spendOrder: 10, claims: [{ key: 'usStockAccount' }] },
+            { id: 'cash',   spendOrder: 20, target: { mode: 'YEARS_OF_SPEND', value: 1 },
+              claims: [{ key: 'usSavingsAccount' }] }],
+    flows: [{ id: 'g2c', from: 'growth', to: 'cash',
+              gate: { allOf: [{ anyOf: [{ sourceDrawdownUnder: 0.05 },
+                                        { targetDrawdownOver: 0.2 }] }] } }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, VALUED_ACCOUNTS));
+  const text = cell(host, 'gate-prose-g2c').textContent;
+  assert.match(text, /authored directly/);
+  assert.ok(!/blocks /.test(text), 'it must not render a partial description of a gate it cannot draw');
+});
+
+test('LiquidityGraph CTRL-3: an ungated flow says so rather than rendering nothing', () => {
+  const param = { name: 'liquidityGraph', value: {
+    pools: [{ id: 'growth', spendOrder: 10, claims: [{ key: 'usStockAccount' }] },
+            { id: 'cash',   spendOrder: 20, target: { mode: 'YEARS_OF_SPEND', value: 1 },
+              claims: [{ key: 'usSavingsAccount' }] }],
+    flows: [{ id: 'g2c', from: 'growth', to: 'cash' }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, VALUED_ACCOUNTS));
+  assert.match(cell(host, 'gate-prose-g2c').textContent, /no gate/);
+});
+
+test('LiquidityGraph CTRL-15: three switch states render three lines, and the readouts render in all three', () => {
+  // §10.5. Hiding the readouts when the graph is switched off would make the switch a way to
+  // stop seeing the graph you are editing — which is precisely what validation refuses to do
+  // (`collectAuthoredGraphProblems` keeps reporting while the switch is off, "because the
+  // switch is a run-time 'ignore this', not an authoring-time 'this is fine'").
+  const seen = new Set();
+  for (const flags of [{},
+                       { liquidityGraphEnabled: false },
+                       { poolFlowsEnabled: false }]) {
+    const param = { name: 'liquidityGraph', value: copy(GRAPH_FOR_READOUTS) };
+    const host  = mount(buildLiquidityGraphEditor(param, VALUED_ACCOUNTS, () => flags));
+    seen.add(cell(host, 'graph-provenance').textContent);
+    assert.ok(cell(host, 'compiled-order').textContent.includes('1. usSavingsAccount'),
+      'the readouts render in every state — only the line above them changes');
+  }
+  assert.strictEqual(seen.size, 3, 'three distinct states must read as three distinct lines');
+
+  const off = [...seen].find(t => t.includes('liquidityGraphEnabled'));
+  assert.match(off, /will NOT be used/, 'the off state must say the order is not the run’s');
+});
+
+test('LiquidityShapes CTRL-15: a shape names itself and does not claim the whole run', () => {
+  // The fourth state. A shape is live only in the years its schedule selects it, so the base
+  // graph's "this is the order the run will use" is false for every other year — and design
+  // 109 §7 makes the switch date and the authored year differ by up to a cadence, which is
+  // why the line names the shape and never a date.
+  const param = { name: 'liquidityShapes', value: { bridge: copy(GRAPH_FOR_READOUTS) } };
+  const host  = mount(buildLiquidityShapesEditor(param, VALUED_ACCOUNTS, () => ({})));
+  const text  = cell(host, 'graph-provenance').textContent;
+  assert.match(text, /Shape 'bridge'/);
+  assert.match(text, /not the whole run/);
+});
+
 test('LiquidityGraph: what the editor writes is what the normalizer accepts', async () => {
   const { normalizeLiquidityGraph } = await import('../../src/finance/pools/liquidity-graph.js');
   const param = { name: 'liquidityGraph', value: null };
@@ -1436,4 +1742,37 @@ test('LiquidityShapes: the shape head carries four controls on its own column te
   const head = host.querySelector('.mix-block-head');
   assert.ok(head.classList.contains('pool-shape-head'));
   assert.strictEqual(head.children.length, 4, 'label, input, Duplicate, Remove');
+});
+
+test('LiquidityGraph CTRL-4: an advisory renders in the editor and refuses nothing', () => {
+  // Design 110 §4.3's whole point. The two design-109 warnings were `console.warn`, which
+  // reaches nobody. They now arrive with the rest of the problems and are drawn above the
+  // readouts — and the readouts still render, because a warning is not a refusal.
+  const flags = () => ({ problems: [
+    { param: 'liquidityShapes', shape: null, severity: 'warn',
+      message: "liquidityShapes: 'orphan' is not selected by any row." },
+    { param: 'liquidityGraph', shape: null, severity: 'error',
+      message: 'a bad cell — this one is a refusal and is NOT drawn here' },
+  ] });
+  const param = { name: 'liquidityGraph', value: copy(GRAPH_FOR_READOUTS) };
+  const host  = mount(buildLiquidityGraphEditor(param, VALUED_ACCOUNTS, flags));
+
+  const shown = cells(host, 'graph-advisory').map(n => n.textContent);
+  assert.deepStrictEqual(shown, ["liquidityShapes: 'orphan' is not selected by any row."],
+    'advisories are drawn; refusals belong to the Rebuild guard, not to this block');
+  assert.ok(cell(host, 'compiled-order').textContent.includes('1. usSavingsAccount'),
+    'a warning must not take the readouts down with it');
+});
+
+test('LiquidityShapes CTRL-4: a shape sees its OWN advisories, not every shape’s', () => {
+  // Without the split, every one of the N shape editors on a scheduled plan repeats every
+  // warning — saying everything everywhere instead of saying it in the right place.
+  const flags = () => ({ problems: [
+    { param: 'liquidityShapes', shape: 'bridge', severity: 'warn', message: 'about bridge' },
+    { param: 'liquidityShapes', shape: 'late',   severity: 'warn', message: 'about late' },
+    { param: 'liquidityGraphSchedule', shape: null, severity: 'warn', message: 'about the base graph' },
+  ] });
+  const param = { name: 'liquidityShapes', value: { bridge: copy(GRAPH_FOR_READOUTS) } };
+  const host  = mount(buildLiquidityShapesEditor(param, VALUED_ACCOUNTS, flags));
+  assert.deepStrictEqual(cells(host, 'graph-advisory').map(n => n.textContent), ['about bridge']);
 });

@@ -1,8 +1,9 @@
 # 110 — The liquidity pool control surface (design 97 §14, effort 2)
 
-**Status:** **PROPOSED**, and written to be argued with. Nothing here is built. §10 records the
-first review (18 Sep 2026): three of the five open questions decided, one closed, and one — the
-shape-spanning axis — promoted from a labelling question to a **precondition of phase 6** (§10.3).
+**Status:** **PHASES 1–3 BUILT** (19 Sep 2026); 4–9 proposed. §10 records the first review
+(18 Sep 2026): three of the five open questions decided, one closed, and one — the
+shape-spanning axis — promoted from a labelling question to a **precondition of phase 6**
+(§10.3), which §10.3 now answers. §13 records what the build changed.
 
 Design 97 §14 is eleven lines and a seven-row table. It sketched effort 2 far enough to name
 what effort 1 must not foreclose, and then four separate builds happened *against* that sketch
@@ -427,15 +428,18 @@ rewriting another lever. Wealth-matching is not a config problem and stays where
 Ordered so that each step is independently shippable, and so that the cheapest things that
 prevent a wrong reading come first.
 
-1. **The `ui` round trip, asserted** (§2.2) — one test through the editor and one through
-   `ScenarioSerializer`. Precondition for anything that draws a layout, and it either confirms
-   a §14 constraint or deletes a dead field.
-2. **Authoring readouts** (§4.2) — claims summary, holds-now, compiled spend order,
-   gate-as-a-sentence, behind the three-state provenance line of §10.5. No engine change, no new
-   authored field, and every one of them is derived by calling the compiler. This is the highest
-   ratio of misreadings-prevented to code in the document.
-3. **Warnings and shape-local problems** (§2.3, §4.3) — `collectAuthoredGraphProblems` gains a
-   severity and stops short-circuiting the shape pass; the two `console.warn`s move into it.
+1. ~~**The `ui` round trip, asserted**~~ (§2.2) — **BUILT.** It did not confirm the constraint:
+   `normalizeLiquidityGraph` carries `raw.ui` on pools *and* flows, and the editor carried it on
+   pools only, so a layout authored on an EDGE was discarded by the first edit to any cell —
+   silently, with the graph still loading and still running. Fixed; CTRL-1 covers pools, flows,
+   a shape-nested graph, and `ScenarioSerializer`.
+2. ~~**Authoring readouts**~~ (§4.2) — **BUILT**, with one placement changed by measuring in the
+   running app: see §13.1. CTRL-2, CTRL-3, CTRL-15.
+3. ~~**Warnings and shape-local problems**~~ (§2.3, §4.3) — **BUILT.**
+   `collectAuthoredGraphProblems` gained `severity`, `blockingProblems` is the single filter
+   every refusal site now goes through, the shape pass runs unconditionally and localizes to
+   the cell, and the two `console.warn`s are rendered from the same collectors the advisory
+   rows come from. CTRL-4, CTRL-5. **Four more `console.warn`s remain — see §13.2.**
 4. **Shape boundaries on the panel** (§5.3) — `markLine` per switch, `shape` as a CSV column,
    every shape in the strip. Three small edits, one theme.
 5. **The topology view** (§5.2) — the fifth view, labelled with run-to-date
@@ -592,6 +596,27 @@ Either way this is now a **step 6 input**, because it decides the key's meaning.
 is a change to what an existing axis means, on the one surface where a silently-changed meaning
 is most expensive.
 
+**DECIDED (19 Sep 2026): (a), the multiplier.** The key is **`pool.<poolId>.targetScale`,
+default `1.0`**, applied to that pool's authored target in **every** shape that contains it.
+This unblocks step 6, and it fixes the meaning of three things that were otherwise open:
+
+- **CTRL-14 is now the defining assertion of the axis, not a guard on it.** "Both values move
+  and their ratio is unchanged" is the whole content of (a); if that test is deleted the key
+  has no meaning left.
+- **(c) does not arise.** A pool absent from some shape is not a special case under a
+  multiplier — the factor applies to the shapes that contain the pool and there is nothing to
+  apply it to in the shapes that do not. The bridge pool stays searchable, which was (c)'s
+  entire cost.
+- **The legibility cost is paid in the harvest row, as §10.3 says**, by showing the resolved
+  values a factor produces (`0.5 → 1y / 2y`) rather than the factor alone. That is a label on
+  a row; it is not a second authority and it does not touch the key.
+
+What this does **not** license: `pool.<id>.target` as an absolute key **must not be added
+later beside** the scale. Two keys writing one field is §12.2's one-authority rule broken by
+exactly the mechanism §6.2 chose the `BALANCE_TARGET` overlay pattern to avoid, and a sweep
+that set both would have no defined answer. An author who wants an absolute value writes it
+in the graph; the axis only ever scales what is written.
+
 ### 10.4 Q4 — no. The editor does not simulate the draw
 
 **Decided against.** §4.2 item 3 renders the compiled spend *order*, which is a pure function of
@@ -712,3 +737,59 @@ the expensive part of each one is finding the seam. Line numbers drift; the func
 
 §10.3 — absolute target or multiplier. It is not a labelling choice and it cannot be deferred
 into the build.
+
+
+---
+
+## 13. What the build changed (19 Sep 2026, phases 1–3)
+
+Recorded because a design whose phases were built elsewhere is a design that is wrong in a way
+that is hard to see — the same reason §11 exists.
+
+### 13.1 §4.2 item 1 moved off the Pools row
+
+§4.2 asked for the claims summary as "a derived, non-editable summary cell **on the Pools
+row**". Built that way, then measured in the running app on a real plan (§12.2's last trap):
+the params pane is ~550px, the Pools table already carries eleven columns, and a twelfth took
+**~13% off every one of them** — `Id` from 39px to 34px, `Target` from 63px to 55px, on cells
+that were already truncating a mode name to three characters. A derived readout that buys its
+own legibility with the authoring surface's width has made the editor worse at the thing it is
+for.
+
+**It is rendered under the tables instead**, one line per pool. It costs no authoring width, and
+the whole string fits rather than being hinted at behind a tooltip. §4.2's substance — *the join
+done once, correctly* — is unchanged; only where it is drawn.
+
+The **"Holds today"** readout (§4.2 item 2) stayed on the **Claims** row, where §4.2 put it: that
+table has three columns and nothing in it clips.
+
+This is the §10.5 revision loop working as described — "watch someone read it" — one phase early.
+
+### 13.2 §4.3 named two `console.warn`s. There are six.
+
+§4.3 enumerated `_warnUnscheduledShapes` and `_warnResurrectedPools`, and both are now advisory
+rows. **Four more live inside `normalizeLiquidityGraph` itself** and were not named:
+
+| where | what it says |
+|---|---|
+| `liquidity-graph.js` ~906 | a gate reads a market signal on a pool claiming only cash-like accounts — no lots, so its return index never moves off its high and the clause is effectively constant |
+| ~981 | one pool is the source of several gated edges **whose gates differ** — a gate vetoes the sale of its SOURCE, so the strictest one wins and the others are not what they read as |
+| ~1048 | a pool `target`s a class the **location policy fills somewhere else first**, so the pool reports less cover than the plan carries and the spend order walks past the rest |
+| ~1074 | a REBALANCE edge whose pool claims an account **the rebalancer does not trade** |
+
+The third one fires four times on the repository author's own live scenario, for `buffer` (BOND)
+and `gold` (GOLD). That is a real, actionable statement about a real plan that has been going to
+the browser console and nowhere else — precisely the defect §4.3 exists to remove, in the four
+places §4.3 did not look.
+
+**They are not folded in yet, deliberately.** The two that are done sit *outside* the normalizer
+and had a natural collector each. These four are *inside* it, and it returns a graph rather than
+a problem list, so collecting them means threading an optional sink through
+`normalizeLiquidityGraph` — a small change, but one that touches the compile path that every
+golden run goes through, and a wider scope than phase 3 was given.
+
+**Proposed as phase 3b**, before phase 4: `normalizeLiquidityGraph(graph, accounts, opts)` takes
+an optional `opts.advisories` array; when present the four push to it instead of calling
+`console.warn`, and `collectAuthoredGraphProblems` passes one. The compile path passes none and
+keeps warning to the console, so no run changes and no fixture moves. CTRL-4's "the console
+warning and the reported warning are the same sentence" extends to all six unchanged.

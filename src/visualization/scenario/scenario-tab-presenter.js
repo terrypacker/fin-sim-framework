@@ -14,7 +14,8 @@ import { ScenarioLoader }     from '../../scenarios/scenario-loader.js';
 import { paramsToCsv, csvToParamUpdates, coerceParamValue, CSV_SCALAR_TYPES } from './param-csv.js';
 import { withBom } from '../../utils/csv.js';
 import { collectAuthoredMixProblems } from '../../finance/behavioral/rebalance-to-target-reducer.js';
-import { collectAuthoredGraphProblems } from '../../finance/pools/liquidity-graph.js';
+import { collectAuthoredGraphProblems, blockingProblems }
+  from '../../finance/pools/liquidity-graph.js';
 
 /**
  * ScenarioTabPresenter — owns all scenario-tab UI and scenario CRUD.
@@ -112,14 +113,41 @@ export class ScenarioTabPresenter {
     // list, and a missing `offsetsPropertyKey` there does not read as "not supplied" — it
     // reads as "this offset links to no property", which would refuse a Rebuild the
     // compiler is perfectly happy with. `role` is the second such field (§20.19's warning).
+    //
+    // Design 110 §4.2 item 2 widened it a second time, for the "what this claim holds today"
+    // readout, and the three fields it added are the ones `claimValueNative` READS — that
+    // function is the authority on what a claim is worth and it is called, never re-derived
+    // (§17.2). `holdings` is projected to `{ allocation, marketValue }` only: a live lot
+    // carries a basis, a purchase date and a security id that nothing here reads, and handing
+    // the editor whole lots would let a later readout quietly start reading one.
+    //
+    // `currency` rides along because the readout reports the claim in the account's OWN
+    // currency and must therefore NAME it. `claimValueNative` does not convert and the editor
+    // has no rate, so an unlabelled figure on a mixed-currency plan is a number whose unit the
+    // reader has to guess. The pool-level total, with FX and per period, is the panel's job
+    // and stays there (§4.2 item 2).
     this._view.accountsProvider = () => {
       const registry = ServiceRegistry.getInstance();
       return (registry.accountService?.getAll?.() ?? [])
         .map(a => ({ stateKey: a.stateKey, name: a.name ?? a.stateKey, type: a.type,
                      ...(a.offsetsPropertyKey != null ? { offsetsPropertyKey: a.offsetsPropertyKey } : {}),
-                     ...(a.role != null ? { role: a.role } : {}) }))
+                     ...(a.role != null ? { role: a.role } : {}),
+                     ...(a.currency != null ? { currency: a.currency } : {}),
+                     ...(Number.isFinite(a.balance) ? { balance: a.balance } : {}),
+                     ...(Array.isArray(a.holdings)
+                       ? { holdings: a.holdings.map(h => ({ allocation: h?.allocation ?? null,
+                                                            marketValue: h?.marketValue ?? 0 })) }
+                       : {}) }))
         .filter(a => a.stateKey);
     };
+
+    // Design 110 §4.3 — the ADVISORY half of the graph problems, for the readouts under the
+    // graph tables. The refusal half goes to `confirmSaveInvalidPools` / `reportInvalidPools`
+    // through `_graphProblems`, which filters; this is the same list unfiltered, and the two
+    // warnings it carries (`_collectUnscheduledShapes`, `_collectResurrectedPools`) used to be
+    // `console.warn` and therefore reached nobody. A provider, not a value: the shapes and the
+    // schedule are sibling params that can change without this editor being rebuilt.
+    this._view.graphProblemsProvider = () => this._allGraphProblems();
 
     // Click-through: open the linked account/person in the shared edit modal.
     this._view.onOpenLinkedNode = (paramNode) => {
@@ -351,9 +379,23 @@ export class ScenarioTabPresenter {
 
   /**
    * The active scenario's liquidity-graph problems, against the accounts its claims name.
+   *
+   * BLOCKING ones only. Design 110 §4.3 put the two design-109 advisories into the same list
+   * so there is one authority on "what is wrong with this graph", and every caller of this
+   * one is deciding a refusal (`confirmSaveInvalidPools`, the Rebuild guard). An unscheduled
+   * shape must not stop a save — it is normal authoring mid-edit, and a warning that blocked
+   * would be strictly worse than the `console.warn` it replaced (CTRL-4).
    * @private
    */
   _graphProblems() {
+    return blockingProblems(this._allGraphProblems());
+  }
+
+  /**
+   * Every problem including the advisories — for surfaces that REPORT rather than refuse.
+   * @private
+   */
+  _allGraphProblems() {
     return collectAuthoredGraphProblems(this._paramBag(), this._graphAccounts());
   }
 

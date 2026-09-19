@@ -200,6 +200,29 @@ const DRAWDOWN_BASES = new Set(Object.values(POOL_DRAWDOWN_BASIS));
 /** A composed gate is a tree; a bound keeps a cyclic or absurd authored one from recursing. */
 const MAX_GATE_DEPTH = 6;
 
+/**
+ * Design 110 §4.3. A problem is a REFUSAL or an ADVISORY, and the difference decides whether
+ * Rebuild proceeds.
+ *
+ * Both severities come out of `collectAuthoredGraphProblems` so there is one authority on
+ * "what is wrong with this graph" — but that means every consumer that decides a refusal has
+ * to say which it means. `blockingProblems` is that decision, in one place, so a new consumer
+ * cannot get it wrong by forgetting to filter: an advisory that blocked a Rebuild would be a
+ * strictly worse outcome than the `console.warn` it replaced.
+ */
+export const PROBLEM_SEVERITY = Object.freeze({ ERROR: 'error', WARN: 'warn' });
+
+/**
+ * The problems that must stop a Rebuild — everything that is not an advisory.
+ *
+ * Written as "not WARN" rather than "is ERROR" deliberately: a problem from an older caller
+ * that carries no `severity` at all is a refusal, which is what every entry meant before
+ * design 110 and what a reader of an unfamiliar row would assume.
+ */
+export function blockingProblems(problems) {
+  return (problems ?? []).filter(x => x?.severity !== PROBLEM_SEVERITY.WARN);
+}
+
 const err = (msg) => { throw new Error(`liquidityGraph: ${msg}`); };
 
 /** A finite number, or throw naming the field. */
@@ -1184,16 +1207,32 @@ function _graphOptsFrom(p) {
  * compiler runs, so the two can never drift — a percent authored as 100 is reported here
  * by exactly the sentence `normalizeLiquidityGraph` would have thrown.
  *
- * Field-local problems are reported alone: once a size spec is known bad the whole-graph
- * pass would only re-report it, unlocalized. When there is none, the whole-graph pass runs
- * and its first throw is reported with `field: null` — still nameable ("this graph does not
- * compile"), just not repairable a cell at a time.
+ * A bad size spec in the BASE graph still suppresses the base graph's whole-graph pass —
+ * once a cell is known bad that pass would only re-report it, unlocalized. Design 110 §2.3
+ * found that the same `return` was also suppressing the SHAPE pass, and that does not
+ * follow: a shape is a separate document with separate cells, so while any one base-graph
+ * cell was bad every problem in every named shape was invisible. The shape pass now always
+ * runs, and it localizes its own cells the same way (§2.3 rule 2 — design 109 §12 asked for
+ * localisation and got naming).
+ *
+ * ─── two severities (design 110 §4.3) ────────────────────────────────────────
+ *
+ * Every entry carries a `severity`. `'error'` is a refusal — the graph does not compile and
+ * Rebuild must not proceed. `'warn'` is advisory: the graph compiles, and something about it
+ * is almost certainly not what the author meant (an unscheduled shape, a resurrected pool).
+ * Both live here so there is ONE authority on "what is wrong with this graph" and the
+ * refusal path and the advisory path are the same code.
+ *
+ * A consumer that decides a REFUSAL must filter with {@link blockingProblems}. Warnings that
+ * blocked would be worse than warnings that went nowhere, which is the state they were in:
+ * `console.warn` in the app, and nothing at all from the CLI tools
+ * (`cli-tools-swallow-loader-warnings`).
  *
  * @param {object} params   - the scenario parameter bag
  * @param {Array}  accounts - the accounts the claims name; the whole-graph pass is SKIPPED
  *        when this is empty, because every claim would then read as naming a dead account
  * @returns {Array<{param: string, index: number|null, field: string|null, pool: string|null,
- *                  message: string}>} empty when valid
+ *                  shape?: string|null, severity: string, message: string}>} empty when valid
  */
 export function collectAuthoredGraphProblems(params, accounts = []) {
   const p = params ?? {};
@@ -1203,48 +1242,127 @@ export function collectAuthoredGraphProblems(params, accounts = []) {
   if (rawPools.length === 0) return [];
 
   const problems = [];
+
+  // The base graph's own cells.
+  const baseCellProblems = _sizeSpecProblems(rawPools, 'liquidityGraph', null);
+  problems.push(...baseCellProblems);
+
+  if (!accounts?.length) {
+    // No accounts ⇒ every claim would read as naming a dead account, so the whole-graph and
+    // shape passes are both skipped. The shapes' own CELLS do not need accounts, though, and
+    // a bad percent is a bad percent whatever the claims say — so they are still reported.
+    problems.push(..._shapeCellProblems(p));
+    return problems;
+  }
+
+  if (!baseCellProblems.length) {
+    try {
+      // NOT `resolveLiquidityGraph` — see `_normalizeFromParams`. A graph switched off with
+      // `liquidityGraphEnabled: false` still has to report its problems, because the switch
+      // is a run-time "ignore this", not an authoring-time "this is fine".
+      _normalizeFromParams(p, accounts);
+    } catch (e) {
+      problems.push({ param: 'liquidityGraph', index: null, field: null, pool: null,
+                      severity: PROBLEM_SEVERITY.ERROR, message: e.message });
+    }
+  }
+
+  // Design 109 §5 rule 3 — the SHAPES and the schedule, on the same terms, and NOT behind the
+  // base graph's cells (design 110 §2.3). A shape is a separate document: its cells are
+  // localized like the base graph's, and its whole-graph pass runs when its own cells are
+  // clean, so "shape B does not compile" is reported as the cell it is in rather than as a
+  // sentence about the shape.
+  const shapeCellProblems = _shapeCellProblems(p);
+  problems.push(...shapeCellProblems);
+  const dirtyShapes = new Set(shapeCellProblems.map(x => x.shape));
+  try {
+    _normalizeShapes(p, accounts, dirtyShapes);
+    _normalizeSchedule(p.liquidityGraphSchedule, p.liquidityShapes);
+  } catch (e) {
+    const m = /^liquidityGraph: shape '([^']+)': /.exec(e.message);
+    problems.push({
+      param: m ? 'liquidityShapes' : 'liquidityGraphSchedule',
+      index: null, field: null, pool: null, shape: m ? m[1] : null,
+      severity: PROBLEM_SEVERITY.ERROR, message: e.message,
+    });
+  }
+
+  // Design 110 §4.3 — the two advisories, in the SAME list rather than in `console.warn`.
+  // They need a compiling graph to be meaningful (both read the resolved schedule), so they
+  // run only when nothing above refused.
+  if (!blockingProblems(problems).length) problems.push(..._scheduleAdvisories(p, accounts));
+
+  return problems;
+}
+
+/**
+ * The `target`/`floor`/`capacity` cells of one pool list, each re-validated through the SAME
+ * `sizeSpec` the compiler runs — so the sentence the author reads is the sentence the
+ * compiler would have thrown, and the two cannot drift.
+ * @private
+ */
+function _sizeSpecProblems(rawPools, param, shape) {
   const specs = [
     ['target',   TARGET_MODES,   POOL_TARGET_MODE.YEARS_OF_SPEND],
     ['floor',    TARGET_MODES,   POOL_TARGET_MODE.AMOUNT],
     ['capacity', CAPACITY_MODES, POOL_CAPACITY_MODE.BALANCE],
   ];
-  rawPools.forEach((raw, index) => {
+  const out = [];
+  (Array.isArray(rawPools) ? rawPools : []).forEach((raw, index) => {
     if (!raw || typeof raw !== 'object') return;
     const id = typeof raw.id === 'string' && raw.id ? raw.id : `#${index}`;
     for (const [field, allowed, defaultMode] of specs) {
       try {
         sizeSpec(raw[field], `pool '${id}' ${field}`, allowed, defaultMode);
       } catch (e) {
-        problems.push({ param: 'liquidityGraph', index, field, pool: raw.id ?? null, message: e.message });
+        out.push({ param, index, field, pool: raw.id ?? null,
+                   ...(shape != null ? { shape } : {}),
+                   severity: PROBLEM_SEVERITY.ERROR, message: e.message });
       }
     }
   });
-  if (problems.length) return problems;
+  return out;
+}
 
-  if (!accounts?.length) return problems;
-  try {
-    // NOT `resolveLiquidityGraph` — see `_normalizeFromParams`. A graph switched off with
-    // `liquidityGraphEnabled: false` still has to report its problems, because the switch
-    // is a run-time "ignore this", not an authoring-time "this is fine".
-    _normalizeFromParams(p, accounts);
-  } catch (e) {
-    problems.push({ param: 'liquidityGraph', index: null, field: null, pool: null, message: e.message });
+/**
+ * Every named shape's cells, localized to the shape AND the cell (design 110 §2.3 rule 2).
+ *
+ * Before this, a bad percent in shape B was "shape B does not compile" while the same typo in
+ * the base graph highlighted the cell — design 109 §12 asked for localisation and got naming.
+ * @private
+ */
+function _shapeCellProblems(p) {
+  const raw = (p?.liquidityShapes && typeof p.liquidityShapes === 'object'
+               && !Array.isArray(p.liquidityShapes)) ? p.liquidityShapes : {};
+  const out = [];
+  for (const [id, shape] of Object.entries(raw)) {
+    if (!shape || typeof shape !== 'object') continue;   // the container's own error; _normalizeShapes says it
+    out.push(..._sizeSpecProblems(shape.pools, 'liquidityShapes', id));
   }
+  return out;
+}
 
-  // Design 109 §5 rule 3 — the SHAPES and the schedule, on the same terms. Reported with the
-  // shape named, or a bad cell in shape B reads as a bad cell in shape A and the author
-  // repairs the wrong table. Also switched-off-safe, for the reason above.
+/**
+ * The two design-109 advisories, as `severity: 'warn'` rows (design 110 §4.3).
+ *
+ * They are computed from the same collectors `resolveLiquidityGraphSchedule` renders to the
+ * console, so there is one derivation and two renderers rather than two derivations.
+ * @private
+ */
+function _scheduleAdvisories(p, accounts) {
   try {
-    _normalizeShapes(p, accounts);
-    _normalizeSchedule(p.liquidityGraphSchedule, p.liquidityShapes);
-  } catch (e) {
-    const m = /^liquidityGraph: shape '([^']+)': /.exec(e.message);
-    problems.push({
-      param: m ? 'liquidityShapes' : 'liquidityGraphSchedule',
-      index: null, field: null, pool: null, shape: m ? m[1] : null, message: e.message,
-    });
+    const rows = _normalizeSchedule(p.liquidityGraphSchedule, p.liquidityShapes);
+    if (!rows.length) return [];
+    const shapes = _normalizeShapes(p, accounts);
+    const entries = [{ shapeId: null, graph: _normalizeFromParams(p, accounts) },
+                     ...rows.map(r => ({ shapeId: r.shape, graph: shapes.get(r.shape) }))];
+    return [..._collectUnscheduledShapes(shapes, rows),
+            ..._collectResurrectedPools(entries)];
+  } catch {
+    // An advisory pass that throws has nothing to add: the error leg above already reported
+    // the refusal, and a second sentence about the same defect is noise.
+    return [];
   }
-  return problems;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -1330,8 +1448,13 @@ export function resolveLiquidityGraphSchedule(params, accounts = []) {
       graph:   shapes.get(row.shape),
     });
   }
-  _warnUnscheduledShapes(shapes, rows);
-  _warnResurrectedPools(out);
+  // Design 110 §4.3 — the same collectors `collectAuthoredGraphProblems` returns as
+  // `severity: 'warn'` rows, rendered here to the console for the ENGINE path, which has no
+  // authoring surface. One derivation, two renderers: the advisory the author reads in the
+  // editor and the one a developer sees in the console are by construction the same sentence.
+  for (const w of [..._collectUnscheduledShapes(shapes, rows), ..._collectResurrectedPools(out)]) {
+    console.warn(w.message);
+  }
   return out;
 }
 
@@ -1390,11 +1513,17 @@ function _normalizeSchedule(rawSchedule, rawShapes) {
  * records for three call sites and this would reintroduce for N shapes.
  * @private
  */
-function _normalizeShapes(p, accounts) {
+function _normalizeShapes(p, accounts, skip = null) {
   const raw = _shapesObject(p.liquidityShapes);
   const out = new Map();
   for (const [id, shape] of Object.entries(raw)) {
     if (!shape || typeof shape !== 'object') err(`liquidityShapes['${id}'] is not a graph`);
+    // `skip` is the reporting path's (design 110 §2.3): a shape whose own CELLS have already
+    // been reported cell-by-cell must not then throw an unlocalized sentence about the same
+    // typo — the base graph's cells suppress its whole-graph pass for exactly this reason,
+    // and a shape is a separate document that deserves the same treatment. It is null on the
+    // COMPILE path, where every shape must still throw.
+    if (skip?.has(id)) continue;
     try {
       out.set(id, normalizeLiquidityGraph(shape, accounts, _graphOptsFrom(p)));
     } catch (e) {
@@ -1413,14 +1542,19 @@ function _normalizeShapes(p, accounts) {
  * to schedule it, for whom this is the only signal that the new structure is doing nothing.
  * @private
  */
-function _warnUnscheduledShapes(shapes, rows) {
+function _collectUnscheduledShapes(shapes, rows) {
   const used = new Set(rows.map(r => r.shape));
   const idle = [...shapes.keys()].filter(id => !used.has(id));
-  if (idle.length) {
-    console.warn(`liquidityShapes: ${idle.map(s => `'${s}'`).join(', ')} ${idle.length === 1 ? 'is' : 'are'} `
-      + 'not selected by any `liquidityGraphSchedule` row, so it governs no part of the run. '
-      + 'Add a row, or delete the shape.');
-  }
+  if (!idle.length) return [];
+  // One row per idle SHAPE, not one sentence listing them all: the authoring surface keys a
+  // problem to the thing that carries it, and "shapes A and C are unscheduled" cannot be
+  // rendered beside either of them.
+  return idle.map(id => ({
+    param: 'liquidityShapes', index: null, field: null, pool: null, shape: id,
+    severity: PROBLEM_SEVERITY.WARN,
+    message: `liquidityShapes: '${id}' is not selected by any \`liquidityGraphSchedule\` row, `
+      + 'so it governs no part of the run. Add a row, or delete the shape.',
+  }));
 }
 
 /**
@@ -1435,7 +1569,7 @@ function _warnUnscheduledShapes(shapes, rows) {
  * Almost never what anybody meant, and the cheapest moment to say so is here.
  * @private
  */
-function _warnResurrectedPools(entries) {
+function _collectResurrectedPools(entries) {
   const seenIn = new Map();     // pool id -> indices of entries containing it
   entries.forEach((e, i) => {
     for (const pool of (e.graph?.pools ?? [])) {
@@ -1443,16 +1577,23 @@ function _warnResurrectedPools(entries) {
       seenIn.get(pool.id).push(i);
     }
   });
+  const out = [];
   for (const [id, at] of seenIn) {
     const gapped = at.some((v, i) => i > 0 && v !== at[i - 1] + 1);
     if (!gapped) continue;
     const where = at.map(i => entries[i].shapeId ?? 'the base graph').join(' → ');
-    console.warn(`liquidityGraphSchedule: pool '${id}' is absent from a shape and returns in a `
-      + `later one (${where}). Design 109 §9: that RETIRES the pool and starts a new one with `
-      + 'the same name — its trailing high resets to 0, so every drawdown gate on it reads "0% '
-      + 'below its high" and opens for a period. Carry the pool through the intervening shape, '
-      + 'or give the second one its own id.');
+    out.push({
+      param: 'liquidityGraphSchedule', index: null, field: null, pool: id,
+      shape: entries[at[at.length - 1]].shapeId ?? null,
+      severity: PROBLEM_SEVERITY.WARN,
+      message: `liquidityGraphSchedule: pool '${id}' is absent from a shape and returns in a `
+        + `later one (${where}). Design 109 §9: that RETIRES the pool and starts a new one with `
+        + 'the same name — its trailing high resets to 0, so every drawdown gate on it reads "0% '
+        + 'below its high" and opens for a period. Carry the pool through the intervening shape, '
+        + 'or give the second one its own id.',
+    });
   }
+  return out;
 }
 
 /**

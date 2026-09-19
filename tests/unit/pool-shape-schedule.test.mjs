@@ -30,7 +30,7 @@ import assert   from 'node:assert/strict';
 
 import {
   resolveLiquidityGraphSchedule, activeGraphAt, resolveLiquidityGraph,
-  collectAuthoredGraphProblems, compileToDrawdownSequence,
+  collectAuthoredGraphProblems, compileToDrawdownSequence, blockingProblems,
 } from '../../src/finance/pools/liquidity-graph.js';
 import { ACCOUNT_TYPE } from '../../src/finance/assets/account.js';
 
@@ -836,4 +836,131 @@ test('PSS-16b: a plan whose pools only BEGIN at a later shape still gets its red
   const r = new RebalanceToTargetReducer({ poolGraph: null });
   assert.equal(r._poolGraphOf({}), null);
   assert.ok(r._poolGraphOf({ liquidityGraph: SCHEDULED()[1].graph }));
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Design 110 §2.3 / §4.3 — two severities, and a shape pass that is not suppressed
+// ═════════════════════════════════════════════════════════════════════════════
+
+test('CTRL-4: an unscheduled shape and a resurrected pool are warnings, and do not block', () => {
+  // Design 109 §12 rule 3: "an author who forgot to schedule the shape they just wrote is the
+  // common case, and this is the only signal they get." Before design 110 §4.3 that signal was
+  // a `console.warn` — which reaches nobody in the app and nothing at all from the CLI tools
+  // (`cli-tools-swallow-loader-warnings`). It is now a row in the same list as the refusals,
+  // with a severity that says it must not stop a Rebuild.
+  const problems = collectAuthoredGraphProblems(paramsOf({
+    liquidityShapes: { bridge: BRIDGE, orphan: LATE },
+    liquidityGraphSchedule: [{ year: 2035, shape: 'bridge' }],
+  }), ACCOUNTS);
+
+  const warn = problems.filter(x => x.severity === 'warn');
+  assert.equal(warn.length, 1, `expected exactly the unscheduled shape, got ${JSON.stringify(problems)}`);
+  assert.equal(warn[0].shape, 'orphan');
+  assert.match(warn[0].message, /governs no part of the run/);
+
+  // The whole point: nothing here refuses. A Rebuild proceeds.
+  assert.deepEqual(blockingProblems(problems), []);
+});
+
+test('CTRL-4: a resurrected pool is reported as a warning against the schedule', () => {
+  // §12 rule 4. Its symptom is a gate reading 0% below its high for one period, which is
+  // invisible in every other surface — which is why §4.3 calls it the case that most needs
+  // this. `bonds` is in the base graph and in `bridge`, absent from `late`, and back in
+  // `bridge2`: a retirement followed by a COLD RESTART under the same name.
+  const problems = collectAuthoredGraphProblems(paramsOf({
+    liquidityShapes: { bridge: BRIDGE, late: LATE, bridge2: BRIDGE },
+    liquidityGraphSchedule: [{ year: 2035, shape: 'bridge' },
+                             { year: 2040, shape: 'late' },
+                             { year: 2045, shape: 'bridge2' }],
+  }), ACCOUNTS);
+
+  const warn = problems.filter(x => x.severity === 'warn');
+  assert.equal(warn.length, 1, JSON.stringify(problems));
+  assert.equal(warn[0].pool, 'bonds');
+  assert.equal(warn[0].param, 'liquidityGraphSchedule');
+  assert.match(warn[0].message, /trailing high resets to 0/);
+  assert.deepEqual(blockingProblems(problems), []);
+});
+
+test('CTRL-4: a bad size spec still REFUSES — the two severities are not one', () => {
+  const problems = collectAuthoredGraphProblems(paramsOf({
+    liquidityGraph: { pools: [{ id: 'x', spendOrder: 10,
+                                target: { mode: 'PERCENT', value: 100 },
+                                claims: [{ key: 'usSavingsAccount' }] }] },
+  }), ACCOUNTS);
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0].severity, 'error');
+  assert.equal(blockingProblems(problems).length, 1, 'a bad percent must stop a Rebuild');
+});
+
+test('CTRL-4: the console warning and the reported warning are the same sentence', () => {
+  // One derivation, two renderers. If these ever diverge, the developer reading the console
+  // and the author reading the editor are being told different things about one defect.
+  const params = paramsOf({
+    liquidityShapes: { bridge: BRIDGE, orphan: LATE },
+    liquidityGraphSchedule: [{ year: 2035, shape: 'bridge' }],
+  });
+  const logged = capturingWarnings(() => resolveLiquidityGraphSchedule(params, ACCOUNTS));
+  const warn   = collectAuthoredGraphProblems(params, ACCOUNTS).filter(x => x.severity === 'warn');
+  assert.deepEqual(logged, warn.map(w => w.message));
+});
+
+test('CTRL-5: a bad cell in the base graph does not suppress shape problems', () => {
+  // Design 110 §2.3's sharpest small finding. `if (problems.length) return problems;` was
+  // right about the base graph's own whole-graph pass and wrong about the shapes, which are
+  // separate documents with separate cells — so while any one base-graph cell was bad, every
+  // problem in every named shape was invisible, and the author repaired one, rebuilt, and
+  // met the next.
+  const badBase  = { pools: [{ id: 'cash', spendOrder: 10,
+                               target: { mode: 'PERCENT', value: 100 },
+                               claims: [{ key: 'usSavingsAccount' }] }] };
+  const badShape = { pools: [{ id: 'cash', spendOrder: 10,
+                               target: { mode: 'PERCENT', value: 250 },
+                               claims: [{ key: 'usSavingsAccount' }] }] };
+  const problems = collectAuthoredGraphProblems({
+    liquidityGraph: badBase,
+    liquidityShapes: { bridge: badShape },
+    liquidityGraphSchedule: [{ year: 2035, shape: 'bridge' }],
+  }, ACCOUNTS);
+
+  const base  = problems.find(x => x.param === 'liquidityGraph');
+  const shape = problems.find(x => x.param === 'liquidityShapes');
+  assert.ok(base,  `the base graph problem must survive: ${JSON.stringify(problems)}`);
+  assert.ok(shape, `the shape problem must NOT be suppressed: ${JSON.stringify(problems)}`);
+
+  // Each localized to its OWN container, cell and pool — §2.3 rule 2. Before this, a bad
+  // percent in a shape read as "shape B does not compile" with `index: null, field: null`,
+  // while the same typo in the base graph highlighted the cell.
+  assert.deepEqual([base.index, base.field, base.pool],   [0, 'target', 'cash']);
+  assert.deepEqual([shape.index, shape.field, shape.pool], [0, 'target', 'cash']);
+  assert.equal(shape.shape, 'bridge');
+  assert.equal(base.shape, undefined, 'a base-graph problem names no shape');
+});
+
+test('CTRL-5: a shape whose cells are bad is not ALSO reported unlocalized', () => {
+  // The other half. A shape reported cell-by-cell must not then throw a second, unlocalized
+  // sentence about the same typo — that is exactly what the base graph's cells already
+  // suppress, and a shape is a separate document that deserves the same treatment.
+  const badShape = { pools: [{ id: 'cash', spendOrder: 10,
+                               target: { mode: 'PERCENT', value: 250 },
+                               claims: [{ key: 'usSavingsAccount' }] }] };
+  const problems = collectAuthoredGraphProblems(paramsOf({
+    liquidityShapes: { bridge: badShape },
+    liquidityGraphSchedule: [{ year: 2035, shape: 'bridge' }],
+  }), ACCOUNTS);
+  const onShapes = problems.filter(x => x.param === 'liquidityShapes');
+  assert.equal(onShapes.length, 1, `one localized row, not two: ${JSON.stringify(problems)}`);
+  assert.equal(onShapes[0].field, 'target');
+});
+
+test('CTRL-5: a shape cell is reported even with no accounts to resolve claims against', () => {
+  // The whole-graph legs are skipped without accounts (every claim would read as an orphan),
+  // but a bad percent is a bad percent whatever the claims say.
+  const badShape = { pools: [{ id: 'cash', spendOrder: 10,
+                               target: { mode: 'PERCENT', value: 250 },
+                               claims: [{ key: 'usSavingsAccount' }] }] };
+  const problems = collectAuthoredGraphProblems(paramsOf({ liquidityShapes: { bridge: badShape } }), []);
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0].shape, 'bridge');
+  assert.equal(problems[0].field, 'target');
 });

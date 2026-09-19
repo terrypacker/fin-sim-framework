@@ -44,7 +44,9 @@ const NO_OPTIONS = [];
  *
  * @param {object} opts
  * @param {Array<object>} opts.rows        the list being edited, mutated IN PLACE
- * @param {Array<{field: string, label: string, type?: 'number'|'select'|'text'|'checkset',
+ * @param {Array<{field: string, label: string,
+ *                type?: 'number'|'select'|'text'|'checkset'|'note',
+ *                text?: function(object): string,   // 'note' only — a DERIVED, unwritable cell
  *                step?: string|function(object): string,
  *                min?: string|function(object): string,
  *                max?: string|function(object): string,
@@ -170,8 +172,34 @@ function buildCell(col, row, changed, resort, rerender) {
     case 'select':   return buildSelect(col, row, changed, after);
     case 'text':     return buildText(col, row, changed, after);
     case 'checkset': return buildCheckSet(col, row, changed);
+    case 'note':     return buildNote(col, row);
     default:         return buildNumber(col, row, changed, after);
   }
+}
+
+/**
+ * A DERIVED cell — text computed from the row (and whatever the caller closed over), with no
+ * control in it and no write path at all.
+ *
+ * Design 110 §4.2 asked for four things the pool tables cannot say, and two of them belong
+ * ON a row rather than under the table: what a pool's claims are, and what one claim holds
+ * today. Both are joins the reader currently performs in their head between two tables.
+ *
+ * It takes `text(row)` and never a `field`, which is the point: there is no row key for it to
+ * write to, so a derived column cannot become an authored one by accident. A caller that
+ * wants the value saved must add a real column.
+ *
+ * `title(row)` is optional and carries the long form — a claims summary is a cell's width and
+ * a pool can hold more accounts than that.
+ */
+function buildNote(col, row) {
+  const span = document.createElement('span');
+  span.className  = 'row-list-note';
+  span.dataset.id = col.field;
+  span.textContent = (typeof col.text === 'function' ? col.text(row) : col.text) ?? '';
+  const t = typeof col.title === 'function' ? col.title(row) : col.title;
+  if (t) span.title = t;
+  return span;
 }
 
 /**
