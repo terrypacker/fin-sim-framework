@@ -284,10 +284,65 @@ export function poolHistoryRows(history) {
         reserveAccessible: p.reserve?.accessible ?? null,
         reserveLocked:     p.reserve?.locked ?? null,
         reserveYears:      p.reserve?.yearsOfCover ?? null,
+        // Design 110 §5.3. `shapeId` rides `history.periods[]` and was not a column, so the
+        // fact table could not be GROUPED by shape — which is the first thing anybody asks of
+        // a run that changed its policy halfway through. Per-period like the reserve figures
+        // above, so it repeats down every pool's row.
+        //
+        // Empty string, not null, for the periods before the first switch: the base graph is
+        // not a named shape, and writing 'base' would put a name in the column that appears
+        // in no scenario file. A run with no schedule leaves it empty throughout.
+        shape: p.shapeId ?? '',
       });
     }
   }
   return rows;
+}
+
+/**
+ * Design 110 §5.3 — every shape the run passed through, with the date it actually took over.
+ *
+ * ONE derivation, for the panel's three consumers: the provenance strip (which listed only
+ * the LAST shape, so a run through three shapes reported the third), the `markLine` on every
+ * time-series view, and the CSV's `shape` column. §23.6's `_seriesSpecs` refactor is the
+ * precedent and the warning — two derivations of one list is where a picker starts offering a
+ * line the chart does not draw.
+ *
+ * `liquidityShapeId` rides the ordinary journal diff and `PoolShapeScheduleReducer` writes it
+ * ONLY on a change, so the periods before the first switch carry no field at all. That is why
+ * the opening span is reconstructed rather than read: a run that begins on the base graph
+ * records nothing about it, and a strip that said nothing about the first nineteen years
+ * would be describing the run by its ending.
+ *
+ * The date is the one the switch LANDED on, never the authored year. Design 109 §7 switches
+ * at the first advance on or after 1 January of a row's year, which on a semi-annual cadence
+ * is up to six months later — and a marker drawn on the typed year, beside a chart that had
+ * not switched yet, is the clearest possible way to misread a mid-year cadence.
+ *
+ * @returns {Array<{shapeId: string|null, at: Date, seq: number, opening: boolean}>}
+ *          `shapeId` null is the base graph. `opening` marks the span the run STARTED in,
+ *          which is not a switch: there is nothing before it, so it takes no chart marker.
+ */
+export function poolShapeSpans(history) {
+  const periods = history?.periods ?? [];
+  if (!periods.length) return [];
+  // A run with no schedule never stamps the field, and has no spans to report — distinct
+  // from a run that sat on the base graph the whole time, which stamps nothing either but
+  // cannot be told apart here. Reporting neither is right: with no switch there is no
+  // boundary to draw and no second shape to name.
+  if (!periods.some(p => p.shapeId !== undefined)) return [];
+
+  const out = [];
+  for (const p of periods) {
+    // Before the first stamp the run is on whatever the base graph is. Recorded once, at the
+    // run's own first period, so the strip can say "base graph since <start>" rather than
+    // starting its story at the first switch.
+    const id = p.shapeId === undefined ? null : p.shapeId;
+    const last = out[out.length - 1];
+    if (last && last.shapeId === id) continue;
+    out.push({ shapeId: id, at: p.at, seq: p.seq, opening: out.length === 0 });
+  }
+  return out;
 }
 
 /**

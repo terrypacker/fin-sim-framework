@@ -1,6 +1,6 @@
 # 110 — The liquidity pool control surface (design 97 §14, effort 2)
 
-**Status:** **PHASES 1–3 AND 3b BUILT** (19 Sep 2026); 4–9 proposed. §10 records the first review
+**Status:** **PHASES 1–4 BUILT** (19 Sep 2026, including 3b); 5–9 proposed. §10 records the first review
 (18 Sep 2026): three of the five open questions decided, one closed, and one — the
 shape-spanning axis — promoted from a labelling question to a **precondition of phase 6**
 (§10.3), which §10.3 now answers. §13 records what the build changed.
@@ -444,8 +444,10 @@ prevent a wrong reading come first.
    an optional `opts.advisories` sink; the reporting path supplies one and the compile path
    does not, so all six advisories now reach the author by one route and no run changed.
    CTRL-4b.
-4. **Shape boundaries on the panel** (§5.3) — `markLine` per switch, `shape` as a CSV column,
-   every shape in the strip. Three small edits, one theme.
+4. ~~**Shape boundaries on the panel**~~ (§5.3) — **BUILT.** One shared derivation
+   (`poolShapeSpans`) feeds all three: a `markLine` per switch on every time-series view, a
+   `shape` CSV column, and a strip that names every shape with its own live-from date.
+   CTRL-6, HIST-9. See §13.5.
 5. **The topology view** (§5.2) — the fifth view, labelled with run-to-date
    fired/gated/vetoed and **no period selector**: the app's own step/rewind already scrubs it
    (§10.1).
@@ -835,3 +837,38 @@ is where to look.
 Verified live by pointing `allocationLocationPolicy.GOLD` at `ira` (an account the `gold` pool
 does not claim): the advisory appeared in the editor, named both IRA accounts, listed the
 claimed accounts, and refused nothing — the readouts rendered beside it.
+
+### 13.5 Phase 4, as built
+
+The three items of §5.3 are three renderings of one fact, so the build starts with the fact:
+**`poolShapeSpans(history)`** in `pool-history.js`, returning one entry per shape the run passed
+through with the date it took over. §23.6's `_seriesSpecs` refactor is the precedent — two
+derivations of one list is where a picker starts offering a line the chart does not draw — and
+the panel-local `_shapeLiveSince` it replaces was already the second derivation waiting to
+happen. It is deleted rather than left unused.
+
+Two things the reducer forced, neither of them in §5.3:
+
+1. **The opening span is reconstructed, not read.** `PoolShapeScheduleReducer` writes
+   `liquidityShapeId` only on a CHANGE, and `stamped = state.liquidityShapeId ?? null` means a
+   run that begins on the base graph emits **no diff at all** for that stretch. So the periods
+   before the first switch carry no field, and a strip built only from what was recorded would
+   begin its story at the first switch — describing a 43-year run by its last 27 years.
+2. **A span that begins at the run's first period is not a switch** (`opening: true`). It takes
+   no chart marker, because a marker on the first category has nothing to its left to separate
+   it from. This also covers the case §5.3 did not consider: a schedule whose first row is
+   already live at the start stamps on period 0 and has no base-graph stretch at all.
+
+The `shape` CSV column is `''` before the first switch, not `'base'` — the base graph is not a
+named shape, and writing a name that appears in no scenario file into the fact table would
+invent one.
+
+Verified on a real 39,568-entry run of the `D109 wrappers-last from 2043` scenario: two spans
+(`base graph` from 2027-01-01, `wrapLast` since 2043-01-01), one marker, drawn on all three
+time-series views in both themes, and landing exactly on the regime change visible in two of the
+cover lines. The date is the one the switch LANDED on, which is the property §5.3 cared about
+and the one design 109 §7 makes easy to get wrong.
+
+**Superseded:** design 109 §14 step 6's two strip tests. The strip named only the LIVE shape, so
+a run through three shapes reported the third; the assertions were rewritten against every-shape
+wording, keeping the date property unchanged.

@@ -14,7 +14,8 @@ import { WB_EVENTS }          from '../../workbench-runtime.js';
 import { ServiceRegistry }    from '../../../../services/service-registry.js';
 import { withBom }            from '../../../../utils/csv.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../../../simulation-framework/bus-messages.js';
-import { buildPoolHistory, poolHistoryRows, poolSeries, reserveSeries, tiePoolHistory, POOL_EVENT_KIND }
+import { buildPoolHistory, poolHistoryRows, poolSeries, reserveSeries, tiePoolHistory,
+         poolShapeSpans, POOL_EVENT_KIND }
   from '../../../../finance/pools/pool-history.js';
 import { colorForSeriesKey } from '../../../../finance/allocation-reporting/allocation-palette.js';
 
@@ -28,6 +29,9 @@ export const POOL_CSV_COLUMNS = Object.freeze([
   // Per-PERIOD figures, repeated on every pool's row (§22.3 extended). Last, so a reader
   // scanning the per-pool columns is not interrupted by three that do not vary with `pool`.
   'reserveAccessible', 'reserveLocked', 'reserveYears',
+  // Design 110 §5.3. `shapeId` was on `history.periods[]` and not here, so the fact table
+  // could not be grouped by the thing that changed the policy halfway through the run.
+  'shape',
 ]);
 
 /**
@@ -404,11 +408,21 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
     // panel therefore says the date the shape actually became live, never the year that was
     // typed — a strip showing the authored year next to a run that had not switched yet would
     // be the clearest possible way to misread a mid-year cadence.
-    const shapeId = this._sim?.state?.liquidityShapeId;
-    if (shapeId !== undefined) {
-      const since = this._shapeLiveSince(hist);
-      notes.push(`shape <strong>${_esc(shapeId ?? 'base graph')}</strong>`
-        + (since ? ` <span class="pool-dim">since ${_esc(since)}</span>` : ''));
+    // Design 110 §5.3 — EVERY shape the run passed through, with the date each took over.
+    // It named only the current one, so a run through three shapes reported the third and
+    // the two the plan spent most of its life in were invisible. That is §23.6's lesson
+    // again: a run-level statement belongs in the strip, and "the last one" is not one.
+    const spans = poolShapeSpans(hist);
+    if (spans.length) {
+      notes.push('shapes ' + spans.map(sp =>
+        `<strong>${_esc(sp.shapeId ?? 'base graph')}</strong>`
+        + ` <span class="pool-dim">${sp.opening ? 'from' : 'since'} `
+        + `${_esc(sp.at.toISOString().slice(0, 10))}</span>`).join(' → '));
+    } else if (this._sim?.state?.liquidityShapeId !== undefined) {
+      // Stamped but never switched — a schedule whose first row is already live at the start.
+      // `poolShapeSpans` reports no span because there is no boundary; the strip still says
+      // which shape is running, because that is a fact about the run either way.
+      notes.push(`shape <strong>${_esc(this._sim.state.liquidityShapeId ?? 'base graph')}</strong>`);
     }
 
     const fired  = hist.events.filter(e => e.kind === POOL_EVENT_KIND.FIRED);
@@ -636,6 +650,55 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
           tooltip: { formatter: (p) => (this._tips ? _esc(marks[p.dataIndex].text) : '') },
         });
       }
+    }
+
+    // Design 110 §5.3 — the shape boundaries, on EVERY time-series view.
+    //
+    // A shape switch is the largest structural discontinuity the graph can experience — a
+    // pool can be RETIRED at one (design 109 §9), and its line simply stops — and the charts
+    // drew a continuous line straight through it. The marker is what turns "this series ends
+    // here" from a glitch into the policy change it is.
+    //
+    // Added last so it sits at the end of the series picker rather than between two pools,
+    // and hung off the reserve's namespace for the reason the gate marks are: it is not
+    // per-pool, and inventing a second reserved id to hold one series is worse than sharing
+    // the one that already cannot collide with an authored pool id. Hideable like any other.
+    const boundaries = this._shapeMarks(hist, axis);
+    if (boundaries.length) {
+      add('__reserve', 'shapes', 'shape switches', {
+        name: 'shape switches', type: 'line', data: [], z: 7, silent: true,
+        markLine: {
+          symbol: 'none', silent: true,
+          label: { show: true, formatter: (p) => p.name, color: ink, fontSize: 9,
+                   position: 'insideEndTop' },
+          lineStyle: { color: dark ? '#a78bfa' : '#7c3aed', type: 'dashed', width: 1 },
+          data: boundaries.map(b => ({ xAxis: b.x, name: b.name })),
+        },
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Where the chart's x-axis crosses a shape boundary, labelled with the INCOMING shape.
+   *
+   * Only switches — `poolShapeSpans` marks the span the run started in as `opening`, and a
+   * marker on the first category of the axis has nothing to its left to separate it from.
+   *
+   * The x position is looked up by the period's own date label rather than computed from the
+   * authored year, for the reason `poolShapeSpans` records: the switch lands at the first
+   * advance on or after 1 January of the row's year, which on a semi-annual cadence is up to
+   * six months later. A marker on the typed year would sit beside a chart that had not
+   * switched yet.
+   */
+  _shapeMarks(hist, axis) {
+    const idx = new Map(axis.map((label, i) => [label, i]));
+    const out = [];
+    for (const sp of poolShapeSpans(hist)) {
+      if (sp.opening) continue;
+      const x = idx.get(sp.at.toISOString().slice(0, 10));
+      if (x == null) continue;
+      out.push({ x, name: sp.shapeId ?? 'base graph' });
     }
     return out;
   }
@@ -989,23 +1052,6 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
           `${lock}</span>`);
       }
     }
-  }
-
-  /**
-   * The date the LIVE shape actually took over, read out of the replayed history.
-   *
-   * `liquidityShapeId` rides the ordinary journal diff, so the first period carrying the
-   * current value is the period the switch landed on. Null when the history does not record
-   * one — a run that has never switched, where "since" would be a date nothing happened on.
-   */
-  _shapeLiveSince(hist) {
-    const periods = hist?.periods ?? [];
-    let since = null;
-    for (const p of periods) {
-      if (p.shapeId === undefined) continue;
-      if (!since || p.shapeId !== since.id) since = { id: p.shapeId, at: p.at };
-    }
-    return since && since.id != null ? since.at.toISOString().slice(0, 10) : null;
   }
 
   _onLegendClick(e) {
