@@ -1053,7 +1053,11 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
         options: sleeveOptionsFor(accounts), blankValue: null, width: '2fr',
         emptyText: 'whole account' },
     ],
-    newRow:    () => ({ pool: pools[0]?.id ?? null, key: accounts?.[0]?.stateKey ?? null, sleeves: null }),
+    // §22.5 trap 2 — the LAST pool, not the first. `+ Add Pool` then `+ Add Claim` is the
+    // authoring order, so defaulting to `pools[0]` silently landed the new pool's first claim
+    // in bucket 1 — a claim that reads correct in the table and belongs to the wrong pool.
+    newRow:    () => ({ pool: pools[pools.length - 1]?.id ?? null,
+                        key: accounts?.[0]?.stateKey ?? null, sleeves: null }),
     addLabel:  '+ Add Claim',
     emptyText: 'No claims — a pool with no claims holds nothing.',
     onChange:  sync,
@@ -1242,7 +1246,13 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
         step: sizeAttr('capacity', 'step'), min: sizeAttr('capacity', 'min'),
         max:  sizeAttr('capacity', 'max'),  title: sizeAttr('capacity', 'title'), width: '0.7fr' },
     ],
-    newRow:    () => ({ id: null, label: null, spendOrder: (pools.length + 1) * 10,
+    // §22.5 trap 1 — `spendOrder` starts BLANK ("never"), not `(pools.length + 1) * 10`.
+    // Defaulting it put every new pool BEHIND `growth`, which on most plans is the residual
+    // pool and never runs dry, so the new pool was never reached: §18.6's corollary says a
+    // pool placed after one that never empties is not low-priority, it is UNCLAIMED. The
+    // author added a pool, rebuilt, saw no change, and concluded the input did not work. Blank
+    // makes the position a decision — the placeholder already reads `never`.
+    newRow:    () => ({ id: null, label: null, spendOrder: null,
                         targetMode: '', targetValue: null, targetAfter: [], capacity: 'BALANCE',
                         capacityValue: null, floor: null, targetExtra: null, targetWhenResident: '',
                         capacityExtra: null, ui: null }),

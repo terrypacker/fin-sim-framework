@@ -552,11 +552,29 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
       // ABSENT on a healthy pool and appears exactly when the ask outgrows the portfolio —
       // which is the event worth seeing, and it arrives gradually rather than on a date.
       const aff = poolSeries(hist, 'targetAfforded', ids);
+      // A FIFTH line, on the same terms (design 97 §24.3): what a penalty-free draw could
+      // actually reach. Drawn ONLY where it departs from the balance, which is only on a pool
+      // claiming an age-gated wrapper — so it is absent on every pool that has no gate, and
+      // the view is unchanged for them.
+      //
+      // Without it the balance line and the cover view contradict each other with nothing
+      // between them: `yearsOfCover` reads `accessible`, so a wrapper pool draws a large,
+      // healthy balance here and a near-zero cover there. §9.3(a) measured the mirror image of
+      // this — a cover of 0.0 years in every year — and it was invisible until it was plotted.
+      const acc = poolSeries(hist, 'accessible', ids);
       for (const id of ids) {
         const c = colorOf(id);
         add(id, 'balance', 'balance', {
           name: `${hist.labels[id]}`, type: 'line', showSymbol: false,
           lineStyle: { width: 1.6, color: c }, itemStyle: { color: c }, data: bal.series[id] });
+        if (acc.series[id].some((v, i) => v != null && bal.series[id][i] != null
+                                       && Math.abs(v - bal.series[id][i]) > 0.005)) {
+          add(id, 'accessible', 'accessible', {
+            name: `${hist.labels[id]} · accessible`, type: 'line', showSymbol: false,
+            lineStyle: { width: 1.4, type: 'solid', color: c, opacity: 0.45 },
+            areaStyle: { color: c, opacity: 0.07 },
+            itemStyle: { color: c }, data: acc.series[id] });
+        }
         if (tgt.series[id].some(v => v != null)) {
           add(id, 'target', 'target', {
             name: `${hist.labels[id]} · target`, type: 'line', showSymbol: false,
@@ -907,9 +925,17 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
       // others does not.
       const short = (m?.targetAfforded != null && m.target > 0)
         ? Math.round((m.targetAfforded / m.target) * 100) : null;
+      // Design 97 §24.6 — the LOCKED half, and only where there is one. `balance` stays the
+      // headline because it is what the pool holds and what the chart plots; the cover figure
+      // beside it now reads ACCESSIBLE (§24.3), so on a wrapper pool the two disagree and this
+      // chip is the only thing that says why. A pool with no gated claim is unchanged.
+      const lockedTail = (m?.locked > 0.005)
+        ? ` <span class="pool-locked" title="${_esc(this._money(m.locked))} of this pool sits behind an age gate: a penalty-free draw would find ${_esc(this._money(m.accessible ?? 0))} of it today, which is what the years-of-cover figure beside it counts. The balance is what the pool HOLDS.${m.unlocksAt ? ` The earliest gate opens ${_esc(String(m.unlocksAt).slice(0, 10))}.` : ''}">${_esc(this._money(m.locked))} locked${m.unlocksAt ? ` → ${_esc(String(m.unlocksAt).slice(0, 10))}` : ''}</span>`
+        : '';
       const tail = m
         ? ` <strong>${_esc(this._money(m.balance))}</strong>` +
           (m.yearsOfCover != null ? ` <span class="pool-dim">${m.yearsOfCover.toFixed(1)}y</span>` : '') +
+          lockedTail +
           (short != null ? ` <span class="pool-clamped" title="This pool asked for ${_esc(this._money(m.target))} and the portfolio could only afford ${_esc(this._money(m.targetAfforded))} — ${short}% of the ask. The rest of the mix is squeezed to make room, so the other allocation classes hold less than any authored weight asked for. Reduce this pool's target.">${short}% of ask</span>` : '')
         : '';
       // The title says what the chip DOES, not just what it is: this strip is the panel's

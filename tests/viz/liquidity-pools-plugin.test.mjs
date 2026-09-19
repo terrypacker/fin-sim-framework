@@ -597,3 +597,71 @@ test('an unclamped run leaves the provenance strip alone', () => {
     'an unclamped run made the strip wrap for nothing');
   plugin.unmount();
 });
+
+// ─── design 97 §24.6 — the locked half of a pool ─────────────────────────────
+// `yearsOfCover` reads ACCESSIBLE (§24.3), so on a pool claiming an age-gated wrapper the
+// balance and the cover disagree. These assert the panel says why, and says nothing extra on
+// a pool with no gate.
+
+const GATED_RUN = (over = {}) => [
+  entry('2030-01-01', [
+    { field: 'liquidityPools', before: null,
+      after: {
+        offset: CUBE({ balance: 380_000, accessible: 380_000, locked: 0, unlocksAt: null }),
+        growth: CUBE({ balance: 800_000, accessible: 90_000, locked: 710_000,
+                       yearsOfCover: 0.9, unlocksAt: '2039-07-02T12:00:00.000Z', ...over }),
+      } },
+  ]),
+];
+
+test('§24.6: a pool with locked money shows the locked figure and its unlock date', () => {
+  const { plugin } = mountPlugin(simOf(GATED_RUN()));
+  const chip = q(plugin, 'legend').querySelector('[data-key="growth"]');
+
+  // The balance stays the headline — it is what the pool holds and what the chart plots.
+  assert.match(chip.textContent, /\$800000/);
+  // …and the cover beside it is the ACCESSIBLE reading, which is why the pair is needed.
+  assert.match(chip.textContent, /0\.9y/);
+  assert.match(chip.textContent, /\$710000 locked/);
+  assert.match(chip.textContent, /2039-07-02/);
+
+  const locked = chip.querySelector('.pool-locked');
+  assert.ok(locked, 'the locked figure is its own element, not loose text');
+  assert.match(locked.getAttribute('title'), /penalty-free draw would find \$90000/);
+  plugin.unmount();
+});
+
+test('§24.6: a pool with no gated claim is unchanged — no locked chip at all', () => {
+  const { plugin } = mountPlugin(simOf(GATED_RUN()));
+  const chip = q(plugin, 'legend').querySelector('[data-key="offset"]');
+  assert.equal(chip.querySelector('.pool-locked'), null);
+  assert.doesNotMatch(chip.textContent, /locked/);
+  plugin.unmount();
+});
+
+test('§24.6: locked money with no unlock date states the amount and promises no date', () => {
+  // `unlocksAt` is null when the owner cannot be resolved (§24.2 Q1) — the pool still knows
+  // how much is out of reach, and must not invent a date for it.
+  const { plugin } = mountPlugin(simOf(GATED_RUN({ unlocksAt: null })));
+  const chip = q(plugin, 'legend').querySelector('[data-key="growth"]');
+  assert.match(chip.textContent, /\$710000 locked/);
+  assert.doesNotMatch(chip.textContent, /→/);
+  plugin.unmount();
+});
+
+test('§24.6: the stock view draws an accessible line ONLY where it departs from the balance', () => {
+  const { plugin } = mountPlugin(simOf(GATED_RUN()));
+  plugin._view = 'stock';
+  plugin._render();
+  const roles = plugin._lastSpecs.map(s => s.key);
+  assert.ok(roles.includes('growth::accessible'), 'the gated pool gets the line');
+  assert.ok(!roles.includes('offset::accessible'), 'the ungated pool does not');
+  plugin.unmount();
+});
+
+test('§24.6: accessible and locked reach the CSV fact table', () => {
+  assert.ok(POOL_CSV_COLUMNS.includes('accessible'));
+  assert.ok(POOL_CSV_COLUMNS.includes('locked'));
+  // Beside `balance`, because they are only ever read against it.
+  assert.equal(POOL_CSV_COLUMNS.indexOf('accessible'), POOL_CSV_COLUMNS.indexOf('balance') + 1);
+});

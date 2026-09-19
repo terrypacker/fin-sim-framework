@@ -251,6 +251,17 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Design 97 §24.6 — the age-gated share of a pool. Deliberately NOT `--red` like
+   `.pool-clamped` beside it: locked money is not a fault, it is a date. Muted and boxed so it
+   reads as a qualifier on the balance rather than as a warning about it. */
+.pool-locked {
+  color: var(--text-muted);
+  background: var(--surface-sunken, rgba(148, 163, 184, .14));
+  border-radius: 2px;
+  padding: 0 4px;
+  font-variant-numeric: tabular-nums;
+}
+
 .pool-kind {
   display: inline-block;
   border-radius: 2px;

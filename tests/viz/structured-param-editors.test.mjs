@@ -1221,3 +1221,61 @@ test('LiquidityGraph: a scope on a gate the table cannot draw survives untouched
   type(cell(host, 'priority'), '3', 'change');
   assert.strictEqual(param.value.flows[0].gate.scope, 'EDGE');
 });
+
+// ─── design 97 §22.5 / §24.6 — the two defaults that made a correct path look broken ──────
+
+test('LiquidityGraph: a new pool starts with NO spendOrder, not behind every existing pool', () => {
+  // §22.5 trap 1. Defaulting to `(pools.length + 1) * 10` put every new pool behind `growth`,
+  // which on most plans is the residual pool and never runs dry — so the new pool was never
+  // reached. §18.6's corollary: a pool placed after one that never empties is not
+  // low-priority, it is unclaimed. The author added a pool, rebuilt, saw no change, and
+  // concluded the control did not work.
+  const param = { name: 'liquidityGraph', value: {
+    pools: [
+      { id: 'cash',   spendOrder: 10, claims: [{ key: 'usSavingsAccount' }] },
+      { id: 'growth', spendOrder: 40, claims: [{ key: 'usStockAccount' }] },
+    ],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  button(host, 'Add Pool').click();
+
+  const orders = cells(host, 'spendOrder');
+  assert.strictEqual(orders[orders.length - 1].value, '',
+    'blank — the placeholder already reads "never", so the position is a decision');
+
+  // And it must not be written as a number by the sync either.
+  const id = cells(host, 'id').at(-1);
+  type(id, 'wrappers', 'change');
+  assert.strictEqual(param.value.pools.at(-1).spendOrder, undefined);
+});
+
+test('LiquidityGraph: a new claim defaults to the LAST pool, which is the one just added', () => {
+  // §22.5 trap 2. "+ Add Pool" then "+ Add Claim" is the authoring order, so defaulting the
+  // claim's pool cell to `pools[0]` silently landed the new pool's first claim in bucket 1 —
+  // a row that reads correct in the table and belongs to the wrong pool.
+  const param = { name: 'liquidityGraph', value: {
+    pools: [
+      { id: 'cash',   spendOrder: 10, claims: [{ key: 'usSavingsAccount' }] },
+      { id: 'growth', spendOrder: 40, claims: [{ key: 'usStockAccount' }] },
+    ],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  button(host, 'Add Claim').click();
+
+  assert.strictEqual(cells(host, 'pool').at(-1).value, 'growth');
+});
+
+test('LiquidityGraph: add a pool, then a claim — the claim lands in the pool just added', () => {
+  // The two fixes together, in the order an author actually works.
+  const param = { name: 'liquidityGraph', value: {
+    pools: [{ id: 'cash', spendOrder: 10, claims: [{ key: 'usSavingsAccount' }] }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+
+  button(host, 'Add Pool').click();
+  type(cells(host, 'id').at(-1), 'wrappers', 'change');
+  button(host, 'Add Claim').click();
+
+  assert.strictEqual(cells(host, 'pool').at(-1).value, 'wrappers');
+  assert.deepStrictEqual(param.value.pools.map(p => p.id), ['cash', 'wrappers']);
+});

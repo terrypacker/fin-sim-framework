@@ -3906,6 +3906,28 @@ Both `claimAccess` and `householdReserve` now mirror the walk: resolve the owner
 primary, and lock only when the plan carries no birth date at all — which is the one case the
 inherited coercion would otherwise read as *eligible*. PAC-6 / PAC-6a / PAC-6d.
 4. **§24.6 panel + editor defaults.** Cheap, and step 2 is unreadable without the panel half.
+   **BUILT (18 Sep 2026)**: 6828 unit + 1546 viz green (8 new viz cases).
+
+   **The editor**, both §22.5 traps: a new pool's `spendOrder` now starts blank rather than at
+   `(pools.length + 1) * 10`, and `+ Add Claim` defaults its pool cell to the LAST pool rather
+   than `pools[0]`. The third test walks the order an author actually works in — add a pool,
+   name it, add a claim — and asserts the claim lands in the pool just added.
+
+   **The panel**, on the principle that the pair appears only where it says something:
+   - the legend chip keeps `balance` as its headline (it is what the pool holds and what the
+     chart plots) and gains a `$X locked → YYYY-MM-DD` chip where `locked > 0`, with the
+     accessible figure in its tooltip. This is now load-bearing rather than decorative:
+     `yearsOfCover` reads `accessible` since §24.3, so on a wrapper pool the balance and the
+     cover disagree and this chip is the only thing on the panel that says why.
+   - the stock view draws an `accessible` line per pool, on the same terms as
+     `targetAfforded` — **only where it departs from the balance**, so it is absent on every
+     ungated pool and the view is unchanged for them.
+   - `.pool-locked` is deliberately muted rather than `--red` like `.pool-clamped` beside it:
+     locked money is not a fault, it is a date.
+
+   **Not verified in the running app**, unlike §23.4 — doing so needs a scenario that authors a
+   wrapper-claiming pool, and §22.2 (config only) has not been authored on any plan yet. The
+   jsdom cases cover the rendering; the first real plan to claim a wrapper is the real check.
 5. **§24.5** — `access` on the pool.
 
 Steps 1–3 leave `balance`-based sizing untouched and are the honest-measurement half; steps 4–5
