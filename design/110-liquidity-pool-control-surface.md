@@ -1,6 +1,7 @@
 # 110 — The liquidity pool control surface (design 97 §14, effort 2)
 
-**Status:** **PHASES 1–4 BUILT** (19 Sep 2026, including 3b); 5–9 proposed. §10 records the first review
+**Status:** **PHASES 1–5 BUILT** (19 Sep 2026, including 3b); 6–9 proposed, and 6 is
+unblocked — §10.3 is decided. §10 records the first review
 (18 Sep 2026): three of the five open questions decided, one closed, and one — the
 shape-spanning axis — promoted from a labelling question to a **precondition of phase 6**
 (§10.3), which §10.3 now answers. §13 records what the build changed.
@@ -448,9 +449,8 @@ prevent a wrong reading come first.
    (`poolShapeSpans`) feeds all three: a `markLine` per switch on every time-series view, a
    `shape` CSV column, and a strip that names every shape with its own live-from date.
    CTRL-6, HIST-9. See §13.5.
-5. **The topology view** (§5.2) — the fifth view, labelled with run-to-date
-   fired/gated/vetoed and **no period selector**: the app's own step/rewind already scrubs it
-   (§10.1).
+5. ~~**The topology view**~~ (§5.2) — **BUILT.** The fifth view, run-to-date counts, no period
+   selector. CTRL-7, CTRL-13. See §13.6.
 6. **Leg C mechanism** (§6.2) — a hidden, compile-only generated param on the `BALANCE_TARGET`
    pattern, joined to `generated-param-keys.js` and harvested. **Blocked on §10.3**: whether the
    key is an absolute target or a multiplier over every shape decides what the key MEANS, and
@@ -708,7 +708,7 @@ the expensive part of each one is finding the seam. Line numbers drift; the func
 | 3 — problems + warnings | `liquidity-graph.js#collectAuthoredGraphProblems` (the short-circuit is the early `return problems`), `#_warnUnscheduledShapes`, `#_warnResurrectedPools`. Consumers: `scenario-tab-presenter.js#_graphProblems` → `reportInvalidPools`, and `scenario-load-error-overlay.js` (three call sites) | `tests/unit/evt-liquidity-pools.test.mjs`, `tests/unit/pool-shape-schedule.test.mjs` |
 | 4 — shape boundaries | `liquidity-pools-plugin.js` `POOL_CSV_COLUMNS` and `#_shapeLiveSince`; `pool-history.js#poolHistoryRows` (the row builder that omits `shapeId`, which `history.periods[]` already carries) | `tests/unit/pool-history.test.mjs`, `tests/viz/liquidity-pools-plugin.test.mjs` |
 | 5 — topology view | `liquidity-pools-plugin.js` — `this._view` is the view key, `_render` branches on it, `_seriesSpecs` is built in `_render` (not `_drawChart`, deliberately — §23.6) | `tests/viz/liquidity-pools-plugin.test.mjs` |
-| 6 — the axis | `scenarios/params/scenario-param-generator.js#generate(cfg)`, `params/record-param-templates.js#BALANCE_TARGET` (the pattern to copy), `params/generated-param-keys.js` (the namespace list), `param-schema-utils.js#harvestSweepVariables` / `buildOptVariables({ cfg })` | `tests/unit/generated-key-param-paths.test.mjs` is the existing detector for the dot trap |
+| 6 — the axis | `scenarios/params/scenario-param-generator.js#generate(cfg)`, `scenarios/params/record-param-templates.js#BALANCE_TARGET` (the pattern to copy), `scenarios/params/generated-param-keys.js#GENERATED_KEY_PREFIXES` (**`'pool.'` must be added here or the key is dead on arrival** — see §12.2), `finance/param-schema-utils.js#harvestSweepVariables` / `intl-retirement-opt-config.js#buildOptVariables({ cfg })` | `tests/unit/generated-key-param-paths.test.mjs` is the existing detector for the dot trap |
 | 7 — hygiene | `scripts/lib/pool-arms.mjs` is the specification — its `base` block is the six-item list; port it as a reporter | new |
 | 8 — clause ids | `structured-param-editors.js#gateToRows` / `rowsToGate` / `renumberBranches` | `tests/viz/structured-param-editors.test.mjs` |
 
@@ -719,6 +719,12 @@ the expensive part of each one is finding the seam. Line numbers drift; the func
   run. The pool topics are `help/concepts/liquidity-pools.md`,
   `help/concepts/pool-shapes-over-time.md` and `help/panels/pools.md`. Never hand-edit
   `help/REFERENCE.md`.
+- **`'pool.'` is not yet a generated namespace.** `set()` in `mc-param-paths.js` writes a
+  dotted key flat ONLY when `isGeneratedParamKey(path)` says so, and the list is
+  `acct. person. prop. coll. equity. bequest. raAsset.` — verified 19 Sep 2026. A
+  `pool.<id>.targetScale` axis added without touching `GENERATED_KEY_PREFIXES` will pass
+  every hand-written flat-`cfg.parameters` test and be **inert in a real solve**, which is
+  this trap's whole signature (`optimizer-param-key-dot-collision`).
 - **A liveness gate must be evaluated against a LOADED config**, never an authored one
   (`legacy-alias-levers-inert-on-loaded-plan`). This bites phase 6 directly: an axis that reads
   as live on a raw cfg and is inert on the loaded one is this repository's most expensive
@@ -872,3 +878,41 @@ and the one design 109 §7 makes easy to get wrong.
 **Superseded:** design 109 §14 step 6's two strip tests. The strip named only the LIVE shape, so
 a run through three shapes reported the third; the assertions were rewritten against every-shape
 wording, keeping the date property unchanged.
+
+### 13.6 Phase 5, as built
+
+**It renders as inline SVG into the grid element, not through ECharts.** Not a style
+preference: `_drawChart` no-ops without a canvas — which is jsdom *and* a docked panel before
+its first activation — and this panel had already moved the series picker out of it because *"a
+control that silently does not exist in those states is a control the reader cannot find"*
+(§23.6). A whole VIEW that silently did not exist would be that mistake at full size, and it
+would make CTRL-7 and CTRL-13 unassertable.
+
+**Edges come from the GRAPH, counts from the events.** This is the mechanical expression of
+§5.2's argument against the sankey, and it is the one thing in this view that must not be
+reversed: deriving edges from the events would rebuild the ribbon-of-width-zero blind spot in a
+new costume, because the edge that never fired is exactly the one the author is looking for. On
+the author's own plan the view immediately showed one — `growth-to-offset · 0f 0g` — an authored
+refill edge that has never fired in 43 simulated years, invisible on every other surface.
+
+**A veto belongs to the POOL, not the edge.** `POOL_EVENT_KIND.VETOED` carries no flow id
+(§12.4c): it names the pool that may not be sold, or the one that may not be grown. Attributing
+it to an edge would invent a fact the run never recorded, so it renders as a badge on the node
+(`32 veto` on the author's `growth`).
+
+**Layout is deterministic — pools in spend order, edges arcing beside them.** A force-directed
+layout that rearranged itself between two renders of the same run would make "did this change?"
+unanswerable, and §14's `ui` blob, where an author-placed layout would live, is still written by
+nothing (§2.2). Spend order also makes §18.6's corollary legible for free: a pool placed after
+one that never empties is not low-priority, it is UNCLAIMED — on this view, a box near the
+bottom with no inflow.
+
+**One defect found in the app and fixed** (§12.2's last trap, again): the first build sized the
+diagram on a fixed lane width, so `growth-to-offset · 0f 0g` rendered as `gro` and
+`paycheck-sweep-us-to-au` as `paycheck-sw`. The viewBox now derives its width from the longest
+label. jsdom computes no layout, but the geometry is arithmetic, so the regression IS assertable
+and is asserted — the half of the "verify in the app" lesson that can be pinned in a test.
+
+Verified on the author's 39,568-entry run: 9 nodes, 7 edges, per-edge counts summing to exactly
+the 174 fired / 41 gated the provenance strip reports, with zero per-edge mismatches against the
+flow log.

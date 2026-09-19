@@ -15,7 +15,7 @@ import { ServiceRegistry }    from '../../../../services/service-registry.js';
 import { withBom }            from '../../../../utils/csv.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../../../simulation-framework/bus-messages.js';
 import { buildPoolHistory, poolHistoryRows, poolSeries, reserveSeries, tiePoolHistory,
-         poolShapeSpans, POOL_EVENT_KIND }
+         poolShapeSpans, poolTopology, POOL_EVENT_KIND }
   from '../../../../finance/pools/pool-history.js';
 import { colorForSeriesKey } from '../../../../finance/allocation-reporting/allocation-palette.js';
 
@@ -121,6 +121,7 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
           <option value="cover">Years of cover</option>
           <option value="stock">Balance vs target vs capacity</option>
           <option value="flows">Flows in and out</option>
+          <option value="topology">The graph as a shape</option>
           <option value="log">Flow log</option>
         </select>
         <span class="pool-seg" data-pool="logscope" style="display:none">
@@ -317,7 +318,8 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
     const tips = this._q('tips');
     if (tips) {
       tips.classList.toggle('on', this._tips);
-      tips.style.display = this._view === 'log' ? 'none' : '';
+      // Chart-only: the hover popup belongs to ECharts, and the two DOM views have none.
+      tips.style.display = (this._view === 'log' || this._view === 'topology') ? 'none' : '';
     }
   }
 
@@ -337,9 +339,16 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
 
     const empty = !hist || hist.periods.length === 0;
     const isLog = this._view === 'log';
+    // Design 110 §5.2's view is the first here that is not a time series, and it renders as
+    // SVG into the grid rather than through ECharts. Not a style choice: `_drawChart` no-ops
+    // without a canvas — a docked panel before its first activation, and jsdom — and this
+    // panel already moved the picker out of it because "a control that silently does not
+    // exist in those states is a control the reader cannot find" (§23.6). A whole VIEW that
+    // silently did not exist would be that mistake at full size, and it would be unassertable.
+    const isDom = isLog || this._view === 'topology';
     this._q('placeholder').style.display = empty ? '' : 'none';
-    this._q('chart').style.display = empty || isLog ? 'none' : '';
-    this._q('grid').style.display  = !empty && isLog ? '' : 'none';
+    this._q('chart').style.display = empty || isDom ? 'none' : '';
+    this._q('grid').style.display  = !empty && isDom ? '' : 'none';
     if (empty) {
       this._q('legend').innerHTML = '';
       this._q('grid').innerHTML   = '';
@@ -358,8 +367,9 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
     // `_drawChart`: that method no-ops without a canvas (a docked panel before its first
     // activation, and jsdom), and a filter that silently does not exist in those states is a
     // control the reader cannot find. It is also the only way the picker is assertable.
-    this._syncPicker(hist, isLog);
-    if (isLog) { this._renderLog(hist); return; }
+    this._syncPicker(hist, isDom);
+    if (isLog)                    { this._renderLog(hist);      return; }
+    if (this._view === 'topology') { this._renderTopology(hist); return; }
     this._drawChart(hist);
   }
 
@@ -792,13 +802,14 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
   /**
    * Recompute the offered series and refresh the picker.
    *
-   * The log view draws no series at all, so the control is hidden outright rather than left
-   * showing the previous view's rows — a filter that does nothing is worse than no filter.
+   * The log and topology views draw no series at all, so the control is hidden outright rather
+   * than left showing the previous view's rows — a filter that does nothing is worse than no
+   * filter.
    */
-  _syncPicker(hist, isLog) {
+  _syncPicker(hist, noSeries) {
     const picker = this._q('picker');
-    if (picker) picker.style.display = isLog ? 'none' : '';
-    if (isLog) {
+    if (picker) picker.style.display = noSeries ? 'none' : '';
+    if (noSeries) {
       const menu = this._q('picker-menu');
       if (menu) menu.hidden = true;
       this._lastSpecs = [];
@@ -915,6 +926,139 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
       out.push({ x, text: `${label} — ${e.flowId}: ${e.reason} (wanted ${this._money(e.wanted)})` });
     }
     return out;
+  }
+
+  /**
+   * Design 110 §5.2 — the graph as a SHAPE. The one question the four time-series views
+   * cannot answer: *what is this policy?*
+   *
+   * This is the diagram §4.1 declined to build as an EDITOR, built where a diagram belongs.
+   * The tables stay the authoring surface — §17.1's argument for them got stronger under
+   * design 109, not weaker — and a canvas answers "what does this graph look like", which is
+   * a reading question, not an authoring one. So: drawn, never edited.
+   *
+   * ─── the layout ──────────────────────────────────────────────────────────
+   *
+   * Pools in a single column in SPEND ORDER (`hist.poolIds` is the author's own order when a
+   * graph is at hand), edges arcing down the right. Deterministic, which matters more here
+   * than prettiness: a force-directed layout that rearranges itself between two renders of
+   * the same run would make "did this change?" unanswerable, and §14's `ui` blob — the field
+   * an author-placed layout would live in — is still written by nothing (§2.2).
+   *
+   * Laying the nodes out by spend order also makes a second thing legible for free: §18.6's
+   * rule that a pool placed after one that never empties is not low-priority, it is
+   * UNCLAIMED. On this view that is a box near the bottom with no inflow.
+   *
+   * ─── counts ──────────────────────────────────────────────────────────────
+   *
+   * Run-to-date totals, no period selector (§10.1). `poolTopology` derives them from the same
+   * `hist.events` the flow log renders, so the two cannot disagree (CTRL-7).
+   */
+  _renderTopology(hist) {
+    const el = this._q('grid');
+    if (!el) return;
+    const topo = poolTopology(hist, this._reducer()?.graph ?? null);
+    const dark = this._dark();
+
+    const ROW = 54, BOX_W = 210, BOX_H = 40, PAD = 10;
+    // Four arc lanes so two edges between the same rows do not overlap, then the labels to the
+    // right of them. The label width is ESTIMATED from the longest one rather than measured:
+    // an SVG has no layout to ask before it is in the document, and sizing the viewBox after
+    // the fact would need a second render. 5.6px per character at font-size 9 in the panel's
+    // mono face, rounded up — an overestimate leaves white space, an underestimate CLIPS the
+    // label, and a clipped `growth-to-offset` reading "gro" is worse than a wide diagram.
+    const LANES = 4, LANE_W = 22;
+    const labelFor = (e) => `${e.id} · ${e.fired}f ${e.gated}g`;
+    const longest = topo.edges.reduce((n, e) => Math.max(n, labelFor(e).length), 0);
+    const LANE = 14 + LANES * LANE_W + Math.ceil(longest * 5.6) + 8;
+    const height = PAD * 2 + Math.max(1, topo.nodes.length) * ROW;
+    const width  = PAD * 2 + BOX_W + LANE;
+    const yOf = (i) => PAD + i * ROW;
+    const index = new Map(topo.nodes.map((n, i) => [n.id, i]));
+
+    const ink    = dark ? '#94a3b8' : '#52514e';
+    const stroke = dark ? '#475569' : '#cbd5e1';
+    const fill   = dark ? '#1e293b' : '#ffffff';
+    // Coloured by which OUTCOME dominates, which is the whole point of putting counts on an
+    // edge rather than a width on it: an edge that is mostly gated is a policy that is mostly
+    // refusing, and that is invisible on every other view unless you go looking in the log.
+    const FIRED  = dark ? '#34d399' : '#059669';
+    const GATED  = dark ? '#fbbf24' : '#b45309';
+    const IDLE   = dark ? '#475569' : '#cbd5e1';
+
+    const edges = topo.edges.map((e) => {
+      const a = index.get(e.from), b = index.get(e.to);
+      const colour = e.fired === 0 && e.gated === 0 ? IDLE : (e.gated > e.fired ? GATED : FIRED);
+      return { ...e, a, b, colour };
+    });
+
+    const arcs = edges.filter(e => e.a != null && e.b != null).map((e, i) => {
+      const y1 = yOf(e.a) + BOX_H / 2;
+      const y2 = yOf(e.b) + BOX_H / 2;
+      const x  = PAD + BOX_W + 14 + (i % LANES) * LANE_W;
+      const midY = (y1 + y2) / 2;
+      return { ...e, d: `M ${PAD + BOX_W} ${y1} C ${x + 26} ${y1}, ${x + 26} ${y2}, ${PAD + BOX_W} ${y2}`,
+               // Every label in ONE column, clear of the widest lane, so they read as a list
+               // rather than stepping in and out with the arc each one belongs to.
+               labelX: PAD + BOX_W + 14 + LANES * LANE_W, labelY: midY,
+               // An arrowhead at the DESTINATION end. §12.5 makes cycles legal and this view
+               // is the only surface on which a cycle is visible at all, so direction has to
+               // be drawn rather than inferred from the row order.
+               tipY: y2, tipUp: y2 < y1 };
+    });
+
+    const money = (v) => (v == null ? '—' : this._money(v));
+    const nodeSvg = topo.nodes.map((n, i) => {
+      const y = yOf(i);
+      const sub = n.retired
+        ? 'retired by a shape switch'
+        : `${money(n.balance)}${n.target != null ? ` / ${money(n.target)}` : ''}`
+          + `${n.yearsOfCover != null ? ` · ${n.yearsOfCover.toFixed(1)}y` : ''}`;
+      const flags = [n.vetoed ? `${n.vetoed} veto` : null, n.capped ? `${n.capped} cap` : null]
+        .filter(Boolean).join(' · ');
+      return `<g data-pool-node="${_esc(n.id)}">
+        <rect x="${PAD}" y="${y}" width="${BOX_W}" height="${BOX_H}" rx="4"
+              fill="${fill}" stroke="${n.retired ? IDLE : stroke}"
+              stroke-dasharray="${n.retired ? '3 2' : ''}"/>
+        <text x="${PAD + 8}" y="${y + 16}" font-size="10" fill="${ink}"
+              font-weight="600">${_esc(n.label)}</text>
+        <text x="${PAD + 8}" y="${y + 30}" font-size="9" fill="${ink}"
+              opacity="0.8">${_esc(sub)}</text>
+        ${flags ? `<text x="${PAD + BOX_W - 8}" y="${y + 30}" font-size="9" text-anchor="end"
+              fill="${GATED}">${_esc(flags)}</text>` : ''}
+      </g>`;
+    }).join('');
+
+    const edgeSvg = arcs.map(e => `<g data-pool-edge="${_esc(e.id)}">
+        <path d="${e.d}" fill="none" stroke="${e.colour}" stroke-width="1.4"
+              stroke-dasharray="${e.fired === 0 && e.gated === 0 ? '3 3' : ''}"/>
+        <path d="M ${PAD + BOX_W} ${e.tipY} l 7 ${e.tipUp ? 4 : -4} l 0 ${e.tipUp ? -8 : 8} z"
+              fill="${e.colour}"/>
+        <text x="${e.labelX}" y="${e.labelY}" font-size="9" fill="${ink}"
+              >${_esc(labelFor(e))}</text>
+      </g>`).join('');
+
+    // An edge whose ends are not both drawn — a flow naming a pool the run never stamped.
+    // Listed rather than dropped: it is a real authored edge, and an author looking for it on
+    // the diagram and not finding it would conclude the view is broken.
+    const orphans = edges.filter(e => e.a == null || e.b == null);
+
+    el.innerHTML = `
+      <p class="pool-grid-note">
+        The graph as a shape, in spend order — <strong>what this policy is</strong>, which the
+        time-series views cannot say. Each edge is labelled <strong>Nf</strong> fired and
+        <strong>Ng</strong> gated over the whole run, and coloured by which dominates; a dashed
+        edge never did either. Counts are run-to-date and have no cursor of their own: the
+        simulation's own step and rewind are the scrub (design 110 §10.1).
+      </p>
+      <svg class="pool-topology" viewBox="0 0 ${width} ${height}"
+           width="${width}" height="${height}" role="img"
+           aria-label="the liquidity graph as nodes and edges">
+        ${edgeSvg}${nodeSvg}
+      </svg>
+      ${orphans.length ? `<p class="pool-grid-note pool-warn">
+        ${_esc(orphans.map(o => o.id).join(', '))} name a pool this run never stamped, so
+        ${orphans.length === 1 ? 'it is' : 'they are'} not drawn above.</p>` : ''}`;
   }
 
   /**

@@ -367,3 +367,19 @@
 }
 
 .pool-series-box input { margin: 0; cursor: pointer; }
+
+/* ── The topology view (design 110 §5.2) ──
+   Inline SVG rather than ECharts: `_drawChart` no-ops without a canvas, and a whole VIEW that
+   silently did not exist in a docked-but-never-activated panel would be the mistake §23.6
+   already paid for with a control. */
+.pool-topology {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 4px 0 8px;
+}
+
+/* The box is the pool; nothing about its SIZE is meaningful (§5.2 — "sized by nothing"), so
+   hover says which one it is rather than inviting a reading of its area. */
+.pool-topology [data-pool-node] rect { transition: opacity 0.12s; }
+.pool-topology [data-pool-node]:hover rect { opacity: 0.85; }

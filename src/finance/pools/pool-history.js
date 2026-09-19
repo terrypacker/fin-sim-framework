@@ -346,6 +346,98 @@ export function poolShapeSpans(history) {
 }
 
 /**
+ * Design 110 §5.2 — the graph as a SHAPE: nodes, edges, and what each one did over the run.
+ *
+ * §21.6 deferred the topology and the sankey together, on one argument: *"neither shows a
+ * non-event, and the non-event is what the three defects of §20 were."* That is correct about a
+ * sankey and does not extend to this. A sankey encodes volume as ribbon WIDTH, so a flow that
+ * moved nothing has width zero and is structurally incapable of drawing the interesting event.
+ * A topology encodes STRUCTURE: an edge is present whether or not it fired, and the counts are
+ * a LABEL on it.
+ *
+ * So the edges come from the GRAPH and the counts come from the events — never the other way
+ * round. Deriving edges from the events would rebuild the sankey's blind spot in a new costume:
+ * the edge that never fired is exactly the one the author is looking for.
+ *
+ * Counts are run-to-date totals and there is no cursor (§10.1, decided): the panel already
+ * re-renders off the sim bus, the workbench owns step/rewind, and `rewindTo`/`reset` truncate
+ * the journal and replay — so stepping backwards cannot leave a total from a future that has
+ * been un-run. A panel-local period selector would be a SECOND time cursor in an app that has
+ * one, and the two would disagree the moment either moved.
+ *
+ * Read off `history.events`, which is what the flow log renders, so the two tie by construction
+ * rather than by a test that has to keep them in step (CTRL-7 asserts it anyway — §23.6's
+ * failure shape is two derivations of one number).
+ *
+ * @param {object} history   from {@link buildPoolHistory}
+ * @param {object|null} graph the normalized graph, for the edges that never fired
+ * @returns {{nodes: Array, edges: Array}}
+ */
+export function poolTopology(history, graph = null) {
+  const events = history?.events ?? [];
+
+  const fired = new Map();
+  const gated = new Map();
+  // Per POOL, not per edge: a rebalance veto names the pool that may not be sold (or, EDGE-
+  // scoped, the one that may not be grown) and carries no flow id at all (§12.4c). Putting it
+  // on an edge would be inventing an attribution the run never made.
+  const vetoed = new Map();
+  const capped = new Map();
+  const bump = (m, k) => { if (k != null) m.set(k, (m.get(k) ?? 0) + 1); };
+  for (const e of events) {
+    if (e.kind === POOL_EVENT_KIND.FIRED)  bump(fired, e.flowId);
+    else if (e.kind === POOL_EVENT_KIND.GATED) bump(gated, e.flowId);
+    else if (e.kind === POOL_EVENT_KIND.VETOED) {
+      if (e.to != null) bump(capped, e.to); else bump(vetoed, e.from);
+    }
+  }
+
+  // The LAST period's cube is what a node shows. `activeGraphAt` retires pools at a shape
+  // switch (design 109 §9), so a pool the current shape does not have has no entry in the
+  // last period — its box still draws, with no figures, which is the honest reading: it
+  // existed, and it does not now.
+  const last = history?.periods?.[history.periods.length - 1] ?? null;
+
+  const nodes = (history?.poolIds ?? []).map(id => {
+    const m = last?.pools?.[id] ?? null;
+    return {
+      id,
+      label: history?.labels?.[id] ?? id,
+      balance:      m?.balance ?? null,
+      target:       m?.target ?? null,
+      yearsOfCover: m?.yearsOfCover ?? null,
+      retired: !m,
+      vetoed: vetoed.get(id) ?? 0,
+      capped: capped.get(id) ?? 0,
+    };
+  });
+
+  const known = new Set(nodes.map(n => n.id));
+  const fromGraph = (graph?.flows ?? []).map(f => ({ id: f.id, from: f.from, to: f.to }));
+  // An edge the graph does not declare but the journal recorded — a run replayed against a
+  // graph that has since been edited. Kept rather than dropped: the panel reports what the
+  // RUN did, and silently omitting an edge that fired would be the one thing this view exists
+  // to prevent.
+  const seen = new Set(fromGraph.map(f => f.id));
+  for (const e of events) {
+    if (!e.flowId || seen.has(e.flowId)) continue;
+    seen.add(e.flowId);
+    fromGraph.push({ id: e.flowId, from: e.from ?? null, to: e.to ?? null, unauthored: true });
+  }
+
+  const edges = fromGraph.map(f => ({
+    ...f,
+    fired: fired.get(f.id) ?? 0,
+    gated: gated.get(f.id) ?? 0,
+    // Whether either END is a pool the view draws. An edge to a retired pool still has a
+    // node to attach to (`poolIds` is first-seen over the WHOLE run, not the live shape).
+    known: known.has(f.from) && known.has(f.to),
+  }));
+
+  return { nodes, edges };
+}
+
+/**
  * A field of the cube as one series per pool over the periods, plus the axis labels.
  *
  * The panel's ONLY pivot. Kept here rather than inline in the plugin for the reason design
