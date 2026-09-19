@@ -34,7 +34,7 @@ import assert   from 'node:assert/strict';
 
 import {
   normalizeLiquidityGraph, compileToDrawdownSequence, resolveLiquidityGraph,
-  collectAuthoredGraphProblems, FLOW_EXECUTOR, POOL_CAPACITY_MODE,
+  collectAuthoredGraphProblems, blockingProblems, FLOW_EXECUTOR, POOL_CAPACITY_MODE,
 } from '../../src/finance/pools/liquidity-graph.js';
 import { poolMetrics, allPoolMetrics, poolContext, loanForOffset } from '../../src/finance/pools/pool-metrics.js';
 import { PoolFlowReducer }      from '../../src/finance/pools/pool-flow-reducer.js';
@@ -2197,4 +2197,106 @@ test('POOL-23c: the cube CARRIES the ask — the entry is built field by field',
   const cash = out.liquidityPools.cash;
   assert.ok('yearsOfCoverTarget' in cash, 'the cube entry dropped the ask');
   assert.equal(cash.yearsOfCoverTarget, 2, 'the 240k target against a 120k spend is 2 years');
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Design 110 §13.2 (phase 3b) — the four in-normalizer advisories become rows
+//
+// §4.3 enumerated two `console.warn`s and gave them a severity. There are six: these four
+// live INSIDE `normalizeLiquidityGraph`, which returns a graph rather than a problem list,
+// so they are collected through an optional `opts.advisories` sink. The sink is supplied only
+// by the reporting path — the compile path passes none and still warns to the console, which
+// is what keeps every run and every golden fixture byte-identical.
+// ═════════════════════════════════════════════════════════════════════════════
+
+test('CTRL-4b: with no sink the four advisories still go to the console, unchanged', () => {
+  // The identity that makes phase 3b safe to ship. If this stops holding, a compile has
+  // started behaving differently and a golden is about to move.
+  const lines = capturingWarnings(() =>
+    normalizeLiquidityGraph(placementGraph('EQUITY'), PLACEMENT_ACCOUNTS, {}));
+  assert.equal(lines.length, 1);
+  assert.match(lines[0], /pool 'reserve' has a `target` sizing EQUITY/);
+});
+
+test('CTRL-4b: with a sink they are collected as rows and the console stays silent', () => {
+  const advisories = [];
+  const lines = capturingWarnings(() =>
+    normalizeLiquidityGraph(placementGraph('EQUITY'), PLACEMENT_ACCOUNTS, { advisories }));
+  assert.deepEqual(lines, [], 'a collected advisory must not ALSO be printed');
+  assert.equal(advisories.length, 1);
+  assert.equal(advisories[0].pool, 'reserve');
+  assert.match(advisories[0].message, /pool 'reserve' has a `target` sizing EQUITY/);
+});
+
+test('CTRL-4b: the console sentence and the collected sentence are identical', () => {
+  // The §4.3 property, extended to all six. One derivation, two renderers: if these diverge,
+  // the developer reading the console and the author reading the editor are being told
+  // different things about one defect.
+  const graph = CASH_MARKET_GRAPH({ not: { sourceDrawdownUnder: 0.1, drawdownBasis: 'INDEX' } });
+  const printed = capturingWarnings(() => normalizeLiquidityGraph(graph, ACCOUNTS));
+  const advisories = [];
+  normalizeLiquidityGraph(graph, ACCOUNTS, { advisories });
+  assert.deepEqual(printed, advisories.map(a => a.message));
+});
+
+test('CTRL-4b: each row names the pool (and the flow, where it is about one)', () => {
+  // `index`/`field` stay null on all four: these are statements about a POOL or a FLOW and
+  // its relationship to the rest of the plan, not about one cell, so there is no cell to
+  // highlight and claiming one would point the author at the wrong thing.
+  const advisories = [];
+  normalizeLiquidityGraph(CASH_MARKET_GRAPH({ sourceDrawdownUnder: 0.1, drawdownBasis: 'INDEX' }),
+    ACCOUNTS, { advisories });
+  assert.equal(advisories.length, 1);
+  assert.equal(advisories[0].flow, 'o2c', 'a market-clause advisory is about an EDGE');
+  assert.equal(advisories[0].pool, 'offset', 'and names the pool with no market');
+});
+
+test('CTRL-4b: collectAuthoredGraphProblems reports them as warn rows that do not block', () => {
+  const problems = collectAuthoredGraphProblems(
+    { liquidityGraph: placementGraph('EQUITY') }, PLACEMENT_ACCOUNTS);
+  const warn = problems.filter(x => x.severity === 'warn');
+  assert.equal(warn.length, 1, JSON.stringify(problems));
+  assert.equal(warn[0].param, 'liquidityGraph');
+  assert.equal(warn[0].pool, 'reserve');
+  assert.equal(warn[0].field, null);
+  assert.equal(blockingProblems(problems).length, 0, 'a compiling graph must still Rebuild');
+});
+
+test('CTRL-4b: a shape’s advisory is stamped with its shape and belongs to liquidityShapes', () => {
+  // Otherwise an advisory about `bridge` renders under the BASE graph's tables and names a
+  // pool the reader is not looking at — design 109 §12's "the author repairs the wrong table"
+  // in a new place. The editor filters on exactly this field.
+  const problems = collectAuthoredGraphProblems({
+    liquidityGraph: REFERENCE,
+    liquidityShapes: { bridge: placementGraph('EQUITY') },
+    liquidityGraphSchedule: [{ year: 2035, shape: 'bridge' }],
+  }, [...ACCOUNTS, ...PLACEMENT_ACCOUNTS]);
+
+  const warn = problems.filter(x => x.severity === 'warn' && x.pool === 'reserve');
+  assert.equal(warn.length, 1, JSON.stringify(problems, null, 1));
+  assert.equal(warn[0].shape, 'bridge');
+  assert.equal(warn[0].param, 'liquidityShapes');
+});
+
+test('CTRL-4b: a graph that does not compile reports NO advisories', () => {
+  // An advisory about a graph that does not compile is a statement about a graph nobody has,
+  // and it would sit next to the error that says so.
+  const problems = collectAuthoredGraphProblems({ liquidityGraph: {
+    pools: [{ id: 'reserve', spendOrder: 10, target: { mode: 'PERCENT', value: 100 },
+              claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] }],
+  } }, PLACEMENT_ACCOUNTS);
+  assert.equal(problems.filter(x => x.severity === 'warn').length, 0);
+  assert.equal(blockingProblems(problems).length, 1);
+});
+
+test('CTRL-4b: the reporting pass does not print the advisories four times', () => {
+  // The symptom that found phase 3b: `collectAuthoredGraphProblems` normalizes the base graph
+  // and every shape more than once, and each un-sinked call re-printed all four. On the
+  // REPORTING path nothing should reach the console at all — the rows ARE the report.
+  const lines = capturingWarnings(() => collectAuthoredGraphProblems({
+    liquidityGraph: placementGraph('EQUITY'),
+    liquidityShapes: { bridge: placementGraph('EQUITY') },
+    liquidityGraphSchedule: [{ year: 2035, shape: 'bridge' }],
+  }, PLACEMENT_ACCOUNTS));
+  assert.deepEqual(lines, [], `the reporting path must be silent, got:\n${lines.join('\n')}`);
 });

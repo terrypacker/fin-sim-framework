@@ -1,6 +1,6 @@
 # 110 — The liquidity pool control surface (design 97 §14, effort 2)
 
-**Status:** **PHASES 1–3 BUILT** (19 Sep 2026); 4–9 proposed. §10 records the first review
+**Status:** **PHASES 1–3 AND 3b BUILT** (19 Sep 2026); 4–9 proposed. §10 records the first review
 (18 Sep 2026): three of the five open questions decided, one closed, and one — the
 shape-spanning axis — promoted from a labelling question to a **precondition of phase 6**
 (§10.3), which §10.3 now answers. §13 records what the build changed.
@@ -439,7 +439,11 @@ prevent a wrong reading come first.
    `collectAuthoredGraphProblems` gained `severity`, `blockingProblems` is the single filter
    every refusal site now goes through, the shape pass runs unconditionally and localizes to
    the cell, and the two `console.warn`s are rendered from the same collectors the advisory
-   rows come from. CTRL-4, CTRL-5. **Four more `console.warn`s remain — see §13.2.**
+   rows come from. CTRL-4, CTRL-5.
+3b. ~~**The other four `console.warn`s**~~ (§13.2) — **BUILT.** `normalizeLiquidityGraph` takes
+   an optional `opts.advisories` sink; the reporting path supplies one and the compile path
+   does not, so all six advisories now reach the author by one route and no run changed.
+   CTRL-4b.
 4. **Shape boundaries on the panel** (§5.3) — `markLine` per switch, `shape` as a CSV column,
    every shape in the strip. Three small edits, one theme.
 5. **The topology view** (§5.2) — the fifth view, labelled with run-to-date
@@ -782,14 +786,52 @@ and `gold` (GOLD). That is a real, actionable statement about a real plan that h
 the browser console and nowhere else — precisely the defect §4.3 exists to remove, in the four
 places §4.3 did not look.
 
-**They are not folded in yet, deliberately.** The two that are done sit *outside* the normalizer
-and had a natural collector each. These four are *inside* it, and it returns a graph rather than
-a problem list, so collecting them means threading an optional sink through
-`normalizeLiquidityGraph` — a small change, but one that touches the compile path that every
-golden run goes through, and a wider scope than phase 3 was given.
+### 13.3 Phase 3b, as built
 
-**Proposed as phase 3b**, before phase 4: `normalizeLiquidityGraph(graph, accounts, opts)` takes
-an optional `opts.advisories` array; when present the four push to it instead of calling
-`console.warn`, and `collectAuthoredGraphProblems` passes one. The compile path passes none and
-keeps warning to the console, so no run changes and no fixture moves. CTRL-4's "the console
-warning and the reported warning are the same sentence" extends to all six unchanged.
+`normalizeLiquidityGraph(graph, accounts, opts)` takes an optional **`opts.advisories`** array.
+The four `warnX` functions became `collectX` functions returning rows; one block at the end of
+the normalizer either pushes them into the sink or, when there is none, `console.warn`s each
+message exactly as before.
+
+**The sink is supplied only by the reporting path.** The compile path passes none, so every
+compile behaves identically and no golden fixture moved — the property phase 3b had to preserve,
+asserted directly by CTRL-4b ("with no sink the four advisories still go to the console,
+unchanged").
+
+Three things the build settled that the proposal did not state:
+
+1. **A shape's advisory is stamped with its shape id** inside `_normalizeShapes`, so it lands on
+   `liquidityShapes` and renders under *that* shape's tables. Unstamped, an advisory about
+   `bridge` would render under the base graph and name a pool the reader is not looking at —
+   design 109 §12's "the author repairs the wrong table" in a new place.
+2. **`index`/`field` stay null.** These four are statements about a POOL or a FLOW and its
+   relationship to the rest of the plan, not about one cell. There is no cell to highlight, and
+   claiming one would point at the wrong thing.
+3. **`_scheduleAdvisories` passes a DISCARDED sink.** It re-normalizes the base graph and every
+   shape to build its entry list, and without one each of those calls re-printed all four —
+   which is what made the placement warning appear four times in the browser console for one
+   graph.
+
+### 13.4 The eight console lines were false positives
+
+Worth recording, because it is the opposite of what §13.2 assumed. Read in the running app, the
+four duplicated `buffer`/`gold` placement warnings did **not** survive phase 3b — and the reason
+is not that they were silenced. Under the scenario's real options they do not fire at all: its
+`allocationLocationPolicy` already ranks the claimed roles first
+(`BOND: [us-stock, au-stock, …]`, `GOLD: [us-stock]`), which is precisely the fix the message
+recommends, and POOL-21b is the test that says so.
+
+So something was calling `normalizeLiquidityGraph` with options that **lacked `locationPolicy`**,
+and warning against the DEFAULT policy rather than the authored one. The advisory was telling the
+author to fix something they had already fixed. That is worse than a warning nobody reads, and
+it is the argument for §4.3's one-authority rule stated from the other end: a message emitted
+from a call site with a different option set is not the same message.
+
+It is gone now — the reporting path is silent and the editor's rows are produced under
+`_graphOptsFrom`, which carries the policy. **The call site with the incomplete options was not
+identified** and may still exist for other purposes; if a stray console advisory reappears, that
+is where to look.
+
+Verified live by pointing `allocationLocationPolicy.GOLD` at `ira` (an account the `gold` pool
+does not claim): the advisory appeared in the editor, named both IRA accounts, listed the
+claimed accounts, and refused nothing — the readouts rendered beside it.
