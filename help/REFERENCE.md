@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-223 parameters · 33 panels · 173 action types · 79 tools · 266 state field types · 59 topics · 117 design docs
+223 parameters · 33 panels · 173 action types · 79 tools · 266 state field types · 59 topics · 118 design docs
 
 ---
 
@@ -1646,7 +1646,7 @@ what the in-app panel keys on.
 
 ---
 
-## Design documents (117)
+## Design documents (118)
 
 Tier 3 — the full argument behind each mechanic, in `design/`. The title is each
 file's own H1, read out of it; there is no summary column, because a one-line precis
@@ -1769,6 +1769,7 @@ between 10 and 11.
 | [`107-retirement-paycheck-and-tax-instalments.md`](../design/107-retirement-paycheck-and-tax-instalments.md) | 107 — The retirement paycheck, and paying tax in instalments |
 | [`108-help-system.md`](../design/108-help-system.md) | 108 — The help system: generated reference, stamped prose, two surfaces |
 | [`109-time-varying-pool-shapes.md`](../design/109-time-varying-pool-shapes.md) | 109 — Time-varying pool shapes: named shapes, and a schedule that selects one |
+| [`110-liquidity-pool-control-surface.md`](../design/110-liquidity-pool-control-surface.md) | 110 — The liquidity pool control surface (design 97 §14, effort 2) |
 | [`bus-unification-plan.md`](../design/bus-unification-plan.md) | Bus Unification Plan |
 | [`inconsistencies.md`](../design/inconsistencies.md) | Inconsistencies, Rework Candidates, and Open Questions |
 | [`requirements.md`](../design/requirements.md) | Requirements Tracker |
