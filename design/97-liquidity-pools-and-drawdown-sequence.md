@@ -2916,8 +2916,9 @@ clickable legend below. Tests: `tests/unit/pool-history.test.mjs` (10),
 
 ## 22. The age-gated wrappers in a pool — the accessibility axis (5 Sep 2026)
 
-**Status**: PROPOSED, except §22.8–§22.9 which are **BUILT**. §22.2 is CONFIG-ONLY and
-works today; §§22.3–22.5 are the remaining code; §22.10 is a filed follow-up.
+**Status**: **BUILT** (§24, 18 Sep 2026) except §22.2, which is CONFIG-ONLY and works today,
+and §22.10, which is a filed follow-up. §22.3 / §22.4 / §22.5 are built as specified in §24,
+which corrects §22.3's choice of authority before building it.
 
 §18.6 rule 4 established that a wrapper the graph does not claim is not "spent last", it is
 usually **never spent**, and gave the placement a name (`POOL_KIND.WRAPPERS`) in the study
@@ -3928,9 +3929,41 @@ inherited coercion would otherwise read as *eligible*. PAC-6 / PAC-6a / PAC-6d.
    **Not verified in the running app**, unlike §23.4 — doing so needs a scenario that authors a
    wrapper-claiming pool, and §22.2 (config only) has not been authored on any plan yet. The
    jsdom cases cover the rendering; the first real plan to claim a wrapper is the real check.
-5. **§24.5** — `access` on the pool.
+5. **§24.5** — `access` on the pool. **BUILT (18 Sep 2026)**: 6841 unit + 1550 viz green.
+   `POOL_ACCESS_MODE` on the normalizer (absent ⇒ `PENALTY_FREE`, an unknown mode throws
+   naming the pool), an `Early access` select on the Pools table written only when it deviates
+   (§22.9's rule — the only value in a file is a decision somebody made), `accessible` counting
+   the penalised slice NET of the statutory rate under `ALLOW_PENALTY`, and the Phase 2 gate.
+
+   **How the policy reaches the draw.** `compileToDrawdownSequence` flattens the mode onto each
+   claim as `allowPenalty`, so `AccountService` still never learns that pools exist (§12): it
+   walks a list of entries, and an entry saying whether it may be raided early is the same kind
+   of fact as one saying which sleeves it covers. The field is a **three-way**, and that is why
+   `false` is written explicitly on every compiled entry rather than omitted — every compiled
+   entry comes from a pool, so *present* means "a pool decided this", and ABSENT keeps its own
+   meaning: an entry no pool authored, i.e. a hand-written `drawdownSequence` or the remainder
+   pass, both of which must go on reaching Phase 2 exactly as they do today. The guard is
+   therefore `=== false`, not falsiness. EW-15a–e.
+
+   **The blast radius, measured rather than assumed.** `PENALTY_FREE` being the default means a
+   pooled wrapper that used to fall into a penalty draw no longer does — a real behaviour
+   change. Scanned across the scenario library: **83 files carry a liquidity graph, 505 pools
+   between them, and none claims a retirement wrapper.** Nothing else can reach Phase 2 — it
+   needs `allowsEarlyWithdrawal` *and* a rules-table entry, which only the three US wrapper
+   types have — so no scenario on disk changes. That is §22.5's point arriving as evidence: the
+   wrappers were effectively unauthorable, which is why this default is safe to ship now and
+   would not have been later.
+
+   **One thing the tests found.** `opensAt` briefly carried a "fully reachable ⇒ no date"
+   branch that could never fire: below the gate an `ALLOW_PENALTY` pool is always short of its
+   claim by the penalty, and the rate is zero exactly when the pool is already eligible. It was
+   removed rather than kept as a speculative guard. The date is now reported under BOTH modes
+   and means the same thing in each — the instant the claim stops being gated — which under
+   `ALLOW_PENALTY` is when the penalty stops being charged, i.e. when `locked` reaches zero.
+   The panel chip follows the mode too, reading `penalty` rather than `locked`, because the two
+   words describe different things and one sentence would be wrong under one of them.
 
 Steps 1–3 leave `balance`-based sizing untouched and are the honest-measurement half; steps 4–5
-are the authoring half. Design 109 §14 takes this whole section as its step 1, because a
+are the authoring half. **All five are built (18 Sep 2026).** Design 109 §14 takes this whole section as its step 1, because a
 schedule that switches between a pre-gate and a post-gate shape cannot be scored until the
 cover figure is honest.

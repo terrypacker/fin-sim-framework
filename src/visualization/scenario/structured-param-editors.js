@@ -702,6 +702,16 @@ const TARGET_MODE_OPTIONS = Object.freeze([
   ['YEARS_OF_SPEND_REMAINDER', 'remainder of N years across pools'],
 ]);
 
+/**
+ * Design 97 §24.5 — whether this pool may be reached by paying the early-withdrawal penalty.
+ * Worded as the CONSEQUENCE rather than as the enum, because "PENALTY_FREE" reads like a
+ * property of the money and it is a decision about the household.
+ */
+const ACCESS_MODE_OPTIONS = Object.freeze([
+  ['PENALTY_FREE',  'penalty-free only'],
+  ['ALLOW_PENALTY', 'may be raided early (10% penalty)'],
+]);
+
 /** The target modes whose `after` cell is meaningful. One entry today; a list so it reads. */
 const TARGET_NEEDS_AFTER = Object.freeze(['YEARS_OF_SPEND_REMAINDER']);
 
@@ -949,6 +959,9 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
     // failed to fill. Like `targetAfter`, being drawn means it must also come OUT of
     // `targetExtra` below or the sync writes it twice.
     targetWhenResident: p?.target?.whenResident ?? '',
+    // §24.5. Absent is PENALTY_FREE — the default, and what every graph authored before it
+    // means — so the cell always shows the policy in force rather than an empty box.
+    access:      p?.access?.mode ?? 'PENALTY_FREE',
     capacity:    p?.capacity?.mode ?? 'BALANCE',
     // The capacity of an AMOUNT / YEARS_OF_SPEND pool. Without this cell those two modes are
     // selectable and unauthorable: `sizeSpec` requires a value for every non-derived mode, so
@@ -1029,6 +1042,11 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
                             ? { value: p.capacityValue ?? 0 } : {}),
                           ...(p.capacityExtra ?? {}) } }
           : {}),
+        // §24.5 — written only when it DEVIATES from the default, on the §22.9 rule: the only
+        // value that ever appears in a file is a decision somebody actually made, and absent
+        // means "the default applies". Writing `PENALTY_FREE` on every pool would put the
+        // default in every scenario file and make it look authored.
+        ...(p.access === 'ALLOW_PENALTY' ? { access: { mode: 'ALLOW_PENALTY' } } : {}),
         ...(p.floor ? { floor: p.floor } : {}),
         ...(p.ui ? { ui: p.ui } : {}),
         claims: claims.filter(c => c.pool === p.id && c.key)
@@ -1239,6 +1257,11 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
               // off the screen rather than explained after the fact.
               && !TARGET_NEEDS_AFTER.includes(q.targetMode)).map(q => [q.id, q.label || q.id])
           : []) },
+      // §24.5 — beside Spend # rather than at the end: both answer "when may this pool be
+      // spent", and an early-access policy read in isolation from the spend order is the
+      // §18.6 mistake (a pool nothing reaches cannot be raided either way).
+      { field: 'access',      label: 'Early access', type: 'select', options: ACCESS_MODE_OPTIONS,
+        width: '1.7fr' },
       { field: 'capacity',    label: 'Capacity', type: 'select', options: CAPACITY_MODE_OPTIONS,
         rerender: true, width: '1.5fr' },
       // Blank on BALANCE / OFFSET_CAP, whose ceiling is derived from live state.
@@ -1252,7 +1275,7 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
     // pool placed after one that never empties is not low-priority, it is UNCLAIMED. The
     // author added a pool, rebuilt, saw no change, and concluded the input did not work. Blank
     // makes the position a decision — the placeholder already reads `never`.
-    newRow:    () => ({ id: null, label: null, spendOrder: null,
+    newRow:    () => ({ id: null, label: null, spendOrder: null, access: 'PENALTY_FREE',
                         targetMode: '', targetValue: null, targetAfter: [], capacity: 'BALANCE',
                         capacityValue: null, floor: null, targetExtra: null, targetWhenResident: '',
                         capacityExtra: null, ui: null }),

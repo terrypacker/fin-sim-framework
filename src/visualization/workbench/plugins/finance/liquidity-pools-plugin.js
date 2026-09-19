@@ -929,8 +929,16 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
       // headline because it is what the pool holds and what the chart plots; the cover figure
       // beside it now reads ACCESSIBLE (§24.3), so on a wrapper pool the two disagree and this
       // chip is the only thing that says why. A pool with no gated claim is unchanged.
+      // The wording has to follow the pool's ACCESS mode (§24.5), because `locked` means two
+      // different things under the two. Under PENALTY_FREE it is money the gate puts out of
+      // reach; under ALLOW_PENALTY the money IS reachable and `locked` is the penalty that
+      // reaching it costs. One sentence for both would be wrong under one of them.
+      const raidable = (this._reducer()?.graph?.pools ?? [])
+        .find(p => p.id === id)?.access?.mode === 'ALLOW_PENALTY';
       const lockedTail = (m?.locked > 0.005)
-        ? ` <span class="pool-locked" title="${_esc(this._money(m.locked))} of this pool sits behind an age gate: a penalty-free draw would find ${_esc(this._money(m.accessible ?? 0))} of it today, which is what the years-of-cover figure beside it counts. The balance is what the pool HOLDS.${m.unlocksAt ? ` The earliest gate opens ${_esc(String(m.unlocksAt).slice(0, 10))}.` : ''}">${_esc(this._money(m.locked))} locked${m.unlocksAt ? ` → ${_esc(String(m.unlocksAt).slice(0, 10))}` : ''}</span>`
+        ? ` <span class="pool-locked" title="${_esc(raidable
+            ? `This pool may be drawn early, so all of it is reachable — but ${this._money(m.locked)} of what it holds would be paid away as the early-withdrawal penalty. The years-of-cover figure counts the ${this._money(m.accessible ?? 0)} that would actually arrive.`
+            : `${this._money(m.locked)} of this pool sits behind an age gate: a penalty-free draw would find ${this._money(m.accessible ?? 0)} of it today, which is what the years-of-cover figure beside it counts. The balance is what the pool HOLDS.`)}${m.unlocksAt ? _esc(` The gate opens ${String(m.unlocksAt).slice(0, 10)}${raidable ? ', after which there is no penalty to pay' : ''}.`) : ''}">${_esc(this._money(m.locked))} ${raidable ? 'penalty' : 'locked'}${m.unlocksAt ? ` → ${_esc(String(m.unlocksAt).slice(0, 10))}` : ''}</span>`
         : '';
       const tail = m
         ? ` <strong>${_esc(this._money(m.balance))}</strong>` +

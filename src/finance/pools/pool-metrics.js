@@ -12,8 +12,9 @@ import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
 import { POOL_TARGET_MODE, POOL_CAPACITY_MODE, POOL_SPEND_BASIS } from './liquidity-graph.js';
 import { ACCOUNT_TYPE }           from '../assets/account.js';
 import { getResidency, primaryPersonKey, getBirthDate } from '../residency-utils.js';
-import { hasAgeGate, isAgeEligible, penaltyFreeSliceOf, unlocksAt as gateOpensAt }
-  from '../account-rules/penalty-free-availability.js';
+import { hasAgeGate, isAgeEligible, penaltyFreeSliceOf, penaltyBearingSliceOf,
+  decimalAgeAt, unlocksAt as gateOpensAt } from '../account-rules/penalty-free-availability.js';
+import { POOL_ACCESS_MODE } from './liquidity-graph.js';
 
 /**
  * DESIGN 97 §12.1 — a pool is not a balance.
@@ -146,7 +147,7 @@ function ownerBirthDate(state, account) {
   return getBirthDate(state, account?.ownerId) ?? getBirthDate(state, primaryPersonKey(state));
 }
 
-function claimAccess(state, account, sleeves, value, asOf) {
+function claimAccess(state, account, sleeves, value, asOf, accessMode) {
   if (!hasAgeGate(account)) return { accessible: value, opensAt: null };
 
   const birthDate = ownerBirthDate(state, account);
@@ -154,9 +155,23 @@ function claimAccess(state, account, sleeves, value, asOf) {
   if (birthDate == null || asOf == null) return { accessible: 0, opensAt: null };
 
   const eligible = isAgeEligible(account, birthDate, asOf);
+  let accessible = penaltyFreeSliceOf(account, eligible, value);
+
+  // §24.5 — an ALLOW_PENALTY pool may be raided early, so its cover counts the penalised
+  // slice too, NET of the penalty. The same switch decides whether Phase 2 may actually draw
+  // these claims (`compileToDrawdownSequence` stamps `allowPenalty` on the entry), which is
+  // what keeps the number and the draw the same statement rather than two.
+  if (accessMode === POOL_ACCESS_MODE.ALLOW_PENALTY) {
+    accessible += penaltyBearingSliceOf(account, eligible, value, decimalAgeAt(birthDate, asOf));
+  }
+
   return {
-    accessible: penaltyFreeSliceOf(account, eligible, value),
-    opensAt:    eligible ? null : gateOpensAt(account, birthDate),
+    accessible,
+    // Reported under BOTH modes, and it means the same thing in each: the instant this claim
+    // stops being gated. Under ALLOW_PENALTY the gate no longer decides whether the money can
+    // be reached, only what it COSTS — so the date is when the penalty slice stops being a
+    // penalty, which is exactly the `locked` figure beside it becoming zero.
+    opensAt: eligible ? null : gateOpensAt(account, birthDate),
   };
 }
 
@@ -319,7 +334,7 @@ export function poolMetrics(state, pool, ctx) {
     balance += fx(native);
 
     // §24.3 — what a Phase 1 draw would find in this claim, and when the rest of it opens.
-    const access = claimAccess(state, account, sleeves, native, ctx.asOf);
+    const access = claimAccess(state, account, sleeves, native, ctx.asOf, pool.access?.mode);
     accessible += fx(access.accessible);
     if (access.opensAt && (opensAt == null || access.opensAt < opensAt)) opensAt = access.opensAt;
 
@@ -541,6 +556,9 @@ export function householdReserve(state, ctx, date = null) {
     // The RESERVE slice is the base, not the balance — `reserveValueNative` has already
     // narrowed to CASH+BOND — so `accessible` cannot exceed it and `locked` cannot go
     // negative. Same rule, two bases (§24.2 `penaltyFreeSliceOf`).
+    // No pool, so no `access` policy: the household reserve is a PENALTY_FREE reading by
+    // construction. A reserve that costs 10% to reach is not a reserve, and this line answers
+    // "how long could I spend without selling equity" — not "or paying a penalty".
     const reachable = fx(claimAccess(state, account, null, native, asOf).accessible);
     accessible += reachable;
     locked     += base - reachable;

@@ -665,3 +665,30 @@ test('§24.6: accessible and locked reach the CSV fact table', () => {
   // Beside `balance`, because they are only ever read against it.
   assert.equal(POOL_CSV_COLUMNS.indexOf('accessible'), POOL_CSV_COLUMNS.indexOf('balance') + 1);
 });
+
+test('§24.5: under ALLOW_PENALTY the chip says PENALTY, not locked — they mean different things', () => {
+  // `locked` under PENALTY_FREE is money the gate puts out of reach; under ALLOW_PENALTY the
+  // money IS reachable and `locked` is what reaching it costs. One wording would be wrong
+  // under one of them.
+  const graph = {
+    pools: [{ id: 'offset', label: 'The backstop' },
+            { id: 'growth', label: 'Bucket 3 — growth', access: { mode: 'ALLOW_PENALTY' } }],
+    flows: [],
+  };
+  const { plugin } = mountPlugin(simOf(GATED_RUN(), { graph }));
+  const chip = q(plugin, 'legend').querySelector('[data-key="growth"]');
+
+  assert.match(chip.textContent, /\$710000 penalty/);
+  assert.doesNotMatch(chip.textContent, /locked/);
+  assert.match(chip.querySelector('.pool-locked').getAttribute('title'),
+    /may be drawn early, so all of it is reachable/);
+  plugin.unmount();
+});
+
+test('§24.5: the default mode keeps the "locked" wording', () => {
+  const { plugin } = mountPlugin(simOf(GATED_RUN()));
+  const chip = q(plugin, 'legend').querySelector('[data-key="growth"]');
+  assert.match(chip.textContent, /\$710000 locked/);
+  assert.doesNotMatch(chip.textContent, /penalty/);
+  plugin.unmount();
+});

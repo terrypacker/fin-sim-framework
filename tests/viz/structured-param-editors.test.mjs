@@ -1279,3 +1279,32 @@ test('LiquidityGraph: add a pool, then a claim — the claim lands in the pool j
   assert.strictEqual(cells(host, 'pool').at(-1).value, 'wrappers');
   assert.deepStrictEqual(param.value.pools.map(p => p.id), ['cash', 'wrappers']);
 });
+
+test('LiquidityGraph: `access` defaults to PENALTY_FREE and is written only when it deviates', () => {
+  // §24.5 / §22.9's rule: the only value that ever appears in a file is a decision somebody
+  // actually made, so the default is not written and absent means "the default applies".
+  const param = { name: 'liquidityGraph', value: {
+    pools: [{ id: 'cash', spendOrder: 10, claims: [{ key: 'usSavingsAccount' }] }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+
+  const access = cell(host, 'access');
+  assert.strictEqual(access.value, 'PENALTY_FREE', 'the cell shows the policy in force');
+  assert.strictEqual(param.value.pools[0].access, undefined, 'and does not author it');
+
+  pick(access, 'ALLOW_PENALTY');
+  assert.deepStrictEqual(param.value.pools[0].access, { mode: 'ALLOW_PENALTY' });
+
+  pick(cell(host, 'access'), 'PENALTY_FREE');
+  assert.strictEqual(param.value.pools[0].access, undefined, 'and back to absent, not written');
+});
+
+test('LiquidityGraph: an authored ALLOW_PENALTY round-trips through the editor', () => {
+  const param = { name: 'liquidityGraph', value: {
+    pools: [{ id: 'last', spendOrder: 90, access: { mode: 'ALLOW_PENALTY' },
+              claims: [{ key: 'usStockAccount' }] }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  assert.strictEqual(cell(host, 'access').value, 'ALLOW_PENALTY');
+  assert.deepStrictEqual(param.value.pools[0].access, { mode: 'ALLOW_PENALTY' });
+});

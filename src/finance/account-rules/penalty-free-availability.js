@@ -9,6 +9,7 @@
  */
 
 import { ACCOUNT_TYPE } from '../assets/account.js';
+import { getUsEarlyWithdrawalRules, supportsEarlyWithdrawal } from './us/us-early-withdrawal-rules.js';
 
 /**
  * DESIGN 97 §24.2 — the ONE authority for "what would a penalty-free draw find here, now".
@@ -51,6 +52,14 @@ import { ACCOUNT_TYPE } from '../assets/account.js';
 
 /** Days-per-year the decimal-age gate is computed on. The 59.5 gate needs a decimal age. */
 const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
+
+/**
+ * The owner's decimal age at `asOfDate`, on the same year length the gate uses, or NaN when
+ * either operand is unusable. Exported because §24.5's penalty rate is a function of it.
+ */
+export function decimalAgeAt(birthDate, asOfDate) {
+  return (asOfDate - birthDate) / MS_PER_YEAR;
+}
 
 /**
  * Does this account have an age gate at all?
@@ -157,6 +166,40 @@ export function penaltyFreeSliceOf(account, eligible, value) {
  */
 export function penaltyFreeAvailableFor(account, eligible) {
   return penaltyFreeSliceOf(account, eligible, drawableBalance(account));
+}
+
+/**
+ * DESIGN 97 §24.5 — how much of `value` an EARLY (penalised) draw could reach, NET of the
+ * penalty it would pay. Zero once the gate is open, because there is no penalty to pay then
+ * and the whole amount is already penalty-free.
+ *
+ * This is the only figure in the model allowed to read `allowsEarlyWithdrawal`, and it reads
+ * it through `supportsEarlyWithdrawal` as §22.8 item 4 requires: Phase 2 tests the flag and
+ * then looks up the rules table, so a type with no entry cannot be drawn early at ANY flag
+ * value. Believing the flag alone is §24.1's defect, and this is the one place the two
+ * readings are deliberately allowed to differ — under a named mode, rather than by accident.
+ *
+ * **Net, not gross.** A pool reporting cover it can only realise at 90 cents in the dollar is
+ * the same overstatement §24.1 measured, one layer down. The rate is the statutory one from
+ * the rules table, applied only below that type's own age threshold.
+ *
+ * @param {object}  account
+ * @param {boolean} eligible - the result of {@link isAgeEligible} for this account's owner
+ * @param {number}  value    - the base to slice, in the account's own currency
+ * @param {number}  age      - the owner's decimal age, for the rules table's threshold
+ * @returns {number} in the account's OWN currency, net of the penalty
+ */
+export function penaltyBearingSliceOf(account, eligible, value, age) {
+  if (eligible) return 0;
+  if (!account?.allowsEarlyWithdrawal) return 0;
+  if (!supportsEarlyWithdrawal(account.type)) return 0;
+  const rules = getUsEarlyWithdrawalRules(account.type);
+  if (!rules) return 0;
+  // What Phase 1 could NOT take — Phase 2 draws the remainder, and for a Roth that is exactly
+  // the earnings, because Phase 1 has already taken the contribution basis.
+  const base = Math.max(0, (value ?? 0) - penaltyFreeSliceOf(account, eligible, value));
+  const rate = (Number.isFinite(age) && age < rules.ageThreshold) ? rules.penaltyRate : 0;
+  return base * (1 - rate);
 }
 
 /**

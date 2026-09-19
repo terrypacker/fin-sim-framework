@@ -22,6 +22,7 @@
  * PAC-7  accessible <= balance always — `locked` can never go negative
  * PAC-8  The cube: stamped, replayed through the journal, tied to live state
  * PAC-9  The household reserve takes the AMOUNT too (§24.4)
+ * PAC-10 `access` on the pool — what `accessible` counts, and what Phase 2 may draw (§24.5)
  */
 
 import { test } from 'node:test';
@@ -448,4 +449,105 @@ test('PAC-9e: the reserve never exceeds what it counted — locked stays non-neg
   assert.equal(r.accessible, 90_000);
   assert.equal(r.locked,     0);
   assert.ok(r.locked >= 0);
+});
+
+// ─── PAC-10: `access` on the pool (§24.5) ────────────────────────────────────
+// The mode decides TWO things and they are one switch: what `accessible` counts, and whether
+// Phase 2 may draw these claims. Splitting them is how a pool reports cover it will not
+// deliver, so every case below asserts the metric and the draw together where it can.
+
+test('PAC-10: PENALTY_FREE is the default, and an absent `access` normalizes to it', async () => {
+  const g = graphOf([{ id: 'k', spendOrder: 40, claims: [{ key: 'k401Account' }] }]);
+  assert.equal(g.pools[0].access.mode, 'PENALTY_FREE');
+
+  const { POOL_ACCESS_MODE } = await import('../../src/finance/pools/liquidity-graph.js');
+  assert.equal(POOL_ACCESS_MODE.PENALTY_FREE, 'PENALTY_FREE');
+});
+
+test('PAC-10b: an unknown access mode is refused at config time, naming the pool', () => {
+  assert.throws(
+    () => graphOf([{ id: 'k', spendOrder: 40, access: { mode: 'SOMETIMES' },
+                     claims: [{ key: 'k401Account' }] }]),
+    /pool 'k' access 'SOMETIMES' is not one of/);
+});
+
+test('PAC-10c: ALLOW_PENALTY counts the penalised slice NET of the penalty', () => {
+  const state = householdState(AT_50);
+  const free = poolMetrics(state,
+    graphOf([{ id: 'k', spendOrder: 40, claims: [{ key: 'k401Account' }] }]).pools[0],
+    ctxOf(state));
+  const paid = poolMetrics(state,
+    graphOf([{ id: 'k', spendOrder: 40, access: { mode: 'ALLOW_PENALTY' },
+               claims: [{ key: 'k401Account' }] }]).pools[0],
+    ctxOf(state));
+
+  assert.equal(free.accessible, 0,       'a reserve that costs 10% is not a reserve');
+  assert.equal(paid.accessible, 360_000, '400k less the 10% penalty — NET, not gross');
+  assert.equal(paid.balance,    400_000, 'what it HOLDS is the same either way');
+  assert.equal(paid.locked,     40_000,  'the penalty is the part that cannot be spent');
+});
+
+test('PAC-10d: a Roth under ALLOW_PENALTY adds only the EARNINGS, penalised', () => {
+  // Phase 1 has already taken the contribution basis, so the penalised slice is the remainder.
+  const state = householdState(AT_50);
+  const m = poolMetrics(state,
+    graphOf([{ id: 'r', spendOrder: 40, access: { mode: 'ALLOW_PENALTY' },
+               claims: [{ key: 'rothAccount' }] }]).pools[0],
+    ctxOf(state));
+  // 90k basis free + (300k − 90k) × 0.9 = 90k + 189k.
+  assert.equal(m.accessible, 279_000);
+});
+
+test('PAC-10e: ALLOW_PENALTY on a type with NO early-withdrawal rule adds nothing', () => {
+  // Super reaches `if (!rules) continue` in Phase 2 and cannot be drawn early at any flag
+  // value (§22.8). A mode that moved the metric without moving a dollar is the §20.18 shape.
+  const state = householdState(AT_50);
+  state.superAccount = Object.assign(
+    new TraditionalIRAAccount(200_000, { ownerId: 'primary', currency: USD }),
+    { type: 'SUPERANNUATION', allowsEarlyWithdrawal: true, minimumAge: 60 });
+  const g = normalizeLiquidityGraph(
+    { pools: [{ id: 's', spendOrder: 40, access: { mode: 'ALLOW_PENALTY' },
+                claims: [{ key: 'superAccount' }] }] },
+    [...ACCOUNTS, { stateKey: 'superAccount', type: 'SUPERANNUATION' }]);
+  const m = poolMetrics(state, g.pools[0], ctxOf(state));
+  assert.equal(m.accessible, 0);
+  assert.equal(m.locked,     200_000);
+});
+
+test('PAC-10f: past the gate the two modes agree — there is no penalty left to pay', () => {
+  const state = householdState(AT_65);
+  const free = poolMetrics(state,
+    graphOf([{ id: 'k', spendOrder: 40, claims: [{ key: 'k401Account' }] }]).pools[0], ctxOf(state));
+  const paid = poolMetrics(state,
+    graphOf([{ id: 'k', spendOrder: 40, access: { mode: 'ALLOW_PENALTY' },
+               claims: [{ key: 'k401Account' }] }]).pools[0], ctxOf(state));
+  assert.equal(free.accessible, 400_000);
+  assert.equal(paid.accessible, 400_000);
+  assert.equal(paid.unlocksAt,  null);
+});
+
+test('PAC-10g: an ALLOW_PENALTY pool still reports its unlock date — that is when the penalty ends', () => {
+  // Under ALLOW_PENALTY the gate no longer decides whether the money can be reached, only what
+  // it COSTS. The date is therefore still worth saying: it is when `locked` — which under this
+  // mode IS the penalty — becomes zero. PAC-10f covers the other side: past the gate, null.
+  const state = householdState(AT_50);
+  const m = poolMetrics(state,
+    graphOf([{ id: 'k', spendOrder: 40, access: { mode: 'ALLOW_PENALTY' },
+               claims: [{ key: 'k401Account' }] }]).pools[0], ctxOf(state));
+  assert.equal(new Date(m.unlocksAt).getUTCFullYear(), 2039);
+  assert.equal(m.locked, 40_000, 'and the locked figure is exactly the penalty');
+});
+
+test('PAC-10h: the mode reaches the compiled sequence as `allowPenalty` on each claim', async () => {
+  const { compileToDrawdownSequence } = await import('../../src/finance/pools/liquidity-graph.js');
+  const g = graphOf([
+    { id: 'cash', spendOrder: 10, claims: [{ key: 'usSavingsAccount' }] },
+    { id: 'last', spendOrder: 90, access: { mode: 'ALLOW_PENALTY' },
+      claims: [{ key: 'k401Account' }, { key: 'iraAccount' }] },
+  ]);
+  assert.deepEqual(compileToDrawdownSequence(g), [
+    { key: 'usSavingsAccount', sleeves: null, allowPenalty: false },
+    { key: 'k401Account',      sleeves: null, allowPenalty: true },
+    { key: 'iraAccount',       sleeves: null, allowPenalty: true },
+  ]);
 });

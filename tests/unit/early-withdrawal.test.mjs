@@ -966,3 +966,79 @@ test('EW-14: code may still build a genuine statutory exception', () => {
   // NAMED rule that resolves to an age, which is a different design (§22.10).
   assert.strictEqual(new FourOhOneKAccount(0, { minimumAge: 55 }).minimumAge, 55);
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EW-15: design 97 §24.5 — a pool's `access` mode gates the Phase 2 draw
+//
+// The mode decides what `poolMetrics.accessible` counts AND whether Phase 2 may draw these
+// claims, and it must be ONE switch: a pool reporting cover it will not deliver is the defect
+// §24 exists to end. These are the DRAW half; the metric half is `pool-accessibility.test.mjs`
+// PAC-10. The policy rides `state.drawdownSequence` as `allowPenalty` on each entry, so
+// `AccountService` never learns that pools exist (§12).
+// ══════════════════════════════════════════════════════════════════════════════
+
+function rothUnderGate(balance = 10_000, contrib = 2_000) {
+  const target = new CheckingAccount(0, { country: 'US', currency: USD });
+  const roth   = new RothAccount(balance, {
+    contributionBasis: contrib, earningsBasis: balance - contrib, drawdownPriority: 1 });
+  return { target, roth, state: {
+    target, roth, people: { primary: { birthDate: new Date(1990, 0, 1), residency: 'US' } } } };
+}
+
+test('EW-15: a PENALTY_FREE pool blocks the Phase 2 draw — the deficit goes unmet, not unpaid', () => {
+  const svc  = makeSvc();
+  const { target, roth, state } = rothUnderGate();
+  state.drawdownSequence = [{ key: 'roth', sleeves: null, allowPenalty: false }];
+
+  // Phase 1 finds the 2000 contribution basis; the remaining 3000 would have come from
+  // earnings at a 10% penalty, and this pool has not opted into that.
+  assert.throws(() => svc.replenishSavings(state, 'target', 5_000, new Date(2026, 0, 1)),
+    /InsufficientFunds|insufficient/i);
+  assert.strictEqual(roth.contributionBasis, 0,     'phase 1 still ran');
+  assert.strictEqual(roth.earningsBasis,     8_000, 'phase 2 did not');
+  assert.strictEqual(target.balance,         2_000);
+});
+
+test('EW-15b: the same pool with ALLOW_PENALTY draws, and pays the penalty', () => {
+  const svc  = makeSvc();
+  const { target, roth, state } = rothUnderGate();
+  state.drawdownSequence = [{ key: 'roth', sleeves: null, allowPenalty: true }];
+
+  const { pendingTaxActions } = svc.replenishSavings(state, 'target', 5_000, new Date(2026, 0, 1));
+  assert.strictEqual(target.balance, 5_000, 'the deficit is met');
+  assert.ok(roth.earningsBasis < 8_000, 'out of earnings');
+  assert.ok(pendingTaxActions.some(a => a.penaltyAmount > 0), 'and the penalty is emitted');
+});
+
+test('EW-15c: an entry with NO allowPenalty keeps today\'s behaviour — a hand-written sequence', () => {
+  // `undefined` means no pool authored this entry. A hand-written `drawdownSequence` has no
+  // pools behind it, so its accounts must go on reaching Phase 2 exactly as they always have —
+  // which is why the guard tests `=== false` rather than falsiness.
+  const svc  = makeSvc();
+  const { target, state } = rothUnderGate();
+  state.drawdownSequence = [{ key: 'roth', sleeves: null }];
+
+  svc.replenishSavings(state, 'target', 5_000, new Date(2026, 0, 1));
+  assert.strictEqual(target.balance, 5_000);
+});
+
+test('EW-15d: with NO sequence at all the draw is untouched — every plan without a graph', () => {
+  const svc  = makeSvc();
+  const { target, state } = rothUnderGate();
+  svc.replenishSavings(state, 'target', 5_000, new Date(2026, 0, 1));
+  assert.strictEqual(target.balance, 5_000);
+});
+
+test('EW-15e: the REMAINDER is never blocked — a pool can only speak for what it claims', () => {
+  // The sequence claims the savings account; the Roth is not in any pool, so it follows in
+  // ordinary drawdownPriority order with no opinion attached and stays Phase-2 reachable.
+  const svc  = makeSvc();
+  const { target, roth, state } = rothUnderGate();
+  const savings = new CheckingAccount(1_000, { country: 'US', currency: USD, drawdownPriority: 0 });
+  state.savings = savings;
+  state.drawdownSequence = [{ key: 'savings', sleeves: null, allowPenalty: false }];
+
+  svc.replenishSavings(state, 'target', 5_000, new Date(2026, 0, 1));
+  assert.strictEqual(target.balance, 5_000);
+  assert.ok(roth.earningsBasis < 8_000, 'the unclaimed Roth was still raidable');
+});

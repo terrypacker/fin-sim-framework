@@ -91,6 +91,27 @@ export const POOL_SPEND_BASIS = Object.freeze({
   TRAILING: 'TRAILING',
 });
 
+/**
+ * DESIGN 97 §22.4 / §24.5 — may this pool's claims be reached by paying the early-withdrawal
+ * penalty?
+ *
+ * Authored on the POOL and not on the account, because the policy is a property of how this
+ * pool is being USED: the same 401(k) can be `PENALTY_FREE` while it sits in a reserve node
+ * and `ALLOW_PENALTY` in a last-resort node, which an account-level flag cannot say.
+ *
+ * It decides two things and they are deliberately ONE switch: whether `poolMetrics.accessible`
+ * counts the penalised slice, and whether `AccountService`'s Phase 2 may draw these claims.
+ * Splitting them is how a pool comes to report cover it will not deliver.
+ */
+export const POOL_ACCESS_MODE = Object.freeze({
+  /** Phase 1 only. The default: a pool is a reserve, and a reserve that costs 10% is not one. */
+  PENALTY_FREE:  'PENALTY_FREE',
+  /** the opt-in — this pool may be raided early, at the statutory penalty. */
+  ALLOW_PENALTY: 'ALLOW_PENALTY',
+});
+
+const ACCESS_MODES = Object.values(POOL_ACCESS_MODE);
+
 /** How a pool's CAPACITY (its ceiling, distinct from its balance) is derived (§12.1). */
 export const POOL_CAPACITY_MODE = Object.freeze({
   /** capacity == balance; the pool has no ceiling of its own. The default. */
@@ -672,6 +693,13 @@ export function normalizeLiquidityGraph(graph, accounts = [], opts = {}) {
       }
     }
 
+    // §24.5 — absent is PENALTY_FREE, so every graph authored before this reads as it always
+    // behaved on the METRIC side. The draw side is a deliberate change; see §24.5.
+    const accessMode = raw.access?.mode ?? raw.access ?? POOL_ACCESS_MODE.PENALTY_FREE;
+    if (!ACCESS_MODES.includes(accessMode)) {
+      err(`pool '${id}' access '${accessMode}' is not one of ${ACCESS_MODES.join(', ')}`);
+    }
+
     const target   = sizeSpec(raw.target,   `pool '${id}' target`,   TARGET_MODES,   POOL_TARGET_MODE.YEARS_OF_SPEND);
     const floor    = sizeSpec(raw.floor,    `pool '${id}' floor`,    TARGET_MODES,   POOL_TARGET_MODE.AMOUNT);
     const capacity = sizeSpec(raw.capacity, `pool '${id}' capacity`, CAPACITY_MODES, POOL_CAPACITY_MODE.BALANCE)
@@ -712,6 +740,7 @@ export function normalizeLiquidityGraph(graph, accounts = [], opts = {}) {
       target,
       floor,
       capacity,
+      access: { mode: accessMode },
       // Opaque to the engine, preserved by the serializer — the editor (effort 2) needs a
       // place to keep layout and a second store would drift (design 97 §14).
       ...(raw.ui != null ? { ui: raw.ui } : {}),
@@ -1040,6 +1069,20 @@ function warnUntradeableRebalanceFlows(pools, flows, byKey) {
  *
  * Returns null when no pool is a spend source, so the compiled state field stays absent and
  * the drawdownPriority walk runs untouched (the §3.1 non-negotiable).
+ *
+ * §24.5 — each entry also carries `allowPenalty`, the pool's `access` mode flattened onto the
+ * claims it governs. It travels HERE, on the sequence, rather than being looked up from the
+ * graph at draw time, because `AccountService` is the one consumer that must never learn that
+ * pools exist (§12): it walks a list of entries, and an entry saying whether it may be raided
+ * early is the same kind of fact as an entry saying which sleeves it covers.
+ *
+ * `false` is written EXPLICITLY on every compiled entry rather than omitted, and that is what
+ * makes the field a three-way rather than a boolean. Every compiled entry comes from a pool,
+ * and every pool has an access mode — so `present` means "a pool decided this", and ABSENT can
+ * keep its own meaning: an entry no pool authored, i.e. a HAND-WRITTEN `drawdownSequence`,
+ * whose accounts must go on reaching Phase 2 exactly as they do today. Omitting `false` would
+ * collapse "PENALTY_FREE, deliberately" into "nobody said", and the default — the whole point
+ * of §24.5 — would become unexpressible.
  */
 export function compileToDrawdownSequence(graph) {
   const pools = graph?.pools;
@@ -1050,7 +1093,10 @@ export function compileToDrawdownSequence(graph) {
     .sort((a, b) => (a.p.spendOrder - b.p.spendOrder) || (a.i - b.i));
   const out = [];
   for (const { p } of spend) {
-    for (const { key, sleeves } of p.claims) out.push({ key, sleeves: sleeves ?? null });
+    const allowPenalty = p.access?.mode === POOL_ACCESS_MODE.ALLOW_PENALTY;
+    for (const { key, sleeves } of p.claims) {
+      out.push({ key, sleeves: sleeves ?? null, allowPenalty });
+    }
   }
   return out.length ? out : null;
 }

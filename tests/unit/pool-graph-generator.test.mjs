@@ -60,8 +60,10 @@ test('PG-2: the study\'s central arm compiles to cash → bonds → offset → e
   const g = buildPoolGraph(CFG, { order: SHAPES.OFFSET_AFTER_BONDS, ...SIZED });
   const seq = compileToDrawdownSequence(normalize(g));
 
-  // The order is the finding, so it is asserted as a whole rather than by spot check.
-  assert.deepEqual(seq, [
+  // The order is the finding, so it is asserted as a whole rather than by spot check —
+  // projected to (key, sleeves), because the per-entry early-access policy (§24.5's
+  // `allowPenalty`) is not what this test is about and is pinned by POOL-2 and PAC-10h.
+  assert.deepEqual(seq.map(({ key, sleeves }) => ({ key, sleeves })), [
     { key: 'usSavings',   sleeves: null },
     { key: 'auSavings',   sleeves: null },
     { key: 'usBrokerage', sleeves: ['CASH'] },

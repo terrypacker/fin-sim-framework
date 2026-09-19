@@ -72,11 +72,13 @@ const REFERENCE = {
 
 test('POOL-2: a single-claim graph compiles to exactly the hand-authored sequence', () => {
   const g = normalizeLiquidityGraph(REFERENCE, ACCOUNTS);
+  // `allowPenalty` is on every compiled entry (§24.5): present means a POOL decided this
+  // entry's early-access policy, and absent is reserved for a hand-written sequence.
   assert.deepEqual(compileToDrawdownSequence(g), [
-    { key: 'usSavingsAccount', sleeves: null },
-    { key: 'usStockAccount',   sleeves: ['BOND'] },
-    { key: 'offsetAccount',    sleeves: null },
-    { key: 'usStockAccount',   sleeves: ['EQUITY', 'GOLD'] },
+    { key: 'usSavingsAccount', sleeves: null,               allowPenalty: false },
+    { key: 'usStockAccount',   sleeves: ['BOND'],           allowPenalty: false },
+    { key: 'offsetAccount',    sleeves: null,               allowPenalty: false },
+    { key: 'usStockAccount',   sleeves: ['EQUITY', 'GOLD'], allowPenalty: false },
   ]);
 });
 
@@ -1029,9 +1031,9 @@ test('POOL-2c: the graph reaches state through a real scenario load, and compile
   // `replenishSavings` already reads, which never learned that pools exist.
   assert.equal(sim.state.liquidityGraph.pools.length, 3);
   assert.deepEqual(sim.state.drawdownSequence, [
-    { key: 'usSavingsAccount', sleeves: null },
-    { key: 'usStockAccount',   sleeves: ['BOND'] },
-    { key: 'usStockAccount',   sleeves: ['EQUITY', 'GOLD'] },
+    { key: 'usSavingsAccount', sleeves: null,               allowPenalty: false },
+    { key: 'usStockAccount',   sleeves: ['BOND'],           allowPenalty: false },
+    { key: 'usStockAccount',   sleeves: ['EQUITY', 'GOLD'], allowPenalty: false },
   ]);
 });
 
@@ -1832,8 +1834,8 @@ test('POOL-20f: eviction only removes what the projection DID NOT emit', () => {
   });
   // Present, and the freshly compiled one — the stale single entry lost, as it should.
   assert.deepEqual(sim.state.drawdownSequence, [
-    { key: 'usSavingsAccount', sleeves: null },
-    { key: 'usStockAccount',   sleeves: ['EQUITY'] },
+    { key: 'usSavingsAccount', sleeves: null,       allowPenalty: false },
+    { key: 'usStockAccount',   sleeves: ['EQUITY'], allowPenalty: false },
   ]);
 });
 

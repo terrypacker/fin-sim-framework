@@ -103,7 +103,13 @@ function _applyDrawdownSequence(sources, sequence, poolCandidates = null) {
     const account = key ? byKey.get(key) : null;
     if (!account) continue;                 // not a live drawdown source this period
     const sleeves = (typeof entry === 'string') ? null : (entry?.sleeves ?? null);
-    out.push([key, account, sleeves]);
+    // Design 97 §24.5 — the pool's `access` mode, flattened onto this claim by
+    // `compileToDrawdownSequence`. THREE states, and the third is why it is read with `??`
+    // rather than coerced: `true` (the pool opted in), `false` (a pool decided PENALTY_FREE)
+    // and `undefined` (no pool authored this entry — a hand-written sequence, or the
+    // remainder pass below — which must go on reaching Phase 2 exactly as it does today).
+    const allowPenalty = (typeof entry === 'string') ? undefined : entry?.allowPenalty;
+    out.push([key, account, sleeves, allowPenalty]);
     if (sleeves == null) claimed.set(key, WHOLE);
     else if (claimed.get(key) !== WHOLE) claimed.set(key, (claimed.get(key) ?? new Set()));
   }
@@ -119,6 +125,8 @@ function _applyDrawdownSequence(sources, sequence, poolCandidates = null) {
   // lots — and the unnarrowed form cannot strand an allocation class that is not in
   // DRAWDOWN_SLEEVE_CLASSES.
   for (const entry of sources) {
+    // No 4th element: the remainder is by definition what no pool claimed, so no pool has an
+    // opinion about its early access. `undefined` is the honest value and it is today's rule.
     if (claimed.get(entry[0]) !== WHOLE) out.push([entry[0], entry[1], null]);
   }
   return out;
@@ -1168,8 +1176,16 @@ export class AccountService extends AssetService {
     }
 
     // ── Phase 2: early withdrawal (with penalty) ──────────────────────────────
-    for (const [key, account] of orderedSources) {
+    for (const [key, account, , allowPenalty] of orderedSources) {
       if (remaining < 1e-9) break;
+      // Design 97 §24.5 — a pool that has not opted in is not raidable. The account flag says
+      // the LAW permits an early withdrawal; this says whether this household will take it
+      // from money it has placed in this pool, and the pool is where the policy belongs
+      // because the same 401(k) can be a reserve in one node and a last resort in another.
+      //
+      // `=== false` and not falsy: `undefined` means no pool authored this entry (a
+      // hand-written sequence, or the remainder), and those keep today's behaviour exactly.
+      if (allowPenalty === false) continue;
       if (!account.allowsEarlyWithdrawal) continue;
       const acctBirthDate2 = (account.ownerId && account.ownerId !== personKey)
         ? (getBirthDate(state, account.ownerId) ?? birthDate)
