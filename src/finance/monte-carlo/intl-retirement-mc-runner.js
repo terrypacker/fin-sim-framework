@@ -12,6 +12,7 @@ import { ScenarioRunner }             from '../../simulation-framework/scenario.
 import { IntlRetirementScenario, resolveBalanceCenters } from '../../scenarios/intl-retirement-scenario.js';
 import { ScenarioSerializer }         from '../../scenarios/scenario-serializer.js';
 import { resolveAliasCenters }        from '../../scenarios/scenario-param-apply.js';
+import { resolvePoolTargetScaleCenters } from '../pools/pool-target-scale.js';
 import { IntlRetirementMcConfig, CENTER_SOURCES, refineCenterSource } from './intl-retirement-mc-config.js';
 import { scenarioParamValues, paramSchemaDefaults } from '../param-schema-utils.js';
 import { buildIterationRunner, perturbParams, samplingSignature, mcEquityModel, mcInflationModel, mcPrimeModel } from './parallel/mc-worker-core.js';
@@ -223,8 +224,12 @@ export class IntlRetirementMcRunner {
     // Legacy-keyed levers (`auHouseSaleYear`, the wages) centre on their generated
     // successor's value — a loaded cfg carries only that one.
     const aliasCenters   = resolveAliasCenters(rawTemplate);
-    const base = { ...schemaDefaults, ...templateParams, ...aliasCenters, ...balanceCenters, ...baseParams,
-                   endDate: simEnd };
+    // A liquidity-pool size axis (design 110 §6.2) is a hidden generated param: absent from
+    // `cfg.params` AND from the schema defaults, so nothing above carries its plan value.
+    // Without it a grid on a pool has no reference cell and a disabled row has no centre.
+    const poolCenters    = resolvePoolTargetScaleCenters(rawTemplate);
+    const base = { ...schemaDefaults, ...templateParams, ...aliasCenters, ...balanceCenters,
+                   ...poolCenters, ...baseParams, endDate: simEnd };
     // Harvest from the raw template: its records carry the generated per-record params
     // (design 98 W3). Once, here on the main thread — workers get resolved `variables`.
     const variables  = this.mcConfig.buildVariables(base, { cfg: rawTemplate });

@@ -18,6 +18,10 @@ import { TAX_ADVANTAGED_ROLES, TAXABLE_ROLES } from '../behavioral/rebalance-to-
 // second transcription of its default preference lists would be a second thing to keep in
 // step. `allocation-location.js` does not import us either.
 import { resolveLocationPolicy } from '../behavioral/allocation-location.js';
+// Design 110 §6.2 — the pool-size AXIS. Applied HERE, in front of the normalizer, because
+// this file is where a raw authored graph becomes a compiled one and the overlay must never
+// touch the authored object itself; see `pool-target-scale.js` for why that is the seam.
+import { poolTargetScalesFrom, scaleRawPoolGraph } from './pool-target-scale.js';
 
 /**
  * DESIGN 97 PART II — the LIQUIDITY GRAPH.
@@ -1194,7 +1198,9 @@ export function resolveLiquidityGraph(params, accounts = []) {
  * @private
  */
 function _normalizeFromParams(p, accounts, advisories = null) {
-  return normalizeLiquidityGraph(p.liquidityGraph, accounts, _graphOptsFrom(p, advisories));
+  return normalizeLiquidityGraph(
+    scaleRawPoolGraph(p.liquidityGraph, poolTargetScalesFrom(p)), accounts,
+    _graphOptsFrom(p, advisories));
 }
 
 /**
@@ -1567,6 +1573,10 @@ function _normalizeSchedule(rawSchedule, rawShapes) {
  */
 function _normalizeShapes(p, accounts, skip = null, advisories = null) {
   const raw = _shapesObject(p.liquidityShapes);
+  // §6.4 — the axis key is the POOL id, so one factor moves that pool in EVERY shape that
+  // contains it. Scaling each shape here rather than once over the whole map keeps the
+  // per-shape `err()` re-throw below pointing at the shape the author has to look at.
+  const scales = poolTargetScalesFrom(p);
   const out = new Map();
   for (const [id, shape] of Object.entries(raw)) {
     if (!shape || typeof shape !== 'object') err(`liquidityShapes['${id}'] is not a graph`);
@@ -1582,7 +1592,8 @@ function _normalizeShapes(p, accounts, skip = null, advisories = null) {
       // looking at, which is design 109 §12's "the author repairs the wrong table" in a new
       // place. The editor filters on exactly this field (`advisoriesFor`).
       const mine = advisories ? [] : null;
-      out.set(id, normalizeLiquidityGraph(shape, accounts, _graphOptsFrom(p, mine)));
+      out.set(id, normalizeLiquidityGraph(
+        scaleRawPoolGraph(shape, scales), accounts, _graphOptsFrom(p, mine)));
       if (mine) advisories.push(...mine.map(a => ({ ...a, shape: id })));
     } catch (e) {
       // Re-thrown with the shape named. Without this the message is identical to the one the

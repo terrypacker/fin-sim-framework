@@ -14,6 +14,7 @@ import { McRunsPanel }             from './mc-runs-panel.js';
 import { IntlRetirementMcConfig, refineCenterSource } from '../../finance/monte-carlo/intl-retirement-mc-config.js';
 import { resolveBalanceCenters, IntlRetirementScenario } from '../../scenarios/intl-retirement-scenario.js';
 import { resolveAliasCenters } from '../../scenarios/scenario-param-apply.js';
+import { resolvePoolTargetScaleCenters } from '../../finance/pools/pool-target-scale.js';
 import { scenarioParamValues, paramSchemaDefaults } from '../../finance/param-schema-utils.js';
 import { ServiceRegistry }         from '../../services/service-registry.js';
 import { APP_EVENTS }              from '../app-display-settings.js';
@@ -365,7 +366,10 @@ export class MonteCarloPresenter {
     // (a holdings-bearing balance isn't a plain param), so resolve them from the cfg;
     // they win over the params bag, which can hold a stale copy. Other legacy-keyed
     // levers (the house sale years, the wages) take their generated successor's value.
+    // A liquidity-pool size axis is hidden and generated (design 110 §6.2), so its plan value
+    // is in neither store; 1.0 is what the plan runs at. Without it the grid panel shows a
+    // pool axis with no plan value and the grid has no reference cell.
     return { ...snapshot, ...scenarioParamValues(activeCfg), ...resolveAliasCenters(activeCfg),
-             ...resolveBalanceCenters(activeCfg) };
+             ...resolveBalanceCenters(activeCfg), ...resolvePoolTargetScaleCenters(activeCfg) };
   }
 }

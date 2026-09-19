@@ -20,6 +20,8 @@ import { indexParamSchema, resolveSweepVariables, harvestSweepVariables,
          groupWithAliasSuccessor } from '../param-schema-utils.js';
 import { INTL_RETIREMENT_PARAM_ALIASES } from '../../scenarios/intl-retirement-scenario.js';
 import { ScenarioParamGenerator } from '../../scenarios/params/scenario-param-generator.js';
+import { scalablePoolTargets, poolTargetScaleKey, poolTargetScaleLabel }
+                                     from '../pools/pool-target-scale.js';
 
 // Lazily index the full param schema by key so Opt variables can inherit identity
 // (label / options / visibleWhen) from it rather than duplicating it here.
@@ -590,6 +592,40 @@ function buildInheritedRaOptConfigs(params) {
 }
 
 /**
+ * The liquidity-pool size axes (design 110 §6.2 / §10.3), one per pool the plan gives a
+ * numeric target. `enabled: false`, so they surface only on a plan that authors pools.
+ *
+ * A CURATED contributor rather than a schema harvest, for two reasons and the second is the
+ * one that matters:
+ *
+ *   - the schema entry is `hidden` (the `BALANCE_TARGET` pattern — see
+ *     `ScenarioParamGenerator._expandPoolTargetScales`), and `harvestSweepVariables`
+ *     deliberately skips hidden entries;
+ *   - a factor CENTRED ON 1.0 has no sensible harvested range. `optRowFor`'s `rate` kind
+ *     would offer 0.98 … 1.02 — an axis that reads as a lever, sweeps as a lever and returns
+ *     three near-identical rollouts. The range below is in units of the authored target:
+ *     half it, double it, in quarter steps.
+ *
+ * The label names the authored values the factor multiplies (§10.3) and says how many shapes
+ * one factor moves (§6.4); `poolTargetScaleLabel` owns both sentences so the Opt list, the
+ * grid axis list and the generated schema entry cannot disagree about them.
+ *
+ * NOT `controllable`: the graph is resolved once, when the reducers are built, so an MPC
+ * controller re-deciding this between periods would change nothing. A control that cannot
+ * actuate is worse than a missing one.
+ */
+function buildPoolOptConfigs(params) {
+  return scalablePoolTargets(params).map(row => ({
+    paramKey: poolTargetScaleKey(row.poolId),
+    label:    poolTargetScaleLabel(row),
+    type:     OPT_PARAM_TYPES.CONTINUOUS,
+    min: 0.5, max: 2, step: 0.25,
+    group:    'Liquidity Pools',
+    enabled:  false,
+  }));
+}
+
+/**
  * Build the full optimization variable list for a given param snapshot.
  *
  * Returns DEFAULT_OPTIMIZATION_CONFIGS plus one severity entry per configured
@@ -617,6 +653,7 @@ export function buildOptVariables(params, accounts = null, { cfg = null } = {}) 
     ...buildExpenseBandOptConfigs(params),
     ...buildRothScheduleOptConfigs(params),
     ...buildInheritedRaOptConfigs(params),
+    ...buildPoolOptConfigs(params),
   ];
   const schema = [
     ...IntlRetirementScenario.buildFullParamSchema(),

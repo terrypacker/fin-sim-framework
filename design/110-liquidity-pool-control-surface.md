@@ -451,10 +451,11 @@ prevent a wrong reading come first.
    CTRL-6, HIST-9. See §13.5.
 5. ~~**The topology view**~~ (§5.2) — **BUILT.** The fifth view, run-to-date counts, no period
    selector. CTRL-7, CTRL-13. See §13.6.
-6. **Leg C mechanism** (§6.2) — a hidden, compile-only generated param on the `BALANCE_TARGET`
-   pattern, joined to `generated-param-keys.js` and harvested. **Blocked on §10.3**: whether the
-   key is an absolute target or a multiplier over every shape decides what the key MEANS, and
-   that cannot be changed afterwards without changing the meaning of a live axis.
+6. ~~**Leg C mechanism**~~ (§6.2) — **BUILT.** `pool.<poolId>.targetScale`, a hidden
+   generated param on the `BALANCE_TARGET` pattern, `'pool.'` joined to
+   `generated-param-keys.js`, offered as a curated Opt/grid row rather than harvested, and
+   applied where the graph is RESOLVED rather than by a loader cascade. §10.3's multiplier
+   decision is what unblocked it. CTRL-8, CTRL-9, CTRL-10, CTRL-14, CTRL-16. See §13.7.
 7. **Leg C hygiene** (§6.5) — `poolAxisProblems`, rendered beside the axis.
 8. **Gate clause ids** (§6.3 option A), then the gate-threshold axis.
 9. **The shape-year axis** (§6.4), deferred per design 109 Q1 until 6–8 are green.
@@ -916,3 +917,83 @@ and is asserted — the half of the "verify in the app" lesson that can be pinne
 Verified on the author's 39,568-entry run: 9 nodes, 7 edges, per-edge counts summing to exactly
 the 174 fired / 41 gated the provenance strip reports, with zero per-edge mismatches against the
 flow log.
+
+### 13.7 Phase 6, as built
+
+**The seam is the RESOLVER, not the loader cascade.** §6.2 chose the `BALANCE_TARGET` pattern
+and §12.1 named `ScenarioLoader` as the place it lands, which is right for every other
+generated param and wrong for this one. Every `acct.` / `prop.` / `person.` key cascades onto a
+cfg RECORD; a pool is not a record, it is a value inside the `liquidityGraph` param, and that
+param is read from the params bag when `buildSim()` builds the reducers — **before**
+`ScenarioLoader.load()` runs at all (`config-field-in-state-is-not-read`). A cascade branch
+would have written the scale onto a graph nothing reads. So the factor is applied in
+`resolveLiquidityGraph` / `resolveLiquidityGraphSchedule`, in front of `normalizeLiquidityGraph`,
+on a copy. `pool` is therefore deliberately ABSENT from `PREFIX_TO_NODE_TYPE`, so
+`decodeGeneratedParamKey` returns null for the key and the loader's third pass skips it.
+
+That placement turns out to be better than the one the design named, for two reasons that were
+not in the argument when it was written:
+
+- **§6.2's "an overlay, not a rewrite" becomes true by construction.** The authored param object
+  is never written to, so CTRL-9 is not a property the code has to maintain — there is no code
+  path that could break it. `ScenarioSerializer` writes `cfg.params` and not `cfg.parameters`,
+  so a scenario saved mid-sweep reloads at the author's own targets because the swept value was
+  never in the store that gets saved.
+- **A multiplier is not idempotent, and now nothing can apply it twice.** `BALANCE_TARGET`
+  rescales holdings to an ABSOLUTE figure, so applying it to its own output is harmless; ×0.5
+  applied twice is ×0.25. Resolving from the authored value every time removes the whole class
+  of bug rather than guarding against it.
+
+**A curated Opt row, not a harvest row.** §6.1's payoff ("a pool lever that appears in the
+harvest is a grid axis, an MC lever and an optimizer variable at once") is real but arrives by a
+different route: `harvestSweepVariables` skips `hidden` entries *by design* (that is how
+`BALANCE_TARGET` stays out of the editor and the panel both), and a factor centred on 1.0 has no
+sensible harvested range — `optRowFor`'s `rate` kind would offer 0.98 … 1.02, three
+near-identical rollouts wearing a lever's clothes. So `buildPoolOptConfigs` joins
+`buildShockOptConfigs` / `buildInheritedRaOptConfigs` as a dynamic contributor, with a range in
+units of the authored target (half it to double it, quarter steps). `buildGridAxes` builds on
+`buildOptVariables`, so the grid axis comes free; `mc: false` is deliberate per design 98 W2 —
+how many years of reserve to hold is CHOSEN, not uncertain.
+
+**`controllable` is deliberately not set.** The graph is resolved once, when the reducers are
+built, so an MPC controller re-deciding the factor between periods would change nothing. A
+control that cannot actuate is the same defect as an inert lever, one surface over.
+
+**Two traps were live and both would have been silent.** §12.2 named the first and it was real:
+`'pool.'` had to join `GENERATED_KEY_PREFIXES` or `set()` writes a nested `pool` object nothing
+reads. The second is not in §12.2 and cost the longer half of the session to see —
+`forwardToolsetOverrides` drops any bag key that is not a toolset schema key, so the axis was
+being discarded on the way into `buildDefaultConfig`, which is the path **every** MC iteration,
+grid cell and optimizer rollout takes (`mc-worker-core`, `optimization-problem` and the workbench
+all construct the scenario from the bag). It is `legacy-alias-levers-inert-on-loaded-plan`
+exactly: live on the panel, inert in the run, every cell identical. CTRL-8 asserts the arrival
+(`cfg.parameters[key]`) separately from the effect, because those are two different failures.
+
+**The centre had to be supplied by hand, three times.** A hidden generated param is absent from
+`cfg.params` AND from `paramSchemaDefaults` (both exclude `hidden`), so nothing in any lever base
+carried the axis's plan value and a grid on a pool would have had no reference cell —
+`harvest never synthesizes a center`, and rightly. `resolvePoolTargetScaleCenters` is the
+`resolveBalanceCenters` / `resolveAliasCenters` of this axis and is merged at the same three
+sites (`IntlRetirementMcRunner._prepare`, `OptimizationProblem._resolveBase`,
+`MonteCarloPresenter._resolveBaseParams`).
+
+**No second validator, and a PERCENT target can be swept out of range.** §17.2 holds: the scaled
+spec goes through `normalizeLiquidityGraph` exactly as an authored one does, so a factor of 2 on
+a `PERCENT` target of 0.6 is REFUSED with the normalizer's own sentence rather than clamped.
+That is the honest behaviour — a clamp would run a target nobody chose — but it means a grid
+whose axis brackets a PERCENT pool near the top of its range will have failing cells, and the
+range is 0.5 … 2. Worth a line in phase 7's `poolAxisProblems`, which is the surface that
+already exists to say this kind of thing before a grid is launched.
+
+**The legibility cost is paid in one place.** `poolTargetScaleLabel` renders both obligations
+§10.3 and §6.4 imposed — the authored values the factor multiplies (`base 2y, bridge 4y`) and
+the fact that one factor moves every shape (`one factor, 2 shapes`) — and the generated schema
+entry, the Opt row and the grid row all take their label from it, so the three surfaces cannot
+come to disagree about what the axis does.
+
+**Still open, and unchanged by this:** phase 7's `poolAxisProblems` (§6.5) is the next step and
+this axis is dangerous without it — `scripts/lib/pool-arms.mjs`'s six hygiene items apply to the
+control as much as the arms, and a grid that looks comparable and is not is worse than no grid.
+Phase 8's gate-clause ids and phase 9's shape-year axis are untouched; §6.4's note that the
+shape-year axis is "the same mechanism" is now concrete — it is another dynamic contributor over
+a flat companion key, applied at the same resolver seam.

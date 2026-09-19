@@ -30,6 +30,13 @@ import {
 } from './record-param-templates.js';
 import { INHERITED_RETIREMENT_ROLES } from '../../finance/state/account-roles.js';
 import { recordFieldValue } from './record-field-rounding.js';
+// Design 110 §6.2 — the liquidity-pool size axis. Its owner is a pool inside the
+// `liquidityGraph` PARAM rather than a cfg record, which is why it is the one generated
+// namespace with no cascade `node`; see `_expandPoolTargetScales`.
+import {
+  scalablePoolTargets, poolTargetScaleKey, poolTargetScaleLabel,
+  POOL_TARGET_SCALE_DEFAULT,
+} from '../../finance/pools/pool-target-scale.js';
 // The namespace list lives in a dependency-free module so mc-param-paths can use it
 // without loading the templates (design 98 W0); re-exported so importers are unchanged.
 import { GENERATED_KEY_PREFIXES, isGeneratedParamKey } from './generated-param-keys.js';
@@ -61,6 +68,12 @@ function resolveAccountType(a) {
   return a.type ?? CLASS_TO_ACCOUNT_TYPE[a.__type] ?? ROLE_TO_ACCOUNT_TYPE[a.role] ?? null;
 }
 
+// `pool` is deliberately ABSENT (design 110 §6.2): a pool is not a cfg record, so a
+// `pool.<id>.targetScale` key has no node to decode to and `decodeGeneratedParamKey` returns
+// null for it — which is what keeps the loader's generated-key cascade from trying to fan it
+// onto a record that does not exist. The overlay is applied where the graph is RESOLVED
+// instead (`pool-target-scale.js`); adding a `pool` entry here would give the value a second
+// authority, and a multiplier applied twice compounds.
 const PREFIX_TO_NODE_TYPE = {
   acct: 'account', person: 'person', prop: 'realProperty',
   coll: 'collectible', equity: 'companyEquity',
@@ -142,7 +155,57 @@ export class ScenarioParamGenerator {
       if (a.inherited && INHERITED_RETIREMENT_ROLES.has(a.role))
         add(this._expand('raAsset', 'bequestAsset', a, a.stateKey, INHERITED_RA_PARAM_TEMPLATE));
     }
+    // Design 110 §6.2 — one hidden `pool.<poolId>.targetScale` per pool the plan gives a
+    // target. Generated, not hand-declared, for the reason the namespace was chosen over
+    // §12.8's `poolTarget::<id>`: it regenerates from the config at Build/Rebuild, so
+    // renaming a pool moves its axis with it (CTRL-10) and a deleted pool cannot leave an
+    // axis pointing at nothing.
+    add(this._expandPoolTargetScales(cfg));
     return out;
+  }
+
+  /**
+   * The liquidity-pool size axes (design 110 §6.2), one per pool with a numeric target.
+   *
+   * Three things make these unlike every other generated entry, and all three are the same
+   * fact — the owner is a pool inside the `liquidityGraph` param, not a domain record:
+   *
+   *   - **no `node`.** There is no record for the cascade to fan a value onto. The overlay is
+   *     applied in `resolveLiquidityGraph` / `resolveLiquidityGraphSchedule`, on a copy of the
+   *     authored graph, so the param the author wrote is never written to.
+   *   - **the authored value is read from the typed `cfg.params` entry first.** That entry is
+   *     the author's own graph; `cfg.parameters` is the flat bag an MC/Opt runner injects into
+   *     (`two-param-stores-trap`). Seeding from the authored side is what makes the axis list
+   *     stable across a sweep.
+   *   - **`hidden: true`**, on the `BALANCE_TARGET` pattern: kept out of the param editor AND
+   *     out of the persisted `cfg.params` (see `ScenarioLoader._mergeParamSchema`), so it is
+   *     present only while a runner injects it and can never round-trip as a stale value
+   *     (CTRL-9). An author who wants a different target edits the graph; the axis only ever
+   *     scales what is written there.
+   * @private
+   */
+  static _expandPoolTargetScales(cfg) {
+    const read = (key) => {
+      const typed = Array.isArray(cfg?.params) ? cfg.params.find(p => p?.name === key) : undefined;
+      return typed ? typed.value : cfg?.parameters?.[key];
+    };
+    return scalablePoolTargets({
+      liquidityGraph:  read('liquidityGraph'),
+      liquidityShapes: read('liquidityShapes'),
+    }).map(row => ({
+      key:          poolTargetScaleKey(row.poolId),
+      label:        poolTargetScaleLabel(row),
+      type:         'Number',
+      group:        'Liquidity Pools',
+      defaultValue: POOL_TARGET_SCALE_DEFAULT,
+      // A household CHOICE and a scalar, so `opt: true` / `mc: false` (design 98 W2): how
+      // many years of spending to hold in reserve is decided, not uncertain. `opt: 'rate'`
+      // names the sweep kind explicitly because inference would read a center of 1.0 as a
+      // rate by accident rather than on purpose.
+      mc:           false,
+      opt:          'rate',
+      hidden:       true,
+    }));
   }
 
   /**

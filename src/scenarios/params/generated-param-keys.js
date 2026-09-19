@@ -19,7 +19,16 @@
 
 /** Namespaces the generator owns. A param key with one of these prefixes is
  *  generated (§6 harvest exception is scoped by this). */
-export const GENERATED_KEY_PREFIXES = ['acct.', 'person.', 'prop.', 'coll.', 'equity.', 'bequest.', 'raAsset.'];
+export const GENERATED_KEY_PREFIXES = ['acct.', 'person.', 'prop.', 'coll.', 'equity.', 'bequest.',
+  'raAsset.',
+  // Design 110 §6.2 — `pool.<poolId>.targetScale`, the liquidity-pool size axis. The only
+  // namespace here whose owner is NOT a cfg record: a pool is authored inside the
+  // `liquidityGraph` param, so this key has no cascade `node` and is applied where the graph
+  // is resolved (`pool-target-scale.js`). It is in this list for the reason every other
+  // prefix is — `set()` in `mc-param-paths` writes a dotted key FLAT only for a generated
+  // namespace, and a lever outside the list is inert in a real solve while passing every
+  // hand-written flat-bag test (design 98 W0 / `optimizer-param-key-dot-collision`).
+  'pool.'];
 
 /** True when `key` is a generated per-record param key (by namespace). */
 export function isGeneratedParamKey(key) {
