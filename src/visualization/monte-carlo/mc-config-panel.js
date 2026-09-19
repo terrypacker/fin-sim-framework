@@ -423,13 +423,20 @@ export class McConfigPanel extends BaseComponent {
       valuesEl.className = 'mc-grid-values';
       const planEl = document.createElement('div');
       planEl.className = 'mc-grid-plan';
-      block.append(label, select, valuesEl, planEl);
+      // Design 110 §6.5 — study hygiene for a pool axis, beside the axis. Its own element and
+      // not appended to the plan line: the plan value is one short token the eye skips to, and
+      // burying three sentences of "this grid will not measure what it claims" inside it would
+      // hide the more important of the two.
+      const hygieneEl = document.createElement('div');
+      hygieneEl.className = 'mc-grid-hygiene';
+      hygieneEl.hidden = true;
+      block.append(label, select, valuesEl, planEl, hygieneEl);
       el.appendChild(block);
 
       this.listen(select, 'change', () => this._selectAxis(k, select.value));
       this.listen(valuesEl, 'input',  () => this._updateGridCost());
       this.listen(valuesEl, 'change', () => this._updateGridCost());
-      return { select, valuesEl, planEl, previewEl: null, cfg: null, inputs: null };
+      return { select, valuesEl, planEl, hygieneEl, previewEl: null, cfg: null, inputs: null };
     });
 
     const modeField = document.createElement('div');
@@ -553,6 +560,39 @@ export class McConfigPanel extends BaseComponent {
   _renderAxisPlan(axis) {
     const pv = axis.cfg?.planValue;
     axis.planEl.textContent = pv === undefined || pv === null ? '' : `plan: ${formatAxisValue(pv)}`;
+    this._renderAxisHygiene(axis);
+  }
+
+  /**
+   * The chosen lever's study-hygiene problems (design 110 §6.5), or nothing.
+   *
+   * The panel REPORTS what the presenter handed it and never repairs — offering a "fix this for
+   * me" button here would be the app rewriting the author's plan behind a grid, which is §12.2's
+   * one-authority rule broken by a convenience. Each row names the param to change, so the
+   * author goes to the Parameters list and changes it there, where the change is visible and
+   * saved with the scenario.
+   */
+  _renderAxisHygiene(axis) {
+    const el = axis.hygieneEl;
+    if (!el) return;
+    const problems = axis.cfg?.problems ?? [];
+    el.replaceChildren();
+    el.hidden = problems.length === 0;
+    if (!problems.length) return;
+    for (const p of problems) {
+      const row = document.createElement('div');
+      row.className = `mc-grid-hygiene-row mc-grid-hygiene-row--${p.kind ?? 'confounded'}`;
+      const tag = document.createElement('span');
+      tag.className = 'mc-grid-hygiene-tag';
+      // The two kinds are two different failures and the tag is the shortest way to say which:
+      // an INERT axis reports a flat response that reads as a null result, a CONFOUNDED one
+      // reports an effect larger than the lever's.
+      tag.textContent = p.kind === 'inert' ? 'INERT' : 'CONFOUNDED';
+      const text = document.createElement('span');
+      text.textContent = ` ${p.message}`;
+      row.append(tag, text);
+      el.appendChild(row);
+    }
   }
 
   /**

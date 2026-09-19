@@ -1776,3 +1776,99 @@ test('LiquidityShapes CTRL-4: a shape sees its OWN advisories, not every shape�
   const host  = mount(buildLiquidityShapesEditor(param, VALUED_ACCOUNTS, flags));
   assert.deepStrictEqual(cells(host, 'graph-advisory').map(n => n.textContent), ['about bridge']);
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Design 110 §6.3 option A — the gate clause's optional ADDRESS (phase 8)
+//
+// §20.15's branch number is a POSITION (`renumberBranches` densely renumbers on every edit),
+// so a threshold had no address and could not be an axis. The `Search id` cell is that address.
+// The property worth testing is the one that makes it safe: blank means exactly what every
+// graph authored before it means, and filling it in changes nothing about the run.
+// ═════════════════════════════════════════════════════════════════════════════
+
+const IDD_GRAPH = () => ({
+  pools: [
+    { id: 'buffer', spendOrder: 10, target: { mode: 'YEARS_OF_SPEND', value: 2 },
+      claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }] },
+    { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+  ],
+  flows: [{ id: 'g2b', from: 'growth', to: 'buffer',
+            gate: { id: 'harvest', sourceDrawdownUnder: 0.05, drawdownBasis: 'INDEX' } }],
+});
+
+test('LiquidityGraph: a gate clause id round-trips and survives an unrelated edit', () => {
+  const param = { name: 'liquidityGraph', value: IDD_GRAPH() };
+  const host  = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  assert.strictEqual(cell(host, 'gateId').value, 'harvest', 'the address is shown, not hidden');
+
+  // The failure this pins is the one §2.2 found for `ui` and design 109 §12 found for a gate
+  // kind: a field the control reads but does not write back is silently deleted the first time
+  // anything in the row is touched. The graph still loads, still runs, and the axis is gone.
+  type(cell(host, 'priority'), '5', 'change');
+  assert.deepStrictEqual(param.value.flows[0].gate,
+    { id: 'harvest', sourceDrawdownUnder: 0.05, drawdownBasis: 'INDEX' });
+});
+
+test('LiquidityGraph: a blank Search id authors no `id` at all', async () => {
+  const { normalizeLiquidityGraph } = await import('../../src/finance/pools/liquidity-graph.js');
+  // Blank is what every graph authored before §6.3 means — positional, and not searchable. An
+  // `id: ''` or `id: null` written onto every clause would make every previously-saved graph
+  // differ from itself on the next save, and would fail `normalizeGate`'s id validation.
+  const param = { name: 'liquidityGraph', value: IDD_GRAPH() };
+  const host  = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  type(cell(host, 'gateId'), '   ', 'change');
+  assert.deepStrictEqual(param.value.flows[0].gate,
+    { sourceDrawdownUnder: 0.05, drawdownBasis: 'INDEX' });
+  assert.ok(normalizeLiquidityGraph(param.value, ACCOUNTS), 'and it still compiles');
+});
+
+test('LiquidityGraph: typing an id makes the clause addressable, and it validates', async () => {
+  const { normalizeLiquidityGraph } = await import('../../src/finance/pools/liquidity-graph.js');
+  const param = { name: 'liquidityGraph', value: {
+    pools: IDD_GRAPH().pools,
+    flows: [{ id: 'g2b', from: 'growth', to: 'buffer', gate: { sourceReturnOver: 0 } }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  assert.strictEqual(cell(host, 'gateId').value, '', 'an anonymous clause starts blank');
+  type(cell(host, 'gateId'), 'upYear', 'change');
+  assert.deepStrictEqual(param.value.flows[0].gate, { id: 'upYear', sourceReturnOver: 0 });
+
+  // The config boundary is the only validator (§17.2), and what the control produces has to
+  // pass it — including the id's own rule, since the id becomes a param key.
+  assert.strictEqual(normalizeLiquidityGraph(param.value, ACCOUNTS).flows[0].gate.id, 'upYear');
+  type(cell(host, 'gateId'), 'up.year', 'change');
+  assert.throws(() => normalizeLiquidityGraph(param.value, ACCOUNTS), /must be letters, digits/);
+});
+
+test('LiquidityGraph: on a NEGATED clause the id rides the `not`, beside the dwell', () => {
+  // "The source has NOT been within 5% of its high for two years" is one row, and the node the
+  // row IS is the `not`. The id goes where the dwell goes, or the two would address different
+  // nodes and `gate.<id>.dwell` would move a clause the author did not name.
+  const param = { name: 'liquidityGraph', value: {
+    pools: IDD_GRAPH().pools,
+    flows: [{ id: 'g2b', from: 'growth', to: 'buffer',
+              gate: { id: 'pause', sustainedYears: 2, not: { sourceDrawdownUnder: 0.05 } } }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  assert.strictEqual(cell(host, 'gateId').value, 'pause');
+  assert.strictEqual(cell(host, 'gateNegate').value, 'NOT');
+  assert.strictEqual(cell(host, 'gateYears').value, '2');
+  type(cell(host, 'priority'), '3', 'change');
+  assert.deepStrictEqual(param.value.flows[0].gate,
+    { not: { sourceDrawdownUnder: 0.05 }, sustainedYears: 2, id: 'pause' });
+});
+
+test('LiquidityGraph: ids on BOTH sides of a `not` go to rawGate rather than losing one', () => {
+  // The table has one id cell per row, so it cannot show two addresses on one row. Drawing it
+  // would silently drop the inner one on the next save — so the flow keeps its authored gate
+  // verbatim instead, the same rule a nested scope follows.
+  const gate = { id: 'outer', not: { id: 'inner', sourceDrawdownUnder: 0.05 } };
+  const param = { name: 'liquidityGraph', value: {
+    pools: IDD_GRAPH().pools,
+    flows: [{ id: 'g2b', from: 'growth', to: 'buffer', gate }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  assert.strictEqual(cell(host, 'gateId'), null, 'no clause row is drawn for it');
+  type(cell(host, 'priority'), '4', 'change');
+  assert.deepStrictEqual(param.value.flows[0].gate, gate, 'and the gate survives verbatim');
+});

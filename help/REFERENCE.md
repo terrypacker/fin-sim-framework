@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-223 parameters · 33 panels · 173 action types · 79 tools · 266 state field types · 59 topics · 118 design docs
+223 parameters · 33 panels · 173 action types · 79 tools · 266 state field types · 60 topics · 118 design docs
 
 ---
 
@@ -426,7 +426,7 @@ scenario's own schema), which is where to go to change it.
 - **`inflationAdjust`** — Inflation-Adjust Expenses · `Boolean` · default `true` · sweep: opt · via US_RETIREMENT
   If true, monthly expenses grow with inflation each year
 - **`liquidityGraph`** — Liquidity Pools (graph) · `LiquidityGraph` · default — · conditional · via ECONOMIC_REGIMES
-  The pool GRAPH: { pools: [...], flows: [...] } (design 97 Part II). A pool is a named node with `claims` of (account, sleeves), an optional `spendOrder` (its position on the draw walk), a `target` ({mode: YEARS_OF_SPEND|PERCENT|AMOUNT, value}), an optional `floor`, and a `capacity` rule (BALANCE, or OFFSET_CAP for an offset, whose ceiling is min(cash parked, loan owed) and falls on a schedule nobody authored). A flow is a directed edge {from, to} with a `trigger` (when the destination wants money), an `amount` (how far to fill it) and a `gate` (whether the SOURCE may be sold at all). `sourceDrawdownUnder` with `drawdownBasis: INDEX` — "only harvest while the source is within x of its peak, measured on its compounded RETURN so the household's own spending does not count as drawdown" — is the gate that measured best in decumulation (design 97 §20.14). On the default `BALANCE` basis the same clause cannot tell a falling market from the pool being spent down and latches shut after the first crash, so use BALANCE only for a pool that is accumulating. `sourceReturnOver: 0` is "only harvest after an up year" and `targetReturnUnder` is the same machinery pointing the other way, i.e. buy the dip. Clauses can be composed — `anyOf` / `allOf` / `not`, an array is an AND — and any of them can carry `sustainedYears: n`, which holds the gate shut until its condition has held n consecutive years; §20.13 measured that DURATION, not the threshold, as the lever. Trigger and amount are deliberately two numbers — an (s, S) band — so a refill does not fire every period. The graph COMPILES to the drawdown sequence, so it replaces `drawdownSequence` rather than sitting beside it (authoring both throws). Blank (the default) = no pools, byte-identical to before. In-portfolio refills are executed by the TARGET_ALLOCATION rebalancer, so select that strategy too unless every flow is cross-account.
+  The pool GRAPH: { pools: [...], flows: [...] } (design 97 Part II). A pool is a named node with `claims` of (account, sleeves), an optional `spendOrder` (its position on the draw walk), a `target` ({mode: YEARS_OF_SPEND|PERCENT|AMOUNT, value}), an optional `floor`, and a `capacity` rule (BALANCE, or OFFSET_CAP for an offset, whose ceiling is min(cash parked, loan owed) and falls on a schedule nobody authored). A flow is a directed edge {from, to} with a `trigger` (when the destination wants money), an `amount` (how far to fill it) and a `gate` (whether the SOURCE may be sold at all). `sourceDrawdownUnder` with `drawdownBasis: INDEX` — "only harvest while the source is within x of its peak, measured on its compounded RETURN so the household's own spending does not count as drawdown" — is the gate that measured best in decumulation (design 97 §20.14). On the default `BALANCE` basis the same clause cannot tell a falling market from the pool being spent down and latches shut after the first crash, so use BALANCE only for a pool that is accumulating. `sourceReturnOver: 0` is "only harvest after an up year" and `targetReturnUnder` is the same machinery pointing the other way, i.e. buy the dip. Clauses can be composed — `anyOf` / `allOf` / `not`, an array is an AND — and any of them can carry `sustainedYears: n`, which holds the gate shut until its condition has held n consecutive years; §20.13 measured that DURATION, not the threshold, as the lever. A clause can also carry an `id` (letters, digits, `_`, `-`), which is its ADDRESS: it changes nothing about the run and makes that one clause SEARCHABLE, generating the `gate.<id>.threshold` and `gate.<id>.dwell` levers the optimizer and the MC grid can sweep. Without one a clause is positional — the OR # renumbers on every edit — so it cannot be addressed and no axis for it exists. Ids are unique within a graph; the same id in two shapes is the same clause, and one sweep moves both. Trigger and amount are deliberately two numbers — an (s, S) band — so a refill does not fire every period. The graph COMPILES to the drawdown sequence, so it replaces `drawdownSequence` rather than sitting beside it (authoring both throws). Blank (the default) = no pools, byte-identical to before. In-portfolio refills are executed by the TARGET_ALLOCATION rebalancer, so select that strategy too unless every flow is cross-account.
 - **`liquidityGraphEnabled`** — Liquidity Pools Enabled · `Boolean` · default `true` · conditional · via ECONOMIC_REGIMES
   The whole-graph OFF switch. Deselecting the LIQUIDITY_POOLS strategy stops only the refill flows — the graph still compiles to the drawdown sequence and still sizes the rebalancer, because those two read the graph directly and never look at the strategy list. Setting this false makes all three go dark at once: `resolveLiquidityGraph` returns null, so the spend order falls back to `drawdownPriority` (or to an authored `drawdownSequence`, which stops being a second authority once the graph is off) and every pool target, gate and capacity rule is inert. The graph is KEPT — this is how you run a pools-off control without deleting the structure and losing it. It still has to compile: the authoring UI reports a bad pool while the switch is off, so flipping it back on cannot surface an error you were never shown. Contrast `poolFlowsEnabled`, which turns off only the refill edges and leaves the pools, their sizing and the spend order live.
 - **`liquidityGraphSchedule`** — Liquidity Pool Schedule · `LiquidityGraphSchedule` · default — · conditional · via ECONOMIC_REGIMES
@@ -1574,7 +1574,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 
 ---
 
-## Topics (59)
+## Topics (60)
 
 Tier 2 — the hand-written prose under `help/`, listed by what it CITES rather than
 summarised. A topic may not restate a param description (design 108 §3), so there is
@@ -1614,7 +1614,7 @@ what the in-app panel keys on.
 | [Interest Rates and the Yield Curve](concepts/interest-rates.md) | concept | 250 | 2 panels · 23 params · design 56, 67 |
 | [Journal Report](panels/journal-report.md) | panel | 193 | 1 panel · design 16 |
 | [Lineage](panels/lineage.md) | panel | 196 | 1 panel · design 30 |
-| [Liquidity Pools](concepts/liquidity-pools.md) | concept | 259 | 1 panel · 6 params · design 97 |
+| [Liquidity Pools](concepts/liquidity-pools.md) | concept | 294 | 1 panel · 6 params · design 97 |
 | [Monte Carlo](panels/mc-config.md) | panel | 194 | 1 panel · design 100 |
 | [MC Results](panels/mc-results.md) | panel | 202 | 1 panel · design 100, 89 |
 | [MC Runs](panels/mc-runs.md) | panel | 196 | 1 panel · design 100 |
@@ -1634,6 +1634,7 @@ what the in-app panel keys on.
 | [Roth Conversions](concepts/roth-conversions.md) | concept | 242 | 2 panels · 12 params · design 29 |
 | [Scenario](panels/scenario.md) | panel | 201 | 1 panel |
 | [Scenario Compare](panels/scenario-compare.md) | panel | 205 | 1 panel |
+| [Searching Pool Levers](concepts/searching-pool-levers.md) | concept | 352 | design 110, 97 |
 | [Securities](panels/securities.md) | panel | 188 | 1 panel · design 94 |
 | [Spending](panels/spending.md) | panel | 209 | 1 panel · design 89 |
 | [The Spending Rule](concepts/spending-rule.md) | concept | 296 | 1 panel · 17 params · design 89 |

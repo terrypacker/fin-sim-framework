@@ -50,6 +50,9 @@
  * therefore REFUSED with the normalizer's own sentence rather than silently clamped — the
  * cell fails loudly instead of running a target nobody chose.
  */
+// Leg C's other axis family, imported for `resolveLiquidityAxisCenters` only — one function for
+// the three lever bases to merge, so a family added later cannot reach two of the three.
+import { resolveGateAxisCenters } from './pool-gate-axis.js';
 
 /** The generated namespace this axis lives in (see `GENERATED_KEY_PREFIXES`). */
 export const POOL_KEY_PREFIX = 'pool.';
@@ -208,6 +211,29 @@ export function scalablePoolTargets(params) {
 }
 
 /**
+ * One param's AUTHORED value on a cfg: the typed `cfg.params` entry first, the flat
+ * `cfg.parameters` bag second.
+ *
+ * The order is the point, not a convenience. `cfg.params` is what the author wrote and what
+ * `ScenarioSerializer` saves; `cfg.parameters` is the flat bag an MC/Opt runner injects
+ * sampled values into (`two-param-stores-trap`). Reading the typed entry first is what makes
+ * the axis list — and the hygiene report built from the same graph — stable across a sweep
+ * rather than describing whatever the last cell happened to run at.
+ */
+export function authoredParamValue(cfg, key) {
+  const typed = Array.isArray(cfg?.params) ? cfg.params.find(p => p?.name === key) : undefined;
+  return typed ? typed.value : cfg?.parameters?.[key];
+}
+
+/** The base graph and the shape map as AUTHORED, for the axis list and the hygiene report. */
+export function authoredPoolGraphs(cfg) {
+  return {
+    liquidityGraph:  authoredParamValue(cfg, 'liquidityGraph'),
+    liquidityShapes: authoredParamValue(cfg, 'liquidityShapes'),
+  };
+}
+
+/**
  * The plan value of every pool axis: `1.0`, for each pool the plan gives a target.
  *
  * A hidden generated param is deliberately absent from `cfg.params` and from
@@ -220,18 +246,26 @@ export function scalablePoolTargets(params) {
  */
 export function resolvePoolTargetScaleCenters(cfg) {
   if (!cfg) return {};
-  const read = (key) => {
-    const typed = Array.isArray(cfg.params) ? cfg.params.find(p => p?.name === key) : undefined;
-    return typed ? typed.value : cfg.parameters?.[key];
-  };
   const centers = {};
-  for (const { poolId } of scalablePoolTargets({
-    liquidityGraph:  read('liquidityGraph'),
-    liquidityShapes: read('liquidityShapes'),
-  })) {
+  for (const { poolId } of scalablePoolTargets(authoredPoolGraphs(cfg))) {
     centers[poolTargetScaleKey(poolId)] = POOL_TARGET_SCALE_DEFAULT;
   }
   return centers;
+}
+
+/**
+ * Every leg-C axis's plan value for this cfg — the pool factors AND the gate thresholds/dwells.
+ *
+ * One function so the three lever bases that need it (`IntlRetirementMcRunner._prepare`,
+ * `OptimizationProblem._resolveBase`, `MonteCarloPresenter._resolveBaseParams`) merge ONE thing.
+ * A second axis family added to leg C later and merged at two of the three sites would be
+ * live on the panel and centreless in the runner, which is the shape of defect this design
+ * keeps re-finding.
+ */
+export function resolveLiquidityAxisCenters(cfg) {
+  if (!cfg) return {};
+  const authored = authoredPoolGraphs(cfg);
+  return { ...resolvePoolTargetScaleCenters(cfg), ...resolveGateAxisCenters(cfg, authored) };
 }
 
 /** Mode → the unit an authored target reads in, for a label. */

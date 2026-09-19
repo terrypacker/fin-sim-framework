@@ -21,6 +21,7 @@
  */
 import { RETIRED_RATE_PARAMS } from './retired-rate-params.js';
 import { parsePoolTargetScaleKey } from '../finance/pools/pool-target-scale.js';
+import { parseGateAxisKey } from '../finance/pools/pool-gate-axis.js';
 
 /**
  * The keys contributed by `toolsets` that the scenario-level schema does not name.
@@ -60,7 +61,7 @@ export function forwardToolsetOverrides(params, parameters, toolsetKeys) {
     // BUILT, not through the loader's record cascade, so an axis that does not reach
     // `parameters` reads as live on the panel and moves nothing in the sim.
     if (!toolsetKeys.has(key) && !(key in RETIRED_RATE_PARAMS)
-        && parsePoolTargetScaleKey(key) == null) continue;
+        && parsePoolTargetScaleKey(key) == null && parseGateAxisKey(key) == null) continue;
     parameters[key] = params[key];
   }
 }

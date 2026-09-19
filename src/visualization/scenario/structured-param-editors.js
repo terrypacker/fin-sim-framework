@@ -1724,10 +1724,18 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null) {
       // the stricter reading and stays the default; see the design section before assuming
       // EDGE is simply safer.
       { field: 'gateScope', label: 'Vetoes', type: 'select', options: GATE_SCOPE_OPTIONS, width: '1.4fr' },
+      // Design 110 §6.3 option A — the clause's optional ADDRESS, and the only reason a
+      // threshold can be an axis at all. Blank is what every graph authored so far means:
+      // positional, and not searchable. Filling it in generates `gate.<id>.threshold` and
+      // `gate.<id>.dwell` at the next Rebuild.
+      //
+      // LAST column deliberately. It is the one cell that changes nothing about the run, so
+      // putting it in front of the clause would push the gate's actual content off the read.
+      { field: 'gateId',    label: 'Search id', type: 'text', placeholder: '—', width: '1fr' },
     ],
     newRow:    () => ({ flow: gateableFlowIds()[0] ?? null, branch: 1, gateNegate: '',
                         gateKind: 'sourceDrawdownUnder', gateValue: 0.05,
-                        gateBasis: 'INDEX', gateYears: 1, gateScope: 'SOURCE' }),
+                        gateBasis: 'INDEX', gateYears: 1, gateScope: 'SOURCE', gateId: null }),
     addLabel:  '+ Add Gate Clause',
     emptyText: 'No gate clauses — every flow fires whenever its trigger and amount allow.',
     onChange:  () => {
@@ -1857,15 +1865,23 @@ function gateNodeToRow(node) {
   // (outer) — and the row can only mean the second, so an inner dwell is left to `rawGate`
   // rather than silently re-read as the other policy.
   if (node.not != null) {
-    if (Object.keys(node).some(k => k !== 'not' && k !== 'sustainedYears')) return null;
+    if (Object.keys(node).some(k => k !== 'not' && k !== 'sustainedYears' && k !== 'id')) return null;
     const inner = gateNodeToRow(node.not);
     if (!inner || inner.gateNegate === 'NOT' || inner.gateYears > 1) return null;
-    return { ...inner, gateNegate: 'NOT', gateYears: node.sustainedYears ?? 1 };
+    // The id belongs to the node the ROW IS — the `not`, which is also where the dwell sits. An
+    // id on the clause INSIDE the negation is a second address for the same row and the table
+    // cannot show two, so such a gate goes to `rawGate` verbatim rather than losing one of them.
+    if (inner.gateId != null) return null;
+    return { ...inner, gateNegate: 'NOT', gateYears: node.sustainedYears ?? 1,
+             gateId: typeof node.id === 'string' ? node.id : null };
   }
   if (node.anyOf || node.allOf) return null;                      // a child: not a leaf row
   const kinds = GATE_CLAUSE_KINDS.filter(k => node[k] != null);
   if (kinds.length !== 1) return null;                            // 0 says nothing, 2+ is an AND
-  const known = new Set([...GATE_CLAUSE_KINDS, 'sustainedYears', 'drawdownBasis']);
+  // `id` is design 110 §6.3's optional ADDRESS. It joins the known set rather than sending the
+  // clause to `rawGate`: it is drawable (one text cell) and, unlike a nested scope, it round-trips
+  // faithfully — which is the guard's actual test.
+  const known = new Set([...GATE_CLAUSE_KINDS, 'sustainedYears', 'drawdownBasis', 'id']);
   if (Object.keys(node).some(k => !known.has(k))) return null;    // a clause the table lacks
   const kind = kinds[0];
   return {
@@ -1874,6 +1890,7 @@ function gateNodeToRow(node) {
     gateValue: node[kind],
     gateBasis: isDrawdownClause(kind) ? (node.drawdownBasis ?? 'BALANCE') : '',
     gateYears: node.sustainedYears ?? 1,
+    gateId:    typeof node.id === 'string' ? node.id : null,
   };
 }
 
@@ -1926,6 +1943,11 @@ function rowsToGate(rows) {
     // the clause: "the source has NOT been within 5% of its high for two years".
     const node = r.gateNegate === 'NOT' ? { not: clause } : clause;
     if (Number(r.gateYears) > 1) node.sustainedYears = Number(r.gateYears);
+    // Design 110 §6.3 — the optional address, on the node the row IS (the `not` for a negated
+    // row, matching where the dwell goes). Blank means positional, exactly as before, so a graph
+    // authored without ids round-trips byte-identically.
+    const gateId = typeof r.gateId === 'string' ? r.gateId.trim() : '';
+    if (gateId) node.id = gateId;
     const key = r.branch ?? 1;
     byBranch.set(key, [...(byBranch.get(key) ?? []), node]);
   }

@@ -163,3 +163,55 @@ describe('MonteCarloPresenter — baseline slot (design 100 §5)', () => {
     second.destroy();
   });
 });
+
+// ── design 110 §6.5 — the hygiene rides on the pool axis rows (phase 7) ────────────────
+
+describe('MonteCarloPresenter — pool axis hygiene', () => {
+  afterEach(() => ServiceRegistry.resetAll());
+
+  const POOL_AXIS = 'pool.reserve.targetScale';
+  const GRAPH = { pools: [
+    { id: 'cash',    spendOrder: 10, claims: [{ key: 'usSavingsAccount' }] },
+    { id: 'reserve', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }],
+      target: { mode: 'YEARS_OF_SPEND', value: 4 } },
+  ] };
+
+  test('a pool axis carries the plan\'s hygiene problems; no other lever does', () => {
+    // A glidepath beside a pool target is legal and silent: the pool governs the classes it
+    // claims and the schedule governs the residual, so the mix MOVES as the axis is swept.
+    setActiveCfg({ params: [
+      { name: 'liquidityGraph',     value: GRAPH },
+      { name: 'allocationSchedule', value: 'GLIDEPATH' },
+    ], accounts: [] });
+    const presenter = makePresenter({ params: {} });
+
+    const axes = presenter._resolveGridAxes();
+    const pool = axes.find(v => v.paramKey === POOL_AXIS);
+    expect(pool).toBeTruthy();
+    expect(pool.planValue).toBe(1);
+    expect(pool.problems.map(p => p.param)).toContain('allocationSchedule');
+
+    // Every other axis is silent. Attaching a plan-level warning to an inflation axis would
+    // train the author to ignore the row that matters.
+    for (const v of axes.filter(x => x.paramKey !== POOL_AXIS)) {
+      expect(v.problems).toBeUndefined();
+    }
+    presenter.destroy();
+  });
+
+  test('a hygienic plan attaches no problems at all', () => {
+    setActiveCfg({ params: [
+      { name: 'liquidityGraph',       value: GRAPH },
+      { name: 'allocationSchedule',   value: 'STATIC' },
+      { name: 'shocks',               value: [] },
+      { name: 'behavioralStrategies', value: ['LIQUIDITY_POOLS', 'TARGET_ALLOCATION'] },
+    ], accounts: [] });
+    const presenter = makePresenter({ params: {} });
+
+    const pool = presenter._resolveGridAxes().find(v => v.paramKey === POOL_AXIS);
+    expect(pool).toBeTruthy();
+    expect(pool.problems).toBeUndefined();
+
+    presenter.destroy();
+  });
+});

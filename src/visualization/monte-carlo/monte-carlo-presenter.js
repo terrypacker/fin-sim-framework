@@ -14,7 +14,10 @@ import { McRunsPanel }             from './mc-runs-panel.js';
 import { IntlRetirementMcConfig, refineCenterSource } from '../../finance/monte-carlo/intl-retirement-mc-config.js';
 import { resolveBalanceCenters, IntlRetirementScenario } from '../../scenarios/intl-retirement-scenario.js';
 import { resolveAliasCenters } from '../../scenarios/scenario-param-apply.js';
-import { resolvePoolTargetScaleCenters } from '../../finance/pools/pool-target-scale.js';
+import { resolveLiquidityAxisCenters, parsePoolTargetScaleKey }
+                              from '../../finance/pools/pool-target-scale.js';
+import { parseGateAxisKey }   from '../../finance/pools/pool-gate-axis.js';
+import { poolAxisProblems }   from '../../finance/pools/pool-axis-hygiene.js';
 import { scenarioParamValues, paramSchemaDefaults } from '../../finance/param-schema-utils.js';
 import { ServiceRegistry }         from '../../services/service-registry.js';
 import { APP_EVENTS }              from '../app-display-settings.js';
@@ -344,8 +347,20 @@ export class MonteCarloPresenter {
     const base      = this._resolveBaseParams();
     const activeCfg = ServiceRegistry.getInstance()?.scenarioService?.getActive?.() ?? null;
     const withDefaults = { ...paramSchemaDefaults(IntlRetirementScenario.buildFullParamSchema()), ...base };
+    // Design 110 §6.5 — the study hygiene that makes pooled arms comparable, carried on the pool
+    // axis rows so the panel renders it BESIDE the axis. Computed once here rather than per row:
+    // it is a property of the plan, not of one pool, and every pool axis says the same thing
+    // about it. `poolAxisProblems` reports and never repairs (§12.2's one-authority rule applied
+    // to the app itself — a grid launched from a config the app quietly edited is a grid nobody
+    // can reproduce).
+    const hygiene = poolAxisProblems(activeCfg);
     return buildGridAxes(base, this._scenario?.accounts, { cfg: activeCfg })
-      .map(v => ({ ...v, planValue: get(withDefaults, v.paramKey) }));
+      .map(v => ({
+        ...v,
+        planValue: get(withDefaults, v.paramKey),
+        ...(hygiene.length && (parsePoolTargetScaleKey(v.paramKey) != null
+                              || parseGateAxisKey(v.paramKey) != null) ? { problems: hygiene } : {}),
+      }));
   }
 
   /**
@@ -366,10 +381,10 @@ export class MonteCarloPresenter {
     // (a holdings-bearing balance isn't a plain param), so resolve them from the cfg;
     // they win over the params bag, which can hold a stale copy. Other legacy-keyed
     // levers (the house sale years, the wages) take their generated successor's value.
-    // A liquidity-pool size axis is hidden and generated (design 110 §6.2), so its plan value
-    // is in neither store; 1.0 is what the plan runs at. Without it the grid panel shows a
-    // pool axis with no plan value and the grid has no reference cell.
+    // Leg C's axes are hidden and generated (design 110 §6.2 / §6.3), so their plan value is
+    // in neither store: a pool factor runs at 1.0 and a gate threshold at whatever the clause
+    // says. Without them the grid panel shows an axis with no plan value and no reference cell.
     return { ...snapshot, ...scenarioParamValues(activeCfg), ...resolveAliasCenters(activeCfg),
-             ...resolveBalanceCenters(activeCfg), ...resolvePoolTargetScaleCenters(activeCfg) };
+             ...resolveBalanceCenters(activeCfg), ...resolveLiquidityAxisCenters(activeCfg) };
   }
 }

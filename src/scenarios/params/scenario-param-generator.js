@@ -34,9 +34,12 @@ import { recordFieldValue } from './record-field-rounding.js';
 // `liquidityGraph` PARAM rather than a cfg record, which is why it is the one generated
 // namespace with no cascade `node`; see `_expandPoolTargetScales`.
 import {
-  scalablePoolTargets, poolTargetScaleKey, poolTargetScaleLabel,
+  scalablePoolTargets, authoredPoolGraphs, poolTargetScaleKey, poolTargetScaleLabel,
   POOL_TARGET_SCALE_DEFAULT,
 } from '../../finance/pools/pool-target-scale.js';
+import {
+  gateClauseAxes, gateAxisKey, gateAxisLabel, GATE_AXIS_FIELD, GATE_DWELL_DEFAULT,
+} from '../../finance/pools/pool-gate-axis.js';
 // The namespace list lives in a dependency-free module so mc-param-paths can use it
 // without loading the templates (design 98 W0); re-exported so importers are unchanged.
 import { GENERATED_KEY_PREFIXES, isGeneratedParamKey } from './generated-param-keys.js';
@@ -161,7 +164,44 @@ export class ScenarioParamGenerator {
     // renaming a pool moves its axis with it (CTRL-10) and a deleted pool cannot leave an
     // axis pointing at nothing.
     add(this._expandPoolTargetScales(cfg));
+    // Design 110 §6.3 — the threshold / dwell of every id'd gate clause. Only an id'd clause
+    // generates one, so an axis that cannot be addressed fails to exist rather than addressing
+    // the wrong clause after an unrelated edit renumbered a branch above it (§2.1).
+    add(this._expandGateClauseAxes(cfg));
     return out;
+  }
+
+  /**
+   * The gate-clause axes (design 110 §6.3 option A). Hidden and node-less on exactly the same
+   * terms as `_expandPoolTargetScales` — a gate clause is not a record either — with one
+   * difference worth naming: the threshold's `defaultValue` is the AUTHORED number rather than a
+   * fixed identity. A pool factor has a natural 1.0; a threshold's plan value is whatever the
+   * clause says, so it is re-seeded from the graph on every Rebuild.
+   * @private
+   */
+  static _expandGateClauseAxes(cfg) {
+    const entries = [];
+    for (const row of gateClauseAxes(authoredPoolGraphs(cfg))) {
+      const common = { type: 'Number', group: 'Liquidity Pools', mc: false, hidden: true };
+      // No threshold axis when the node has no single numeric clause: two numeric clauses on one
+      // node have no unique threshold, and inventing a winner would make the axis mean something
+      // the author never wrote (the same rule a multi-class pool `target` follows).
+      if (row.kind) {
+        entries.push({
+          ...common, opt: 'rate',
+          key:          gateAxisKey(row.clauseId, GATE_AXIS_FIELD.THRESHOLD),
+          label:        gateAxisLabel(row, GATE_AXIS_FIELD.THRESHOLD),
+          defaultValue: row.threshold,
+        });
+      }
+      entries.push({
+        ...common, opt: 'year', type: 'Integer',
+        key:          gateAxisKey(row.clauseId, GATE_AXIS_FIELD.DWELL),
+        label:        gateAxisLabel(row, GATE_AXIS_FIELD.DWELL),
+        defaultValue: row.dwell ?? GATE_DWELL_DEFAULT,
+      });
+    }
+    return entries;
   }
 
   /**
@@ -185,14 +225,7 @@ export class ScenarioParamGenerator {
    * @private
    */
   static _expandPoolTargetScales(cfg) {
-    const read = (key) => {
-      const typed = Array.isArray(cfg?.params) ? cfg.params.find(p => p?.name === key) : undefined;
-      return typed ? typed.value : cfg?.parameters?.[key];
-    };
-    return scalablePoolTargets({
-      liquidityGraph:  read('liquidityGraph'),
-      liquidityShapes: read('liquidityShapes'),
-    }).map(row => ({
+    return scalablePoolTargets(authoredPoolGraphs(cfg)).map(row => ({
       key:          poolTargetScaleKey(row.poolId),
       label:        poolTargetScaleLabel(row),
       type:         'Number',

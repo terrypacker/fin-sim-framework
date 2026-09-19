@@ -22,6 +22,9 @@ import { resolveLocationPolicy } from '../behavioral/allocation-location.js';
 // this file is where a raw authored graph becomes a compiled one and the overlay must never
 // touch the authored object itself; see `pool-target-scale.js` for why that is the seam.
 import { poolTargetScalesFrom, scaleRawPoolGraph } from './pool-target-scale.js';
+// Design 110 §6.3 option A — an optional authored `id` on a gate clause, and the threshold /
+// dwell axis it makes addressable. Applied at the same seam and on the same terms.
+import { gateOverridesFrom, applyGateOverridesToGraph, GATE_CLAUSE_ID_RE } from './pool-gate-axis.js';
 
 /**
  * DESIGN 97 PART II — the LIQUIDITY GRAPH.
@@ -434,6 +437,28 @@ function normalizeGate(raw, flowId, depth = 0, where = 'gate') {
   if (raw.ageOver  != null) out.ageOver  = num(raw.ageOver,  `flow '${flowId}' ${where}.ageOver`,  { min: 0, max: 120 });
   if (raw.ageUnder != null) out.ageUnder = num(raw.ageUnder, `flow '${flowId}' ${where}.ageUnder`, { min: 0, max: 120 });
 
+  // ── design 110 §6.3 option A — the clause's optional ADDRESS ──────────────────────
+  //
+  // §14's first constraint is that ids are stable and authored, never positional, and §20.15's
+  // branch NUMBER is a position (`renumberBranches` densely renumbers on every edit). So a
+  // threshold had no address and could not be an axis. An `id` gives one clause one.
+  //
+  // OPTIONAL, and absent means exactly what it means today. Only an id'd clause generates an
+  // axis, so an axis that cannot be addressed FAILS TO EXIST rather than addressing the wrong
+  // clause — which is the whole reason option A was chosen over promoting one threshold per
+  // flow (§20.15 spent a section removing the single-clause gate) or sweeping whole graphs.
+  //
+  // Stricter than a pool id, which may be any non-empty string: a clause id exists ONLY to be
+  // an address (`gate.<id>.threshold`), and an address that needs quoting is not one. Narrowing
+  // the pool id retroactively is not available; starting narrow here is.
+  if (raw.id != null) {
+    if (typeof raw.id !== 'string' || !GATE_CLAUSE_ID_RE.test(raw.id)) {
+      err(`flow '${flowId}' ${where}.id must be letters, digits, '_' or '-' (it becomes the `
+        + `param key \`gate.<id>.threshold\`), got ${JSON.stringify(raw.id)}`);
+    }
+    out.id = raw.id;
+  }
+
   // ── the composition, and the dwell ────────────────────────────────────────────────
   for (const key of ['allOf', 'anyOf']) {
     if (raw[key] == null) continue;
@@ -472,6 +497,13 @@ function normalizeGate(raw, flowId, depth = 0, where = 'gate') {
     // differ from itself on the next save — the same rule `sustainedYears: 1` follows below.
     if (sc !== POOL_GATE_SCOPE.SOURCE) out.scope = sc;
   }
+  // An id on a node that says nothing is an address for a clause that does not exist: it would
+  // generate an axis, the axis would write a threshold onto a node with no condition, and every
+  // cell would be identical. Refused for the same reason an empty `anyOf` branch is.
+  if (out.id != null && !hasCondition(out)) {
+    err(`flow '${flowId}' ${where}.id names a node with no condition, so there is nothing for `
+      + 'an axis on it to move. Put the id on the clause itself.');
+  }
   // Dwell. `1` is the default and is dropped, so an authored 1 does not make a saved graph
   // differ from itself on the next save.
   if (raw.sustainedYears != null) {
@@ -485,9 +517,45 @@ function normalizeGate(raw, flowId, depth = 0, where = 'gate') {
   return Object.keys(out).length ? out : null;
 }
 
+/**
+ * Design 110 §6.3 — a gate clause id is an ADDRESS, so it has to be unique across the graph.
+ *
+ * Checked here, as a whole-graph pass, for the same reason the claim-overlap and remainder-ref
+ * checks are: the duplicate may be on a flow that has not been read yet when the first one is.
+ *
+ * Two clauses sharing an id is the exact defect the id exists to prevent, one level up: an axis
+ * on it would write BOTH, so a sweep of "the harvest threshold" would silently move a second
+ * gate the author was not thinking about. Refused rather than warned — a warning here leaves a
+ * live axis whose meaning nobody can state.
+ *
+ * Uniqueness is WITHIN one graph, never across shapes. A pool id in two shapes is deliberately
+ * the same pool (design 109 §9) and one factor moves it in both (§6.4); a clause id follows the
+ * identical rule, so the same id in the base graph and in a shape is the same clause and one
+ * axis moves both. That is stated in the axis label rather than left to be inferred.
+ */
+function assertGateClauseIdsUnique(flows) {
+  const ownerOf = new Map();
+  const visit = (node, flowId) => {
+    if (node == null) return;
+    if (Array.isArray(node)) { for (const k of node) visit(k, flowId); return; }
+    if (typeof node !== 'object') return;
+    if (typeof node.id === 'string') {
+      const prior = ownerOf.get(node.id);
+      if (prior != null) {
+        err(`gate clause id '${node.id}' is used twice — by flow '${prior}' and flow '${flowId}'. `
+          + 'A clause id is an ADDRESS (it becomes the param key `gate.<id>.threshold`), so a '
+          + 'sweep of it would move both clauses and the axis would mean two things at once.');
+      }
+      ownerOf.set(node.id, flowId);
+    }
+    for (const key of ['allOf', 'anyOf', 'not']) if (node[key] != null) visit(node[key], flowId);
+  };
+  for (const f of flows) visit(f.gate, f.id);
+}
+
 /** Does this normalized node say anything at all? (`sustainedYears` alone says nothing.) */
 function hasCondition(node) {
-  return Object.keys(node).some(k => k !== 'sustainedYears' && k !== 'scope');
+  return Object.keys(node).some(k => k !== 'sustainedYears' && k !== 'scope' && k !== 'id');
 }
 
 /**
@@ -844,6 +912,7 @@ export function normalizeLiquidityGraph(graph, accounts = [], opts = {}) {
     });
   }
   assertNoUnconditionalCycle(flows);
+  assertGateClauseIdsUnique(flows);
   assignExecutors(pools, flows, byKey);
 
   // Design 110 §13.2 (phase 3b). Four advisories about a graph that COMPILES and is almost
@@ -1199,8 +1268,21 @@ export function resolveLiquidityGraph(params, accounts = []) {
  */
 function _normalizeFromParams(p, accounts, advisories = null) {
   return normalizeLiquidityGraph(
-    scaleRawPoolGraph(p.liquidityGraph, poolTargetScalesFrom(p)), accounts,
-    _graphOptsFrom(p, advisories));
+    _overlayRawGraph(p.liquidityGraph, p), accounts, _graphOptsFrom(p, advisories));
+}
+
+/**
+ * A raw authored graph with leg C's overlays applied — the pool size factors (§6.2) and the
+ * gate-clause threshold / dwell overrides (§6.3).
+ *
+ * Both return the caller's own object when the bag carries nothing for them, so an unswept plan
+ * normalizes the authored object itself and every run stays byte-identical. Neither writes to
+ * it: see `pool-target-scale.js` for why the resolver rather than a loader cascade is the seam.
+ * @private
+ */
+function _overlayRawGraph(raw, p) {
+  return applyGateOverridesToGraph(
+    scaleRawPoolGraph(raw, poolTargetScalesFrom(p)), gateOverridesFrom(p));
 }
 
 /**
@@ -1576,7 +1658,6 @@ function _normalizeShapes(p, accounts, skip = null, advisories = null) {
   // §6.4 — the axis key is the POOL id, so one factor moves that pool in EVERY shape that
   // contains it. Scaling each shape here rather than once over the whole map keeps the
   // per-shape `err()` re-throw below pointing at the shape the author has to look at.
-  const scales = poolTargetScalesFrom(p);
   const out = new Map();
   for (const [id, shape] of Object.entries(raw)) {
     if (!shape || typeof shape !== 'object') err(`liquidityShapes['${id}'] is not a graph`);
@@ -1593,7 +1674,7 @@ function _normalizeShapes(p, accounts, skip = null, advisories = null) {
       // place. The editor filters on exactly this field (`advisoriesFor`).
       const mine = advisories ? [] : null;
       out.set(id, normalizeLiquidityGraph(
-        scaleRawPoolGraph(shape, scales), accounts, _graphOptsFrom(p, mine)));
+        _overlayRawGraph(shape, p), accounts, _graphOptsFrom(p, mine)));
       if (mine) advisories.push(...mine.map(a => ({ ...a, shape: id })));
     } catch (e) {
       // Re-thrown with the shape named. Without this the message is identical to the one the

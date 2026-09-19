@@ -851,3 +851,30 @@
   padding: 4px 2px 3px;
   cursor: pointer;
 }
+
+/* Design 110 §6.5 — study hygiene beside a pool axis. Deliberately wrapped and readable rather
+   than truncated: every row is a reason the grid about to be launched will not measure what it
+   claims, and a clipped sentence is one the author scrolls past. */
+.mc-grid-hygiene {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+.mc-grid-hygiene-row {
+  font-size: 9px;
+  line-height: 1.35;
+  padding: 3px 5px;
+  border-left: 2px solid var(--warning);
+  background: var(--warning-bg);
+  color: var(--text-muted);
+}
+.mc-grid-hygiene-tag {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--warning);
+}
+/* An INERT axis is the worse of the two — it produces a flat grid that reads as a null
+   result — so it is the one that carries the full-strength rule. */
+.mc-grid-hygiene-row--inert { border-left-width: 3px; }
+.mc-grid-hygiene-row--confounded { border-left-color: var(--warning-dim); }

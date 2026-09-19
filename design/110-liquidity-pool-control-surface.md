@@ -456,8 +456,13 @@ prevent a wrong reading come first.
    `generated-param-keys.js`, offered as a curated Opt/grid row rather than harvested, and
    applied where the graph is RESOLVED rather than by a loader cascade. §10.3's multiplier
    decision is what unblocked it. CTRL-8, CTRL-9, CTRL-10, CTRL-14, CTRL-16. See §13.7.
-7. **Leg C hygiene** (§6.5) — `poolAxisProblems`, rendered beside the axis.
-8. **Gate clause ids** (§6.3 option A), then the gate-threshold axis.
+7. ~~**Leg C hygiene**~~ (§6.5) — **BUILT.** `poolAxisProblems` reports five things and
+   deliberately restates none of the three `pool-arms` items that are already refusals; the
+   presenter carries them on the axis rows and the panel draws them beside the axis, tagged
+   INERT or CONFOUNDED. CTRL-12. See §13.8.
+8. ~~**Gate clause ids**~~ (§6.3 option A) **and the gate-threshold axis** — **BUILT.** An
+   optional authored `id` on any gate node, unique per graph, plus `gate.<id>.threshold` and
+   `gate.<id>.dwell`. CTRL-11, and CTRL-8/9/16 again on the new key. See §13.9.
 9. **The shape-year axis** (§6.4), deferred per design 109 Q1 until 6–8 are green.
 
 Steps 1–5 cannot change a run. Step 6 is the first that can, and only under a runner.
@@ -997,3 +1002,105 @@ control as much as the arms, and a grid that looks comparable and is not is wors
 Phase 8's gate-clause ids and phase 9's shape-year axis are untouched; §6.4's note that the
 shape-year axis is "the same mechanism" is now concrete — it is another dynamic contributor over
 a flat companion key, applied at the same resolver seam.
+
+### 13.8 Phase 7, as built
+
+**Three of `pool-arms`' six are already refusals, so the port is FIVE rows and not six.**
+`normalizeLiquidityGraph` already throws on the legacy `poolCashYears`/`poolBondYears` beside a
+pool `target` (§12.2), on a hand-authored `drawdownSequence`, and on `drawdownMode:
+PROPORTIONAL`. Restating them as hygiene rows would be two derivations of one sentence — §23.6's
+failure shape and the thing §17.2 forbids — so `poolAxisProblems` names them in its header and
+CTRL-12's sibling (PTS-12) asserts the premise that lets them be left out: each one still
+refuses, so it cannot reach a grid at all. The legacy-pair refusal has exactly one gap,
+`hasRebalancer: false`, and there the axis has no reader whatsoever, which is reported in its own
+right and is a stronger statement.
+
+**The sixth item needed translating, and the translation is the sharpest row.** *"The strategy
+list identical across arms"* has no in-app form as written — a grid sweeps one config, so the
+list is identical by construction. Its substance is whether the axis has a READER, and that does
+bite: a pool `target` is realised by the TARGET_ALLOCATION rebalancer and the refill edges by
+LIQUIDITY_POOLS' reducers, so with either deselected, or with `liquidityGraphEnabled: false`, the
+factor is swept and nothing reads it. Every cell returns the plan and a flat grid reads as a null
+result rather than as a misconfiguration.
+
+**Two kinds, not one severity.** An INERT axis and a CONFOUNDED one are different failures and
+conflating them would cost a session: the first reports "the reserve size does not matter", the
+second reports an effect larger than the lever has. `POOL_AXIS_PROBLEM_KIND` is that
+distinction, the INERT rows are reported first (there is no point telling an author their
+glidepath confounds a comparison that is not happening), and the panel's tag is the shortest way
+to say which. Every row is `severity: 'warn'`: none of these makes a plan illegal, so none may
+stop a Rebuild.
+
+**Absent is not "none selected".** `behavioralStrategies` missing from a params bag takes the
+permissive reading, exactly as `hasTargetAllocation` does — without that rule every partial
+config and every test bag reports two problems it does not have.
+
+**It reports and never repairs, and the panel has no control that could.** A "fix this for me"
+button would be the app rewriting the author's plan behind a grid: §12.2's one-authority rule
+broken by a convenience, and a grid nobody can reproduce. Each row names the param to change so
+the author changes it in the Parameters list, where the change is visible and is saved with the
+scenario. One jest case asserts the absence — `querySelectorAll('button, input, select')` is
+empty inside the hygiene block — because "we did not add a button" is not a property a reader
+can check by looking.
+
+**Not built, and deliberately:** wealth-matching (§6.5 — not a config problem; nothing a pool
+axis does moves money, so `assertArmsWealthMatched` stays on a built state) and any statement
+about the RUN config. Whether a stochastic grid is seed-paired is the same class of mistake
+(`single-stochastic-run-is-not-an-ab`, `seed-matching-is-not-crn`) and belongs to design 100, not
+to a function that takes a cfg.
+
+### 13.9 Phase 8, as built
+
+**The id is on the NODE, and that one decision settles four questions.** An id addresses the node
+it is authored on; that node's threshold is its single numeric clause, and its dwell is its own
+`sustainedYears`. From that: a node with two numeric clauses gets a dwell axis and no threshold
+axis (no unique threshold, and inventing a winner is what a multi-class pool `target` is refused
+for); a negated row resolves its threshold one level through the `not`, because the editor's row
+model is exactly `{ not: clause }` with the dwell on the `not`; ids on both sides of a `not` are
+two addresses for one row, which the table cannot draw, so such a gate goes to `rawGate`
+verbatim rather than losing one of them; and an id on a node with no condition is REFUSED, since
+it would generate an axis that writes onto a node nothing reads.
+
+**The dwell axis was built too, and §2.1 is the reason.** The phasing says "the gate-threshold
+axis", but §2.1 says the knob the evidence points at is the DURATION — §20.13 measured the three
+trailing-high thresholds landing within \$13k of each other on a \$5m plan while the same gate
+family differing only in how long it stays shut spread by \$460k — and that *"the one knob the
+evidence points at is the one with no address"*. The addressing work is identical for both, so
+shipping only the threshold would have done all of it and left the evidence-backed lever
+unreachable. §20.16's dwell sweep was a negative result on one plan, which is a reason to be able
+to re-run it, not to delete it.
+
+**Absolute ranges, which is the opposite of the pool axis's choice.** A pool target is a level
+whose shape across shapes must be preserved, so it is swept as a factor (§10.3). A gate threshold
+is one number on one clause and the interesting span is wide: §20.13 swept 1 %, 5 % and 10 %, a
+factor of ten, which a ±50 % band around an authored 0.05 reaches at neither end. So
+`GATE_THRESHOLD_RANGES` is a per-kind absolute table, and the dwell is an INTEGER axis in years —
+never periods, since this reducer fires on both US_ and AU_PERIOD_ADVANCE and a dwell counted in
+evaluations would mean two different policies in a US-only and a cross-border plan (§20.15).
+
+**Uniqueness is within a graph and never across shapes**, because a clause id follows the pool
+id's rule (design 109 §9): the same id in the base graph and in a shape is the same clause and
+one sweep moves both. A duplicate WITHIN a graph is refused rather than warned — a warning would
+leave a live axis whose meaning nobody can state, which is the defect the id exists to prevent
+one level up.
+
+**The overlay works on gates the editor cannot draw.** Because the seam is the raw tree in front
+of the normalizer (§13.7), an id'd clause inside an OR-under-an-AND — a `rawGate` case — is still
+addressable. The axis is not limited to the DNF subset the clause table renders, which was not an
+argument for the seam when it was chosen and is now one of its better properties.
+
+**A clause id is stricter than a pool id**: `[A-Za-z0-9_-]+`. A pool id may be any non-empty
+string and that cannot be narrowed retroactively; a clause id is new, exists only to be an
+address, and an address that needs quoting is not one.
+
+**The description and the help topic were the last of the work, not an afterthought.** An
+authoring field nobody can discover is half-built, so `liquidityGraph`'s description names the
+`id` and what it generates. That failed `help:gate` (expected — the stamp), and restamping then
+put `help/concepts/liquidity-pools.md` 215 words over the concept budget, which is the gate
+telling the truth: this is a separate concept. It is now `help/concepts/searching-pool-levers.md`,
+with a one-line pointer from the pools topic.
+
+**What remains open:** phase 9, the shape-year axis (§6.4), which is now concrete rather than
+sketched — another dynamic contributor over a flat companion key, applied at the same resolver
+seam. §6.3's option C (`scripts/lib/pool-graph.mjs`, sweeping whole graphs) stays supported and
+is still the only route to a STRUCTURAL sweep, which no scalar axis will ever reach.

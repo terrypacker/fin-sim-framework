@@ -28,7 +28,11 @@ export const GENERATED_KEY_PREFIXES = ['acct.', 'person.', 'prop.', 'coll.', 'eq
   // prefix is — `set()` in `mc-param-paths` writes a dotted key FLAT only for a generated
   // namespace, and a lever outside the list is inert in a real solve while passing every
   // hand-written flat-bag test (design 98 W0 / `optimizer-param-key-dot-collision`).
-  'pool.'];
+  'pool.',
+  // Design 110 §6.3 — `gate.<clauseId>.threshold` / `.dwell`, the addressable gate clause. Same
+  // shape as `pool.` above and here for the same reason: no cascade node, applied at the graph
+  // resolver, and dead on arrival in a real solve if `set()` cannot write it flat.
+  'gate.'];
 
 /** True when `key` is a generated per-record param key (by namespace). */
 export function isGeneratedParamKey(key) {

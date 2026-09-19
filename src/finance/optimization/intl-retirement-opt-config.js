@@ -22,6 +22,8 @@ import { INTL_RETIREMENT_PARAM_ALIASES } from '../../scenarios/intl-retirement-s
 import { ScenarioParamGenerator } from '../../scenarios/params/scenario-param-generator.js';
 import { scalablePoolTargets, poolTargetScaleKey, poolTargetScaleLabel }
                                      from '../pools/pool-target-scale.js';
+import { gateClauseAxes, gateAxisKey, gateAxisLabel, GATE_AXIS_FIELD,
+  GATE_THRESHOLD_RANGES, GATE_DWELL_RANGE } from '../pools/pool-gate-axis.js';
 
 // Lazily index the full param schema by key so Opt variables can inherit identity
 // (label / options / visibleWhen) from it rather than duplicating it here.
@@ -626,6 +628,40 @@ function buildPoolOptConfigs(params) {
 }
 
 /**
+ * The gate-clause axes (design 110 §6.3), one or two per id'd clause. `enabled: false`.
+ *
+ * A curated contributor for the same two reasons the pool axis is, and a third of its own: the
+ * ranges are per CLAUSE KIND and absolute (`GATE_THRESHOLD_RANGES`). §20.13's measurement swept
+ * 1 %, 5 % and 10 % — a factor of ten — and `optRowFor`'s `rate` kind would offer ±0.02 around
+ * the authored value, which reaches neither end of the thing that motivated the axis.
+ *
+ * The dwell is an INTEGER axis, in years and never periods: this reducer fires on both
+ * US_ and AU_PERIOD_ADVANCE, so a dwell counted in evaluations would mean one year in a US-only
+ * plan and half a year in a cross-border one (§20.15).
+ */
+function buildGateOptConfigs(params) {
+  const out = [];
+  for (const row of gateClauseAxes(params)) {
+    const range = GATE_THRESHOLD_RANGES[row.kind];
+    if (range) {
+      out.push({
+        paramKey: gateAxisKey(row.clauseId, GATE_AXIS_FIELD.THRESHOLD),
+        label:    gateAxisLabel(row, GATE_AXIS_FIELD.THRESHOLD),
+        type:     OPT_PARAM_TYPES.CONTINUOUS,
+        ...range, group: 'Liquidity Pools', enabled: false,
+      });
+    }
+    out.push({
+      paramKey: gateAxisKey(row.clauseId, GATE_AXIS_FIELD.DWELL),
+      label:    gateAxisLabel(row, GATE_AXIS_FIELD.DWELL),
+      type:     OPT_PARAM_TYPES.INTEGER,
+      ...GATE_DWELL_RANGE, group: 'Liquidity Pools', enabled: false,
+    });
+  }
+  return out;
+}
+
+/**
  * Build the full optimization variable list for a given param snapshot.
  *
  * Returns DEFAULT_OPTIMIZATION_CONFIGS plus one severity entry per configured
@@ -654,6 +690,7 @@ export function buildOptVariables(params, accounts = null, { cfg = null } = {}) 
     ...buildRothScheduleOptConfigs(params),
     ...buildInheritedRaOptConfigs(params),
     ...buildPoolOptConfigs(params),
+    ...buildGateOptConfigs(params),
   ];
   const schema = [
     ...IntlRetirementScenario.buildFullParamSchema(),

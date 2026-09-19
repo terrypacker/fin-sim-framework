@@ -33,6 +33,8 @@ import {
 } from '../../src/finance/pools/pool-target-scale.js';
 import { resolveLiquidityGraph, resolveLiquidityGraphSchedule }
                                   from '../../src/finance/pools/liquidity-graph.js';
+import { poolAxisProblems, POOL_AXIS_PROBLEM_KIND }
+                                  from '../../src/finance/pools/pool-axis-hygiene.js';
 import { ScenarioParamGenerator, isGeneratedParamKey, decodeGeneratedParamKey }
                                   from '../../src/scenarios/params/scenario-param-generator.js';
 import { buildOptVariables, buildGridAxes }
@@ -315,4 +317,89 @@ test('CTRL-16 identity: a factor of 1 is byte-identical to no axis at all', () =
   const a = loadScenarioSim({ params: RUN, ...SPAN });
   const b = loadScenarioSim({ params: { ...RUN, [SCALE]: 1 }, ...SPAN });
   assert.equal(JSON.stringify(b.sim.state), JSON.stringify(a.sim.state));
+});
+
+// ── phase 7 — study hygiene (§6.5) ─────────────────────────────────────────────────────
+
+test('CTRL-12 hygiene reports, never repairs', () => {
+  // The one assertion §9 spells out for this phase: a live glidepath beside a pool axis
+  // produces a problem row AND an unmodified config. Repairing silently would be the app
+  // rewriting the author's plan behind a grid — §12.2's one-authority rule broken by a
+  // convenience, and a grid nobody can reproduce.
+  const cfg = { parameters: { ...SCHEDULED, allocationSchedule: 'GLIDEPATH' } };
+  const before = JSON.stringify(cfg);
+  const problems = poolAxisProblems(cfg);
+
+  assert.equal(JSON.stringify(cfg), before, 'the config is untouched');
+  const row = problems.find(p => p.param === 'allocationSchedule');
+  assert.ok(row, 'the glidepath is reported');
+  assert.equal(row.kind, POOL_AXIS_PROBLEM_KIND.CONFOUNDED);
+  assert.equal(row.severity, 'warn', 'a legal plan must never be blocked from rebuilding');
+  assert.deepEqual([row.index, row.field, row.pool, row.shape], [null, null, null, null],
+    'a hygiene problem is about the PLAN, not a cell — claiming one would point at the wrong thing');
+  assert.match(row.message, /governs the residual/);
+  assert.match(row.message, /MOVES as this axis is swept/);
+});
+
+test('PTS-9 no pool, no report — and a clean plan reports nothing', () => {
+  assert.deepEqual(poolAxisProblems(null), []);
+  assert.deepEqual(poolAxisProblems({ parameters: { allocationSchedule: 'GLIDEPATH', shocks: [{}] } }), [],
+    'with no scalable pool there is no axis, so there is nothing to warn about');
+  assert.deepEqual(poolAxisProblems({ parameters: {
+    ...SCHEDULED, allocationSchedule: 'STATIC', shocks: [],
+    behavioralStrategies: ['LIQUIDITY_POOLS', 'TARGET_ALLOCATION'],
+  } }), [], 'the hygienic plan is silent');
+});
+
+test('PTS-10 an axis with no reader is reported as INERT, not as a confound', () => {
+  const inertOf = (over) => poolAxisProblems({ parameters: { ...SCHEDULED, ...over } })
+    .filter(p => p.kind === POOL_AXIS_PROBLEM_KIND.INERT).map(p => p.param);
+
+  assert.deepEqual(inertOf({ liquidityGraphEnabled: false }), ['liquidityGraphEnabled']);
+  // A pool `target` is realised by the rebalancer, so without it the factor is swept and
+  // nothing reads it — a flat grid that reads as "the reserve size does not matter".
+  assert.deepEqual(inertOf({ behavioralStrategies: ['LIQUIDITY_POOLS'] }), ['behavioralStrategies']);
+  assert.deepEqual(inertOf({ behavioralStrategies: ['TARGET_ALLOCATION'] }), ['behavioralStrategies']);
+  assert.equal(inertOf({ behavioralStrategies: [] }).length, 2, 'both readers missing, both named');
+  // Absent is NOT "none selected" — a partial config takes the permissive reading, exactly as
+  // `hasTargetAllocation` does, or every test bag would report two problems it does not have.
+  assert.deepEqual(inertOf({}), []);
+});
+
+test('PTS-11 the two items pool-arms owns that are NOT already refusals', () => {
+  const params = { ...SCHEDULED, behavioralStrategies: ['LIQUIDITY_POOLS', 'TARGET_ALLOCATION'] };
+  // §18.4 — a DATED crash is foreseen, which biases exactly this class of timing lever.
+  const shockRow = poolAxisProblems({ parameters: { ...params, shocks: [{ severity: 0.3 }] } })
+    .find(p => p.param === 'shocks');
+  assert.ok(shockRow);
+  assert.equal(shockRow.kind, POOL_AXIS_PROBLEM_KIND.CONFOUNDED);
+  assert.match(shockRow.message, /FORESEEN/);
+  assert.match(shockRow.message, /^1 manufactured shock are|^1 manufactured shock is/,
+    'one shock reads as one');
+
+  // YEARS_OF_SPEND is the pool target's own PREDECESSOR, so it gets its own sentence rather
+  // than the generic "the mix has a second author".
+  const legacy = poolAxisProblems({ parameters: { ...params, allocationSchedule: 'YEARS_OF_SPEND' } })
+    .find(p => p.param === 'allocationSchedule');
+  assert.match(legacy.message, /predecessor/);
+  const regime = poolAxisProblems({ parameters: { ...params, allocationSchedule: 'REGIME_CONDITIONED' } })
+    .find(p => p.param === 'allocationSchedule');
+  assert.match(regime.message, /REGIME_CONDITIONED/);
+  assert.equal(/predecessor/.test(regime.message), false);
+});
+
+test('PTS-12 the three items pool-arms owns that ARE already refusals stay refusals', () => {
+  // Restating a refusal here would be two derivations of one sentence (§23.6 / §17.2). This
+  // asserts the premise that lets `poolAxisProblems` leave them out: each one still REFUSES,
+  // so it can never reach a grid in the first place.
+  const base = { liquidityGraph: BASE, behavioralStrategies: ['LIQUIDITY_POOLS', 'TARGET_ALLOCATION'] };
+  assert.throws(() => resolveLiquidityGraph({ ...base, poolBondYears: 4 }, ACCOUNTS),
+    /cannot be combined with `poolCashYears`/);
+  assert.throws(() => resolveLiquidityGraph({ ...base, drawdownSequence: [{ key: 'usSavingsAccount' }] }, ACCOUNTS),
+    /cannot be combined with an authored `drawdownSequence`/);
+  assert.throws(() => resolveLiquidityGraph({ ...base, drawdownMode: 'PROPORTIONAL' }, ACCOUNTS),
+    /cannot be combined with drawdownMode PROPORTIONAL/);
+  // …and none of them is duplicated as a hygiene row.
+  const params = { ...base, poolBondYears: 4, drawdownMode: 'PROPORTIONAL' };
+  assert.deepEqual(poolAxisProblems({ parameters: params }), []);
 });
