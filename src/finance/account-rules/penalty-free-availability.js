@@ -117,26 +117,46 @@ export function drawableBalance(account) {
 }
 
 /**
- * Penalty-free amount currently withdrawable from a single account:
- *   - age-eligible accounts  → the drawable balance
- *   - Roth below minimumAge  → contribution basis (always penalty-free, capped at drawable)
+ * How much of `value` units of this account is reachable penalty-free:
+ *   - age-eligible accounts  → all of it
+ *   - Roth below minimumAge  → contribution basis (always penalty-free), capped at `value`
  *   - everything else        → 0 (only reachable via the phase-2 early withdrawal)
  *
  * **Accessibility is an AMOUNT, not a boolean.** The Roth branch is the whole reason: a
  * predicate that called an under-age Roth "locked" would under-report cover the draw does in
  * fact produce, which is the same class of defect as §24.1's, pointing the other way.
  *
+ * `value` is a parameter rather than always `drawableBalance(account)` because the drawdown
+ * walk and the pool cube measure the same account in two different units — the walk in
+ * balance-above-the-floor, the pool in what its CLAIM holds, which for an account with lots
+ * is the sum of the claimed lots and can differ from the balance (`holdings-balance-desync`).
+ * Design 97 §24.3 needs `accessible <= balance` to hold so that `locked` cannot go negative,
+ * and that only holds if both figures are taken from the same base. One rule, two bases.
+ *
+ * @param {object}  account
+ * @param {boolean} eligible - the result of {@link isAgeEligible} for this account's owner
+ * @param {number}  value    - the base to slice, in the account's own currency
+ * @returns {number} in the account's OWN currency
+ */
+export function penaltyFreeSliceOf(account, eligible, value) {
+  const base = Math.max(0, value ?? 0);
+  if (eligible) return base;
+  if (account?.type === ACCOUNT_TYPE.ROTH) {
+    return Math.max(0, Math.min(account.contributionBasis ?? 0, base));
+  }
+  return 0;
+}
+
+/**
+ * Penalty-free amount currently withdrawable from a single account — {@link penaltyFreeSliceOf}
+ * over the whole drawable balance. This is the drawdown walk's reading.
+ *
  * @param {object} account
  * @param {boolean} eligible - the result of {@link isAgeEligible} for this account's owner
  * @returns {number} in the account's OWN currency
  */
 export function penaltyFreeAvailableFor(account, eligible) {
-  const drawable = drawableBalance(account);
-  if (eligible) return Math.max(0, drawable);
-  if (account?.type === ACCOUNT_TYPE.ROTH) {
-    return Math.max(0, Math.min(account.contributionBasis ?? 0, drawable));
-  }
-  return 0;
+  return penaltyFreeSliceOf(account, eligible, drawableBalance(account));
 }
 
 /**

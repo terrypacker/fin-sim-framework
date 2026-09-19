@@ -21,7 +21,7 @@ import { colorForSeriesKey } from '../../../../finance/allocation-reporting/allo
 /** The CSV's columns, in order. The fact table's contract — see `poolHistoryRows`. */
 export const POOL_CSV_COLUMNS = Object.freeze([
   'date', 'year', 'pool', 'label',
-  'balance', 'capacity', 'utilised', 'target', 'targetAfforded',
+  'balance', 'accessible', 'locked', 'capacity', 'utilised', 'target', 'targetAfforded',
   'yearsOfCover', 'yearsOfCoverTarget', 'high',
   'marketReturn', 'priorYearReturn', 'inflow', 'outflow',
   'headroom', 'shortfall', 'drawdown', 'gated', 'vetoed', 'capped',

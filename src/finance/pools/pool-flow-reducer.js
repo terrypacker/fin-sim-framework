@@ -378,6 +378,10 @@ export class PoolFlowReducer extends Reducer {
       expensesCurrency: this.expensesCurrency,
       baseCurrency:     this.baseCurrency,
       bookBase:         this._bookBase(state),
+      // §24.3 — the instant the pools' age gates are asked about. THIS value, the one the
+      // gates and the telemetry below already run on, so a period cannot report a wrapper as
+      // locked while deciding on a date that says it is open.
+      asOf:             asOfMs,
     });
 
     const prior   = state.liquidityPools ?? {};
@@ -533,6 +537,18 @@ export class PoolFlowReducer extends Reducer {
       const p = prior[pool.id] ?? {};
       const entry = {
         balance:      +m.balance.toFixed(2),
+        // §24.3 — what a penalty-free draw could reach, and the remainder. Stamped beside
+        // `balance` rather than derived in the panel, for the reason every other cube field
+        // is: the panel must replay the number the RUN used, not recompute one that can drift
+        // from it. Identical to `balance`/0 on a pool with no gated claim, which is every pool
+        // in every scenario that does not claim a wrapper.
+        accessible:   +m.accessible.toFixed(2),
+        locked:       +m.locked.toFixed(2),
+        // The earliest gate still shut, as an ISO instant, or null. Absent-as-null rather than
+        // omitted, because the cube is reconstructed from journal DIFFS and carries the last
+        // value forward: a field that vanished on the period a gate opened would keep showing
+        // the old date forever (`pool-history.js`).
+        unlocksAt:    m.unlocksAt,
         capacity:     +m.capacity.toFixed(2),
         utilised:     +m.utilised.toFixed(2),
         target:       m.target != null ? +m.target.toFixed(2) : null,
@@ -606,6 +622,13 @@ export class PoolFlowReducer extends Reducer {
         liquidityPools[pool.id] = {
           ...q,
           balance:            entry.balance,
+          // §24.3 — LIVE figures, like the balance and the cover beside them. A gate opens on
+          // a date, not on an advance, so a paycheck evaluation that carried a stale
+          // `accessible` forward would report a wrapper as locked for up to a year after it
+          // opened — on the one figure whose whole job is to say when.
+          accessible:         entry.accessible,
+          locked:             entry.locked,
+          unlocksAt:          entry.unlocksAt,
           capacity:           entry.capacity,
           utilised:           entry.utilised,
           target:             entry.target,

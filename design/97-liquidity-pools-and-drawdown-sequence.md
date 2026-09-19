@@ -3857,7 +3857,29 @@ the same way until the pair is on the screen.
    which is the real assertion — the sim is bit-deterministic, so an extraction that changed
    anything would move a fixture.
 2. **§24.3** — `accessible` / `locked` / `unlocksAt` on `poolMetrics`, the cube and the CSV;
-   `yearsOfCover` and `available` switch over.
+   `yearsOfCover` and `available` switch over. **BUILT (18 Sep 2026)**: `claimAccess` in
+   `pool-metrics.js` off the §24.2 authority, `poolContext` gains `asOf` (passed by the flow
+   reducer from the instant its gates already run on, falling back to
+   `state.currentPeriods`), the cube and `POOL_CSV_COLUMNS` gain the pair, and the paycheck's
+   narrower entry restamps them rather than carrying them forward — a gate opens on a date,
+   not on an advance. 6821 unit (16 new, PAC-1..8) + 1538 viz green; no golden moves, because
+   no golden scenario authors a graph.
+
+   Two things found while building it. `penaltyFreeSliceOf` was added beside
+   `penaltyFreeAvailableFor` so the claim-level and account-level readings share one rule on
+   two bases — `balance` follows the CLAIM (its lots, when it has any) and the account-level
+   figure follows the balance, and taking `accessible` from the second while `balance` came
+   from the first lets `locked` go negative on a Roth whose basis exceeds what its lots are
+   worth. Pinned by PAC-7. And `poolMetrics` returned a duplicated `capped` key in its object
+   literal; same value both times, so it was inert, and it is removed.
+
+   **Left inconsistent on purpose, until step 3**: `liquidityReserve` is stamped in the same
+   patch, by the same reducer, and still reads `isDrawdownAccessible`. So a run now carries a
+   strict per-pool `accessible` beside a loose household one, and on a plan holding an
+   under-age wrapper with the default flag they disagree by the whole wrapper book. Nothing
+   reads the two against each other yet — the panel pair is §24.6 — but this is exactly the
+   "two answers to one question" state this section exists to end, and it should not outlive
+   the next step.
 3. **§24.4** — `householdReserve` switches over; the caveat comment is deleted.
 4. **§24.6 panel + editor defaults.** Cheap, and step 2 is unreadable without the panel half.
 5. **§24.5** — `access` on the pool.

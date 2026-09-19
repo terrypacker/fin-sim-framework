@@ -12,7 +12,9 @@ import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
 import { POOL_TARGET_MODE, POOL_CAPACITY_MODE, POOL_SPEND_BASIS } from './liquidity-graph.js';
 import { ACCOUNT_TYPE }           from '../assets/account.js';
 import { isDrawdownAccessible }   from '../derived-metrics/net-liquidity.js';
-import { getResidency, primaryPersonKey } from '../residency-utils.js';
+import { getResidency, primaryPersonKey, getBirthDate } from '../residency-utils.js';
+import { hasAgeGate, isAgeEligible, penaltyFreeSliceOf, unlocksAt as gateOpensAt }
+  from '../account-rules/penalty-free-availability.js';
 
 /**
  * DESIGN 97 §12.1 — a pool is not a balance.
@@ -108,6 +110,48 @@ function claimValueNative(account, sleeves) {
   if (fromHoldings != null) return fromHoldings;
   if (sleeves) return 0;      // a sleeve-narrowed claim on an account with no lots holds nothing
   return Math.max(0, account?.balance ?? 0);
+}
+
+/**
+ * DESIGN 97 §24.3 — how much of one claim a PENALTY-FREE draw would really find, and when the
+ * rest of it opens. Both in the claimed account's OWN currency; the caller converts.
+ *
+ * The gate and the amount come from `account-rules/penalty-free-availability.js`, which is the
+ * same authority `AccountService`'s Phase 1 walk uses (§24.2). That is the whole point of the
+ * section: §24.1 measured the alternative — `net-liquidity.js#isAccessible`, which reads
+ * `allowsEarlyWithdrawal` ahead of the age — and it calls the entire under-age US wrapper book
+ * reachable, so a cover figure built on it would have been today's `balance` under a new name.
+ *
+ * Three things this has to get right that the account-level form does not:
+ *
+ * 1. **The base is the CLAIM, not the balance.** `penaltyFreeSliceOf` takes the claim value so
+ *    that `accessible <= balance` holds by construction and `locked` cannot go negative. A
+ *    sleeve-narrowed claim is a brokerage by construction (§22.6 — `normalizeClaims` refuses
+ *    the narrowing on anything else), and a brokerage has no gate, so the narrowed case falls
+ *    out as "all of it" without a special branch.
+ * 2. **The owner is the ACCOUNT's owner.** A pool claiming a spouse's wrapper is ordinary
+ *    authoring, and resolving it against the primary's birth date is a silent decade of error
+ *    in either direction. This mirrors `eligibleOf` (`account-service.js:1036`).
+ * 3. **A claim whose owner cannot be resolved is LOCKED, not open.** §24.2 Q1: the extracted
+ *    predicate inherits `isWithdrawalEligible`'s coercion, under which a null birth date reads
+ *    as eligible on a gated account. That was unreachable from the drawdown walk, which always
+ *    enters with a real person; it is reachable HERE, because a claim may name an account whose
+ *    `ownerId` matches nobody on the plan. Reporting a gated wrapper as fully spendable on
+ *    missing data is §24.1's defect arriving by a second road, so the gate is resolved only
+ *    against a birth date that exists.
+ */
+function claimAccess(state, account, sleeves, value, asOf) {
+  if (!hasAgeGate(account)) return { accessible: value, opensAt: null };
+
+  const birthDate = getBirthDate(state, account?.ownerId);
+  // No owner, or no date to ask against ⇒ unprovable ⇒ locked. See (3) above.
+  if (birthDate == null || asOf == null) return { accessible: 0, opensAt: null };
+
+  const eligible = isAgeEligible(account, birthDate, asOf);
+  return {
+    accessible: penaltyFreeSliceOf(account, eligible, value),
+    opensAt:    eligible ? null : gateOpensAt(account, birthDate),
+  };
 }
 
 /**
@@ -256,6 +300,8 @@ function resolveRemainderTargets(out, pools, ctx) {
  */
 export function poolMetrics(state, pool, ctx) {
   let balance    = 0;
+  let accessible = 0;
+  let opensAt    = null;          // §24.3 — the EARLIEST gate still shut, over the claims
   let offsetCap  = 0;
   let hasOffsetCap = pool.capacity?.mode === POOL_CAPACITY_MODE.OFFSET_CAP;
 
@@ -265,6 +311,12 @@ export function poolMetrics(state, pool, ctx) {
     const fx     = (v) => toBaseCurrency(v, currencyOf(account, ctx.baseCurrency), ctx.baseCurrency, state);
     const native = claimValueNative(account, sleeves);
     balance += fx(native);
+
+    // §24.3 — what a Phase 1 draw would find in this claim, and when the rest of it opens.
+    const access = claimAccess(state, account, sleeves, native, ctx.asOf);
+    accessible += fx(access.accessible);
+    if (access.opensAt && (opensAt == null || access.opensAt < opensAt)) opensAt = access.opensAt;
+
     if (hasOffsetCap) {
       // The CEILING is what is OWED. Cash above the debt suppresses no interest and earns
       // nothing, so it is money sitting in the wrong place — but that is a statement about
@@ -303,6 +355,21 @@ export function poolMetrics(state, pool, ctx) {
   return {
     id:        pool.id,
     balance,
+    // §24.3 — what the pool HOLDS, and what a penalty-free draw could reach of it today.
+    //
+    // `balance` keeps its meaning exactly, so nothing already reading the cube changes
+    // meaning and a pool with no gated claim reports `accessible === balance` and
+    // `locked === 0`. The pair only says something where a claim is gated.
+    //
+    // `locked` is DERIVED, never summed separately: two accumulators over the same claims
+    // can disagree by a rounding step, and a `locked` that is 1e-9 negative is a number a
+    // panel will render as `-0.00`.
+    accessible,
+    locked:    Math.max(0, balance - accessible),
+    // The earliest instant any still-shut claim opens, or null when nothing is gated. A DATE
+    // rather than a duration: the panel says when, and a duration would have to be recomputed
+    // against a "now" the cube does not carry.
+    unlocksAt: opensAt ? opensAt.toISOString() : null,
     capacity,
     // What the pool is actually doing, as distinct from what it could hold. For an offset
     // this is `min(parked, owed)` — design 97 §12.1's figure, in the field that means it —
@@ -312,14 +379,23 @@ export function poolMetrics(state, pool, ctx) {
     // clamp needs the distinction, and re-deriving it from the pool spec at the read site is
     // how the two come to disagree.
     capped,
-    capped,
     target,
     floor,
     // What may still be ADDED (never past a real ceiling) and what is still WANTED.
+    //
+    // Both read BALANCE, deliberately, and §24.3 is where the line is drawn: **cover is about
+    // what can be SPENT; sizing is about what is HELD.** A ceiling is a statement about room —
+    // an offset's capacity is what is owed, and a locked wrapper does not make the debt
+    // smaller — and a target is what the pool should hold, so sizing it against `accessible`
+    // would make a wrapper pool demand refills every period until its gate opened. That is a
+    // rebalance loop, not an honest reserve.
     headroom:  capped ? Math.max(0, capacity - balance) : Infinity,
     shortfall: target != null ? Math.max(0, target - balance) : 0,
-    // What may be TAKEN OUT without breaching the pool's own floor.
-    available: Math.max(0, balance - floor),
+    // What may be TAKEN OUT without breaching the pool's own floor — §24.3: ACCESSIBLE, not
+    // balance. This is what sizes a flow's `givable`, and an edge sourced from a wrapper pool
+    // was previously sized against money Phase 1 cannot reach, so the refill quietly did less
+    // than it said (the scoped draw's shortfall is discarded by `PoolFlowApplyReducer`).
+    available: Math.max(0, accessible - floor),
     marketReturn: poolMarketReturn(state, pool),
     // The reserve the pool HOLDS, and the reserve it was ASKED to hold, in the same unit.
     // Two numbers because they answer different questions and routinely disagree by years:
@@ -331,7 +407,11 @@ export function poolMetrics(state, pool, ctx) {
     //
     // A remainder target is not resolved yet at this point (it reads the other pools), so
     // `resolveRemainderTargets` recomputes this the same way it recomputes `shortfall`.
-    yearsOfCover:       ctx.annualSpend > 0 ? balance / ctx.annualSpend : null,
+    // §24.3 — ACCESSIBLE, not balance. This is the feature's headline number: cover is what a
+    // bad decade can actually be paid out of, and a locked wrapper pays for none of it. §9.3(a)
+    // measured the mirror image of this defect as a cover figure of 0.0 years in every year,
+    // and it was invisible until it was plotted.
+    yearsOfCover:       ctx.annualSpend > 0 ? accessible / ctx.annualSpend : null,
     yearsOfCoverTarget: (ctx.annualSpend > 0 && target != null) ? target / ctx.annualSpend : null,
   };
 }
@@ -350,11 +430,20 @@ export function allPoolMetrics(state, graph, ctx) {
  * The context the metrics read. Built once per period by the flow reducer and reused, so a
  * period's gates, triggers and telemetry all see ONE spend line and ONE book.
  */
-export function poolContext(state, { expensesCurrency = 'RESIDENCE', baseCurrency = 'USD', bookBase = 0 } = {}) {
+export function poolContext(state, { expensesCurrency = 'RESIDENCE', baseCurrency = 'USD', bookBase = 0,
+  asOf = null } = {}) {
   return {
     baseCurrency,
     expensesCurrency,
     bookBase,
+    // §24.3 — the instant the age gates are asked about. Passed by the flow reducer, which
+    // already resolves the period's instant (including the paycheck nuance) and must not
+    // resolve it a second way here. Falling back to the live period start means a caller that
+    // does not pass one — a panel, a test — still gets the run's own date rather than
+    // `Date.now()`, which on a projection decades out is not a small error but a wrong answer.
+    // Null only on a hand-built state with no period, where §24.3 reads a gated claim as
+    // locked rather than guessing.
+    asOf: asOf ?? (state?.currentPeriods?.US?.startMs ?? state?.currentPeriods?.AU?.startMs ?? null),
     annualSpend: annualSpendBase(state, { expensesCurrency, baseCurrency }),
     // Read LIVE, every evaluation, and off the same person the spending path resolves its
     // transaction account from (`MonthlyExpensesHandler`). A residency captured at build time

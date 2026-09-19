@@ -53,7 +53,11 @@ export const POOL_CUBE_FIELDS = Object.freeze([
   // (design 97 §23.2), and null in every period where the ask fit. Stamped by the rebalancer,
   // not `PoolFlowReducer`, so it is the one cube field whose absence means "fine" rather than
   // "not computed" — see the panel, which draws it only where it exists.
-  'balance', 'capacity', 'utilised', 'target', 'targetAfforded',
+  // `accessible` / `locked` sit beside `balance` because they are only ever read against it
+  // (design 97 §24.3): a balance without its accessible half hides a pool whose cover is
+  // years away, which is the defect §24.1 measured. `unlocksAt` is a DATE and stays off this
+  // list — the cube is numeric and the panel reads the instant off the live entry.
+  'balance', 'accessible', 'locked', 'capacity', 'utilised', 'target', 'targetAfforded',
   'yearsOfCover', 'yearsOfCoverTarget', 'high',
   'marketReturn', 'priorYearReturn', 'inflow', 'outflow',
 ]);
