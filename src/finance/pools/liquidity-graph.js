@@ -1148,7 +1148,18 @@ export function resolveLiquidityGraph(params, accounts = []) {
  * @private
  */
 function _normalizeFromParams(p, accounts) {
-  return normalizeLiquidityGraph(p.liquidityGraph, accounts, {
+  return normalizeLiquidityGraph(p.liquidityGraph, accounts, _graphOptsFrom(p));
+}
+
+/**
+ * The option set a graph normalizes under, derived from the params bag.
+ *
+ * Split out of {@link _normalizeFromParams} for design 109: every named SHAPE has to be built
+ * with the identical options, or two shapes in one scenario would mean different things.
+ * @private
+ */
+function _graphOptsFrom(p) {
+  return ({
     drawdownMode:        p.drawdownMode,
     hasDrawdownSequence: Array.isArray(p.drawdownSequence) && p.drawdownSequence.length > 0,
     hasLegacyPoolYears:  Number.isFinite(p.poolCashYears) || Number.isFinite(p.poolBondYears),
@@ -1219,5 +1230,251 @@ export function collectAuthoredGraphProblems(params, accounts = []) {
   } catch (e) {
     problems.push({ param: 'liquidityGraph', index: null, field: null, pool: null, message: e.message });
   }
+
+  // Design 109 §5 rule 3 — the SHAPES and the schedule, on the same terms. Reported with the
+  // shape named, or a bad cell in shape B reads as a bad cell in shape A and the author
+  // repairs the wrong table. Also switched-off-safe, for the reason above.
+  try {
+    _normalizeShapes(p, accounts);
+    _normalizeSchedule(p.liquidityGraphSchedule, p.liquidityShapes);
+  } catch (e) {
+    const m = /^liquidityGraph: shape '([^']+)': /.exec(e.message);
+    problems.push({
+      param: m ? 'liquidityShapes' : 'liquidityGraphSchedule',
+      index: null, field: null, pool: null, shape: m ? m[1] : null, message: e.message,
+    });
+  }
   return problems;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// DESIGN 109 — time-varying pool shapes: named shapes, and a schedule that selects one
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * The sentinel `fromMs` of the OPENING entry — the `liquidityGraph` param, which governs
+ * every instant before the first scheduled row. `-Infinity` rather than the sim start,
+ * because the resolver does not know when the run begins and must not invent a date that
+ * would make the opening shape inactive on the first period of an earlier-starting plan.
+ */
+const OPENING_FROM_MS = -Infinity;
+
+/**
+ * `liquidityShapes` as a plain object, or a throw naming the container. Absent is `{}` — no
+ * shapes is not an error, it is the default.
+ * @private
+ */
+function _shapesObject(raw) {
+  if (raw == null) return {};
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    err('`liquidityShapes` has to be an object of { <shapeId>: { pools, flows } }');
+  }
+  return raw;
+}
+
+/** 1 January of `year`, UTC — what a schedule row's `year` means (design 109 §7). */
+function januaryFirstUtc(year) {
+  return Date.UTC(year, 0, 1);
+}
+
+/**
+ * Design 109 §5 — every shape, normalized at BUILD, plus the schedule that selects between
+ * them, as one sorted step function.
+ *
+ * Returns `null` when no schedule is authored, so a scenario without one takes exactly the
+ * `resolveLiquidityGraph` path it takes today and adds no state, no reducer and no journal
+ * entry. That is the gate on the whole design (§13 case 1).
+ *
+ * ─── why every shape normalizes now, and not on first use ────────────────────────
+ *
+ * A shape that takes effect in 2045 and does not compile must fail the scenario HERE, at
+ * load, beside the shape that does. Discovering it nineteen simulated years in — as a throw
+ * from inside a period advance — puts the error somewhere the author cannot associate with
+ * the thing they typed, which is this repo's `config-field-in-state-is-not-read` lesson one
+ * level up. It also means the §12 whole-graph invariants (executor assignment, cycle
+ * detection, remainder references, one-claim-per-sleeve) are checked per shape, which is
+ * what §4 Q1's choice of WHOLE-graph shapes buys: each shape is a complete, separately valid
+ * graph rather than a fragment whose validity depends on which other fragments are live.
+ *
+ * @param {object} params   - the scenario parameter bag
+ * @param {Array}  accounts - context.accounts; every shape validates against the SAME list
+ * @returns {Array<{fromMs:number, year:number|null, shapeId:string|null, graph:object|null}>|null}
+ *          sorted ascending by `fromMs`; entry 0 is the `liquidityGraph` param
+ */
+export function resolveLiquidityGraphSchedule(params, accounts = []) {
+  const p = params ?? {};
+  // The master switch sits in front of this exactly as it sits in front of
+  // `resolveLiquidityGraph` (§23): off ⇒ every design-97 AND design-109 line is inert at
+  // once, and the schedule is not a way to sneak a graph past it.
+  if (p.liquidityGraphEnabled === false) return null;
+
+  const rows = _normalizeSchedule(p.liquidityGraphSchedule, p.liquidityShapes);
+  if (!rows.length) return null;
+
+  const shapes = _normalizeShapes(p, accounts);
+  const out = [{
+    fromMs:  OPENING_FROM_MS,
+    year:    null,
+    // null, not a shape id: the opening entry is the `liquidityGraph` param, which is not a
+    // named shape and must not be reported as one — an author looking at "which shape is
+    // live" needs to see that the answer is "the base graph" rather than a name they never
+    // wrote.
+    shapeId: null,
+    graph:   _normalizeFromParams(p, accounts),
+  }];
+  for (const row of rows) {
+    out.push({
+      fromMs:  januaryFirstUtc(row.year),
+      year:    row.year,
+      shapeId: row.shape,
+      graph:   shapes.get(row.shape),
+    });
+  }
+  _warnUnscheduledShapes(shapes, rows);
+  _warnResurrectedPools(out);
+  return out;
+}
+
+/**
+ * The schedule rows, validated and sorted. Shape ids are checked against `rawShapes` here
+ * rather than after normalizing, so an unknown id is reported as the typo it is instead of
+ * as a missing graph.
+ * @private
+ */
+function _normalizeSchedule(rawSchedule, rawShapes) {
+  if (rawSchedule == null) return [];
+  if (!Array.isArray(rawSchedule)) {
+    err('`liquidityGraphSchedule` has to be an array of { year, shape } rows');
+  }
+  // The CONTAINER before the rows. Checked here as well as in `_normalizeShapes` because this
+  // function runs first, and an array of shapes would otherwise be reported as a row naming a
+  // shape "which is not in `liquidityShapes` (which is empty)" — true, and useless: it points
+  // the author at the row they got right rather than at the container they got wrong.
+  const known = new Set(Object.keys(_shapesObject(rawShapes)));
+
+  const seen = new Map();
+  const rows = rawSchedule.map((raw, i) => {
+    if (!raw || typeof raw !== 'object') err(`liquidityGraphSchedule[${i}] is not a { year, shape } row`);
+    const year = Number(raw.year);
+    if (!Number.isInteger(year)) {
+      err(`liquidityGraphSchedule[${i}] year '${raw.year}' is not a whole year`);
+    }
+    const shape = raw.shape;
+    if (typeof shape !== 'string' || !shape) {
+      err(`liquidityGraphSchedule[${i}] (year ${year}) names no shape`);
+    }
+    if (!known.has(shape)) {
+      err(`liquidityGraphSchedule[${i}] (year ${year}) names shape '${shape}', which is not in `
+        + `\`liquidityShapes\` (${known.size ? [...known].map(s => `'${s}'`).join(', ') : 'which is empty'})`);
+    }
+    // §12 rule 1. Two rows cannot both start a year: last-writer-wins would make the answer
+    // depend on authoring order, which is exactly the kind of silent decision this design's
+    // whole-graph choice (§4 Q1) exists to avoid.
+    if (seen.has(year)) {
+      err(`liquidityGraphSchedule has two rows for ${year} ('${seen.get(year)}' and '${shape}') — `
+        + 'only one shape can be active for a pool at a time');
+    }
+    seen.set(year, shape);
+    return { year, shape };
+  });
+  return rows.sort((a, b) => a.year - b.year);
+}
+
+/**
+ * Every named shape, normalized with the SAME options the base graph gets.
+ *
+ * Same options is load-bearing and not a convenience: `_normalizeFromParams` derives the
+ * drawdown mode, the two-authorities check and the rebalancer/location policy from the params
+ * bag, and a shape normalized under a different set would be a graph that means something
+ * different from the one beside it — the failure `resolveLiquidityGraph`'s own doc comment
+ * records for three call sites and this would reintroduce for N shapes.
+ * @private
+ */
+function _normalizeShapes(p, accounts) {
+  const raw = _shapesObject(p.liquidityShapes);
+  const out = new Map();
+  for (const [id, shape] of Object.entries(raw)) {
+    if (!shape || typeof shape !== 'object') err(`liquidityShapes['${id}'] is not a graph`);
+    try {
+      out.set(id, normalizeLiquidityGraph(shape, accounts, _graphOptsFrom(p)));
+    } catch (e) {
+      // Re-thrown with the shape named. Without this the message is identical to the one the
+      // base graph would produce, and on a four-shape plan the author cannot tell which table
+      // the bad cell is in.
+      err(`shape '${id}': ${e.message.replace(/^liquidityGraph: /, '')}`);
+    }
+  }
+  return out;
+}
+
+/**
+ * §12 rule 3 — a shape no row selects. A WARNING and not an error: keeping an unused shape
+ * around is normal authoring, and the common case is an author who wrote a shape and forgot
+ * to schedule it, for whom this is the only signal that the new structure is doing nothing.
+ * @private
+ */
+function _warnUnscheduledShapes(shapes, rows) {
+  const used = new Set(rows.map(r => r.shape));
+  const idle = [...shapes.keys()].filter(id => !used.has(id));
+  if (idle.length) {
+    console.warn(`liquidityShapes: ${idle.map(s => `'${s}'`).join(', ')} ${idle.length === 1 ? 'is' : 'are'} `
+      + 'not selected by any `liquidityGraphSchedule` row, so it governs no part of the run. '
+      + 'Add a row, or delete the shape.');
+  }
+}
+
+/**
+ * §12 rule 4 — a pool id that disappears and later comes back.
+ *
+ * Design 109 §9 makes the pool `id` the handle for identity across a shape change: the same
+ * id continues (keeping its trailing `high` and `spendHistory`), a new id starts cold, and a
+ * dropped id is retired. A gap in the middle is therefore a retirement followed by a COLD
+ * RESTART, and the symptom is close to invisible: a pool with `high = 0` reads as 0% below
+ * its high, so every drawdown gate on it opens wide for a period.
+ *
+ * Almost never what anybody meant, and the cheapest moment to say so is here.
+ * @private
+ */
+function _warnResurrectedPools(entries) {
+  const seenIn = new Map();     // pool id -> indices of entries containing it
+  entries.forEach((e, i) => {
+    for (const pool of (e.graph?.pools ?? [])) {
+      if (!seenIn.has(pool.id)) seenIn.set(pool.id, []);
+      seenIn.get(pool.id).push(i);
+    }
+  });
+  for (const [id, at] of seenIn) {
+    const gapped = at.some((v, i) => i > 0 && v !== at[i - 1] + 1);
+    if (!gapped) continue;
+    const where = at.map(i => entries[i].shapeId ?? 'the base graph').join(' → ');
+    console.warn(`liquidityGraphSchedule: pool '${id}' is absent from a shape and returns in a `
+      + `later one (${where}). Design 109 §9: that RETIRES the pool and starts a new one with `
+      + 'the same name — its trailing high resets to 0, so every drawdown gate on it reads "0% '
+      + 'below its high" and opens for a period. Carry the pool through the intervening shape, '
+      + 'or give the second one its own id.');
+  }
+}
+
+/**
+ * Which entry of a resolved schedule governs `asOfMs` (design 109 §7).
+ *
+ * ONE selector, exported, called by every consumer — the same rule `resolveLiquidityGraph`
+ * follows and for the same reason recorded there: normalizing (or here, selecting) the same
+ * object several ways is how it comes to mean several things.
+ *
+ * @param {Array|null} schedule - `resolveLiquidityGraphSchedule` output
+ * @param {number}     asOfMs
+ * @returns {{fromMs:number, year:number|null, shapeId:string|null, graph:object|null}|null}
+ */
+export function activeGraphAt(schedule, asOfMs) {
+  if (!Array.isArray(schedule) || schedule.length === 0) return null;
+  let active = schedule[0];
+  for (const entry of schedule) {
+    // `>=`, so a row's year takes effect ON 1 January rather than after it. The sort is
+    // ascending and the years are unique (§12 rule 1), so the last entry that has started is
+    // the live one.
+    if (asOfMs >= entry.fromMs) active = entry;
+    else break;
+  }
+  return active;
 }

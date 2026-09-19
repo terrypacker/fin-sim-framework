@@ -132,6 +132,12 @@ export const COVERED = [
   // PoolFlowApplyReducer: POOL-8/8b (the transfer goes through the taxing seam, and the
   // scoped draw does not reach past its source pool).
   'PoolFlowReducer', 'PoolFlowApplyReducer',
+  // Design 109 §8 — the pool SHAPE switch (pool-shape-schedule.test.mjs).
+  // PSS-9..12: a non-switching period emits no diff at all, the switch lands at the first
+  // advance on or after its boundary, `drawdownSequence` is re-stamped (the half that moves
+  // money), and pool identity across a switch — continued keeps its history, retired is
+  // dropped from the cube, new is left to be seeded cold.
+  'PoolShapeScheduleReducer',
 
   // F/G — economic regimes + FX (reducer-postconditions-regimes-fx.test.mjs)
   'RemoveRegimeReducer', 'RegimeApplyReducer', 'BondPriceAdjustReducer', 'FxRefreshReducer',

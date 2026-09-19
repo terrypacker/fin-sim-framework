@@ -315,6 +315,7 @@ holdings math / action emission; none service-backed).
 | `StockHarvestApplyReducer` | ✅ |
 | `PoolFlowReducer` (design 97 Part II) | ✅ `evt-liquidity-pools.test.mjs` — POOL-5/5b/5c/5d (the (s, S) band and shared shortfall), POOL-6/6b (the gate and its working-detector control), POOL-7 (the reverse edge). I1-pure: it reads state and emits, it moves nothing. |
 | `PoolFlowApplyReducer` (design 97 Part II) | ✅ `evt-liquidity-pools.test.mjs` — POOL-8 (the transfer raises its disposal-tax action, asserted on the ACTION stream), POOL-8b (a scoped draw does not reach past its source pool). Service-backed, so **not** I1-pure — §7.3's class. |
+| `PoolShapeScheduleReducer` (design 109 §8) | ✅ `pool-shape-schedule.test.mjs` — PSS-9 (a period that does not switch emits NO diff, so a schedule that never fires is indistinguishable from none), PSS-10 (the switch lands at the first advance on or after 1 Jan of its row's year, on both cadences), PSS-11 (`drawdownSequence` is re-stamped — design 109 §2 measured `state.liquidityGraph` as read by nothing, so the graph alone would prove nothing), PSS-12 (§9 identity: a continued id keeps its trailing high, a retired id leaves the cube, a new id is left to be seeded cold). I1-pure. |
 
 ### F — Economic regimes
 

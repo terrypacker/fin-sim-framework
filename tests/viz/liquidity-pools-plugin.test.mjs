@@ -692,3 +692,44 @@ test('§24.5: the default mode keeps the "locked" wording', () => {
   assert.doesNotMatch(chip.textContent, /penalty/);
   plugin.unmount();
 });
+
+// ─── design 109 §14 step 6 — which shape is running ──────────────────────────
+
+test('§109: the strip names the live shape and the date it actually took over', () => {
+  // The DATE, never the authored year: the switch lands at the first advance on or after 1
+  // January, which on a semi-annual cadence is up to six months later. Showing the year next
+  // to a run that had not switched yet is the clearest way to misread a mid-year cadence.
+  const run = [
+    entry('2030-01-01', [
+      { field: 'liquidityShapeId', before: undefined, after: null },
+      { field: 'liquidityPools', before: null, after: { offset: CUBE(), growth: CUBE() } },
+    ]),
+    entry('2035-07-01', [
+      { field: 'liquidityShapeId', before: null, after: 'bridge' },
+      { field: 'liquidityPools.offset.balance', before: 400_000, after: 420_000 },
+    ]),
+  ];
+  const { plugin } = mountPlugin(simOf(run, { state: { liquidityShapeId: 'bridge' } }));
+  const notes = q(plugin, 'provenance').textContent;
+  assert.match(notes, /shape\s*bridge/);
+  assert.match(notes, /since 2035-07-01/);
+  plugin.unmount();
+});
+
+test('§109: a run sitting on the base graph says so rather than naming a shape', () => {
+  const run = [entry('2030-01-01', [
+    { field: 'liquidityShapeId', before: undefined, after: null },
+    { field: 'liquidityPools', before: null, after: { offset: CUBE(), growth: CUBE() } },
+  ])];
+  const { plugin } = mountPlugin(simOf(run, { state: { liquidityShapeId: null } }));
+  const notes = q(plugin, 'provenance').textContent;
+  assert.match(notes, /shape\s*base graph/);
+  assert.doesNotMatch(notes, /since/, 'nothing has switched, so there is no date to give');
+  plugin.unmount();
+});
+
+test('§109: a run with NO schedule is unchanged — the strip says nothing about shapes', () => {
+  const { plugin } = mountPlugin(simOf(RUN));
+  assert.doesNotMatch(q(plugin, 'provenance').textContent, /shape/);
+  plugin.unmount();
+});

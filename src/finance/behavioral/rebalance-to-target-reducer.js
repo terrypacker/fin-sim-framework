@@ -367,10 +367,31 @@ export class RebalanceToTargetReducer extends Reducer {
    * report and the panel can say "asked 30 years, the book affords 12" instead of showing a
    * target that was never once achieved.
    */
+  /**
+   * The liquidity graph that governs THIS evaluation (design 109 §6.2).
+   *
+   * Read from STATE, not from the instance field, because design 109 lets the live graph
+   * change mid-run: `PoolShapeScheduleReducer` re-stamps `state.liquidityGraph` at
+   * `PRE_PROCESS + 1` and this reducer decides at `+4`, so by the time anything here runs the
+   * field is already the shape that governs the period.
+   *
+   * This is what turns design 109 §2's measured finding — `state.liquidityGraph` was written
+   * by the projection and read by NOTHING in `src/` — from a liveness witness into a real read
+   * path. Threading a resolved graph through the six methods below instead would have left the
+   * witness decorative and given the schedule a second place to be interpreted.
+   *
+   * `this.poolGraph` remains the fallback for a hand-built state that carries no graph field
+   * (every isolated reducer test), and for a run whose projection stamped one before any
+   * schedule existed.
+   */
+  _poolGraphOf(state) {
+    return state?.liquidityGraph ?? this.poolGraph;
+  }
+
   _resolvePoolTarget(state, bookBase, fallbackMix, clamped = null) {
     const cube = state?.liquidityPools;
     if (!cube || !(bookBase > 0)) return null;
-    const pools = [...(this.poolGraph.pools ?? [])]
+    const pools = [...(this._poolGraphOf(state).pools ?? [])]
       .filter(p => p.target)
       .sort((a, b) => (a.spendOrder ?? Number.MAX_SAFE_INTEGER) - (b.spendOrder ?? Number.MAX_SAFE_INTEGER));
 
@@ -404,7 +425,7 @@ export class RebalanceToTargetReducer extends Reducer {
     // the mix returns to its targets, which is what a dip-buy is.
     const adjust = state.poolRefillPlan?.adjust;
     if (adjust) {
-      for (const pool of this.poolGraph.pools ?? []) {
+      for (const pool of this._poolGraphOf(state).pools ?? []) {
         const delta = adjust[pool.id];
         if (!delta) continue;
         const cls = (pool.claims.flatMap(c => c.sleeves ?? []))[0];
@@ -467,7 +488,7 @@ export class RebalanceToTargetReducer extends Reducer {
   _applySourceVeto(mix, state, actualFractions) {
     const vetoed = state?.poolRefillPlan?.vetoed;
     if (!Array.isArray(vetoed) || vetoed.length === 0) return mix;
-    const byId = new Map((this.poolGraph?.pools ?? []).map(p => [p.id, p]));
+    const byId = new Map((this._poolGraphOf(state)?.pools ?? []).map(p => [p.id, p]));
     const held = new Map();
     for (const id of vetoed) {
       for (const cls of (byId.get(id)?.claims ?? []).flatMap(c => c.sleeves ?? [])) {
@@ -515,7 +536,7 @@ export class RebalanceToTargetReducer extends Reducer {
   _applyEdgeVeto(mix, state, actualFractions) {
     const capped = state?.poolRefillPlan?.capped;
     if (!Array.isArray(capped) || capped.length === 0) return mix;
-    const byId = new Map((this.poolGraph?.pools ?? []).map(p => [p.id, p]));
+    const byId = new Map((this._poolGraphOf(state)?.pools ?? []).map(p => [p.id, p]));
     const cap = new Map();
     for (const id of capped) {
       for (const cls of (byId.get(id)?.claims ?? []).flatMap(c => c.sleeves ?? [])) {
@@ -622,7 +643,7 @@ export class RebalanceToTargetReducer extends Reducer {
     // Design 97 §12.2 — ONE authority. A graph target governs the classes its pools claim
     // and `allocationSchedule` governs the rest; authoring both a graph target and
     // poolCashYears/poolBondYears throws at config time, because one would silently win.
-    if (this.poolGraph) {
+    if (this._poolGraphOf(state)) {
       const base = this._scheduledMix(state, action, bookBase);
       const mix  = this._resolvePoolTarget(state, bookBase, base, clamped) ?? base;
       return this._applyVeto(mix, state, actualFractions);
@@ -686,7 +707,7 @@ export class RebalanceToTargetReducer extends Reducer {
     // Portfolio-level actual fractions — needed only by the design-97 veto, which has to
     // know what the vetoed classes currently hold in order to pin their target there.
     let actualFractions = null;
-    if (this.poolGraph && bookBase > 0) {
+    if (this._poolGraphOf(state) && bookBase > 0) {
       const byClass = {};
       let grossTotal = 0;
       for (const { stateKey } of present) {

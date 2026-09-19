@@ -14,9 +14,13 @@ import { normalizeFilter, matchesFilter, FilteredFoldState } from '../components
 import {
   buildMixListEditor, buildAllocationGlidepathEditor, buildAllocationRegimeTargetsEditor,
   buildDrawdownSequenceEditor, buildLiquidityGraphEditor,
+  buildLiquidityShapesEditor, buildLiquidityGraphScheduleEditor,
   buildLocationPolicyEditor, buildYieldCurveShapeEditor, buildYieldCurveScheduleEditor,
   buildRateKeyMapEditor,
 } from './structured-param-editors.js';
+
+/** Local plain-object test — the structured editors' own helper is not exported. */
+const isPlainObject_ = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 
 export class ScenarioTabView {
   constructor() {
@@ -625,6 +629,15 @@ export class ScenarioTabView {
         valueInput = buildDrawdownSequenceEditor(param, this._accounts());
       } else if (param.type === 'LiquidityGraph') {
         valueInput = buildLiquidityGraphEditor(param, this._accounts());
+      } else if (param.type === 'LiquidityShapes') {
+        valueInput = buildLiquidityShapesEditor(param, this._accounts());
+      } else if (param.type === 'LiquidityGraphSchedule') {
+        // The shape ids are read LIVE off the sibling param rather than captured, so a shape
+        // added or renamed without a full re-render still offers the right options here.
+        valueInput = buildLiquidityGraphScheduleEditor(param, () => {
+          const src = scenario.params.find(x => x.name === 'liquidityShapes')?.value;
+          return isPlainObject_(src) ? Object.keys(src) : [];
+        });
       } else if (param.type === 'DrawdownStrategyList') {
         valueInput = _buildDrawdownStrategyListEditor(
           param, () => this._maybeRerenderForController(param, scenario),

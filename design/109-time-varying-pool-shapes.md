@@ -1,7 +1,7 @@
 # 109 — Time-varying pool shapes: named shapes, and a schedule that selects one
 
-**Status:** PROPOSED. Design 97 built a liquidity graph that is authored once and holds for
-the whole run. This design makes the *shape* of that graph a function of time — the same
+**Status:** **BUILT** — all six phases, 18 Sep 2026 (§16). Design 97 built a liquidity graph
+that is authored once and holds for the whole run. This design makes the *shape* of that graph a function of time — the same
 authoring move `yieldCurveSchedule` and `allocationGlidepath` already make for a value — and
 its whole difficulty is that a pool graph is not a value: four live objects are **built from
 it** at t=0 and never ask again.
@@ -355,14 +355,159 @@ All of these go through `collectAuthoredGraphProblems`, which needs the `shape` 
    is honest the two arms cannot be compared. Build it first.
 2. **`liquidityShapes` + `liquidityGraphSchedule` + `resolveLiquidityGraphSchedule` +
    `activeGraphAt`**, with validation. No consumer changes. Authorable, inert, and every shape
-   is already proven to compile.
+   is already proven to compile. **BUILT (18 Sep 2026)**: 6864 unit (23 new, PSS-1..8) + 1550
+   viz green; no consumer reads any of it, so nothing can have moved.
+
+   `_graphOptsFrom` was split out of `_normalizeFromParams` so every shape normalizes under the
+   IDENTICAL option set as the base graph — otherwise two shapes in one scenario would mean
+   different things, which is the failure `resolveLiquidityGraph`'s own doc comment records for
+   three call sites and this would have reintroduced for N shapes. That is also what makes §12
+   rule 5 free: PSS-8 shows the two-authorities throw reaching a shape.
+
+   `collectAuthoredGraphProblems` reports shape and schedule problems with a `shape` field, and
+   `_normalizeShapes` re-throws each shape's error with the shape named — without it, a bad cell
+   in shape B carries the identical message to the same cell in shape A and the author repairs
+   the wrong table.
+
+   Two things the tests found, both about the QUALITY of a message rather than a result:
+   - A `liquidityShapes` authored as an array was reported as a row naming a shape *"which is
+     not in `liquidityShapes` (which is empty)"* — true, and useless: it points at the row the
+     author got right rather than the container they got wrong. The container check moved into
+     one `_shapesObject` guard both paths call, since `_normalizeSchedule` runs first.
+   - The first draft of the help topic ran 693 words against a 400-word concept budget. It
+     became its own topic (`help/concepts/pool-shapes-over-time.md`) rather than being cut —
+     shapes-over-time is a distinct mechanic from the pools themselves, and the budget was
+     right to say so.
 3. **`PoolShapeScheduleReducer`** and the `drawdownSequence` re-stamp (§6.3, §6.4, §8, §9).
    This is the step that moves money, and it moves it through the draw order alone.
+   **BUILT (18 Sep 2026)**: 6883 unit (42 in `pool-shape-schedule.test.mjs`) + 1550 viz green.
+
+   Registered in `US_RETIREMENT.reducers(context)` — the toolset whose projection compiled the
+   opening sequence, so the compile and every re-compile are owned by one authority — and
+   **only when a schedule is authored**, so a scenario without one has an identical reducer
+   list, an identical journal and an identical run. Deliberately NOT gated on the
+   `LIQUIDITY_POOLS` strategy: the projection compiles the spend order whatever the strategy
+   list says (§23's whole point), so a switch that fired only under that strategy would freeze
+   the order on the opening shape in exactly the configuration where nothing else would say so.
+
+   It runs at `PRE_PROCESS + 1`, ahead of `PoolFlowReducer` (+3) and the rebalancer (+4), so a
+   switching period evaluates its flows on the shape that has just taken over rather than on
+   the one it is leaving — a one-period error on a date the author chose deliberately is the
+   worst place to have one.
+
+   Two details that are the difference between working and looking like it works:
+   - The no-change path goes through `newState(state)` and adds no field, so `diffStates`
+     emits nothing. A schedule that has not yet fired is invisible in the journal (PSS-9).
+   - Both `stamped` and `active.shapeId` are read with `?? null`, because the OPENING entry's
+     id genuinely is `null` (it is the base graph, not a named shape) while an unstamped state
+     has no field at all. Without the coalesce the first advance of every scheduled run would
+     emit a patch that changed nothing (PSS-9c).
+
+   PSS-13a–e run it through a real scenario load, which is the seam the unit cases cannot
+   reach: PSS-13e asserts that a shape scheduled for 2099 fails the LOAD rather than a period
+   seventy years in.
 4. **The three instance-held consumers** (§6.1, §6.2) — flows and the rebalancer follow the
-   active shape.
-5. **The editor** (§11).
+   active shape. **BUILT (18 Sep 2026)**: 6892 unit (51 in `pool-shape-schedule.test.mjs`) +
+   1550 viz green; all 15 golden fixtures byte-identical.
+
+   **`PoolFlowReducer`** resolves the live graph ONCE per evaluation, off the instant it is
+   already deciding at, and threads it as a parameter — a second resolution inside a helper
+   could see a different answer and the period would evaluate half its edges on each shape.
+   `_vetoable` / `_cappable` moved from the constructor to a per-graph memo, because a veto set
+   derived from the opening shape would go on vetoing pools a later shape does not have.
+
+   **`PoolFlowApplyReducer`** does NOT re-resolve, per §6.1. The plan carries the `shapeId` it
+   was computed under and the apply side looks that up; a shape it cannot find applies NOTHING
+   rather than falling back, because a refill applied against the wrong pool's claims draws
+   from accounts the author never put in that pool.
+
+   **The rebalancer took a better route than §6.2 specified.** The design proposed the same
+   instance-field threading as the flow reducer. It instead reads `state.liquidityGraph`, with
+   its own field as the fallback for a hand-built state. It runs at `PRE_PROCESS + 4` and the
+   shape switch at `+1`, so the field is already current — and this turns §2's measured
+   finding, that `state.liquidityGraph` was written by the projection and read by nothing in
+   `src/`, from a liveness witness into a real read path. Threading instead would have left the
+   witness decorative and given the schedule a second place to be interpreted. It also fixes a
+   case threading could not: a plan whose pools only BEGIN at a later shape has a null
+   `poolGraph` at build, which an instance-field reading would have left permanently
+   pool-blind (PSS-16b).
+
+   The flow-reducer registration now runs when EITHER a graph or a schedule resolves, for the
+   same reason.
+5. **The editor** (§11). **BUILT (18 Sep 2026)**: `buildLiquidityShapesEditor` and
+   `buildLiquidityGraphScheduleEditor`, 10 new viz cases.
+
+   Each shape holds the EXISTING three-table graph editor over its own value — one vocabulary,
+   not two, or the shape editor and the base editor would drift. `+ Duplicate` sits beside
+   `+ Add` rather than in a menu, because §4 Q1's cost is that a one-number change means a
+   whole second graph, and re-typing four tables is how a pool id drifts — which §9 makes a
+   silent retirement. The diff line (`N carried · added X · retired Y`) renders §9's rule at
+   the moment of authoring, and a RENAMED pool shows up there as one retired and one added,
+   which is exactly the mistake it exists to catch.
+
+   The schedule table draws the base graph as an explicit row 0. Without it the table says
+   "the bridge starts in 2035" and leaves the years before it looking unauthored, when
+   `liquidityGraph` governs them. The shape cell is a select over live ids, and a row pointing
+   at a deleted shape keeps its value and is marked rather than silently re-pointed.
+
 6. **The panel**: the shape id and its effective date on the pool cube, and the cube's handling
-   of retired ids.
+   of retired ids. **BUILT (18 Sep 2026)**: 6892 unit + 1563 viz green, all 15 goldens
+   byte-identical.
+
+   `pool-history.js` replays `liquidityShapeId` off the ordinary diff path, so the first period
+   carrying a new value IS the period the switch landed on, and the strip reports **that date,
+   never the authored year**. §8's lag is real — up to six months on a semi-annual cadence —
+   and a strip showing the year next to a run that had not switched yet would be the clearest
+   possible way to misread it. A run with no schedule adds no key and the strip is unchanged.
+
+### 15b. Two defects found in the running app (18 Sep 2026)
+
+Both are §22.5's shape — a control that exists and cannot be found — and neither was reachable
+by the jsdom cases, which compute no layout and render one param at a time.
+
+**The schedule table was gated behind an invisible precondition.** `liquidityGraphSchedule`
+was `visibleWhen: { param: 'liquidityShapes', exists: true }`. A shape whose id is still blank
+syncs the param to `null` (the editor keeps only named shapes), so an author who had clicked
+`+ Add Shape` and not yet typed a name saw **no scheduling UI at all** and concluded there was
+none. Worse, it made this editor's own empty state — *"add one under Liquidity Pool Shapes,
+then schedule it here"* — unreachable: the copy explaining the precondition was hidden BY the
+precondition. Now shown on the same condition as the shapes editor itself, so the two always
+appear together and the empty state does its job.
+
+**The shape head overflowed.** It carries four controls (id label, input, Duplicate, Remove)
+on `.mix-block-head`, which is a three-column grid. Measured in the running app: **73px tall**,
+i.e. two rows, with Duplicate crushed into the 26px remove track and the ✕ wrapped past the
+right edge. A `.pool-shape-head` rule with four tracks brings it to **29px, zero overflow**, at
+full and narrow panel widths.
+
+**And a lesson about the probe, not the CSS.** The first fix sized that last track with
+`min-content`, on a measurement showing the literal `26px` overflowing by 4px. That measurement
+was wrong: the probe element was built without an `.age-band-list-editor` ancestor, so
+`.age-band-list-editor .age-band-remove` — which sets `width: 100%; padding: 0` — never
+applied, and the probe measured a button at its unstyled 30px natural width. With the real
+ancestor the literal does not overflow at all, and `min-content` **collapses the button to the
+bare 11px glyph**, against the 26px every other ✕ in the app renders at. That is what the
+author saw and reported as "smaller than all the rest".
+
+A probe has to carry the selectors' ancestors or it is measuring different CSS. The track is
+now a literal 30px — a little wider than the rows' 26px, because this control deletes a whole
+SHAPE rather than one row of one, and a block header's control reading smaller than the rows
+beneath it is backwards.
+
+---
+
+## 16. Status
+
+**All six steps built, 18 Sep 2026.** 6892 unit + 1563 viz green; all 15 whole-state golden
+fixtures byte-identical, which is the assertion that matters — the sim is bit-deterministic, so
+a scenario without a schedule that moved at all would have moved a fixture.
+
+The three open questions in §15 are unchanged and none was answered speculatively: Q1 (the
+switch year as an MC/optimiser lever) is still deferred, Q2 (event-selected shapes) is still
+deliberately unanswered, and Q3 (an empty shape) falls out of the data structure — a shape with
+no pools is legal today and compiles to no spend order, which `PoolShapeScheduleReducer` stamps
+as a null sequence rather than leaving a stale one standing (PSS-11b). Whether that SHOULD be
+legal is the sentence §15 asks for and it has not been written.
 
 Steps 2 and 3 are separately shippable and separately verifiable, which is the point of the
 split: step 2 cannot change a run, and step 3 changes exactly one thing.

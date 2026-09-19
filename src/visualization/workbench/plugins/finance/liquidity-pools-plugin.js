@@ -395,6 +395,22 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
       : `<span class="pool-ok">✓</span> replay ties across ${tie.checked} fields`);
     notes.push(`${hist.poolIds.length} pools · ${hist.flowIds.length} flows`);
 
+    // Design 109 §14 step 6 — WHICH SHAPE is running. Only on a plan that has a schedule, so
+    // every other run's strip is unchanged.
+    //
+    // The shape id is read off live state rather than the params, because the two can differ
+    // by design: `PoolShapeScheduleReducer` switches at the first ADVANCE on or after 1
+    // January of a row's year, which on a semi-annual cadence is up to six months later. The
+    // panel therefore says the date the shape actually became live, never the year that was
+    // typed — a strip showing the authored year next to a run that had not switched yet would
+    // be the clearest possible way to misread a mid-year cadence.
+    const shapeId = this._sim?.state?.liquidityShapeId;
+    if (shapeId !== undefined) {
+      const since = this._shapeLiveSince(hist);
+      notes.push(`shape <strong>${_esc(shapeId ?? 'base graph')}</strong>`
+        + (since ? ` <span class="pool-dim">since ${_esc(since)}</span>` : ''));
+    }
+
     const fired  = hist.events.filter(e => e.kind === POOL_EVENT_KIND.FIRED);
     const gated  = hist.events.filter(e => e.kind === POOL_EVENT_KIND.GATED);
     const vetoed = hist.events.filter(e => e.kind === POOL_EVENT_KIND.VETOED);
@@ -973,6 +989,23 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
           `${lock}</span>`);
       }
     }
+  }
+
+  /**
+   * The date the LIVE shape actually took over, read out of the replayed history.
+   *
+   * `liquidityShapeId` rides the ordinary journal diff, so the first period carrying the
+   * current value is the period the switch landed on. Null when the history does not record
+   * one — a run that has never switched, where "since" would be a date nothing happened on.
+   */
+  _shapeLiveSince(hist) {
+    const periods = hist?.periods ?? [];
+    let since = null;
+    for (const p of periods) {
+      if (p.shapeId === undefined) continue;
+      if (!since || p.shapeId !== since.id) since = { id: p.shapeId, at: p.at };
+    }
+    return since && since.id != null ? since.at.toISOString().slice(0, 10) : null;
   }
 
   _onLegendClick(e) {

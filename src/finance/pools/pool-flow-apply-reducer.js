@@ -45,7 +45,7 @@ export class PoolFlowApplyReducer extends Reducer {
    * @param {Array<{stateKey:string,type:string}>} opts.accounts
    * @param {string} [opts.baseCurrency='USD']
    */
-  constructor({ accountService, graph, accounts = [], baseCurrency = 'USD' } = {}) {
+  constructor({ accountService, graph, schedule = null, accounts = [], baseCurrency = 'USD' } = {}) {
     // POSITION_UPDATE, matching every other apply reducer. Note what the framework's
     // queueing then implies for the ORDER within a period: emitted actions are unshifted, so
     // the rebalancer (which decides at PRE_PROCESS + 4, one step after the flow reducer)
@@ -54,6 +54,9 @@ export class PoolFlowApplyReducer extends Reducer {
     super('Pool Flow Apply', PRIORITY.POSITION_UPDATE);
     this.accountService = accountService;
     this.graph          = graph;
+    // Design 109 §6.1 — held so the PLAN's shape can be looked up, never so this reducer can
+    // pick one. See `reduce`.
+    this.schedule       = schedule;
     this.baseCurrency   = baseCurrency;
     this._byKey         = new Map((accounts ?? []).map(a => [a.stateKey, a]));
     this.reducedActionTypes   = ['POOL_FLOW_APPLY'];
@@ -62,8 +65,19 @@ export class PoolFlowApplyReducer extends Reducer {
 
   reduce(state, action, date) {
     const { from, to, amountBase, flowId } = action;
-    const src = this.graph?.pools?.find(p => p.id === from);
-    const dst = this.graph?.pools?.find(p => p.id === to);
+    // Design 109 §6.1 — the ONE place this reducer is allowed to be opinionated about which
+    // shape it is applying, and the answer is "the one the plan was computed under".
+    //
+    // This reducer has no date of its own — it reads `from` and `to` off the action, which the
+    // flow reducer emitted under a specific shape — so re-resolving from a schedule here would
+    // let the pair disagree across a switch boundary and move money between pools that were
+    // never both live. When the action names a shape this cannot find, it does NOTHING rather
+    // than falling back: a refill applied against the wrong pool's claims draws from accounts
+    // the author never put in that pool.
+    const graph = this._graphForPlan(action);
+    if (!graph) return this.newState(state);
+    const src = graph.pools?.find(p => p.id === from);
+    const dst = graph.pools?.find(p => p.id === to);
     if (!src || !dst || !(amountBase > 0)) return this.newState(state);
 
     // Two shapes of destination (design 97 §12.4a). A pool with a cash-like claim is a
@@ -107,6 +121,20 @@ export class PoolFlowApplyReducer extends Reducer {
     const { drawnKeys = [], pendingTaxActions = [], crossBorderTransfers = [] } = result;
     const balanceActions = [...new Set([...drawnKeys, targetKey])].map(k => new RecordBalanceAction(`${k}.balance`, k));
     return this.newState(state, {}, [...balanceActions, ...crossBorderTransfers, ...pendingTaxActions]);
+  }
+
+  /**
+   * The graph the PLAN was computed under (design 109 §6.1).
+   *
+   * No schedule ⇒ the one graph, as before. A schedule and a `shapeId` on the action ⇒ that
+   * entry's graph. A schedule and NO `shapeId` ⇒ an action from before the plan carried one,
+   * which can only have been emitted under the opening shape.
+   */
+  _graphForPlan(action) {
+    if (!this.schedule) return this.graph;
+    if (action?.shapeId === undefined) return this.schedule[0]?.graph ?? null;
+    const hit = this.schedule.find(e => (e.shapeId ?? null) === (action.shapeId ?? null));
+    return hit?.graph ?? null;
   }
 
   toJSON() {

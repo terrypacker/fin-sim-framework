@@ -93,6 +93,11 @@ export function buildPoolHistory({ journal, graph = null } = {}) {
   // no diff for the same reason every cube field is: the reducer writes it every period, so
   // an absent diff means the number did not move.
   let reserve = {};
+  // Design 109 — which named shape was live. Replayed like everything else: it rides the
+  // ordinary diff path, so the first period carrying a new value is the period the switch
+  // landed on. `undefined` until a diff sets it, which is how a run with no schedule stays
+  // distinguishable from one sitting on the base graph (`null`).
+  let shapeId = undefined;
   const periods = [];
   const events  = [];
   const fromActions = [];              // FIRED rows read from POOL_FLOW_APPLY (the fallback)
@@ -115,6 +120,9 @@ export function buildPoolHistory({ journal, graph = null } = {}) {
         touched = true;
       } else if (field.startsWith('liquidityReserve.')) {
         _setPath(reserve, field.split('.').slice(1), diff.after);
+        touched = true;
+      } else if (field === 'liquidityShapeId') {
+        shapeId = diff.after ?? null;
         touched = true;
       } else if (field === 'poolRefillPlan') {
         plan = _clone(diff.after ?? {});
@@ -208,7 +216,11 @@ export function buildPoolHistory({ journal, graph = null } = {}) {
 
     periods.push({ seq: entry.seq ?? periods.length, at, year, pools,
                    reserve: { ...reserve }, vetoed: [...(plan?.vetoed ?? [])],
-                   capped: [...(plan?.capped ?? [])] });
+                   capped: [...(plan?.capped ?? [])],
+                   // Spread so a run with no schedule adds NO key, for the reason the cube
+                   // fields follow the same rule: absent has to stay distinguishable from
+                   // "on the base graph".
+                   ...(shapeId !== undefined ? { shapeId } : {}) });
   }
 
   // Pool order: the author's spend order when the graph is at hand, first-seen otherwise.

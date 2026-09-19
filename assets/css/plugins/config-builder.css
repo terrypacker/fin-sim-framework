@@ -949,6 +949,28 @@
   align-items: center;
 }
 
+/* Design 109 §11 — the shape head carries FOUR controls, not three: the id, its input,
+   Duplicate and Remove. On `.mix-block-head`'s three columns the Duplicate button was squeezed
+   into the 26px remove slot and the ✕ wrapped to a second row: measured in the running app at
+   73px tall against 25px for this rule.
+
+   The last track is a LITERAL width, like every other table's remove column, and must not be
+   `min-content`: `.age-band-list-editor .age-band-remove` sets `width: 100%; padding: 0`, so a
+   content-sized track collapses to the bare glyph — measured at 11px against the 26px every
+   other ✕ in the app renders at. 30px here rather than 26px because this one heads a BLOCK
+   rather than a row, and a block header's control reading smaller than the rows beneath it is
+   backwards. */
+.mix-block-head.pool-shape-head {
+  grid-template-columns: auto 1fr auto 30px;
+}
+
+/* Matched to the track above, and a little taller than the 24px row buttons for the same
+   reason: this is the control that deletes a whole shape, not one row of one. */
+.age-band-list-editor .pool-shape-head .age-band-remove {
+  height: 28px;
+  font-size: 13px;
+}
+
 .mix-grid {
   display: flex;
   flex-direction: column;

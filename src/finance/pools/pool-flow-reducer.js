@@ -11,7 +11,7 @@
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { ageAsOf }           from '../behavioral/rebalance-to-target-reducer.js';
 import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
-import { FLOW_EXECUTOR, FLOW_CADENCE, POOL_TARGET_MODE, POOL_SPEND_BASIS, POOL_DRAWDOWN_BASIS, POOL_GATE_SCOPE } from './liquidity-graph.js';
+import { FLOW_EXECUTOR, FLOW_CADENCE, POOL_TARGET_MODE, POOL_SPEND_BASIS, POOL_DRAWDOWN_BASIS, POOL_GATE_SCOPE, activeGraphAt } from './liquidity-graph.js';
 import { poolContext, allPoolMetrics, householdReserve } from './pool-metrics.js';
 
 /**
@@ -69,9 +69,14 @@ export class PoolFlowReducer extends Reducer {
    * @param {string}  [opts.baseCurrency='USD']
    * @param {string}  [opts.expensesCurrency='RESIDENCE']
    */
-  constructor({ graph, flowsEnabled = true, baseCurrency = 'USD', expensesCurrency = 'RESIDENCE' } = {}) {
+  constructor({ graph, schedule = null, flowsEnabled = true, baseCurrency = 'USD',
+                expensesCurrency = 'RESIDENCE' } = {}) {
     super('Pool Flows', PRIORITY.PRE_PROCESS + 3);   // before RebalanceToTarget (+4)
     this.graph              = graph;
+    // Design 109 §6.1 — the shape SCHEDULE, when the plan has one. `graph` stays the fallback
+    // and is what every unscheduled scenario uses, so the field below is the only thing a
+    // plan without a schedule ever touches.
+    this.schedule           = schedule;
     this.flowsEnabled       = flowsEnabled !== false;
     this.baseCurrency       = baseCurrency;
     this.expensesCurrency   = expensesCurrency;
@@ -85,13 +90,42 @@ export class PoolFlowReducer extends Reducer {
     // The pools a rebalance veto can actually bind on: `RebalanceToTargetReducer#_applyVeto`
     // pins the target of a vetoed pool's ALLOCATION classes, so a pool that narrows no
     // sleeves names no class and cannot be vetoed. See where it is read, below.
-    this._vetoable = new Set((graph?.pools ?? [])
-      .filter(p => (p.claims ?? []).some(c => c.sleeves?.length))
-      .map(p => p.id));
-    // §12.4c — the same test on the DESTINATION side. An EDGE-scoped gate into a pool that
-    // claims no ALLOCATION class (an offset, a savings facility) caps nothing, which is the
-    // scope's honest limit and must not be logged as a decision.
-    this._cappable = this._vetoable;
+    // Memoized PER GRAPH rather than computed once, because design 109 lets the live graph
+    // change mid-run and a veto set derived from the opening shape would keep vetoing pools a
+    // later shape does not have. Keyed on the normalized graph object, which is built once at
+    // load and never replaced, so this is one computation per shape for the whole run.
+    this._vetoableByGraph = new WeakMap();
+  }
+
+  /**
+   * The pools a rebalance veto can actually bind on, for `graph`: a pool that narrows no
+   * sleeves names no ALLOCATION class and cannot be vetoed. §12.4c applies the same test on
+   * the DESTINATION side — an EDGE-scoped gate into a pool that claims no class (an offset, a
+   * savings facility) caps nothing, which is the scope's honest limit and must not be logged
+   * as a decision — so the two sets are deliberately the same set.
+   */
+  _vetoableOf(graph) {
+    if (!graph) return new Set();
+    let set = this._vetoableByGraph.get(graph);
+    if (!set) {
+      set = new Set((graph.pools ?? [])
+        .filter(p => (p.claims ?? []).some(c => c.sleeves?.length))
+        .map(p => p.id));
+      this._vetoableByGraph.set(graph, set);
+    }
+    return set;
+  }
+
+  /**
+   * Design 109 §6.1 — the graph that governs `asOfMs`.
+   *
+   * Resolved once per evaluation, off the instant this reduce is already deciding at, and
+   * then threaded as a parameter rather than re-read: a second resolution inside a helper
+   * could see a different answer and the period would evaluate half its edges on each shape.
+   */
+  _graphAt(asOfMs) {
+    if (!this.schedule) return this.graph;
+    return activeGraphAt(this.schedule, asOfMs)?.graph ?? null;
   }
 
   /**
@@ -99,10 +133,10 @@ export class PoolFlowReducer extends Reducer {
    * FX-normalised. Deliberately the pools' own book rather than the rebalancer's account
    * list — a percentage of "the book" has to mean a percentage of something the graph names.
    */
-  _bookBase(state) {
+  _bookBase(state, graph) {
     const seen = new Set();
     let total  = 0;
-    for (const pool of this.graph.pools) {
+    for (const pool of (graph?.pools ?? [])) {
       for (const { key } of pool.claims) {
         if (seen.has(key)) continue;
         seen.add(key);
@@ -298,9 +332,9 @@ export class PoolFlowReducer extends Reducer {
    * forward instead. A year with no advance at all simply leaves the most recent completed
    * year standing, which is what "the last thing that finished" means.
    */
-  _priorYearReturns(prior, yearOf) {
+  _priorYearReturns(prior, yearOf, graph) {
     const out = {};
-    for (const pool of this.graph.pools) {
+    for (const pool of (graph?.pools ?? [])) {
       const p = prior?.[pool.id] ?? {};
       out[pool.id] = (p.marketReturnYear != null && p.marketReturnYear >= yearOf)
         ? (p.priorYearReturn ?? null)
@@ -329,10 +363,10 @@ export class PoolFlowReducer extends Reducer {
    * "no signal" leaves the index where it is, so the drawdown reads 0 and the gate stays
    * OPEN, matching `sourceDrawdownUnder`'s absent-reading default (POOL-12b's rule).
    */
-  _returnIndices(prior, yearOf) {
+  _returnIndices(prior, yearOf, graph) {
     const indices = {};
     const highs   = {};
-    for (const pool of this.graph.pools) {
+    for (const pool of (graph?.pools ?? [])) {
       const p     = prior?.[pool.id] ?? {};
       const start = p.returnIndex ?? 1;
       const done  = p.marketReturnYear != null && p.marketReturnYear < yearOf && p.marketReturn != null;
@@ -374,10 +408,18 @@ export class PoolFlowReducer extends Reducer {
                  : (state.currentPeriods?.[action?.type === 'AU_PERIOD_ADVANCE' ? 'AU' : 'US']?.startMs
                     ?? (date ? new Date(date).getTime() : Date.now()));
 
+    // Design 109 §6.1 — the shape that governs this instant. Resolved ONCE, here, and passed
+    // down; every `this.graph` below became `graph` so a period cannot evaluate half its
+    // edges on one shape and half on another.
+    const graph = this._graphAt(asOfMs);
+    if (!graph) return this.newState(state);
+
+    const vetoable = this._vetoableOf(graph);
+
     const ctx = poolContext(state, {
       expensesCurrency: this.expensesCurrency,
       baseCurrency:     this.baseCurrency,
-      bookBase:         this._bookBase(state),
+      bookBase:         this._bookBase(state, graph),
       // §24.3 — the instant the pools' age gates are asked about. THIS value, the one the
       // gates and the telemetry below already run on, so a period cannot report a wrapper as
       // locked while deciding on a date that says it is open.
@@ -385,10 +427,10 @@ export class PoolFlowReducer extends Reducer {
     });
 
     const prior   = state.liquidityPools ?? {};
-    const metrics = allPoolMetrics(state, this.graph, ctx);
+    const metrics = allPoolMetrics(state, graph, ctx);
     const yearOf  = new Date(asOfMs).getUTCFullYear();
-    const priorYearReturns = this._priorYearReturns(prior, yearOf);
-    const { indices, indexHighs } = this._returnIndices(prior, yearOf);
+    const priorYearReturns = this._priorYearReturns(prior, yearOf, graph);
+    const { indices, indexHighs } = this._returnIndices(prior, yearOf, graph);
 
     // The trailing high, monotone, updated BEFORE the gates read it so a pool at a fresh peak
     // this period reads as 0% below its high rather than as one period stale.
@@ -399,7 +441,7 @@ export class PoolFlowReducer extends Reducer {
     // and so widening every `drawdownBasis: BALANCE` gate's measured drawdown for reasons
     // that have nothing to do with the market.
     const highs = {};
-    for (const pool of this.graph.pools) {
+    for (const pool of graph.pools) {
       highs[pool.id] = isPaycheck
         ? (prior[pool.id]?.high ?? metrics[pool.id].balance)
         : Math.max(prior[pool.id]?.high ?? 0, metrics[pool.id].balance);
@@ -410,7 +452,7 @@ export class PoolFlowReducer extends Reducer {
     // the pool state through serialization and replay. Merged into one map here because the
     // evaluator asks by flow id, not by pool.
     const streaksIn = {};
-    for (const pool of this.graph.pools) {
+    for (const pool of graph.pools) {
       for (const [flowId, paths] of Object.entries(prior[pool.id]?.gateStreaks ?? {})) {
         streaksIn[flowId] = { ...(streaksIn[flowId] ?? {}), ...paths };
       }
@@ -429,8 +471,8 @@ export class PoolFlowReducer extends Reducer {
     if (this.flowsEnabled) {
       // Deterministic evaluation order (§12.5): destination spend order, then edge priority,
       // then id. A period must be replayable, and two edges into one pool must not race.
-      const orderOf = new Map(this.graph.pools.map(p => [p.id, p.spendOrder ?? Number.MAX_SAFE_INTEGER]));
-      const flows = [...this.graph.flows].sort((a, b) =>
+      const orderOf = new Map(graph.pools.map(p => [p.id, p.spendOrder ?? Number.MAX_SAFE_INTEGER]));
+      const flows = [...graph.flows].sort((a, b) =>
         (orderOf.get(a.to) - orderOf.get(b.to)) || (a.priority - b.priority) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
       for (const flow of flows) {
@@ -451,7 +493,7 @@ export class PoolFlowReducer extends Reducer {
         // it: two sources into one pool must SHARE the shortfall, not each fill it.
         const promised = inflow[flow.to] ?? 0;
         const destNow  = { ...dest, balance: dest.balance + promised, shortfall: Math.max(0, dest.shortfall - promised) };
-        const want     = this._demand(flow, this.graph.pools.find(p => p.id === flow.to), destNow, ctx, prior[flow.to]);
+        const want     = this._demand(flow, graph.pools.find(p => p.id === flow.to), destNow, ctx, prior[flow.to]);
 
         if (!gate.open) {
           // Record the non-event, and veto the SOURCE's rebalance sale: a gate that stops the
@@ -473,8 +515,8 @@ export class PoolFlowReducer extends Reducer {
             // second list here. Adding an EDGE-scoped source to BOTH would floor the source
             // and cap the destination — twice the constraint the author asked for.
             if (this._scopeOf(flow) === POOL_GATE_SCOPE.SOURCE) {
-              if (this._vetoable.has(flow.from)) vetoed.add(flow.from);
-            } else if (this._cappable.has(flow.to)) {
+              if (vetoable.has(flow.from)) vetoed.add(flow.from);
+            } else if (vetoable.has(flow.to)) {
               // The EDGE half of the same decision. Recorded HERE rather than re-derived by
               // the rebalancer from `gated` + a flow lookup, because the panel needs it too
               // and two derivations of one decision is how they come to disagree — the same
@@ -513,7 +555,15 @@ export class PoolFlowReducer extends Reducer {
         fired.push({ id: flow.id, from: flow.from, to: flow.to,
                      amount: +amount.toFixed(2), executor: flow.executor });
         if (flow.executor === FLOW_EXECUTOR.TRANSFER) {
-          transfers.push({ type: 'POOL_FLOW_APPLY', flowId: flow.id, from: flow.from, to: flow.to, amountBase: +amount.toFixed(2), year: yearOf });
+          // Design 109 §6.1 — the plan carries the SHAPE it was computed under. The apply
+          // side resolves THAT shape rather than re-resolving its own: it has no date of its
+          // own (it reads `from`/`to` off the action), and a reducer pair that disagreed
+          // about which shape is live would be the `journal-entry-per-reducer` class of
+          // defect with money in it. Stamped only when a schedule exists, so an unscheduled
+          // run's action is byte-identical to today's.
+          transfers.push({ type: 'POOL_FLOW_APPLY', flowId: flow.id, from: flow.from, to: flow.to,
+            amountBase: +amount.toFixed(2), year: yearOf,
+            ...(this.schedule ? { shapeId: activeGraphAt(this.schedule, asOfMs)?.shapeId ?? null } : {}) });
         } else if (flow.amount.fractionOfSource != null) {
           // An IN-PORTFOLIO edge is executed by the rebalancer, and the two `amount` forms
           // mean different things there:
@@ -532,7 +582,7 @@ export class PoolFlowReducer extends Reducer {
 
     // ── the cube ────────────────────────────────────────────────────────────────────
     const liquidityPools = {};
-    for (const pool of this.graph.pools) {
+    for (const pool of graph.pools) {
       const m = metrics[pool.id];
       const p = prior[pool.id] ?? {};
       const entry = {
@@ -588,7 +638,7 @@ export class PoolFlowReducer extends Reducer {
       // evaluation, and dropping its streak would silently restart a multi-year dwell every
       // time the edge fired.
       const streaks = {};
-      for (const flow of this.graph.flows) {
+      for (const flow of graph.flows) {
         if (flow.to !== pool.id) continue;
         const now = streaksOut[flow.id] ?? streaksIn[flow.id];
         if (now) streaks[flow.id] = now;
@@ -669,7 +719,7 @@ export class PoolFlowReducer extends Reducer {
       // What executor 1 reads. `shortfall` is what the rebalancer should still try to fill;
       // `vetoed` is the set of source pools whose sale it must NOT make this period.
       poolRefillPlan: {
-        shortfall: Object.fromEntries(this.graph.pools.map(p => [p.id, +(metrics[p.id].shortfall ?? 0).toFixed(2)])),
+        shortfall: Object.fromEntries(graph.pools.map(p => [p.id, +(metrics[p.id].shortfall ?? 0).toFixed(2)])),
         vetoed:    [...vetoed],
         // Spread, not a bare `[]`: a graph with no EDGE-scoped gate must gain NO state key at
         // all, so no whole-state fixture grows a line to say nothing ("absent is absent").
