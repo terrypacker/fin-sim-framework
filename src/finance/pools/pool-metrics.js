@@ -11,7 +11,6 @@
 import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
 import { POOL_TARGET_MODE, POOL_CAPACITY_MODE, POOL_SPEND_BASIS } from './liquidity-graph.js';
 import { ACCOUNT_TYPE }           from '../assets/account.js';
-import { isDrawdownAccessible }   from '../derived-metrics/net-liquidity.js';
 import { getResidency, primaryPersonKey, getBirthDate } from '../residency-utils.js';
 import { hasAgeGate, isAgeEligible, penaltyFreeSliceOf, unlocksAt as gateOpensAt }
   from '../account-rules/penalty-free-availability.js';
@@ -132,19 +131,26 @@ function claimValueNative(account, sleeves) {
  * 2. **The owner is the ACCOUNT's owner.** A pool claiming a spouse's wrapper is ordinary
  *    authoring, and resolving it against the primary's birth date is a silent decade of error
  *    in either direction. This mirrors `eligibleOf` (`account-service.js:1036`).
- * 3. **A claim whose owner cannot be resolved is LOCKED, not open.** §24.2 Q1: the extracted
- *    predicate inherits `isWithdrawalEligible`'s coercion, under which a null birth date reads
- *    as eligible on a gated account. That was unreachable from the drawdown walk, which always
- *    enters with a real person; it is reachable HERE, because a claim may name an account whose
- *    `ownerId` matches nobody on the plan. Reporting a gated wrapper as fully spendable on
- *    missing data is §24.1's defect arriving by a second road, so the gate is resolved only
- *    against a birth date that exists.
+ * 3. **An unresolvable owner falls back to the PRIMARY, exactly as the walk does.** §24.2 Q1
+ *    worried about the opposite — the extracted predicate inherits `isWithdrawalEligible`'s
+ *    coercion, under which a *null* birth date reads as eligible on a gated account — and
+ *    proposed locking any claim whose owner could not be resolved. That is the wrong fix, and
+ *    `eligibleOf` (`account-service.js:1043`) says why: it resolves an absent `ownerId`, and an
+ *    `ownerId` naming nobody, to the SAME fallback — the birth date of the person driving the
+ *    draw. So locking here would not have been conservative, it would have been a second
+ *    divergence from the walk, in the direction of under-reporting, on exactly the metric this
+ *    section exists to make agree. Mirror the walk; lock only when there is no birth date on
+ *    the plan at all, which is the case the coercion would otherwise open.
  */
+function ownerBirthDate(state, account) {
+  return getBirthDate(state, account?.ownerId) ?? getBirthDate(state, primaryPersonKey(state));
+}
+
 function claimAccess(state, account, sleeves, value, asOf) {
   if (!hasAgeGate(account)) return { accessible: value, opensAt: null };
 
-  const birthDate = getBirthDate(state, account?.ownerId);
-  // No owner, or no date to ask against ⇒ unprovable ⇒ locked. See (3) above.
+  const birthDate = ownerBirthDate(state, account);
+  // Nobody to ask about, or no date to ask on ⇒ unprovable ⇒ locked. See (3) above.
   if (birthDate == null || asOf == null) return { accessible: 0, opensAt: null };
 
   const eligible = isAgeEligible(account, birthDate, asOf);
@@ -493,14 +499,26 @@ function reserveValueNative(account) {
  * REBALANCE edge. Hence a household-level figure alongside the per-pool ones, rather than a
  * pool that cannot exist.
  *
- * `isDrawdownAccessible` is the authority for the age gate — the same one `computeNetLiquidity`
- * uses (design 88 §5), so the reserve line and the control metric cannot drift apart. It
- * carries that authority's known coarseness: accessibility there is a per-ACCOUNT boolean, so
- * an under-age Roth counts WHOLE on the strength of `allowsEarlyWithdrawal`, where a draw
- * would really find only its `contributionBasis` (§22.3's trap). That overstates in the one
- * direction this metric should not, so read `accessible` before the age gates open as an upper
- * bound. Fixing it means returning an AMOUNT from the shared authority, which is §22.3's own
- * remaining work and belongs there rather than in a second copy of the rule here.
+ * ─── the age gate: an AMOUNT, off the same authority the draw uses (§24.4) ───────
+ *
+ * This line used to ask `isDrawdownAccessible` — a per-ACCOUNT boolean — and carried that
+ * authority's coarseness as a documented caveat. §24.1 measured the caveat and it was larger
+ * than it read: all three US wrapper classes default `allowsEarlyWithdrawal: true`, and
+ * `isAccessible` believes the flag ahead of the age, so the whole under-age US wrapper book
+ * counted as reserve while a Phase 1 draw would find only a Roth's `contributionBasis`.
+ * Overstating the household's spendable reserve is the one direction this metric must not err
+ * in — it is the number that answers "how long could I spend without selling equity".
+ *
+ * So it now takes the amount from `account-rules/penalty-free-availability.js`, the same
+ * authority `AccountService`'s Phase 1 walk and the per-pool figures above use (§24.2). The
+ * `drawdownPriority == null` exclusion is KEPT and is a separate, correct rule: money the
+ * drawdown chain will not touch cannot fund a year of spending however open its gate.
+ *
+ * **`computeNetLiquidity` is deliberately NOT changed with it** (§24.4). It is the control
+ * metric the MPC and the optimiser steer (design 88 §5); moving it is a design-88 decision
+ * with a measured effect on every controller arm, not a side effect of a pools change. The two
+ * therefore now differ on an under-age wrapper, which is a known and filed divergence rather
+ * than the unnoticed one §24.1 found.
  *
  * @param {object}    state
  * @param {object}    ctx    `poolContext` output — supplies `annualSpend` and `baseCurrency`
@@ -510,17 +528,22 @@ function reserveValueNative(account) {
 export function householdReserve(state, ctx, date = null) {
   let accessible = 0;
   let locked     = 0;
+  const asOf = date ?? ctx?.asOf ?? null;
   for (const account of Object.values(state ?? {})) {
     if (!account || typeof account !== 'object') continue;
     if (typeof account.balance !== 'number') continue;      // not an account-shaped entry
     const native = reserveValueNative(account);
     if (!(native > 0)) continue;
-    const base = toBaseCurrency(native, currencyOf(account, ctx.baseCurrency), ctx.baseCurrency, state);
-    // `isDrawdownAccessible` also excludes anything opted OUT of drawdown
-    // (`drawdownPriority: null`), which is correct here for the same reason: money the
-    // drawdown chain will not touch cannot fund a year of spending.
-    if (isDrawdownAccessible(account, state, date)) accessible += base;
-    else locked += base;
+    const fx   = (v) => toBaseCurrency(v, currencyOf(account, ctx.baseCurrency), ctx.baseCurrency, state);
+    const base = fx(native);
+    // Opted OUT of the drawdown chain ⇒ none of it is reserve, whatever its gate says.
+    if (account.drawdownPriority == null) { locked += base; continue; }
+    // The RESERVE slice is the base, not the balance — `reserveValueNative` has already
+    // narrowed to CASH+BOND — so `accessible` cannot exceed it and `locked` cannot go
+    // negative. Same rule, two bases (§24.2 `penaltyFreeSliceOf`).
+    const reachable = fx(claimAccess(state, account, null, native, asOf).accessible);
+    accessible += reachable;
+    locked     += base - reachable;
   }
   return {
     accessible,

@@ -3880,7 +3880,31 @@ the same way until the pair is on the screen.
    reads the two against each other yet — the panel pair is §24.6 — but this is exactly the
    "two answers to one question" state this section exists to end, and it should not outlive
    the next step.
-3. **§24.4** — `householdReserve` switches over; the caveat comment is deleted.
+3. **§24.4** — `householdReserve` switches over; the caveat comment is deleted. **BUILT
+   (18 Sep 2026)**: it now takes the amount through the same `claimAccess` the per-pool figures
+   use, keeping the `drawdownPriority == null` exclusion as the separate rule it is.
+   `computeNetLiquidity` is unchanged and the divergence is now a filed one. 6828 unit
+   (23 in `pool-accessibility.test.mjs`) + 1538 viz green.
+
+   **The existing RES-1..11 cases did not cover this change** — their fixture authors
+   `allowsEarlyWithdrawal: false` on its wrapper, so it passes either side of it. PAC-9 uses
+   the CLASS DEFAULT, which is what every real scenario carries since §22.9 narrowed the export
+   to the opt-out. Measured on that fixture, the old rule counted a 300k under-age wrapper bond
+   sleeve as household reserve; it is now locked, and a Roth contributes its contribution basis
+   rather than 0 or the whole sleeve.
+
+#### The owner fallback — §24.2 Q1 revised, and step 2 corrected with it
+
+§24.2 Q1 proposed that a claim whose owner cannot be resolved should read as LOCKED, and step 2
+shipped that. It is wrong, and `eligibleOf` (`account-service.js:1043`) is why: it resolves an
+**absent** `ownerId` and an `ownerId` **naming nobody** to the same fallback — the birth date of
+the person driving the draw. Locking on either is not a conservative guard, it is a second
+divergence from the walk, in the direction of under-reporting, on the very metric this section
+exists to make agree. §24.1's lesson cuts both ways.
+
+Both `claimAccess` and `householdReserve` now mirror the walk: resolve the owner, else the
+primary, and lock only when the plan carries no birth date at all — which is the one case the
+inherited coercion would otherwise read as *eligible*. PAC-6 / PAC-6a / PAC-6d.
 4. **§24.6 panel + editor defaults.** Cheap, and step 2 is unreadable without the panel half.
 5. **§24.5** — `access` on the pool.
 

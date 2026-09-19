@@ -18,8 +18,10 @@
  * PAC-3  `available` (a flow's givable) is sized off accessible, not balance
  * PAC-4  A spouse-owned claim resolves against the SPOUSE's birth date
  * PAC-5  `unlocksAt` is the earliest gate still shut, and null once every gate is open
- * PAC-6  A claim whose owner cannot be resolved is LOCKED, not open (§24.2 Q1)
+ * PAC-6  Owner resolution mirrors the draw's fallback; no birth date at all ⇒ locked
  * PAC-7  accessible <= balance always — `locked` can never go negative
+ * PAC-8  The cube: stamped, replayed through the journal, tied to live state
+ * PAC-9  The household reserve takes the AMOUNT too (§24.4)
  */
 
 import { test } from 'node:test';
@@ -27,7 +29,7 @@ import assert   from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import {
-  poolMetrics, allPoolMetrics, poolContext,
+  poolMetrics, allPoolMetrics, poolContext, householdReserve,
 } from '../../src/finance/pools/pool-metrics.js';
 import { normalizeLiquidityGraph } from '../../src/finance/pools/liquidity-graph.js';
 import { ACCOUNT_TYPE, USD, SavingsAccount } from '../../src/finance/assets/account.js';
@@ -65,7 +67,9 @@ function householdState(asOfMs = AT_50) {
     monthlyExpenses:  100_000 / 12,
     effectiveExchangeRates: { USD_AUD: 1 },
 
-    usSavingsAccount: new SavingsAccount(50_000,   { ownerId: 'primary', currency: USD }),
+    // `drawdownPriority` matters only to `householdReserve` (PAC-9), which excludes anything
+    // opted out of the drawdown chain. The per-pool figures never consult it.
+    usSavingsAccount: new SavingsAccount(50_000,   { ownerId: 'primary', currency: USD, drawdownPriority: 1 }),
     usStockAccount:   new BrokerageAccount(200_000, { ownerId: 'primary', currency: USD }),
     k401Account:      new FourOhOneKAccount(400_000, { ownerId: 'primary', currency: USD }),
     rothAccount:      Object.assign(
@@ -76,6 +80,8 @@ function householdState(asOfMs = AT_50) {
 }
 
 const graphOf = (pools) => normalizeLiquidityGraph({ pools }, ACCOUNTS);
+const householdReserveOf = (state, asOfMs) =>
+  householdReserve(state, poolContext(state, { baseCurrency: 'USD', asOf: asOfMs }), new Date(asOfMs));
 const ctxOf   = (state) => poolContext(state, { baseCurrency: 'USD' });
 
 // ─── PAC-1 ───────────────────────────────────────────────────────────────────
@@ -239,20 +245,45 @@ test('PAC-5b: an OPEN claim contributes no date — a part-open pool reports the
 
 // ─── PAC-6 ───────────────────────────────────────────────────────────────────
 
-test('PAC-6: a claim whose owner cannot be resolved is LOCKED, not open (§24.2 Q1)', () => {
-  const state = householdState(AT_50);
-  // A stale key: the account names an owner who is not on the plan. The extracted predicate
-  // inherits `isWithdrawalEligible`'s coercion, under which a null birth date reads as
-  // ELIGIBLE — unreachable from the drawdown walk, reachable here. Reporting a gated wrapper
-  // as fully spendable on missing data is §24.1's defect by a second road.
+test('PAC-6: an unresolvable owner falls back to the PRIMARY, exactly as the draw does', () => {
+  // `eligibleOf` (account-service.js:1043) resolves an ABSENT ownerId and an ownerId naming
+  // NOBODY to the same fallback — the birth date of the person driving the draw. The metric
+  // must do the same or it under-reports against a walk that would have drawn. §24.2 Q1
+  // originally proposed locking here; that would have been a second divergence, not a guard.
+  const state = householdState(AT_50);                 // primary is 50, under the IRA's gate
   state.iraAccount.ownerId = 'nobody';
   const g = graphOf([{ id: 'ira', spendOrder: 40, claims: [{ key: 'iraAccount' }] }]);
   const m = poolMetrics(state, g.pools[0], ctxOf(state));
 
-  assert.equal(m.balance,    100_000);
+  assert.equal(m.accessible, 0, "the primary's age decides, and it is short of the gate");
+  assert.equal(m.locked,     100_000);
+  assert.equal(new Date(m.unlocksAt).getUTCFullYear(), 2040, "and it is the PRIMARY's date");
+
+  // The proof that the fallback is doing work rather than the gate being shut anyway: at 65
+  // the same unowned account opens, because the primary is past it.
+  const later = poolMetrics(state, g.pools[0], poolContext(state, { baseCurrency: 'USD', asOf: AT_65 }));
+  assert.equal(later.accessible, 100_000);
+});
+
+test('PAC-6a: an ABSENT ownerId resolves the same way — the two cases must not differ', () => {
+  const state = householdState(AT_65);
+  delete state.iraAccount.ownerId;
+  const g = graphOf([{ id: 'ira', spendOrder: 40, claims: [{ key: 'iraAccount' }] }]);
+  assert.equal(poolMetrics(state, g.pools[0], ctxOf(state)).accessible, 100_000);
+});
+
+test('PAC-6d: with NO birth date on the plan a gated claim is locked (§24.2 Q1)', () => {
+  // This is the case the coercion would otherwise open: the extracted predicate inherits
+  // `isWithdrawalEligible`'s arithmetic, under which a null birth date reads as ELIGIBLE on a
+  // gated account. Unreachable from the walk, which always enters with a real person.
+  const state = householdState(AT_50);
+  state.people = {};
+  state.iraAccount.ownerId = 'nobody';
+  const g = graphOf([{ id: 'ira', spendOrder: 40, claims: [{ key: 'iraAccount' }] }]);
+  const m = poolMetrics(state, g.pools[0], ctxOf(state));
   assert.equal(m.accessible, 0, 'unprovable is locked, never open');
   assert.equal(m.locked,     100_000);
-  assert.equal(m.unlocksAt,  null, 'no owner ⇒ no date to promise');
+  assert.equal(m.unlocksAt,  null, 'nobody to promise a date to');
 });
 
 test('PAC-6b: with no period instant on state a gated claim reads locked, an ungated one does not', () => {
@@ -353,4 +384,68 @@ test('PAC-8b: a PAYCHECK evaluation refreshes accessible rather than carrying it
     assert.ok(new RegExp(`\\b${f}:\\s*entry\\.`).test(narrow),
       `the paycheck entry must restamp '${f}' from the live metrics, not carry it forward`);
   }
+});
+
+// ─── PAC-9: the household reserve (§24.4) ────────────────────────────────────
+// The existing RES-* cases all set `allowsEarlyWithdrawal: false` on their wrapper, so they
+// pass either side of this change and do not cover it. These use the CLASS DEFAULT, which is
+// `true` for all three US types — the configuration §24.1 measured, and the one every real
+// scenario has, because §22.9 narrowed the export to the opt-out and absent means "the law".
+
+test('PAC-9: an under-age wrapper with the DEFAULT flag is locked reserve, not accessible', () => {
+  const state = householdState(AT_50);
+  // A bond sleeve inside the 401(k): reserve-class money, behind an age gate, with the
+  // class-default flag. `isDrawdownAccessible` calls this reachable; a Phase 1 draw finds 0.
+  state.k401Account.drawdownPriority = 2;
+  state.k401Account.holdings = [{ allocation: 'BOND', marketValue: 300_000, rateKey: 'BOND_US' }];
+  assert.equal(state.k401Account.allowsEarlyWithdrawal, true, 'the class default, unauthored');
+
+  const r = householdReserveOf(state, AT_50);
+  assert.equal(r.accessible, 50_000,  'the savings only');
+  assert.equal(r.locked,     300_000, 'the wrapper bonds are behind the gate');
+  assert.equal(r.yearsOfCover, 0.5);
+});
+
+test('PAC-9b: past the gate the same wrapper bonds count — the gate is what moved', () => {
+  const state = householdState(AT_65);
+  state.k401Account.drawdownPriority = 2;
+  state.k401Account.holdings = [{ allocation: 'BOND', marketValue: 300_000, rateKey: 'BOND_US' }];
+
+  const r = householdReserveOf(state, AT_65);
+  assert.equal(r.accessible, 350_000);
+  assert.equal(r.locked,     0);
+});
+
+test('PAC-9c: an under-age ROTH contributes its contribution basis, not 0 and not the whole sleeve', () => {
+  // The reason accessibility is an AMOUNT. A boolean rule gets this wrong in BOTH directions:
+  // `isDrawdownAccessible` counts the whole sleeve, and "a gated account is locked" counts none.
+  const state = householdState(AT_50);
+  state.rothAccount.drawdownPriority = 2;
+  state.rothAccount.holdings = [{ allocation: 'BOND', marketValue: 200_000, rateKey: 'BOND_US' }];
+  assert.equal(state.rothAccount.contributionBasis, 90_000);
+
+  const r = householdReserveOf(state, AT_50);
+  assert.equal(r.accessible, 140_000, '50k savings + 90k of reachable Roth basis');
+  assert.equal(r.locked,     110_000);
+});
+
+test('PAC-9d: opted out of drawdown is locked whatever the gate says', () => {
+  const state = householdState(AT_65);              // past every gate
+  state.k401Account.drawdownPriority = null;        // but not in the chain
+  state.k401Account.holdings = [{ allocation: 'BOND', marketValue: 300_000, rateKey: 'BOND_US' }];
+
+  const r = householdReserveOf(state, AT_65);
+  assert.equal(r.accessible, 50_000);
+  assert.equal(r.locked,     300_000);
+});
+
+test('PAC-9e: the reserve never exceeds what it counted — locked stays non-negative', () => {
+  const state = householdState(AT_50);
+  state.rothAccount.drawdownPriority = 2;
+  // Basis (90k) above the reserve-class slice (40k): the cap has to bite on the SLICE.
+  state.rothAccount.holdings = [{ allocation: 'BOND', marketValue: 40_000, rateKey: 'BOND_US' }];
+  const r = householdReserveOf(state, AT_50);
+  assert.equal(r.accessible, 90_000);
+  assert.equal(r.locked,     0);
+  assert.ok(r.locked >= 0);
 });
