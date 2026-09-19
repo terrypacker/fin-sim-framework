@@ -32,7 +32,11 @@ export const GENERATED_KEY_PREFIXES = ['acct.', 'person.', 'prop.', 'coll.', 'eq
   // Design 110 §6.3 — `gate.<clauseId>.threshold` / `.dwell`, the addressable gate clause. Same
   // shape as `pool.` above and here for the same reason: no cascade node, applied at the graph
   // resolver, and dead on arrival in a real solve if `set()` cannot write it flat.
-  'gate.'];
+  'gate.',
+  // Design 110 §6.4 / design 109 Q1 — `shape.<shapeId>.yearShift`, the switch-year axis. Q1
+  // named this trap itself: `liquidityGraphSchedule[i].year` is a nested path, a dotted key is
+  // dropped by `set()`, and the answer is a flat scalar companion in a generated namespace.
+  'shape.'];
 
 /** True when `key` is a generated per-record param key (by namespace). */
 export function isGeneratedParamKey(key) {

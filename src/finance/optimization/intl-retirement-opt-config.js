@@ -20,10 +20,12 @@ import { indexParamSchema, resolveSweepVariables, harvestSweepVariables,
          groupWithAliasSuccessor } from '../param-schema-utils.js';
 import { INTL_RETIREMENT_PARAM_ALIASES } from '../../scenarios/intl-retirement-scenario.js';
 import { ScenarioParamGenerator } from '../../scenarios/params/scenario-param-generator.js';
-import { scalablePoolTargets, poolTargetScaleKey, poolTargetScaleLabel }
+import { scalablePoolTargets, poolTargetScaleKey, poolTargetScaleLabel, POOL_TARGET_SCALE_RANGE }
                                      from '../pools/pool-target-scale.js';
 import { gateClauseAxes, gateAxisKey, gateAxisLabel, GATE_AXIS_FIELD,
   GATE_THRESHOLD_RANGES, GATE_DWELL_RANGE } from '../pools/pool-gate-axis.js';
+import { scheduledShapeAxes, shapeYearShiftKey, shapeYearShiftLabel, SHAPE_YEAR_SHIFT_RANGE }
+                                     from '../pools/pool-shape-year-axis.js';
 
 // Lazily index the full param schema by key so Opt variables can inherit identity
 // (label / options / visibleWhen) from it rather than duplicating it here.
@@ -621,7 +623,7 @@ function buildPoolOptConfigs(params) {
     paramKey: poolTargetScaleKey(row.poolId),
     label:    poolTargetScaleLabel(row),
     type:     OPT_PARAM_TYPES.CONTINUOUS,
-    min: 0.5, max: 2, step: 0.25,
+    ...POOL_TARGET_SCALE_RANGE,
     group:    'Liquidity Pools',
     enabled:  false,
   }));
@@ -662,6 +664,29 @@ function buildGateOptConfigs(params) {
 }
 
 /**
+ * The shape-switch year axes (design 110 §6.4, design 109 Q1), one per SCHEDULED shape.
+ *
+ * An INTEGER axis in years, centred on 0: the key is a SHIFT, so ±5 years either way is the
+ * span, and a grid of -2 / 0 / +2 reads as the question the author asked ("what does moving the
+ * bridge two years earlier do") rather than as three calendar years whose distance apart depends
+ * on the plan.
+ *
+ * A shift that lands one switch on another's year is refused by `_normalizeSchedule`'s own
+ * duplicate-year rule, not clamped here (§17.2 — no second validator). `poolAxisProblems` warns
+ * when switches sit close enough for that to bite.
+ */
+function buildShapeYearOptConfigs(params) {
+  return scheduledShapeAxes(params).map(row => ({
+    paramKey: shapeYearShiftKey(row.shapeId),
+    label:    shapeYearShiftLabel(row),
+    type:     OPT_PARAM_TYPES.INTEGER,
+    ...SHAPE_YEAR_SHIFT_RANGE,
+    group:    'Liquidity Pools',
+    enabled:  false,
+  }));
+}
+
+/**
  * Build the full optimization variable list for a given param snapshot.
  *
  * Returns DEFAULT_OPTIMIZATION_CONFIGS plus one severity entry per configured
@@ -691,6 +716,7 @@ export function buildOptVariables(params, accounts = null, { cfg = null } = {}) 
     ...buildInheritedRaOptConfigs(params),
     ...buildPoolOptConfigs(params),
     ...buildGateOptConfigs(params),
+    ...buildShapeYearOptConfigs(params),
   ];
   const schema = [
     ...IntlRetirementScenario.buildFullParamSchema(),

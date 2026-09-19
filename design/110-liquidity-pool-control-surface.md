@@ -463,9 +463,14 @@ prevent a wrong reading come first.
 8. ~~**Gate clause ids**~~ (§6.3 option A) **and the gate-threshold axis** — **BUILT.** An
    optional authored `id` on any gate node, unique per graph, plus `gate.<id>.threshold` and
    `gate.<id>.dwell`. CTRL-11, and CTRL-8/9/16 again on the new key. See §13.9.
-9. **The shape-year axis** (§6.4), deferred per design 109 Q1 until 6–8 are green.
+9. ~~**The shape-year axis**~~ (§6.4, design 109 Q1) — **BUILT.**
+   `shape.<shapeId>.yearShift`, a SHIFT for §10.3's reason rather than an absolute year.
+   See §13.10. **Leg C is complete.**
 
-Steps 1–5 cannot change a run. Step 6 is the first that can, and only under a runner.
+Steps 1–5 cannot change a run. Step 6 is the first that can, and only under a runner. Steps 6–9
+are the three axis families (a pool size, a gate clause, a shape switch) plus the hygiene that
+makes a grid of any of them worth reading; all four went in at one seam, and the seam is the
+graph RESOLVER rather than the loader cascade (§13.7).
 
 ---
 
@@ -1104,3 +1109,57 @@ with a one-line pointer from the pools topic.
 sketched — another dynamic contributor over a flat companion key, applied at the same resolver
 seam. §6.3's option C (`scripts/lib/pool-graph.mjs`, sweeping whole graphs) stays supported and
 is still the only route to a STRUCTURAL sweep, which no scalar axis will ever reach.
+
+### 13.10 Phase 9, as built — and leg C closed
+
+**A shift, not a year, and §10.3 decided it before the question was asked.** Design 109 Q1 wants
+*"what does moving the bridge shape two years earlier do"*, and the obvious key is
+`shape.<id>.year`. It does not survive contact with the data structure: `_normalizeSchedule`
+refuses two rows in one YEAR and says nothing about one SHAPE appearing in two rows, so
+`[{2035, bridge}, {2045, late}, {2055, bridge}]` is a legal plan in which `bridge` is scheduled
+twice on purpose. An absolute key swept to 2040 would set both of those rows to 2040 — which is
+not merely wrong, it is the refusal, so the axis would turn a legal plan into a failing one at
+every cell but its own. `shape.<shapeId>.yearShift`, default 0, moves every row selecting that
+shape and preserves the gap between them, which is §10.3's argument one object over: the
+schedule's spacing is a profile and a scalar key must not flatten it. It is also the more direct
+reading of Q1 — *"two years earlier"* IS `-2`, and a grid of 2033/2035/2037 means different
+distances on two different plans.
+
+**Q1's own trap was already closed.** Q1 named it — a nested path into the array is dropped by
+`set()` — and proposed *"a flat scalar companion param rather than a path into the array"*.
+That is §6.2's answer, so phase 9 inherited it: `'shape.'` joins `GENERATED_KEY_PREFIXES` and
+nothing else about the key form had to be decided.
+
+**Only SCHEDULED shapes get an axis**, which is PTS-13's rule applied before it could bite twice:
+a shape no row selects governs nothing, so an axis on it would move nothing at every value. The
+base graph gets none either — the period before the first row is the `liquidityGraph` param and
+is deliberately not a named shape, so the way to move when it ends is to shift the first row's
+shape. There is nothing else to address.
+
+**Three reads, one overlay.** `p.liquidityGraphSchedule` is read by the resolver, by
+`collectAuthoredGraphProblems` and by `_scheduleAdvisories`. All three now go through
+`_overlayRawSchedule`, because an advisory computed on the authored schedule while the run uses a
+shifted one would describe a plan nobody is running — §21.3's whole subject, in a new place.
+
+**A third hygiene kind, and the two rows it was owed.** §13.7 and §13.9 both left a debt: §17.2
+means the overlay never clamps, so a factor that pushes a PERCENT target past 1.0 and a shift
+that lands one switch on another's year are both REFUSED with the normalizer's own sentence.
+That is the right behaviour and it is not INERT and not CONFOUNDED — it is a third sentence, a
+grid that comes back with holes. `POOL_AXIS_PROBLEM_KIND.REFUSES` says it, and
+`poolAxisProblems` now computes both cases up front: it names the factor above which a PERCENT
+pool fails, and the gap between the two closest switches. `POOL_TARGET_SCALE_RANGE` moved out of
+the Opt contributor so the warning and the row it warns about cannot disagree about the span.
+
+**Leg C is complete**, and §14's original ask — *"searches pool sizes and gate thresholds instead
+of the author guessing them"* — is answered for three families rather than two, each of them an
+optimizer variable, an MC-grid axis and a hidden compile-only overlay at once. What is NOT built
+and is not a gap: §6.3's option C, sweeping whole graphs through `scripts/lib/pool-graph.mjs`,
+which remains the only route to a STRUCTURAL sweep (a pool added, an edge re-pointed) that no
+scalar axis will ever reach.
+
+**One defect this design shipped and then fixed, worth carrying forward.** Phase 6 generated an
+axis for a pool whose target was authored `AMOUNT 0`; a factor cannot lift a target off zero, so
+it read as a lever, swept as a lever and returned byte-identical rollouts. Every test passed. It
+was found in about five minutes by running the axis list against a plan the author had actually
+written — §12.2's last trap, proving itself again on the phase that was most confident it did
+not need the check.

@@ -25,6 +25,8 @@ import { poolTargetScalesFrom, scaleRawPoolGraph } from './pool-target-scale.js'
 // Design 110 §6.3 option A — an optional authored `id` on a gate clause, and the threshold /
 // dwell axis it makes addressable. Applied at the same seam and on the same terms.
 import { gateOverridesFrom, applyGateOverridesToGraph, GATE_CLAUSE_ID_RE } from './pool-gate-axis.js';
+// Design 110 §6.4 / design 109 Q1 — the shape-switch YEAR axis, as a shift.
+import { shapeYearShiftsFrom, applyShapeYearShifts } from './pool-shape-year-axis.js';
 
 /**
  * DESIGN 97 PART II — the LIQUIDITY GRAPH.
@@ -1286,6 +1288,19 @@ function _overlayRawGraph(raw, p) {
 }
 
 /**
+ * The raw `liquidityGraphSchedule` with leg C's shape-year shifts applied (§6.4).
+ *
+ * Every read of `p.liquidityGraphSchedule` goes through this — the resolver, the reporting path
+ * and the schedule advisories — because a shift the advisories could not see would describe a
+ * schedule the run is not using, which is the whole class of defect §21.3's provenance strip
+ * exists for. Returns the caller's own array when the bag carries no shift.
+ * @private
+ */
+function _overlayRawSchedule(p) {
+  return applyShapeYearShifts(p.liquidityGraphSchedule, shapeYearShiftsFrom(p));
+}
+
+/**
  * The option set a graph normalizes under, derived from the params bag.
  *
  * Split out of {@link _normalizeFromParams} for design 109: every named SHAPE has to be built
@@ -1397,7 +1412,7 @@ export function collectAuthoredGraphProblems(params, accounts = []) {
   const dirtyShapes = new Set(shapeCellProblems.map(x => x.shape));
   try {
     _normalizeShapes(p, accounts, dirtyShapes, advisories);
-    _normalizeSchedule(p.liquidityGraphSchedule, p.liquidityShapes);
+    _normalizeSchedule(_overlayRawSchedule(p), p.liquidityShapes);
   } catch (e) {
     const m = /^liquidityGraph: shape '([^']+)': /.exec(e.message);
     problems.push({
@@ -1485,7 +1500,7 @@ function _shapeCellProblems(p) {
  */
 function _scheduleAdvisories(p, accounts) {
   try {
-    const rows = _normalizeSchedule(p.liquidityGraphSchedule, p.liquidityShapes);
+    const rows = _normalizeSchedule(_overlayRawSchedule(p), p.liquidityShapes);
     if (!rows.length) return [];
     // A DISCARDED sink, not an absent one. This pass re-normalizes the base graph and every
     // shape to build the entry list, and without a sink each of those calls would `console.warn`
@@ -1566,7 +1581,7 @@ export function resolveLiquidityGraphSchedule(params, accounts = []) {
   // once, and the schedule is not a way to sneak a graph past it.
   if (p.liquidityGraphEnabled === false) return null;
 
-  const rows = _normalizeSchedule(p.liquidityGraphSchedule, p.liquidityShapes);
+  const rows = _normalizeSchedule(_overlayRawSchedule(p), p.liquidityShapes);
   if (!rows.length) return null;
 
   const shapes = _normalizeShapes(p, accounts);

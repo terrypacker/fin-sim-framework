@@ -55,8 +55,10 @@
  * axis does moves money, so `assertArmsWealthMatched` stays where it is, on a built state.
  */
 import { PROBLEM_SEVERITY } from './liquidity-graph.js';
-import { authoredParamValue, scalablePoolTargets, authoredPoolGraphs } from './pool-target-scale.js';
+import { authoredParamValue, scalablePoolTargets, authoredPoolGraphs, POOL_TARGET_SCALE_RANGE }
+  from './pool-target-scale.js';
 import { gateClauseAxes } from './pool-gate-axis.js';
+import { scheduledShapeAxes, SHAPE_YEAR_SHIFT_RANGE } from './pool-shape-year-axis.js';
 
 /**
  * What a hygiene row says about the grid it is warning about. Two different sentences, and
@@ -69,6 +71,16 @@ export const POOL_AXIS_PROBLEM_KIND = Object.freeze({
   INERT:      'inert',
   /** The axis moves, and so does something else. The cells differ for two reasons. */
   CONFOUNDED: 'confounded',
+  /**
+   * Some values in the axis's range produce a plan the compiler REFUSES, so those cells are
+   * holes rather than results.
+   *
+   * A third kind and not a shade of the other two, because it is a third sentence: the grid
+   * neither reports a flat response nor an inflated one, it comes back with gaps. §17.2 is why
+   * it can happen at all — the overlay never clamps, so a value out of range is refused with the
+   * normalizer's own sentence rather than quietly corrected into a policy nobody chose.
+   */
+  REFUSES:    'refuses',
 });
 
 /**
@@ -93,7 +105,11 @@ export function poolAxisProblems(cfg) {
   // than that and say so: their argument is specifically about what a pool `target` claims.
   const hasPoolTarget = scalablePoolTargets(authored).length > 0;
   const hasGateAxis   = gateClauseAxes(authored).length > 0;
-  if (!hasPoolTarget && !hasGateAxis) return [];
+  const shapeAxes = scheduledShapeAxes({
+    liquidityShapes:        authored.liquidityShapes,
+    liquidityGraphSchedule: authoredParamValue(cfg, 'liquidityGraphSchedule'),
+  });
+  if (!hasPoolTarget && !hasGateAxis && shapeAxes.length === 0) return [];
 
   const val = (key) => authoredParamValue(cfg, key);
   const out = [];
@@ -168,5 +184,48 @@ export function poolAxisProblems(cfg) {
       + '`shocks` for the grid and let the paths supply the bad years.');
   }
 
+  // ── will some cells simply refuse? ───────────────────────────────────────────────────
+  //
+  // Both of these are consequences of §17.2, which is the rule and not a defect: the overlay
+  // never clamps, so a swept value outside what the normalizer accepts is refused with its own
+  // sentence. Saying so before a grid is launched is the difference between a hole the author
+  // expected and one they spend an afternoon explaining.
+  for (const row of scalablePoolTargets(authored)) {
+    const worst = row.authored
+      .filter(a => a.mode === 'PERCENT')
+      .reduce((m, a) => Math.max(m, a.value), 0);
+    if (worst > 0 && worst * POOL_TARGET_SCALE_RANGE.max > 1) {
+      const limit = trimTo(1 / worst);
+      row_(out, 'liquidityGraph', POOL_AXIS_PROBLEM_KIND.REFUSES,
+        `Pool '${row.label}' is sized as a PERCENT of the book (${trimTo(worst * 100)}%), and a `
+        + `PERCENT target is a FRACTION — above 1.0 the graph refuses to compile. Factors over `
+        + `${limit} will fail rather than run, so the top of the default ${POOL_TARGET_SCALE_RANGE.min}–`
+        + `${POOL_TARGET_SCALE_RANGE.max} range is out of reach for this pool. Narrow the axis, or `
+        + 'size the pool in years of spending, which has no ceiling.');
+    }
+  }
+  if (shapeAxes.length) {
+    const years = shapeAxes.flatMap(r => r.years).sort((a, b) => a - b);
+    let closest = Infinity;
+    for (let i = 1; i < years.length; i++) closest = Math.min(closest, years[i] - years[i - 1]);
+    if (closest <= SHAPE_YEAR_SHIFT_RANGE.max) {
+      row_(out, 'liquidityGraphSchedule', POOL_AXIS_PROBLEM_KIND.REFUSES,
+        `Two shape switches are ${closest} year${closest === 1 ? '' : 's'} apart, and the switch-`
+        + `year axis shifts by up to ±${SHAPE_YEAR_SHIFT_RANGE.max}. A shift that lands one switch on `
+        + 'another\'s year is refused outright — only one shape can take over in a given year — so '
+        + 'those cells will be holes in the grid rather than results. Keep the shift inside '
+        + `±${closest - 1 >= 0 ? closest - 1 : 0}, or move the switches further apart.`);
+    }
+  }
+
   return out;
+}
+
+/** Round a display number without trailing float noise. */
+const trimTo = (n) => Number(n.toPrecision(12));
+
+/** Push a row — the same shape `row()` builds, for the checks that run after it is out of scope. */
+function row_(out, param, kind, message) {
+  out.push({ param, index: null, field: null, pool: null, shape: null,
+             severity: PROBLEM_SEVERITY.WARN, kind, message });
 }

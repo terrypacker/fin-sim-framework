@@ -584,10 +584,10 @@ export class McConfigPanel extends BaseComponent {
       row.className = `mc-grid-hygiene-row mc-grid-hygiene-row--${p.kind ?? 'confounded'}`;
       const tag = document.createElement('span');
       tag.className = 'mc-grid-hygiene-tag';
-      // The two kinds are two different failures and the tag is the shortest way to say which:
-      // an INERT axis reports a flat response that reads as a null result, a CONFOUNDED one
-      // reports an effect larger than the lever's.
-      tag.textContent = p.kind === 'inert' ? 'INERT' : 'CONFOUNDED';
+      // The three kinds are three different failures and the tag is the shortest way to say
+      // which: an INERT axis reports a flat response that reads as a null result, a CONFOUNDED
+      // one reports an effect larger than the lever's, and a REFUSES one comes back with holes.
+      tag.textContent = { inert: 'INERT', refuses: 'REFUSES' }[p.kind] ?? 'CONFOUNDED';
       const text = document.createElement('span');
       text.textContent = ` ${p.message}`;
       row.append(tag, text);

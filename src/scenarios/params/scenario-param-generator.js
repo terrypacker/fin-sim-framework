@@ -34,12 +34,16 @@ import { recordFieldValue } from './record-field-rounding.js';
 // `liquidityGraph` PARAM rather than a cfg record, which is why it is the one generated
 // namespace with no cascade `node`; see `_expandPoolTargetScales`.
 import {
-  scalablePoolTargets, authoredPoolGraphs, poolTargetScaleKey, poolTargetScaleLabel,
+  scalablePoolTargets, authoredPoolGraphs, authoredParamValue,
+  poolTargetScaleKey, poolTargetScaleLabel,
   POOL_TARGET_SCALE_DEFAULT,
 } from '../../finance/pools/pool-target-scale.js';
 import {
   gateClauseAxes, gateAxisKey, gateAxisLabel, GATE_AXIS_FIELD, GATE_DWELL_DEFAULT,
 } from '../../finance/pools/pool-gate-axis.js';
+import {
+  scheduledShapeAxes, shapeYearShiftKey, shapeYearShiftLabel, SHAPE_YEAR_SHIFT_DEFAULT,
+} from '../../finance/pools/pool-shape-year-axis.js';
 // The namespace list lives in a dependency-free module so mc-param-paths can use it
 // without loading the templates (design 98 W0); re-exported so importers are unchanged.
 import { GENERATED_KEY_PREFIXES, isGeneratedParamKey } from './generated-param-keys.js';
@@ -168,7 +172,37 @@ export class ScenarioParamGenerator {
     // generates one, so an axis that cannot be addressed fails to exist rather than addressing
     // the wrong clause after an unrelated edit renumbered a branch above it (§2.1).
     add(this._expandGateClauseAxes(cfg));
+    // Design 110 §6.4 — one switch-year shift per SCHEDULED shape. Only scheduled shapes: a
+    // shape no row selects governs nothing, so an axis on it would move nothing at every value.
+    add(this._expandShapeYearShifts(cfg));
     return out;
+  }
+
+  /**
+   * The shape-switch year axes (design 110 §6.4, design 109 Q1). Hidden and node-less on the
+   * same terms as the other two leg-C families, and a SHIFT rather than an absolute year for
+   * §10.3's reason: one shape can be scheduled more than once, and an absolute key would set
+   * every one of its rows to the same year — which `_normalizeSchedule` refuses outright, so the
+   * axis would turn a legal plan into a failing one at every cell but its own.
+   * @private
+   */
+  static _expandShapeYearShifts(cfg) {
+    const params = {
+      liquidityShapes:        authoredParamValue(cfg, 'liquidityShapes'),
+      liquidityGraphSchedule: authoredParamValue(cfg, 'liquidityGraphSchedule'),
+    };
+    return scheduledShapeAxes(params).map(row => ({
+      key:          shapeYearShiftKey(row.shapeId),
+      label:        shapeYearShiftLabel(row),
+      type:         'Integer',
+      group:        'Liquidity Pools',
+      defaultValue: SHAPE_YEAR_SHIFT_DEFAULT,
+      // When a plan re-plumbs itself is a household CHOICE, and a whole number of years, so
+      // `opt: 'year'` / `mc: false` (design 98 W2).
+      mc:           false,
+      opt:          'year',
+      hidden:       true,
+    }));
   }
 
   /**

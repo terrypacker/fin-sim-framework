@@ -53,6 +53,7 @@
 // Leg C's other axis family, imported for `resolveLiquidityAxisCenters` only — one function for
 // the three lever bases to merge, so a family added later cannot reach two of the three.
 import { resolveGateAxisCenters } from './pool-gate-axis.js';
+import { resolveShapeYearShiftCenters } from './pool-shape-year-axis.js';
 
 /** The generated namespace this axis lives in (see `GENERATED_KEY_PREFIXES`). */
 export const POOL_KEY_PREFIX = 'pool.';
@@ -62,6 +63,15 @@ export const POOL_TARGET_SCALE_FIELD = 'targetScale';
 
 /** Identity — the value a plan nobody sweeps runs at. */
 export const POOL_TARGET_SCALE_DEFAULT = 1;
+
+/**
+ * How far a grid or a solver may scale a target: half it to double it, in quarter steps.
+ *
+ * Exported rather than written in the Opt contributor, because `poolAxisProblems` has to know
+ * the same span to say whether a sweep will push a PERCENT target past 1.0. Two transcriptions
+ * of one range is how a warning comes to disagree with the thing it warns about.
+ */
+export const POOL_TARGET_SCALE_RANGE = Object.freeze({ min: 0.5, max: 2, step: 0.25 });
 
 /** The param key for one pool's target factor. */
 export function poolTargetScaleKey(poolId) {
@@ -284,7 +294,12 @@ export function resolvePoolTargetScaleCenters(cfg) {
 export function resolveLiquidityAxisCenters(cfg) {
   if (!cfg) return {};
   const authored = authoredPoolGraphs(cfg);
-  return { ...resolvePoolTargetScaleCenters(cfg), ...resolveGateAxisCenters(cfg, authored) };
+  const schedule = {
+    liquidityShapes:        authored.liquidityShapes,
+    liquidityGraphSchedule: authoredParamValue(cfg, 'liquidityGraphSchedule'),
+  };
+  return { ...resolvePoolTargetScaleCenters(cfg), ...resolveGateAxisCenters(cfg, authored),
+           ...resolveShapeYearShiftCenters(schedule) };
 }
 
 /** Mode → the unit an authored target reads in, for a label. */

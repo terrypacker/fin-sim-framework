@@ -17,6 +17,7 @@ import { resolveAliasCenters } from '../../scenarios/scenario-param-apply.js';
 import { resolveLiquidityAxisCenters, parsePoolTargetScaleKey }
                               from '../../finance/pools/pool-target-scale.js';
 import { parseGateAxisKey }   from '../../finance/pools/pool-gate-axis.js';
+import { parseShapeYearShiftKey } from '../../finance/pools/pool-shape-year-axis.js';
 import { poolAxisProblems }   from '../../finance/pools/pool-axis-hygiene.js';
 import { scenarioParamValues, paramSchemaDefaults } from '../../finance/param-schema-utils.js';
 import { ServiceRegistry }         from '../../services/service-registry.js';
@@ -359,7 +360,9 @@ export class MonteCarloPresenter {
         ...v,
         planValue: get(withDefaults, v.paramKey),
         ...(hygiene.length && (parsePoolTargetScaleKey(v.paramKey) != null
-                              || parseGateAxisKey(v.paramKey) != null) ? { problems: hygiene } : {}),
+                              || parseGateAxisKey(v.paramKey) != null
+                              || parseShapeYearShiftKey(v.paramKey) != null)
+             ? { problems: hygiene } : {}),
       }));
   }
 
