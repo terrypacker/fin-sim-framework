@@ -1425,3 +1425,15 @@ test('LiquidityShapes: renaming a shape keeps its graph, and clearing every shap
   host.querySelector('.age-band-remove').click();
   assert.strictEqual(param.value, null, 'absent, not an empty object');
 });
+
+test('LiquidityShapes: the shape head carries four controls on its own column template', () => {
+  // On `.mix-block-head`'s three columns the Duplicate button was squeezed into the 26px
+  // remove slot and the ✕ wrapped to a second row, overflowing to the right. jsdom computes
+  // no layout, so this asserts the CONTRACT: four children, and the class that gives them
+  // four columns.
+  const param = { name: 'liquidityShapes', value: { bridge: SHAPE_A } };
+  const host = mount(buildLiquidityShapesEditor(param, ACCOUNTS));
+  const head = host.querySelector('.mix-block-head');
+  assert.ok(head.classList.contains('pool-shape-head'));
+  assert.strictEqual(head.children.length, 4, 'label, input, Duplicate, Remove');
+});

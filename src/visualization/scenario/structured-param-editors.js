@@ -1084,7 +1084,8 @@ export function buildLiquidityShapesEditor(param, accounts = []) {
       const block = el('div', 'mix-block');
       block.dataset.id = `shape-${idx}`;
 
-      const head = el('div', 'mix-block-head');
+      // FOUR controls, so it needs its own column template — see `.pool-shape-head`.
+      const head = el('div', 'mix-block-head pool-shape-head');
       head.appendChild(el('span', 'age-band-col-label', 'Shape id'));
       const idInput = textInput({ value: shape.id, placeholder: 'bridge', id: 'shape-id' });
       idInput.addEventListener('change', () => {

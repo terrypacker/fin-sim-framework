@@ -706,7 +706,17 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
           + 'through their own gates. Pool identity across a change is the pool `id` — the same id '
           + 'continues and keeps its trailing high, a new id starts cold, a dropped id is retired. '
           + 'Blank (the default) = one graph for the whole run.',
-        visibleWhen: { param: 'liquidityShapes', exists: true },
+        // Shown on the SAME condition as Liquidity Pool Shapes, not gated on a shape already
+        // existing. Gating it meant the table appeared only once a shape had been both added
+        // AND named — a shape with a blank id syncs the param to null — so an author who had
+        // just clicked "+ Add Shape" saw no way to schedule anything and concluded there was
+        // none. That is design 97 §22.5's trap exactly, and it also made this editor's own
+        // "add one under Liquidity Pool Shapes, then schedule it here" empty state
+        // unreachable: the copy that explains the precondition was hidden BY the precondition.
+        visibleWhen: { anyOf: [
+          { param: 'behavioralStrategies', includes: 'LIQUIDITY_POOLS' },
+          { param: 'liquidityGraph', exists: true },
+        ] },
       },
       {
         // The MASTER switch (design 97 §12.5). Gated on the GRAPH existing, never on the

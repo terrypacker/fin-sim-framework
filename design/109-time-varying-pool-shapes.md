@@ -460,6 +460,40 @@ All of these go through `collectAuthoredGraphProblems`, which needs the `shape` 
    and a strip showing the year next to a run that had not switched yet would be the clearest
    possible way to misread it. A run with no schedule adds no key and the strip is unchanged.
 
+### 15b. Two defects found in the running app (18 Sep 2026)
+
+Both are §22.5's shape — a control that exists and cannot be found — and neither was reachable
+by the jsdom cases, which compute no layout and render one param at a time.
+
+**The schedule table was gated behind an invisible precondition.** `liquidityGraphSchedule`
+was `visibleWhen: { param: 'liquidityShapes', exists: true }`. A shape whose id is still blank
+syncs the param to `null` (the editor keeps only named shapes), so an author who had clicked
+`+ Add Shape` and not yet typed a name saw **no scheduling UI at all** and concluded there was
+none. Worse, it made this editor's own empty state — *"add one under Liquidity Pool Shapes,
+then schedule it here"* — unreachable: the copy explaining the precondition was hidden BY the
+precondition. Now shown on the same condition as the shapes editor itself, so the two always
+appear together and the empty state does its job.
+
+**The shape head overflowed.** It carries four controls (id label, input, Duplicate, Remove)
+on `.mix-block-head`, which is a three-column grid. Measured in the running app: **73px tall**,
+i.e. two rows, with Duplicate crushed into the 26px remove track and the ✕ wrapped past the
+right edge. A `.pool-shape-head` rule with four tracks brings it to **29px, zero overflow**, at
+full and narrow panel widths.
+
+**And a lesson about the probe, not the CSS.** The first fix sized that last track with
+`min-content`, on a measurement showing the literal `26px` overflowing by 4px. That measurement
+was wrong: the probe element was built without an `.age-band-list-editor` ancestor, so
+`.age-band-list-editor .age-band-remove` — which sets `width: 100%; padding: 0` — never
+applied, and the probe measured a button at its unstyled 30px natural width. With the real
+ancestor the literal does not overflow at all, and `min-content` **collapses the button to the
+bare 11px glyph**, against the 26px every other ✕ in the app renders at. That is what the
+author saw and reported as "smaller than all the rest".
+
+A probe has to carry the selectors' ancestors or it is measuring different CSS. The track is
+now a literal 30px — a little wider than the rows' 26px, because this control deletes a whole
+SHAPE rather than one row of one, and a block header's control reading smaller than the rows
+beneath it is backwards.
+
 ---
 
 ## 16. Status
