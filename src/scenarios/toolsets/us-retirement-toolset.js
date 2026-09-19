@@ -32,7 +32,9 @@ import {
 } from '../../finance/handlers/earnings-handlers.js';
 import { SLEEVE_ORDER_MODES, LOT_STRATEGIES, sleeveWeightsFromParams } from '../../finance/holdings/holdings-selection.js';
 import { normalizeDrawdownSequence } from '../../finance/holdings/drawdown-sequence.js';
-import { resolveLiquidityGraph, compileToDrawdownSequence } from '../../finance/pools/liquidity-graph.js';
+import { resolveLiquidityGraph, compileToDrawdownSequence, resolveLiquidityGraphSchedule }
+  from '../../finance/pools/liquidity-graph.js';
+import { PoolShapeScheduleReducer } from '../../finance/pools/pool-shape-schedule-reducer.js';
 import { OutOfFundsHandler }            from '../../finance/handlers/out-of-funds-handler.js';
 import { RetirementDateHandler }        from '../../finance/spending/strategies/retirement-date-handler.js';
 import { ExpenseEventHandler, buildExpenseEventSchedule } from '../../finance/spending/strategies/expense-event-handler.js';
@@ -255,6 +257,7 @@ export const US_RETIREMENT = {
     reducers: [
       ExpenseDebitReducer, HouseRepairApplyReducer, ReplenishSavingsReducer, StockDividendCashApplyReducer, BondCouponCashApplyReducer, CashSleeveInterestApplyReducer, BondSleeveCouponApplyReducer, BondAccretionApplyReducer,
       SetOutOfFundsDateReducer, AccumulateDeficitReducer, OutOfFundsReducer, InflationAdjustReducer,
+      PoolShapeScheduleReducer,
       RothContributionApplyReducer, RothWithdrawalContribApplyReducer,
       RothWithdrawalEarningsApplyReducer, RothEarningsApplyReducer,
       RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer,
@@ -1490,6 +1493,23 @@ export const US_RETIREMENT = {
       // Non-cash bond accretion apply (design 66 §G5/§G6). One reducer for all
       // bond-capable accounts (US + AU); branches on the action's taxMode.
       reducers.push(new BondAccretionApplyReducer({ accountService: accountSvc, stateRegistry: sr }));
+    }
+
+    // ── design 109 §8 — the pool shape switch ─────────────────────────────────────
+    //
+    // Registered HERE, in the toolset whose state projection compiled the OPENING sequence
+    // (see the `liquidityGraph` block above), so the compile and every re-compile are owned by
+    // one authority. Registered ONLY when a schedule is authored, so a scenario without one
+    // has an identical reducer list, an identical journal and an identical run — which is what
+    // makes design 109's step-2 guarantee survive step 3.
+    //
+    // Not gated on the LIQUIDITY_POOLS strategy: the spend order is compiled by the projection
+    // whatever the strategy list says (design 97 §23's whole point), so a switch that only
+    // fired when that strategy was selected would leave the order frozen on the opening shape
+    // in exactly the configuration where nothing else would say so.
+    {
+      const schedule = resolveLiquidityGraphSchedule(p, context.accounts ?? []);
+      if (schedule) reducers.push(new PoolShapeScheduleReducer({ schedule }));
     }
 
     reducers.push(new SetOutOfFundsDateReducer());

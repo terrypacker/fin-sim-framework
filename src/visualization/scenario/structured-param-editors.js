@@ -81,6 +81,15 @@ function numberInput({ value, step, min, max, placeholder, id }) {
   return input;
 }
 
+function textInput({ value, placeholder, id }) {
+  const input = el('input', 'age-band-input');
+  input.type = 'text';
+  if (placeholder != null) input.placeholder = placeholder;
+  if (id) input.dataset.id = id;
+  input.value = value ?? '';
+  return input;
+}
+
 function selectInput({ value, options, id }) {
   const sel = el('select', 'age-band-input');
   if (id) sel.dataset.id = id;
@@ -940,6 +949,187 @@ const sizeAttr = (modeField, key) => (row) => boundsFor(row?.[modeField])?.[key]
  * reason `buildAllocationRegimeTargetsEditor` gives about maps: a half-renamed pool id would
  * otherwise drop its claims the moment the new key was written.
  */
+/**
+ * `LiquidityGraphSchedule` — the year band that says which named shape is in charge
+ * (design 109 §11).
+ *
+ * `[{ year, shape }]`, one row per year, sorted. The shape cell is a select over the ids in
+ * `liquidityShapes` rather than free text, because a typo there is refused at LOAD and the
+ * author would find out at Rebuild — the exact "invisible until it throws" shape this editor
+ * exists to remove.
+ *
+ * The BASE graph is drawn as an implicit, non-editable row 0. Without it the table says "the
+ * bridge shape starts in 2035" and leaves the first nine years of the plan looking
+ * unauthored, when in fact `liquidityGraph` governs them.
+ *
+ * @param {object} param
+ * @param {function(): Array<string>} shapeIdsProvider  the live `liquidityShapes` keys
+ */
+export function buildLiquidityGraphScheduleEditor(param, shapeIdsProvider = () => []) {
+  const rows = (Array.isArray(param.value) ? param.value : []).map(r => ({
+    year:  Number.isFinite(Number(r?.year)) ? Number(r.year) : null,
+    shape: typeof r?.shape === 'string' ? r.shape : null,
+  }));
+  const sync = () => {
+    const kept = rows.filter(r => r.year != null && r.shape);
+    param.value = kept.length ? kept.map(r => ({ year: r.year, shape: r.shape })) : null;
+  };
+  sync();
+
+  const container = el('div', 'age-band-list-editor liquidity-schedule-editor');
+
+  const render = () => {
+    container.innerHTML = '';
+    const ids = shapeIdsProvider() ?? [];
+
+    // Row 0, stated rather than implied. See the docstring.
+    const base = el('div', 'row-list-empty');
+    base.dataset.id = 'base-row';
+    base.textContent = ids.length
+      ? 'Before the first year below, the base Liquidity Pools graph governs.'
+      : 'No shapes defined yet — add one under Liquidity Pool Shapes, then schedule it here.';
+    container.appendChild(base);
+
+    container.appendChild(buildRowListEditor({
+      rows,
+      columns: [
+        { field: 'year',  label: 'From year', type: 'number', step: '1', min: '1900', width: '0.8fr' },
+        // Only ids that EXIST are offered. A row pointing at a deleted shape keeps its value
+        // and is shown as missing, the same way a claim pointing at a renamed pool is.
+        { field: 'shape', label: 'Shape', type: 'select', width: '1.6fr',
+          options: (row) => {
+            const opts = ids.map(id => [id, id]);
+            if (row?.shape && !ids.includes(row.shape)) opts.unshift([row.shape, `${row.shape} — not found`]);
+            return opts;
+          } },
+      ],
+      newRow: () => {
+        const last = rows[rows.length - 1];
+        return { year: (last?.year ?? new Date().getUTCFullYear()) + 1, shape: ids[0] ?? null };
+      },
+      addLabel:  '+ Add Year',
+      emptyText: 'One shape for the whole run — the base graph governs throughout.',
+      sortBy:    (a, b) => (a.year ?? 0) - (b.year ?? 0),
+      onChange:  () => { sync(); render(); },
+    }));
+  };
+
+  render();
+  return container;
+}
+
+/**
+ * `LiquidityShapes` — the named alternative graphs (design 109 §11).
+ *
+ * `{ <shapeId>: { pools, flows } }` rendered as a list of named blocks, each holding the
+ * EXISTING three-table graph editor over that shape's value. One editor, not two: a shape is
+ * the same vocabulary as the base graph (§4), so a second authoring surface for it would be a
+ * second place for the two to drift.
+ *
+ * **`+ Duplicate` is not a convenience.** §4 Q1 chose whole-graph shapes, whose cost is that
+ * changing one pool's target in 2040 means authoring a second complete graph. Re-typing four
+ * tables is how a pool id drifts, and §9 makes the id the handle for identity across a switch
+ * — a renamed pool silently retires one pool and starts another whose trailing high is zero.
+ * Duplication is the mechanism that keeps ids stable, so it sits beside Add rather than in a
+ * menu.
+ *
+ * @param {object} param
+ * @param {Array}  accounts
+ */
+export function buildLiquidityShapesEditor(param, accounts = []) {
+  const value  = isPlainObject(param.value) ? param.value : {};
+  const shapes = Object.entries(value).map(([id, graph]) => ({ id, graph: graph ?? {} }));
+
+  const sync = () => {
+    const kept = shapes.filter(s => s.id);
+    param.value = kept.length
+      ? Object.fromEntries(kept.map(s => [s.id, s.graph ?? {}]))
+      : null;
+  };
+  sync();
+
+  const container = el('div', 'age-band-list-editor liquidity-shapes-editor');
+
+  /**
+   * Pools added / retired / carried, against the shape before this one.
+   *
+   * §9's rule made visible at the moment of authoring, and the single highest-value thing on
+   * this screen: a RENAMED pool shows up here as one retired and one added, which is exactly
+   * the mistake the line exists to catch.
+   */
+  const diffLine = (idx) => {
+    const prev = idx === 0 ? null : shapes[idx - 1];
+    const ids  = (s) => new Set((s?.graph?.pools ?? []).map(p => p?.id).filter(Boolean));
+    const now  = ids(shapes[idx]);
+    if (!prev) return `${now.size} pool(s).`;
+    const was     = ids(prev);
+    const added   = [...now].filter(id => !was.has(id));
+    const retired = [...was].filter(id => !now.has(id));
+    const kept    = [...now].filter(id => was.has(id));
+    const parts = [`${kept.length} carried`];
+    if (added.length)   parts.push(`added ${added.join(', ')}`);
+    if (retired.length) parts.push(`retired ${retired.join(', ')}`);
+    return `vs ${prev.id}: ${parts.join(' · ')}`;
+  };
+
+  const render = () => {
+    container.innerHTML = '';
+
+    if (!shapes.length) {
+      container.appendChild(el('div', 'row-list-empty',
+        'No named shapes — the base graph governs the whole run.'));
+    }
+
+    shapes.forEach((shape, idx) => {
+      const block = el('div', 'mix-block');
+      block.dataset.id = `shape-${idx}`;
+
+      const head = el('div', 'mix-block-head');
+      head.appendChild(el('span', 'age-band-col-label', 'Shape id'));
+      const idInput = textInput({ value: shape.id, placeholder: 'bridge', id: 'shape-id' });
+      idInput.addEventListener('change', () => {
+        shape.id = idInput.value.trim() || null;
+        sync();
+        render();
+      });
+      head.appendChild(idInput);
+      head.appendChild(addButton('+ Duplicate', () => {
+        // The ids INSIDE are copied verbatim — that is the point (see the docstring).
+        shapes.splice(idx + 1, 0, {
+          id: `${shape.id ?? 'shape'}-copy`,
+          graph: JSON.parse(JSON.stringify(shape.graph ?? {})),
+        });
+        sync();
+        render();
+      }));
+      head.appendChild(removeButton('Remove shape', () => { shapes.splice(idx, 1); sync(); render(); }));
+      block.appendChild(head);
+
+      const diff = el('div', 'pool-shape-diff', diffLine(idx));
+      diff.dataset.id = `shape-diff-${idx}`;
+      block.appendChild(diff);
+
+      // The SAME editor the base graph uses, over this shape's value.
+      block.appendChild(buildLiquidityGraphEditor({
+        name:  `${param.name}.${shape.id}`,
+        get value() { return shape.graph; },
+        set value(v) { shape.graph = v ?? {}; sync(); },
+      }, accounts));
+
+      container.appendChild(block);
+    });
+
+    container.appendChild(addButton('+ Add Shape', () => {
+      shapes.push({ id: null, graph: {} });
+      sync();
+      render();
+    }));
+  };
+
+  render();
+  return container;
+}
+
 export function buildLiquidityGraphEditor(param, accounts = []) {
   const value = isPlainObject(param.value) ? param.value : {};
 

@@ -27,7 +27,7 @@ import { ACCOUNT_ROLES }                       from '../state/account-roles.js';
 import { PoolFlowReducer }                     from '../pools/pool-flow-reducer.js';
 import { SpendingRefillHandler }               from '../handlers/spending-refill-handler.js';
 import { PoolFlowApplyReducer }                from '../pools/pool-flow-apply-reducer.js';
-import { resolveLiquidityGraph }               from '../pools/liquidity-graph.js';
+import { resolveLiquidityGraph, resolveLiquidityGraphSchedule } from '../pools/liquidity-graph.js';
 import {
   ALLOCATION_OPTIMIZED_MODE, synthesizeTargetAllocation, presentAllocations,
   buildAllocWeightSchema, DEFAULT_ALLOC_WEIGHTS,
@@ -608,16 +608,23 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
     },
     reducers: (context) => {
       const p     = context.parameters;
-      const graph = resolveLiquidityGraph(p, context.accounts ?? []);
-      if (!graph) return [];      // no graph authored ⇒ contribute nothing at all
+      const graph    = resolveLiquidityGraph(p, context.accounts ?? []);
+      // Design 109 §6.1 — the shape schedule, when the plan has one. Both flow reducers take
+      // it; `graph` stays the fallback and is the only thing an unscheduled plan ever reads.
+      const schedule = resolveLiquidityGraphSchedule(p, context.accounts ?? []);
+      // A plan can have a schedule whose OPENING entry is empty — shapes authored with no
+      // base `liquidityGraph`, so the pools only begin at the first row. `graph` is null
+      // there and the flows still have to be registered, or the shape would take over a run
+      // that has no reducer to notice.
+      if (!graph && !schedule) return [];      // no graph authored ⇒ contribute nothing at all
       const accounts = (context.accounts ?? []).map(a => ({ stateKey: a.stateKey, type: a.type }));
       return [
         new PoolFlowReducer({
-          graph,
+          graph, schedule,
           flowsEnabled:     p.poolFlowsEnabled !== false,
           expensesCurrency: p.monthlyExpensesCurrency ?? 'RESIDENCE',
         }),
-        new PoolFlowApplyReducer({ accountService: context.accountService, graph, accounts }),
+        new PoolFlowApplyReducer({ accountService: context.accountService, graph, schedule, accounts }),
       ];
     },
     paramSchema: () => [
@@ -662,6 +669,44 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
           { param: 'behavioralStrategies', includes: 'LIQUIDITY_POOLS' },
           { param: 'liquidityGraph', exists: true },
         ] },
+      },
+      {
+        // ── design 109 — named shapes ────────────────────────────────────────────────
+        key: 'liquidityShapes', label: 'Liquidity Pool Shapes',
+        type: 'LiquidityShapes', group: 'Spending', mc: false, opt: false,
+        defaultValue: null,
+        description: 'Named alternative pool GRAPHS, as { <shapeId>: { pools, flows } } — each one '
+          + 'exactly the value Liquidity Pools (graph) takes, so a shape is not a new vocabulary, it '
+          + 'is the existing one given a name (design 109). A shape is the WHOLE graph, not one '
+          + 'pool\'s settings: flows name pools, remainder targets name pools and cycle detection is '
+          + 'a property of the whole edge set, so a per-pool timeline would let a composition that '
+          + 'validates in 2030 and 2040 be invalid in 2035. Every shape is compiled and validated at '
+          + 'LOAD, beside the base graph, so a shape that takes effect in twenty years fails now '
+          + 'rather than mid-run. Selected by Liquidity Pool Schedule; a shape no row selects warns '
+          + 'and governs nothing. Blank (the default) = one graph for the whole run, byte-identical '
+          + 'to before.',
+        visibleWhen: { anyOf: [
+          { param: 'behavioralStrategies', includes: 'LIQUIDITY_POOLS' },
+          { param: 'liquidityGraph', exists: true },
+        ] },
+      },
+      {
+        key: 'liquidityGraphSchedule', label: 'Liquidity Pool Schedule',
+        type: 'LiquidityGraphSchedule', group: 'Spending', mc: false, opt: false,
+        defaultValue: null,
+        description: 'When each pool shape takes over: [{ year, shape }], the shape naming a key of '
+          + 'Liquidity Pool Shapes (design 109). A step function — the row with the greatest year '
+          + 'not after the current one governs, and BEFORE the first row the base Liquidity Pools '
+          + '(graph) governs, so adding a schedule never requires copying the existing graph into a '
+          + 'shape. One row per year (two rows for one year is refused; only one shape can be active '
+          + 'at a time). A row takes effect at the first period advance on or after 1 January of its '
+          + 'year, which on a semi-annual cadence can be up to six months later — shapes govern '
+          + 'DECISIONS, and decisions are taken at advances. A change moves no money by itself: the '
+          + 'new shape\'s targets are honoured by the rebalancer and the flows at their own cadence, '
+          + 'through their own gates. Pool identity across a change is the pool `id` — the same id '
+          + 'continues and keeps its trailing high, a new id starts cold, a dropped id is retired. '
+          + 'Blank (the default) = one graph for the whole run.',
+        visibleWhen: { param: 'liquidityShapes', exists: true },
       },
       {
         // The MASTER switch (design 97 §12.5). Gated on the GRAPH existing, never on the

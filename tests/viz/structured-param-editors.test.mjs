@@ -31,6 +31,7 @@ import {
   buildMixListEditor, buildAllocationGlidepathEditor, buildAllocationRegimeTargetsEditor,
   buildLocationPolicyEditor, buildYieldCurveShapeEditor, buildYieldCurveScheduleEditor,
   buildRateKeyMapEditor, buildDrawdownSequenceEditor, buildLiquidityGraphEditor,
+  buildLiquidityShapesEditor, buildLiquidityGraphScheduleEditor,
 } from '../../src/visualization/scenario/structured-param-editors.js';
 import { ALLOCATION_VALUES } from '../../src/finance/holdings/allocation.js';
 import { assertTotalMix }    from '../../src/finance/holdings/allocation.js';
@@ -1307,4 +1308,120 @@ test('LiquidityGraph: an authored ALLOW_PENALTY round-trips through the editor',
   const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
   assert.strictEqual(cell(host, 'access').value, 'ALLOW_PENALTY');
   assert.deepStrictEqual(param.value.pools[0].access, { mode: 'ALLOW_PENALTY' });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// design 109 §11 — the shapes list and the schedule table
+// ═════════════════════════════════════════════════════════════════════════════
+
+const SHAPE_A = { pools: [
+  { id: 'cash',   spendOrder: 10, claims: [{ key: 'usSavingsAccount' }] },
+  { id: 'bonds',  spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }] },
+] };
+const SHAPE_B = { pools: [
+  { id: 'cash',   spendOrder: 10, claims: [{ key: 'usSavingsAccount' }] },
+  { id: 'growth', spendOrder: 40, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+] };
+
+test('LiquidityGraphSchedule: the base graph is stated, not left as an unauthored gap', () => {
+  // Without row 0 the table says "the bridge starts in 2035" and the first nine years look
+  // unauthored, when `liquidityGraph` governs them.
+  const param = { name: 'liquidityGraphSchedule', value: [{ year: 2035, shape: 'bridge' }] };
+  const host = mount(buildLiquidityGraphScheduleEditor(param, () => ['bridge']));
+  assert.match(cell(host, 'base-row').textContent, /Before the first year below/);
+});
+
+test('LiquidityGraphSchedule: with no shapes it says where to make one', () => {
+  const param = { name: 'liquidityGraphSchedule', value: null };
+  const host = mount(buildLiquidityGraphScheduleEditor(param, () => []));
+  assert.match(cell(host, 'base-row').textContent, /add one under Liquidity Pool Shapes/i);
+});
+
+test('LiquidityGraphSchedule: the shape cell is a SELECT over live ids, not free text', () => {
+  // A typo is refused at load, so the author would find out at Rebuild — the "invisible until
+  // it throws" shape this editor exists to remove.
+  const param = { name: 'liquidityGraphSchedule', value: [{ year: 2035, shape: 'bridge' }] };
+  const host = mount(buildLiquidityGraphScheduleEditor(param, () => ['bridge', 'late']));
+  const sel = cell(host, 'shape');
+  assert.equal(sel.tagName, 'SELECT');
+  assert.deepStrictEqual([...sel.options].map(o => o.value), ['bridge', 'late']);
+});
+
+test('LiquidityGraphSchedule: a row pointing at a DELETED shape is kept and marked', () => {
+  const param = { name: 'liquidityGraphSchedule', value: [{ year: 2035, shape: 'gone' }] };
+  const host = mount(buildLiquidityGraphScheduleEditor(param, () => ['bridge']));
+  const sel = cell(host, 'shape');
+  assert.strictEqual(sel.value, 'gone', 'silently re-pointing it would be a plan nobody chose');
+  assert.match([...sel.options].map(o => o.textContent).join(' '), /not found/);
+});
+
+test('LiquidityGraphSchedule: rows sort by year, and an incomplete row is not written', () => {
+  const param = { name: 'liquidityGraphSchedule', value: [{ year: 2050, shape: 'late' }] };
+  const host = mount(buildLiquidityGraphScheduleEditor(param, () => ['bridge', 'late']));
+
+  button(host, 'Add Year').click();
+  type(cells(host, 'year').at(-1), '2035', 'change');
+  pick(cells(host, 'shape').at(-1), 'bridge');
+
+  assert.deepStrictEqual(param.value, [
+    { year: 2035, shape: 'bridge' },
+    { year: 2050, shape: 'late' },
+  ]);
+});
+
+test('LiquidityShapes: a shape holds the SAME three-table editor the base graph uses', () => {
+  const param = { name: 'liquidityShapes', value: { bridge: SHAPE_A } };
+  const host = mount(buildLiquidityShapesEditor(param, ACCOUNTS));
+  assert.strictEqual(cell(host, 'shape-id').value, 'bridge');
+  // The pools table is present and populated — one vocabulary, not two.
+  assert.deepStrictEqual(cells(host, 'id').map(c => c.value), ['cash', 'bonds']);
+});
+
+test('LiquidityShapes: + Duplicate copies the pool IDS verbatim — that is the point', () => {
+  // §4 Q1's cost is that a one-number change means a whole second graph; §9 makes the pool id
+  // the handle for identity across a switch. Re-typing is how an id drifts, and a drifted id
+  // retires a pool and starts another whose trailing high is zero.
+  const param = { name: 'liquidityShapes', value: { bridge: SHAPE_A } };
+  const host = mount(buildLiquidityShapesEditor(param, ACCOUNTS));
+
+  button(host, 'Duplicate').click();
+  assert.deepStrictEqual(Object.keys(param.value), ['bridge', 'bridge-copy']);
+  assert.deepStrictEqual(
+    param.value['bridge-copy'].pools.map(p => p.id),
+    param.value.bridge.pools.map(p => p.id));
+});
+
+test('LiquidityShapes: the duplicate is a deep copy — editing one does not move the other', () => {
+  const param = { name: 'liquidityShapes', value: { bridge: SHAPE_A } };
+  const host = mount(buildLiquidityShapesEditor(param, ACCOUNTS));
+  button(host, 'Duplicate').click();
+
+  param.value['bridge-copy'].pools[0].spendOrder = 99;
+  assert.strictEqual(param.value.bridge.pools[0].spendOrder, 10);
+});
+
+test('LiquidityShapes: the diff line names pools carried, added and retired', () => {
+  // §9's rule made visible while authoring — a RENAMED pool shows up as one retired and one
+  // added, which is exactly the mistake the line exists to catch.
+  const param = { name: 'liquidityShapes', value: { first: SHAPE_A, second: SHAPE_B } };
+  const host = mount(buildLiquidityShapesEditor(param, ACCOUNTS));
+
+  assert.match(cell(host, 'shape-diff-0').textContent, /2 pool\(s\)/);
+  const d = cell(host, 'shape-diff-1').textContent;
+  assert.match(d, /vs first/);
+  assert.match(d, /1 carried/);
+  assert.match(d, /added growth/);
+  assert.match(d, /retired bonds/);
+});
+
+test('LiquidityShapes: renaming a shape keeps its graph, and clearing every shape writes null', () => {
+  const param = { name: 'liquidityShapes', value: { bridge: SHAPE_A } };
+  const host = mount(buildLiquidityShapesEditor(param, ACCOUNTS));
+
+  type(cell(host, 'shape-id'), 'theBridge', 'change');
+  assert.deepStrictEqual(Object.keys(param.value), ['theBridge']);
+  assert.deepStrictEqual(param.value.theBridge.pools.map(p => p.id), ['cash', 'bonds']);
+
+  host.querySelector('.age-band-remove').click();
+  assert.strictEqual(param.value, null, 'absent, not an empty object');
 });

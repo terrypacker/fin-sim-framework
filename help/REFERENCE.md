@@ -9,11 +9,11 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-221 parameters · 33 panels · 173 action types · 79 tools · 266 state field types · 58 topics · 117 design docs
+223 parameters · 33 panels · 173 action types · 79 tools · 266 state field types · 59 topics · 117 design docs
 
 ---
 
-## Parameters (221)
+## Parameters (223)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
@@ -367,7 +367,7 @@ scenario's own schema), which is where to go to change it.
 - **`rothConversionStartYear`** — Roth Conversion Start Year · `Number` · default — · sweep: opt · via US_ROTH_CONVERSION
   First year to convert; null = primary person's retirement year
 
-### Spending (44)
+### Spending (46)
 
 - **`ageBandDeclineRate`** — Age-Band Decline Rate · `Number` · default — · sweep: mc+opt · conditional · via US_RETIREMENT
   Convenience: a single real %/yr decline anchored at the primary person's retirement age. When set, overrides Spending Age Bands with a synthesized one-band glide (e.g. -0.01 = Blanchett's ~1%/yr smile)
@@ -429,6 +429,10 @@ scenario's own schema), which is where to go to change it.
   The pool GRAPH: { pools: [...], flows: [...] } (design 97 Part II). A pool is a named node with `claims` of (account, sleeves), an optional `spendOrder` (its position on the draw walk), a `target` ({mode: YEARS_OF_SPEND|PERCENT|AMOUNT, value}), an optional `floor`, and a `capacity` rule (BALANCE, or OFFSET_CAP for an offset, whose ceiling is min(cash parked, loan owed) and falls on a schedule nobody authored). A flow is a directed edge {from, to} with a `trigger` (when the destination wants money), an `amount` (how far to fill it) and a `gate` (whether the SOURCE may be sold at all). `sourceDrawdownUnder` with `drawdownBasis: INDEX` — "only harvest while the source is within x of its peak, measured on its compounded RETURN so the household's own spending does not count as drawdown" — is the gate that measured best in decumulation (design 97 §20.14). On the default `BALANCE` basis the same clause cannot tell a falling market from the pool being spent down and latches shut after the first crash, so use BALANCE only for a pool that is accumulating. `sourceReturnOver: 0` is "only harvest after an up year" and `targetReturnUnder` is the same machinery pointing the other way, i.e. buy the dip. Clauses can be composed — `anyOf` / `allOf` / `not`, an array is an AND — and any of them can carry `sustainedYears: n`, which holds the gate shut until its condition has held n consecutive years; §20.13 measured that DURATION, not the threshold, as the lever. Trigger and amount are deliberately two numbers — an (s, S) band — so a refill does not fire every period. The graph COMPILES to the drawdown sequence, so it replaces `drawdownSequence` rather than sitting beside it (authoring both throws). Blank (the default) = no pools, byte-identical to before. In-portfolio refills are executed by the TARGET_ALLOCATION rebalancer, so select that strategy too unless every flow is cross-account.
 - **`liquidityGraphEnabled`** — Liquidity Pools Enabled · `Boolean` · default `true` · conditional · via ECONOMIC_REGIMES
   The whole-graph OFF switch. Deselecting the LIQUIDITY_POOLS strategy stops only the refill flows — the graph still compiles to the drawdown sequence and still sizes the rebalancer, because those two read the graph directly and never look at the strategy list. Setting this false makes all three go dark at once: `resolveLiquidityGraph` returns null, so the spend order falls back to `drawdownPriority` (or to an authored `drawdownSequence`, which stops being a second authority once the graph is off) and every pool target, gate and capacity rule is inert. The graph is KEPT — this is how you run a pools-off control without deleting the structure and losing it. It still has to compile: the authoring UI reports a bad pool while the switch is off, so flipping it back on cannot surface an error you were never shown. Contrast `poolFlowsEnabled`, which turns off only the refill edges and leaves the pools, their sizing and the spend order live.
+- **`liquidityGraphSchedule`** — Liquidity Pool Schedule · `LiquidityGraphSchedule` · default — · conditional · via ECONOMIC_REGIMES
+  When each pool shape takes over: [{ year, shape }], the shape naming a key of Liquidity Pool Shapes (design 109). A step function — the row with the greatest year not after the current one governs, and BEFORE the first row the base Liquidity Pools (graph) governs, so adding a schedule never requires copying the existing graph into a shape. One row per year (two rows for one year is refused; only one shape can be active at a time). A row takes effect at the first period advance on or after 1 January of its year, which on a semi-annual cadence can be up to six months later — shapes govern DECISIONS, and decisions are taken at advances. A change moves no money by itself: the new shape's targets are honoured by the rebalancer and the flows at their own cadence, through their own gates. Pool identity across a change is the pool `id` — the same id continues and keeps its trailing high, a new id starts cold, a dropped id is retired. Blank (the default) = one graph for the whole run.
+- **`liquidityShapes`** — Liquidity Pool Shapes · `LiquidityShapes` · default — · conditional · via ECONOMIC_REGIMES
+  Named alternative pool GRAPHS, as { <shapeId>: { pools, flows } } — each one exactly the value Liquidity Pools (graph) takes, so a shape is not a new vocabulary, it is the existing one given a name (design 109). A shape is the WHOLE graph, not one pool's settings: flows name pools, remainder targets name pools and cycle detection is a property of the whole edge set, so a per-pool timeline would let a composition that validates in 2030 and 2040 be invalid in 2035. Every shape is compiled and validated at LOAD, beside the base graph, so a shape that takes effect in twenty years fails now rather than mid-run. Selected by Liquidity Pool Schedule; a shape no row selects warns and governs nothing. Blank (the default) = one graph for the whole run, byte-identical to before.
 - **`monthlyExpenses`** — Monthly Expenses · `Money` · default `6000` · USD · sweep: mc+opt · via US_RETIREMENT
   Monthly household expenses drawn from savings
 - **`monthlyExpensesCurrency`** — Expense Denomination · `Enum` · default `RESIDENCE` · one of `RESIDENCE`, `USD`, `AUD` · via US_RETIREMENT
@@ -1570,7 +1574,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 
 ---
 
-## Topics (58)
+## Topics (59)
 
 Tier 2 — the hand-written prose under `help/`, listed by what it CITES rather than
 summarised. A topic may not restate a param description (design 108 §3), so there is
@@ -1623,6 +1627,7 @@ what the in-app panel keys on.
 | [Parameters](panels/parameters.md) | panel | 188 | 1 panel · design 98 |
 | [Paycheque](panels/paycheque.md) | panel | 197 | 1 panel · design 95, 107 |
 | [Performance](panels/perf.md) | panel | 201 | 1 panel · design 78 |
+| [Pool Shapes Over Time](concepts/pool-shapes-over-time.md) | concept | 378 | 2 params · design 109, 97 |
 | [Liquidity Pools](panels/pools.md) | panel | 217 | 1 panel · design 97 |
 | [Randomness and Seeds](concepts/randomness-and-seeds.md) | concept | 251 | 2 panels · 2 params · design 74 |
 | [Return Assumptions](concepts/return-assumptions.md) | concept | 266 | 2 panels · 13 params · design 99, 106 |
