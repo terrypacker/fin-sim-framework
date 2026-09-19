@@ -3642,3 +3642,227 @@ failure mode reproduced one level up.
 Verified in the running app, not only in jsdom: the panel draws held-vs-asked, the picker's
 "only asked" cuts 12 series to 4 and rescales the axis, and the §23.2 preference-leak warning
 fires once for the gold pool with no other console errors.
+
+## 24. The accessibility axis, corrected and costed (18 Sep 2026)
+
+**Status:** PROPOSED. §22 specified this axis and phased it; §22.8–§22.9 built the serializer
+half. This section is the build plan for what is left — §22.3 (`accessible` / `locked` /
+`unlocksAt`), §22.4 (`access` on the pool) and §22.5 (the editor) — and it opens by
+**correcting §22.3's stated fix**, because the authority it names would leave the defect in
+place while looking like it had removed it.
+
+### 24.1 The measured correction: `isAccessible` is the wrong authority for a PENALTY_FREE pool
+
+§22.3 says to reuse `isAccessible` / `isDrawdownAccessible` from
+`src/finance/derived-metrics/net-liquidity.js`. `householdReserve` (`pool-metrics.js:421`) did
+exactly that, and its own doc comment records the coarseness as *"an under-age Roth counts
+WHOLE on the strength of `allowsEarlyWithdrawal`"*.
+
+It is larger than a Roth. Measured directly — a household born 1980, each wrapper holding the
+same balance, asked at 2030-01-01 (age 50):
+
+| account | `minimumAge` | `allowsEarlyWithdrawal` | `isDrawdownAccessible` | `isWithdrawalEligible` | `_penaltyFreeAvailable` |
+|---|---|---|---|---|---|
+| 401(k) | 59.5 | true | **true** | false | **0** |
+| Roth (basis 30% of balance) | 59.5 | true | **true** | false | **30% of balance** |
+| IRA | 60 | true | **true** | false | **0** |
+| super | 60 | false | false | false | 0 |
+
+The three US wrapper classes default `allowsEarlyWithdrawal: true` in their constructors
+(`investment-account.js:419,442,465`), and `isAccessible` (`net-liquidity.js:47`) returns true
+on that flag **before it looks at the age**. `AccountService.isWithdrawalEligible`
+(`account-service.js:785`) — the predicate the Phase 1 walk actually uses, via `eligibleOf` at
+`:1036` — tests `minimumAge` against the owner's age and **never reads the flag at all**.
+
+So on the whole US wrapper book, under age:
+
+> `isAccessible` says **100% accessible**. A Phase 1 draw finds **0**, except the Roth
+> contribution basis.
+
+Building §22.3 on `isAccessible` would therefore set `accessible === balance` for every US
+wrapper — which is today's `balance` under a new name. The cover figure would still overstate
+by the whole wrapper book, the panel would show an `accessible`/`locked` pair that is always
+`balance`/`0`, and the feature would read as shipped. That is a worse state than the current
+one, which at least documents its own coarseness.
+
+**Super is the only type the two predicates agree on**, and they agree by accident: its class
+default is `false`, so `isAccessible` falls through to the age test. A design that is correct
+for one of four types because of a constructor default is not correct.
+
+### 24.2 The authority: one amount, one module, two callers
+
+The fix is §22.3's own trap paragraph taken literally — *"accessibility is not a boolean per
+account […] the answer is an amount"* — and applied to the right pair of functions.
+
+Extract the Phase 1 rule into a pure module, e.g.
+`src/finance/accounts/penalty-free-availability.js`:
+
+```
+penaltyFreeAvailable(account, { birthDate, asOf }) → number     // in the account's own currency
+unlocksAt(account, { birthDate })                  → Date|null  // null = no gate
+```
+
+It is the existing rule, moved, not restated:
+
+- the age gate is `isWithdrawalEligible`'s exact arithmetic (`minimumAge` absent or null ⇒ no
+  gate; otherwise decimal age against `minimumAge` on a 365.25-day year);
+- the amount is `_penaltyFreeAvailable`'s exact rule (eligible ⇒ `balance − minimumBalance`,
+  floored at 0; an ineligible Roth ⇒ `min(contributionBasis, drawable)`; otherwise 0).
+
+`AccountService` then calls it instead of holding its own copies, and `poolMetrics` calls the
+same function. **This is the whole point**: the reason §22.3's defect exists is that the metric
+and the draw answer the same question from two places, and adding a third — even a correct one
+— reproduces the failure the moment either rule moves. Extracting rather than copying is the
+condition on this work, not a refinement of it.
+
+The owner-birth-date resolution (`eligibleOf`, `account-service.js:1036`: an account owned by
+someone other than the primary uses *their* birth date, falling back to the primary's) moves
+with it. A pool claiming a spouse's wrapper is an obvious authoring, and resolving it against
+the wrong person is a silent decade of error.
+
+#### Q1 — two edge cases the extraction preserved rather than fixed — BUILT (18 Sep 2026)
+
+Step 1 is meant to be provably behaviour-neutral, so the date arithmetic moved verbatim,
+including two results nobody would author on purpose. Both are now pinned by tests
+(`penalty-free-availability.test.mjs` PFA-6, PFA-6b) so that fixing them is a visible change
+to a test file rather than an invisible change to a run:
+
+| input | today | why it is that |
+|---|---|---|
+| `minimumAge: undefined` | **permanently gated, at every age** | `'minimumAge' in account` holds and the value is not `null`, so it falls through to `age >= undefined`, which is false forever |
+| `birthDate: null` on a gated account | **eligible** | `asOfDate - null` coerces to the epoch, so the computed age is the date itself — tens of thousands of years |
+| `birthDate: undefined` on a gated account | not eligible | `asOfDate - undefined` is NaN |
+
+The middle row is the one that matters, and it is **unreachable today**: every drawdown path
+enters through `eligibleOf` (`account-service.js:1036`), which resolves an owner's date with
+`?? birthDate` and is only ever called with a real person on the household.
+
+§24.3 makes it reachable for the first time. `poolMetrics` will resolve an owner **per claim**,
+and a claim may name an account whose `ownerId` matches nobody on the plan — a stale key after
+a person is removed, an account seeded by a builder that never set one. Under the preserved
+rule that pool would report a gated wrapper as fully accessible, which is §24.1's defect
+arriving by a second route. So §24.3 must resolve a missing owner to **not eligible** and test
+it; `unlocksAt` already returns null on an unusable birth date rather than a bogus one.
+
+### 24.3 What `poolMetrics` gains, and what it must not lose
+
+`poolContext` (`pool-metrics.js:353`) carries no date today; `allPoolMetrics`'s one caller
+already has `asOfMs` (`pool-flow-reducer.js:372`) and `householdReserve` already takes a
+`date`. So the date arrives as a `poolContext` field rather than a fifth positional argument,
+and every metrics consumer gets it from the one place.
+
+Per pool, alongside the untouched `balance`:
+
+- **`accessible`** — Σ `penaltyFreeAvailable` over the claims, in base currency, with the same
+  FX conversion `balance` uses.
+- **`locked`** — `balance − accessible`. Derived, not summed separately, so the two cannot
+  disagree by a rounding step.
+- **`unlocksAt`** — the earliest `unlocksAt` over the claims that are not yet fully accessible;
+  null when nothing is gated.
+
+**`balance` keeps its meaning exactly** — what the pool holds — so nothing reading the cube
+changes meaning and every existing fixture is unchanged for a pool with no wrapper claim. Then:
+
+| figure | changes to read | why |
+|---|---|---|
+| `yearsOfCover` | `accessible` | §22.3: this is the feature's headline number and the one that overstates |
+| `available` (sizing a flow's `givable`) | `accessible` | an edge must not be sized against money Phase 1 cannot reach |
+| `utilised`, `headroom`, `capacity` | **unchanged — `balance`** | a ceiling is a statement about room, not about reachability. An offset's capacity is what is owed; a locked wrapper does not make the debt smaller |
+| `shortfall`, `target` | **unchanged — `balance`** | a target is what the pool should *hold*. Sizing it against `accessible` would make a wrapper pool demand refills forever, which is a rebalance loop, not a fix |
+
+That split is the load-bearing judgement in this section and it is the one a reviewer should
+argue with: **cover is about what can be spent; sizing is about what is held.** Conflating them
+in either direction produces a plan that either under-reports its reserve or endlessly buys
+more of it.
+
+`POOL_CUBE_FIELDS` (`pool-history.js`) gains `accessible` and `locked`; `unlocksAt` is a date
+and belongs on the panel rather than in a numeric cube. `POOL_CSV_COLUMNS` follows.
+
+### 24.4 `householdReserve` is fixed by the same change
+
+It already reports `accessible` / `locked` and already carries the §24.1 overstatement, with a
+doc comment that defers the fix to §22.3. Once §24.2 exists, `householdReserve` switches from
+`isDrawdownAccessible` (a boolean) to the amount — keeping the `drawdownPriority == null`
+exclusion, which is a separate and correct scope rule — and the comment's "read `accessible`
+before the age gates open as an upper bound" caveat is deleted rather than reworded.
+
+**`computeNetLiquidity` is deliberately NOT changed here.** It is the control metric the MPC
+and the optimiser steer (design 88 §5), and moving it is a design-88 decision with a measured
+effect on every controller arm, not a side effect of a pools change. It should move, for
+exactly the reason in §24.1, and it should move in its own study with its own before/after.
+Filed, not done.
+
+### 24.5 `access` on the pool (§22.4), restated against §24.1
+
+§22.4's `access: { mode: 'PENALTY_FREE' | 'ALLOW_PENALTY' }` is unchanged and is now easier to
+specify, because §24.2 gives each mode a different authority:
+
+- **`PENALTY_FREE`** (default) ⇒ `accessible` = `penaltyFreeAvailable`. §24.2.
+- **`ALLOW_PENALTY`** ⇒ `accessible` additionally includes the Phase 2 slice: the balance
+  reachable under `allowsEarlyWithdrawal && supportsEarlyWithdrawal(type)`, **net of the 10%
+  penalty**, because a pool that reports gross cover it can only realise at 90 cents is the
+  same overstatement one layer down.
+
+§22.4's condition stands and is the reason the two halves are one switch: the mode decides both
+what `accessible` counts *and* whether this pool's claims may be drawn in Phase 2. Splitting
+them is how a pool comes to report cover it will not deliver.
+
+Note the scope this closes: `accessible` under `ALLOW_PENALTY` is the only figure in the model
+that will be allowed to read `allowsEarlyWithdrawal`, and it reads it through
+`supportsEarlyWithdrawal` as §22.8 item 4 requires. §24.1's divergence then stops being a
+divergence and becomes two named modes.
+
+### 24.6 The editor and the panel (§22.5)
+
+Unchanged from §22.5, now with the columns named:
+
+- Pools table gains one **`access`** select (`PENALTY_FREE` / `ALLOW_PENALTY`).
+- §22.5's two defaults are fixed: a new pool's `spendOrder` defaults to blank, and `+ Add Claim`
+  defaults its pool cell to the last pool in the table.
+- The **panel** shows `accessible` / `locked` as a pair beside `balance`, and `unlocksAt` as a
+  date on any pool that has one. A pool with no wrapper claim shows the single number it shows
+  today — the pair appears only where it says something.
+
+The panel half matters more than it sounds: §9.3(a) measured the mirror image of this defect as
+*0.0 years in every year* and it was invisible until plotted. A wrapper pool reporting cover it
+cannot deliver is the same defect with the sign flipped, and it will be invisible in exactly
+the same way until the pair is on the screen.
+
+### 24.7 Test plan
+
+1. **The two predicates agree, per type, at every age** — the §24.1 table as a table-driven
+   test over all four types, at an age below and above each gate. This is the regression that
+   keeps the extraction honest.
+2. **`AccountService` behaviour is byte-identical after the extraction.** The existing
+   early-withdrawal and drawdown suites are the assertion; no new expectations.
+3. **A pool with no wrapper claim is byte-identical** — `accessible === balance`, `locked === 0`,
+   `unlocksAt === null`, every golden unchanged.
+4. **A wrapper pool under the gate**: `accessible` is 0 for a 401(k)/IRA, the contribution basis
+   for a Roth, and `yearsOfCover` falls accordingly while `balance`, `capacity` and `target`
+   do not move.
+5. **A spouse-owned claim resolves against the spouse's birth date**, and unlocks on their gate.
+6. **`unlocksAt`** is the earliest gate among partly-locked claims and null once all are open.
+7. **`ALLOW_PENALTY`** includes the penalised slice net of 10%, only for types with a rule, and
+   permits a Phase 2 draw on that pool; `PENALTY_FREE` does neither.
+8. **`householdReserve`** reports the amount, not the boolean (§24.4), on the same fixture as
+   case 4.
+
+### 24.8 Phasing
+
+1. **§24.2** — extract `penaltyFreeAvailable` / `unlocksAt`; `AccountService` calls it. No
+   behaviour change, and test 2 is the proof. **BUILT (18 Sep 2026)**:
+   `src/finance/account-rules/penalty-free-availability.js`, with `isWithdrawalEligible`,
+   `_penaltyFreeAvailable` and `_drawableBalance` reduced to one-line delegations. 6805 unit
+   (16 new, PFA-1..6) + 1538 viz green; all 15 whole-state golden fixtures byte-identical,
+   which is the real assertion — the sim is bit-deterministic, so an extraction that changed
+   anything would move a fixture.
+2. **§24.3** — `accessible` / `locked` / `unlocksAt` on `poolMetrics`, the cube and the CSV;
+   `yearsOfCover` and `available` switch over.
+3. **§24.4** — `householdReserve` switches over; the caveat comment is deleted.
+4. **§24.6 panel + editor defaults.** Cheap, and step 2 is unreadable without the panel half.
+5. **§24.5** — `access` on the pool.
+
+Steps 1–3 leave `balance`-based sizing untouched and are the honest-measurement half; steps 4–5
+are the authoring half. Design 109 §14 takes this whole section as its step 1, because a
+schedule that switches between a pre-gate and a post-gate shape cannot be scored until the
+cover figure is honest.

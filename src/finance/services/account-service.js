@@ -12,6 +12,7 @@ import { AssetService } from './asset-service.js';
 import { EventBus } from '../../simulation-framework/event-bus.js';
 import { InsufficientFundsError, ACCOUNT_TYPE } from '../assets/account.js';
 import { getUsEarlyWithdrawalRules } from '../account-rules/us/us-early-withdrawal-rules.js';
+import { isAgeEligible, penaltyFreeAvailableFor, drawableBalance } from '../account-rules/penalty-free-availability.js';
 import { computeConversionRecapture } from '../account-rules/us/roth-conversion-lots.js';
 import { getBirthDate, getResidency } from '../residency-utils.js';
 import { Holding } from '../holdings/holding.js';
@@ -777,16 +778,22 @@ export class AccountService extends AssetService {
    * Returns true if the person meets the account's minimum age requirement.
    * If the account has no minimumAge (null or field absent) always returns true.
    * Uses decimal age to support the 59.5-year gate (401k).
+   *
+   * Design 97 §24.2 — the RULE lives in `account-rules/penalty-free-availability.js` and this
+   * is a thin call onto it. It moved because `pool-metrics.js` needs the same answer (§24.3)
+   * and the §22.3 candidate authority, `net-liquidity.js#isAccessible`, gives a DIFFERENT one:
+   * it reads `allowsEarlyWithdrawal` ahead of the age, so it calls the whole under-age US
+   * wrapper book reachable where this predicate — the one Phase 1 actually walks, via
+   * `eligibleOf` — calls it shut. Two answers to one question is the defect; a third copy
+   * would have been the defect again.
+   *
    * @param {import('../account.js').Account} account
    * @param {import('../person.js').Person} person
    * @param {Date}    asOfDate
    * @returns {boolean}
    */
   isWithdrawalEligible(account, person, asOfDate) {
-    if (!('minimumAge' in account) || account.minimumAge === null) return true;
-    const msPerYear  = 365.25 * 24 * 60 * 60 * 1000;
-    const ageDecimal = (asOfDate - person.birthDate) / msPerYear;
-    return ageDecimal >= account.minimumAge;
+    return isAgeEligible(account, person?.birthDate, asOfDate);
   }
 
   /**
@@ -1614,21 +1621,18 @@ export class AccountService extends AssetService {
    *   - eligible (age-gated) accounts → full balance
    *   - Roth below minimumAge        → contribution basis (always penalty-free)
    *   - everything else              → 0 (only reachable via phase-2 early withdrawal)
+   *
+   * Design 97 §24.2 — the rule lives in `account-rules/penalty-free-availability.js`, beside
+   * the age gate it depends on. The Roth branch is why accessibility is an AMOUNT and not a
+   * boolean, which is the constraint the pool-level figure in §24.3 is built to.
    */
   _penaltyFreeAvailable(account, eligible) {
-    // Cash/savings keep their minimumBalance buffer; investments have min 0 so
-    // this is a no-op for them. `_drawableBalance` applies the same floor.
-    const drawable = this._drawableBalance(account);
-    if (eligible) return Math.max(0, drawable);
-    if (account.type === ACCOUNT_TYPE.ROTH) {
-      return Math.max(0, Math.min(account.contributionBasis ?? 0, drawable));
-    }
-    return 0;
+    return penaltyFreeAvailableFor(account, eligible);
   }
 
   /** Balance a source may give up: everything above its minimumBalance floor. */
   _drawableBalance(account) {
-    return Math.max(0, (account.balance ?? 0) - (account.minimumBalance ?? 0));
+    return drawableBalance(account);
   }
 
   /**
