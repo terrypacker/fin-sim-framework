@@ -403,3 +403,31 @@ test('PTS-12 the three items pool-arms owns that ARE already refusals stay refus
   const params = { ...base, poolBondYears: 4, drawdownMode: 'PROPORTIONAL' };
   assert.deepEqual(poolAxisProblems({ parameters: params }), []);
 });
+
+test('PTS-13 a target of ZERO grows no axis — a factor cannot lift one off zero', () => {
+  // Found by running the axis list against the author's own plan, which carries an `AMOUNT 0`
+  // offset pool: `pool.offset.targetScale` read as a lever, swept as a lever, and returned
+  // byte-identical rollouts at every value. The same failure `appliesTo` exists for on the
+  // record templates, and the one `equity-shift-lever-was-dead` records.
+  const zeroed = structuredClone(SCHEDULED);
+  for (const g of [zeroed.liquidityGraph, zeroed.liquidityShapes.bridge]) {
+    g.pools.find(p => p.id === 'reserve').target = { mode: 'AMOUNT', value: 0 };
+  }
+  assert.deepEqual(scalablePoolTargets(zeroed), [], 'no level to scale, so no axis');
+  assert.deepEqual(resolvePoolTargetScaleCenters({ parameters: zeroed }), {});
+  assert.equal(ScenarioParamGenerator.generate({ parameters: zeroed })
+    .some(e => e.key === SCALE), false);
+  // …and the overlay is a no-op, so nothing clones for nothing either.
+  assert.equal(scaleRawPoolGraph(zeroed.liquidityGraph, poolTargetScalesFrom({ [SCALE]: 10 })),
+    zeroed.liquidityGraph, 'the caller\'s own object back');
+
+  // Scoped to "no shape authors a non-zero value", never "the base graph is zero". A pool the
+  // base holds nothing in and a bridge shape holds years in is genuinely searchable — and is
+  // the most interesting kind of pool there is (§10.3's bridge).
+  const bridgeOnly = structuredClone(zeroed);
+  bridgeOnly.liquidityShapes.bridge.pools.find(p => p.id === 'reserve').target =
+    { mode: 'YEARS_OF_SPEND', value: 4 };
+  assert.deepEqual(scalablePoolTargets(bridgeOnly).map(r => r.poolId), ['reserve']);
+  const scaled = scaleRawPoolShapes(bridgeOnly.liquidityShapes, poolTargetScalesFrom({ [SCALE]: 0.5 }));
+  assert.equal(targetOf(scaled.bridge, 'reserve'), 2, 'the shape that holds something scales');
+});

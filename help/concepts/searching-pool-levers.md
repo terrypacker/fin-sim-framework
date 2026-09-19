@@ -9,7 +9,7 @@ tools: []
 design: [110-liquidity-pool-control-surface.md, 97-liquidity-pools-and-drawdown-sequence.md]
 sources: [src/finance/pools/pool-target-scale.js, src/finance/pools/pool-axis-hygiene.js]
 stamps:
-  src/finance/pools/pool-target-scale.js: e2a576
+  src/finance/pools/pool-target-scale.js: 25c9ec
   src/finance/pools/pool-axis-hygiene.js: 080c31
 ---
 
@@ -25,7 +25,8 @@ that difference is the reason for writing shapes at all. A sweep of one absolute
 would flatten the whole profile to that figure, then report it as though it were the
 policy. A factor scales what you wrote and leaves its shape alone. The price is that a
 result reads as "1.25" rather than "five years", so the lever list shows the values each
-factor resolves to.
+factor resolves to. A pool you have set to hold nothing is not offered at all: no factor can
+lift a target off zero, and a lever that cannot move is worse than a missing one.
 
 **A gate clause has to be named before it can be searched.** The clause table's OR
 column is a position, and positions shift when a row is inserted above them; an axis

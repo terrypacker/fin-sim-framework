@@ -1634,7 +1634,7 @@ what the in-app panel keys on.
 | [Roth Conversions](concepts/roth-conversions.md) | concept | 242 | 2 panels · 12 params · design 29 |
 | [Scenario](panels/scenario.md) | panel | 201 | 1 panel |
 | [Scenario Compare](panels/scenario-compare.md) | panel | 205 | 1 panel |
-| [Searching Pool Levers](concepts/searching-pool-levers.md) | concept | 352 | design 110, 97 |
+| [Searching Pool Levers](concepts/searching-pool-levers.md) | concept | 385 | design 110, 97 |
 | [Securities](panels/securities.md) | panel | 188 | 1 panel · design 94 |
 | [Spending](panels/spending.md) | panel | 209 | 1 panel · design 89 |
 | [The Spending Rule](concepts/spending-rule.md) | concept | 296 | 1 panel · 17 params · design 89 |

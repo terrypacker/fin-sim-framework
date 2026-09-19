@@ -114,9 +114,16 @@ const trim = (n) => Number(n.toPrecision(12));
  * normalizer to refuse or accept on its own terms.
  */
 function scaleRawTarget(raw, k) {
-  if (typeof raw === 'number' && Number.isFinite(raw)) return trim(raw * k);
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    const next = trim(raw * k);
+    return next === raw ? raw : next;
+  }
   if (raw && typeof raw === 'object' && Number.isFinite(raw.value)) {
-    return { ...raw, value: trim(raw.value * k) };
+    const next = trim(raw.value * k);
+    // A product equal to the authored value is not a change. Returning the spec itself keeps
+    // the "same object back" property honest for the case that actually occurs: a target of 0,
+    // which no factor can move (see `scalablePoolTargets`).
+    return next === raw.value ? raw : { ...raw, value: next };
   }
   return raw;
 }
@@ -187,6 +194,17 @@ export function scalablePoolTargets(params) {
     }
   }
   const byId = new Map();
+  // Pools whose target is non-zero in at least ONE shape. A FACTOR cannot lift a target off
+  // zero, so a pool authored at 0 everywhere has no level to scale: the axis would read as a
+  // lever, sweep as a lever and return byte-identical rollouts. That is the failure
+  // `appliesTo` exists for on the record templates ("a param that changes nothing is worse
+  // than no param") and it is not hypothetical — the author's own plan carries an
+  // `AMOUNT 0` offset pool, which is how this was found.
+  //
+  // Scoped to "no shape authors a non-zero value", not "the base graph is zero": a pool the
+  // base holds nothing in and a bridge shape holds four years in is genuinely searchable, and
+  // it is the most interesting kind of pool there is (§10.3's bridge case).
+  const nonZero = new Set();
   for (const [where, graph] of graphs) {
     for (const pool of (Array.isArray(graph.pools) ? graph.pools : [])) {
       if (!pool || typeof pool !== 'object' || typeof pool.id !== 'string' || !pool.id) continue;
@@ -196,6 +214,7 @@ export function scalablePoolTargets(params) {
       if (!Number.isFinite(value)) continue;
       const mode = (target && typeof target === 'object' && typeof target.mode === 'string')
         ? target.mode : null;
+      if (value !== 0) nonZero.add(pool.id);
       const row = byId.get(pool.id)
         ?? { poolId: pool.id, label: pool.id, authored: [] };
       // The first LABEL wins, and the base graph is read first: a pool relabelled in a
@@ -207,7 +226,7 @@ export function scalablePoolTargets(params) {
       byId.set(pool.id, row);
     }
   }
-  return [...byId.values()];
+  return [...byId.values()].filter(r => nonZero.has(r.poolId));
 }
 
 /**
