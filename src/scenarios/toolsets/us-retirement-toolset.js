@@ -35,6 +35,8 @@ import { normalizeDrawdownSequence } from '../../finance/holdings/drawdown-seque
 import { resolveLiquidityGraph, compileToDrawdownSequence, resolveLiquidityGraphSchedule }
   from '../../finance/pools/liquidity-graph.js';
 import { PoolShapeScheduleReducer } from '../../finance/pools/pool-shape-schedule-reducer.js';
+import { MpcDecisionScheduleReducer } from '../../finance/mpc/mpc-decision-schedule-reducer.js';
+import { resolveActiveMpcRun }      from '../../finance/mpc/run-schedule.js';
 import { OutOfFundsHandler }            from '../../finance/handlers/out-of-funds-handler.js';
 import { RetirementDateHandler }        from '../../finance/spending/strategies/retirement-date-handler.js';
 import { ExpenseEventHandler, buildExpenseEventSchedule } from '../../finance/spending/strategies/expense-event-handler.js';
@@ -257,7 +259,7 @@ export const US_RETIREMENT = {
     reducers: [
       ExpenseDebitReducer, HouseRepairApplyReducer, ReplenishSavingsReducer, StockDividendCashApplyReducer, BondCouponCashApplyReducer, CashSleeveInterestApplyReducer, BondSleeveCouponApplyReducer, BondAccretionApplyReducer,
       SetOutOfFundsDateReducer, AccumulateDeficitReducer, OutOfFundsReducer, InflationAdjustReducer,
-      PoolShapeScheduleReducer,
+      PoolShapeScheduleReducer, MpcDecisionScheduleReducer,
       RothContributionApplyReducer, RothWithdrawalContribApplyReducer,
       RothWithdrawalEarningsApplyReducer, RothEarningsApplyReducer,
       RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer,
@@ -585,6 +587,53 @@ export const US_RETIREMENT = {
         type: 'Number', group: 'Mortality', mc: false, opt: false,
         defaultValue: 2.0,
         description: 'Multiplier applied to all monthly expenses during the late-life care window',
+      },
+      // ── design 81 §4 — recorded MPC runs, as a bag plus a scalar selector ──────────
+      {
+        key: 'mpcRuns', label: 'Recorded MPC Runs',
+        type: 'MpcRuns', group: 'MPC Runs', mc: false, opt: false,
+        defaultValue: null,
+        description: 'Recorded closed-loop controller runs, as { <runId>: { source, decisions } } '
+          + '(design 81). A run is the dated list of decisions the MPC cockpit actually '
+          + 'committed: `decisions` is a flat table of { date, lever, key, value } — one row per '
+          + 'decision variable per epoch — and `source` is its provenance (when it was recorded, '
+          + 'the goal, the levers, the solver and budget, the epoch count, and `derivedFrom` when '
+          + 'it was re-solved from another run). Storing the run instead of collapsing it into '
+          + 'age bands is the whole point: design 80 measured that every faithful bake of a '
+          + 'SOLVENT run produced an INSOLVENT scenario, because a die-with-zero plan has no '
+          + 'margin for an epsilon. A run stores no param paths — each lever applies its own '
+          + 'value through its own hook, keyed by age or year — so editing the band table or the '
+          + 'conversion schedule cannot silently re-point a recorded decision. Rows take effect '
+          + 'at the first period advance on or after their date. The bag is inert on its own: '
+          + 'nothing plays until Active MPC Run selects one, so a scenario can carry ten runs '
+          + 'and play none. Blank (the default) = no recorded runs, byte-identical to before.',
+      },
+      {
+        key: 'mpcActiveRun', label: 'Active MPC Run',
+        // `opt: false` for now, deliberately: design 81 §9 wants this as an optimizer ENUM
+        // over the bag's keys, but the candidate set has to come FROM the bag and that is
+        // phase 8. A flag whose engine cannot yet sweep it is a promise no panel can keep
+        // (SWEEP-18), so it is turned on with the machinery, not ahead of it.
+        type: 'Text', group: 'MPC Runs', mc: false, opt: false,
+        defaultValue: null,
+        description: 'Which recorded run governs this plan — a key of Recorded MPC Runs, or '
+          + 'blank for none (design 81 §4). This is the "use optimized parameters" switch: '
+          + 'select a run and the simulation plays the decisions the controller committed, as '
+          + 'the clock reaches each one. Because it is a SCALAR it is also an axis — a decision '
+          + 'graph point over this param ranks recorded plans against each other under Monte '
+          + 'Carlo, and the optimizer can search over it as an ENUM. A selection naming an entry '
+          + 'the bag does not have warns and runs the base plan rather than failing silently.',
+      },
+      {
+        key: 'mpcRunEnabled', label: 'MPC Run Enabled',
+        type: 'Boolean', group: 'MPC Runs', mc: false, opt: false,
+        defaultValue: true,
+        description: 'The OFF switch that KEEPS the selection (design 81 §8), mirroring '
+          + 'Liquidity Pools Enabled. False makes the active run inert without forgetting which '
+          + 'run you were on — toggling a plan on and off against its own base is the most '
+          + 'common thing anyone does with a recorded run, and clearing Active MPC Run to do it '
+          + 'loses the selection every time.',
+        visibleWhen: { param: 'mpcActiveRun', exists: true },
       },
     ];
   },
@@ -1510,6 +1559,21 @@ export const US_RETIREMENT = {
     {
       const schedule = resolveLiquidityGraphSchedule(p, context.accounts ?? []);
       if (schedule) reducers.push(new PoolShapeScheduleReducer({ schedule }));
+    }
+
+    // ── design 81 §5 — the recorded-run switch ────────────────────────────────────
+    //
+    // Registered ONLY when `mpcActiveRun` resolves to an entry of `mpcRuns` and the master
+    // switch is on. The condition is on the SELECTION, not on the bag: a scenario may carry
+    // ten recorded runs and play none, which is what makes the bag safe to accumulate (D4).
+    // Absent is absent — a scenario with no active run has an identical reducer list, an
+    // identical journal and an identical run, so every existing golden stays byte-identical.
+    //
+    // `baseParams: p` because SPENDING's `applyAt` rebuilds the WHOLE band table from the
+    // authored one each period (§6.1) and a reducer cannot reach the param bag any other way.
+    {
+      const run = resolveActiveMpcRun(p);
+      if (run) reducers.push(new MpcDecisionScheduleReducer({ run, baseParams: p }));
     }
 
     reducers.push(new SetOutOfFundsDateReducer());

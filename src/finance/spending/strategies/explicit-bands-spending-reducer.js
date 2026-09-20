@@ -132,6 +132,22 @@ export class ExplicitBandsSpendingReducer extends Reducer {
     this.discretionaryShare  = discretionaryShare;
   }
 
+  /**
+   * The band table in force — design 81 §6.1, the `_poolGraphOf` refactor design 109 already
+   * did on `RebalanceToTargetReducer`.
+   *
+   * A reducer sees only `(state, action, date)`: no service registry, no reach into another
+   * reducer's instance fields. So a lever whose runtime value lives on an instance field
+   * CANNOT be changed mid-run by anything inside the simulation — the only alternative is
+   * `ReducerService.updateReducer`, which is a configuration-layer edit that Monte Carlo, the
+   * optimizer, the CLI tools and the goldens never see. `state.mpcSpendingBands` is a FULL
+   * REPLACEMENT table (D12), the same shape `this.bands` is, so `bandForAge` and the re-pin
+   * below work unchanged and there is one vocabulary rather than two.
+   *
+   * Absent (every run with no active MPC run) ⇒ `this.bands`, i.e. exactly today's behaviour.
+   */
+  _bandsOf(state) { return state?.mpcSpendingBands ?? this.bands; }
+
   reduce(state, action) {
     if (!state.expenses) return this.newState(state);
 
@@ -148,7 +164,7 @@ export class ExplicitBandsSpendingReducer extends Reducer {
     if (!birthDate || asOfMs == null) return this.newState(state);
 
     const age  = getAge(new Date(birthDate), new Date(asOfMs));
-    const band = bandForAge(age, this.bands);
+    const band = bandForAge(age, this._bandsOf(state));
     if (!band) return this.newState(state);
 
     // Re-pin on entering a new band OR when the band's amount itself changed —

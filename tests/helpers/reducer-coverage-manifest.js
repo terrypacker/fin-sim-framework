@@ -139,6 +139,12 @@ export const COVERED = [
   // dropped from the cube, new is left to be seeded cold.
   'PoolShapeScheduleReducer',
 
+  // MRS-6..8 / MRA-1..5: an undecided period adds NO field (so a scenario with no active run
+  // is byte-identical), a crossed date stamps exactly once, a lever with no `applyAt` warns
+  // rather than playing back short, and a played run reproduces the from-scratch date-keyed
+  // plan state for state (design 81 §13's headline — `B ≡ A′` as a regression test).
+  'MpcDecisionScheduleReducer',
+
   // F/G — economic regimes + FX (reducer-postconditions-regimes-fx.test.mjs)
   'RemoveRegimeReducer', 'RegimeApplyReducer', 'BondPriceAdjustReducer', 'FxRefreshReducer',
   // Design 66 §G4 — individual-bond maturity/redemption (bond-maturity.test.mjs)

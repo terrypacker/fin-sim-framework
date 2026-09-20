@@ -33,6 +33,7 @@ import {
 } from '../holdings/holdings-selection.js';
 import { ALLOCATION_SCHEDULE }      from '../behavioral/rebalance-to-target-reducer.js';
 import { HARVEST_FORMS, collapseConsecutive, ageAt, requiresIncludes } from './harvest.js';
+import { LEVER_SCHEDULE }        from './lever-schedule.js';
 
 /**
  * The set of account roles actually present in a live sim state — every entry
@@ -58,6 +59,11 @@ function _presentRolesFromState(state) {
  */
 export const COCKPIT_CONTROLS = {
   SPENDING: {
+    // ── design 81 §4.5 — `scheduleKey` + `applyAt`, the two hooks that let a RECORDED
+    // decision be replayed by the simulation itself. Spread in from `lever-schedule.js` so
+    // the reducer and the toolset that registers it can reach them without importing this
+    // module (and the solver registry behind it). See that file's header.
+    ...LEVER_SCHEDULE.SPENDING,
     key:     'SPENDING',
     label:   'Monthly Spending',
     numeric: true,                       // search range (min/max/step) applies
