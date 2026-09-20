@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-226 parameters · 33 panels · 11 node types (164 fields) · 173 action types · 80 tools · 266 state field types · 72 topics · 119 design docs
+226 parameters · 33 panels · 11 node types (164 fields) · 173 action types · 80 tools · 274 state field types · 72 topics · 119 design docs
 
 ---
 
@@ -333,7 +333,7 @@ scenario's own schema), which is where to go to change it.
 
 ### MPC Runs (3)
 
-- **`mpcActiveRun`** — Active MPC Run · `Text` · default — · via US_RETIREMENT
+- **`mpcActiveRun`** — Active MPC Run · `MpcRunSelect` · default — · via US_RETIREMENT
   Which recorded run governs this plan — a key of Recorded MPC Runs, or blank for none (design 81 §4). This is the "use optimized parameters" switch: select a run and the simulation plays the decisions the controller committed, as the clock reaches each one. Because it is a SCALAR it is also an axis — a decision graph point over this param ranks recorded plans against each other under Monte Carlo, and the optimizer can search over it as an ENUM. A selection naming an entry the bag does not have warns and runs the base plan rather than failing silently.
 - **`mpcRunEnabled`** — MPC Run Enabled · `Boolean` · default `true` · conditional · via US_RETIREMENT
   The OFF switch that KEEPS the selection (design 81 §8), mirroring Liquidity Pools Enabled. False makes the active run inert without forgetting which run you were on — toggling a plan on and off against its own base is the most common thing anyone does with a recorded run, and clearing Active MPC Run to do it loses the selection every time.
@@ -1715,7 +1715,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 
 ---
 
-## State field types (266)
+## State field types (274)
 
 The scenario-INDEPENDENT half of `StateSchemaRegistry`: the globs and exact paths it
 installs in its own constructor, with the value type that decides how each formats.
@@ -1908,6 +1908,14 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `metrics.netWorth` | currency(USD) |
 | `metrics.netWorthInclSpeculative` | currency(USD) |
 | `monthlyExpenses` | currency(USD) |
+| `mpcBondLadderRungs` | integer |
+| `mpcDecisionApplied.date` | date |
+| `mpcDecisionApplied.levers.*` | text |
+| `mpcDecisionApplied.runId` | text |
+| `mpcDecisionApplied.throughMs` | integer |
+| `mpcSpendingBands.*.monthlyAmount` | currency(USD) |
+| `mpcSpendingBands.*.startAge` | integer |
+| `mpcTargetAllocation.*` | percentage |
 | `outOfFundsDate` | date |
 | `people.*.lifeExpectancy` | integer |
 | `people.*.residency` | text |
@@ -2045,7 +2053,7 @@ what the in-app panel keys on.
 | [MC Results](panels/mc-results.md) | panel | 202 | 1 panel · design 100, 89 |
 | [MC Runs](panels/mc-runs.md) | panel | 196 | 1 panel · design 100 |
 | [Mortality and Survivorship](concepts/mortality.md) | concept | 253 | 2 panels · 5 params |
-| [MPC Cockpit](panels/mpc-cockpit.md) | panel | 200 | 1 panel · design 39, 80 |
+| [MPC Cockpit](panels/mpc-cockpit.md) | panel | 250 | 1 panel · design 39, 80 |
 | [Optimize](panels/opt-config.md) | panel | 186 | 1 panel |
 | [OPT Results](panels/opt-results.md) | panel | 186 | 1 panel |
 | [OPT Runs](panels/opt-runs.md) | panel | 139 | 1 panel |

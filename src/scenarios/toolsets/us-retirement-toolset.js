@@ -614,7 +614,12 @@ export const US_RETIREMENT = {
         // over the bag's keys, but the candidate set has to come FROM the bag and that is
         // phase 8. A flag whose engine cannot yet sweep it is a promise no panel can keep
         // (SWEEP-18), so it is turned on with the machinery, not ahead of it.
-        type: 'Text', group: 'MPC Runs', mc: false, opt: false,
+        //
+        // `MpcRunSelect` (design 81 5a) rather than `Enum`: the options come from a sibling
+        // BAG param and each one is LABELLED from its `source`, because a raw run id is not a
+        // choice anyone can make. It also keeps a dangling selection visible as "(not found)"
+        // instead of silently re-pointing at the first run in the bag.
+        type: 'MpcRunSelect', group: 'MPC Runs', mc: false, opt: false,
         defaultValue: null,
         description: 'Which recorded run governs this plan — a key of Recorded MPC Runs, or '
           + 'blank for none (design 81 §4). This is the "use optimized parameters" switch: '

@@ -58,6 +58,7 @@ import { buildRowListEditor }  from '../components/row-list-editor.js';
 import { normalizeLiquidityGraph, compileToDrawdownSequence }
   from '../../finance/pools/liquidity-graph.js';
 import { claimValueNative } from '../../finance/pools/pool-metrics.js';
+import { describeRunSource } from '../../finance/mpc/run-schedule.js';
 
 // ─── small DOM helpers (shared shape with the band editors in scenario-tab-view) ──
 
@@ -1991,4 +1992,217 @@ function buildFlow(f, clauses = []) {
   // graph differ from itself on the next save.
   if (f.ui) out.ui = f.ui;
   return out;
+}
+
+
+// ─── design 81 — recorded MPC runs ────────────────────────────────────────────
+
+/** The `COCKPIT_CONTROLS` keys a decision row's `lever` column may name. */
+const MPC_LEVERS = [
+  'SPENDING', 'ROTH', 'EARLY_WITHDRAWAL',
+  'DRAWDOWN_XBORDER', 'DRAWDOWN_WITHINTIER', 'DRAWDOWN_WEIGHTS', 'DRAWDOWN_SLEEVE',
+  'ALLOCATION_MIX', 'BOND_LADDER',
+];
+
+/**
+ * `mpcActiveRun` — the select that turns a recorded run on (design 81 §8, 5a).
+ *
+ * This IS the "use optimized parameters" control; there is no separate mode flag. Two things
+ * it must do that a plain `Enum` cannot:
+ *
+ *  1. **Label from `source`.** A raw run id (`run:2026-09-18`) is not a choice anyone can make.
+ *     `describeRunSource` is the one formatter, shared with the run editor and `run:save`.
+ *  2. **Keep a dangling selection VISIBLE.** §15's sharp edge: a selection naming a deleted or
+ *     renamed entry must degrade to "no run" *visibly*. `selectInput`'s orphan row is the
+ *     established way to say so — the alternative is a select that silently re-points at the
+ *     first run in the bag and re-saves as that, which is a different plan the user never chose.
+ *
+ * The bag is read at BUILD time from the sibling param, and the select re-reads it on focus, so
+ * a run deleted in the editor below does not leave a stale option standing here.
+ */
+export function buildMpcRunSelect(param, getBag) {
+  const container = el('div', 'mpc-run-select');
+  const NONE = '';
+
+  const render = () => {
+    container.innerHTML = '';
+    const bag = getBag?.() ?? null;
+    const ids = isPlainObject(bag) ? Object.keys(bag) : [];
+
+    const sel = el('select', 'age-band-input');
+    sel.dataset.id = 'mpcActiveRun';
+    const none = el('option', null, '— none —');
+    none.value = NONE;
+    sel.appendChild(none);
+    for (const id of ids) {
+      const o = el('option', null, `${id} — ${describeRunSource(bag[id]?.source, id)}`);
+      o.value = id;
+      sel.appendChild(o);
+    }
+    const current = typeof param.value === 'string' ? param.value : '';
+    if (current && !ids.includes(current)) {
+      const orphan = el('option', null, `${current} (not found)`);
+      orphan.value = current;
+      sel.appendChild(orphan);
+    }
+    sel.value = current;
+    sel.addEventListener('change', () => {
+      // `null`, not `''`: `resolveActiveMpcRun` treats both as "no run", but the param's
+      // declared default is null and a scenario that round-trips through the editor should
+      // come back byte-identical to one that was never opened.
+      param.value = sel.value === NONE ? null : sel.value;
+      render();
+    });
+    sel.addEventListener('focus', render);
+    container.appendChild(sel);
+
+    const note = el('div', 'row-list-empty');
+    note.dataset.id = 'mpcActiveRunNote';
+    if (!ids.length) {
+      note.textContent = 'No recorded runs in this scenario — run the MPC cockpit and press '
+        + '“Save run to plan”.';
+    } else if (!current) {
+      note.textContent = `${ids.length} recorded run(s) available, none playing — the base plan runs.`;
+    } else if (!ids.includes(current)) {
+      note.textContent = `“${current}” is not in this scenario’s runs, so the BASE plan runs. `
+        + 'Select an existing run, or clear the selection.';
+    } else {
+      const src = bag[current]?.source ?? {};
+      const rows = bag[current]?.decisions?.length ?? 0;
+      note.textContent = `Playing ${rows} recorded decision(s)`
+        + (src.first ? `, ${String(src.first).slice(0, 10)} → ${String(src.last).slice(0, 10)}` : '')
+        + '. Each takes effect at the first period advance on or after its date.';
+    }
+    container.appendChild(note);
+  };
+
+  render();
+  container.refresh = render;
+  return container;
+}
+
+/**
+ * The order `resolveActiveMpcRun` normalizes a run's rows into — date, then lever, then key.
+ *
+ * The tie-break is not decoration: two rows for the same (lever, key) on the same date are a
+ * last-wins collapse, and "last" has to mean the same thing in the editor as it does at load
+ * or the table shows one winner and the simulation plays another.
+ */
+const DECISION_ORDER = (a, b) =>
+  String(a?.date ?? '').localeCompare(String(b?.date ?? ''))
+  || String(a?.lever ?? '').localeCompare(String(b?.lever ?? ''))
+  || String(a?.key ?? '').localeCompare(String(b?.key ?? ''));
+
+/**
+ * `mpcRuns` — the run picker (design 81 §8, 5b).
+ *
+ * Named blocks over `buildRowListEditor`, the shape `buildLiquidityShapesEditor` already uses
+ * for a bag-of-named-things param. Each entry shows its `source` line, its row count, Delete,
+ * and expands to the decision table.
+ *
+ * ─── why the decision table is FLAT (§4.4) ───────────────────────────────────────
+ *
+ * Four scalar columns, not a `{ date, params: {…} }` blob per epoch. Flat buys the interaction
+ * for free: filter to one lever, sort by date, delete the one epoch that was wrong, change the
+ * one value you want to try. A JSON blob in a table cell is the shape every structured editor
+ * in this repo exists to avoid.
+ *
+ * ─── `derivedFrom` renders as a tree, held as a parent pointer (§4.3) ────────────
+ *
+ * `DecisionRecordStorage.save` persists nodes without edges, so lineage cannot live on graph
+ * edges and survive a reload. The entry carries its parent's id and the block states it.
+ */
+export function buildMpcRunsEditor(param, onSelectionMayChange = null) {
+  const value = isPlainObject(param.value) ? param.value : {};
+  const runs  = Object.entries(value).map(([id, entry]) => ({ id, entry: entry ?? {} }));
+
+  const sync = () => {
+    const kept = runs.filter(r => r.id);
+    // `null` rather than `{}` for an emptied bag: the param's default is null, and an empty
+    // object would make a scenario that once held a run differ from one that never did.
+    param.value = kept.length ? Object.fromEntries(kept.map(r => [r.id, r.entry ?? {}])) : null;
+  };
+  sync();
+
+  const container = el('div', 'age-band-list-editor mpc-runs-editor');
+
+  const render = () => {
+    container.innerHTML = '';
+    if (!runs.length) {
+      container.appendChild(el('div', 'row-list-empty',
+        'No recorded runs. The MPC cockpit’s “Save run to plan” writes one here.'));
+    }
+
+    runs.forEach((run, idx) => {
+      const block = el('div', 'mix-block');
+      block.dataset.id = `mpc-run-${idx}`;
+
+      const head = el('div', 'mix-block-head');
+      head.appendChild(el('span', 'age-band-col-label', 'Run id'));
+      const idInput = textInput({ value: run.id, placeholder: 'run:2026-09-18', id: 'run-id' });
+      idInput.addEventListener('change', () => {
+        run.id = idInput.value.trim() || null;
+        sync();
+        // A rename orphans `mpcActiveRun`, which the select above renders as "(not found)"
+        // rather than silently re-pointing. Tell it to re-read (§15's sharp edge).
+        onSelectionMayChange?.();
+        render();
+      });
+      head.appendChild(idInput);
+      head.appendChild(removeButton('Delete run', () => {
+        runs.splice(idx, 1); sync(); onSelectionMayChange?.(); render();
+      }));
+      block.appendChild(head);
+
+      const src = isPlainObject(run.entry.source) ? run.entry.source : null;
+      const provenance = el('div', 'pool-shape-diff', describeRunSource(src, run.id));
+      provenance.dataset.id = `mpc-run-source-${idx}`;
+      block.appendChild(provenance);
+
+      if (src?.derivedFrom) {
+        const lineage = el('div', 'pool-shape-diff', `re-solved from ${src.derivedFrom}`);
+        lineage.dataset.id = `mpc-run-derived-${idx}`;
+        block.appendChild(lineage);
+      }
+
+      if (!Array.isArray(run.entry.decisions)) run.entry.decisions = [];
+      // Sorted ON OPEN, not only after an edit: the table must read in the order the run
+      // PLAYS from the moment it is opened, and this is the comparator `resolveActiveMpcRun`
+      // already applies on every load — so the sorted form IS the canonical one, and writing
+      // it back makes the saved file match what the simulation does with it.
+      run.entry.decisions.sort(DECISION_ORDER);
+      block.appendChild(buildRowListEditor({
+        rows: run.entry.decisions,
+        columns: [
+          { field: 'date',  label: 'Date',  type: 'text',   placeholder: '2031-01-01', width: '1.2fr' },
+          { field: 'lever', label: 'Lever', type: 'select',
+            options: MPC_LEVERS.map(k => [k, k]), width: '1.4fr' },
+          // Free text, deliberately: the legal keys depend on the lever AND on the plan
+          // (`band@69` exists only if that band does), so a select would either be wrong or
+          // would need the whole param bag. A typo'd key is inert, not dangerous — `applyAt`
+          // skips a row it cannot parse.
+          { field: 'key',   label: 'Key',   type: 'text',   placeholder: 'band@69', width: '1.4fr' },
+          { field: 'value', label: 'Value', type: 'text',   placeholder: '9000', width: '1fr' },
+        ],
+        newRow: () => ({ date: '', lever: MPC_LEVERS[0], key: '', value: '' }),
+        addLabel: '+ Add Decision',
+        emptyText: 'No decisions — this run changes nothing.',
+        // The same comparator after every edit, so a retyped date jumps to where it belongs.
+        sortBy: DECISION_ORDER,
+        onChange: () => { sync(); render(); },
+      }));
+
+      container.appendChild(block);
+    });
+
+    container.appendChild(addButton('+ Add Run', () => {
+      runs.push({ id: null, entry: { source: { recordedAt: new Date().toISOString() }, decisions: [] } });
+      sync();
+      render();
+    }, 'addRun'));
+  };
+
+  render();
+  container.refresh = render;
+  return container;
 }

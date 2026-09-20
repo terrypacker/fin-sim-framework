@@ -304,6 +304,22 @@ export class StateSchemaRegistry {
     this.register('expenses.discretionary',      ParameterValueType.currency('USD'));
     this.register('ageBandSpending.appliedFactor', ParameterValueType.decimal(4));
 
+    // ── design 81 §5 / §6 — the fields a recorded MPC run stamps ─────────────────
+    //
+    // Typing them is what makes a decision LEGIBLE where a user actually watches one land:
+    // the journal diff and the state viewer. Untyped, `mpcDecisionApplied.date` renders as a
+    // raw ISO string and `mpcSpendingBands.*.monthlyAmount` as a bare number, so the one
+    // visible marker the design asks for arrives as noise. `mpcDecisionApplied.date` is the
+    // date the decision became LIVE, not the date it was recorded (D6).
+    this.register('mpcDecisionApplied.runId',     ParameterValueType.text());
+    this.register('mpcDecisionApplied.date',      ParameterValueType.date());
+    this.register('mpcDecisionApplied.throughMs', ParameterValueType.integer());
+    this.registerPattern('mpcDecisionApplied.levers.*', ParameterValueType.text());
+    this.registerPattern('mpcSpendingBands.*.startAge',      ParameterValueType.integer());
+    this.registerPattern('mpcSpendingBands.*.monthlyAmount', ParameterValueType.currency('USD'));
+    this.registerPattern('mpcTargetAllocation.*',  ParameterValueType.percentage());
+    this.register('mpcBondLadderRungs',            ParameterValueType.integer());
+
     // US YTD
     this.register('usOrdinaryIncomeYTD',         ParameterValueType.currency('USD'));
     this.register('usNegativeIncomeYTD',         ParameterValueType.currency('USD'));

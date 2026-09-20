@@ -15,6 +15,7 @@ import {
   buildMixListEditor, buildAllocationGlidepathEditor, buildAllocationRegimeTargetsEditor,
   buildDrawdownSequenceEditor, buildLiquidityGraphEditor,
   buildLiquidityShapesEditor, buildLiquidityGraphScheduleEditor,
+  buildMpcRunsEditor, buildMpcRunSelect,
   buildLocationPolicyEditor, buildYieldCurveShapeEditor, buildYieldCurveScheduleEditor,
   buildRateKeyMapEditor,
 } from './structured-param-editors.js';
@@ -656,6 +657,21 @@ export class ScenarioTabView {
           const src = scenario.params.find(x => x.name === 'liquidityShapes')?.value;
           return isPlainObject_(src) ? Object.keys(src) : [];
         });
+      } else if (param.type === 'MpcRuns') {
+        // Design 81 §8 / 5b. The two params are siblings and each has to see the other: the
+        // editor renames or deletes a run, and the select above has to stop offering it (or
+        // start saying "(not found)" when it was the one selected) without a full re-render.
+        valueInput = buildMpcRunsEditor(param, () => {
+          const sel = scenario.params.find(x => x.name === 'mpcActiveRun');
+          sel?._editor?.refresh?.();
+        });
+      } else if (param.type === 'MpcRunSelect') {
+        // Read the bag LIVE off the sibling param for the same reason the liquidity schedule
+        // editor reads its shape ids live: a run added or renamed without a full re-render
+        // must still be offered here.
+        valueInput = buildMpcRunSelect(param, () =>
+          scenario.params.find(x => x.name === 'mpcRuns')?.value);
+        param._editor = valueInput;
       } else if (param.type === 'DrawdownStrategyList') {
         valueInput = _buildDrawdownStrategyListEditor(
           param, () => this._maybeRerenderForController(param, scenario),

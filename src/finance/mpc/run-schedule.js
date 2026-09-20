@@ -197,3 +197,33 @@ export function truncateActiveRunAt(params, asOf) {
     },
   };
 }
+
+/**
+ * The picker's one-line label for a bag entry (§8) — `2 levers · CEM/128 · 2026-09-18 · 44 epochs`.
+ *
+ * Shared by the `mpcActiveRun` select, the run editor and `run:save`, so the three cannot
+ * describe the same entry differently. A raw run id is not a choice anyone can make.
+ *
+ * It lives HERE, beside the resolver, rather than in `run-record.js` where `source` is built,
+ * because the consumers are a UI editor and a CLI and this module imports nothing (§16.5). A
+ * formatter that drags `OptimizationProblem` into `structured-param-editors.js` is the same
+ * mistake in a different file.
+ */
+export function describeRunSource(source, runId = null) {
+  if (!source) return runId ?? 'recorded run';
+  const parts = [];
+  const n = source.levers?.length ?? 0;
+  if (n) parts.push(`${n} lever${n === 1 ? '' : 's'}`);
+  if (source.solver) parts.push(source.solver);
+  if (source.recordedAt) parts.push(String(source.recordedAt).slice(0, 10));
+  if (source.epochs) parts.push(`${source.epochs} epoch${source.epochs === 1 ? '' : 's'}`);
+  return parts.length ? parts.join(' · ') : (runId ?? 'recorded run');
+}
+
+/** A bag key that is legible in a select and does not collide with one already there. */
+export function makeRunKey(source, existingBag = null) {
+  const base = `run:${String(source?.recordedAt ?? '').slice(0, 10) || 'undated'}`;
+  let key = base, n = 2;
+  while (existingBag && Object.prototype.hasOwnProperty.call(existingBag, key)) key = `${base}#${n++}`;
+  return key;
+}

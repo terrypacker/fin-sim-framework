@@ -35,9 +35,6 @@ import { checkHarvestFeasibility } from './harvest-feasibility.js';
  * summary a human can argue with is still worth having, it is just no longer what the plan is.
  */
 
-/** ISO day, for run ids and the picker's label. */
-function _day(iso) { return String(iso ?? '').slice(0, 10); }
-
 /**
  * Turn a run's decision records into the `{ date, lever, key, value }` table §4.4 specifies.
  *
@@ -153,30 +150,12 @@ export function buildRunEntry(records = [], {
   return { entry: { source, decisions }, warnings };
 }
 
-/**
- * The picker's one-line label (§8) — `9 levers · CEM/128 · 2026-09-18 · 44 epochs`.
- *
- * Shared by the UI select, the run picker and `run:inspect` so the three cannot describe the
- * same entry differently.
+/*
+ * `describeRunSource` / `makeRunKey` live in `run-schedule.js` (which imports nothing) and are
+ * re-exported here so the CLI keeps one import. The UI needs them and must not drag this
+ * module's `OptimizationProblem` dependency into an editor — §16.5's rule, one file over.
  */
-export function describeRunSource(source, runId = null) {
-  if (!source) return runId ?? 'recorded run';
-  const parts = [];
-  const n = source.levers?.length ?? 0;
-  if (n) parts.push(`${n} lever${n === 1 ? '' : 's'}`);
-  if (source.solver) parts.push(source.solver);
-  if (source.recordedAt) parts.push(_day(source.recordedAt));
-  if (source.epochs) parts.push(`${source.epochs} epoch${source.epochs === 1 ? '' : 's'}`);
-  return parts.length ? parts.join(' · ') : (runId ?? 'recorded run');
-}
-
-/** A bag key that is legible in a select and stable across a session. */
-export function makeRunKey(source, existingBag = null) {
-  const base = `run:${_day(source?.recordedAt) || 'undated'}`;
-  let key = base, n = 2;
-  while (existingBag && Object.prototype.hasOwnProperty.call(existingBag, key)) key = `${base}#${n++}`;
-  return key;
-}
+export { describeRunSource, makeRunKey } from './run-schedule.js';
 
 /**
  * The design 80 F1 promotion gate, reused rather than rebuilt.
