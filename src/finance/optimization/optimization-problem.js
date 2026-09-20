@@ -12,6 +12,7 @@ import { ServiceRegistry }     from '../../services/service-registry.js';
 import { IntlRetirementScenario } from '../../scenarios/intl-retirement-scenario.js';
 import { ScenarioLoader }      from '../../scenarios/scenario-loader.js';
 import { applyParamBagToConfig, resolveAliasCenters } from '../../scenarios/scenario-param-apply.js';
+import { resolveLiquidityAxisCenters } from '../pools/pool-target-scale.js';
 import { ScenarioSerializer }  from '../../scenarios/scenario-serializer.js';
 import { computeNetWorth, computeNetWorthInclSpeculative } from '../derived-metrics/net-worth.js';
 import { computeNetLiquidity } from '../derived-metrics/net-liquidity.js';
@@ -149,7 +150,11 @@ export class OptimizationProblem {
    */
   _resolveBase() {
     const raw = this._rawTemplate();
-    this._resolvedBase ??= { ...scenarioParamValues(raw), ...resolveAliasCenters(raw), ...this.baseParams };
+    // Leg C's axes (design 110 §6.2 / §6.3) are HIDDEN generated params, so they are in
+    // neither `cfg.params` nor `paramSchemaDefaults` and the base would carry no value for them —
+    // the same gap `resolveAliasCenters` fills for a legacy-keyed lever.
+    this._resolvedBase ??= { ...scenarioParamValues(raw), ...resolveAliasCenters(raw),
+                             ...resolveLiquidityAxisCenters(raw), ...this.baseParams };
     return this._resolvedBase;
   }
 

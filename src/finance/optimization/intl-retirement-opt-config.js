@@ -20,6 +20,12 @@ import { indexParamSchema, resolveSweepVariables, harvestSweepVariables,
          groupWithAliasSuccessor } from '../param-schema-utils.js';
 import { INTL_RETIREMENT_PARAM_ALIASES } from '../../scenarios/intl-retirement-scenario.js';
 import { ScenarioParamGenerator } from '../../scenarios/params/scenario-param-generator.js';
+import { scalablePoolTargets, poolTargetScaleKey, poolTargetScaleLabel, POOL_TARGET_SCALE_RANGE }
+                                     from '../pools/pool-target-scale.js';
+import { gateClauseAxes, gateAxisKey, gateAxisLabel, GATE_AXIS_FIELD,
+  GATE_THRESHOLD_RANGES, GATE_DWELL_RANGE } from '../pools/pool-gate-axis.js';
+import { scheduledShapeAxes, shapeYearShiftKey, shapeYearShiftLabel, SHAPE_YEAR_SHIFT_RANGE }
+                                     from '../pools/pool-shape-year-axis.js';
 
 // Lazily index the full param schema by key so Opt variables can inherit identity
 // (label / options / visibleWhen) from it rather than duplicating it here.
@@ -590,6 +596,97 @@ function buildInheritedRaOptConfigs(params) {
 }
 
 /**
+ * The liquidity-pool size axes (design 110 §6.2 / §10.3), one per pool the plan gives a
+ * numeric target. `enabled: false`, so they surface only on a plan that authors pools.
+ *
+ * A CURATED contributor rather than a schema harvest, for two reasons and the second is the
+ * one that matters:
+ *
+ *   - the schema entry is `hidden` (the `BALANCE_TARGET` pattern — see
+ *     `ScenarioParamGenerator._expandPoolTargetScales`), and `harvestSweepVariables`
+ *     deliberately skips hidden entries;
+ *   - a factor CENTRED ON 1.0 has no sensible harvested range. `optRowFor`'s `rate` kind
+ *     would offer 0.98 … 1.02 — an axis that reads as a lever, sweeps as a lever and returns
+ *     three near-identical rollouts. The range below is in units of the authored target:
+ *     half it, double it, in quarter steps.
+ *
+ * The label names the authored values the factor multiplies (§10.3) and says how many shapes
+ * one factor moves (§6.4); `poolTargetScaleLabel` owns both sentences so the Opt list, the
+ * grid axis list and the generated schema entry cannot disagree about them.
+ *
+ * NOT `controllable`: the graph is resolved once, when the reducers are built, so an MPC
+ * controller re-deciding this between periods would change nothing. A control that cannot
+ * actuate is worse than a missing one.
+ */
+function buildPoolOptConfigs(params) {
+  return scalablePoolTargets(params).map(row => ({
+    paramKey: poolTargetScaleKey(row.poolId),
+    label:    poolTargetScaleLabel(row),
+    type:     OPT_PARAM_TYPES.CONTINUOUS,
+    ...POOL_TARGET_SCALE_RANGE,
+    group:    'Liquidity Pools',
+    enabled:  false,
+  }));
+}
+
+/**
+ * The gate-clause axes (design 110 §6.3), one or two per id'd clause. `enabled: false`.
+ *
+ * A curated contributor for the same two reasons the pool axis is, and a third of its own: the
+ * ranges are per CLAUSE KIND and absolute (`GATE_THRESHOLD_RANGES`). §20.13's measurement swept
+ * 1 %, 5 % and 10 % — a factor of ten — and `optRowFor`'s `rate` kind would offer ±0.02 around
+ * the authored value, which reaches neither end of the thing that motivated the axis.
+ *
+ * The dwell is an INTEGER axis, in years and never periods: this reducer fires on both
+ * US_ and AU_PERIOD_ADVANCE, so a dwell counted in evaluations would mean one year in a US-only
+ * plan and half a year in a cross-border one (§20.15).
+ */
+function buildGateOptConfigs(params) {
+  const out = [];
+  for (const row of gateClauseAxes(params)) {
+    const range = GATE_THRESHOLD_RANGES[row.kind];
+    if (range) {
+      out.push({
+        paramKey: gateAxisKey(row.clauseId, GATE_AXIS_FIELD.THRESHOLD),
+        label:    gateAxisLabel(row, GATE_AXIS_FIELD.THRESHOLD),
+        type:     OPT_PARAM_TYPES.CONTINUOUS,
+        ...range, group: 'Liquidity Pools', enabled: false,
+      });
+    }
+    out.push({
+      paramKey: gateAxisKey(row.clauseId, GATE_AXIS_FIELD.DWELL),
+      label:    gateAxisLabel(row, GATE_AXIS_FIELD.DWELL),
+      type:     OPT_PARAM_TYPES.INTEGER,
+      ...GATE_DWELL_RANGE, group: 'Liquidity Pools', enabled: false,
+    });
+  }
+  return out;
+}
+
+/**
+ * The shape-switch year axes (design 110 §6.4, design 109 Q1), one per SCHEDULED shape.
+ *
+ * An INTEGER axis in years, centred on 0: the key is a SHIFT, so ±5 years either way is the
+ * span, and a grid of -2 / 0 / +2 reads as the question the author asked ("what does moving the
+ * bridge two years earlier do") rather than as three calendar years whose distance apart depends
+ * on the plan.
+ *
+ * A shift that lands one switch on another's year is refused by `_normalizeSchedule`'s own
+ * duplicate-year rule, not clamped here (§17.2 — no second validator). `poolAxisProblems` warns
+ * when switches sit close enough for that to bite.
+ */
+function buildShapeYearOptConfigs(params) {
+  return scheduledShapeAxes(params).map(row => ({
+    paramKey: shapeYearShiftKey(row.shapeId),
+    label:    shapeYearShiftLabel(row),
+    type:     OPT_PARAM_TYPES.INTEGER,
+    ...SHAPE_YEAR_SHIFT_RANGE,
+    group:    'Liquidity Pools',
+    enabled:  false,
+  }));
+}
+
+/**
  * Build the full optimization variable list for a given param snapshot.
  *
  * Returns DEFAULT_OPTIMIZATION_CONFIGS plus one severity entry per configured
@@ -617,6 +714,9 @@ export function buildOptVariables(params, accounts = null, { cfg = null } = {}) 
     ...buildExpenseBandOptConfigs(params),
     ...buildRothScheduleOptConfigs(params),
     ...buildInheritedRaOptConfigs(params),
+    ...buildPoolOptConfigs(params),
+    ...buildGateOptConfigs(params),
+    ...buildShapeYearOptConfigs(params),
   ];
   const schema = [
     ...IntlRetirementScenario.buildFullParamSchema(),

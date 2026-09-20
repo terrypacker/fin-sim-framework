@@ -31,6 +31,8 @@
 import assert from 'node:assert/strict';
 import { LiquidityPoolsPlugin, POOL_CSV_COLUMNS }
   from '../../src/visualization/workbench/plugins/finance/liquidity-pools-plugin.js';
+import { poolHistoryRows, poolSeries, poolTopology }
+  from '../../src/finance/pools/pool-history.js';
 
 const RUNTIME = { bus: { subscribe: () => () => {} } };
 
@@ -711,8 +713,13 @@ test('§109: the strip names the live shape and the date it actually took over',
   ];
   const { plugin } = mountPlugin(simOf(run, { state: { liquidityShapeId: 'bridge' } }));
   const notes = q(plugin, 'provenance').textContent;
-  assert.match(notes, /shape\s*bridge/);
-  assert.match(notes, /since 2035-07-01/);
+  // Design 110 §5.3 widened this from the LIVE shape to every shape the run passed through:
+  // the strip named only the last one, so a run through three shapes reported the third and
+  // the two it spent most of its life in were invisible. The date property is unchanged and
+  // is the one that matters — 2035-07-01, the advance the switch landed on, not the
+  // authored 2035-01-01.
+  assert.match(notes, /shapes\s*base graph/, 'the run OPENED on the base graph');
+  assert.match(notes, /bridge\s*since 2035-07-01/);
   plugin.unmount();
 });
 
@@ -723,13 +730,301 @@ test('§109: a run sitting on the base graph says so rather than naming a shape'
   ])];
   const { plugin } = mountPlugin(simOf(run, { state: { liquidityShapeId: null } }));
   const notes = q(plugin, 'provenance').textContent;
-  assert.match(notes, /shape\s*base graph/);
-  assert.doesNotMatch(notes, /since/, 'nothing has switched, so there is no date to give');
+  assert.match(notes, /shapes\s*base graph/);
+  // Still no "since": the run never switched, and the opening span reads "from" — the date
+  // the run STARTED, which is a different claim from the date something changed.
+  assert.doesNotMatch(notes, /since/, 'nothing has switched, so there is no switch date');
+  assert.match(notes, /from 2030-01-01/);
   plugin.unmount();
 });
 
 test('§109: a run with NO schedule is unchanged — the strip says nothing about shapes', () => {
   const { plugin } = mountPlugin(simOf(RUN));
   assert.doesNotMatch(q(plugin, 'provenance').textContent, /shape/);
+  plugin.unmount();
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Design 110 §5.3 (phase 4) — shape boundaries on the panel
+//
+// Three items, one theme: a shape switch is the largest structural discontinuity the graph
+// can experience — a pool can be RETIRED at one — and the panel drew a continuous line
+// through it, named only the last shape, and could not group the fact table by shape at all.
+// ═════════════════════════════════════════════════════════════════════════════
+
+/** A run through THREE shapes: base graph → bridge (mid-2035) → late (mid-2040). */
+const TWO_SWITCH_RUN = () => [
+  entry('2030-01-01', [
+    { field: 'liquidityPools', before: null, after: { offset: CUBE(), growth: CUBE() } },
+  ]),
+  entry('2035-07-01', [
+    { field: 'liquidityShapeId', before: null, after: 'bridge' },
+    { field: 'liquidityPools.offset.balance', before: 400_000, after: 420_000 },
+  ]),
+  entry('2040-07-01', [
+    { field: 'liquidityShapeId', before: 'bridge', after: 'late' },
+    { field: 'liquidityPools.offset.balance', before: 420_000, after: 440_000 },
+  ]),
+];
+
+test('CTRL-6: two switches draw two markers, at the dates the switches took effect', () => {
+  const { plugin } = mountPlugin(simOf(TWO_SWITCH_RUN(), { state: { liquidityShapeId: 'late' } }));
+  const hist = plugin._history();
+  const axis = ['2030-01-01', '2035-07-01', '2040-07-01'];
+  const marks = plugin._shapeMarks(hist, axis);
+
+  assert.equal(marks.length, 2, 'two switches, two markers — the run START is not a switch');
+  assert.deepEqual(marks.map(m => m.name), ['bridge', 'late'],
+    'each marker names the INCOMING shape');
+  // The dates the advances landed on, NOT 1 January of the authored years. Design 109 §7
+  // switches at the first advance on or after 1 January, which on a semi-annual cadence is
+  // up to six months later; a marker on the typed year sits beside a chart that has not
+  // switched yet.
+  assert.deepEqual(marks.map(m => axis[m.x]), ['2035-07-01', '2040-07-01']);
+  plugin.unmount();
+});
+
+test('CTRL-6: the markers reach every time-series view, and are hideable', () => {
+  const { plugin } = mountPlugin(simOf(TWO_SWITCH_RUN(), { state: { liquidityShapeId: 'late' } }));
+  const hist = plugin._history();
+  const ids  = plugin._visiblePools(hist);
+  const axis = poolSeries(hist, 'balance', ids).labels;
+
+  for (const view of ['cover', 'stock', 'flows']) {
+    plugin._view = view;
+    const specs = plugin._seriesSpecs(hist, ids, { dark: false, ink: '#000', axis });
+    const sp = specs.find(x => x.key === '__reserve::shapes');
+    assert.ok(sp, `the ${view} view must carry the shape boundaries`);
+    assert.equal(sp.series.markLine.data.length, 2);
+    assert.deepEqual(sp.series.markLine.data.map(d => d.name), ['bridge', 'late']);
+    // It comes out of `_seriesSpecs`, so the picker and the hide machinery reach it for free
+    // — the §23.6 rule that a view must not grow a second list of what it draws.
+    assert.equal(specs[specs.length - 1].key, '__reserve::shapes',
+      'added last, so it does not sit between two pools in the picker');
+  }
+  plugin.unmount();
+});
+
+test('CTRL-6: a run that never switches draws no markers', () => {
+  // A marker on the first category has nothing to its left to separate it from, so the
+  // opening span is not a switch and takes none.
+  const run = [entry('2030-01-01', [
+    { field: 'liquidityShapeId', before: undefined, after: null },
+    { field: 'liquidityPools', before: null, after: { offset: CUBE(), growth: CUBE() } },
+  ])];
+  const { plugin } = mountPlugin(simOf(run, { state: { liquidityShapeId: null } }));
+  assert.deepEqual(plugin._shapeMarks(plugin._history(), ['2030-01-01']), []);
+  plugin.unmount();
+});
+
+test('CTRL-6: a run with NO schedule carries no boundary series at all', () => {
+  const { plugin } = mountPlugin(simOf(RUN));
+  const hist = plugin._history();
+  const ids  = plugin._visiblePools(hist);
+  const axis = poolSeries(hist, 'balance', ids).labels;
+  const specs = plugin._seriesSpecs(hist, ids, { dark: false, ink: '#000', axis });
+  assert.equal(specs.filter(x => x.key === '__reserve::shapes').length, 0);
+  plugin.unmount();
+});
+
+test('CTRL-6: the strip names EVERY shape with its own date, not just the last', () => {
+  // The defect: a run through three shapes reported the third, and the two the plan spent
+  // most of its life in were invisible. §23.6 already learned that a run-level statement
+  // belongs in the strip — and "the last one" is not a run-level statement.
+  const { plugin } = mountPlugin(simOf(TWO_SWITCH_RUN(), { state: { liquidityShapeId: 'late' } }));
+  const notes = q(plugin, 'provenance').textContent;
+  assert.match(notes, /base graph\s*from 2030-01-01/);
+  assert.match(notes, /bridge\s*since 2035-07-01/);
+  assert.match(notes, /late\s*since 2040-07-01/);
+  plugin.unmount();
+});
+
+test('CTRL-6: `shape` is a CSV column and changes on the row the switch landed on', () => {
+  const { plugin } = mountPlugin(simOf(TWO_SWITCH_RUN(), { state: { liquidityShapeId: 'late' } }));
+  assert.ok(POOL_CSV_COLUMNS.includes('shape'), 'the fact table must be groupable by shape');
+
+  const rows = poolHistoryRows(plugin._history());
+  const byDate = new Map();
+  for (const r of rows) if (!byDate.has(r.date)) byDate.set(r.date, r.shape);
+  // Empty before the first switch: the base graph is not a named shape, and writing 'base'
+  // would put a name in the column that appears in no scenario file.
+  assert.equal(byDate.get('2030-01-01'), '');
+  assert.equal(byDate.get('2035-07-01'), 'bridge');
+  assert.equal(byDate.get('2040-07-01'), 'late');
+  plugin.unmount();
+});
+
+test('CTRL-6: every pool’s row on one date carries the same shape', () => {
+  // Per-PERIOD, like the reserve figures — it repeats down every pool's row, which is what
+  // makes "group by shape" answer a question about the whole plan rather than one pool.
+  const { plugin } = mountPlugin(simOf(TWO_SWITCH_RUN(), { state: { liquidityShapeId: 'late' } }));
+  const onSwitch = poolHistoryRows(plugin._history()).filter(r => r.date === '2035-07-01');
+  assert.ok(onSwitch.length > 1, 'the fixture must have several pools, or this proves nothing');
+  assert.deepEqual([...new Set(onSwitch.map(r => r.shape))], ['bridge']);
+  plugin.unmount();
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Design 110 §5.2 (phase 5) — the topology view
+//
+// The fifth view, and the first that is not a time series. §21.6 deferred the topology and
+// the sankey together; §5.2 re-argued that the shared objection — "neither shows a non-event"
+// — is true of a sankey (volume is ribbon WIDTH, so a flow that moved nothing has width zero)
+// and false of a topology (structure is the mark, counts are a LABEL).
+// ═════════════════════════════════════════════════════════════════════════════
+
+const showTopology = (plugin) => { plugin._view = 'topology'; plugin._render(); };
+const svgOf = (plugin) => q(plugin, 'grid').querySelector('svg.pool-topology');
+
+test('CTRL-7: the per-edge counts equal the flow log’s row counts for the same run', () => {
+  // §23.6's failure shape is two derivations of one number. `poolTopology` reads the same
+  // `hist.events` the log renders, so they tie by construction — this is the assertion that
+  // keeps it that way.
+  const { plugin } = mountPlugin(simOf(RUN));
+  const hist = plugin._history();
+  const topo = poolTopology(hist, plugin._reducer()?.graph ?? null);
+
+  const logFired = hist.events.filter(e => e.kind === 'FIRED'  && e.flowId === 'g2o').length;
+  const logGated = hist.events.filter(e => e.kind === 'GATED'  && e.flowId === 'g2o').length;
+  const edge = topo.edges.find(e => e.id === 'g2o');
+  assert.equal(edge.fired, logFired);
+  assert.equal(edge.gated, logGated);
+  assert.ok(logFired > 0 && logGated > 0, 'the fixture must exercise BOTH, or this proves nothing');
+
+  // A veto carries no flow id (§12.4c), so it belongs to the POOL that could not be sold —
+  // putting it on an edge would invent an attribution the run never made.
+  const logVetoed = hist.events.filter(e => e.kind === 'VETOED' && e.from === 'growth').length;
+  assert.equal(topo.nodes.find(n => n.id === 'growth').vetoed, logVetoed);
+  plugin.unmount();
+});
+
+test('CTRL-7: an edge that NEVER fired is still drawn — the sankey’s blind spot', () => {
+  // §5.2's whole argument over a ribbon of width zero. The edges come from the GRAPH; only
+  // the counts come from the events.
+  const graph = {
+    pools: [{ id: 'offset', label: 'The backstop' }, { id: 'growth', label: 'Bucket 3' }],
+    flows: [{ id: 'g2o', from: 'growth', to: 'offset' },
+            { id: 'never', from: 'offset', to: 'growth' }],
+  };
+  const { plugin } = mountPlugin(simOf(RUN, { graph }));
+  showTopology(plugin);
+
+  const topo = poolTopology(plugin._history(), graph);
+  const dead = topo.edges.find(e => e.id === 'never');
+  assert.ok(dead, 'an edge that moved nothing must still be an edge');
+  assert.deepEqual([dead.fired, dead.gated], [0, 0]);
+  assert.ok(svgOf(plugin).querySelector('[data-pool-edge="never"]'),
+    'and it must be DRAWN — this is the one thing a sankey structurally cannot do');
+  plugin.unmount();
+});
+
+test('CTRL-7: the view renders without a canvas, unlike every other non-log view', () => {
+  // jsdom provides no canvas, so `_drawChart` no-ops — which is also a docked panel before
+  // its first activation. A whole view that silently did not exist in those states would be
+  // §23.6's "a control the reader cannot find" at full size.
+  const { plugin } = mountPlugin(simOf(RUN));
+  showTopology(plugin);
+  const svg = svgOf(plugin);
+  assert.ok(svg, 'the topology must render as DOM, not through ECharts');
+  assert.equal(svg.querySelectorAll('[data-pool-node]').length, 2);
+  assert.equal(svg.querySelectorAll('[data-pool-edge]').length, 1);
+  // The chart is hidden and the grid shown, exactly as for the log.
+  assert.equal(q(plugin, 'chart').style.display, 'none');
+  assert.notEqual(q(plugin, 'grid').style.display, 'none');
+  plugin.unmount();
+});
+
+test('CTRL-7: the series picker and the values toggle are hidden — there are no series', () => {
+  // A filter that does nothing is worse than no filter (the rule the log already follows).
+  const { plugin } = mountPlugin(simOf(RUN));
+  showTopology(plugin);
+  plugin._syncControls();
+  assert.equal(q(plugin, 'picker').style.display, 'none');
+  assert.equal(q(plugin, 'tips').style.display, 'none');
+  // ...and the log's own scope buttons stay hidden too: they belong to the log, not to every
+  // DOM-rendered view.
+  assert.equal(q(plugin, 'logscope').style.display, 'none');
+  plugin.unmount();
+});
+
+test('CTRL-7: nodes are drawn in SPEND ORDER, and carry balance / target / cover', () => {
+  // §18.6's corollary made visible for free: a pool placed after one that never empties is
+  // not low-priority, it is UNCLAIMED — which on this view is a box near the bottom with no
+  // inflow.
+  const { plugin } = mountPlugin(simOf(RUN));
+  showTopology(plugin);
+  const order = [...svgOf(plugin).querySelectorAll('[data-pool-node]')]
+    .map(g => g.getAttribute('data-pool-node'));
+  assert.deepEqual(order, plugin._history().poolIds);
+  assert.match(svgOf(plugin).textContent, /The backstop/);
+  assert.match(svgOf(plugin).textContent, /\$350000/, 'the LAST period’s balance');
+  plugin.unmount();
+});
+
+test('CTRL-13: the counts shrink when the journal is truncated by a rewind', () => {
+  // The assertion behind §10.1's "no scrub". This view is only ALLOWED to have no cursor of
+  // its own because it cannot show a future that has been un-run: `rewindTo` and `reset`
+  // truncate the journal to zero and replay from the start, so a panel that reads the journal
+  // reads exactly the periods that have happened. A panel-local period selector would be a
+  // SECOND time cursor in an app that already has one, and the two would disagree the moment
+  // either moved — which is §23.6's failure, one surface over.
+  const sim = simOf(RUN);
+  const { plugin } = mountPlugin(sim);
+  showTopology(plugin);
+
+  const full = poolTopology(plugin._history(), plugin._reducer()?.graph ?? null);
+  assert.equal(full.edges.find(e => e.id === 'g2o').gated, 1);
+
+  // Rewind past the gated period: the journal is truncated, exactly as `time-controls` does.
+  sim.journal.journal = RUN.slice(0, 2);
+  plugin._dataSig = null;                 // the sim bus invalidates this on a real rewind
+  plugin._render();
+
+  const rewound = poolTopology(plugin._history(), plugin._reducer()?.graph ?? null);
+  assert.equal(rewound.edges.find(e => e.id === 'g2o').gated, 0,
+    'a gate that has been un-run must stop being counted');
+  assert.equal(rewound.edges.find(e => e.id === 'g2o').fired, 1, 'and the firing that stands, stands');
+  plugin.unmount();
+});
+
+test('CTRL-13: an edge is coloured by which outcome dominates, and dashed when idle', () => {
+  const graph = {
+    pools: [{ id: 'offset', label: 'The backstop' }, { id: 'growth', label: 'Bucket 3' }],
+    flows: [{ id: 'g2o', from: 'growth', to: 'offset' },
+            { id: 'never', from: 'offset', to: 'growth' }],
+  };
+  const { plugin } = mountPlugin(simOf(RUN, { graph }));
+  showTopology(plugin);
+  const svg = svgOf(plugin);
+  const dash = (id) => svg.querySelector(`[data-pool-edge="${id}"] path`).getAttribute('stroke-dasharray');
+  assert.equal(dash('never'), '3 3', 'an edge that never did either reads as idle');
+  assert.equal(dash('g2o'), '', 'an edge that did something is solid');
+  // The label carries both counts, so "mostly refusing" is readable off the diagram.
+  assert.match(svg.querySelector('[data-pool-edge="g2o"]').textContent, /g2o · 1f 1g/);
+  plugin.unmount();
+});
+
+test('CTRL-7: the viewBox is wide enough for the longest edge label', () => {
+  // Found in the running app, not here: the first build sized the diagram on a fixed lane
+  // width, so `growth-to-offset · 0f 0g` rendered as "gro" and `paycheck-sweep-us-to-au` as
+  // "paycheck-sw". jsdom computes no layout, but the GEOMETRY is arithmetic and assertable —
+  // which is the half of §12.2's lesson that can be pinned in a test.
+  const graph = {
+    pools: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }],
+    flows: [{ id: 'a-very-long-flow-identifier-indeed', from: 'a', to: 'b' }],
+  };
+  const run = [entry('2030-01-01', [
+    { field: 'liquidityPools', before: null, after: { a: CUBE(), b: CUBE() } },
+  ])];
+  const { plugin } = mountPlugin(simOf(run, { graph }));
+  showTopology(plugin);
+
+  const svg   = svgOf(plugin);
+  const width = Number(svg.getAttribute('viewBox').split(' ')[3 - 1]);
+  const label = svg.querySelector('[data-pool-edge] text');
+  const x     = Number(label.getAttribute('x'));
+  // The label starts inside the box and has room for every character of it.
+  assert.ok(x + label.textContent.length * 5.6 <= width + 0.001,
+    `label overflows: starts at ${x}, needs ${label.textContent.length} chars, viewBox is ${width}`);
   plugin.unmount();
 });

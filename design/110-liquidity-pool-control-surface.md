@@ -1,8 +1,10 @@
 # 110 — The liquidity pool control surface (design 97 §14, effort 2)
 
-**Status:** **PROPOSED**, and written to be argued with. Nothing here is built. §10 records the
-first review (18 Sep 2026): three of the five open questions decided, one closed, and one — the
-shape-spanning axis — promoted from a labelling question to a **precondition of phase 6** (§10.3).
+**Status:** **PHASES 1–5 BUILT** (19 Sep 2026, including 3b); 6–9 proposed, and 6 is
+unblocked — §10.3 is decided. §10 records the first review
+(18 Sep 2026): three of the five open questions decided, one closed, and one — the
+shape-spanning axis — promoted from a labelling question to a **precondition of phase 6**
+(§10.3), which §10.3 now answers. §13 records what the build changed.
 
 Design 97 §14 is eleven lines and a seven-row table. It sketched effort 2 far enough to name
 what effort 1 must not foreclose, and then four separate builds happened *against* that sketch
@@ -427,29 +429,48 @@ rewriting another lever. Wealth-matching is not a config problem and stays where
 Ordered so that each step is independently shippable, and so that the cheapest things that
 prevent a wrong reading come first.
 
-1. **The `ui` round trip, asserted** (§2.2) — one test through the editor and one through
-   `ScenarioSerializer`. Precondition for anything that draws a layout, and it either confirms
-   a §14 constraint or deletes a dead field.
-2. **Authoring readouts** (§4.2) — claims summary, holds-now, compiled spend order,
-   gate-as-a-sentence, behind the three-state provenance line of §10.5. No engine change, no new
-   authored field, and every one of them is derived by calling the compiler. This is the highest
-   ratio of misreadings-prevented to code in the document.
-3. **Warnings and shape-local problems** (§2.3, §4.3) — `collectAuthoredGraphProblems` gains a
-   severity and stops short-circuiting the shape pass; the two `console.warn`s move into it.
-4. **Shape boundaries on the panel** (§5.3) — `markLine` per switch, `shape` as a CSV column,
-   every shape in the strip. Three small edits, one theme.
-5. **The topology view** (§5.2) — the fifth view, labelled with run-to-date
-   fired/gated/vetoed and **no period selector**: the app's own step/rewind already scrubs it
-   (§10.1).
-6. **Leg C mechanism** (§6.2) — a hidden, compile-only generated param on the `BALANCE_TARGET`
-   pattern, joined to `generated-param-keys.js` and harvested. **Blocked on §10.3**: whether the
-   key is an absolute target or a multiplier over every shape decides what the key MEANS, and
-   that cannot be changed afterwards without changing the meaning of a live axis.
-7. **Leg C hygiene** (§6.5) — `poolAxisProblems`, rendered beside the axis.
-8. **Gate clause ids** (§6.3 option A), then the gate-threshold axis.
-9. **The shape-year axis** (§6.4), deferred per design 109 Q1 until 6–8 are green.
+1. ~~**The `ui` round trip, asserted**~~ (§2.2) — **BUILT.** It did not confirm the constraint:
+   `normalizeLiquidityGraph` carries `raw.ui` on pools *and* flows, and the editor carried it on
+   pools only, so a layout authored on an EDGE was discarded by the first edit to any cell —
+   silently, with the graph still loading and still running. Fixed; CTRL-1 covers pools, flows,
+   a shape-nested graph, and `ScenarioSerializer`.
+2. ~~**Authoring readouts**~~ (§4.2) — **BUILT**, with one placement changed by measuring in the
+   running app: see §13.1. CTRL-2, CTRL-3, CTRL-15.
+3. ~~**Warnings and shape-local problems**~~ (§2.3, §4.3) — **BUILT.**
+   `collectAuthoredGraphProblems` gained `severity`, `blockingProblems` is the single filter
+   every refusal site now goes through, the shape pass runs unconditionally and localizes to
+   the cell, and the two `console.warn`s are rendered from the same collectors the advisory
+   rows come from. CTRL-4, CTRL-5.
+3b. ~~**The other four `console.warn`s**~~ (§13.2) — **BUILT.** `normalizeLiquidityGraph` takes
+   an optional `opts.advisories` sink; the reporting path supplies one and the compile path
+   does not, so all six advisories now reach the author by one route and no run changed.
+   CTRL-4b.
+4. ~~**Shape boundaries on the panel**~~ (§5.3) — **BUILT.** One shared derivation
+   (`poolShapeSpans`) feeds all three: a `markLine` per switch on every time-series view, a
+   `shape` CSV column, and a strip that names every shape with its own live-from date.
+   CTRL-6, HIST-9. See §13.5.
+5. ~~**The topology view**~~ (§5.2) — **BUILT.** The fifth view, run-to-date counts, no period
+   selector. CTRL-7, CTRL-13. See §13.6.
+6. ~~**Leg C mechanism**~~ (§6.2) — **BUILT.** `pool.<poolId>.targetScale`, a hidden
+   generated param on the `BALANCE_TARGET` pattern, `'pool.'` joined to
+   `generated-param-keys.js`, offered as a curated Opt/grid row rather than harvested, and
+   applied where the graph is RESOLVED rather than by a loader cascade. §10.3's multiplier
+   decision is what unblocked it. CTRL-8, CTRL-9, CTRL-10, CTRL-14, CTRL-16. See §13.7.
+7. ~~**Leg C hygiene**~~ (§6.5) — **BUILT.** `poolAxisProblems` reports five things and
+   deliberately restates none of the three `pool-arms` items that are already refusals; the
+   presenter carries them on the axis rows and the panel draws them beside the axis, tagged
+   INERT or CONFOUNDED. CTRL-12. See §13.8.
+8. ~~**Gate clause ids**~~ (§6.3 option A) **and the gate-threshold axis** — **BUILT.** An
+   optional authored `id` on any gate node, unique per graph, plus `gate.<id>.threshold` and
+   `gate.<id>.dwell`. CTRL-11, and CTRL-8/9/16 again on the new key. See §13.9.
+9. ~~**The shape-year axis**~~ (§6.4, design 109 Q1) — **BUILT.**
+   `shape.<shapeId>.yearShift`, a SHIFT for §10.3's reason rather than an absolute year.
+   See §13.10. **Leg C is complete.**
 
-Steps 1–5 cannot change a run. Step 6 is the first that can, and only under a runner.
+Steps 1–5 cannot change a run. Step 6 is the first that can, and only under a runner. Steps 6–9
+are the three axis families (a pool size, a gate clause, a shape switch) plus the hygiene that
+makes a grid of any of them worth reading; all four went in at one seam, and the seam is the
+graph RESOLVER rather than the loader cascade (§13.7).
 
 ---
 
@@ -592,6 +613,27 @@ Either way this is now a **step 6 input**, because it decides the key's meaning.
 is a change to what an existing axis means, on the one surface where a silently-changed meaning
 is most expensive.
 
+**DECIDED (19 Sep 2026): (a), the multiplier.** The key is **`pool.<poolId>.targetScale`,
+default `1.0`**, applied to that pool's authored target in **every** shape that contains it.
+This unblocks step 6, and it fixes the meaning of three things that were otherwise open:
+
+- **CTRL-14 is now the defining assertion of the axis, not a guard on it.** "Both values move
+  and their ratio is unchanged" is the whole content of (a); if that test is deleted the key
+  has no meaning left.
+- **(c) does not arise.** A pool absent from some shape is not a special case under a
+  multiplier — the factor applies to the shapes that contain the pool and there is nothing to
+  apply it to in the shapes that do not. The bridge pool stays searchable, which was (c)'s
+  entire cost.
+- **The legibility cost is paid in the harvest row, as §10.3 says**, by showing the resolved
+  values a factor produces (`0.5 → 1y / 2y`) rather than the factor alone. That is a label on
+  a row; it is not a second authority and it does not touch the key.
+
+What this does **not** license: `pool.<id>.target` as an absolute key **must not be added
+later beside** the scale. Two keys writing one field is §12.2's one-authority rule broken by
+exactly the mechanism §6.2 chose the `BALANCE_TARGET` overlay pattern to avoid, and a sweep
+that set both would have no defined answer. An author who wants an absolute value writes it
+in the graph; the axis only ever scales what is written.
+
 ### 10.4 Q4 — no. The editor does not simulate the draw
 
 **Decided against.** §4.2 item 3 renders the compiled spend *order*, which is a pure function of
@@ -677,7 +719,7 @@ the expensive part of each one is finding the seam. Line numbers drift; the func
 | 3 — problems + warnings | `liquidity-graph.js#collectAuthoredGraphProblems` (the short-circuit is the early `return problems`), `#_warnUnscheduledShapes`, `#_warnResurrectedPools`. Consumers: `scenario-tab-presenter.js#_graphProblems` → `reportInvalidPools`, and `scenario-load-error-overlay.js` (three call sites) | `tests/unit/evt-liquidity-pools.test.mjs`, `tests/unit/pool-shape-schedule.test.mjs` |
 | 4 — shape boundaries | `liquidity-pools-plugin.js` `POOL_CSV_COLUMNS` and `#_shapeLiveSince`; `pool-history.js#poolHistoryRows` (the row builder that omits `shapeId`, which `history.periods[]` already carries) | `tests/unit/pool-history.test.mjs`, `tests/viz/liquidity-pools-plugin.test.mjs` |
 | 5 — topology view | `liquidity-pools-plugin.js` — `this._view` is the view key, `_render` branches on it, `_seriesSpecs` is built in `_render` (not `_drawChart`, deliberately — §23.6) | `tests/viz/liquidity-pools-plugin.test.mjs` |
-| 6 — the axis | `scenarios/params/scenario-param-generator.js#generate(cfg)`, `params/record-param-templates.js#BALANCE_TARGET` (the pattern to copy), `params/generated-param-keys.js` (the namespace list), `param-schema-utils.js#harvestSweepVariables` / `buildOptVariables({ cfg })` | `tests/unit/generated-key-param-paths.test.mjs` is the existing detector for the dot trap |
+| 6 — the axis | `scenarios/params/scenario-param-generator.js#generate(cfg)`, `scenarios/params/record-param-templates.js#BALANCE_TARGET` (the pattern to copy), `scenarios/params/generated-param-keys.js#GENERATED_KEY_PREFIXES` (**`'pool.'` must be added here or the key is dead on arrival** — see §12.2), `finance/param-schema-utils.js#harvestSweepVariables` / `intl-retirement-opt-config.js#buildOptVariables({ cfg })` | `tests/unit/generated-key-param-paths.test.mjs` is the existing detector for the dot trap |
 | 7 — hygiene | `scripts/lib/pool-arms.mjs` is the specification — its `base` block is the six-item list; port it as a reporter | new |
 | 8 — clause ids | `structured-param-editors.js#gateToRows` / `rowsToGate` / `renumberBranches` | `tests/viz/structured-param-editors.test.mjs` |
 
@@ -688,6 +730,12 @@ the expensive part of each one is finding the seam. Line numbers drift; the func
   run. The pool topics are `help/concepts/liquidity-pools.md`,
   `help/concepts/pool-shapes-over-time.md` and `help/panels/pools.md`. Never hand-edit
   `help/REFERENCE.md`.
+- **`'pool.'` is not yet a generated namespace.** `set()` in `mc-param-paths.js` writes a
+  dotted key flat ONLY when `isGeneratedParamKey(path)` says so, and the list is
+  `acct. person. prop. coll. equity. bequest. raAsset.` — verified 19 Sep 2026. A
+  `pool.<id>.targetScale` axis added without touching `GENERATED_KEY_PREFIXES` will pass
+  every hand-written flat-`cfg.parameters` test and be **inert in a real solve**, which is
+  this trap's whole signature (`optimizer-param-key-dot-collision`).
 - **A liveness gate must be evaluated against a LOADED config**, never an authored one
   (`legacy-alias-levers-inert-on-loaded-plan`). This bites phase 6 directly: an axis that reads
   as live on a raw cfg and is inert on the loaded one is this repository's most expensive
@@ -712,3 +760,406 @@ the expensive part of each one is finding the seam. Line numbers drift; the func
 
 §10.3 — absolute target or multiplier. It is not a labelling choice and it cannot be deferred
 into the build.
+
+
+---
+
+## 13. What the build changed (19 Sep 2026, phases 1–3)
+
+Recorded because a design whose phases were built elsewhere is a design that is wrong in a way
+that is hard to see — the same reason §11 exists.
+
+### 13.1 §4.2 item 1 moved off the Pools row
+
+§4.2 asked for the claims summary as "a derived, non-editable summary cell **on the Pools
+row**". Built that way, then measured in the running app on a real plan (§12.2's last trap):
+the params pane is ~550px, the Pools table already carries eleven columns, and a twelfth took
+**~13% off every one of them** — `Id` from 39px to 34px, `Target` from 63px to 55px, on cells
+that were already truncating a mode name to three characters. A derived readout that buys its
+own legibility with the authoring surface's width has made the editor worse at the thing it is
+for.
+
+**It is rendered under the tables instead**, one line per pool. It costs no authoring width, and
+the whole string fits rather than being hinted at behind a tooltip. §4.2's substance — *the join
+done once, correctly* — is unchanged; only where it is drawn.
+
+The **"Holds today"** readout (§4.2 item 2) stayed on the **Claims** row, where §4.2 put it: that
+table has three columns and nothing in it clips.
+
+This is the §10.5 revision loop working as described — "watch someone read it" — one phase early.
+
+### 13.2 §4.3 named two `console.warn`s. There are six.
+
+§4.3 enumerated `_warnUnscheduledShapes` and `_warnResurrectedPools`, and both are now advisory
+rows. **Four more live inside `normalizeLiquidityGraph` itself** and were not named:
+
+| where | what it says |
+|---|---|
+| `liquidity-graph.js` ~906 | a gate reads a market signal on a pool claiming only cash-like accounts — no lots, so its return index never moves off its high and the clause is effectively constant |
+| ~981 | one pool is the source of several gated edges **whose gates differ** — a gate vetoes the sale of its SOURCE, so the strictest one wins and the others are not what they read as |
+| ~1048 | a pool `target`s a class the **location policy fills somewhere else first**, so the pool reports less cover than the plan carries and the spend order walks past the rest |
+| ~1074 | a REBALANCE edge whose pool claims an account **the rebalancer does not trade** |
+
+The third one fires four times on the repository author's own live scenario, for `buffer` (BOND)
+and `gold` (GOLD). That is a real, actionable statement about a real plan that has been going to
+the browser console and nowhere else — precisely the defect §4.3 exists to remove, in the four
+places §4.3 did not look.
+
+### 13.3 Phase 3b, as built
+
+`normalizeLiquidityGraph(graph, accounts, opts)` takes an optional **`opts.advisories`** array.
+The four `warnX` functions became `collectX` functions returning rows; one block at the end of
+the normalizer either pushes them into the sink or, when there is none, `console.warn`s each
+message exactly as before.
+
+**The sink is supplied only by the reporting path.** The compile path passes none, so every
+compile behaves identically and no golden fixture moved — the property phase 3b had to preserve,
+asserted directly by CTRL-4b ("with no sink the four advisories still go to the console,
+unchanged").
+
+Three things the build settled that the proposal did not state:
+
+1. **A shape's advisory is stamped with its shape id** inside `_normalizeShapes`, so it lands on
+   `liquidityShapes` and renders under *that* shape's tables. Unstamped, an advisory about
+   `bridge` would render under the base graph and name a pool the reader is not looking at —
+   design 109 §12's "the author repairs the wrong table" in a new place.
+2. **`index`/`field` stay null.** These four are statements about a POOL or a FLOW and its
+   relationship to the rest of the plan, not about one cell. There is no cell to highlight, and
+   claiming one would point at the wrong thing.
+3. **`_scheduleAdvisories` passes a DISCARDED sink.** It re-normalizes the base graph and every
+   shape to build its entry list, and without one each of those calls re-printed all four —
+   which is what made the placement warning appear four times in the browser console for one
+   graph.
+
+### 13.4 The eight console lines were false positives
+
+Worth recording, because it is the opposite of what §13.2 assumed. Read in the running app, the
+four duplicated `buffer`/`gold` placement warnings did **not** survive phase 3b — and the reason
+is not that they were silenced. Under the scenario's real options they do not fire at all: its
+`allocationLocationPolicy` already ranks the claimed roles first
+(`BOND: [us-stock, au-stock, …]`, `GOLD: [us-stock]`), which is precisely the fix the message
+recommends, and POOL-21b is the test that says so.
+
+So something was calling `normalizeLiquidityGraph` with options that **lacked `locationPolicy`**,
+and warning against the DEFAULT policy rather than the authored one. The advisory was telling the
+author to fix something they had already fixed. That is worse than a warning nobody reads, and
+it is the argument for §4.3's one-authority rule stated from the other end: a message emitted
+from a call site with a different option set is not the same message.
+
+It is gone now — the reporting path is silent and the editor's rows are produced under
+`_graphOptsFrom`, which carries the policy. **The call site with the incomplete options was not
+identified** and may still exist for other purposes; if a stray console advisory reappears, that
+is where to look.
+
+Verified live by pointing `allocationLocationPolicy.GOLD` at `ira` (an account the `gold` pool
+does not claim): the advisory appeared in the editor, named both IRA accounts, listed the
+claimed accounts, and refused nothing — the readouts rendered beside it.
+
+### 13.5 Phase 4, as built
+
+The three items of §5.3 are three renderings of one fact, so the build starts with the fact:
+**`poolShapeSpans(history)`** in `pool-history.js`, returning one entry per shape the run passed
+through with the date it took over. §23.6's `_seriesSpecs` refactor is the precedent — two
+derivations of one list is where a picker starts offering a line the chart does not draw — and
+the panel-local `_shapeLiveSince` it replaces was already the second derivation waiting to
+happen. It is deleted rather than left unused.
+
+Two things the reducer forced, neither of them in §5.3:
+
+1. **The opening span is reconstructed, not read.** `PoolShapeScheduleReducer` writes
+   `liquidityShapeId` only on a CHANGE, and `stamped = state.liquidityShapeId ?? null` means a
+   run that begins on the base graph emits **no diff at all** for that stretch. So the periods
+   before the first switch carry no field, and a strip built only from what was recorded would
+   begin its story at the first switch — describing a 43-year run by its last 27 years.
+2. **A span that begins at the run's first period is not a switch** (`opening: true`). It takes
+   no chart marker, because a marker on the first category has nothing to its left to separate
+   it from. This also covers the case §5.3 did not consider: a schedule whose first row is
+   already live at the start stamps on period 0 and has no base-graph stretch at all.
+
+The `shape` CSV column is `''` before the first switch, not `'base'` — the base graph is not a
+named shape, and writing a name that appears in no scenario file into the fact table would
+invent one.
+
+Verified on a real 39,568-entry run of the `D109 wrappers-last from 2043` scenario: two spans
+(`base graph` from 2027-01-01, `wrapLast` since 2043-01-01), one marker, drawn on all three
+time-series views in both themes, and landing exactly on the regime change visible in two of the
+cover lines. The date is the one the switch LANDED on, which is the property §5.3 cared about
+and the one design 109 §7 makes easy to get wrong.
+
+**Superseded:** design 109 §14 step 6's two strip tests. The strip named only the LIVE shape, so
+a run through three shapes reported the third; the assertions were rewritten against every-shape
+wording, keeping the date property unchanged.
+
+### 13.6 Phase 5, as built
+
+**It renders as inline SVG into the grid element, not through ECharts.** Not a style
+preference: `_drawChart` no-ops without a canvas — which is jsdom *and* a docked panel before
+its first activation — and this panel had already moved the series picker out of it because *"a
+control that silently does not exist in those states is a control the reader cannot find"*
+(§23.6). A whole VIEW that silently did not exist would be that mistake at full size, and it
+would make CTRL-7 and CTRL-13 unassertable.
+
+**Edges come from the GRAPH, counts from the events.** This is the mechanical expression of
+§5.2's argument against the sankey, and it is the one thing in this view that must not be
+reversed: deriving edges from the events would rebuild the ribbon-of-width-zero blind spot in a
+new costume, because the edge that never fired is exactly the one the author is looking for. On
+the author's own plan the view immediately showed one — `growth-to-offset · 0f 0g` — an authored
+refill edge that has never fired in 43 simulated years, invisible on every other surface.
+
+**A veto belongs to the POOL, not the edge.** `POOL_EVENT_KIND.VETOED` carries no flow id
+(§12.4c): it names the pool that may not be sold, or the one that may not be grown. Attributing
+it to an edge would invent a fact the run never recorded, so it renders as a badge on the node
+(`32 veto` on the author's `growth`).
+
+**Layout is deterministic — pools in spend order, edges arcing beside them.** A force-directed
+layout that rearranged itself between two renders of the same run would make "did this change?"
+unanswerable, and §14's `ui` blob, where an author-placed layout would live, is still written by
+nothing (§2.2). Spend order also makes §18.6's corollary legible for free: a pool placed after
+one that never empties is not low-priority, it is UNCLAIMED — on this view, a box near the
+bottom with no inflow.
+
+**One defect found in the app and fixed** (§12.2's last trap, again): the first build sized the
+diagram on a fixed lane width, so `growth-to-offset · 0f 0g` rendered as `gro` and
+`paycheck-sweep-us-to-au` as `paycheck-sw`. The viewBox now derives its width from the longest
+label. jsdom computes no layout, but the geometry is arithmetic, so the regression IS assertable
+and is asserted — the half of the "verify in the app" lesson that can be pinned in a test.
+
+Verified on the author's 39,568-entry run: 9 nodes, 7 edges, per-edge counts summing to exactly
+the 174 fired / 41 gated the provenance strip reports, with zero per-edge mismatches against the
+flow log.
+
+### 13.7 Phase 6, as built
+
+**The seam is the RESOLVER, not the loader cascade.** §6.2 chose the `BALANCE_TARGET` pattern
+and §12.1 named `ScenarioLoader` as the place it lands, which is right for every other
+generated param and wrong for this one. Every `acct.` / `prop.` / `person.` key cascades onto a
+cfg RECORD; a pool is not a record, it is a value inside the `liquidityGraph` param, and that
+param is read from the params bag when `buildSim()` builds the reducers — **before**
+`ScenarioLoader.load()` runs at all (`config-field-in-state-is-not-read`). A cascade branch
+would have written the scale onto a graph nothing reads. So the factor is applied in
+`resolveLiquidityGraph` / `resolveLiquidityGraphSchedule`, in front of `normalizeLiquidityGraph`,
+on a copy. `pool` is therefore deliberately ABSENT from `PREFIX_TO_NODE_TYPE`, so
+`decodeGeneratedParamKey` returns null for the key and the loader's third pass skips it.
+
+That placement turns out to be better than the one the design named, for two reasons that were
+not in the argument when it was written:
+
+- **§6.2's "an overlay, not a rewrite" becomes true by construction.** The authored param object
+  is never written to, so CTRL-9 is not a property the code has to maintain — there is no code
+  path that could break it. `ScenarioSerializer` writes `cfg.params` and not `cfg.parameters`,
+  so a scenario saved mid-sweep reloads at the author's own targets because the swept value was
+  never in the store that gets saved.
+- **A multiplier is not idempotent, and now nothing can apply it twice.** `BALANCE_TARGET`
+  rescales holdings to an ABSOLUTE figure, so applying it to its own output is harmless; ×0.5
+  applied twice is ×0.25. Resolving from the authored value every time removes the whole class
+  of bug rather than guarding against it.
+
+**A curated Opt row, not a harvest row.** §6.1's payoff ("a pool lever that appears in the
+harvest is a grid axis, an MC lever and an optimizer variable at once") is real but arrives by a
+different route: `harvestSweepVariables` skips `hidden` entries *by design* (that is how
+`BALANCE_TARGET` stays out of the editor and the panel both), and a factor centred on 1.0 has no
+sensible harvested range — `optRowFor`'s `rate` kind would offer 0.98 … 1.02, three
+near-identical rollouts wearing a lever's clothes. So `buildPoolOptConfigs` joins
+`buildShockOptConfigs` / `buildInheritedRaOptConfigs` as a dynamic contributor, with a range in
+units of the authored target (half it to double it, quarter steps). `buildGridAxes` builds on
+`buildOptVariables`, so the grid axis comes free; `mc: false` is deliberate per design 98 W2 —
+how many years of reserve to hold is CHOSEN, not uncertain.
+
+**`controllable` is deliberately not set.** The graph is resolved once, when the reducers are
+built, so an MPC controller re-deciding the factor between periods would change nothing. A
+control that cannot actuate is the same defect as an inert lever, one surface over.
+
+**Two traps were live and both would have been silent.** §12.2 named the first and it was real:
+`'pool.'` had to join `GENERATED_KEY_PREFIXES` or `set()` writes a nested `pool` object nothing
+reads. The second is not in §12.2 and cost the longer half of the session to see —
+`forwardToolsetOverrides` drops any bag key that is not a toolset schema key, so the axis was
+being discarded on the way into `buildDefaultConfig`, which is the path **every** MC iteration,
+grid cell and optimizer rollout takes (`mc-worker-core`, `optimization-problem` and the workbench
+all construct the scenario from the bag). It is `legacy-alias-levers-inert-on-loaded-plan`
+exactly: live on the panel, inert in the run, every cell identical. CTRL-8 asserts the arrival
+(`cfg.parameters[key]`) separately from the effect, because those are two different failures.
+
+**The centre had to be supplied by hand, three times.** A hidden generated param is absent from
+`cfg.params` AND from `paramSchemaDefaults` (both exclude `hidden`), so nothing in any lever base
+carried the axis's plan value and a grid on a pool would have had no reference cell —
+`harvest never synthesizes a center`, and rightly. `resolvePoolTargetScaleCenters` is the
+`resolveBalanceCenters` / `resolveAliasCenters` of this axis and is merged at the same three
+sites (`IntlRetirementMcRunner._prepare`, `OptimizationProblem._resolveBase`,
+`MonteCarloPresenter._resolveBaseParams`).
+
+**No second validator, and a PERCENT target can be swept out of range.** §17.2 holds: the scaled
+spec goes through `normalizeLiquidityGraph` exactly as an authored one does, so a factor of 2 on
+a `PERCENT` target of 0.6 is REFUSED with the normalizer's own sentence rather than clamped.
+That is the honest behaviour — a clamp would run a target nobody chose — but it means a grid
+whose axis brackets a PERCENT pool near the top of its range will have failing cells, and the
+range is 0.5 … 2. Worth a line in phase 7's `poolAxisProblems`, which is the surface that
+already exists to say this kind of thing before a grid is launched.
+
+**The legibility cost is paid in one place.** `poolTargetScaleLabel` renders both obligations
+§10.3 and §6.4 imposed — the authored values the factor multiplies (`base 2y, bridge 4y`) and
+the fact that one factor moves every shape (`one factor, 2 shapes`) — and the generated schema
+entry, the Opt row and the grid row all take their label from it, so the three surfaces cannot
+come to disagree about what the axis does.
+
+**Still open, and unchanged by this:** phase 7's `poolAxisProblems` (§6.5) is the next step and
+this axis is dangerous without it — `scripts/lib/pool-arms.mjs`'s six hygiene items apply to the
+control as much as the arms, and a grid that looks comparable and is not is worse than no grid.
+Phase 8's gate-clause ids and phase 9's shape-year axis are untouched; §6.4's note that the
+shape-year axis is "the same mechanism" is now concrete — it is another dynamic contributor over
+a flat companion key, applied at the same resolver seam.
+
+### 13.8 Phase 7, as built
+
+**Three of `pool-arms`' six are already refusals, so the port is FIVE rows and not six.**
+`normalizeLiquidityGraph` already throws on the legacy `poolCashYears`/`poolBondYears` beside a
+pool `target` (§12.2), on a hand-authored `drawdownSequence`, and on `drawdownMode:
+PROPORTIONAL`. Restating them as hygiene rows would be two derivations of one sentence — §23.6's
+failure shape and the thing §17.2 forbids — so `poolAxisProblems` names them in its header and
+CTRL-12's sibling (PTS-12) asserts the premise that lets them be left out: each one still
+refuses, so it cannot reach a grid at all. The legacy-pair refusal has exactly one gap,
+`hasRebalancer: false`, and there the axis has no reader whatsoever, which is reported in its own
+right and is a stronger statement.
+
+**The sixth item needed translating, and the translation is the sharpest row.** *"The strategy
+list identical across arms"* has no in-app form as written — a grid sweeps one config, so the
+list is identical by construction. Its substance is whether the axis has a READER, and that does
+bite: a pool `target` is realised by the TARGET_ALLOCATION rebalancer and the refill edges by
+LIQUIDITY_POOLS' reducers, so with either deselected, or with `liquidityGraphEnabled: false`, the
+factor is swept and nothing reads it. Every cell returns the plan and a flat grid reads as a null
+result rather than as a misconfiguration.
+
+**Two kinds, not one severity.** An INERT axis and a CONFOUNDED one are different failures and
+conflating them would cost a session: the first reports "the reserve size does not matter", the
+second reports an effect larger than the lever has. `POOL_AXIS_PROBLEM_KIND` is that
+distinction, the INERT rows are reported first (there is no point telling an author their
+glidepath confounds a comparison that is not happening), and the panel's tag is the shortest way
+to say which. Every row is `severity: 'warn'`: none of these makes a plan illegal, so none may
+stop a Rebuild.
+
+**Absent is not "none selected".** `behavioralStrategies` missing from a params bag takes the
+permissive reading, exactly as `hasTargetAllocation` does — without that rule every partial
+config and every test bag reports two problems it does not have.
+
+**It reports and never repairs, and the panel has no control that could.** A "fix this for me"
+button would be the app rewriting the author's plan behind a grid: §12.2's one-authority rule
+broken by a convenience, and a grid nobody can reproduce. Each row names the param to change so
+the author changes it in the Parameters list, where the change is visible and is saved with the
+scenario. One jest case asserts the absence — `querySelectorAll('button, input, select')` is
+empty inside the hygiene block — because "we did not add a button" is not a property a reader
+can check by looking.
+
+**Not built, and deliberately:** wealth-matching (§6.5 — not a config problem; nothing a pool
+axis does moves money, so `assertArmsWealthMatched` stays on a built state) and any statement
+about the RUN config. Whether a stochastic grid is seed-paired is the same class of mistake
+(`single-stochastic-run-is-not-an-ab`, `seed-matching-is-not-crn`) and belongs to design 100, not
+to a function that takes a cfg.
+
+### 13.9 Phase 8, as built
+
+**The id is on the NODE, and that one decision settles four questions.** An id addresses the node
+it is authored on; that node's threshold is its single numeric clause, and its dwell is its own
+`sustainedYears`. From that: a node with two numeric clauses gets a dwell axis and no threshold
+axis (no unique threshold, and inventing a winner is what a multi-class pool `target` is refused
+for); a negated row resolves its threshold one level through the `not`, because the editor's row
+model is exactly `{ not: clause }` with the dwell on the `not`; ids on both sides of a `not` are
+two addresses for one row, which the table cannot draw, so such a gate goes to `rawGate`
+verbatim rather than losing one of them; and an id on a node with no condition is REFUSED, since
+it would generate an axis that writes onto a node nothing reads.
+
+**The dwell axis was built too, and §2.1 is the reason.** The phasing says "the gate-threshold
+axis", but §2.1 says the knob the evidence points at is the DURATION — §20.13 measured the three
+trailing-high thresholds landing within \$13k of each other on a \$5m plan while the same gate
+family differing only in how long it stays shut spread by \$460k — and that *"the one knob the
+evidence points at is the one with no address"*. The addressing work is identical for both, so
+shipping only the threshold would have done all of it and left the evidence-backed lever
+unreachable. §20.16's dwell sweep was a negative result on one plan, which is a reason to be able
+to re-run it, not to delete it.
+
+**Absolute ranges, which is the opposite of the pool axis's choice.** A pool target is a level
+whose shape across shapes must be preserved, so it is swept as a factor (§10.3). A gate threshold
+is one number on one clause and the interesting span is wide: §20.13 swept 1 %, 5 % and 10 %, a
+factor of ten, which a ±50 % band around an authored 0.05 reaches at neither end. So
+`GATE_THRESHOLD_RANGES` is a per-kind absolute table, and the dwell is an INTEGER axis in years —
+never periods, since this reducer fires on both US_ and AU_PERIOD_ADVANCE and a dwell counted in
+evaluations would mean two different policies in a US-only and a cross-border plan (§20.15).
+
+**Uniqueness is within a graph and never across shapes**, because a clause id follows the pool
+id's rule (design 109 §9): the same id in the base graph and in a shape is the same clause and
+one sweep moves both. A duplicate WITHIN a graph is refused rather than warned — a warning would
+leave a live axis whose meaning nobody can state, which is the defect the id exists to prevent
+one level up.
+
+**The overlay works on gates the editor cannot draw.** Because the seam is the raw tree in front
+of the normalizer (§13.7), an id'd clause inside an OR-under-an-AND — a `rawGate` case — is still
+addressable. The axis is not limited to the DNF subset the clause table renders, which was not an
+argument for the seam when it was chosen and is now one of its better properties.
+
+**A clause id is stricter than a pool id**: `[A-Za-z0-9_-]+`. A pool id may be any non-empty
+string and that cannot be narrowed retroactively; a clause id is new, exists only to be an
+address, and an address that needs quoting is not one.
+
+**The description and the help topic were the last of the work, not an afterthought.** An
+authoring field nobody can discover is half-built, so `liquidityGraph`'s description names the
+`id` and what it generates. That failed `help:gate` (expected — the stamp), and restamping then
+put `help/concepts/liquidity-pools.md` 215 words over the concept budget, which is the gate
+telling the truth: this is a separate concept. It is now `help/concepts/searching-pool-levers.md`,
+with a one-line pointer from the pools topic.
+
+**What remains open:** phase 9, the shape-year axis (§6.4), which is now concrete rather than
+sketched — another dynamic contributor over a flat companion key, applied at the same resolver
+seam. §6.3's option C (`scripts/lib/pool-graph.mjs`, sweeping whole graphs) stays supported and
+is still the only route to a STRUCTURAL sweep, which no scalar axis will ever reach.
+
+### 13.10 Phase 9, as built — and leg C closed
+
+**A shift, not a year, and §10.3 decided it before the question was asked.** Design 109 Q1 wants
+*"what does moving the bridge shape two years earlier do"*, and the obvious key is
+`shape.<id>.year`. It does not survive contact with the data structure: `_normalizeSchedule`
+refuses two rows in one YEAR and says nothing about one SHAPE appearing in two rows, so
+`[{2035, bridge}, {2045, late}, {2055, bridge}]` is a legal plan in which `bridge` is scheduled
+twice on purpose. An absolute key swept to 2040 would set both of those rows to 2040 — which is
+not merely wrong, it is the refusal, so the axis would turn a legal plan into a failing one at
+every cell but its own. `shape.<shapeId>.yearShift`, default 0, moves every row selecting that
+shape and preserves the gap between them, which is §10.3's argument one object over: the
+schedule's spacing is a profile and a scalar key must not flatten it. It is also the more direct
+reading of Q1 — *"two years earlier"* IS `-2`, and a grid of 2033/2035/2037 means different
+distances on two different plans.
+
+**Q1's own trap was already closed.** Q1 named it — a nested path into the array is dropped by
+`set()` — and proposed *"a flat scalar companion param rather than a path into the array"*.
+That is §6.2's answer, so phase 9 inherited it: `'shape.'` joins `GENERATED_KEY_PREFIXES` and
+nothing else about the key form had to be decided.
+
+**Only SCHEDULED shapes get an axis**, which is PTS-13's rule applied before it could bite twice:
+a shape no row selects governs nothing, so an axis on it would move nothing at every value. The
+base graph gets none either — the period before the first row is the `liquidityGraph` param and
+is deliberately not a named shape, so the way to move when it ends is to shift the first row's
+shape. There is nothing else to address.
+
+**Three reads, one overlay.** `p.liquidityGraphSchedule` is read by the resolver, by
+`collectAuthoredGraphProblems` and by `_scheduleAdvisories`. All three now go through
+`_overlayRawSchedule`, because an advisory computed on the authored schedule while the run uses a
+shifted one would describe a plan nobody is running — §21.3's whole subject, in a new place.
+
+**A third hygiene kind, and the two rows it was owed.** §13.7 and §13.9 both left a debt: §17.2
+means the overlay never clamps, so a factor that pushes a PERCENT target past 1.0 and a shift
+that lands one switch on another's year are both REFUSED with the normalizer's own sentence.
+That is the right behaviour and it is not INERT and not CONFOUNDED — it is a third sentence, a
+grid that comes back with holes. `POOL_AXIS_PROBLEM_KIND.REFUSES` says it, and
+`poolAxisProblems` now computes both cases up front: it names the factor above which a PERCENT
+pool fails, and the gap between the two closest switches. `POOL_TARGET_SCALE_RANGE` moved out of
+the Opt contributor so the warning and the row it warns about cannot disagree about the span.
+
+**Leg C is complete**, and §14's original ask — *"searches pool sizes and gate thresholds instead
+of the author guessing them"* — is answered for three families rather than two, each of them an
+optimizer variable, an MC-grid axis and a hidden compile-only overlay at once. What is NOT built
+and is not a gap: §6.3's option C, sweeping whole graphs through `scripts/lib/pool-graph.mjs`,
+which remains the only route to a STRUCTURAL sweep (a pool added, an edge re-pointed) that no
+scalar axis will ever reach.
+
+**One defect this design shipped and then fixed, worth carrying forward.** Phase 6 generated an
+axis for a pool whose target was authored `AMOUNT 0`; a factor cannot lift a target off zero, so
+it read as a lever, swept as a lever and returned byte-identical rollouts. Every test passed. It
+was found in about five minutes by running the axis list against a plan the author had actually
+written — §12.2's last trap, proving itself again on the phase that was most confident it did
+not need the check.

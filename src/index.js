@@ -234,7 +234,22 @@ import { SPLIT_MODE, DEPOSITABLE_ROLES, isDepositable, _resetSplitWarnings, spli
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
 import { Person, PAYROLL_ELECTION_FIELDS } from './finance/person.js';
-import { POOL_TARGET_MODE, POOL_SPEND_BASIS, POOL_CAPACITY_MODE, POOL_ACCESS_MODE, FLOW_CADENCE, POOL_DRAWDOWN_BASIS, POOL_GATE_SCOPE, FLOW_EXECUTOR, depositKeyFor, purchaseTargetFor, normalizeLiquidityGraph, compileToDrawdownSequence, poolsClaimingClass, resolveLiquidityGraph, collectAuthoredGraphProblems } from './finance/pools/liquidity-graph.js';
+import { POOL_TARGET_MODE, POOL_SPEND_BASIS, POOL_CAPACITY_MODE, POOL_ACCESS_MODE, FLOW_CADENCE, POOL_DRAWDOWN_BASIS, POOL_GATE_SCOPE, FLOW_EXECUTOR, depositKeyFor, purchaseTargetFor, normalizeLiquidityGraph, compileToDrawdownSequence, poolsClaimingClass, resolveLiquidityGraph, collectAuthoredGraphProblems, blockingProblems, PROBLEM_SEVERITY } from './finance/pools/liquidity-graph.js';
+// Design 110 leg C — the pool size AXIS and its study hygiene.
+import { poolTargetScaleKey, parsePoolTargetScaleKey, poolTargetScalesFrom, scaleRawPoolGraph,
+  scaleRawPoolShapes, scalablePoolTargets, poolTargetScaleLabel, authoredPoolGraphs,
+  authoredParamValue, resolvePoolTargetScaleCenters, resolveLiquidityAxisCenters,
+  POOL_TARGET_SCALE_DEFAULT, POOL_TARGET_SCALE_RANGE,
+  POOL_TARGET_SCALE_FIELD } from './finance/pools/pool-target-scale.js';
+import { poolAxisProblems, POOL_AXIS_PROBLEM_KIND } from './finance/pools/pool-axis-hygiene.js';
+import { shapeYearShiftKey, parseShapeYearShiftKey, shapeYearShiftsFrom, applyShapeYearShifts,
+  scheduledShapeAxes, shapeYearShiftLabel, resolveShapeYearShiftCenters,
+  SHAPE_YEAR_SHIFT_DEFAULT, SHAPE_YEAR_SHIFT_RANGE, SHAPE_YEAR_SHIFT_FIELD }
+  from './finance/pools/pool-shape-year-axis.js';
+import { gateAxisKey, parseGateAxisKey, gateOverridesFrom, applyGateOverridesToGate,
+  applyGateOverridesToGraph, applyGateOverridesToShapes, gateClauseAxes, gateAxisLabel,
+  resolveGateAxisCenters, GATE_AXIS_FIELD, GATE_DWELL_DEFAULT, GATE_DWELL_RANGE,
+  GATE_THRESHOLD_RANGES, GATE_CLAUSE_ID_RE } from './finance/pools/pool-gate-axis.js';
 import { PoolFlowApplyReducer } from './finance/pools/pool-flow-apply-reducer.js';
 import { PoolFlowReducer } from './finance/pools/pool-flow-reducer.js';
 import { POOL_CUBE_FIELDS, POOL_EVENT_KIND, buildPoolHistory, poolHistoryRows, poolSeries, reserveSeries, tiePoolHistory, latestPools } from './finance/pools/pool-history.js';
@@ -1446,6 +1461,48 @@ export const Finance = {
   poolsClaimingClass,
   resolveLiquidityGraph,
   collectAuthoredGraphProblems,
+  blockingProblems,
+  PROBLEM_SEVERITY,
+  poolTargetScaleKey,
+  parsePoolTargetScaleKey,
+  poolTargetScalesFrom,
+  scaleRawPoolGraph,
+  scaleRawPoolShapes,
+  scalablePoolTargets,
+  poolTargetScaleLabel,
+  authoredPoolGraphs,
+  authoredParamValue,
+  resolvePoolTargetScaleCenters,
+  resolveLiquidityAxisCenters,
+  POOL_TARGET_SCALE_DEFAULT,
+  POOL_TARGET_SCALE_FIELD,
+  POOL_TARGET_SCALE_RANGE,
+  shapeYearShiftKey,
+  parseShapeYearShiftKey,
+  shapeYearShiftsFrom,
+  applyShapeYearShifts,
+  scheduledShapeAxes,
+  shapeYearShiftLabel,
+  resolveShapeYearShiftCenters,
+  SHAPE_YEAR_SHIFT_DEFAULT,
+  SHAPE_YEAR_SHIFT_RANGE,
+  SHAPE_YEAR_SHIFT_FIELD,
+  poolAxisProblems,
+  POOL_AXIS_PROBLEM_KIND,
+  gateAxisKey,
+  parseGateAxisKey,
+  gateOverridesFrom,
+  applyGateOverridesToGate,
+  applyGateOverridesToGraph,
+  applyGateOverridesToShapes,
+  gateClauseAxes,
+  gateAxisLabel,
+  resolveGateAxisCenters,
+  GATE_AXIS_FIELD,
+  GATE_DWELL_DEFAULT,
+  GATE_DWELL_RANGE,
+  GATE_THRESHOLD_RANGES,
+  GATE_CLAUSE_ID_RE,
   PoolFlowApplyReducer,
   PoolFlowReducer,
   POOL_CUBE_FIELDS,

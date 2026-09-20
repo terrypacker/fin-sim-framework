@@ -284,10 +284,157 @@ export function poolHistoryRows(history) {
         reserveAccessible: p.reserve?.accessible ?? null,
         reserveLocked:     p.reserve?.locked ?? null,
         reserveYears:      p.reserve?.yearsOfCover ?? null,
+        // Design 110 §5.3. `shapeId` rides `history.periods[]` and was not a column, so the
+        // fact table could not be GROUPED by shape — which is the first thing anybody asks of
+        // a run that changed its policy halfway through. Per-period like the reserve figures
+        // above, so it repeats down every pool's row.
+        //
+        // Empty string, not null, for the periods before the first switch: the base graph is
+        // not a named shape, and writing 'base' would put a name in the column that appears
+        // in no scenario file. A run with no schedule leaves it empty throughout.
+        shape: p.shapeId ?? '',
       });
     }
   }
   return rows;
+}
+
+/**
+ * Design 110 §5.3 — every shape the run passed through, with the date it actually took over.
+ *
+ * ONE derivation, for the panel's three consumers: the provenance strip (which listed only
+ * the LAST shape, so a run through three shapes reported the third), the `markLine` on every
+ * time-series view, and the CSV's `shape` column. §23.6's `_seriesSpecs` refactor is the
+ * precedent and the warning — two derivations of one list is where a picker starts offering a
+ * line the chart does not draw.
+ *
+ * `liquidityShapeId` rides the ordinary journal diff and `PoolShapeScheduleReducer` writes it
+ * ONLY on a change, so the periods before the first switch carry no field at all. That is why
+ * the opening span is reconstructed rather than read: a run that begins on the base graph
+ * records nothing about it, and a strip that said nothing about the first nineteen years
+ * would be describing the run by its ending.
+ *
+ * The date is the one the switch LANDED on, never the authored year. Design 109 §7 switches
+ * at the first advance on or after 1 January of a row's year, which on a semi-annual cadence
+ * is up to six months later — and a marker drawn on the typed year, beside a chart that had
+ * not switched yet, is the clearest possible way to misread a mid-year cadence.
+ *
+ * @returns {Array<{shapeId: string|null, at: Date, seq: number, opening: boolean}>}
+ *          `shapeId` null is the base graph. `opening` marks the span the run STARTED in,
+ *          which is not a switch: there is nothing before it, so it takes no chart marker.
+ */
+export function poolShapeSpans(history) {
+  const periods = history?.periods ?? [];
+  if (!periods.length) return [];
+  // A run with no schedule never stamps the field, and has no spans to report — distinct
+  // from a run that sat on the base graph the whole time, which stamps nothing either but
+  // cannot be told apart here. Reporting neither is right: with no switch there is no
+  // boundary to draw and no second shape to name.
+  if (!periods.some(p => p.shapeId !== undefined)) return [];
+
+  const out = [];
+  for (const p of periods) {
+    // Before the first stamp the run is on whatever the base graph is. Recorded once, at the
+    // run's own first period, so the strip can say "base graph since <start>" rather than
+    // starting its story at the first switch.
+    const id = p.shapeId === undefined ? null : p.shapeId;
+    const last = out[out.length - 1];
+    if (last && last.shapeId === id) continue;
+    out.push({ shapeId: id, at: p.at, seq: p.seq, opening: out.length === 0 });
+  }
+  return out;
+}
+
+/**
+ * Design 110 §5.2 — the graph as a SHAPE: nodes, edges, and what each one did over the run.
+ *
+ * §21.6 deferred the topology and the sankey together, on one argument: *"neither shows a
+ * non-event, and the non-event is what the three defects of §20 were."* That is correct about a
+ * sankey and does not extend to this. A sankey encodes volume as ribbon WIDTH, so a flow that
+ * moved nothing has width zero and is structurally incapable of drawing the interesting event.
+ * A topology encodes STRUCTURE: an edge is present whether or not it fired, and the counts are
+ * a LABEL on it.
+ *
+ * So the edges come from the GRAPH and the counts come from the events — never the other way
+ * round. Deriving edges from the events would rebuild the sankey's blind spot in a new costume:
+ * the edge that never fired is exactly the one the author is looking for.
+ *
+ * Counts are run-to-date totals and there is no cursor (§10.1, decided): the panel already
+ * re-renders off the sim bus, the workbench owns step/rewind, and `rewindTo`/`reset` truncate
+ * the journal and replay — so stepping backwards cannot leave a total from a future that has
+ * been un-run. A panel-local period selector would be a SECOND time cursor in an app that has
+ * one, and the two would disagree the moment either moved.
+ *
+ * Read off `history.events`, which is what the flow log renders, so the two tie by construction
+ * rather than by a test that has to keep them in step (CTRL-7 asserts it anyway — §23.6's
+ * failure shape is two derivations of one number).
+ *
+ * @param {object} history   from {@link buildPoolHistory}
+ * @param {object|null} graph the normalized graph, for the edges that never fired
+ * @returns {{nodes: Array, edges: Array}}
+ */
+export function poolTopology(history, graph = null) {
+  const events = history?.events ?? [];
+
+  const fired = new Map();
+  const gated = new Map();
+  // Per POOL, not per edge: a rebalance veto names the pool that may not be sold (or, EDGE-
+  // scoped, the one that may not be grown) and carries no flow id at all (§12.4c). Putting it
+  // on an edge would be inventing an attribution the run never made.
+  const vetoed = new Map();
+  const capped = new Map();
+  const bump = (m, k) => { if (k != null) m.set(k, (m.get(k) ?? 0) + 1); };
+  for (const e of events) {
+    if (e.kind === POOL_EVENT_KIND.FIRED)  bump(fired, e.flowId);
+    else if (e.kind === POOL_EVENT_KIND.GATED) bump(gated, e.flowId);
+    else if (e.kind === POOL_EVENT_KIND.VETOED) {
+      if (e.to != null) bump(capped, e.to); else bump(vetoed, e.from);
+    }
+  }
+
+  // The LAST period's cube is what a node shows. `activeGraphAt` retires pools at a shape
+  // switch (design 109 §9), so a pool the current shape does not have has no entry in the
+  // last period — its box still draws, with no figures, which is the honest reading: it
+  // existed, and it does not now.
+  const last = history?.periods?.[history.periods.length - 1] ?? null;
+
+  const nodes = (history?.poolIds ?? []).map(id => {
+    const m = last?.pools?.[id] ?? null;
+    return {
+      id,
+      label: history?.labels?.[id] ?? id,
+      balance:      m?.balance ?? null,
+      target:       m?.target ?? null,
+      yearsOfCover: m?.yearsOfCover ?? null,
+      retired: !m,
+      vetoed: vetoed.get(id) ?? 0,
+      capped: capped.get(id) ?? 0,
+    };
+  });
+
+  const known = new Set(nodes.map(n => n.id));
+  const fromGraph = (graph?.flows ?? []).map(f => ({ id: f.id, from: f.from, to: f.to }));
+  // An edge the graph does not declare but the journal recorded — a run replayed against a
+  // graph that has since been edited. Kept rather than dropped: the panel reports what the
+  // RUN did, and silently omitting an edge that fired would be the one thing this view exists
+  // to prevent.
+  const seen = new Set(fromGraph.map(f => f.id));
+  for (const e of events) {
+    if (!e.flowId || seen.has(e.flowId)) continue;
+    seen.add(e.flowId);
+    fromGraph.push({ id: e.flowId, from: e.from ?? null, to: e.to ?? null, unauthored: true });
+  }
+
+  const edges = fromGraph.map(f => ({
+    ...f,
+    fired: fired.get(f.id) ?? 0,
+    gated: gated.get(f.id) ?? 0,
+    // Whether either END is a pool the view draws. An edge to a retired pool still has a
+    // node to attach to (`poolIds` is first-seen over the WHOLE run, not the live shape).
+    known: known.has(f.from) && known.has(f.to),
+  }));
+
+  return { nodes, edges };
 }
 
 /**

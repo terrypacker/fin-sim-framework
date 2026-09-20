@@ -6,7 +6,7 @@ panels: [pools]
 params: [liquidityGraph, liquidityGraphEnabled, poolFlowsEnabled, poolCashYears, poolBondYears, cashBucketDrawdownMinSeverity]
 design: [97-liquidity-pools-and-drawdown-sequence.md]
 stamps:
-  param:liquidityGraph: ee7bae
+  param:liquidityGraph: c86d6c
   param:liquidityGraphEnabled: 2df3a6
   param:poolFlowsEnabled: 8b8123
   param:poolCashYears: 92629a
@@ -42,3 +42,8 @@ The interesting event is usually a refill that did **not** happen, and nothing e
 the run records a non-event. [Liquidity Pools](../panels/pools.md) exists for that:
 it marks gated, vetoed and capped flows rather than leaving a blocked refill looking
 identical to one never configured.
+
+
+How much to hold, and how patient a refill rule should be, are the two questions this
+feature raises and cannot answer by itself. Both can be searched rather than guessed —
+see [Searching Pool Levers](searching-pool-levers.md).

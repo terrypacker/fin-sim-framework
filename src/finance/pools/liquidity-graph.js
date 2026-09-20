@@ -18,6 +18,15 @@ import { TAX_ADVANTAGED_ROLES, TAXABLE_ROLES } from '../behavioral/rebalance-to-
 // second transcription of its default preference lists would be a second thing to keep in
 // step. `allocation-location.js` does not import us either.
 import { resolveLocationPolicy } from '../behavioral/allocation-location.js';
+// Design 110 §6.2 — the pool-size AXIS. Applied HERE, in front of the normalizer, because
+// this file is where a raw authored graph becomes a compiled one and the overlay must never
+// touch the authored object itself; see `pool-target-scale.js` for why that is the seam.
+import { poolTargetScalesFrom, scaleRawPoolGraph } from './pool-target-scale.js';
+// Design 110 §6.3 option A — an optional authored `id` on a gate clause, and the threshold /
+// dwell axis it makes addressable. Applied at the same seam and on the same terms.
+import { gateOverridesFrom, applyGateOverridesToGraph, GATE_CLAUSE_ID_RE } from './pool-gate-axis.js';
+// Design 110 §6.4 / design 109 Q1 — the shape-switch YEAR axis, as a shift.
+import { shapeYearShiftsFrom, applyShapeYearShifts } from './pool-shape-year-axis.js';
 
 /**
  * DESIGN 97 PART II — the LIQUIDITY GRAPH.
@@ -199,6 +208,29 @@ const SPEND_BASES    = new Set(Object.values(POOL_SPEND_BASIS));
 const DRAWDOWN_BASES = new Set(Object.values(POOL_DRAWDOWN_BASIS));
 /** A composed gate is a tree; a bound keeps a cyclic or absurd authored one from recursing. */
 const MAX_GATE_DEPTH = 6;
+
+/**
+ * Design 110 §4.3. A problem is a REFUSAL or an ADVISORY, and the difference decides whether
+ * Rebuild proceeds.
+ *
+ * Both severities come out of `collectAuthoredGraphProblems` so there is one authority on
+ * "what is wrong with this graph" — but that means every consumer that decides a refusal has
+ * to say which it means. `blockingProblems` is that decision, in one place, so a new consumer
+ * cannot get it wrong by forgetting to filter: an advisory that blocked a Rebuild would be a
+ * strictly worse outcome than the `console.warn` it replaced.
+ */
+export const PROBLEM_SEVERITY = Object.freeze({ ERROR: 'error', WARN: 'warn' });
+
+/**
+ * The problems that must stop a Rebuild — everything that is not an advisory.
+ *
+ * Written as "not WARN" rather than "is ERROR" deliberately: a problem from an older caller
+ * that carries no `severity` at all is a refusal, which is what every entry meant before
+ * design 110 and what a reader of an unfamiliar row would assume.
+ */
+export function blockingProblems(problems) {
+  return (problems ?? []).filter(x => x?.severity !== PROBLEM_SEVERITY.WARN);
+}
 
 const err = (msg) => { throw new Error(`liquidityGraph: ${msg}`); };
 
@@ -407,6 +439,28 @@ function normalizeGate(raw, flowId, depth = 0, where = 'gate') {
   if (raw.ageOver  != null) out.ageOver  = num(raw.ageOver,  `flow '${flowId}' ${where}.ageOver`,  { min: 0, max: 120 });
   if (raw.ageUnder != null) out.ageUnder = num(raw.ageUnder, `flow '${flowId}' ${where}.ageUnder`, { min: 0, max: 120 });
 
+  // ── design 110 §6.3 option A — the clause's optional ADDRESS ──────────────────────
+  //
+  // §14's first constraint is that ids are stable and authored, never positional, and §20.15's
+  // branch NUMBER is a position (`renumberBranches` densely renumbers on every edit). So a
+  // threshold had no address and could not be an axis. An `id` gives one clause one.
+  //
+  // OPTIONAL, and absent means exactly what it means today. Only an id'd clause generates an
+  // axis, so an axis that cannot be addressed FAILS TO EXIST rather than addressing the wrong
+  // clause — which is the whole reason option A was chosen over promoting one threshold per
+  // flow (§20.15 spent a section removing the single-clause gate) or sweeping whole graphs.
+  //
+  // Stricter than a pool id, which may be any non-empty string: a clause id exists ONLY to be
+  // an address (`gate.<id>.threshold`), and an address that needs quoting is not one. Narrowing
+  // the pool id retroactively is not available; starting narrow here is.
+  if (raw.id != null) {
+    if (typeof raw.id !== 'string' || !GATE_CLAUSE_ID_RE.test(raw.id)) {
+      err(`flow '${flowId}' ${where}.id must be letters, digits, '_' or '-' (it becomes the `
+        + `param key \`gate.<id>.threshold\`), got ${JSON.stringify(raw.id)}`);
+    }
+    out.id = raw.id;
+  }
+
   // ── the composition, and the dwell ────────────────────────────────────────────────
   for (const key of ['allOf', 'anyOf']) {
     if (raw[key] == null) continue;
@@ -445,6 +499,13 @@ function normalizeGate(raw, flowId, depth = 0, where = 'gate') {
     // differ from itself on the next save — the same rule `sustainedYears: 1` follows below.
     if (sc !== POOL_GATE_SCOPE.SOURCE) out.scope = sc;
   }
+  // An id on a node that says nothing is an address for a clause that does not exist: it would
+  // generate an axis, the axis would write a threshold onto a node with no condition, and every
+  // cell would be identical. Refused for the same reason an empty `anyOf` branch is.
+  if (out.id != null && !hasCondition(out)) {
+    err(`flow '${flowId}' ${where}.id names a node with no condition, so there is nothing for `
+      + 'an axis on it to move. Put the id on the clause itself.');
+  }
   // Dwell. `1` is the default and is dropped, so an authored 1 does not make a saved graph
   // differ from itself on the next save.
   if (raw.sustainedYears != null) {
@@ -458,9 +519,45 @@ function normalizeGate(raw, flowId, depth = 0, where = 'gate') {
   return Object.keys(out).length ? out : null;
 }
 
+/**
+ * Design 110 §6.3 — a gate clause id is an ADDRESS, so it has to be unique across the graph.
+ *
+ * Checked here, as a whole-graph pass, for the same reason the claim-overlap and remainder-ref
+ * checks are: the duplicate may be on a flow that has not been read yet when the first one is.
+ *
+ * Two clauses sharing an id is the exact defect the id exists to prevent, one level up: an axis
+ * on it would write BOTH, so a sweep of "the harvest threshold" would silently move a second
+ * gate the author was not thinking about. Refused rather than warned — a warning here leaves a
+ * live axis whose meaning nobody can state.
+ *
+ * Uniqueness is WITHIN one graph, never across shapes. A pool id in two shapes is deliberately
+ * the same pool (design 109 §9) and one factor moves it in both (§6.4); a clause id follows the
+ * identical rule, so the same id in the base graph and in a shape is the same clause and one
+ * axis moves both. That is stated in the axis label rather than left to be inferred.
+ */
+function assertGateClauseIdsUnique(flows) {
+  const ownerOf = new Map();
+  const visit = (node, flowId) => {
+    if (node == null) return;
+    if (Array.isArray(node)) { for (const k of node) visit(k, flowId); return; }
+    if (typeof node !== 'object') return;
+    if (typeof node.id === 'string') {
+      const prior = ownerOf.get(node.id);
+      if (prior != null) {
+        err(`gate clause id '${node.id}' is used twice — by flow '${prior}' and flow '${flowId}'. `
+          + 'A clause id is an ADDRESS (it becomes the param key `gate.<id>.threshold`), so a '
+          + 'sweep of it would move both clauses and the axis would mean two things at once.');
+      }
+      ownerOf.set(node.id, flowId);
+    }
+    for (const key of ['allOf', 'anyOf', 'not']) if (node[key] != null) visit(node[key], flowId);
+  };
+  for (const f of flows) visit(f.gate, f.id);
+}
+
 /** Does this normalized node say anything at all? (`sustainedYears` alone says nothing.) */
 function hasCondition(node) {
-  return Object.keys(node).some(k => k !== 'sustainedYears' && k !== 'scope');
+  return Object.keys(node).some(k => k !== 'sustainedYears' && k !== 'scope' && k !== 'id');
 }
 
 /**
@@ -817,12 +914,28 @@ export function normalizeLiquidityGraph(graph, accounts = [], opts = {}) {
     });
   }
   assertNoUnconditionalCycle(flows);
+  assertGateClauseIdsUnique(flows);
   assignExecutors(pools, flows, byKey);
 
-  warnPoolClassesLocatedElsewhere(pools, byKey, opts);
-  warnMarketClausesWithoutAMarket(pools, flows, byKey);
-  warnUntradeableRebalanceFlows(pools, flows, byKey);
-  warnDivergentGatesFromOneSource(flows);
+  // Design 110 §13.2 (phase 3b). Four advisories about a graph that COMPILES and is almost
+  // certainly not what the author meant. They were four `console.warn`s, which is the state
+  // §4.3 found the design-109 pair in and gave the same verdict: in the app the message goes
+  // to the browser console, and from the CLI tools it goes nowhere at all
+  // (`cli-tools-swallow-loader-warnings`).
+  //
+  // The sink is what makes them reportable without changing a run. `opts.advisories` is
+  // supplied ONLY by the reporting path (`collectAuthoredGraphProblems`); the compile path
+  // passes none and still warns to the console exactly as before, so no run changes and no
+  // golden fixture moves. One derivation, two renderers — the same shape §4.3 used for the
+  // design-109 pair, so all six advisories now reach the author by the same route.
+  const advisories = [
+    ...collectPoolClassesLocatedElsewhere(pools, byKey, opts),
+    ...collectMarketClausesWithoutAMarket(pools, flows, byKey),
+    ...collectUntradeableRebalanceFlows(pools, flows, byKey),
+    ...collectDivergentGatesFromOneSource(flows),
+  ];
+  if (Array.isArray(opts.advisories)) opts.advisories.push(...advisories);
+  else for (const a of advisories) console.warn(a.message);
 
   // A destination with no target can never be filled `toTarget` — it would move zero every
   // period, which reads in the journal as "the refill is broken" rather than "the pool has
@@ -859,7 +972,8 @@ export function normalizeLiquidityGraph(graph, accounts = [], opts = {}) {
  * on the same pool is perfectly meaningful — a balance is a series a cash pool really has),
  * just almost never the intended one.
  */
-function warnMarketClausesWithoutAMarket(pools, flows, byKey) {
+function collectMarketClausesWithoutAMarket(pools, flows, byKey) {
+  const out = [];
   // A pool has a market iff some claim can hold LOTS. Cash-like accounts hold none; anything
   // else — brokerage, and every wrapper — does, so an unknown type is left alone.
   const hasMarket = new Map(pools.map(p =>
@@ -880,13 +994,13 @@ function warnMarketClausesWithoutAMarket(pools, flows, byKey) {
       // open on no signal, the two DESTINATION clauses stay shut. A `not` above flips it.
       const base   = clause.startsWith('source');
       const always = negated ? !base : base;
-      console.warn(
+      out.push({ flow: flow.id, pool: poolId, message:
         `liquidityGraph: flow '${flow.id}' ${path}.${clause} reads a market signal on pool `
         + `'${poolId}', which claims only cash-like accounts (${cashClaims.get(poolId)}). They hold `
         + 'no lots, so its return is null and its return index never moves off its high — the '
         + `clause is therefore ALWAYS ${always ? 'TRUE' : 'FALSE'} and the gate decides nothing. `
         + 'Measure the pool that has the market, or use `drawdownBasis: BALANCE`, which reads a '
-        + 'series a cash pool really has.');
+        + 'series a cash pool really has.' });
     }
     for (const key of ['allOf', 'anyOf']) {
       (node[key] ?? []).forEach((kid, i) => visit(kid, flow, `${path}.${key}[${i}]`, negated));
@@ -894,6 +1008,7 @@ function warnMarketClausesWithoutAMarket(pools, flows, byKey) {
     if (node.not) visit(node.not, flow, `${path}.not`, !negated);
   };
   for (const flow of flows) visit(flow.gate, flow, 'gate', false);
+  return out;
 }
 
 /**
@@ -934,7 +1049,8 @@ function warnMarketClausesWithoutAMarket(pools, flows, byKey) {
  * (§20.15) and two edges may differ in clause kind, basis or dwell as easily as in threshold.
  * Any difference has the same consequence, so any difference is worth saying.
  */
-function warnDivergentGatesFromOneSource(flows) {
+function collectDivergentGatesFromOneSource(flows) {
+  const out = [];
   const bySource = new Map();
   for (const flow of flows) {
     if (!flow.gate) continue;
@@ -955,7 +1071,7 @@ function warnDivergentGatesFromOneSource(flows) {
     if (sourceScoped.length === 0 || edges.length < 2) continue;
     const shapes = new Set(edges.map(f => JSON.stringify(f.gate)));
     if (shapes.size < 2) continue;
-    console.warn(
+    out.push({ flow: null, pool: source, message:
       `liquidityGraph: pool '${source}' is the source of ${edges.length} gated edges `
       + `(${edges.map(f => `'${f.id}'`).join(', ')}) whose gates DIFFER. A gate vetoes the sale `
       + `of its SOURCE POOL — it must, or the rebalancer launders the same sale through another `
@@ -963,8 +1079,9 @@ function warnDivergentGatesFromOneSource(flows) {
       + `rebalancer. (Each edge still FIRES on its own gate, which is why a cross-account `
       + `transfer edge is not fully suppressed; an in-portfolio one is — §12.4c.) `
       + `Give the edges one gate, set \`gate.scope: 'EDGE'\` so each vetoes its own destination, `
-      + `or move them onto separate source pools with disjoint claims.`);
+      + `or move them onto separate source pools with disjoint claims.` });
   }
+  return out;
 }
 
 /**
@@ -996,13 +1113,14 @@ function warnDivergentGatesFromOneSource(flows) {
  * earlier class can exhaust an account before this one reaches it — so the message says what
  * was compared rather than predicting a placement.
  */
-function warnPoolClassesLocatedElsewhere(pools, byKey, opts) {
+function collectPoolClassesLocatedElsewhere(pools, byKey, opts) {
+  const out = [];
   // Nothing reads a pool target without the rebalancer, and PER_ACCOUNT drives every account
   // to the same mix, so there is no cross-account placement to disagree with.
-  if (opts.hasRebalancer === false || opts.locationMode === 'PER_ACCOUNT') return;
+  if (opts.hasRebalancer === false || opts.locationMode === 'PER_ACCOUNT') return out;
   const accounts = [...byKey.values()].filter(a => a?.role != null
     && (TAX_ADVANTAGED_ROLES.has(a.role) || TAXABLE_ROLES.has(a.role)));
-  if (!accounts.length) return;                       // roles not supplied — see §20.19
+  if (!accounts.length) return out;                   // roles not supplied — see §20.19
 
   for (const pool of pools) {
     if (!pool.target) continue;
@@ -1022,22 +1140,24 @@ function warnPoolClassesLocatedElsewhere(pools, byKey, opts) {
       const best    = Math.min(...claimed.map(a => rank(a.role)));
       const leaders = accounts.filter(a => !claimsIt.has(a.stateKey) && rank(a.role) < best);
       if (!leaders.length) continue;
-      console.warn(
+      out.push({ flow: null, pool: pool.id, message:
         `liquidityGraph: pool '${pool.id}' has a \`target\` sizing ${cls}, but for a ${residency} `
         + `resident the location policy fills ${leaders.map(a => `'${a.stateKey}' (${a.role})`).join(', ')} `
         + `with ${cls} BEFORE any account the pool claims `
         + `(${claimed.map(a => `'${a.stateKey}'`).join(', ')}). The pool sizes the class and a `
         + `different account holds it, so '${pool.id}' will report less cover than the plan `
         + `actually carries and the spend order will walk past the rest. Put the claimed roles `
-        + `first in \`allocationLocationPolicy.${cls}\`, or claim the accounts the policy prefers.`);
+        + `first in \`allocationLocationPolicy.${cls}\`, or claim the accounts the policy prefers.` });
       break;                                          // one residency's report is enough
     }
   }
+  return out;
 }
 
-function warnUntradeableRebalanceFlows(pools, flows, byKey) {
+function collectUntradeableRebalanceFlows(pools, flows, byKey) {
+  const out = [];
   const anyRole = [...byKey.values()].some(a => a?.role != null);
-  if (!anyRole) return;
+  if (!anyRole) return out;
   const tradeable = (key) => {
     const role = byKey.get(key)?.role;
     return role == null || TAX_ADVANTAGED_ROLES.has(role) || TAXABLE_ROLES.has(role);
@@ -1048,15 +1168,16 @@ function warnUntradeableRebalanceFlows(pools, flows, byKey) {
     for (const [role, poolId] of [['source', flow.from], ['destination', flow.to]]) {
       const blocked = (byId.get(poolId)?.claims ?? []).filter(c => !tradeable(c.key));
       if (!blocked.length) continue;
-      console.warn(
+      out.push({ flow: flow.id, pool: poolId, message:
         `liquidityGraph: flow '${flow.id}' is an in-portfolio (REBALANCE) edge, but its `
         + `${role} pool '${poolId}' claims ${blocked.map(c => `'${c.key}'`).join(', ')}, whose `
         + 'role the rebalancer does not trade — only tax-advantaged and taxable-brokerage roles '
         + `are in its account list. The edge will never move anything. Claim a us-stock / `
         + 'au-stock brokerage sleeve instead, or drop the flow and let the pool be a spend '
-        + 'source only.');
+        + 'source only.' });
     }
   }
+  return out;
 }
 
 /**
@@ -1147,8 +1268,36 @@ export function resolveLiquidityGraph(params, accounts = []) {
  * the editor goes quiet on a graph that will not compile the moment it is switched back on.
  * @private
  */
-function _normalizeFromParams(p, accounts) {
-  return normalizeLiquidityGraph(p.liquidityGraph, accounts, _graphOptsFrom(p));
+function _normalizeFromParams(p, accounts, advisories = null) {
+  return normalizeLiquidityGraph(
+    _overlayRawGraph(p.liquidityGraph, p), accounts, _graphOptsFrom(p, advisories));
+}
+
+/**
+ * A raw authored graph with leg C's overlays applied — the pool size factors (§6.2) and the
+ * gate-clause threshold / dwell overrides (§6.3).
+ *
+ * Both return the caller's own object when the bag carries nothing for them, so an unswept plan
+ * normalizes the authored object itself and every run stays byte-identical. Neither writes to
+ * it: see `pool-target-scale.js` for why the resolver rather than a loader cascade is the seam.
+ * @private
+ */
+function _overlayRawGraph(raw, p) {
+  return applyGateOverridesToGraph(
+    scaleRawPoolGraph(raw, poolTargetScalesFrom(p)), gateOverridesFrom(p));
+}
+
+/**
+ * The raw `liquidityGraphSchedule` with leg C's shape-year shifts applied (§6.4).
+ *
+ * Every read of `p.liquidityGraphSchedule` goes through this — the resolver, the reporting path
+ * and the schedule advisories — because a shift the advisories could not see would describe a
+ * schedule the run is not using, which is the whole class of defect §21.3's provenance strip
+ * exists for. Returns the caller's own array when the bag carries no shift.
+ * @private
+ */
+function _overlayRawSchedule(p) {
+  return applyShapeYearShifts(p.liquidityGraphSchedule, shapeYearShiftsFrom(p));
 }
 
 /**
@@ -1158,8 +1307,12 @@ function _normalizeFromParams(p, accounts) {
  * with the identical options, or two shapes in one scenario would mean different things.
  * @private
  */
-function _graphOptsFrom(p) {
+function _graphOptsFrom(p, advisories = null) {
   return ({
+    // Design 110 §13.2 — present only on the REPORTING path. With it the four in-normalizer
+    // advisories are collected as rows; without it they go to `console.warn` as they always
+    // have, which is what keeps every compile byte-identical.
+    ...(advisories ? { advisories } : {}),
     drawdownMode:        p.drawdownMode,
     hasDrawdownSequence: Array.isArray(p.drawdownSequence) && p.drawdownSequence.length > 0,
     hasLegacyPoolYears:  Number.isFinite(p.poolCashYears) || Number.isFinite(p.poolBondYears),
@@ -1184,16 +1337,32 @@ function _graphOptsFrom(p) {
  * compiler runs, so the two can never drift — a percent authored as 100 is reported here
  * by exactly the sentence `normalizeLiquidityGraph` would have thrown.
  *
- * Field-local problems are reported alone: once a size spec is known bad the whole-graph
- * pass would only re-report it, unlocalized. When there is none, the whole-graph pass runs
- * and its first throw is reported with `field: null` — still nameable ("this graph does not
- * compile"), just not repairable a cell at a time.
+ * A bad size spec in the BASE graph still suppresses the base graph's whole-graph pass —
+ * once a cell is known bad that pass would only re-report it, unlocalized. Design 110 §2.3
+ * found that the same `return` was also suppressing the SHAPE pass, and that does not
+ * follow: a shape is a separate document with separate cells, so while any one base-graph
+ * cell was bad every problem in every named shape was invisible. The shape pass now always
+ * runs, and it localizes its own cells the same way (§2.3 rule 2 — design 109 §12 asked for
+ * localisation and got naming).
+ *
+ * ─── two severities (design 110 §4.3) ────────────────────────────────────────
+ *
+ * Every entry carries a `severity`. `'error'` is a refusal — the graph does not compile and
+ * Rebuild must not proceed. `'warn'` is advisory: the graph compiles, and something about it
+ * is almost certainly not what the author meant (an unscheduled shape, a resurrected pool).
+ * Both live here so there is ONE authority on "what is wrong with this graph" and the
+ * refusal path and the advisory path are the same code.
+ *
+ * A consumer that decides a REFUSAL must filter with {@link blockingProblems}. Warnings that
+ * blocked would be worse than warnings that went nowhere, which is the state they were in:
+ * `console.warn` in the app, and nothing at all from the CLI tools
+ * (`cli-tools-swallow-loader-warnings`).
  *
  * @param {object} params   - the scenario parameter bag
  * @param {Array}  accounts - the accounts the claims name; the whole-graph pass is SKIPPED
  *        when this is empty, because every claim would then read as naming a dead account
  * @returns {Array<{param: string, index: number|null, field: string|null, pool: string|null,
- *                  message: string}>} empty when valid
+ *                  shape?: string|null, severity: string, message: string}>} empty when valid
  */
 export function collectAuthoredGraphProblems(params, accounts = []) {
   const p = params ?? {};
@@ -1203,48 +1372,152 @@ export function collectAuthoredGraphProblems(params, accounts = []) {
   if (rawPools.length === 0) return [];
 
   const problems = [];
+  // Design 110 §13.2 — the sink the four in-normalizer advisories push to on this path.
+  // Filled by the base-graph pass and by each shape's, both below; rendered to nothing if
+  // either refuses, because an advisory about a graph that does not compile describes a
+  // graph nobody has.
+  const advisories = [];
+
+  // The base graph's own cells.
+  const baseCellProblems = _sizeSpecProblems(rawPools, 'liquidityGraph', null);
+  problems.push(...baseCellProblems);
+
+  if (!accounts?.length) {
+    // No accounts ⇒ every claim would read as naming a dead account, so the whole-graph and
+    // shape passes are both skipped. The shapes' own CELLS do not need accounts, though, and
+    // a bad percent is a bad percent whatever the claims say — so they are still reported.
+    problems.push(..._shapeCellProblems(p));
+    return problems;
+  }
+
+  if (!baseCellProblems.length) {
+    try {
+      // NOT `resolveLiquidityGraph` — see `_normalizeFromParams`. A graph switched off with
+      // `liquidityGraphEnabled: false` still has to report its problems, because the switch
+      // is a run-time "ignore this", not an authoring-time "this is fine".
+      _normalizeFromParams(p, accounts, advisories);
+    } catch (e) {
+      problems.push({ param: 'liquidityGraph', index: null, field: null, pool: null,
+                      severity: PROBLEM_SEVERITY.ERROR, message: e.message });
+    }
+  }
+
+  // Design 109 §5 rule 3 — the SHAPES and the schedule, on the same terms, and NOT behind the
+  // base graph's cells (design 110 §2.3). A shape is a separate document: its cells are
+  // localized like the base graph's, and its whole-graph pass runs when its own cells are
+  // clean, so "shape B does not compile" is reported as the cell it is in rather than as a
+  // sentence about the shape.
+  const shapeCellProblems = _shapeCellProblems(p);
+  problems.push(...shapeCellProblems);
+  const dirtyShapes = new Set(shapeCellProblems.map(x => x.shape));
+  try {
+    _normalizeShapes(p, accounts, dirtyShapes, advisories);
+    _normalizeSchedule(_overlayRawSchedule(p), p.liquidityShapes);
+  } catch (e) {
+    const m = /^liquidityGraph: shape '([^']+)': /.exec(e.message);
+    problems.push({
+      param: m ? 'liquidityShapes' : 'liquidityGraphSchedule',
+      index: null, field: null, pool: null, shape: m ? m[1] : null,
+      severity: PROBLEM_SEVERITY.ERROR, message: e.message,
+    });
+  }
+
+  // Design 110 §4.3 and §13.2 — all SIX advisories, in the same list as the refusals rather
+  // than in `console.warn`. They need a compiling graph to be meaningful, so they are dropped
+  // wholesale if anything above refused: an advisory about a graph that does not compile is a
+  // statement about a graph nobody has, and it would sit next to the error that says so.
+  if (!blockingProblems(problems).length) {
+    // The four in-normalizer ones (§13.2). `param` follows the shape stamp: a shape's rows
+    // belong to `liquidityShapes` and are rendered under that shape's tables, the base
+    // graph's under its own. `index`/`field` are null — these are statements about a POOL or
+    // a FLOW and their relationship to the rest of the plan, not about one cell, so there is
+    // no cell to highlight and claiming one would point at the wrong thing.
+    problems.push(...advisories.map(a => ({
+      param: a.shape != null ? 'liquidityShapes' : 'liquidityGraph',
+      index: null, field: null, pool: a.pool ?? null, flow: a.flow ?? null,
+      shape: a.shape ?? null, severity: PROBLEM_SEVERITY.WARN, message: a.message,
+    })));
+    // The two design-109 ones (§4.3), which read the resolved SCHEDULE rather than one graph.
+    problems.push(..._scheduleAdvisories(p, accounts));
+  }
+
+  return problems;
+}
+
+/**
+ * The `target`/`floor`/`capacity` cells of one pool list, each re-validated through the SAME
+ * `sizeSpec` the compiler runs — so the sentence the author reads is the sentence the
+ * compiler would have thrown, and the two cannot drift.
+ * @private
+ */
+function _sizeSpecProblems(rawPools, param, shape) {
   const specs = [
     ['target',   TARGET_MODES,   POOL_TARGET_MODE.YEARS_OF_SPEND],
     ['floor',    TARGET_MODES,   POOL_TARGET_MODE.AMOUNT],
     ['capacity', CAPACITY_MODES, POOL_CAPACITY_MODE.BALANCE],
   ];
-  rawPools.forEach((raw, index) => {
+  const out = [];
+  (Array.isArray(rawPools) ? rawPools : []).forEach((raw, index) => {
     if (!raw || typeof raw !== 'object') return;
     const id = typeof raw.id === 'string' && raw.id ? raw.id : `#${index}`;
     for (const [field, allowed, defaultMode] of specs) {
       try {
         sizeSpec(raw[field], `pool '${id}' ${field}`, allowed, defaultMode);
       } catch (e) {
-        problems.push({ param: 'liquidityGraph', index, field, pool: raw.id ?? null, message: e.message });
+        out.push({ param, index, field, pool: raw.id ?? null,
+                   ...(shape != null ? { shape } : {}),
+                   severity: PROBLEM_SEVERITY.ERROR, message: e.message });
       }
     }
   });
-  if (problems.length) return problems;
+  return out;
+}
 
-  if (!accounts?.length) return problems;
-  try {
-    // NOT `resolveLiquidityGraph` — see `_normalizeFromParams`. A graph switched off with
-    // `liquidityGraphEnabled: false` still has to report its problems, because the switch
-    // is a run-time "ignore this", not an authoring-time "this is fine".
-    _normalizeFromParams(p, accounts);
-  } catch (e) {
-    problems.push({ param: 'liquidityGraph', index: null, field: null, pool: null, message: e.message });
+/**
+ * Every named shape's cells, localized to the shape AND the cell (design 110 §2.3 rule 2).
+ *
+ * Before this, a bad percent in shape B was "shape B does not compile" while the same typo in
+ * the base graph highlighted the cell — design 109 §12 asked for localisation and got naming.
+ * @private
+ */
+function _shapeCellProblems(p) {
+  const raw = (p?.liquidityShapes && typeof p.liquidityShapes === 'object'
+               && !Array.isArray(p.liquidityShapes)) ? p.liquidityShapes : {};
+  const out = [];
+  for (const [id, shape] of Object.entries(raw)) {
+    if (!shape || typeof shape !== 'object') continue;   // the container's own error; _normalizeShapes says it
+    out.push(..._sizeSpecProblems(shape.pools, 'liquidityShapes', id));
   }
+  return out;
+}
 
-  // Design 109 §5 rule 3 — the SHAPES and the schedule, on the same terms. Reported with the
-  // shape named, or a bad cell in shape B reads as a bad cell in shape A and the author
-  // repairs the wrong table. Also switched-off-safe, for the reason above.
+/**
+ * The two design-109 advisories, as `severity: 'warn'` rows (design 110 §4.3).
+ *
+ * They are computed from the same collectors `resolveLiquidityGraphSchedule` renders to the
+ * console, so there is one derivation and two renderers rather than two derivations.
+ * @private
+ */
+function _scheduleAdvisories(p, accounts) {
   try {
-    _normalizeShapes(p, accounts);
-    _normalizeSchedule(p.liquidityGraphSchedule, p.liquidityShapes);
-  } catch (e) {
-    const m = /^liquidityGraph: shape '([^']+)': /.exec(e.message);
-    problems.push({
-      param: m ? 'liquidityShapes' : 'liquidityGraphSchedule',
-      index: null, field: null, pool: null, shape: m ? m[1] : null, message: e.message,
-    });
+    const rows = _normalizeSchedule(_overlayRawSchedule(p), p.liquidityShapes);
+    if (!rows.length) return [];
+    // A DISCARDED sink, not an absent one. This pass re-normalizes the base graph and every
+    // shape to build the entry list, and without a sink each of those calls would `console.warn`
+    // the four §13.2 advisories all over again — on the REPORTING path, where they have already
+    // been collected. That is what made the placement warning appear four times in the browser
+    // console for one graph.
+    const quiet = [];
+    const shapes = _normalizeShapes(p, accounts, null, quiet);
+    const entries = [{ shapeId: null, graph: _normalizeFromParams(p, accounts, quiet) },
+                     ...rows.map(r => ({ shapeId: r.shape, graph: shapes.get(r.shape) }))];
+    return [..._collectUnscheduledShapes(shapes, rows),
+            ..._collectResurrectedPools(entries)];
+  } catch {
+    // An advisory pass that throws has nothing to add: the error leg above already reported
+    // the refusal, and a second sentence about the same defect is noise.
+    return [];
   }
-  return problems;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -1308,7 +1581,7 @@ export function resolveLiquidityGraphSchedule(params, accounts = []) {
   // once, and the schedule is not a way to sneak a graph past it.
   if (p.liquidityGraphEnabled === false) return null;
 
-  const rows = _normalizeSchedule(p.liquidityGraphSchedule, p.liquidityShapes);
+  const rows = _normalizeSchedule(_overlayRawSchedule(p), p.liquidityShapes);
   if (!rows.length) return null;
 
   const shapes = _normalizeShapes(p, accounts);
@@ -1330,8 +1603,13 @@ export function resolveLiquidityGraphSchedule(params, accounts = []) {
       graph:   shapes.get(row.shape),
     });
   }
-  _warnUnscheduledShapes(shapes, rows);
-  _warnResurrectedPools(out);
+  // Design 110 §4.3 — the same collectors `collectAuthoredGraphProblems` returns as
+  // `severity: 'warn'` rows, rendered here to the console for the ENGINE path, which has no
+  // authoring surface. One derivation, two renderers: the advisory the author reads in the
+  // editor and the one a developer sees in the console are by construction the same sentence.
+  for (const w of [..._collectUnscheduledShapes(shapes, rows), ..._collectResurrectedPools(out)]) {
+    console.warn(w.message);
+  }
   return out;
 }
 
@@ -1390,13 +1668,29 @@ function _normalizeSchedule(rawSchedule, rawShapes) {
  * records for three call sites and this would reintroduce for N shapes.
  * @private
  */
-function _normalizeShapes(p, accounts) {
+function _normalizeShapes(p, accounts, skip = null, advisories = null) {
   const raw = _shapesObject(p.liquidityShapes);
+  // §6.4 — the axis key is the POOL id, so one factor moves that pool in EVERY shape that
+  // contains it. Scaling each shape here rather than once over the whole map keeps the
+  // per-shape `err()` re-throw below pointing at the shape the author has to look at.
   const out = new Map();
   for (const [id, shape] of Object.entries(raw)) {
     if (!shape || typeof shape !== 'object') err(`liquidityShapes['${id}'] is not a graph`);
+    // `skip` is the reporting path's (design 110 §2.3): a shape whose own CELLS have already
+    // been reported cell-by-cell must not then throw an unlocalized sentence about the same
+    // typo — the base graph's cells suppress its whole-graph pass for exactly this reason,
+    // and a shape is a separate document that deserves the same treatment. It is null on the
+    // COMPILE path, where every shape must still throw.
+    if (skip?.has(id)) continue;
     try {
-      out.set(id, normalizeLiquidityGraph(shape, accounts, _graphOptsFrom(p)));
+      // A per-shape sink, stamped with the shape id before it joins the rest: an advisory
+      // about `bridge` rendered under the base graph's tables names a pool the reader is not
+      // looking at, which is design 109 §12's "the author repairs the wrong table" in a new
+      // place. The editor filters on exactly this field (`advisoriesFor`).
+      const mine = advisories ? [] : null;
+      out.set(id, normalizeLiquidityGraph(
+        _overlayRawGraph(shape, p), accounts, _graphOptsFrom(p, mine)));
+      if (mine) advisories.push(...mine.map(a => ({ ...a, shape: id })));
     } catch (e) {
       // Re-thrown with the shape named. Without this the message is identical to the one the
       // base graph would produce, and on a four-shape plan the author cannot tell which table
@@ -1413,14 +1707,19 @@ function _normalizeShapes(p, accounts) {
  * to schedule it, for whom this is the only signal that the new structure is doing nothing.
  * @private
  */
-function _warnUnscheduledShapes(shapes, rows) {
+function _collectUnscheduledShapes(shapes, rows) {
   const used = new Set(rows.map(r => r.shape));
   const idle = [...shapes.keys()].filter(id => !used.has(id));
-  if (idle.length) {
-    console.warn(`liquidityShapes: ${idle.map(s => `'${s}'`).join(', ')} ${idle.length === 1 ? 'is' : 'are'} `
-      + 'not selected by any `liquidityGraphSchedule` row, so it governs no part of the run. '
-      + 'Add a row, or delete the shape.');
-  }
+  if (!idle.length) return [];
+  // One row per idle SHAPE, not one sentence listing them all: the authoring surface keys a
+  // problem to the thing that carries it, and "shapes A and C are unscheduled" cannot be
+  // rendered beside either of them.
+  return idle.map(id => ({
+    param: 'liquidityShapes', index: null, field: null, pool: null, shape: id,
+    severity: PROBLEM_SEVERITY.WARN,
+    message: `liquidityShapes: '${id}' is not selected by any \`liquidityGraphSchedule\` row, `
+      + 'so it governs no part of the run. Add a row, or delete the shape.',
+  }));
 }
 
 /**
@@ -1435,7 +1734,7 @@ function _warnUnscheduledShapes(shapes, rows) {
  * Almost never what anybody meant, and the cheapest moment to say so is here.
  * @private
  */
-function _warnResurrectedPools(entries) {
+function _collectResurrectedPools(entries) {
   const seenIn = new Map();     // pool id -> indices of entries containing it
   entries.forEach((e, i) => {
     for (const pool of (e.graph?.pools ?? [])) {
@@ -1443,16 +1742,23 @@ function _warnResurrectedPools(entries) {
       seenIn.get(pool.id).push(i);
     }
   });
+  const out = [];
   for (const [id, at] of seenIn) {
     const gapped = at.some((v, i) => i > 0 && v !== at[i - 1] + 1);
     if (!gapped) continue;
     const where = at.map(i => entries[i].shapeId ?? 'the base graph').join(' → ');
-    console.warn(`liquidityGraphSchedule: pool '${id}' is absent from a shape and returns in a `
-      + `later one (${where}). Design 109 §9: that RETIRES the pool and starts a new one with `
-      + 'the same name — its trailing high resets to 0, so every drawdown gate on it reads "0% '
-      + 'below its high" and opens for a period. Carry the pool through the intervening shape, '
-      + 'or give the second one its own id.');
+    out.push({
+      param: 'liquidityGraphSchedule', index: null, field: null, pool: id,
+      shape: entries[at[at.length - 1]].shapeId ?? null,
+      severity: PROBLEM_SEVERITY.WARN,
+      message: `liquidityGraphSchedule: pool '${id}' is absent from a shape and returns in a `
+        + `later one (${where}). Design 109 §9: that RETIRES the pool and starts a new one with `
+        + 'the same name — its trailing high resets to 0, so every drawdown gate on it reads "0% '
+        + 'below its high" and opens for a period. Carry the pool through the intervening shape, '
+        + 'or give the second one its own id.',
+    });
   }
+  return out;
 }
 
 /**

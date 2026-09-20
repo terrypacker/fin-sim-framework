@@ -51,6 +51,13 @@ import { ALLOCATION_VALUES, MIX_SUM_EPSILON } from '../../finance/holdings/alloc
 import { REGIME_TAG }          from '../../finance/economic-regimes/regime-tag.js';
 import { ACCOUNT_ROLES }       from '../../finance/state/account-roles.js';
 import { buildRowListEditor }  from '../components/row-list-editor.js';
+// Design 110 §4.2 / §17.2's rule: the readouts under the tables DERIVE by calling the
+// compiler's own functions, and never re-implement one. `normalizeLiquidityGraph` is what
+// decides what the author wrote, `compileToDrawdownSequence` is what decides the spend order
+// the run will use, and `claimValueNative` is the authority on what one claim is worth.
+import { normalizeLiquidityGraph, compileToDrawdownSequence }
+  from '../../finance/pools/liquidity-graph.js';
+import { claimValueNative } from '../../finance/pools/pool-metrics.js';
 
 // ─── small DOM helpers (shared shape with the band editors in scenario-tab-view) ──
 
@@ -1036,7 +1043,7 @@ export function buildLiquidityGraphScheduleEditor(param, shapeIdsProvider = () =
  * @param {object} param
  * @param {Array}  accounts
  */
-export function buildLiquidityShapesEditor(param, accounts = []) {
+export function buildLiquidityShapesEditor(param, accounts = [], flags = null) {
   const value  = isPlainObject(param.value) ? param.value : {};
   const shapes = Object.entries(value).map(([id, graph]) => ({ id, graph: graph ?? {} }));
 
@@ -1115,7 +1122,11 @@ export function buildLiquidityShapesEditor(param, accounts = []) {
         name:  `${param.name}.${shape.id}`,
         get value() { return shape.graph; },
         set value(v) { shape.graph = v ?? {}; sync(); },
-      }, accounts));
+      }, accounts, () => ({ ...(typeof flags === 'function' ? flags() : flags),
+                            // Read at call time, not captured: an id retyped in the head
+                            // above must move this line with it, or the readouts below name
+                            // the shape the author just stopped editing.
+                            shapeId: shape.id ?? '(unnamed)' })));
 
       container.appendChild(block);
     });
@@ -1131,7 +1142,303 @@ export function buildLiquidityShapesEditor(param, accounts = []) {
   return container;
 }
 
-export function buildLiquidityGraphEditor(param, accounts = []) {
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Design 110 §4.2 — the four things the pool tables cannot say
+//
+// All four are DERIVED and read-only. None adds an authored field, and items 1, 3 and 4
+// derive from the SAVED value by calling the same functions the compiler calls — §4.2's
+// answer to the objection that every derived display is a second derivation, and the same
+// rule §23.6's `_seriesSpecs` refactor exists to enforce one surface over.
+//
+// Item 2 ("what this claim holds today") is the exception and is allowed to be: it reads
+// live account balances, which is not a compile and therefore cannot disagree with one.
+// ═════════════════════════════════════════════════════════════════════════════
+
+/** A claim's sleeves as a short phrase — the same words the checkset's `emptyText` uses. */
+function claimScopeText(claim) {
+  const sleeves = claim?.sleeves;
+  return Array.isArray(sleeves) && sleeves.length ? sleeves.join('+') : 'whole account';
+}
+
+/**
+ * §4.2 item 1 — a pool's claims, ON the pool's row.
+ *
+ * Today the claims table is joined to the pools table by id, in the reader's head, on every
+ * read. This is that join performed once. Derived from the SAVED value rather than from the
+ * claims row model, so a half-typed claim (no account picked yet) is not counted as one.
+ */
+function claimsSummaryOf(savedValue, poolId) {
+  const pool = (savedValue?.pools ?? []).find(p => p?.id === poolId);
+  if (!pool) return '—';
+  const claims = pool.claims ?? [];
+  if (!claims.length) return 'holds nothing';
+  return claims.map(c => `${c.key} (${claimScopeText(c)})`).join(', ');
+}
+
+/**
+ * §4.2 item 2 — what ONE claim would hold today, in the claimed account's OWN currency.
+ *
+ * Per CLAIM and never summed onto the pool, for two reasons §4.2 gives and both matter:
+ * `claimValueNative` returns the account's own currency and the editor has no rate, so a
+ * pool-level sum across an AUD and a USD claim would be a number with no unit; and the
+ * mistake this catches IS per-claim — the wrong sleeve, or a claim that landed in the wrong
+ * pool (§22.5 trap 2, which shipped as a DEFAULT fix precisely because nothing on the screen
+ * said where the claim had gone).
+ *
+ * The value comes from `claimValueNative` — exported for this, not re-derived. Its sleeve
+ * rule is the non-obvious half and a reader who guessed would have written `balance`: a
+ * sleeve-narrowed claim on an account holding no lots is worth NOTHING, not its cash balance.
+ */
+function claimHoldsNow(accounts, key, sleeves) {
+  if (!key) return '';
+  const account = (accounts ?? []).find(a => a?.stateKey === key);
+  // The account list is the live one. A claim naming a key that is not in it is already a
+  // refusal at Rebuild (`normalizeLiquidityGraph` throws on an unknown claim key), so this
+  // says the same thing early rather than inventing a zero that reads as an empty account.
+  if (!account) return 'no such account';
+  const value = claimValueNative(account, Array.isArray(sleeves) && sleeves.length ? sleeves : null);
+  const code  = account.currency?.code ?? account.currency ?? '';
+  const shown = Math.round(value).toLocaleString('en-US');
+  return code ? `${shown} ${code}` : shown;
+}
+
+/**
+ * §4.2 item 4 — one gate, as one sentence.
+ *
+ * The clause table is honest and unreadable: a two-branch gate with a dwell is four cells
+ * across three rows and the author assembles the meaning themselves. This renders the SAME
+ * rows as prose — driven from `gateToRows`, which is the function that populates the table,
+ * so the sentence and the table cannot disagree by construction. That is what makes CTRL-3
+ * ("the prose names every clause, its basis, its scope and its dwell") a property rather
+ * than a pair of lists somebody has to keep in step.
+ *
+ * It is a description of what the gate SAYS, which is a different object from the panel
+ * log's `reason` — that is the runtime evaluator's account of why a gate was shut in one
+ * period. Neither can stand in for the other, and this one exists because the author has no
+ * run yet.
+ */
+function describeGate(flowId, gate) {
+  if (gate == null) return 'no gate — fires whenever its trigger and amount allow.';
+  const rows = gateToRows(flowId, gate);
+  // §20.15's escape hatch. A gate outside DNF is carried verbatim and the table does not draw
+  // it, so the sentence must not pretend to: a PARTIAL sentence about a gate the author
+  // cannot see in the table is worse than saying plainly that it is not drawn here.
+  if (rows == null) return 'authored directly — this gate is outside what the clause table draws, '
+    + 'and it is kept exactly as written.';
+  if (!rows.length) return 'no gate — fires whenever its trigger and amount allow.';
+
+  const scope = rows[0].gateScope === 'EDGE' ? 'filling the destination pool' : 'selling the source pool';
+  const branches = [...new Set(rows.map(r => r.branch ?? 1))].sort((a, b) => a - b);
+  const parts = branches.map(b => rows.filter(r => (r.branch ?? 1) === b)
+    .map(describeClause).join(' AND '));
+  const body = parts.length === 1 ? parts[0] : parts.map(t => `(${t})`).join(' OR ');
+  return `blocks ${scope} unless ${body}.`;
+}
+
+/** One clause row as a phrase — the same words its cells use, plus the dwell. */
+function describeClause(r) {
+  const label = (GATE_OPTIONS.find(([k]) => k === r.gateKind)?.[1] ?? r.gateKind)
+    .replace(' X ', ` ${r.gateValue} `)
+    .replace(/ X$/, ` ${r.gateValue}`);
+  // The basis is named only where it MEANS something. §20.14's whole point is that a peak
+  // balance counts the household's own spending as drawdown while the return index cannot,
+  // so a drawdown clause whose basis is unstated is a clause whose behaviour is unstated.
+  const basis = isDrawdownClause(r.gateKind)
+    ? ` (measured against ${r.gateBasis === 'INDEX' ? 'its return index' : 'its peak balance'})`
+    : '';
+  // §20.13 measured DURATION, not level, as the lever that moves the answer — the three
+  // drawdown thresholds landed within $13k while the same gate family differing only in
+  // dwell spread by $460k. It is named whenever it binds.
+  const dwell = (r.gateYears ?? 1) > 1 ? ` for ${r.gateYears} consecutive years` : '';
+  const sense = r.gateNegate === 'NOT' ? 'NOT ' : '';
+  return `${sense}${label}${basis}${dwell}`;
+}
+
+/**
+ * §10.5 / CTRL-15 — which of three states the graph on screen is in.
+ *
+ * The readouts render in ALL THREE. Hiding them when the graph is switched off would make
+ * the switch a way to stop seeing the graph you are editing, and validation already refuses
+ * to do that: `collectAuthoredGraphProblems` keeps reporting while `liquidityGraphEnabled`
+ * is false, "because the switch is a run-time 'ignore this', not an authoring-time 'this is
+ * fine'". But a compiled-order readout under `liquidityGraphEnabled: false` describes an
+ * order the run will NOT use, so the line has to say so — §21.3's provenance strip solved
+ * exactly this problem one surface over, and this reuses its vocabulary so the two surfaces
+ * say the same words.
+ */
+function graphProvenanceText(flags) {
+  // A named shape is a fourth state, and the three above would all lie about it: a shape is
+  // live only in the years its schedule selects it, so "this is the order the run will use"
+  // is false for every other year, and `liquidityGraphEnabled: false` switches the shapes off
+  // with the base graph. Design 109 §7 makes the switch date and the authored year differ by
+  // up to a cadence, which is exactly why this line names the SHAPE and not a date.
+  if (flags?.shapeId) {
+    if (flags?.liquidityGraphEnabled === false) {
+      return `Shape '${flags.shapeId}' — liquidityGraphEnabled is OFF, so no shape is used at all.`;
+    }
+    return `Shape '${flags.shapeId}' — this is the order in the years the schedule selects it, `
+      + 'not the whole run.';
+  }
+  if (flags?.liquidityGraphEnabled === false) {
+    return 'liquidityGraphEnabled is OFF — these pools are authored, and this order will NOT be used: '
+      + 'the run falls back to drawdownPriority.';
+  }
+  if (flags?.poolFlowsEnabled === false) {
+    return 'poolFlowsEnabled is OFF — the spend order below IS used and the targets are live, '
+      + 'but no refill edge will fire.';
+  }
+  return 'The graph is live — this is the order and these are the gates the run will use.';
+}
+
+/**
+ * The advisories that belong to THIS editor instance (design 110 §4.3).
+ *
+ * A shape's editor shows the warnings naming that shape; the base graph's editor shows the
+ * rest. Without the split, every one of the N shape editors on a scheduled plan would repeat
+ * every warning — which is the "a run through three shapes reports the third" mistake §5.3
+ * names, in the shape of saying everything everywhere instead of saying it in the wrong place.
+ */
+function advisoriesFor(flags, shapeId) {
+  const all = (flags?.problems ?? []).filter(x => x?.severity === 'warn');
+  return shapeId == null ? all.filter(x => x.shape == null) : all.filter(x => x.shape === shapeId);
+}
+
+/**
+ * The block under the four tables: §4.2 items 3 and 4, behind §10.5's provenance line.
+ *
+ * `flags` is a PROVIDER, not a captured value, for the reason the schedule editor reads its
+ * shape ids live (see `scenario-tab-view`): the two switches are sibling params, and one
+ * toggled without a full re-render would otherwise leave this line stating the old state.
+ *
+ * Returns the container, carrying a `.refresh()` the editor calls after every sync.
+ */
+function buildGraphReadouts(param, accounts, flags) {
+  const container = el('div', 'liquidity-graph-readouts');
+
+  /** Which shape this editor instance is drawing, or null for the base graph. */
+  const shapeIdOf = (f) => (typeof f === 'function' ? f() : f)?.shapeId ?? null;
+
+  const render = () => {
+    container.innerHTML = '';
+
+    const provenance = el('div', 'pool-readout-provenance', graphProvenanceText(
+      typeof flags === 'function' ? flags() : flags));
+    provenance.dataset.id = 'graph-provenance';
+    container.appendChild(provenance);
+
+    // ── §4.3: the advisories, where an author can see them ───────────────────
+    //
+    // `_warnUnscheduledShapes` and `_warnResurrectedPools` were `console.warn`, and design
+    // 109 §12 rule 3 says of the first: "an author who forgot to schedule the shape they just
+    // wrote is the common case, and this is the ONLY signal they get." In the app that signal
+    // went to the browser console and in the CLI tools it went nowhere at all
+    // (`cli-tools-swallow-loader-warnings`). They are rendered here, above the readouts,
+    // because they describe the graph the author is looking at — and they do NOT refuse
+    // anything: every surface that decides a Rebuild filters them out with
+    // `blockingProblems`.
+    for (const w of advisoriesFor(typeof flags === 'function' ? flags() : flags, shapeIdOf(flags))) {
+      const note = el('div', 'pool-readout pool-readout--warn', w.message);
+      note.dataset.id = 'graph-advisory';
+      container.appendChild(note);
+    }
+
+    const value = param.value;
+    if (!value?.pools?.length) return;
+
+    // ── §4.2 item 3: the compiled spend order ────────────────────────────────
+    //
+    // `compileToDrawdownSequence` is pure and available, and it takes a NORMALIZED graph —
+    // so the normalizer runs first, and its throw is shown rather than swallowed. The author
+    // sees the compiler's own sentence, which is the same rule `collectAuthoredGraphProblems`
+    // follows. §22.5 trap 1 (a new pool behind `growth`, never reached, author concludes the
+    // input is broken) was fixed by changing the default; this is what helps the author who
+    // types 35 where they meant 15.
+    let order = el('div', 'pool-readout');
+    order.dataset.id = 'compiled-order';
+    let normalized = null;
+    let compileError = null;
+    try {
+      normalized = normalizeLiquidityGraph(value, accounts);
+    } catch (e) {
+      compileError = e;
+    }
+    const seq = normalized ? compileToDrawdownSequence(normalized) : null;
+    if (compileError) {
+      order.className = 'pool-readout pool-readout--problem';
+      order.textContent = `Spend order: ${compileError.message}`;
+    } else if (!seq?.length) {
+      // §3.1 rule 3 made visible. A graph whose pools all have a blank `spendOrder` compiles
+      // to NOTHING, and the run falls back to `drawdownPriority` — which looks identical to
+      // "the graph did not load" from every other surface.
+      order.textContent = 'Spend order: no pool has a Spend #, so nothing is drawn from the graph — '
+        + 'the drawdownPriority order applies to every account.';
+    } else {
+      const spent = new Set(seq.map(e => e.key));
+      const never = (normalized.pools ?? []).filter(p => p.spendOrder == null).map(p => p.id);
+      // §3.1 rule 3 on its OWN element, not appended to the list. Run together they read as
+      // one sentence ending "…22. spouseRothAccount (whole account) Anything this order does
+      // not claim follows it…" — the runs of spaces that were meant to separate them collapse
+      // in HTML, which is only visible in a browser (§12.2).
+      order.textContent = 'Spend order: '
+        + seq.map((e, i) => `${i + 1}. ${e.key} (${e.sleeves?.length ? e.sleeves.join('+') : 'whole account'})`
+            + (e.allowPenalty ? ' [penalty OK]' : '')).join('  ·  ')
+        + (never.length ? `  —  never spent from: ${never.join(', ')}.` : '');
+      const rule = el('div', 'pool-readout pool-readout--rule',
+        'Anything this order does not claim follows it in drawdownPriority order.');
+      rule.dataset.id = 'compiled-order-rule';
+      container.appendChild(order);
+      container.appendChild(rule);
+      order = null;
+    }
+    if (order) container.appendChild(order);
+
+    // ── §4.2 item 1: each pool's claims ──────────────────────────────────────
+    //
+    // Under the tables, NOT as a cell on the Pools row as §4.2 first proposed. Measured in
+    // the running app on a real plan (§12.2's "verify in the running app, not only in
+    // jsdom"): the params pane is ~550px, the Pools table already has eleven columns in it,
+    // and a twelfth took ~13% off every one of them — `Id` fell from 39px to 34px and
+    // `Target` from 63px to 55px, on cells that were already truncating a mode name to three
+    // characters. A derived readout must not cost the authoring surface the width it needs to
+    // be authored in, and here it bought an ellipsis with somebody else's column.
+    //
+    // It reads better down here anyway: the whole string fits, so the join is legible rather
+    // than hinted at behind a tooltip.
+    const claimsHead = el('div', 'age-band-col-label', 'What each pool holds');
+    container.appendChild(claimsHead);
+    for (const pool of value.pools) {
+      const line = el('div', 'pool-readout',
+        `${pool.id}: ${claimsSummaryOf(value, pool.id)}`);
+      line.dataset.id = `pool-claims-${pool.id}`;
+      container.appendChild(line);
+    }
+
+    // ── §4.2 item 4: each gate as one sentence ───────────────────────────────
+    //
+    // Deliberately NOT behind the compile succeeding. This derives from `gateToRows` — the
+    // function that fills the clause table — and needs no normalized graph, while "the graph
+    // does not compile" is the state the author is in when they most need to read back what
+    // they wrote. Making the sentence disappear with the first bad cell elsewhere in the
+    // graph would be the §2.3 short-circuit repeated in a new place.
+    const flows = value.flows ?? [];
+    if (flows.length) {
+      const head = el('div', 'age-band-col-label', 'Gates, as sentences');
+      container.appendChild(head);
+      for (const f of flows) {
+        const line = el('div', 'pool-readout', `${f.id}: ${describeGate(f.id ?? null, f.gate ?? null)}`);
+        line.dataset.id = `gate-prose-${f.id}`;
+        container.appendChild(line);
+      }
+    }
+  };
+
+  render();
+  container.refresh = render;
+  return container;
+}
+
+export function buildLiquidityGraphEditor(param, accounts = [], flags = null) {
   const value = isPlainObject(param.value) ? param.value : {};
 
   // Pools, minus their claims — the claims live in their own table (see the header note).
@@ -1196,6 +1503,11 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
       // Carried, not drawn — see `extraKeys`.
       amountExtra:  extraKeys(f?.amount, ['toTarget', 'fractionOfSource']),
       triggerExtra: extraKeys(f?.trigger?.below, ['mode', 'value']),
+      // Round-tripped untouched, exactly as a pool's is. `normalizeLiquidityGraph` carries
+      // `raw.ui` on flows as well as pools, so an edge CAN hold a layout; until CTRL-1 the
+      // row model did not, and the first edit to any cell dropped it — the graph still loaded
+      // and still ran, which is what made it invisible (design 110 §2.2).
+      ui:           f?.ui ?? null,
     };
   });
 
@@ -1261,6 +1573,17 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
       { field: 'sleeves', label: 'Sleeves (blank = whole account)', type: 'checkset',
         options: sleeveOptionsFor(accounts), blankValue: null, width: '2fr',
         emptyText: 'whole account' },
+      // §4.2 item 2 — a DERIVED cell, in the claimed account's OWN currency and never summed
+      // onto the pool. It is on the CLAIM row because that is where the mistake is: the wrong
+      // sleeve, or a claim that landed in the wrong pool. A pool-level total needs FX and a
+      // period, which is the panel's job and is done correctly there.
+      { field: 'holdsNow', label: 'Holds today', type: 'note', width: '1.1fr',
+        text: (row) => claimHoldsNow(accounts, row?.key, row?.sleeves),
+        title: (row) => (row?.key
+          ? `What a draw would find in ${row.key} (${claimScopeText(row)}) right now, in that `
+            + 'account\u2019s own currency. Live balances \u2014 not a prediction of which pool a '
+            + 'spend would reach (design 110 \u00a710.4).'
+          : '') },
     ],
     // §22.5 trap 2 — the LAST pool, not the first. `+ Add Pool` then `+ Add Claim` is the
     // authoring order, so defaulting to `pools[0]` silently landed the new pool's first claim
@@ -1269,7 +1592,10 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
                         key: accounts?.[0]?.stateKey ?? null, sleeves: null }),
     addLabel:  '+ Add Claim',
     emptyText: 'No claims — a pool with no claims holds nothing.',
-    onChange:  sync,
+    // The Pools table's derived "Claims" cell reads this table, so it has to be redrawn
+    // here — the mirror of the refresh the pools table already does on the other two. A
+    // `refresh()` re-renders and does NOT fire `onChange`, so the two cannot loop.
+    onChange:  () => { sync(); poolsEditor.refresh(); readouts.refresh(); },
   });
 
   const flowsEditor = buildRowListEditor({
@@ -1288,12 +1614,12 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
     newRow:    () => ({ id: null, from: pools[0]?.id ?? null, to: pools[1]?.id ?? null, priority: 0,
                         cadence: 'PERIOD', triggerKind: '', triggerValue: null, rawGate: null,
                         amountKind: 'toTarget', amountValue: null,
-                        amountExtra: null, triggerExtra: null }),
+                        amountExtra: null, triggerExtra: null, ui: null }),
     addLabel:  '+ Add Flow',
     emptyText: 'No flows — pools are spent in order but never refilled by an explicit rule.',
     // Renaming a flow changes the option list the gate table selects from — the same reason
     // the pools table refreshes the claims and flows tables (§17.1).
-    onChange:  () => { sync(); gateEditor.refresh(); },
+    onChange:  () => { sync(); gateEditor.refresh(); readouts.refresh(); },
   });
 
   // §20.15's table. Keyed by flow id and branch: same-branch rows are ANDed, branches are
@@ -1398,10 +1724,18 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
       // the stricter reading and stays the default; see the design section before assuming
       // EDGE is simply safer.
       { field: 'gateScope', label: 'Vetoes', type: 'select', options: GATE_SCOPE_OPTIONS, width: '1.4fr' },
+      // Design 110 §6.3 option A — the clause's optional ADDRESS, and the only reason a
+      // threshold can be an axis at all. Blank is what every graph authored so far means:
+      // positional, and not searchable. Filling it in generates `gate.<id>.threshold` and
+      // `gate.<id>.dwell` at the next Rebuild.
+      //
+      // LAST column deliberately. It is the one cell that changes nothing about the run, so
+      // putting it in front of the clause would push the gate's actual content off the read.
+      { field: 'gateId',    label: 'Search id', type: 'text', placeholder: '—', width: '1fr' },
     ],
     newRow:    () => ({ flow: gateableFlowIds()[0] ?? null, branch: 1, gateNegate: '',
                         gateKind: 'sourceDrawdownUnder', gateValue: 0.05,
-                        gateBasis: 'INDEX', gateYears: 1, gateScope: 'SOURCE' }),
+                        gateBasis: 'INDEX', gateYears: 1, gateScope: 'SOURCE', gateId: null }),
     addLabel:  '+ Add Gate Clause',
     emptyText: 'No gate clauses — every flow fires whenever its trigger and amount allow.',
     onChange:  () => {
@@ -1411,6 +1745,7 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
       const rebased    = normalizeGateBases();
       const moved      = scoped || renumbered || rebased;
       sync();
+      readouts.refresh();
       if (moved) gateEditor.refresh();
     },
   });
@@ -1475,7 +1810,7 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
     // Renaming or adding a pool changes the option list the OTHER two tables select from,
     // so both are re-rendered. Without this a renamed pool leaves its claims pointing at a
     // dead id and the user finds out at Rebuild.
-    onChange:  () => { sync(); claimsEditor.refresh(); flowsEditor.refresh(); },
+    onChange:  () => { sync(); claimsEditor.refresh(); flowsEditor.refresh(); readouts.refresh(); },
   });
 
   container.appendChild(el('div', 'age-band-col-label', 'Pools'));
@@ -1490,7 +1825,14 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
     + 'rule is said. A flow whose authored gate the table cannot draw is not listed.'));
   container.appendChild(gateEditor);
 
+  // §4.2 items 3 and 4, behind §10.5's provenance line. Built AFTER the tables so its first
+  // render sees the value `sync()` below writes — and referenced by every table's `onChange`
+  // above, which is a closure and therefore reaches it whatever the declaration order.
+  const readouts = buildGraphReadouts(param, accounts, flags);
+  container.appendChild(readouts);
+
   sync();
+  readouts.refresh();
   return container;
 }
 
@@ -1523,15 +1865,23 @@ function gateNodeToRow(node) {
   // (outer) — and the row can only mean the second, so an inner dwell is left to `rawGate`
   // rather than silently re-read as the other policy.
   if (node.not != null) {
-    if (Object.keys(node).some(k => k !== 'not' && k !== 'sustainedYears')) return null;
+    if (Object.keys(node).some(k => k !== 'not' && k !== 'sustainedYears' && k !== 'id')) return null;
     const inner = gateNodeToRow(node.not);
     if (!inner || inner.gateNegate === 'NOT' || inner.gateYears > 1) return null;
-    return { ...inner, gateNegate: 'NOT', gateYears: node.sustainedYears ?? 1 };
+    // The id belongs to the node the ROW IS — the `not`, which is also where the dwell sits. An
+    // id on the clause INSIDE the negation is a second address for the same row and the table
+    // cannot show two, so such a gate goes to `rawGate` verbatim rather than losing one of them.
+    if (inner.gateId != null) return null;
+    return { ...inner, gateNegate: 'NOT', gateYears: node.sustainedYears ?? 1,
+             gateId: typeof node.id === 'string' ? node.id : null };
   }
   if (node.anyOf || node.allOf) return null;                      // a child: not a leaf row
   const kinds = GATE_CLAUSE_KINDS.filter(k => node[k] != null);
   if (kinds.length !== 1) return null;                            // 0 says nothing, 2+ is an AND
-  const known = new Set([...GATE_CLAUSE_KINDS, 'sustainedYears', 'drawdownBasis']);
+  // `id` is design 110 §6.3's optional ADDRESS. It joins the known set rather than sending the
+  // clause to `rawGate`: it is drawable (one text cell) and, unlike a nested scope, it round-trips
+  // faithfully — which is the guard's actual test.
+  const known = new Set([...GATE_CLAUSE_KINDS, 'sustainedYears', 'drawdownBasis', 'id']);
   if (Object.keys(node).some(k => !known.has(k))) return null;    // a clause the table lacks
   const kind = kinds[0];
   return {
@@ -1540,6 +1890,7 @@ function gateNodeToRow(node) {
     gateValue: node[kind],
     gateBasis: isDrawdownClause(kind) ? (node.drawdownBasis ?? 'BALANCE') : '',
     gateYears: node.sustainedYears ?? 1,
+    gateId:    typeof node.id === 'string' ? node.id : null,
   };
 }
 
@@ -1592,6 +1943,11 @@ function rowsToGate(rows) {
     // the clause: "the source has NOT been within 5% of its high for two years".
     const node = r.gateNegate === 'NOT' ? { not: clause } : clause;
     if (Number(r.gateYears) > 1) node.sustainedYears = Number(r.gateYears);
+    // Design 110 §6.3 — the optional address, on the node the row IS (the `not` for a negated
+    // row, matching where the dwell goes). Blank means positional, exactly as before, so a graph
+    // authored without ids round-trips byte-identically.
+    const gateId = typeof r.gateId === 'string' ? r.gateId.trim() : '';
+    if (gateId) node.id = gateId;
     const key = r.branch ?? 1;
     byBranch.set(key, [...(byBranch.get(key) ?? []), node]);
   }
@@ -1629,5 +1985,10 @@ function buildFlow(f, clauses = []) {
   } else if (f.amountExtra) {
     out.amount = { ...f.amountExtra };
   }
+  // Opaque to the engine, preserved by the serializer, and the editor's job is to not lose it
+  // (§14's constraint, asserted by CTRL-1). Written only when present, on the same rule as
+  // every other elided default: a `ui: null` on every edge would make every previously-saved
+  // graph differ from itself on the next save.
+  if (f.ui) out.ui = f.ui;
   return out;
 }

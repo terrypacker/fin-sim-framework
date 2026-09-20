@@ -30,6 +30,20 @@ import {
 } from './record-param-templates.js';
 import { INHERITED_RETIREMENT_ROLES } from '../../finance/state/account-roles.js';
 import { recordFieldValue } from './record-field-rounding.js';
+// Design 110 §6.2 — the liquidity-pool size axis. Its owner is a pool inside the
+// `liquidityGraph` PARAM rather than a cfg record, which is why it is the one generated
+// namespace with no cascade `node`; see `_expandPoolTargetScales`.
+import {
+  scalablePoolTargets, authoredPoolGraphs, authoredParamValue,
+  poolTargetScaleKey, poolTargetScaleLabel,
+  POOL_TARGET_SCALE_DEFAULT,
+} from '../../finance/pools/pool-target-scale.js';
+import {
+  gateClauseAxes, gateAxisKey, gateAxisLabel, GATE_AXIS_FIELD, GATE_DWELL_DEFAULT,
+} from '../../finance/pools/pool-gate-axis.js';
+import {
+  scheduledShapeAxes, shapeYearShiftKey, shapeYearShiftLabel, SHAPE_YEAR_SHIFT_DEFAULT,
+} from '../../finance/pools/pool-shape-year-axis.js';
 // The namespace list lives in a dependency-free module so mc-param-paths can use it
 // without loading the templates (design 98 W0); re-exported so importers are unchanged.
 import { GENERATED_KEY_PREFIXES, isGeneratedParamKey } from './generated-param-keys.js';
@@ -61,6 +75,12 @@ function resolveAccountType(a) {
   return a.type ?? CLASS_TO_ACCOUNT_TYPE[a.__type] ?? ROLE_TO_ACCOUNT_TYPE[a.role] ?? null;
 }
 
+// `pool` is deliberately ABSENT (design 110 §6.2): a pool is not a cfg record, so a
+// `pool.<id>.targetScale` key has no node to decode to and `decodeGeneratedParamKey` returns
+// null for it — which is what keeps the loader's generated-key cascade from trying to fan it
+// onto a record that does not exist. The overlay is applied where the graph is RESOLVED
+// instead (`pool-target-scale.js`); adding a `pool` entry here would give the value a second
+// authority, and a multiplier applied twice compounds.
 const PREFIX_TO_NODE_TYPE = {
   acct: 'account', person: 'person', prop: 'realProperty',
   coll: 'collectible', equity: 'companyEquity',
@@ -142,7 +162,117 @@ export class ScenarioParamGenerator {
       if (a.inherited && INHERITED_RETIREMENT_ROLES.has(a.role))
         add(this._expand('raAsset', 'bequestAsset', a, a.stateKey, INHERITED_RA_PARAM_TEMPLATE));
     }
+    // Design 110 §6.2 — one hidden `pool.<poolId>.targetScale` per pool the plan gives a
+    // target. Generated, not hand-declared, for the reason the namespace was chosen over
+    // §12.8's `poolTarget::<id>`: it regenerates from the config at Build/Rebuild, so
+    // renaming a pool moves its axis with it (CTRL-10) and a deleted pool cannot leave an
+    // axis pointing at nothing.
+    add(this._expandPoolTargetScales(cfg));
+    // Design 110 §6.3 — the threshold / dwell of every id'd gate clause. Only an id'd clause
+    // generates one, so an axis that cannot be addressed fails to exist rather than addressing
+    // the wrong clause after an unrelated edit renumbered a branch above it (§2.1).
+    add(this._expandGateClauseAxes(cfg));
+    // Design 110 §6.4 — one switch-year shift per SCHEDULED shape. Only scheduled shapes: a
+    // shape no row selects governs nothing, so an axis on it would move nothing at every value.
+    add(this._expandShapeYearShifts(cfg));
     return out;
+  }
+
+  /**
+   * The shape-switch year axes (design 110 §6.4, design 109 Q1). Hidden and node-less on the
+   * same terms as the other two leg-C families, and a SHIFT rather than an absolute year for
+   * §10.3's reason: one shape can be scheduled more than once, and an absolute key would set
+   * every one of its rows to the same year — which `_normalizeSchedule` refuses outright, so the
+   * axis would turn a legal plan into a failing one at every cell but its own.
+   * @private
+   */
+  static _expandShapeYearShifts(cfg) {
+    const params = {
+      liquidityShapes:        authoredParamValue(cfg, 'liquidityShapes'),
+      liquidityGraphSchedule: authoredParamValue(cfg, 'liquidityGraphSchedule'),
+    };
+    return scheduledShapeAxes(params).map(row => ({
+      key:          shapeYearShiftKey(row.shapeId),
+      label:        shapeYearShiftLabel(row),
+      type:         'Integer',
+      group:        'Liquidity Pools',
+      defaultValue: SHAPE_YEAR_SHIFT_DEFAULT,
+      // When a plan re-plumbs itself is a household CHOICE, and a whole number of years, so
+      // `opt: 'year'` / `mc: false` (design 98 W2).
+      mc:           false,
+      opt:          'year',
+      hidden:       true,
+    }));
+  }
+
+  /**
+   * The gate-clause axes (design 110 §6.3 option A). Hidden and node-less on exactly the same
+   * terms as `_expandPoolTargetScales` — a gate clause is not a record either — with one
+   * difference worth naming: the threshold's `defaultValue` is the AUTHORED number rather than a
+   * fixed identity. A pool factor has a natural 1.0; a threshold's plan value is whatever the
+   * clause says, so it is re-seeded from the graph on every Rebuild.
+   * @private
+   */
+  static _expandGateClauseAxes(cfg) {
+    const entries = [];
+    for (const row of gateClauseAxes(authoredPoolGraphs(cfg))) {
+      const common = { type: 'Number', group: 'Liquidity Pools', mc: false, hidden: true };
+      // No threshold axis when the node has no single numeric clause: two numeric clauses on one
+      // node have no unique threshold, and inventing a winner would make the axis mean something
+      // the author never wrote (the same rule a multi-class pool `target` follows).
+      if (row.kind) {
+        entries.push({
+          ...common, opt: 'rate',
+          key:          gateAxisKey(row.clauseId, GATE_AXIS_FIELD.THRESHOLD),
+          label:        gateAxisLabel(row, GATE_AXIS_FIELD.THRESHOLD),
+          defaultValue: row.threshold,
+        });
+      }
+      entries.push({
+        ...common, opt: 'year', type: 'Integer',
+        key:          gateAxisKey(row.clauseId, GATE_AXIS_FIELD.DWELL),
+        label:        gateAxisLabel(row, GATE_AXIS_FIELD.DWELL),
+        defaultValue: row.dwell ?? GATE_DWELL_DEFAULT,
+      });
+    }
+    return entries;
+  }
+
+  /**
+   * The liquidity-pool size axes (design 110 §6.2), one per pool with a numeric target.
+   *
+   * Three things make these unlike every other generated entry, and all three are the same
+   * fact — the owner is a pool inside the `liquidityGraph` param, not a domain record:
+   *
+   *   - **no `node`.** There is no record for the cascade to fan a value onto. The overlay is
+   *     applied in `resolveLiquidityGraph` / `resolveLiquidityGraphSchedule`, on a copy of the
+   *     authored graph, so the param the author wrote is never written to.
+   *   - **the authored value is read from the typed `cfg.params` entry first.** That entry is
+   *     the author's own graph; `cfg.parameters` is the flat bag an MC/Opt runner injects into
+   *     (`two-param-stores-trap`). Seeding from the authored side is what makes the axis list
+   *     stable across a sweep.
+   *   - **`hidden: true`**, on the `BALANCE_TARGET` pattern: kept out of the param editor AND
+   *     out of the persisted `cfg.params` (see `ScenarioLoader._mergeParamSchema`), so it is
+   *     present only while a runner injects it and can never round-trip as a stale value
+   *     (CTRL-9). An author who wants a different target edits the graph; the axis only ever
+   *     scales what is written there.
+   * @private
+   */
+  static _expandPoolTargetScales(cfg) {
+    return scalablePoolTargets(authoredPoolGraphs(cfg)).map(row => ({
+      key:          poolTargetScaleKey(row.poolId),
+      label:        poolTargetScaleLabel(row),
+      type:         'Number',
+      group:        'Liquidity Pools',
+      defaultValue: POOL_TARGET_SCALE_DEFAULT,
+      // A household CHOICE and a scalar, so `opt: true` / `mc: false` (design 98 W2): how
+      // many years of spending to hold in reserve is decided, not uncertain. `opt: 'rate'`
+      // names the sweep kind explicitly because inference would read a center of 1.0 as a
+      // rate by accident rather than on purpose.
+      mc:           false,
+      opt:          'rate',
+      hidden:       true,
+    }));
   }
 
   /**

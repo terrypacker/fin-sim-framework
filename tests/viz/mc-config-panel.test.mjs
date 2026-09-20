@@ -244,3 +244,82 @@ describe('McConfigPanel — automatic re-centring', () => {
     panel.destroy();
   });
 });
+
+// ── design 110 §6.5 — study hygiene beside a pool axis (phase 7) ──────────────────────
+
+describe('McConfigPanel — pool axis hygiene', () => {
+  const POOL_AXIS = 'pool.reserve.targetScale';
+
+  /** Choose a lever for the rows axis, as the select's change handler does. */
+  function chooseRowAxis(container, paramKey) {
+    const select = container.querySelector('.mc-grid-axis-block[data-axis="0"] .mc-grid-axis');
+    select.value = paramKey;
+    select.dispatchEvent(new Event('change'));
+    return container.querySelector('.mc-grid-axis-block[data-axis="0"] .mc-grid-hygiene');
+  }
+
+  test('the problems the presenter attaches render beside the axis, tagged by kind', () => {
+    const { panel, container } = makePanel();
+    panel.setGridAxes([{
+      paramKey: POOL_AXIS, label: "Pool 'reserve' target ×", group: 'Liquidity Pools',
+      type: 'continuous', min: 0.5, max: 2, step: 0.25, planValue: 1,
+      problems: [
+        { param: 'behavioralStrategies', kind: 'inert',      message: 'nothing reads the target.' },
+        { param: 'allocationSchedule',   kind: 'confounded', message: 'the mix has a second author.' },
+      ],
+    }]);
+
+    const el = chooseRowAxis(container, POOL_AXIS);
+    expect(el.hidden).toBe(false);
+    const rows = [...el.querySelectorAll('.mc-grid-hygiene-row')];
+    expect(rows).toHaveLength(2);
+    // The two kinds are two different failures — a flat grid that reads as a null result, and
+    // a grid that reports a larger effect than the lever has — so the tag says which.
+    expect(rows[0].className).toContain('mc-grid-hygiene-row--inert');
+    expect(rows[0].querySelector('.mc-grid-hygiene-tag').textContent).toBe('INERT');
+    expect(rows[0].textContent).toContain('nothing reads the target.');
+    expect(rows[1].className).toContain('mc-grid-hygiene-row--confounded');
+    expect(rows[1].querySelector('.mc-grid-hygiene-tag').textContent).toBe('CONFOUNDED');
+
+    // The plan value keeps its own line: it is one short token the eye skips to, and burying
+    // three sentences inside it would hide the more important of the two.
+    const planEl = container.querySelector('.mc-grid-axis-block[data-axis="0"] .mc-grid-plan');
+    expect(planEl.textContent).toContain('plan:');
+    expect(planEl.textContent).not.toContain('nothing reads');
+
+    panel.destroy();
+  });
+
+  test('the panel only reports — it offers nothing that would edit the plan', () => {
+    const { panel, container } = makePanel();
+    panel.setGridAxes([{
+      paramKey: POOL_AXIS, label: 'Pool axis', group: 'Liquidity Pools', type: 'continuous',
+      min: 0.5, max: 2, step: 0.25, planValue: 1,
+      problems: [{ param: 'shocks', kind: 'confounded', message: 'shocks are authored.' }],
+    }]);
+    const el = chooseRowAxis(container, POOL_AXIS);
+    // A "fix this for me" control here would be the app rewriting the author's plan behind a
+    // grid — §12.2's one-authority rule broken by a convenience (design 110 §6.5).
+    expect(el.querySelectorAll('button, input, select')).toHaveLength(0);
+    panel.destroy();
+  });
+
+  test('a lever with no problems draws nothing, and switching away clears the last one', () => {
+    const { panel, container } = makePanel();
+    panel.setGridAxes([
+      { paramKey: POOL_AXIS, label: 'Pool axis', group: 'Liquidity Pools', type: 'continuous',
+        min: 0.5, max: 2, step: 0.25, planValue: 1,
+        problems: [{ param: 'shocks', kind: 'confounded', message: 'shocks are authored.' }] },
+      { paramKey: 'inflationRate', label: 'Inflation', group: 'Economy', type: 'continuous',
+        min: 0.01, max: 0.05, step: 0.01, planValue: 0.03 },
+    ]);
+
+    expect(chooseRowAxis(container, POOL_AXIS).hidden).toBe(false);
+    // Stale advice on a different lever would be worse than none: it would claim a problem
+    // about an axis the author has already moved off.
+    const el = chooseRowAxis(container, 'inflationRate');
+    expect(el.hidden).toBe(true);
+    expect(el.querySelectorAll('.mc-grid-hygiene-row')).toHaveLength(0);
+    panel.destroy();
+  });
+});

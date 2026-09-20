@@ -49,7 +49,7 @@
 
 import { ALLOCATION_VALUES }           from '../../finance/holdings/allocation.js';
 import { collectAuthoredMixProblems }  from '../../finance/behavioral/rebalance-to-target-reducer.js';
-import { collectAuthoredGraphProblems, POOL_TARGET_MODE, POOL_CAPACITY_MODE }
+import { collectAuthoredGraphProblems, blockingProblems, POOL_TARGET_MODE, POOL_CAPACITY_MODE }
   from '../../finance/pools/liquidity-graph.js';
 
 function el(tag, className, text) {
@@ -119,8 +119,11 @@ function cleanStoredCopy(config, scenarioRegistry) {
   if (paramSignature(stored) === paramSignature(config)) return null;
   const bag = {};
   for (const p of (Array.isArray(stored.params) ? stored.params : [])) bag[p.name] = p.value;
+  // Design 110 §4.3: advisories filtered OUT. This decides whether a stored copy is loadable,
+  // and an unscheduled shape is a loadable scenario with a note on it — treating it as
+  // unloadable would strand the user on this page for something that compiles.
   const bad = [...collectAuthoredMixProblems(bag),
-               ...collectAuthoredGraphProblems(bag, stored.accounts ?? [])];
+               ...blockingProblems(collectAuthoredGraphProblems(bag, stored.accounts ?? []))];
   return bad.length ? null : stored;
 }
 
@@ -274,7 +277,7 @@ export function showScenarioLoadError({ error, config, scenarioRegistry, onReloa
   // graph snapshot was harvested, and `collectAuthoredGraphProblems` skips the whole-graph
   // leg when it has none rather than reporting every claim as an orphan.
   const problems      = collectAuthoredMixProblems(bag);
-  const graphProblems = collectAuthoredGraphProblems(bag, config?.accounts ?? []);
+  const graphProblems = blockingProblems(collectAuthoredGraphProblems(bag, config?.accounts ?? []));
   const repairs       = problems.length + graphProblems.length;
   const paramByName = new Map(params.map(p => [p.name, p]));
 
@@ -416,7 +419,7 @@ export function showScenarioLoadError({ error, config, scenarioRegistry, onReloa
       // Re-run BOTH validators, not the one whose section was edited: a repaired mix on a
       // record that still carries a bad pool would reload straight back into this page.
       const stillBad = [...collectAuthoredMixProblems(bag),
-                        ...collectAuthoredGraphProblems(bag, config?.accounts ?? [])];
+                        ...blockingProblems(collectAuthoredGraphProblems(bag, config?.accounts ?? []))];
       if (stillBad.length) {
         // Reloading into the same failure would just redraw this page. Say why — including
         // the rule, because the message alone reads as "the number is wrong" without it.

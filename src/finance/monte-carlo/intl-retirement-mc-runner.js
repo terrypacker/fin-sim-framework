@@ -12,6 +12,7 @@ import { ScenarioRunner }             from '../../simulation-framework/scenario.
 import { IntlRetirementScenario, resolveBalanceCenters } from '../../scenarios/intl-retirement-scenario.js';
 import { ScenarioSerializer }         from '../../scenarios/scenario-serializer.js';
 import { resolveAliasCenters }        from '../../scenarios/scenario-param-apply.js';
+import { resolveLiquidityAxisCenters } from '../pools/pool-target-scale.js';
 import { IntlRetirementMcConfig, CENTER_SOURCES, refineCenterSource } from './intl-retirement-mc-config.js';
 import { scenarioParamValues, paramSchemaDefaults } from '../param-schema-utils.js';
 import { buildIterationRunner, perturbParams, samplingSignature, mcEquityModel, mcInflationModel, mcPrimeModel } from './parallel/mc-worker-core.js';
@@ -223,8 +224,13 @@ export class IntlRetirementMcRunner {
     // Legacy-keyed levers (`auHouseSaleYear`, the wages) centre on their generated
     // successor's value — a loaded cfg carries only that one.
     const aliasCenters   = resolveAliasCenters(rawTemplate);
-    const base = { ...schemaDefaults, ...templateParams, ...aliasCenters, ...balanceCenters, ...baseParams,
-                   endDate: simEnd };
+    // Leg C's axes (a pool size factor, a gate threshold, a gate dwell) are hidden generated
+    // params: absent from `cfg.params` AND from the schema defaults, so nothing above carries
+    // their plan value. Without it a grid on one has no reference cell and a disabled row has
+    // no centre (design 110 §6.2 / §6.3).
+    const poolCenters    = resolveLiquidityAxisCenters(rawTemplate);
+    const base = { ...schemaDefaults, ...templateParams, ...aliasCenters, ...balanceCenters,
+                   ...poolCenters, ...baseParams, endDate: simEnd };
     // Harvest from the raw template: its records carry the generated per-record params
     // (design 98 W3). Once, here on the main thread — workers get resolved `variables`.
     const variables  = this.mcConfig.buildVariables(base, { cfg: rawTemplate });

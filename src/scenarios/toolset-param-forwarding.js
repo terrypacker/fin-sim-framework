@@ -20,6 +20,9 @@
  * made design 99 P5b's first attribution probe show four identical runs.
  */
 import { RETIRED_RATE_PARAMS } from './retired-rate-params.js';
+import { parsePoolTargetScaleKey } from '../finance/pools/pool-target-scale.js';
+import { parseGateAxisKey } from '../finance/pools/pool-gate-axis.js';
+import { parseShapeYearShiftKey } from '../finance/pools/pool-shape-year-axis.js';
 
 /**
  * The keys contributed by `toolsets` that the scenario-level schema does not name.
@@ -53,7 +56,14 @@ export function toolsetParamKeys(toolsets, scenarioSchema) {
 export function forwardToolsetOverrides(params, parameters, toolsetKeys) {
   for (const key of Object.keys(params)) {
     if (key in parameters) continue;
-    if (!toolsetKeys.has(key) && !(key in RETIRED_RATE_PARAMS)) continue;
+    // A generated pool axis (design 110 §6.2) is not a toolset schema key and would be
+    // dropped here without a word — the trap `legacy-alias-levers-inert-on-loaded-plan`
+    // names. It has to arrive: the pool graph is read from this bag when the reducers are
+    // BUILT, not through the loader's record cascade, so an axis that does not reach
+    // `parameters` reads as live on the panel and moves nothing in the sim.
+    if (!toolsetKeys.has(key) && !(key in RETIRED_RATE_PARAMS)
+        && parsePoolTargetScaleKey(key) == null && parseGateAxisKey(key) == null
+        && parseShapeYearShiftKey(key) == null) continue;
     parameters[key] = params[key];
   }
 }

@@ -27,7 +27,8 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { buildPoolHistory, poolHistoryRows, poolSeries, tiePoolHistory, POOL_EVENT_KIND }
+import { buildPoolHistory, poolHistoryRows, poolSeries, tiePoolHistory, poolShapeSpans,
+         POOL_EVENT_KIND }
   from '../../src/finance/pools/pool-history.js';
 import { PoolFlowReducer } from '../../src/finance/pools/pool-flow-reducer.js';
 import { normalizeLiquidityGraph } from '../../src/finance/pools/liquidity-graph.js';
@@ -394,4 +395,96 @@ test('RES-11: a run with no EDGE-scoped gate carries no `capped` — absent, not
   const row = poolHistoryRows(h).find(r => r.pool === 'growth');
   assert.equal(row.vetoed, 1);
   assert.equal(row.capped, 0);
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// HIST-9 / design 110 §5.3 — poolShapeSpans: every shape, with the date it took over
+//
+// ONE derivation for three consumers (the strip, the chart markers, the CSV column). The
+// §23.6 precedent is the reason it lives here and not in the panel: two derivations of one
+// list is where a picker starts offering a line the chart does not draw.
+// ═════════════════════════════════════════════════════════════════════════════
+
+/** base graph → bridge (mid-2035) → late (mid-2040). */
+const SHAPE_RUN = () => [
+  entry('2030-01-01', [{ field: 'liquidityPools', before: null, after: { a: CUBE() } }]),
+  entry('2032-01-01', [{ field: 'liquidityPools.a.balance', before: 100, after: 110 }]),
+  entry('2035-07-01', [
+    { field: 'liquidityShapeId', before: null, after: 'bridge' },
+    { field: 'liquidityPools.a.balance', before: 110, after: 120 },
+  ]),
+  entry('2040-07-01', [
+    { field: 'liquidityShapeId', before: 'bridge', after: 'late' },
+    { field: 'liquidityPools.a.balance', before: 120, after: 130 },
+  ]),
+];
+
+test('HIST-9: one span per shape, in order, with the date the switch landed on', () => {
+  const spans = poolShapeSpans(buildPoolHistory({ journal: SHAPE_RUN() }));
+  assert.deepEqual(spans.map(s => [s.shapeId, s.at.toISOString().slice(0, 10), s.opening]), [
+    // The opening span is RECONSTRUCTED: `PoolShapeScheduleReducer` writes `liquidityShapeId`
+    // only on a change, so the years before the first switch record nothing at all. A strip
+    // that started its story at the first switch would describe the run by its ending.
+    [null,     '2030-01-01', true],
+    ['bridge', '2035-07-01', false],
+    ['late',   '2040-07-01', false],
+  ]);
+});
+
+test('HIST-9: a period that does not change the shape starts no new span', () => {
+  // The run has four periods and three spans — 2032 sits inside the opening one.
+  const spans = poolShapeSpans(buildPoolHistory({ journal: SHAPE_RUN() }));
+  assert.equal(spans.length, 3);
+});
+
+test('HIST-9: a run with NO schedule reports no spans', () => {
+  // Nothing ever stamps the field, so there is no boundary to draw and no second shape to
+  // name. Distinct from a run that sat on the base graph throughout with a schedule — which
+  // also stamps nothing, and for which reporting no boundary is equally right.
+  const run = [entry('2030-01-01', [{ field: 'liquidityPools', before: null, after: { a: CUBE() } }])];
+  assert.deepEqual(poolShapeSpans(buildPoolHistory({ journal: run })), []);
+});
+
+test('HIST-9: a run that starts already ON a shape has ONE span, marked opening', () => {
+  // The schedule's first row is live at the start, so the reducer stamps on period 0 and
+  // there is no base-graph stretch. It is still not a switch: nothing precedes it.
+  const run = [
+    entry('2030-01-01', [
+      { field: 'liquidityShapeId', before: undefined, after: 'bridge' },
+      { field: 'liquidityPools', before: null, after: { a: CUBE() } },
+    ]),
+    entry('2031-01-01', [{ field: 'liquidityPools.a.balance', before: 100, after: 110 }]),
+  ];
+  const spans = poolShapeSpans(buildPoolHistory({ journal: run }));
+  assert.equal(spans.length, 1);
+  assert.equal(spans[0].shapeId, 'bridge');
+  assert.equal(spans[0].opening, true);
+});
+
+test('HIST-9: a shape that comes BACK is a new span, not a continuation', () => {
+  // Design 109 §9: leaving and returning RETIRES the pools and starts them cold. Two spans
+  // with the same id is the honest reading — the second is a different stretch of the run,
+  // and collapsing them would hide the boundary the marker exists to draw.
+  const run = [
+    entry('2030-01-01', [{ field: 'liquidityPools', before: null, after: { a: CUBE() } }]),
+    entry('2035-01-01', [{ field: 'liquidityShapeId', before: null, after: 'bridge' }]),
+    entry('2040-01-01', [{ field: 'liquidityShapeId', before: 'bridge', after: 'late' }]),
+    entry('2045-01-01', [{ field: 'liquidityShapeId', before: 'late', after: 'bridge' }]),
+  ];
+  const spans = poolShapeSpans(buildPoolHistory({ journal: run }));
+  assert.deepEqual(spans.map(s => s.shapeId), [null, 'bridge', 'late', 'bridge']);
+});
+
+test('HIST-9: the CSV row carries the shape, empty before the first switch', () => {
+  const rows = poolHistoryRows(buildPoolHistory({ journal: SHAPE_RUN() }));
+  const shapeOn = (d) => rows.find(r => r.date === d).shape;
+  assert.equal(shapeOn('2030-01-01'), '', 'the base graph is not a NAMED shape');
+  assert.equal(shapeOn('2032-01-01'), '');
+  assert.equal(shapeOn('2035-07-01'), 'bridge');
+  assert.equal(shapeOn('2040-07-01'), 'late');
+});
+
+test('HIST-9: an empty history reports no spans rather than throwing', () => {
+  assert.deepEqual(poolShapeSpans(buildPoolHistory({ journal: [] })), []);
+  assert.deepEqual(poolShapeSpans(null), []);
 });

@@ -674,3 +674,49 @@ test('serializeScenario: a scenario without activeWatchlistId gains no key', () 
   const cfg = ScenarioSerializer.serializeScenario({ ...wlBase, watchlists: ['metrics.netWorth'] });
   assert.ok(!Object.hasOwn(cfg, 'activeWatchlistId'));
 });
+
+// ─── CTRL-1 (design 110 §9): the `ui` blob through the serializer ─────────────
+//
+// Design 97 §14's second constraint: nodes and edges carry an opaque `ui` blob the engine
+// ignores and the serializer preserves. Design 110 §2.2 found it was a promise rather than
+// a property — nothing writes a `ui`, and nothing asserted one survives. The editor half of
+// CTRL-1 lives in tests/viz/structured-param-editors.test.mjs and found the flow half of the
+// blob being dropped; this is the other half of the same claim, and it is the leg that
+// decides whether a layout survives a SAVE rather than an edit.
+//
+// A `liquidityGraph` param's value is authored data, so the assertion is through JSON and
+// back, not just through `serializeScenario`: a blob that survived the serializer and not
+// `JSON.stringify` would still lose the layout at the only moment that matters.
+
+test('serializeScenario CTRL-1: a `ui` blob on a pool AND a flow survives a JSON round-trip', () => {
+  const graph = {
+    pools: [
+      { id: 'cash',   spendOrder: 10, ui: { x: 40, y: 200 }, claims: [{ key: 'usSavingsAccount' }] },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount' }] },
+    ],
+    flows: [{ id: 'g2c', from: 'growth', to: 'cash', ui: { bend: 0.3, label: 'refill' } }],
+  };
+  const params = [{ name: 'liquidityGraph', key: 'liquidityGraph', value: graph }];
+  const cfg    = ScenarioSerializer.serializeScenario({ ...wlBase, params });
+  const reread = JSON.parse(JSON.stringify(cfg));
+  const back   = reread.params.find(p => p.name === 'liquidityGraph');
+  assert.deepStrictEqual(back.value, graph,
+    'the serializer must preserve a layout it does not understand — §14 says the engine ignores it');
+});
+
+test('serializeScenario CTRL-1: a `ui` blob inside a named shape survives a JSON round-trip', () => {
+  // Design 109 §9: the pool id is the identity that spans a shape switch, so the same node
+  // drawn in the same place in every shape is what makes a switch legible. A shape is a
+  // nested value inside one param, which is the shape of thing a serializer most often
+  // flattens — asserted separately from the base graph for that reason.
+  const shapes = {
+    bridge: {
+      pools: [{ id: 'cash', spendOrder: 10, ui: { x: 1, y: 2 }, claims: [{ key: 'usSavingsAccount' }] }],
+      flows: [{ id: 'b2c', from: 'cash', to: 'cash', ui: { bend: 0.3 } }],
+    },
+  };
+  const params = [{ name: 'liquidityShapes', key: 'liquidityShapes', value: shapes }];
+  const cfg    = ScenarioSerializer.serializeScenario({ ...wlBase, params });
+  const back   = JSON.parse(JSON.stringify(cfg)).params.find(p => p.name === 'liquidityShapes');
+  assert.deepStrictEqual(back.value, shapes);
+});
