@@ -227,3 +227,34 @@ export function makeRunKey(source, existingBag = null) {
   while (existingBag && Object.prototype.hasOwnProperty.call(existingBag, key)) key = `${base}#${n++}`;
   return key;
 }
+
+/**
+ * DESIGN 81 §4.2 / §9 — the bag as a CANDIDATE SET.
+ *
+ * This is the payoff the whole bag-plus-scalar indirection was chosen for (§4.1). A scalar run
+ * id is a perfect `DecisionPoint` option value, an optimizer `ENUM` value and a `variant.mjs`
+ * param; a four-hundred-row array is none of them. So "which of these three recorded plans
+ * survives a bad decade" is an ordinary ranking over one param, crossable with any other axis,
+ * with no new machinery in the decision graph, Monte Carlo or the optimizer.
+ *
+ * `includeNone` prepends the BASE PLAN as an option, and it is on by default because a
+ * comparison of recorded runs without their own baseline answers the wrong question: every arm
+ * would be a plan the controller made, and none of them the plan it started from. It rides the
+ * SAME param as the other options — a null selection — so the control differs from each arm in
+ * exactly one value, which is the property a decision point gives for free and that a
+ * hand-built control (flipping `mpcRunEnabled` instead) would quietly lose.
+ *
+ * @param {object} params  the scenario parameter bag
+ * @param {object} [opts]
+ * @returns {Array<{value: string|null, label: string, runId: string|null}>}
+ */
+export function mpcRunOptions(params, { includeNone = true } = {}) {
+  const bag = params?.mpcRuns;
+  const entries = (bag && typeof bag === 'object' && !Array.isArray(bag)) ? Object.entries(bag) : [];
+  const out = entries.map(([runId, entry]) => ({
+    value: runId, runId,
+    label: `${runId} — ${describeRunSource(entry?.source, runId)}`,
+  }));
+  if (includeNone && out.length) out.unshift({ value: null, runId: null, label: '— base plan (no run) —' });
+  return out;
+}

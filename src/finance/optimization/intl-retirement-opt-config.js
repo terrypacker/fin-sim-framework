@@ -20,6 +20,7 @@ import { indexParamSchema, resolveSweepVariables, harvestSweepVariables,
          groupWithAliasSuccessor } from '../param-schema-utils.js';
 import { INTL_RETIREMENT_PARAM_ALIASES } from '../../scenarios/intl-retirement-scenario.js';
 import { ScenarioParamGenerator } from '../../scenarios/params/scenario-param-generator.js';
+import { mpcRunOptions } from '../mpc/run-schedule.js';
 import { scalablePoolTargets, poolTargetScaleKey, poolTargetScaleLabel, POOL_TARGET_SCALE_RANGE }
                                      from '../pools/pool-target-scale.js';
 import { gateClauseAxes, gateAxisKey, gateAxisLabel, GATE_AXIS_FIELD,
@@ -531,6 +532,49 @@ function buildExpenseBandOptConfigs(params) {
  * MPC can actuate it; `enabled: false` so it only appears when the scenario
  * carries a per-year schedule.
  */
+/**
+ * DESIGN 81 §9 / 8a — `mpcActiveRun` as an ENUM over the recorded runs a plan carries.
+ *
+ * "Search over recorded plans", which is the thing the bag-plus-scalar indirection was chosen
+ * for (§4.1): a scalar run id is a perfect ENUM value, a four-hundred-row array is not.
+ *
+ * ─── why the SCHEMA entry stays `opt: false`, and this row is `synthetic` ────────
+ *
+ * This is the one param in the plan whose sweepability is a property of the SCENARIO, not of
+ * the schema. `mpcActiveRun` is searchable on a plan that carries recorded runs and is
+ * searchable on no other, and the schema is plan-independent — so the honest schema answer is
+ * `opt: false`, and SWEEP-18 is right to refuse the flag: on a plan with an empty bag, `opt:
+ * true` would be "a promise no panel can keep".
+ *
+ * The row is therefore `synthetic: true` in exactly the sense that gate means — it is not
+ * DERIVED from the schema entry. Two different things share the key `mpcActiveRun`: a schema
+ * entry describing a selector, and this row, whose candidate values come from the bag. The
+ * generic design-98 harvest cannot build the second from the first and never will, because the
+ * values are scenario data.
+ *
+ * Phase 1 deferred the whole question for the same reason in its other half: there was no bag
+ * worth reading until phase 4 built the recorder.
+ *
+ * The base plan rides the same axis as a `null` selection, so the control differs from each arm
+ * in exactly one value. Below two options there is nothing to search and the row is dropped —
+ * a one-value ENUM is a flat dimension that only wastes solver budget, and a zero-value one is
+ * the dead-axis failure this repo has shipped twice.
+ */
+function buildMpcRunOptConfigs(params) {
+  const options = mpcRunOptions(params);
+  if (options.length < 2) return [];
+  return [{
+    paramKey: 'mpcActiveRun',
+    label:    'Recorded MPC run',
+    type:     OPT_PARAM_TYPES.ENUM,
+    values:   options.map(o => o.value),
+    labels:   options.map(o => o.label),
+    group:    'MPC Runs',
+    enabled:  false,
+    synthetic: true,
+  }];
+}
+
 function buildRothScheduleOptConfigs(params) {
   // Guard with Array.isArray, not `?? []`: a stale non-array value (e.g. the
   // "[object Object],…" string a pre-RothScheduleList free-text editor could
@@ -713,6 +757,7 @@ export function buildOptVariables(params, accounts = null, { cfg = null } = {}) 
     ...buildShockOptConfigs(params),
     ...buildExpenseBandOptConfigs(params),
     ...buildRothScheduleOptConfigs(params),
+    ...buildMpcRunOptConfigs(params),
     ...buildInheritedRaOptConfigs(params),
     ...buildPoolOptConfigs(params),
     ...buildGateOptConfigs(params),
