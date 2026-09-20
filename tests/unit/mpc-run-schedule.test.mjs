@@ -227,12 +227,15 @@ test('MRS-7: "now" falls back to the period start when the action carries no dat
 });
 
 test('MRS-8: a lever with no `applyAt` warns loudly rather than playing back short', () => {
+  // `ROTH` is the real unhooked lever as of phase 2 — it folds into `rothConversionSchedule`
+  // at COMPILE (§6.3), so it will never gain an `applyAt`, which is what makes it the stable
+  // fixture here. (This test named BOND_LADDER until phase 2b hooked it.)
   const run = resolveActiveMpcRun({
-    mpcRuns: { r: { decisions: [{ date: D(2030), lever: 'BOND_LADDER', key: 'bondLadderRungs', value: 7 }] } },
+    mpcRuns: { r: { decisions: [{ date: D(2030), lever: 'ROTH', key: 'rothConversionAmount', value: 50000 }] } },
     mpcActiveRun: 'r',
   });
   const r = new MpcDecisionScheduleReducer({ run, baseParams: BASE_PARAMS });
   const { value: out, seen } = capturingWarnings(() => r.reduce({}, ADVANCE(2031), null));
   assert.equal('mpcDecisionApplied' in out, false);
-  assert.match(seen.join('\n'), /BOND_LADDER.*no `applyAt` hook/s);
+  assert.match(seen.join('\n'), /ROTH.*no `applyAt` hook/s);
 });

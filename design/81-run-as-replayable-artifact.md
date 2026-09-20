@@ -407,9 +407,11 @@ Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`,
 - [x] **1e** — `mpc-run-schedule.test.mjs` (MRS-1…8) and `mpc-run-absent.test.mjs` (MRA-1…5), plus the design 37 §6 coverage row. **Equals-replay is covered in its stronger, cheaper form**: MRA-4 asserts a played run is state-for-state identical to the from-scratch run whose band table is date-keyed the same way. The `replayDecisions` comparison proper waits on phase 4a — there is no recorder yet, so a `records` log would have to be hand-built and would test the hand-building.
 - **Milestone**: ✅ hand-write a bag entry, select it, press Play, and the run reproduces the date-keyed plan exactly (MRA-4). Recording one from the cockpit is 4a.
 
-**Phase 2 — The rest of the state-backed levers** — *start here* (§16.1, §16.2 revise it)
-- [ ] **2a** — `DRAWDOWN_XBORDER`, `DRAWDOWN_WITHINTIER`, `DRAWDOWN_SLEEVE`: no reducer refactor, they already write `FORWARD_DRAWDOWN_STATE_FIELDS`. **`DRAWDOWN_WEIGHTS` is not in that class** (§16.2) — it runs the `synthesizeWeightedPriorities` cascade plus owner banding plus a per-account `drawdownPriority` re-stamp, which exists twice already. Build its `applyAt` as the **D7 authority** and route `actuate` through it here, rather than writing a third copy for 7a to delete. Move `_presentRolesFromState` to `lever-schedule.js`.
-- [ ] **2b** — `ALLOCATION_MIX` + `RebalanceToTargetReducer._targetAllocationOf` (**five** read sites, four of them inside `_scheduledMix` — §16.1); `BOND_LADDER` + `BondLadderReducer._targetRungsOf` (one site, `:91`). Inherit today's glidepath/regime anchor semantics exactly; raise the gating question in design 39 rather than changing behaviour here.
+**Phase 2 — The rest of the state-backed levers** — **BUILT 2026-09-20** (§16.1, §16.2 revised it; §16.5 is what it cost)
+- [x] **2a** — `DRAWDOWN_XBORDER`, `DRAWDOWN_WITHINTIER`, `DRAWDOWN_SLEEVE`: no reducer refactor, they already write `FORWARD_DRAWDOWN_STATE_FIELDS`. The categorical two **refuse an illegal mode** rather than stamping it, because `replenishSavings` reads them with a default branch and a typo'd mode on disk would play back as a plan nobody chose. `DRAWDOWN_SLEEVE` stamps `drawdownSleeveOrder: WEIGHTED` alongside the weights — weights the selector never consults are not a decision, and it makes the recorded run self-contained against a base that has since been switched off (a free partial answer to §16.3). **`DRAWDOWN_WEIGHTS` was not in that class** (§16.2): its `applyAt` is now the **D7 authority** (`drawdownPriorityPatch`), `actuate` calls it, and `_presentRolesFromState` moved to `lever-schedule.js` as `presentRolesFromState`. One call site is left for 7a — `_seededSim`'s re-stamp in `optimization-problem.js`.
+- [x] **2b** — `ALLOCATION_MIX` → `state.mpcTargetAllocation` + `RebalanceToTargetReducer._targetAllocationOf` (all five read sites); `BOND_LADDER` → `state.mpcBondLadderRungs` + `BondLadderReducer._targetRungsOf` (`:91`). Today's glidepath/regime anchor semantics are inherited exactly and now **asserted** (MRL-6), so they cannot drift by accident; the gating question goes to design 39 unchanged. The mix is synthesized over the classes the ROWS name — the same narrowed set `describe`/`actuate` pass — because passing all four would reproduce a different mix from the one the run held.
+- [x] **2c** *(unplanned — see §16.5)* — `scenarios/params/lever-weights.js`, a leaf module holding the Lever-A/Lever-B weight vocabulary and `synthesizeWeightedPriorities`, re-exported from its two old homes. Not tidying: without it phase 2 cannot be written at all.
+- **Tests**: `mpc-run-levers.test.mjs` (MRL-1…8). MRL-4 is the D7 gate — `actuate` and `applyAt` must produce identical per-account priorities. MRL-8 is the import-cycle gate (§16.5).
 
 **Phase 3 — The two queue levers**
 - [ ] **3a** — `ROTH` / `EARLY_WITHDRAWAL` fold into `rothConversionSchedule` / `earlyWithdrawalSchedule` at compile, before either toolset's `schedules(context)` reads them (`us-roth-conversion-toolset.js:226`, `us-early-withdrawal-toolset.js:209`), with a test that asserts the **order**, not just the outcome (§16.3).
@@ -432,7 +434,7 @@ Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`,
 - [ ] **6b** — `run:sweep` over `grid.mjs`; `run:attribute`; `run:seeds`.
 
 **Phase 7 — Consolidation**
-- [ ] **7a** — route `actuate` and `_seededSim`'s re-stamp through `applyAt` (D7), deleting the drift.
+- [ ] **7a** — route `_seededSim`'s per-account re-stamp (`optimization-problem.js`) through `drawdownPriorityPatch` (D7), deleting the last copy. `DRAWDOWN_WEIGHTS.actuate` was already routed through it in phase 2a (§16.2), so this is one call site, not a sweep.
 - [ ] **7b** — demote the collapsing harvest to an explicit "export a legible plan" action (D10).
 
 **Phase 8 — Lean into the decision graph** (§4.2 — mostly wiring, once Phase 1–5 land)
@@ -452,7 +454,7 @@ Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`,
 
 ---
 
-## 16. Notes from the phase 1 build (2026-09-19)
+## 16. Notes from the build (§16.1–16.4 phase 1, 2026-09-19; §16.5 phase 2, 2026-09-20)
 
 Measured while building phase 1, against the tree rather than against the 2026-07 draft's line
 numbers. Each one changes what a later phase has to do, so it is here rather than in a commit
@@ -550,6 +552,38 @@ Phase 1 hit all three; naming them saves the next session the rediscovery.
 | `SWEEP-18` (`param-sweep-schema.test.mjs`) | `mc`/`opt: true` on a param type the engine cannot sweep and no curated row | flag it when the machinery lands, not before — this is why `mpcActiveRun` ships `opt: false` |
 | `reducer-coverage-gate.test.mjs` | a new `src/` reducer absent from the manifest | `tests/helpers/reducer-coverage-manifest.js` **and** a row in design 37 §6 |
 | `check-help.test.mjs` | **any** uncited param — the repo enforces `0 params uncited`, not a backlog | cite it in a `help/` topic and `npm run help:restamp`; concept topics are capped at **400 words** |
+
+### 16.5 `lever-schedule.js` must import only LEAF modules — measured, not guessed
+
+Phase 2's hooks need the design-58 role weights, the design-61 allocation classes and
+`synthesizeWeightedPriorities`. All three lived in `intl-retirement-scenario.js` /
+`scenario-loader.js`, and importing them from `lever-schedule.js` looked free.
+
+It is not. `us-retirement-toolset.js` imports `MpcDecisionScheduleReducer`, which imports
+`lever-schedule.js`; `intl-retirement-scenario.js` imports every toolset. The added import
+closes that loop, and the loop does **not** degrade gracefully — four entry points that load
+today each died at import:
+
+```
+us-retirement-toolset.js          Cannot access 'US_RETIREMENT' before initialization
+intl-retirement-scenario.js       Cannot access 'IntlRetirementScenario' before initialization
+mpc-decision-schedule-reducer.js  Cannot access 'MpcDecisionScheduleReducer' before initialization
+cockpit-controller.js             Cannot access 'IntlRetirementScenario' before initialization
+```
+
+Worth knowing *why* it is easy to miss: `src/index.js` and `scenario-loader.js` still load
+fine, because the entry point decides which module in the cycle is left half-initialized. A
+smoke test that imports the package would have passed.
+
+The fix is to move the constants **down**, never to inline a copy of them — a copy is the
+drift D7 exists to collapse. `scenarios/params/lever-weights.js` is the new leaf (it imports
+only `account-roles.js` and `allocation.js`), and both old homes re-export everything, so no
+existing import site changed. The precedent was already in the tree: design 65's sleeve
+weight-key helpers live in `holdings-selection.js` for exactly this reason.
+
+**The rule, for every later phase**: every import in `lever-schedule.js` must be a leaf. If a
+hook needs something that is not, move that thing. `MRL-8` imports all seven modules and is
+what stops the loop coming back.
 
 Phase 5's editors will also need `scenario-tab-view.js` to dispatch on the `MpcRuns` param type
 the way it already does for `LiquidityGraph` / `LiquidityShapes` (`scenario-tab-view.js:630`);

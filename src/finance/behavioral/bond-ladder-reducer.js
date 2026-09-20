@@ -80,6 +80,18 @@ export class BondLadderReducer extends Reducer {
     this.couponRate      = couponRate;
   }
 
+  /**
+   * The rung count in force — a recorded MPC run's decision if one is playing, else the
+   * compiled one (design 81 §6.2).
+   *
+   * `BOND_LADDER.actuate` re-wires `this.targetRungs` on the live reducer, which a REPLAY
+   * cannot do: the reducer is compiled before the run plays, and a reducer must not reach
+   * into another's instance fields. So `MpcDecisionScheduleReducer` stamps the decision in
+   * state and this reads state-or-self — the same shape `ExplicitBandsSpendingReducer
+   * ._bandsOf` uses. Absent (every run with no active MPC run) ⇒ exactly today's behaviour.
+   */
+  _targetRungsOf(state) { return state?.mpcBondLadderRungs ?? this.targetRungs; }
+
   reduce(state, action) {
     const cc     = action?.type === 'AU_PERIOD_ADVANCE' ? 'AU' : 'US';
     const asOfMs = state.currentPeriods?.[cc]?.startMs ?? null;
@@ -88,7 +100,7 @@ export class BondLadderReducer extends Reducer {
     const account = state[this.stateKey];
     if (!account || !Array.isArray(account.holdings)) return this.newState(state);
 
-    const N = Math.max(2, Math.min(30, Math.round(this.targetRungs ?? 5)));
+    const N = Math.max(2, Math.min(30, Math.round(this._targetRungsOf(state) ?? 5)));
 
     const bondHoldings = account.holdings.filter(h => h?.allocation === ALLOCATION.BOND);
     const bondValue    = +bondHoldings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);

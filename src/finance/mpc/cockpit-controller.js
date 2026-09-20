@@ -20,10 +20,8 @@ import { retargetEarlyWithdrawalEvents } from '../../scenarios/toolsets/us-early
 import { set }                     from '../monte-carlo/mc-param-paths.js';
 import { DateUtils }               from '../../simulation-framework/date-utils.js';
 import { usRatesForYear }         from '../tax-settle-service.js';
-import { synthesizeWeightedPriorities } from '../../scenarios/scenario-loader.js';
 import {
-  DRAWDOWN_WEIGHT_ROLES, DRAWDOWN_CASH_ROLES, DEFAULT_DRAWDOWN_WEIGHTS,
-  DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP, DRAWDOWN_WEIGHT_MODE,
+  DRAWDOWN_WEIGHT_ROLES, DRAWDOWN_WEIGHT_MODE,
   DRAWDOWN_ROLE_LABELS, drawdownWeightKey,
   ALLOC_WEIGHT_CLASSES, ALLOC_WEIGHT_CLASS_LABELS, allocWeightKey,
   ALLOCATION_OPTIMIZED_MODE, synthesizeTargetAllocation, presentAllocations,
@@ -33,21 +31,15 @@ import {
 } from '../holdings/holdings-selection.js';
 import { ALLOCATION_SCHEDULE }      from '../behavioral/rebalance-to-target-reducer.js';
 import { HARVEST_FORMS, collapseConsecutive, ageAt, requiresIncludes } from './harvest.js';
-import { LEVER_SCHEDULE }        from './lever-schedule.js';
+import { LEVER_SCHEDULE, drawdownPriorityPatch, presentRolesFromState }
+  from './lever-schedule.js';
 
-/**
- * The set of account roles actually present in a live sim state — every entry
- * that looks like an account (an object carrying a `role`). Used to prune the
- * Lever-B drawdown-weight lever to roles an account backs (design 58 build-time
- * filter), so the online path matches the compile cascade.
+/*
+ * `_presentRolesFromState` MOVED to `lever-schedule.js` (design 81 §16.2) and is imported
+ * above as `presentRolesFromState`. The design-58 build-time filter is now shared with
+ * `DRAWDOWN_WEIGHTS.applyAt`, so the online path and the replay path prune the same roles
+ * from the same rule rather than from two copies of it.
  */
-function _presentRolesFromState(state) {
-  const roles = new Set();
-  for (const v of Object.values(state ?? {})) {
-    if (v && typeof v === 'object' && !Array.isArray(v) && v.role) roles.add(v.role);
-  }
-  return roles;
-}
 
 /**
  * Built-in control specs for the cockpit (design 39 §7). A control spec maps the
@@ -578,6 +570,8 @@ export const COCKPIT_CONTROLS = {
 
   // ── Cross-border drawdown mode (design 58 §11.3 Phase 1-MPC — Lever A online) ──
   DRAWDOWN_XBORDER: {
+    // design 81 §4.5 — `scheduleKey` + `applyAt`, spread in from `lever-schedule.js`.
+    ...LEVER_SCHEDULE.DRAWDOWN_XBORDER,
     key:     'DRAWDOWN_XBORDER',
     label:   'Cross-Border Drawdown',
     numeric: false,                      // categorical — no min/max/step range
@@ -631,6 +625,8 @@ export const COCKPIT_CONTROLS = {
 
   // ── Within-tier draw policy (design 58 §11.3 Phase 2-MPC — Lever C online) ─────
   DRAWDOWN_WITHINTIER: {
+    // design 81 §4.5 — `scheduleKey` + `applyAt`, spread in from `lever-schedule.js`.
+    ...LEVER_SCHEDULE.DRAWDOWN_WITHINTIER,
     key:     'DRAWDOWN_WITHINTIER',
     label:   'Within-Tier Draw',
     numeric: false,                      // categorical — no min/max/step range
@@ -679,6 +675,8 @@ export const COCKPIT_CONTROLS = {
   // realized state. The order is encoded as one continuous weight per investment
   // role (ascending sort = draw order), so the solver searches the order directly.
   DRAWDOWN_WEIGHTS: {
+    // design 81 §4.5 — `scheduleKey` + `applyAt`, spread in from `lever-schedule.js`.
+    ...LEVER_SCHEDULE.DRAWDOWN_WEIGHTS,
     key:     'DRAWDOWN_WEIGHTS',
     label:   'Drawdown Order (weights)',
     numeric: true,                       // the [0,1] range applies to every weight
@@ -698,7 +696,7 @@ export const COCKPIT_CONTROLS = {
     // build-time filter): a phantom role is a flat search dimension and would only
     // clutter the recommended-order card, so prune it from the live search too.
     buildVariables: ({ range, state }) => {
-      const present = _presentRolesFromState(state);
+      const present = presentRolesFromState(state);
       const roles = DRAWDOWN_WEIGHT_ROLES.filter(role => present.size === 0 || present.has(role));
       return roles.map(role => ({
         paramKey: drawdownWeightKey(role),
@@ -721,10 +719,9 @@ export const COCKPIT_CONTROLS = {
     /**
      * Forward-effective LIVE-VALUE SYNC (design 58 §11.3 leg 3; design 39 §13 H3):
      * mirror each committed weight onto its scenario param, and re-stamp the running sim's
-     * per-account `drawdownPriority` from the weights using the SAME role→rank
-     * synthesis the compile cascade uses (synthesizeWeightedPriorities) + the
-     * configured owner banding — so replenishSavings honors the new order from the
-     * next draw. Realized past untouched; the projection's `_seededSim` per-account
+     * per-account `drawdownPriority` from the weights through `drawdownPriorityPatch` — the
+     * SAME role→rank synthesis + owner banding the compile cascade and the design 81 replay
+     * use — so replenishSavings honors the new order from the next draw. Realized past untouched; the projection's `_seededSim` per-account
      * re-stamp is the twin.
      */
     actuate: ({ services, scenario, candidate, vars }) => {
@@ -740,29 +737,22 @@ export const COCKPIT_CONTROLS = {
         if (p) p.value = w;
       }
 
-      // 2) Synthesize role → rank from the committed weights (missing roles fall back
-      //    to the shipped defaults), then apply owner banding to match the cascade.
-      const roleRank = synthesizeWeightedPriorities({
-        weightKeyPrefix: DRAWDOWN_WEIGHT_PREFIX, weightKeySep: DRAWDOWN_WEIGHT_SEP,
-        weightRoles: DRAWDOWN_WEIGHT_ROLES, cashRoles: DRAWDOWN_CASH_ROLES,
-        weightDefaults: DEFAULT_DRAWDOWN_WEIGHTS,
-      }, candidate ?? {}, _presentRolesFromState(sim.state));
-
-      const mode = (scenario?.params ?? []).find(pp => (pp.key ?? pp.name) === 'drawdownOwnerOrdering')?.value;
-      const ownerOrder  = mode === 'SPOUSE_FIRST' ? ['spouse', 'primary'] : ['primary', 'spouse'];
-      const ownerStride = mode === 'POOLED' ? 0 : 100;
-
-      // 3) Re-stamp each drawdown-eligible live account forward-effective.
-      const next = { ...sim.state };
-      let changed = false;
-      for (const [k, acct] of Object.entries(next)) {
-        if (!acct || typeof acct !== 'object' || Array.isArray(acct)) continue;
-        if (!('drawdownPriority' in acct) || roleRank[acct.role] == null) continue;
-        const rank = Math.max(0, ownerOrder.indexOf(acct.ownerId));
-        const pr = roleRank[acct.role] + rank * ownerStride;
-        if (acct.drawdownPriority !== pr) { next[k] = { ...acct, drawdownPriority: pr }; changed = true; }
-      }
-      if (changed) sim.state = next;
+      // 2+3) Synthesize role → rank, apply owner banding, re-stamp every drawdown-eligible
+      //      live account — through the SAME function the replay uses (design 81 §16.2, D7
+      //      pulled forward from phase 7a). This block used to carry its own copy of the
+      //      cascade, which is exactly the drift D7 exists to collapse: the online commit and
+      //      the recorded playback of that commit must produce the same priorities or an A/B
+      //      between them measures the copy, not the decision. One call site is left to move
+      //      (`_seededSim`'s re-stamp in `optimization-problem.js`), which is 7a.
+      const patch = drawdownPriorityPatch({
+        state:      sim.state,
+        candidate:  candidate ?? {},
+        baseParams: {
+          drawdownOwnerOrdering:
+            (scenario?.params ?? []).find(pp => (pp.key ?? pp.name) === 'drawdownOwnerOrdering')?.value,
+        },
+      });
+      if (patch) sim.state = { ...sim.state, ...patch };
       return true;
     },
   },
@@ -776,6 +766,8 @@ export const COCKPIT_CONTROLS = {
   // per-account shim (the fields ride FORWARD_DRAWDOWN_STATE_FIELDS). Actuation writes
   // the live state fields directly (verified by `scripts/verify-mpc-lever.mjs drawdownSleeve`).
   DRAWDOWN_SLEEVE: {
+    // design 81 §4.5 — `scheduleKey` + `applyAt`, spread in from `lever-schedule.js`.
+    ...LEVER_SCHEDULE.DRAWDOWN_SLEEVE,
     key:     'DRAWDOWN_SLEEVE',
     label:   'Drawdown Sleeve (weights)',
     numeric: true,                       // the [0,1] range applies to every weight
@@ -847,6 +839,8 @@ export const COCKPIT_CONTROLS = {
   // snapshot injection and bites under MPC with no `_seededSim` re-stamp (verified by
   // `scripts/verify-mpc-lever.mjs allocationMix`). Actuation re-wires the live reducer.
   ALLOCATION_MIX: {
+    // design 81 §4.5 — `scheduleKey` + `applyAt`, spread in from `lever-schedule.js`.
+    ...LEVER_SCHEDULE.ALLOCATION_MIX,
     key:     'ALLOCATION_MIX',
     label:   'Allocation Mix (weights)',
     numeric: true,                       // the [0,1] range applies to every weight
@@ -1020,6 +1014,8 @@ export const COCKPIT_CONTROLS = {
   // field — so it survives snapshot injection and bites under MPC with no `_seededSim`
   // re-stamp. Actuation re-wires the live reducer; it re-shapes the ladder next period.
   BOND_LADDER: {
+    // design 81 §4.5 — `scheduleKey` + `applyAt`, spread in from `lever-schedule.js`.
+    ...LEVER_SCHEDULE.BOND_LADDER,
     key:     'BOND_LADDER',
     label:   'Bond Ladder Length (rungs)',
     numeric: true,

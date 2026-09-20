@@ -627,11 +627,34 @@ export class RebalanceToTargetReducer extends Reducer {
 
     const CASH   = take(years[ALLOCATION.CASH]);
     const BOND   = take(years[ALLOCATION.BOND]);
-    const GOLD   = Math.min(room, Math.max(0, Number(this.targetAllocation?.[ALLOCATION.GOLD]) || 0));
+    const GOLD   = Math.min(room, Math.max(0, Number(this._targetAllocationOf(state)?.[ALLOCATION.GOLD]) || 0));
     room -= GOLD;
     const EQUITY = Math.max(0, room);
     return totalizeMix({ CASH, BOND, GOLD, EQUITY });
   }
+
+  /**
+   * The static target / schedule ANCHOR in force — a recorded MPC run's committed mix if one
+   * is playing, else the compiled one (design 81 §6.2).
+   *
+   * `ALLOCATION_MIX.actuate` re-wires `this.targetAllocation` on the live reducer, which a
+   * REPLAY cannot do: this reducer is compiled before the run plays, and a reducer must not
+   * reach into another's instance fields. So `MpcDecisionScheduleReducer` stamps the decision
+   * in state and this reads state-or-self — the shape `ExplicitBandsSpendingReducer._bandsOf`
+   * already uses. Absent ⇒ exactly today's behaviour, byte for byte.
+   *
+   * ─── ANCHOR, not target, under a schedule (design 81 §16.1) ────────────────────
+   *
+   * Four of the five call sites are inside `_scheduledMix`, where GLIDEPATH interpolates and
+   * REGIME_CONDITIONED selects, and this value is only what they fall back to. A committed
+   * mix therefore does NOT become the target under those modes — it becomes the anchor, and
+   * the schedule still governs. That is not new: `ALLOCATION_MIX.actuate` has only ever
+   * written `targetAllocation`, so the live cockpit has behaved this way since design 61.
+   * Routing every read through here reproduces it exactly. Whether the lever should be gated
+   * on `scheduleMode === NONE` the way DRAWDOWN_WEIGHTS is gated on WEIGHTED is a design 39
+   * question, deliberately not answered here.
+   */
+  _targetAllocationOf(state) { return state?.mpcTargetAllocation ?? this.targetAllocation; }
 
   /**
    * Resolve the portfolio target mix in effect this period (design 61 Lever B).
@@ -654,7 +677,7 @@ export class RebalanceToTargetReducer extends Reducer {
   /** The pre-97 schedule resolution — Lever B alone. */
   _scheduledMix(state, action, bookBase = 0) {
     if (this.scheduleMode === ALLOCATION_SCHEDULE.YEARS_OF_SPEND) {
-      return this._resolveYearsTarget(state, bookBase) ?? this.targetAllocation;
+      return this._resolveYearsTarget(state, bookBase) ?? this._targetAllocationOf(state);
     }
     if (this.scheduleMode === ALLOCATION_SCHEDULE.GLIDEPATH) {
       const cc         = action?.type === 'AU_PERIOD_ADVANCE' ? 'AU' : 'US';
@@ -663,12 +686,12 @@ export class RebalanceToTargetReducer extends Reducer {
       const asOfMs     = action?.date != null ? new Date(action.date).getTime()
                                               : state.currentPeriods?.[cc]?.startMs;
       const age = ageAsOf(birthDate, asOfMs);
-      return interpolateGlidepath(this.glidepath, age, this.targetAllocation);
+      return interpolateGlidepath(this.glidepath, age, this._targetAllocationOf(state));
     }
     if (this.scheduleMode === ALLOCATION_SCHEDULE.REGIME_CONDITIONED) {
-      return resolveRegimeTarget(this.regimeTargets, state.activeRegimes, this.targetAllocation);
+      return resolveRegimeTarget(this.regimeTargets, state.activeRegimes, this._targetAllocationOf(state));
     }
-    return this.targetAllocation;
+    return this._targetAllocationOf(state);
   }
 
   reduce(state, action) {

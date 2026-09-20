@@ -77,53 +77,14 @@ const BUILT_IN_TOOLSETS = [
   CORPORATE_ACTIONS,
 ];
 
-/**
- * Lever B (design 58 §4-B): synthesize a strategy priority map (role → rank) from
- * the per-role weight params carried on an `accountPriority` node's WEIGHTED mode.
- * The draw order is the ascending sort of the weights (lowest drawn first); cash
- * roles are pinned to rank 0 (drawn first). A missing/NaN weight falls back to the
- * node's `weightDefaults`, then 0.5, so a partially-swept vector still resolves.
- * Ties preserve the node's `weightRoles` declaration order (stable sort) — those
- * siblings land in one tier for Lever C to split.
- *
- * Weight keys use a `::` separator (`drawdownWeight::roth-ira`), NOT a dot, so they
- * are a single flat token everywhere: the UI params→parameters sync writes the
- * literal key, and the MC/Opt/MPC candidate path's `set()` (which splits on `.`/`[`
- * and refuses to create intermediate nodes) also writes it flat. A dotted key would
- * be silently dropped by `set()` — `set(p, 'drawdownWeight.roth-ira', v)` no-ops
- * because `p.drawdownWeight` doesn't pre-exist — leaving the Lever-B axis inert
- * through the solver and under MPC. The node carries `weightKeySep`.
- *
- * Exported for the Lever-B online cockpit control (design 58 §11.3 Phase 3-MPC):
- * its live `actuate` re-stamps the running sim's per-account `drawdownPriority`
- * from the committed weights using this SAME role→rank synthesis, so advise/apply
- * and the live sim cannot drift.
+/*
+ * Design 81 phase 2 — `synthesizeWeightedPriorities` MOVED to `./params/lever-weights.js`
+ * (a leaf) beside the weight keys it reads, and re-exported here so existing importers are
+ * unchanged. The cascade below still calls it; design 81's `DRAWDOWN_WEIGHTS.applyAt` now
+ * calls the SAME function rather than a third copy (D7), and it cannot import this module.
  */
-export function synthesizeWeightedPriorities(node, parameters = {}, presentRoles = null) {
-  const prefix   = node.weightKeyPrefix ?? 'drawdownWeight';
-  const sep      = node.weightKeySep ?? '::';
-  const defaults = node.weightDefaults ?? {};
-  // Build-time filter (design 58): drop weighted/cash roles that no account backs.
-  // A phantom role's rank is inert (nothing consumes it), so removing it leaves the
-  // *relative* draw order of real accounts identical while keeping the synthesized
-  // map (and any display derived from it) free of roles the scenario can't hold.
-  const allow = presentRoles == null
-    ? null
-    : (presentRoles instanceof Set ? presentRoles : new Set(presentRoles));
-  const keep = (role) => allow == null || allow.has(role);
-  const roles = (Array.isArray(node.weightRoles) ? node.weightRoles : []).filter(keep);
-  const weighted = roles.map(role => {
-    const raw = Number(parameters?.[`${prefix}${sep}${role}`]);
-    const w   = Number.isFinite(raw) ? raw
-              : (Number.isFinite(defaults[role]) ? defaults[role] : 0.5);
-    return { role, w };
-  });
-  weighted.sort((a, b) => a.w - b.w);   // ascending = draw order; stable tie-break
-  const priorities = {};
-  for (const role of (node.cashRoles ?? [])) if (keep(role)) priorities[role] = 0;   // cash first
-  weighted.forEach(({ role }, i) => { priorities[role] = i + 1; });
-  return priorities;
-}
+import { synthesizeWeightedPriorities } from './params/lever-weights.js';
+export { synthesizeWeightedPriorities } from './params/lever-weights.js';
 
 /**
  * Keys `_evictStaleDerivedState` is allowed to remove — see that method. Both are compiled
