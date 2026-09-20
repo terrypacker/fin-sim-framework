@@ -449,3 +449,57 @@ export function allocWeightsFromPreset(name) {
 export function presentAllocations(_accounts = null, _holdings = null) {
   return new Set(ALLOC_WEIGHT_CLASSES);
 }
+
+// ─── design 35 — per-owner drawdown banding, in ONE place (design 81 phase 7a) ────
+
+/**
+ * The owner-banding table the `accountPriority` cascade applies, and the ONE authority for it.
+ *
+ * `drawdownPriority = roleRank + ownerRank * ownerStride`, so the stride is what decides
+ * whether the primary's accounts drain fully before the spouse's (100) or whether same-role
+ * accounts across owners share one tier (POOLED, stride 0).
+ *
+ * ─── why this moved here, and what it was before (design 81 §16.10) ──────────────
+ *
+ * It was two tables. The compile cascade read this one off the `accountPriority` node; the
+ * online commit and the design-81 replay re-derived it from HARD-CODED literals
+ * (`mode === 'SPOUSE_FIRST' ? ['spouse','primary'] : ['primary','spouse']`, stride
+ * `mode === 'POOLED' ? 0 : 100`). They agreed — by coincidence of two tables saying the same
+ * thing, not by construction. Add a fourth mode, or change a stride, and the plan the
+ * controller commits stops matching the plan the compile produces, silently, on a field
+ * nothing prints.
+ *
+ * That is D7's drift in its last hiding place: phase 2a collapsed the three copies of the
+ * role→rank SYNTHESIS and left the BANDING duplicated behind it.
+ */
+export const DRAWDOWN_OWNER_MODES = Object.freeze({
+  PRIMARY_FIRST: { ownerOrder: ['primary', 'spouse'], ownerStride: 100 },
+  SPOUSE_FIRST:  { ownerOrder: ['spouse', 'primary'], ownerStride: 100 },
+  POOLED:        { ownerStride: 0 },
+});
+
+/** The bare fallback a node carries, and what an unknown/absent mode resolves to. */
+export const DRAWDOWN_OWNER_DEFAULT = Object.freeze({ ownerOrder: ['primary', 'spouse'], ownerStride: 100 });
+
+/**
+ * Resolve `{ ownerOrder, ownerStride }` for a banding mode.
+ *
+ * Note `POOLED` names no `ownerOrder`: it only zeroes the stride, so the order falls through
+ * to the default and is inert (rank × 0). Reproducing that by hand is exactly the kind of
+ * detail two tables drift on, which is why this is a function and not a lookup.
+ *
+ * @param {string|null} mode   the `drawdownOwnerOrdering` value
+ * @param {object} [fallback]  a node's own bare `ownerOrder`/`ownerStride`, when it has them
+ */
+export function resolveOwnerBanding(mode, fallback = DRAWDOWN_OWNER_DEFAULT) {
+  const base = {
+    ownerOrder:  fallback?.ownerOrder  ?? DRAWDOWN_OWNER_DEFAULT.ownerOrder,
+    ownerStride: fallback?.ownerStride ?? DRAWDOWN_OWNER_DEFAULT.ownerStride,
+  };
+  const cfg = (mode != null) ? DRAWDOWN_OWNER_MODES[mode] : null;
+  if (!cfg) return base;
+  return {
+    ownerOrder:  cfg.ownerOrder  ?? base.ownerOrder,
+    ownerStride: cfg.ownerStride ?? base.ownerStride,
+  };
+}

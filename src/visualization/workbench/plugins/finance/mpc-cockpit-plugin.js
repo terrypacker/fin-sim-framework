@@ -175,11 +175,14 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
         <button class="btn btn-sm btn-primary" data-mpc="advise">Advise next move</button>
         <button class="btn btn-sm" data-mpc="advance" title="Step &quot;now&quot; forward one year and re-plan">Advance ▶</button>
         <button class="btn btn-sm" data-mpc="auto" title="Auto-accept the recommended move and advance each year to the end of the run">Auto ▶▶</button>
-        <button class="btn btn-sm" data-mpc="harvest" title="Copy this run's decisions back into the loaded scenario's parameters (design 39 §13)" disabled>Copy to scenario…</button>
-        <!-- Design 81 §8. Beside "Copy to scenario…", not instead of it: D10 keeps the lossy
-             harvest as an EXPORT (a three-band summary a human can argue with is worth
-             having), while this saves the run itself, which is what the plan becomes. -->
-        <button class="btn btn-sm" data-mpc="save-run" title="Save this run's decisions into the scenario as a recorded MPC run, and play it (design 81 §8)" disabled>Save run to plan…</button>
+        <!-- Design 81 D10 — the two exits, in the order they should be reached for.
+             SAVING the run is what keeps the plan: it is lossless, and design 80 measured
+             that every faithful bake of a solvent run produced an insolvent scenario. The
+             harvest survives as an EXPORT — a three-band summary a human can argue with is
+             worth having — so it is demoted to a secondary action and labelled for what it
+             is, rather than deleted. -->
+        <button class="btn btn-sm btn-primary" data-mpc="save-run" title="Save this run's decisions into the scenario as a recorded MPC run, and play it back exactly (design 81 §8). Lossless." disabled>Save run to plan…</button>
+        <button class="btn btn-sm" data-mpc="harvest" title="Export this run as ordinary static settings — small and legible, and LOSSY: the squash is what design 80 measured turning a solvent run into an insolvent plan (design 81 D10)" disabled>Export as settings…</button>
       </div>
 
       <!-- Design 81 §8 — live plan vs playing a recorded run must NEVER be ambiguous. A
@@ -216,10 +219,11 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
       <div class="mpc-fan" data-mpc="fan" style="display:none"></div>
 
       <!-- Harvest review (design 39 §13.8): nothing is written to the scenario
-           until the user reads this diff and approves it. -->
+           until the user reads this diff and approves it. Design 81 D10 demotes what this
+           writes from "the plan" to "an export of it" — see the note the body renders. -->
       <div class="mpc-harvest" data-mpc="harvest-panel" style="display:none">
         <div class="mpc-harvest-head">
-          <span data-mpc="harvest-title">Copy to scenario</span>
+          <span data-mpc="harvest-title">Export as settings</span>
           <label class="mpc-field mpc-harvest-opt" title="Re-solve the best STATIC value over the whole run for levers with no schedule form, instead of freezing the last epoch's decision (design 39 §13.6.6). Costs one optimizer run.">
             <input type="checkbox" data-mpc="harvest-resolve"> Re-solve static levers
           </label>
@@ -227,9 +231,9 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
                explicit and labelled with the ruin date, because a truncated
                exploratory harvest (§13 H2) is a legitimate reason to want one. -->
           <label class="mpc-field mpc-harvest-opt mpc-harvest-override" data-mpc="harvest-override-field" style="display:none">
-            <input type="checkbox" data-mpc="harvest-override"> <span data-mpc="harvest-override-label">Copy anyway</span>
+            <input type="checkbox" data-mpc="harvest-override"> <span data-mpc="harvest-override-label">Export anyway</span>
           </label>
-          <button class="btn btn-sm btn-primary" data-mpc="harvest-apply">Copy to scenario</button>
+          <button class="btn btn-sm btn-primary" data-mpc="harvest-apply">Export to scenario</button>
           <button class="btn btn-sm" data-mpc="harvest-cancel">Cancel</button>
         </div>
         <div class="mpc-harvest-body" data-mpc="harvest-body"></div>
@@ -998,7 +1002,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
 
   // ─── Harvest: copy the run back into the scenario (design 39 §13) ──────────
 
-  /** Enable "Copy to scenario…" as soon as the session has a decision to copy. */
+  /** Enable both exits as soon as the session has a decision to keep. */
   _syncHarvestEnabled() {
     const has = readDecisionRuns(this._services()?.graph ?? null).length > 0;
     const btn = this._q('harvest');
@@ -1189,12 +1193,12 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     if (box && blocked) {
       const label = this._q('harvest-override-label');
       const when = f.outOfFundsDate ? _fmtDate(f.outOfFundsDate) : 'mid-plan';
-      if (label) label.textContent = `Copy anyway — this plan runs out in ${when}`;
+      if (label) label.textContent = `Export anyway — this plan runs out in ${when}`;
     }
     if (btn) {
       btn.disabled = blocked && !(box?.checked);
       btn.classList.toggle('btn-warn', blocked && !!box?.checked);
-      btn.textContent = blocked && box?.checked ? 'Copy anyway' : 'Copy to scenario';
+      btn.textContent = blocked && box?.checked ? 'Export anyway' : 'Export to scenario';
     }
   }
 
@@ -1214,7 +1218,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     // trusting the button's disabled state alone (the panel is also driven by
     // tests and by keyboard activation).
     if (this._harvestFeasible?.feasible === false && !this._q('harvest-override')?.checked) {
-      this._setNow(`Copy blocked — ${describeFeasibility(this._harvestFeasible, { fmtDate: _fmtDate, fmtUsd: _usd })}`);
+      this._setNow(`Export blocked — ${describeFeasibility(this._harvestFeasible, { fmtDate: _fmtDate, fmtUsd: _usd })}`);
       return;
     }
 
@@ -1222,7 +1226,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     try {
       res = applyHarvestPlan(scenario, plan);
     } catch (err) {
-      this._setNow(`Copy failed: ${err?.message ?? err}`);
+      this._setNow(`Export failed: ${err?.message ?? err}`);
       return;
     }
 
@@ -1232,7 +1236,8 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     if (res.created.length)  bits.push(`${res.created.length} created`);
     if (res.requires.length) bits.push(`${res.requires.length} enabling param(s) set`);
     if (res.skipped.length)  bits.push(`${res.skipped.length} skipped`);
-    this._setNow(`Copied to “${scenario.name ?? 'scenario'}”: ${bits.join(', ')} — Rebuild to run it, then Save.`);
+    this._setNow(`Exported to “${scenario.name ?? 'scenario'}”: ${bits.join(', ')} — Rebuild to run it, `
+      + 'then Save. This is a SUMMARY of the run, not the run (design 81 D10).');
     this._closeHarvest();
   }
 
@@ -1245,7 +1250,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     if (title) {
       const range = plan.epochRange?.[0] && plan.epochRange?.[1]
         ? `${_fmtDate(plan.epochRange[0])} → ${_fmtDate(plan.epochRange[1])}` : '—';
-      title.textContent = `Harvest run · ${plan.epochs} epoch(s) · ${range}`
+      title.textContent = `Export as settings · ${plan.epochs} epoch(s) · ${range}`
         + (plan.goal?.label ? ` · Goal: ${plan.goal.label}` : '');
     }
 
@@ -1274,10 +1279,14 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
       this._feasibilityBanner() +
       (rows || reqRows
         ? `<ul class="mpc-hv-list">${rows}${reqRows}</ul>`
-        : `<div class="mpc-hv-empty">Nothing to copy from this run.</div>`) +
+        : `<div class="mpc-hv-empty">Nothing to export from this run.</div>`) +
       (warn ? `<ul class="mpc-hv-warns">${warn}</ul>` : '') +
-      `<div class="mpc-hv-note">A copied plan is <b>open-loop</b>: it re-runs deterministically on this path, `
-      + `but it cannot react the way the controller did — under a different seed or Monte Carlo arm it will differ.</div>`;
+      `<div class="mpc-hv-note">An exported plan is <b>open-loop and lossy</b>: it re-runs `
+      + `deterministically on this path, but it cannot react the way the controller did, and the `
+      + `squash below is what design 80 measured turning solvent runs into insolvent scenarios. `
+      + `To keep the plan itself, use <b>Save run to plan</b> — the run plays back decision for `
+      + `decision. Reach for this export to <i>explain</i> a run in settings someone can argue `
+      + `with (design 81 D10).</div>`;
 
     this._syncHarvestApply();
   }

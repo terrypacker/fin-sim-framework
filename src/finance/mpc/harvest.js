@@ -9,10 +9,23 @@
  */
 
 /**
- * Harvest — copy a completed MPC run's decisions back into scenario params
- * (design/39 §13).
+ * Harvest — EXPORT a completed MPC run's decisions as ordinary scenario params
+ * (design/39 §13; demoted from "the copy-out step" to "an export" by design 81 D10).
  *
- * The cockpit is a DISCOVERY surface; this is the copy-out step. It reads the
+ * ─── what design 81 changed about this file's JOB ────────────────────────────
+ *
+ * Nothing in the code, and everything in what it is FOR. This used to be how a run became a
+ * plan. Design 80 measured that every faithful bake of a solvent run produced an insolvent
+ * scenario — the errors were a dollar of rounding and a boundary landing a year early, and a
+ * die-with-zero plan has no margin for either. So design 81 stores the run itself
+ * (`mpcRuns` + `MpcDecisionScheduleReducer`), and **this is no longer what the plan is.**
+ *
+ * It survives, deliberately, as D10 states: a three-band summary a human can argue with is
+ * worth having, and "explain this run in settings someone can read" is a real question that
+ * the lossless representation answers badly. What must not happen is a reader mistaking the
+ * export for the plan, which is why the panel that drives it now says so in its own words.
+ *
+ * The cockpit is a DISCOVERY surface; this is the export step. It reads the
  * decision-record log (§13.2 — not the controller, which is rebuilt after every
  * Apply and whose `committed` bag has already collapsed the time dimension),
  * routes each epoch's values back to the lever that owns them, and produces a
