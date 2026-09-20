@@ -2074,7 +2074,7 @@ what the in-app panel keys on.
 | [Dashboard](panels/dashboard.md) | panel | 183 | 1 panel |
 | [Decision Graph](panels/dg-config.md) | panel | 168 | 1 panel · design 30 |
 | [DG Results](panels/dg-results.md) | panel | 162 | 1 panel · design 30 |
-| [Drawdown Order](concepts/drawdown-order.md) | concept | 272 | 2 panels · 22 params · design 44, 65, 97 |
+| [Drawdown Order](concepts/drawdown-order.md) | concept | 316 | 2 panels · 22 params · design 44, 65, 97 |
 | [Early Withdrawal](concepts/early-withdrawal.md) | concept | 228 | 1 panel · 8 params |
 | [Economic Shocks](concepts/economic-shocks.md) | concept | 242 | 2 panels · 3 params |
 | [Event](nodes/event.md) | node | 220 | 2 panels · design 2 |

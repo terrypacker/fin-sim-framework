@@ -919,21 +919,42 @@ VoTV measurement is what should keep that easiness from becoming overfitting.
 ## 14. The projection gap — why every epoch under-projects its own outcome
 
 **Status**: open, and now *isolated*. Inherited from `design/81` Q6, which sharpened the
-question and handed it here. Nothing below is built; this section exists so the next session
-starts from the measurement rather than from the surprise.
+question and handed it here. This section exists so the next session starts from the
+measurement rather than from the surprise.
 
-### 14.1 The phenomenon
+**Measured 2026-09-20, before any hypothesis was tested** — two findings that change what the
+rest of the section is asking, both against the author's own plan rather than a fixture:
 
-On a real 44-epoch, nine-lever run under a `DIE_WITH_TARGET` goal, **the last epoch projected a
-terminal roughly 6.5× smaller than the path the run actually delivered** (the numbers are in
-design 81 §12 Q6). A second run, against a different base, reproduced the same *sign* at a
-smaller magnitude — so it is not a one-off of that plan, and the magnitude is not a constant
-either.
+- the headline ratio is an artifact of a near-zero denominator (§14.1, restated);
+- **five of the nine levers were inert on that plan**, four of them silently. §14.8 is that
+  finding and its fix, which is BUILT. Nothing else below is.
 
-The direction matters more than the size. A goal-seeking controller aimed at "die with ≈ target"
-told the user, at every epoch, that it was landing on target — while the plan it was actually
-flying overshot by multiples. §7's recommended-move card shows the projection and nothing else,
-so **the one number the user reads is the one that is wrong.**
+### 14.1 The phenomenon, in dollars
+
+On a real 44-epoch, nine-lever run under a `DIE_WITH_TARGET` goal, the last epoch projected a
+terminal of **\$16,249** against a realized path of **\$106,476** (design 81 §12 Q6). A second
+run, against a different base, reproduced the same *sign* at a smaller magnitude — so it is not a
+one-off of that plan.
+
+**State it as \$90,227, not as 6.5×.** The ratio was the original framing and it is the wrong
+statistic here, for a reason this design already knows: under `DIE_WITH_TARGET` with a target at
+or near zero the terminal IS a residual, so both terms are small and their quotient is unstable
+by construction — design 80 §4.1's degeneracy arriving as a measurement error rather than as an
+objective one. §14.6's last bullet says the goal metric cannot referee this; a ratio built out
+of the goal metric cannot either. On a plan whose controllable wealth runs to millions, \$90k is
+about a percent of the axis, and the "second run at a smaller magnitude" is consistent with
+*both* observations being small absolute misses divided by small numbers. Any per-epoch rate
+derived from the ratio (§14.4) inherits the same distortion.
+
+So the honest scale for every measurement below is **dollars, and dollars as a fraction of the
+net liquidity the epoch could actually steer** — not a multiple of the terminal.
+
+What survives the restatement, undiminished, is the DIRECTION and the display defect. A
+goal-seeking controller aimed at "die with ≈ target" told the user at every epoch that it was
+landing on target, while the plan it was flying landed elsewhere. §7's recommended-move card
+shows the projection and nothing else, so **the one number the user reads is the one that is
+wrong** — and §14.8 found the card confidently rendering a full sell order chosen from a
+completely flat objective, which is the same defect with no gap in it at all.
 
 ### 14.2 What design 81 excluded, and why that is the whole reason this is tractable
 
@@ -968,10 +989,12 @@ controller is also probably choosing differently than it would if it priced the 
 
 ### 14.4 Hypotheses, with what would discriminate them
 
-Convert the ratio to a **per-epoch rate before hunting**: 6.5× over 44 annual epochs is ≈4.4%/yr
-and the smaller observation is ≈1.3%/yr. Both are small enough per epoch to be invisible in any
-single solve, which is itself a strong hint — it points away from one dramatic cause and toward
-something that accretes.
+**Amortize the gap before hunting**, but in dollars (§14.1): \$90,227 over 44 annual epochs is
+about \$2,050 a year of missed projection. Small enough per
+epoch to be invisible in any single solve, which is itself a strong hint — it points away from one
+dramatic cause and toward something that accretes. (The earlier framing put this as ≈4.4%/yr
+against ≈1.3%/yr for the second observation; both are quotients of near-zero terminals and
+neither should be quoted again.)
 
 - **H1 — The projection is honest; feedback really is worth that much.** Each epoch under-values
   the plan because it cannot see its own future re-decisions. *Prediction*: an explicitly
@@ -996,6 +1019,16 @@ something that accretes.
   **committed** params fails to reproduce the recorded `result`. **Check this first**: it is the
   cheapest, and it would invalidate every measurement built on A.
 
+  *Partly ruled out already, 2026-09-20.* Four epochs of a headless `CockpitController`
+  (`cfgTemplate` = a real plan, `DIE_WITH_TARGET_LIQUID`, one lever) projected the SAME terminal
+  at every epoch, equal to that plan's own run to the dollar — so A ≡ A′ ≡ B exactly.
+  Snapshot injection and `prepareBaseParams` therefore do not mis-bookkeep A in general, and no
+  measurement built on A is invalid by default. What survives is H3's lever-specific form — a
+  lever whose `actuate` does more than the rollout modelled — so experiment 1 runs **per lever**,
+  over the live levers of the run in question, rather than once for the run. The arm that showed
+  this used a lever §14.8 has since gated off, which is the point: with an inert lever feedback is
+  worth exactly zero, so A − A′ = 0 is the prediction, and it held to the dollar.
+
 - **H4 — Horizon / terminal-value mis-specification** (design 41, §10 Q2). Only bites in windowed
   mode; the die-with-target family is full-life today. *Prediction*: absent on full-life runs.
   Listed to be ruled out, not because it is likely.
@@ -1008,13 +1041,23 @@ their **ratio**, because they have opposite remedies: H1 is fixed by reporting, 
 Cheapest-first, and each one answers something even if the next is never run. The design-81 lab
 supplies the arms, so none of this needs a new driver.
 
-1. **Rule out H3.** One epoch. Re-run its rollout from its own snapshot with the committed
-   params; compare to the recorded `result`. If it does not reproduce, stop and fix that.
+0. **Establish the live-lever set** (§14.8, and the reason it is step 0). On the author's plan
+   five of nine levers moved nothing, so a nine-lever run had at most four live levers and any
+   decomposition would have attributed to *feedback* whatever a dead lever contributed, which is
+   nothing. The gates added in §14.8 make this a read rather than an experiment: ask each of the
+   run's levers `appliesTo` against the run's OWN base params, and for `ALLOCATION_MIX` ask
+   `leverHygieneProblems`. A run whose live set is empty has no gap to explain. **Do not skip
+   this on the grounds that the gates now prevent it** — the recorded run that produced the 6.5×
+   predates them, and its live set is a fact about that log.
+1. **Rule out H3, per lever.** One epoch each. Re-run its rollout from its own snapshot with the
+   committed params; compare to the recorded `result`. Already done once for a single-lever run,
+   where it reproduced exactly (H3 above), so what remains is the levers that run had live.
 2. **Decompose per epoch.** For each epoch *k*: the projection at *k*, and the realized terminal
    of the path that actually followed from *k*. `replayDecisions` already returns per-epoch
    entries, so this is a reporting change over an existing structure. The **shape of the series**
    is the discriminator: evenly accreting ⇒ H1/H2; arriving in a few steps ⇒ a specific lever or
-   event, and the epoch dates name it.
+   event, and the epoch dates name it. Read it only after step 0 — a flat series means "H1/H2
+   accreting evenly" *or* "nothing was live", and those have nothing in common.
 3. **Build the open-loop arm** (H1). Hold epoch 1's decision for the whole horizon — one bag
    entry with the first epoch's rows and nothing else, which is `withoutLever`'s sibling and a
    few lines in `run-lab.mjs`. Does it land near A?
@@ -1046,3 +1089,101 @@ supplies the arms, so none of this needs a new driver.
   only as experiment 5, to test a prediction.
 - Not blocked on anything. The measurement surface exists (`design/81` §10), the decision log
   exists, and the first experiment is one epoch.
+
+### 14.8 The dead levers the search was advising on — BUILT 2026-09-20
+
+Found while opening this section, on the author's own pooled plan, in about five minutes. It is
+not the projection gap; it is the thing that had to be true before the gap could be measured at
+all, and it is the same class of defect design 110's `targetScale` axis was: *a lever that
+changes nothing is worse than no lever.*
+
+#### 14.8.1 The measurement
+
+Eight params across five levers were swept on a plan whose graph names a spend order, and
+**every arm returned the identical net worth, net liquidity, lifetime tax and after-tax net
+worth — to the dollar**:
+
+| lever | pooled | with `liquidityGraphEnabled: false` |
+|---|---|---|
+| `DRAWDOWN_SLEEVE` | inert | −7.7% of terminal wealth |
+| `DRAWDOWN_WEIGHTS` | inert | −12.8% |
+| `DRAWDOWN_XBORDER` | inert | — |
+| `DRAWDOWN_WITHINTIER` | inert | — |
+| `ALLOCATION_MIX` | inert | — |
+
+Live on the same plan, as a scale for those zeroes: `ROTH` moved terminal wealth by ~19% and
+`BOND_LADDER` by ~6%. Correctly refused by the gates that already existed: `SPENDING` (no
+EXPLICIT_BANDS) and `EARLY_WITHDRAWAL` (disabled). So the real search space was **two levers of
+nine**, and the cockpit said nothing.
+
+The harness objection is cleared the way `lever-reaches-loaded-sim` clears it: the same overrides
+move the no-graph arms by several percent of terminal wealth each, so they do reach the sim. This
+is inertness, not a forwarding bug.
+
+The runs themselves are in this section's study directory, per the "findings live with the study"
+rule — nothing below needs the numbers, only their shape.
+
+#### 14.8.2 Why — one line of design 97, four consequences
+
+`compileToDrawdownSequence` flattens the pools' claims into `state.drawdownSequence` (§12, and
+the graph is the authority — authoring both throws). From there, inside `replenishSavings`:
+
+- the `drawdownPriority` walk never runs ⇒ **DRAWDOWN_WEIGHTS** synthesizes priorities nobody
+  reads;
+- `sequenced = orderedSources !== sources` takes the ordered branch unconditionally ⇒
+  **DRAWDOWN_WITHINTIER** never splits a tier;
+- a sequence entry resolves against every drawable account, deliberately bypassing the
+  LOCAL_FIRST country gate (§8 Q3 — naming an account is the more specific statement) ⇒
+  **DRAWDOWN_XBORDER** is never consulted;
+- each claim narrows its draw to ONE allocation class before the sleeve ranker runs ⇒
+  **DRAWDOWN_SLEEVE** never has two classes to rank. This is exactly the structural fact design
+  107 §5.3 had to correct about `drawdownRebalanceWeight`: under a graph, `spendOrder` IS the
+  sleeve policy.
+
+`ALLOCATION_MIX` fails for a different reason — `RebalanceToTargetReducer` sizes the classes its
+pools claim (§12.4, one authority), and that plan's pools claim every class the lever searches.
+
+#### 14.8.3 The fix, and why it is two different fixes
+
+Two of the four drawdown gates were `appliesTo: () => true`, on a comment arguing they are inert
+only under a DATA condition no gate can see. A compiled spend order is a CONFIG condition, in the
+params bag, so that argument no longer holds and the comment is corrected in place.
+
+`poolGraphCompilesSpendOrder(bp)` (`lever-schedule.js`) is the predicate: the master switch,
+then whether any pool names a `spendOrder` in the base graph or in a **scheduled shape** (design
+109 — an order that arrives in 2043 still kills the lever for the part of the horizon being tuned).
+It re-reads the authored param rather than calling the normalizer, because that file may import
+leaves only (design 81 §16.5) — which makes it a second derivation of one fact, and `PLG-2` is the
+test that keeps the two from drifting: the predicate must be true exactly when
+`compileToDrawdownSequence` returns a sequence.
+
+Then the split that matters:
+
+- **The four drawdown levers are GATED.** `appliesTo` says no, the cockpit greys out Advise and
+  prints the reason.
+- **`requirement` may now be a function.** A two-clause gate has two remedies, and telling an
+  operator to set Drawdown Strategy to WEIGHTED when it already is and the graph is the problem
+  costs a session. Read it through `leverRequirement(spec, bp)`, never off the spec.
+- **`inertWhen(bp)` splits the load-time refusal.** `assertRunIsPlayable` throws for a DISABLED
+  mechanic because the rows are dropped and the plan silently becomes a different plan. These
+  rows are NOT dropped — they apply exactly as recorded and change nothing, so the run plays back
+  byte-identically to the base plan. Throwing would refuse to load a saved scenario over a
+  contradiction with no behaviour behind it. An inert lever therefore **warns and loads**.
+- **`ALLOCATION_MIX` is reported, never refused** (`lever-hygiene.js`, the `pool-axis-hygiene`
+  shape). Its inertness is a property of which classes the claims cover, not of pooling: freeing
+  ONE class on that same plan — one claim deleted, everything else held — brought the lever back
+  to life immediately, by more than a percent of terminal wealth. A gate keyed on "a graph
+  exists" would be wrong on every plan that leaves a class free.
+
+#### 14.8.4 What it says about the cockpit, beyond the gates
+
+With every candidate scoring identically, CEM still converged and the card still rendered a
+confident full sell order — the same weights at every epoch, presented as advice. **A flat
+objective is a result and the cockpit does not report it.** That is §14.6's display argument
+arriving from the other side: there the card shows an open-loop number as a forecast; here it
+shows an arbitrary point from a flat surface as a recommendation. The same run also never
+mentioned that its `DIE_WITH_TARGET` terminal target was being missed by the entire portfolio —
+no lever it had could close that, and nothing said so.
+
+Both belong with §7's card, and neither is a gate. Left open deliberately, because the honest
+form of "the search found nothing" depends on what §14.6 decides the card should say.

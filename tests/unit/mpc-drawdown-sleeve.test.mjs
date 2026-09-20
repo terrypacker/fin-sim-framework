@@ -28,6 +28,7 @@ import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
 import { COCKPIT_CONTROLS }   from '../../src/finance/mpc/cockpit-controller.js';
+import { leverRequirement }   from '../../src/finance/mpc/lever-schedule.js';
 import { makeInitialSnapshot } from '../../src/finance/mpc/mpc-controller.js';
 import { OptimizationProblem } from '../../src/finance/optimization/optimization-problem.js';
 import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES } from '../../src/finance/optimization/optimization-objectives.js';
@@ -55,7 +56,26 @@ test('DRAWDOWN_SLEEVE: appliesTo gates on the WEIGHTED sleeve order', () => {
   assert.strictEqual(DS.appliesTo({ drawdownSleeveOrder: 'WEIGHTED' }), true);
   assert.strictEqual(DS.appliesTo({ drawdownSleeveOrder: 'TAX_COST' }), false);
   assert.strictEqual(DS.appliesTo({}), false);
-  assert.match(DS.requirement, /WEIGHTED/);
+  // The gate grew a second clause (design 39 §14.8), so the sentence is resolved against the
+  // bag rather than read off the spec — two clauses, two remedies.
+  assert.match(leverRequirement(DS, { drawdownSleeveOrder: 'TAX_COST' }), /WEIGHTED/);
+});
+
+test('DRAWDOWN_SLEEVE: and a compiled pool spend order refuses it too (§14.8)', () => {
+  // Every claim narrows its draw to ONE allocation class, so the sleeve ranker never has two
+  // classes to rank. Measured byte-identical at every weight on a real pooled plan.
+  const pooled = {
+    drawdownSleeveOrder: 'WEIGHTED',
+    liquidityGraph: { pools: [
+      { id: 'buffer', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }] },
+      { id: 'growth', spendOrder: 40, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ] },
+  };
+  assert.strictEqual(DS.appliesTo(pooled), false);
+  assert.strictEqual(DS.inertWhen(pooled), true, 'INERT — the rows apply and change nothing');
+  assert.match(leverRequirement(DS, pooled), /liquidity graph/i);
+  // The switch brings it back.
+  assert.strictEqual(DS.appliesTo({ ...pooled, liquidityGraphEnabled: false }), true);
 });
 
 test('DRAWDOWN_SLEEVE: describe renders the sell order (ascending weight = sold first)', () => {

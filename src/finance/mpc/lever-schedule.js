@@ -514,6 +514,55 @@ function _hasStrategy(strategy, key) {
 }
 
 /**
+ * Does a liquidity graph COMPILE the drawdown order on this params bag? (design 39 §14.8)
+ *
+ * Measured on the author's own pooled plan, 20 Sep 2026: with a graph that names a spend
+ * order, **four** drawdown levers are byte-identical inert — same net worth, net liquidity
+ * and lifetime tax to the dollar at every value. The cause is one line of design 97 §12:
+ * `compileToDrawdownSequence` flattens the pools' claims into `state.drawdownSequence`, and
+ * from there
+ *
+ *   · the `drawdownPriority` walk never runs           ⇒ DRAWDOWN_WEIGHTS decides nothing;
+ *   · `sequenced` short-circuits the tier-split branch  ⇒ DRAWDOWN_WITHINTIER decides nothing;
+ *   · a sequence entry resolves against every drawable account, deliberately bypassing the
+ *     LOCAL_FIRST country gate (§8 Q3)                  ⇒ DRAWDOWN_XBORDER decides nothing;
+ *   · each claim narrows its draw to ONE allocation class before the sleeve ranker runs
+ *                                                       ⇒ DRAWDOWN_SLEEVE decides nothing.
+ *
+ * The last is the same structural fact design 107 §5.3 had to correct about
+ * `drawdownRebalanceWeight`: under a graph, `spendOrder` IS the sleeve policy. With
+ * `liquidityGraphEnabled: false` all four come back to life — the sleeve and weight levers moved
+ * terminal wealth by 7.7% and 12.8% on that same plan — which is what makes this a CONFIG
+ * condition a gate can see rather than the data condition the two ungated levers claimed.
+ *
+ * Pure data, no import: `lever-schedule.js` may import leaves only (§16.5), and
+ * `liquidity-graph.js` is not one. So this asks the authored param what `resolveLiquidityGraph`
+ * would ask it — `liquidityGraphEnabled` (absent ⇒ ON, matching the master switch) and whether
+ * any pool names a `spendOrder`, in the base graph OR in a scheduled shape, because a plan whose
+ * order arrives in 2043 (design 109) is pooled for the part of the horizon that matters.
+ *
+ * @param {object} bp  the scenario parameter bag
+ * @returns {boolean}
+ */
+export function poolGraphCompilesSpendOrder(bp) {
+  if (bp?.liquidityGraphEnabled === false) return false;
+  const orders = (graph) => Array.isArray(graph?.pools)
+    && graph.pools.some(p => p?.spendOrder != null);
+  if (orders(bp?.liquidityGraph)) return true;
+  const shapes = bp?.liquidityShapes;
+  return shapes != null && typeof shapes === 'object'
+    && Object.values(shapes).some(orders);
+}
+
+/** The sentence every pooled-inert gate says, with the lever's own clause spliced in. */
+function _pooledInert(what) {
+  return `A liquidity graph compiles the drawdown order (design 97 §12), so ${what} — `
+    + 'every value returns the identical run. Say it in the GRAPH instead (pool `spendOrder` '
+    + 'and the sleeves each claim names), or switch the pools off (Liquidity Pools Enabled) '
+    + 'to tune this lever online.';
+}
+
+/**
  * Every lever's `appliesTo` gate + the sentence that says how to satisfy it.
  *
  * These MOVED here from `COCKPIT_CONTROLS` (they are spread back in) for the reason §16.3
@@ -524,24 +573,65 @@ function _hasStrategy(strategy, key) {
  * every ROTH row dropped by the toolset's opening `if (!p.rothConversionEnabled) return []`
  * and plays back as a different plan in silence. Two copies of that predicate is two places
  * the two answers can diverge.
+ *
+ * ─── two failures, one predicate, two sentences (design 39 §14.8) ─────────────────
+ *
+ * `appliesTo` answers one question — *is this lever worth searching?* — and two different
+ * facts can make the answer no:
+ *
+ *   **DISABLED** — the mechanic is off, so the toolset never compiles the consumer and a
+ *   recorded row is DROPPED. The plan silently becomes a different plan, which is why
+ *   `assertRunIsPlayable` throws.
+ *
+ *   **INERT** — the mechanic is on and the row applies exactly as recorded; nothing downstream
+ *   reads it. Playing the run is byte-identical to not playing it, so refusing to LOAD it would
+ *   be a refusal with no behaviour behind it.
+ *
+ * `inertWhen(bp)` names the second case: true means this gate is failing for inertness on this
+ * bag. Search is refused either way — advising on a lever that cannot move the plan is the
+ * defect §14.8 found — but the load-time assertion warns instead of throwing.
+ *
+ * `requirement` may be a string or `(bp) => string`, because a gate with two clauses has two
+ * remedies and telling the operator the wrong one costs a session. Read it through
+ * {@link leverRequirement}, never off the spec.
  */
 const LEVER_GATES = {
   SPENDING: {
     appliesTo: (bp) => _hasStrategy(bp?.spendingStrategy, 'EXPLICIT_BANDS'),
     requirement: 'Switch Spending Strategy to include EXPLICIT_BANDS (Scenario panel) to use this lever.',
   },
-  // Always applicable: which country's accounts compete for a draw, and how accounts sharing
-  // a tier split one, are valid decisions whenever the plan spans both / a tier has ≥2
-  // members. Inert only under a DATA condition, which is not something a gate can see.
-  DRAWDOWN_XBORDER:    { appliesTo: () => true },
-  DRAWDOWN_WITHINTIER: { appliesTo: () => true },
+  // Applicable whenever the plan spans both countries / a tier has ≥2 members: which
+  // country's accounts compete for a draw, and how accounts sharing a tier split one, are
+  // then real decisions. They used to be UNCONDITIONAL, on the argument that they are inert
+  // only under a data condition no gate can see. A compiled spend order is not a data
+  // condition (§14.8), and it makes both of them decide nothing at all.
+  DRAWDOWN_XBORDER: {
+    appliesTo: (bp) => !poolGraphCompilesSpendOrder(bp),
+    requirement: _pooledInert('a draw resolves against every account the sequence names and '
+      + 'never consults the cross-border policy'),
+    inertWhen: poolGraphCompilesSpendOrder,
+  },
+  DRAWDOWN_WITHINTIER: {
+    appliesTo: (bp) => !poolGraphCompilesSpendOrder(bp),
+    requirement: _pooledInert('a sequenced draw takes the ordered walk and never splits a tier'),
+    inertWhen: poolGraphCompilesSpendOrder,
+  },
   DRAWDOWN_WEIGHTS: {
-    appliesTo: (bp) => bp?.drawdownStrategy === DRAWDOWN_WEIGHT_MODE,
-    requirement: 'Set Drawdown Strategy to WEIGHTED (Scenario panel) to tune the drawdown order online.',
+    appliesTo: (bp) => bp?.drawdownStrategy === DRAWDOWN_WEIGHT_MODE
+                    && !poolGraphCompilesSpendOrder(bp),
+    requirement: (bp) => (poolGraphCompilesSpendOrder(bp)
+      ? _pooledInert('the `drawdownPriority` walk these weights synthesize never runs')
+      : 'Set Drawdown Strategy to WEIGHTED (Scenario panel) to tune the drawdown order online.'),
+    inertWhen: poolGraphCompilesSpendOrder,
   },
   DRAWDOWN_SLEEVE: {
-    appliesTo: (bp) => bp?.drawdownSleeveOrder === SLEEVE_WEIGHT_MODE,
-    requirement: 'Set Drawdown Sleeve Order to WEIGHTED (Scenario panel) to tune the sleeve sell order online.',
+    appliesTo: (bp) => bp?.drawdownSleeveOrder === SLEEVE_WEIGHT_MODE
+                    && !poolGraphCompilesSpendOrder(bp),
+    requirement: (bp) => (poolGraphCompilesSpendOrder(bp)
+      ? _pooledInert('each claim narrows its draw to one allocation class, so the sleeve '
+        + 'ranker never has two classes to choose between')
+      : 'Set Drawdown Sleeve Order to WEIGHTED (Scenario panel) to tune the sleeve sell order online.'),
+    inertWhen: poolGraphCompilesSpendOrder,
   },
   ALLOCATION_MIX: {
     appliesTo: (bp) => bp?.allocationStrategy === ALLOCATION_OPTIMIZED_MODE
@@ -570,3 +660,19 @@ export const LEVER_SCHEDULE = {
   ALLOCATION_MIX:      { ...LEVER_GATES.ALLOCATION_MIX, ...ALLOCATION_MIX_SCHEDULE },
   BOND_LADDER:         { ...LEVER_GATES.BOND_LADDER, ...BOND_LADDER_SCHEDULE },
 };
+
+/**
+ * The sentence that says how to satisfy `lever`'s gate against `bp`.
+ *
+ * One reader for both shapes, so no call site has to know that a two-clause gate carries a
+ * function. Undefined when the lever has nothing to say (a gate that cannot fail).
+ *
+ * @param {object} spec  a `LEVER_SCHEDULE` entry or a `COCKPIT_CONTROLS` spec (they are spread
+ *                       from the same object, so either works)
+ * @param {object} bp    the scenario parameter bag
+ * @returns {string|undefined}
+ */
+export function leverRequirement(spec, bp) {
+  const r = spec?.requirement;
+  return typeof r === 'function' ? r(bp ?? {}) : r;
+}

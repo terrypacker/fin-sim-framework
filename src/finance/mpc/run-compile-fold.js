@@ -9,7 +9,7 @@
  */
 
 import { resolveActiveMpcRun, allDecisionsOf } from './run-schedule.js';
-import { LEVER_SCHEDULE }                      from './lever-schedule.js';
+import { LEVER_SCHEDULE, leverRequirement }    from './lever-schedule.js';
 
 /**
  * DESIGN 81 phase 3 — what a recorded run does at COMPILE, before any clock exists.
@@ -17,7 +17,8 @@ import { LEVER_SCHEDULE }                      from './lever-schedule.js';
  * Two things, in this order, both called once from `ScenarioCompiler.compile`:
  *
  *   1. `assertRunIsPlayable`  — D11's first half. A run whose levers name a mechanic the base
- *                               has since disabled THROWS, rather than playing back short.
+ *                               has since disabled THROWS, rather than playing back short; one
+ *                               whose levers are merely INERT warns (design 39 §14.8).
  *   2. `foldQueueLeverRuns`   — §6.3. The ROTH / EARLY_WITHDRAWAL rows become ordinary
  *                               year-keyed schedule params before the toolsets read them.
  *
@@ -54,19 +55,39 @@ function _leversOf(run) {
  * shape of failure exists wherever a gate decides whether a consumer is compiled at all (no
  * EXPLICIT_BANDS ⇒ no `ExplicitBandsSpendingReducer` ⇒ a stamped band table nobody reads).
  *
+ * ─── and the case that must NOT throw (design 39 §14.8) ─────────────────────────
+ *
+ * The four pooled drawdown gates fail for a different reason than ROTH's: the mechanic is ON,
+ * every recorded row applies exactly as it was recorded, and a liquidity graph decides the
+ * order instead. Nothing is dropped and the plan does not become a different plan — it is
+ * BYTE-IDENTICAL to the same plan with the run switched off. Throwing would refuse to load a
+ * saved scenario over a contradiction that has no behaviour behind it, which is the opposite
+ * of the trade this function exists to make. So `inertWhen` splits the two: a DISABLED lever
+ * still throws, an INERT one warns and the plan loads.
+ *
  * @param {object} parameters  the resolved scenario parameter bag
- * @throws {Error} naming every offending lever and how to satisfy its gate
+ * @throws {Error} naming every lever whose mechanic is DISABLED and how to satisfy its gate
  */
 export function assertRunIsPlayable(parameters) {
   const run = resolveActiveMpcRun(parameters);
   if (!run) return;
 
   const problems = [];
+  const inert    = [];
   for (const lever of _leversOf(run)) {
-    const gate = LEVER_SCHEDULE[lever]?.appliesTo;
+    const spec = LEVER_SCHEDULE[lever];
+    const gate = spec?.appliesTo;
     if (typeof gate !== 'function' || gate(parameters)) continue;
-    problems.push(`  • ${lever} — ${LEVER_SCHEDULE[lever]?.requirement
-      ?? 'the mechanic this lever drives is not enabled in this scenario.'}`);
+    const line = `  • ${lever} — ${leverRequirement(spec, parameters)
+      ?? 'the mechanic this lever drives is not enabled in this scenario.'}`;
+    (spec?.inertWhen?.(parameters) ? inert : problems).push(line);
+  }
+  if (inert.length > 0) {
+    console.warn(
+      `mpcActiveRun: recorded run '${run.runId}' decided ${inert.length} lever(s) that this `
+      + 'scenario makes INERT. The decisions apply exactly as recorded and change nothing, so '
+      + 'the run plays back identically to the base plan on those levers (design 39 §14.8):\n'
+      + inert.join('\n'));
   }
   if (problems.length === 0) return;
 

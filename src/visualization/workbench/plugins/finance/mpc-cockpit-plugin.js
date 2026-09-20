@@ -20,6 +20,8 @@ import { checkHarvestFeasibility, describeFeasibility } from '../../../../financ
 import { buildRunEntry, makeRunKey, describeRunSource, saveRunToScenario, checkRunFeasibility }
   from '../../../../finance/mpc/run-record.js';
 import { resolveActiveMpcRun } from '../../../../finance/mpc/run-schedule.js';
+import { leverRequirement }    from '../../../../finance/mpc/lever-schedule.js';
+import { leverHygieneProblems } from '../../../../finance/mpc/lever-hygiene.js';
 import { resolveStaticLevers, foldScheduleBakes, mergeResolved } from '../../../../finance/mpc/harvest-resolve.js';
 import {
   OPTIMIZATION_OBJECTIVES, DIE_WITH_TARGET_AXES, DIE_WITH_TARGET_FAMILY,
@@ -372,10 +374,31 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     const params = this._baseParams();
     for (const c of this._currentControls()) {
       if (typeof c?.appliesTo === 'function' && !c.appliesTo(params)) {
-        return { ok: false, requirement: c.requirement, label: c.label };
+        // A two-clause gate names the remedy for the clause that actually failed
+        // (design 39 §14.8), so the sentence is resolved against the bag, not read off the spec.
+        return { ok: false, requirement: leverRequirement(c, params), label: c.label };
       }
     }
     return { ok: true };
+  }
+
+  /**
+   * The warn-only half of §14.8 — a lever this config makes inert that no gate can refuse,
+   * because whether it is inert depends on the graph's claims rather than on pooling itself.
+   *
+   * Reported and never repaired (the `pool-axis-hygiene` rule), and it does NOT disable Advise:
+   * the operator may have a reason to run a flat search, and a flat fan they were warned about
+   * is very different from a flat fan they were not.
+   *
+   * @returns {string[]} one sentence per problem
+   */
+  _leverHygiene() {
+    const keys = this._currentControls().map(c => c?.key).filter(Boolean);
+    try {
+      return leverHygieneProblems(this._baseParams(), keys, this._sim?.state
+        ? (this._services()?.simulationContext?.accounts ?? []) : [])
+        .map(r => r.message);
+    } catch { return []; }
   }
 
   /**
@@ -397,9 +420,13 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     if (!ok) {
       this._clearCard();
       this._setNow(`“${label}” has no effect here — ${requirement}`);
-    } else {
-      this._renderNow();
+      return;
     }
+    this._renderNow();
+    // Searchable, but this config may already decide it — appended to the “now” line rather
+    // than replacing it, because the date is the one thing on that line the operator needs.
+    const warnings = this._leverHygiene();
+    if (warnings.length) this._appendNow(`⚠ ${warnings.join(' ')}`);
   }
 
   /**
@@ -1387,6 +1414,11 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
   }
 
   _setNow(text) { const el = this._q('now'); if (el) el.textContent = text; }
+  /** Add a sentence after whatever `now` already says (§14.8's warn-only row). */
+  _appendNow(text) {
+    const el = this._q('now');
+    if (el) el.textContent = el.textContent ? `${el.textContent}  ${text}` : text;
+  }
   _q(name) { return this.el?.querySelector(`[data-mpc="${name}"]`) ?? null; }
 }
 

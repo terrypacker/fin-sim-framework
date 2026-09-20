@@ -49,8 +49,11 @@ levers are separate because the questions are.
 5. **Which instrument** — an order over securities, for "sell the employer stock
    before the index fund".
 
-`drawdownSequence` replaces the first three with one literal list of pools. Reach for
-it when the policy you want falls *between* the layers above — a rule that interleaves
+`drawdownSequence` replaces the first three with one literal list of pools — and
+*replaces* is exact: a pool spend order compiles that list, after which layers 1–3
+decide nothing and are byte-identical at every value. Say it in the graph instead. The
+MPC cockpit refuses those levers on a pooled plan for the same reason. Reach for a
+sequence when the policy you want falls *between* the layers above — a rule that interleaves
 two accounts around a single sleeve boundary cannot be expressed by tuning an account
 order and a sleeve order separately, because each of those is blind to the other.
 
