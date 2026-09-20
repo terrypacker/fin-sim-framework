@@ -373,7 +373,7 @@ Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`,
 - ~~**Q3 — Is `state.mpcSpendingBands` the right shape?**~~ **RESOLVED → D12: a full replacement band table.** The size objection was the only argument for a merge map and it does not survive measurement (~1 KB vs a ~280 KB snapshot). A replacement is the shape `this.bands` already is, so nothing downstream learns a second vocabulary.
 - **Q3b — Does a run re-solved from epoch *k* become its own entry?** Yes — `source.derivedFrom` (§4.3) makes runs a tree held as parent pointers. Open: whether the picker should *offer* "re-solve from here" or whether that stays a cockpit action that happens to write a derived entry.
 - **Q4 — Does the schedule round-trip through `ScenarioSerializer` and the CSV param export?** Dates in a table cell are the usual place that breaks.
-- **Q5 — Staleness.** `source.baseScenarioId` lets us detect that the base moved under a recorded run. What should that *do* — warn, refuse to select, or nothing? A run that stores no param paths is far more robust to a base edit than the 2026-07-26 draft was, so this is probably a badge on the picker entry rather than a gate.
+- **Q5 — Staleness.** `source.baseScenarioId` lets us detect that the base moved under a recorded run. What should that *do* — warn, refuse to select, or nothing? A run that stores no param paths is far more robust to a base edit than the 2026-07-26 draft was, so this looked like a badge on the picker entry rather than a gate. **§16.3 found the case that decides it and it is not a badge**: a run recorded with `rothConversionEnabled: true`, selected against a base where it has since been switched off, has every ROTH row dropped by the toolset's opening gate and plays back as a different plan in silence. A run whose levers name a disabled mechanic must refuse at load. Open: whether *any* other base edit rises to a refusal, or whether that one gate is the whole of it.
 - **Q6 — Why does every epoch under-project its own outcome by ~6.5×?** On the real log the last epoch projected a \$16,249 terminal; the realized path delivered **\$106,476**. Every epoch's projection is the terminal of "hold this decision for the rest of life", but the realized path is the *sequence* of first segments, and they are not the same plan. The cockpit only ever displays the projection — so for a die-with-target goal the user is told they will land on target while the plan overshoots by 6.5×. **This design sharpens the question rather than answering it**: once `B ≡ A′` is a regression test, the A-vs-A′ gap is isolated as a pure controller-accuracy problem with the harvest permanently excluded as a suspect. A goal-seeking controller that systematically misses its goal by that margin is either mis-reporting or under-spending, and both matter. Own it in design 39.
 
 ---
@@ -407,12 +407,13 @@ Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`,
 - [x] **1e** — `mpc-run-schedule.test.mjs` (MRS-1…8) and `mpc-run-absent.test.mjs` (MRA-1…5), plus the design 37 §6 coverage row. **Equals-replay is covered in its stronger, cheaper form**: MRA-4 asserts a played run is state-for-state identical to the from-scratch run whose band table is date-keyed the same way. The `replayDecisions` comparison proper waits on phase 4a — there is no recorder yet, so a `records` log would have to be hand-built and would test the hand-building.
 - **Milestone**: ✅ hand-write a bag entry, select it, press Play, and the run reproduces the date-keyed plan exactly (MRA-4). Recording one from the cockpit is 4a.
 
-**Phase 2 — The rest of the state-backed levers**
-- [ ] **2a** — the four `DRAWDOWN_*` levers. No reducer refactor — they already write `FORWARD_DRAWDOWN_STATE_FIELDS` and per-account `drawdownPriority`.
-- [ ] **2b** — `ALLOCATION_MIX` + `RebalanceToTargetReducer._targetAllocationOf`; `BOND_LADDER` + `BondLadderReducer._targetRungsOf`. Every read site.
+**Phase 2 — The rest of the state-backed levers** — *start here* (§16.1, §16.2 revise it)
+- [ ] **2a** — `DRAWDOWN_XBORDER`, `DRAWDOWN_WITHINTIER`, `DRAWDOWN_SLEEVE`: no reducer refactor, they already write `FORWARD_DRAWDOWN_STATE_FIELDS`. **`DRAWDOWN_WEIGHTS` is not in that class** (§16.2) — it runs the `synthesizeWeightedPriorities` cascade plus owner banding plus a per-account `drawdownPriority` re-stamp, which exists twice already. Build its `applyAt` as the **D7 authority** and route `actuate` through it here, rather than writing a third copy for 7a to delete. Move `_presentRolesFromState` to `lever-schedule.js`.
+- [ ] **2b** — `ALLOCATION_MIX` + `RebalanceToTargetReducer._targetAllocationOf` (**five** read sites, four of them inside `_scheduledMix` — §16.1); `BOND_LADDER` + `BondLadderReducer._targetRungsOf` (one site, `:91`). Inherit today's glidepath/regime anchor semantics exactly; raise the gating question in design 39 rather than changing behaviour here.
 
 **Phase 3 — The two queue levers**
-- [ ] **3a** — `ROTH` / `EARLY_WITHDRAWAL` fold into `rothConversionSchedule` / `earlyWithdrawalSchedule` at compile, before the toolsets read them, with the load-order test.
+- [ ] **3a** — `ROTH` / `EARLY_WITHDRAWAL` fold into `rothConversionSchedule` / `earlyWithdrawalSchedule` at compile, before either toolset's `schedules(context)` reads them (`us-roth-conversion-toolset.js:226`, `us-early-withdrawal-toolset.js:209`), with a test that asserts the **order**, not just the outcome (§16.3).
+- [ ] **3b** — the `rothConversionEnabled` / `earlyWithdrawalEnabled` gates drop every recorded row silently when the base has been edited since (§16.3). Refuse at load, D11's first half — this is the case that settles Q5.
 
 **Phase 4 — Record → bag**
 - [ ] **4a** — write a bag entry from the decision log and select it, F1-gated; `source` stamped, `derivedFrom` when re-solved from an existing run.
@@ -448,3 +449,109 @@ Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`,
 - **The lag is real.** A decision takes effect at the next period advance (§5). On an annual cadence that is invisible; on a semi-annual one it is up to six months and it is not a bug.
 - **The bag grows and nothing prunes it.** Ten runs is ~240 KB (§4.6) and fine; a hundred is not, and only Delete in the picker stands between them. A cap or an age-out may be wanted once this is used in anger.
 - **A selection is a sharp edge.** `mpcActiveRun` pointing at a deleted or renamed entry must degrade to "no run", visibly — the `liquidityGraphSchedule` editor's *"not found"* row is the precedent for saying so rather than silently playing the base plan.
+
+---
+
+## 16. Notes from the phase 1 build (2026-09-19)
+
+Measured while building phase 1, against the tree rather than against the 2026-07 draft's line
+numbers. Each one changes what a later phase has to do, so it is here rather than in a commit
+message.
+
+### 16.1 `RebalanceToTargetReducer` has FIVE reads of `targetAllocation`, not two — and four of
+them are one funnel
+
+§6.2 names `rebalance-to-target-reducer.js:630, 657`. The live count is **630, 657, 666, 669,
+671**, and 657 / 666 / 669 / 671 are all inside `_scheduledMix`. So phase 2b's accessor work is
+smaller than five sites suggests — `_targetAllocationOf(state)` inside `_scheduledMix`, plus the
+GOLD clamp at 630 — but the *semantics* at 666 and 669 need a decision the design has not taken:
+
+```js
+// _scheduledMix — under a glidepath, `this.targetAllocation` is the fallback ANCHOR
+return interpolateGlidepath(this.glidepath, age, this.targetAllocation);
+return resolveRegimeTarget(this.regimeTargets, state.activeRegimes, this.targetAllocation);
+```
+
+Under `GLIDEPATH` or `REGIME_CONDITIONED`, a committed mix does **not** become the target — it
+becomes the value the schedule falls back to, and the schedule still governs. A controller that
+commits 60/40 and gets a glidepath-interpolated 55/45 is precisely the fidelity gap this design
+exists to close.
+
+**But it is not a gap this design opens.** `ALLOCATION_MIX.actuate` already writes only
+`targetAllocation` (`cockpit-controller.js:1011`), so the live cockpit has behaved this way all
+along, and routing every read through the accessor **reproduces today's behaviour exactly**.
+That is the right phase 2b default — inherit the ambiguity, do not create a second one — with
+the question raised where it belongs, in design 39: *should `ALLOCATION_MIX` be gated on
+`scheduleMode === NONE` the way `DRAWDOWN_WEIGHTS` is gated on `WEIGHTED`?* An ungated lever
+whose value is silently re-interpolated is a lever the solver is searching through a filter it
+does not know about.
+
+`BondLadderReducer` is as advertised: one read, `bond-ladder-reducer.js:91`.
+
+### 16.2 `DRAWDOWN_WEIGHTS` is not a "no refactor" lever, and it is where D7 should land first
+
+§14 phase 2a says the four `DRAWDOWN_*` levers need "no reducer refactor — they already write
+`FORWARD_DRAWDOWN_STATE_FIELDS` and per-account `drawdownPriority`". True for three of them:
+`DRAWDOWN_XBORDER` and `DRAWDOWN_WITHINTIER` each stamp one top-level field, and
+`DRAWDOWN_SLEEVE` writes state-resident config the disposal primitive re-reads every draw.
+
+`DRAWDOWN_WEIGHTS` is different. Its `actuate` runs a whole cascade — `synthesizeWeightedPriorities`
+over the present roles, then owner banding read from the `drawdownOwnerOrdering` **param**, then a
+per-account re-stamp of `drawdownPriority`. That logic exists twice today (there, and in
+`_seededSim`'s re-stamp block) and is exactly the drift **D7** exists to collapse. Writing a
+third copy in `applyAt` and deleting it in phase 7a is the wrong order.
+
+> **Revision to the plan: pull D7 forward for this one lever.** Build `DRAWDOWN_WEIGHTS.applyAt`
+> as the authority in phase 2a and have `actuate` call it, rather than deferring the
+> consolidation wholesale to 7a. The other levers can still consolidate late.
+
+Two mechanical consequences: `_presentRolesFromState` (a private helper in
+`cockpit-controller.js`) moves to `lever-schedule.js` beside the hook that needs it, and the
+owner-banding read is a **third** vindication of `applyAt` taking `baseParams` — a reducer
+cannot reach `drawdownOwnerOrdering` any other way.
+
+### 16.3 Phase 3's fold point is concrete, and its real risk is a silent drop
+
+Both schedules are read in the same place and the same way, inside each toolset's
+`schedules(context)`:
+
+```js
+// us-roth-conversion-toolset.js:226
+const schedule = Array.isArray(p.rothConversionSchedule) ? p.rothConversionSchedule : [];
+// us-early-withdrawal-toolset.js:209
+const schedule = Array.isArray(p.earlyWithdrawalSchedule) ? p.earlyWithdrawalSchedule : [];
+```
+
+So the fold has one clean seam: `context.parameters` must carry the folded schedule before
+either `schedules()` runs. §6.3 already says this needs a test that names it rather than a
+comment — agreed, and the test should assert the **order**, not just the outcome, because an
+outcome test passes for a fold that happens to run first today.
+
+The risk §6.3 does not mention is upstream of the fold. Both toolsets open with a gate:
+
+```js
+if (!p.rothConversionEnabled) return [];
+if (!p.earlyWithdrawalEnabled) return [];
+```
+
+A run recorded with conversions on, selected against a base scenario where they have since been
+switched off, drops **every** ROTH row on the floor and plays back as a different plan, silently.
+The lever's `appliesTo` gate cannot catch it — that ran at record time. This is **Q5 (staleness)
+made concrete**, and it is the case that decides Q5: a badge on the picker entry is not enough
+when the failure mode is a plan quietly becoming a different plan. A recorded run whose levers
+name a disabled mechanic should **refuse at load**, in D11's first half.
+
+### 16.4 Three repo gates any later phase will hit
+
+Phase 1 hit all three; naming them saves the next session the rediscovery.
+
+| Gate | What trips it | Fix |
+|---|---|---|
+| `SWEEP-18` (`param-sweep-schema.test.mjs`) | `mc`/`opt: true` on a param type the engine cannot sweep and no curated row | flag it when the machinery lands, not before — this is why `mpcActiveRun` ships `opt: false` |
+| `reducer-coverage-gate.test.mjs` | a new `src/` reducer absent from the manifest | `tests/helpers/reducer-coverage-manifest.js` **and** a row in design 37 §6 |
+| `check-help.test.mjs` | **any** uncited param — the repo enforces `0 params uncited`, not a backlog | cite it in a `help/` topic and `npm run help:restamp`; concept topics are capped at **400 words** |
+
+Phase 5's editors will also need `scenario-tab-view.js` to dispatch on the `MpcRuns` param type
+the way it already does for `LiquidityGraph` / `LiquidityShapes` (`scenario-tab-view.js:630`);
+until then the param renders with the default editor, which is why phase 1 could ship the param
+without the picker.
