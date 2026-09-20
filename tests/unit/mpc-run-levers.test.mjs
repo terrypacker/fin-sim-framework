@@ -25,6 +25,8 @@
  * MRL-6  The two reducer accessors read state-or-self, so absent ⇒ today's behaviour
  * MRL-7  One period, many levers: the reducer stamps them all and names them all
  * MRL-8  The import-cycle guard — the leaf rule `lever-schedule.js` lives under (§16.5)
+ * MRL-9  **D7, phase 7a** — the COMPILE cascade and `drawdownPriorityPatch` band owners
+ *        identically, for every mode in the one table
  */
 
 import { test } from 'node:test';
@@ -40,6 +42,9 @@ import {
   DRAWDOWN_WEIGHT_ROLES, drawdownWeightKey, allocWeightKey, synthesizeTargetAllocation,
 } from '../../src/scenarios/params/lever-weights.js';
 import { DRAWDOWN_SLEEVE_CLASSES, sleeveWeightKey } from '../../src/finance/holdings/holdings-selection.js';
+import { DRAWDOWN_OWNER_MODES, DRAWDOWN_WEIGHT_MODE, resolveOwnerBanding }
+  from '../../src/scenarios/params/lever-weights.js';
+import { loadScenarioSim } from '../helpers/scenario-harness.js';
 import { ACCOUNT_ROLES }            from '../../src/finance/state/account-roles.js';
 import { RebalanceToTargetReducer } from '../../src/finance/behavioral/rebalance-to-target-reducer.js';
 import { BondLadderReducer }        from '../../src/finance/behavioral/bond-ladder-reducer.js';
@@ -297,4 +302,70 @@ test('MRL-8: the import-cycle guard — every entry point phase 2 broke still lo
   ]) {
     await assert.doesNotReject(() => import(m), `${m} failed to import — an import cycle is back`);
   }
+});
+
+// ─── MRL-9 ───────────────────────────────────────────────────────────────────
+
+test('MRL-9: D7 — the COMPILE cascade and `drawdownPriorityPatch` agree for EVERY banding mode', () => {
+  // The last place D7's drift was hiding (design 81 §16.10). Phase 2a collapsed the three
+  // copies of the role→rank synthesis and left the owner-banding TABLE duplicated behind it:
+  // the cascade read it off the `accountPriority` node, the online commit and the replay
+  // re-derived it from hard-coded literals. They agreed — because two tables happened to say
+  // the same thing, on a field nothing prints.
+  //
+  // So this compares the two PATHS, not the two tables: compile a real scenario under each
+  // mode, then ask `drawdownPriorityPatch` for the same thing and require every account to
+  // match. Add a mode to `DRAWDOWN_OWNER_MODES` and this test covers it without being edited.
+  const weights = Object.fromEntries(
+    DRAWDOWN_WEIGHT_ROLES.map((r, i) => [drawdownWeightKey(r), 0.05 * (i + 1)]));
+
+  for (const mode of Object.keys(DRAWDOWN_OWNER_MODES)) {
+    const params = { drawdownStrategy: DRAWDOWN_WEIGHT_MODE, drawdownOwnerOrdering: mode, ...weights };
+    // Through `cfg.parameters`, NOT the harness's `params`: `drawdownStrategy` is a
+    // scenario-level param that `buildDefaultConfig` consumes to stamp per-account
+    // priorities directly, so passing it there stamps the DEFAULT order and never runs the
+    // cascade at all — a vacuous pass in the other direction (the two-param-stores trap).
+    const { sim } = loadScenarioSim({
+      mutateCfg: (c) => { c.parameters = { ...(c.parameters ?? {}), ...params }; },
+      simStart: new Date(Date.UTC(2026, 0, 1)), simEnd: new Date(Date.UTC(2027, 0, 1)),
+      telemetry: 'off',
+    });
+    // Guard the guard: if the cascade did not run WEIGHTED, the comparison below is
+    // meaningless, and the failure mode is that it silently passes.
+    assert.equal(sim.state.drawdownStrategy ?? DRAWDOWN_WEIGHT_MODE, DRAWDOWN_WEIGHT_MODE);
+
+    // What the compile produced, per account.
+    const compiled = {};
+    for (const [k, v] of Object.entries(sim.state)) {
+      if (v && typeof v === 'object' && !Array.isArray(v) && Number.isFinite(v.drawdownPriority)) {
+        compiled[k] = v.drawdownPriority;
+      }
+    }
+    assert.ok(Object.keys(compiled).length > 0, `${mode}: the cascade ranked no account`);
+
+    // What the online commit / recorded-run replay would produce from the same params.
+    // Ranks are cleared first so the patch has to derive every one rather than agreeing by
+    // finding them already right.
+    const blanked = Object.fromEntries(Object.entries(sim.state).map(([k, v]) =>
+      (k in compiled) ? [k, { ...v, drawdownPriority: -1 }] : [k, v]));
+    const patch = drawdownPriorityPatch({ state: blanked, candidate: params, baseParams: params });
+
+    for (const [k, pr] of Object.entries(compiled)) {
+      assert.equal(patch?.[k]?.drawdownPriority, pr,
+        `${mode}: account '${k}' — compile says ${pr}, the commit/replay path says ${patch?.[k]?.drawdownPriority}`);
+    }
+  }
+});
+
+test('MRL-9: `resolveOwnerBanding` keeps POOLED’s fall-through, which a lookup would lose', () => {
+  // POOLED names no `ownerOrder`: it only zeroes the stride, so the order falls through to
+  // the default and is inert (rank × 0). Reproducing that by hand is exactly the detail two
+  // tables drift on.
+  assert.deepEqual(resolveOwnerBanding('POOLED'),
+    { ownerOrder: ['primary', 'spouse'], ownerStride: 0 });
+  assert.deepEqual(resolveOwnerBanding('SPOUSE_FIRST'),
+    { ownerOrder: ['spouse', 'primary'], ownerStride: 100 });
+  // An unknown or absent mode is the bare fallback, not a throw and not a zero stride.
+  assert.deepEqual(resolveOwnerBanding(null), resolveOwnerBanding('NOT_A_MODE'));
+  assert.equal(resolveOwnerBanding(undefined).ownerStride, 100);
 });

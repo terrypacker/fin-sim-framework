@@ -705,7 +705,9 @@ test('MpcCockpitPlugin: the block is overridable, and the override is labelled w
 
   const field = plugin._q('harvest-override-field');
   assert.equal(field.style.display, '', 'override offered only when blocked');
-  assert.match(plugin._q('harvest-override-label').textContent, /Copy anyway — this plan runs out in Apr 2051/);
+  // "Export", not "Copy": design 81 D10 demoted the harvest from how a run becomes a plan
+  // to an export OF one, and the labels say so — `Save run to plan` is the lossless exit.
+  assert.match(plugin._q('harvest-override-label').textContent, /Export anyway — this plan runs out in Apr 2051/);
 
   // Applying while still blocked writes nothing.
   plugin._applyHarvest();
@@ -719,6 +721,26 @@ test('MpcCockpitPlugin: the block is overridable, and the override is labelled w
   assert.equal(plugin._q('harvest-apply').disabled, false);
   plugin._applyHarvest();
   assert.equal(scenario.harvestedFrom.runId, 'run:test', 'the override applies the plan');
+});
+
+test('MpcCockpitPlugin: D10 — the harvest presents itself as a lossy EXPORT, and names the lossless exit', async () => {
+  // Design 81 D10. The harvest is kept, not deleted: a three-band summary a human can argue
+  // with is worth having. What must not happen is a reader mistaking it for the plan, which
+  // is exactly what design 80 measured going wrong — so the panel says which exit is which.
+  const { plugin, graph } = mountGatedPlugin(SOLVENT, {
+    params: [{ name: 'spendingExpenseBands', type: 'ExpenseBandList', value: [] }],
+  });
+  addSpendingEpoch(graph, { year: 2030, amount: 6000 });
+  await plugin._openHarvest();
+
+  const note = plugin._q('harvest-body').textContent;
+  assert.match(note, /lossy/i);
+  assert.match(note, /Save run to plan/, 'the panel must name the lossless alternative');
+
+  // Saving the run is the PRIMARY action; the export is secondary. Styling carries that, and
+  // an assertion on it is what stops a later tidy-up silently swapping them back.
+  assert.ok(plugin._q('save-run').classList.contains('btn-primary'));
+  assert.equal(plugin._q('harvest').classList.contains('btn-primary'), false);
 });
 
 test('MpcCockpitPlugin: a feasible harvest says so and hides the override', async () => {

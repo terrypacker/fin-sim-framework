@@ -28,6 +28,7 @@ import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES, objectiveIsWindowable,
 import { valuesForConfig }     from './opt-values.js';
 import { DateUtils }           from '../../simulation-framework/date-utils.js';
 import { rolloutProfiler }     from './rollout-profiler.js';
+import { DRAWDOWN_WEIGHT_MODE } from '../../scenarios/params/lever-weights.js';
 
 /**
  * Design 58 §11.2 — compile-time drawdown-control state fields a committed online
@@ -415,8 +416,19 @@ export class OptimizationProblem {
       // injected snapshot's accounts, which carry the OLD order. Only under WEIGHTED:
       // every other strategy fixes the order at authoring/compile time and the
       // candidate never changes it, so the injected priorities are already right.
+      //
+      // ─── design 81 phase 7a: this FORWARDS, it does not re-derive ───────────────
+      //
+      // §14's 7a expected this block to route through `drawdownPriorityPatch` as the third
+      // copy of the cascade. It is not one. It reads what the COMPILE has already produced
+      // in `sim.state` and carries it across snapshot injection — so it is already using the
+      // one authority, for every strategy, without knowing anything about weights or banding.
+      // Re-deriving here would replace a capture of the truth with a second computation of
+      // it, which is a step backwards; the surviving drift was the owner-banding TABLE, and
+      // that is fixed at the source (`resolveOwnerBanding`). What this block did share with
+      // the copies is the `'WEIGHTED'` string, now the sentinel both sides import.
       let forwardPriorities = null;
-      if (params.drawdownStrategy === 'WEIGHTED') {
+      if (params.drawdownStrategy === DRAWDOWN_WEIGHT_MODE) {
         forwardPriorities = {};
         for (const [k, v] of Object.entries(sim.state)) {
           if (v && typeof v === 'object' && !Array.isArray(v) && 'drawdownPriority' in v) {

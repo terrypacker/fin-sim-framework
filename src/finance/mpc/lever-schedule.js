@@ -13,6 +13,7 @@ import {
   DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP, DRAWDOWN_WEIGHT_MODE, drawdownWeightKey,
   synthesizeWeightedPriorities,
   ALLOC_WEIGHT_CLASSES, ALLOCATION_OPTIMIZED_MODE, allocWeightKey, synthesizeTargetAllocation,
+  resolveOwnerBanding,
 } from '../../scenarios/params/lever-weights.js';
 import {
   DRAWDOWN_SLEEVE_CLASSES, SLEEVE_WEIGHT_MODE, SLEEVE_WEIGHT_PREFIX, SLEEVE_WEIGHT_SEP,
@@ -293,9 +294,10 @@ export function drawdownPriorityPatch({ state, candidate, baseParams }) {
   const roleRank = synthesizeWeightedPriorities(
     DRAWDOWN_WEIGHT_NODE, candidate ?? {}, presentRolesFromState(state));
 
-  const mode        = baseParams?.drawdownOwnerOrdering;
-  const ownerOrder  = mode === 'SPOUSE_FIRST' ? ['spouse', 'primary'] : ['primary', 'spouse'];
-  const ownerStride = mode === 'POOLED' ? 0 : 100;
+  // Design 81 phase 7a (D7) — the banding table, not a hand-written copy of it. These three
+  // lines used to spell out `['spouse','primary']` / stride 100 / stride 0 inline, agreeing
+  // with the compile cascade only because two tables happened to say the same thing.
+  const { ownerOrder, ownerStride } = resolveOwnerBanding(baseParams?.drawdownOwnerOrdering);
 
   let patch = null;
   for (const [k, acct] of Object.entries(state ?? {})) {

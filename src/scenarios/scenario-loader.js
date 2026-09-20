@@ -83,7 +83,7 @@ const BUILT_IN_TOOLSETS = [
  * unchanged. The cascade below still calls it; design 81's `DRAWDOWN_WEIGHTS.applyAt` now
  * calls the SAME function rather than a third copy (D7), and it cannot import this module.
  */
-import { synthesizeWeightedPriorities } from './params/lever-weights.js';
+import { synthesizeWeightedPriorities, resolveOwnerBanding } from './params/lever-weights.js';
 export { synthesizeWeightedPriorities } from './params/lever-weights.js';
 
 /**
@@ -866,14 +866,11 @@ export class ScenarioLoader {
         // Per-owner banding (design 35): the selected drawdownOwnerOrdering mode
         // overrides the node's default ownerOrder/ownerStride. POOLED uses stride 0
         // so same-role accounts across owners share a priority tier.
-        let ownerOrder  = node.ownerOrder ?? [];
-        let ownerStride = node.ownerStride ?? 0;
+        // Design 81 phase 7a (D7): ONE resolver, shared with the online commit and the
+        // recorded-run replay. The mode table used to be written out on the node here and
+        // hard-coded again in `cockpit-controller.js`; they agreed by coincidence.
         const mode = node.ownerModeKey ? cfg.parameters?.[node.ownerModeKey] : null;
-        const modeCfg = (mode != null && node.ownerModes) ? node.ownerModes[mode] : null;
-        if (modeCfg) {
-          if (modeCfg.ownerOrder  != null) ownerOrder  = modeCfg.ownerOrder;
-          if (modeCfg.ownerStride != null) ownerStride = modeCfg.ownerStride;
-        }
+        const { ownerOrder, ownerStride } = resolveOwnerBanding(mode, node);
         const eligible = new Set(
           Object.values(strategies).flatMap(m => (m ? Object.keys(m) : [])));
         for (const rec of (cfg.accounts ?? [])) {

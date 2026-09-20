@@ -62,6 +62,7 @@ import {
   ALLOC_WEIGHT_CLASSES, ALLOC_WEIGHT_PREFIX, ALLOC_WEIGHT_SEP, allocWeightKey,
   ALLOC_WEIGHT_CLASS_LABELS, ALLOCATION_PRESETS, DEFAULT_ALLOC_WEIGHTS,
   synthesizeTargetAllocation, allocWeightsFromMix, allocWeightsFromPreset, presentAllocations,
+  DRAWDOWN_OWNER_MODES, DRAWDOWN_OWNER_DEFAULT, resolveOwnerBanding,
 } from './params/lever-weights.js';
 
 export {
@@ -72,6 +73,7 @@ export {
   ALLOC_WEIGHT_CLASSES, ALLOC_WEIGHT_PREFIX, ALLOC_WEIGHT_SEP, allocWeightKey,
   ALLOC_WEIGHT_CLASS_LABELS, ALLOCATION_PRESETS, DEFAULT_ALLOC_WEIGHTS,
   synthesizeTargetAllocation, allocWeightsFromMix, allocWeightsFromPreset, presentAllocations,
+  DRAWDOWN_OWNER_MODES, DRAWDOWN_OWNER_DEFAULT, resolveOwnerBanding,
 } from './params/lever-weights.js';
 
 
@@ -473,13 +475,13 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
             weightRoles: DRAWDOWN_WEIGHT_ROLES,
             cashRoles: DRAWDOWN_CASH_ROLES,
             weightDefaults: DEFAULT_DRAWDOWN_WEIGHTS,
-            ownerOrder: ['primary', 'spouse'], ownerStride: 100,
+            // Design 81 phase 7a (D7): the banding table is `DRAWDOWN_OWNER_MODES`, shared
+            // with the online commit and the recorded-run replay. It used to be written out
+            // here AND hard-coded in `cockpit-controller.js` — two tables that agreed by
+            // coincidence, on a field nothing prints.
+            ...DRAWDOWN_OWNER_DEFAULT,
             ownerModeKey: 'drawdownOwnerOrdering',
-            ownerModes: {
-              PRIMARY_FIRST: { ownerOrder: ['primary', 'spouse'], ownerStride: 100 },
-              SPOUSE_FIRST:  { ownerOrder: ['spouse', 'primary'], ownerStride: 100 },
-              POOLED:        { ownerStride: 0 },
-            } },
+            ownerModes: DRAWDOWN_OWNER_MODES },
   },
   {
     // Per-owner drawdown banding (design 35). Read by the drawdownStrategy node's

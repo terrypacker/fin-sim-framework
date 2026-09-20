@@ -32,8 +32,13 @@
  * Deliberately NOT folded into `applyHarvestPlan`, which is a pure, synchronous
  * param writer and stays one (design/80 §4.1: "the preview panel calls it before
  * enabling Copy to scenario; applyHarvestPlan stays a dumb writer"). That split
- * is also what lets design/81 reuse this as its Phase-5 promotion gate: the check
- * takes a PLAN, and a plan with one entry is a valid input.
+ * is also what lets design/81 reuse this as its promotion gate — and it did, in phase 4:
+ * `checkRunFeasibility` folds a bag entry as three plan entries and calls straight in.
+ *
+ * One thing that reuse taught, recorded here because the lesson is this file's: the
+ * try/catch below turns EVERY exception into `feasible: null` ("could not verify"), and a
+ * caller that also wants to REFUSE something must do it before calling, not inside. Design
+ * 81's playability assert threw in here once and came back as a soft warning.
  */
 
 import { OptimizationProblem } from '../optimization/optimization-problem.js';

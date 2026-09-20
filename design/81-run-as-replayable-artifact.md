@@ -442,9 +442,9 @@ Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`,
 - **Tests**: `mpc-run-lab.test.mjs` (MRL6-1…6) over the shared half; the six tools are thin by construction.
 - **Exercised end to end** on the real 44-epoch, nine-lever log design 80 investigated — which is where the two findings in §16.9 came from.
 
-**Phase 7 — Consolidation**
-- [ ] **7a** — route `_seededSim`'s per-account re-stamp (`optimization-problem.js`) through `drawdownPriorityPatch` (D7), deleting the last copy. `DRAWDOWN_WEIGHTS.actuate` was already routed through it in phase 2a (§16.2), so this is one call site, not a sweep.
-- [ ] **7b** — demote the collapsing harvest to an explicit "export a legible plan" action (D10).
+**Phase 7 — Consolidation** — **BUILT 2026-09-20** (§16.10)
+- [x] **7a** — D7's last drift, which was **not** where the plan expected it (§16.10). `_seededSim` turns out not to be a third implementation at all: it FORWARDS what the compile produced across snapshot injection, which is already the one authority and is stronger than re-deriving — routing it through `drawdownPriorityPatch` would have replaced a capture of the truth with a second computation of it. What *was* duplicated is the owner-banding **table**: the cascade read it off the `accountPriority` node and the online/replay path re-derived it from hard-coded literals. Both now call `resolveOwnerBanding` over one `DRAWDOWN_OWNER_MODES`, and `_seededSim` shares the `WEIGHTED` sentinel. **MRL-9** compares the two PATHS on a real compile, for every mode in the table, and was mutation-tested to prove it is not vacuous.
+- [x] **7b** — D10. The harvest is kept and demoted: `Save run to plan…` is the primary action, `Export as settings…` the secondary, and the review panel states in its own words that what it writes is a lossy summary and names the lossless exit. Nothing was deleted — "explain this run in settings someone can argue with" is a real question the lossless representation answers badly.
 
 **Phase 8 — Lean into the decision graph** (§4.2 — mostly wiring, once Phase 1–5 land)
 - [ ] **8a** — offer `mpcActiveRun` in the `DecisionPoint` param picker, with options auto-populated from the bag and labelled from `source`.
@@ -463,7 +463,7 @@ Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`,
 
 ---
 
-## 16. Notes from the build (§16.1–16.4 phase 1, 2026-09-19; §16.5–16.9 phases 2–6, 2026-09-20)
+## 16. Notes from the build (§16.1–16.4 phase 1, 2026-09-19; §16.5–16.10 phases 2–7, 2026-09-20)
 
 Measured while building phase 1, against the tree rather than against the 2026-07 draft's line
 numbers. Each one changes what a later phase has to do, so it is here rather than in a commit
@@ -720,3 +720,37 @@ because A′ replays the log by INDEX and will address different rows of a diffe
 `save-run.mjs` stamps the scenario it saves *into*, not the one the log was *recorded against* —
 so the warning catches a moved file, not a re-homed log. Closing that needs the recorder to
 stamp at record time, which is a cockpit change, not a CLI one.
+
+### 16.10 D7's last drift was the banding TABLE, not a third cascade
+
+§14's 7a says to route `_seededSim`'s re-stamp through `drawdownPriorityPatch`, on the reading
+that it is the last copy of the cascade. Reading it for phase 7 shows that premise is wrong, in
+a way worth recording because the instinct is to "finish the job" and make it worse:
+
+> `_seededSim` does not synthesize anything. It reads the priorities the COMPILE has already
+> written into `sim.state` and carries them across snapshot injection. That is a capture of the
+> one authority, it works for every strategy, and it knows nothing about weights or banding.
+> Routing it through `drawdownPriorityPatch` would replace a capture of the truth with a second
+> computation of it — a step backwards dressed as consolidation.
+
+The drift was one level down, and it had survived every phase so far. The cascade resolved
+owner banding from `node.ownerModes`, a table on the `accountPriority` node. `actuate` — and
+therefore `drawdownPriorityPatch`, which inherited it verbatim in phase 2a — re-derived the
+same thing from literals:
+
+```js
+const ownerOrder  = mode === 'SPOUSE_FIRST' ? ['spouse', 'primary'] : ['primary', 'spouse'];
+const ownerStride = mode === 'POOLED' ? 0 : 100;
+```
+
+Two tables, agreeing because they happened to say the same thing, on a field nothing prints.
+Add a fourth mode and the plan the controller commits stops matching the plan the compile
+produces — silently, and only for households with a spouse. `DRAWDOWN_OWNER_MODES` +
+`resolveOwnerBanding` in the leaf is now the one authority, and MRL-9 pins it.
+
+**Two things about that test worth keeping.** It compares the two *paths* on a real compile,
+not the two tables, so a new mode is covered without editing it. And it nearly shipped vacuous:
+the first version passed `drawdownStrategy` through the harness's `params`, where
+`buildDefaultConfig` consumes it to stamp per-account priorities directly and the cascade never
+runs — the two-param-stores trap, which would have compared the DEFAULT order against itself.
+It now goes through `cfg.parameters` and asserts the cascade ran before comparing anything.
