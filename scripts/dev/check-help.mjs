@@ -63,6 +63,10 @@ if (opts.template) {
     'id: <kebab-id>',
     `kind: ${opts.template}`,
     'title: <Title Case>',
+    ...(opts.template === 'node'
+      // A node topic names the kind whose FORM it explains — the stamp that fires when a
+      // field is added to that form is keyed on this.
+      ? ['# The NODE_EDITORS kind this explains.', 'node: <kind>'] : []),
     '# What this topic documents. Every entry here must exist, and gets a stamp.',
     'panels: []',
     'params: []',
@@ -79,6 +83,14 @@ if (opts.template) {
     `<${BUDGETS[opts.template]} words max. Do NOT restate a param description: tier 1 already`,
     'emits it exactly, and a 12-word shared run fails the gate. Say what tier 1 cannot —',
     'why it exists, when you would reach for it, what it deliberately does not do.>',
+    ...(opts.template === 'node' ? ['',
+      '## Fields',
+      '',
+      '<One entry per control on the form, in `npm run help -- --kind nodes --find <kind>`',
+      'order. A field a record param already describes is NOT listed: tier 1 emits it.>',
+      '',
+      '- `<field>` — <what it means, and what an empty one means. 80 words max.>',
+    ] : []),
   ].join('\n'));
   process.exit(0);
 }

@@ -35,10 +35,10 @@ import { join }                     from 'node:path';
 import { parseFlags }     from '../lib/cli.mjs';
 import { buildHelpIndex, ROOT } from '../lib/help-index.mjs';
 
-const KINDS = ['all', 'params', 'panels', 'actions', 'tools', 'state', 'topics', 'design'];
+const KINDS = ['all', 'params', 'panels', 'nodes', 'actions', 'tools', 'state', 'topics', 'design'];
 
 const opts = parseFlags(process.argv.slice(2), {
-  usage: 'npm run help -- --find <text> [--kind params|panels|actions|tools|state|topics|design] [--limit n]',
+  usage: 'npm run help -- --find <text> [--kind params|panels|nodes|actions|tools|state|topics|design] [--limit n]',
   find:  { type: 'string',                     help: 'text to search for (case-insensitive)' },
   kind:  { type: 'string', default: 'all', choices: KINDS, help: 'restrict to one surface' },
   limit: { type: 'number', default: 25,        help: 'max matches per surface' },
@@ -94,6 +94,22 @@ total += section('panels', 'PANELS',
     console.log(`  ${p.id}  "${p.title}"  pane: ${p.layoutPane ?? '—'}\n      ${p.source ?? ''}`);
     const cites = citedBy(t => t.panels.includes(p.id));
     if (cites) console.log(`      explained in: ${cites}`);
+  });
+
+// A node-field hit prints the WHOLE kind it belongs to, not the one line that matched.
+// "what does Cost Basis mean on a property" is almost never asked alone — the next
+// question is what the neighbouring boxes do, and the form is the unit of that answer.
+total += section('nodes', 'NODE TYPES',
+  (index.nodes ?? []).filter(n => hit(n.kind, n.label)
+    || n.fields.some(f => hit(f.field, f.label, f.description))),
+  (n) => {
+    console.log(`  ${n.kind}  "${n.label}"  ${n.fields.length} fields`
+      + `${n.topic ? `   explained in: help/nodes/${n.kind}.md` : ''}`);
+    for (const f of n.fields) {
+      const match = hit(f.field, f.label, f.description) ? '*' : ' ';
+      console.log(`    ${match} ${f.field}  [${f.inputType}]  ${f.label ?? ''}`);
+      if (!opts.brief && f.description) console.log(`        ${f.description}`);
+    }
   });
 
 total += section('tools', 'TOOLS',

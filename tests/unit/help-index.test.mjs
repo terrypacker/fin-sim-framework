@@ -29,8 +29,10 @@ import { join }                      from 'node:path';
 import {
   collectParams, collectPanels, collectActions, collectTools, collectState,
   purposeFromDocblock, flagsFromSource, specFromSource, isEntryPoint, buildHelpIndex,
-  collectTopics, collectDesign, ROOT,
+  collectTopics, collectDesign, collectNodes, templateFields, ROOT,
 } from '../../scripts/lib/help-index.mjs';
+import { NODE_EDITORS }
+  from '../../src/visualization/configuration/node-editor-registry.js';
 import { readTopics, BUDGETS }     from '../../scripts/lib/help-topics.mjs';
 import { renderReferenceMarkdown } from '../../scripts/lib/help-render.mjs';
 import { IntlRetirementScenario }  from '../../src/scenarios/intl-retirement-scenario.js';
@@ -345,4 +347,72 @@ test('HELP-18: the README points at the generated index instead of copying it', 
   assert.ok(!/^-\s+`\d+-[a-z-]+\.md`/m.test(readme),
     'the design-doc list is back — it covered 19 of 116 last time and would again');
   assert.ok(readme.includes('help/REFERENCE.md'), 'and it must say where the real list is');
+});
+
+/* ────────────────────────────── nodes (111) ──────────────────────────────── */
+
+test('HELP-19: every node kind the Nodes panel offers is in the index, with its form', async () => {
+  const nodes = await collectNodes();
+  assert.deepEqual(nodes.map(n => n.kind), Object.keys(NODE_EDITORS),
+    'the index must carry exactly the kinds the panel renders — it reads the same registry');
+
+  for (const n of nodes) {
+    assert.ok(n.fields.length > 0, `${n.kind}: a kind with no fields means the form was not found`);
+    // A field named twice by two sub-editors is ONE field of the form: `fieldName` appears
+    // in four of the Action sub-editors, and four entries would invite four descriptions
+    // of the same box.
+    const names = n.fields.map(f => f.field);
+    assert.deepEqual(names, [...new Set(names)], `${n.kind}: duplicate field`);
+    for (const f of n.fields) {
+      assert.ok(f.label, `${n.kind}.${f.field}: no label — the template's <label> was not found`);
+      assert.ok(f.inputType, `${n.kind}.${f.field}: no control type`);
+    }
+  }
+});
+
+test('HELP-20: the field inventory is read from the FORM, not from prose', () => {
+  // The whole claim of tier 1 (design 111 §3): add a control to the markup and it appears
+  // here, whether or not anyone wrote about it.
+  const html = `<template id="tpl-x-editor">
+      <div class="node-field"><label>Value <small>(hint)</small></label>
+        <input type="number" data-id="value"/></div>
+      <div class="node-field"><label>Mode</label><select data-field="mode"></select></div>
+      <div class="node-field"><label>Notes</label><textarea data-id="notes"></textarea></div>
+      <div data-id="config"></div>
+      <button data-id="saveBtn">Save</button>
+      <input type="button" data-id="ghostBtn"/>
+    </template>`;
+
+  assert.deepEqual(templateFields(html, 'tpl-x-editor'), [
+    { field: 'value', label: 'Value (hint)', inputType: 'number', template: 'tpl-x-editor' },
+    { field: 'mode',  label: 'Mode',         inputType: 'select', template: 'tpl-x-editor' },
+    { field: 'notes', label: 'Notes',        inputType: 'textarea', template: 'tpl-x-editor' },
+  ], 'buttons and sub-editor mounts are not fields; data-id and data-field are both field names');
+
+  assert.equal(templateFields(html, 'tpl-missing-editor'), null,
+    'a template the registry names but the markup lacks must be reported, not skipped');
+});
+
+test('HELP-21: a field its record param describes takes that description, once', async () => {
+  const nodes = await collectNodes();
+  const prop  = nodes.find(n => n.kind === 'real-property');
+  const value = prop.fields.find(f => f.field === 'value');
+
+  assert.equal(value.describedBy, 'param',
+    'value is a generated parameter — tier 1 emits its description and the topic may not');
+  assert.ok(value.description.length > 0);
+
+  // And the topic does not also carry it. That is the gate's rule; this is the index side
+  // of it, so a merge that preferred the topic would fail here rather than silently.
+  const topic = readTopics().find(t => t.id === 'real-property');
+  assert.equal(topic.fields.value, undefined);
+});
+
+test('HELP-22: every field on every form is described, by exactly one tier', async () => {
+  const nodes = await collectNodes();
+  const bad   = nodes.flatMap(n => n.fields
+    .filter(f => !f.describedBy)
+    .map(f => `${n.kind}.${f.field}`));
+  assert.deepEqual(bad, [],
+    'an undocumented control is invisible — write its entry in help/nodes/<kind>.md');
 });

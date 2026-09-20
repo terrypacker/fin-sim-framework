@@ -4,7 +4,7 @@ A deterministic, event-driven simulation framework for modeling complex financia
 
 > **Audience**: this README is the orientation guide for anyone (human or AI) joining the codebase. It documents the **current architecture** and how to extend it. Deeper, per-feature designs live in `design/*.md`. Known inconsistencies and rework candidates are tracked in [`design/inconsistencies.md`](design/inconsistencies.md).
 >
-> **For the exact surface — every parameter, panel, journal action, CLI tool, state field type and design doc — read [`help/REFERENCE.md`](help/REFERENCE.md).** It is generated from the code by `npm run help:build`, so unlike a README section it cannot go stale; `npm run help -- --find <text>` searches it. Prose about *why* a mechanic exists lives in [`help/`](help/) and is rendered by the app's own Help panel. See [`design/108-help-system.md`](design/108-help-system.md).
+> **For the exact surface — every parameter, panel, node type and edit-form field, journal action, CLI tool, state field type and design doc — read [`help/REFERENCE.md`](help/REFERENCE.md).** It is generated from the code by `npm run help:build`, so unlike a README section it cannot go stale; `npm run help -- --find <text>` searches it. Prose about *why* a mechanic exists lives in [`help/`](help/) and is rendered by the app's own Help panel. See [`design/108-help-system.md`](design/108-help-system.md).
 
 ---
 
@@ -527,6 +527,24 @@ Notable suites:
 3. Add it to `FINANCE_PLUGINS` in `src/visualization/workbench/plugins/finance/finance-plugin-package.js`, and to whichever workspace templates should include it by default.
 4. The plugin gets the `WorkbenchRuntime` in its constructor — subscribe to runtime events (`SCENARIO_READY`, `BREAKPOINT_HIT`, …) and read services via `ServiceRegistry.getInstance()`.
 5. **Write its help topic**, `help/panels/<id>.md` — 250 words on what it shows, when to open it, and what it needs loaded. `npm test` fails until it exists: that is the point, since every one of the 14 panels missing from the old table got there by a commit that could have documented it and did not. Start from `npm run help:gate -- --template panel`, then `npm run help:build && npm run help:restamp -- <id>`.
+
+### Add a field to a node edit form
+
+1. Add the control to the editor's `<template>` in `index.html` with a `data-id`, or to the
+   editor's exported field spec where it builds its rows in JS (`BEQUEST_FORM_FIELDS`,
+   `SECURITY_FORM_FIELDS`). Give it a `<label>` — the generator reads it.
+2. **Do not write a `title=`.** Field help lives in `help/nodes/<kind>.md`, reaches the
+   tooltip and the `?` through the generated index, and is checked against the form.
+3. Run `npm run help:build`. The gate now fails naming your field: add a `` - `field` — … ``
+   entry under `## Fields` (80 words), or — if the field is a generated record parameter —
+   let its param description stand and write nothing, because a topic may not restate tier 1.
+4. `npm run help:restamp -- <kind>`: the `node:<kind>` stamp hashes the form, so it moved
+   when you added the control. See [`design/111-node-type-help.md`](design/111-node-type-help.md).
+
+A whole new node KIND also needs an entry in `NODE_EDITORS`
+(`src/visualization/configuration/node-editor-registry.js`) — which is what the Nodes panel
+renders its kind dropdown from — and a `help/nodes/<kind>.md` started from
+`npm run help:gate -- --template node`.
 
 ### Add a scenario parameter
 

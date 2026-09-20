@@ -43,8 +43,19 @@ import { ROOT } from './help-index.mjs';
 
 export const TOPICS_DIR = join(ROOT, 'help');
 
-/** Word budgets by kind (design 108 §5). A topic over its budget is restating tier 1. */
-export const BUDGETS = Object.freeze({ panel: 250, concept: 400, workflow: 600 });
+/**
+ * Word budgets by kind (design 108 §5). A topic over its budget is restating tier 1.
+ *
+ * `node` budgets the OVERVIEW only — the prose above `## Fields`. A node topic also
+ * carries one entry per field on the form, and real-property's form has 45 of them, so a
+ * whole-file budget would be a budget on how many fields an editor may have. Each entry
+ * gets `FIELD_BUDGET` instead, which is the number that actually keeps a field
+ * description readable (design 111 §5).
+ */
+export const BUDGETS = Object.freeze({ panel: 250, concept: 400, workflow: 600, node: 250 });
+
+/** Words allowed in one `## Fields` entry of a `kind: node` topic. */
+export const FIELD_BUDGET = 80;
 
 /** The longest run of words a topic may share with a description it cites. */
 export const PASTE_RUN = 12;
@@ -136,11 +147,16 @@ export function readTopics(dir = TOPICS_DIR) {
     const text = readFileSync(path, 'utf8');
     try {
       const { data, body } = parseFrontmatter(text, rel);
+      const section = parseFieldSection(body);
       return {
         path: rel,
         id:      data.id ?? null,
         kind:    data.kind ?? null,
         title:   data.title ?? null,
+        node:    data.node ?? null,
+        overview: section.overview,
+        fields:   section.fields,
+        fieldOrder: section.order,
         panels:  asList(data.panels),
         params:  asList(data.params),
         actions: asList(data.actions),
@@ -149,17 +165,58 @@ export function readTopics(dir = TOPICS_DIR) {
         sources: asList(data.sources),
         stamps:  data.stamps ?? {},
         body,
-        words:   countWords(body),
+        // A node topic's budget is on its OVERVIEW; its field entries are budgeted one by
+        // one. For every other kind the overview IS the body.
+        words:   countWords(section.overview),
         error:   null,
       };
     } catch (e) {
       return { path: rel, id: null, stamps: {}, body: '', words: 0, error: e.message,
+               node: null, overview: '', fields: {}, fieldOrder: [],
                panels: [], params: [], actions: [], tools: [], design: [], sources: [] };
     }
   });
 }
 
 const asList = (v) => (Array.isArray(v) ? v : v ? [v] : []);
+
+/**
+ * Split a `kind: node` topic into its overview and its per-field entries (design 111 §4).
+ *
+ * The shape is one markdown list item per field under a `## Fields` heading:
+ *
+ *   - `costBasis` — What you paid, plus capitalised improvements…
+ *
+ * Parsed rather than free-form so the gate can check each field against the FORM: an entry
+ * for a field the editor does not render is a dead reference, and a rendered field with no
+ * entry is the undocumented box this design exists to abolish. A continuation line (the
+ * prose wrapped, or an indented sub-list) belongs to the entry above it.
+ *
+ * @returns {{ overview: string, fields: Record<string,string>, order: string[] }}
+ */
+export function parseFieldSection(body) {
+  const lines = body.split('\n');
+  const at = lines.findIndex(l => /^##\s+Fields\s*$/.test(l.trim()));
+  if (at < 0) return { overview: body, fields: {}, order: [] };
+
+  const fields = {}, order = [];
+  let current = null;
+  for (const line of lines.slice(at + 1)) {
+    const m = line.match(/^-\s+`([^`]+)`\s+[—-]\s+(.*)$/);
+    if (m) {
+      current = m[1];
+      order.push(current);
+      fields[current] = m[2].trim();
+      continue;
+    }
+    if (current && line.trim() && !/^#/.test(line)) {
+      fields[current] = `${fields[current]} ${line.trim()}`.trim();
+      continue;
+    }
+    if (/^#/.test(line)) current = null;   // a later heading ends the list
+  }
+  return { overview: lines.slice(0, at).join('\n'), fields, order };
+}
 
 /** Prose words. Fenced code blocks do not count against a budget meant for explanation. */
 export function countWords(body) {
@@ -189,6 +246,15 @@ export function stampFor(ref, index, root = ROOT) {
     const p = index.panels.find(x => x.id === ref.slice(6));
     return p ? hash(`${norm(p.title)}|${norm(p.category)}`) : null;
   }
+  // A node kind, hashed over its FORM: the label plus every field the editor renders and
+  // the control it renders it with. So a field added to a template, renamed, or swapped
+  // from a checkbox to a select fails the gate on that kind — which is the moment its
+  // topic is either wrong or incomplete, and the only moment anyone is looking.
+  if (ref.startsWith('node:')) {
+    const n = index.nodes?.find(x => x.kind === ref.slice(5));
+    return n ? hash(`${norm(n.label)}|${n.fields
+      .map(f => `${f.field}:${f.inputType}`).sort().join(',')}`) : null;
+  }
   // A source file. Hashed whole: this is the stamp that catches drift a description edit
   // would miss, which is exactly why its budget is two files and the author picks them.
   try { return hash(readFileSync(resolve(root, ref), 'utf8')); } catch { return null; }
@@ -199,6 +265,7 @@ export function refsOf(topic) {
   return [
     ...topic.params.map(k => `param:${k}`),
     ...topic.panels.map(k => `panel:${k}`),
+    ...(topic.kind === 'node' && topic.node ? [`node:${topic.node}`] : []),
     ...topic.sources,
   ];
 }
@@ -233,6 +300,7 @@ export function checkTopics({ topics, index, root = ROOT }) {
     errors.push({ path: t.path, id: t.id, kind: t.kind ?? 'topic', msg, fix });
 
   const paramByKey = new Map(index.params.map(p => [p.key, p]));
+  const nodeByKind = new Map((index.nodes ?? []).map(n => [n.kind, n]));
   const panelById  = new Map(index.panels.map(p => [p.id, p]));
   const actionSet  = new Set(index.actions.map(a => a.type));
   const toolSet    = new Set(index.tools.map(t => t.path));
@@ -270,6 +338,45 @@ export function checkTopics({ topics, index, root = ROOT }) {
         'a topic claiming more than two files is claiming too much');
     }
     for (const s of t.sources) if (!exists(join(root, s))) at(t, `sources: "${s}" does not exist`, 'remove or correct it');
+
+    // ── `kind: node`: the form is the spec ────────────────────────────────────
+    if (t.kind === 'node') {
+      const node = t.node ? nodeByKind.get(t.node) : null;
+      if (!t.node) {
+        at(t, 'no `node:` — a node topic must name the kind it explains', 'add one');
+      } else if (!node) {
+        at(t, `node: "${t.node}" is not a kind in NODE_EDITORS`, 'remove or correct it');
+      } else {
+        const onForm = new Map(node.fields.map(f => [f.field, f]));
+        for (const field of t.fieldOrder) {
+          const f = onForm.get(field);
+          if (!f) {
+            at(t, `\`${field}\` is not a field of the ${t.node} form`,
+              'remove it — the form is the spec, not this list');
+            continue;
+          }
+          // Tier 1 already emits the record-param description, verbatim, to the tooltip
+          // and to REFERENCE.md. A second one here is the copy that drifts — 108 §3.
+          if (f.describedBy === 'param') {
+            at(t, `\`${field}\` is already described by its record param template`,
+              'delete the entry — tier 1 emits it, and a topic may not restate tier 1');
+          }
+          // Plain prose only. A field entry reaches the user as a native `title=` tooltip
+          // and as escaped text in the Help panel — neither renders markdown, so emphasis
+          // arrives as literal asterisks. Say it in words instead.
+          if (/\*\*|__|`[^`]+`/.test(t.fields[field] ?? '')) {
+            at(t, `\`${field}\` uses markdown — a field entry is shown as a plain tooltip`,
+              'drop the **, __ and backticks; say it in words');
+          }
+
+          const words = countWords(t.fields[field] ?? '');
+          if (words > FIELD_BUDGET) {
+            at(t, `\`${field}\` is ${words} words over the ${FIELD_BUDGET}-word field budget`,
+              'cut it, or move the argument to a design doc and cite it');
+          }
+        }
+      }
+    }
 
     // The non-restatement rule. Crude on purpose: a shared run of words catches PASTE,
     // which is the only way restatement actually happens.
@@ -309,6 +416,31 @@ export function checkTopics({ topics, index, root = ROOT }) {
       errors.push({ path: `help/panels/${p.id}.md`, id: p.id, kind: 'panel',
         msg: `panel "${p.id}" (${p.title}) has no \`kind: panel\` topic`,
         fix: 'write one — 250 words: what it shows, when to open it, what it needs loaded' });
+    }
+  }
+
+  // Node coverage, structural for the same reason panel coverage is: an undocumented box
+  // on a form is invisible, and every one of the ~60 design 111 found got there because
+  // nothing failed when a field was added without a word about it.
+  const nodeTopicFor = new Map(topics.filter(t => t.kind === 'node' && t.node).map(t => [t.node, t]));
+  for (const n of index.nodes ?? []) {
+    if (!nodeTopicFor.has(n.kind)) {
+      errors.push({ path: `help/nodes/${n.kind}.md`, id: n.kind, kind: 'node',
+        msg: `node kind "${n.kind}" (${n.label}) has no \`kind: node\` topic`,
+        fix: 'write one — an overview plus one `## Fields` entry per control on the form' });
+      continue;
+    }
+    // Read from the TOPIC, not only from the index's own `describedBy`. The index is
+    // built from the topics, so the two agree in a normal run — but a check that trusted
+    // a possibly-stale index would report a field as undocumented the moment someone
+    // wrote its entry without rebuilding, which trains people to ignore the gate.
+    const written = nodeTopicFor.get(n.kind).fields ?? {};
+    const undescribed = n.fields.filter(f => f.describedBy !== 'param' && !written[f.field]);
+    if (undescribed.length) {
+      errors.push({ path: `help/nodes/${n.kind}.md`, id: n.kind, kind: 'node',
+        msg: `${n.kind}: ${undescribed.length} field(s) on the form with no description — `
+           + undescribed.map(f => f.field).join(', '),
+        fix: 'add a `## Fields` entry for each' });
     }
   }
 

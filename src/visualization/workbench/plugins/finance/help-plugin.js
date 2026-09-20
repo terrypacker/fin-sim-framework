@@ -10,6 +10,7 @@
 
 import { WorkbenchComponent } from '../../component.js';
 import { WB_EVENTS }          from '../../workbench-runtime.js';
+import { loadHelpIndex }      from '../../../help/help-index-source.js';
 
 /**
  * Help — the in-app half of the design-108 help system (§8).
@@ -23,7 +24,8 @@ import { WB_EVENTS }          from '../../workbench-runtime.js';
  *    a native browser tooltip, which cuts them off. The `?` beside a param label
  *    publishes `WB_EVENTS.HELP_OPEN` and the whole description lands here, laid out, next
  *    to the default, the range, the sweepability, the owning toolset, and every topic
- *    that cites it.
+ *    that cites it. Design 111 extended the same `?` to every control on a node EDIT FORM,
+ *    which had the identical problem and, for half its ~164 fields, no tooltip at all.
  *
  * ### It renders, it does not author
  *
@@ -47,8 +49,7 @@ export class HelpPlugin extends WorkbenchComponent {
     super();
     this._runtime = runtime;
     this._index   = index;
-    this._loading = null;          // the in-flight load promise, so two mounts share one
-    this._view    = null;          // { kind: 'topic'|'param'|'panel'|'group', key }
+    this._view    = null;          // { kind: 'topic'|'param'|'panel'|'group'|'node'|'nodeField', key }
     this._history = [];            // previous views, for the back button
   }
 
@@ -77,9 +78,11 @@ export class HelpPlugin extends WorkbenchComponent {
       this._go({ kind: 'panel', key: tab }, { replace: true });
     });
 
-    this._runtime.bus.subscribe(WB_EVENTS.HELP_OPEN, ({ param, group, topic }) => {
+    this._runtime.bus.subscribe(WB_EVENTS.HELP_OPEN, ({ param, group, topic, node, field }) => {
       if (param)      this._go({ kind: 'param', key: param });
       else if (group) this._go({ kind: 'group', key: group });
+      else if (node && field) this._go({ kind: 'nodeField', key: `${node}.${field}` });
+      else if (node)  this._go({ kind: 'node', key: node });
       else if (topic) this._go({ kind: 'topic', key: topic });
     });
   }
@@ -99,26 +102,13 @@ export class HelpPlugin extends WorkbenchComponent {
 
   // ── The index ───────────────────────────────────────────────────────────────
 
-  /** Load `help-index.json` once per session. Resolves even on failure — see `_paint`. */
+  /**
+   * The index, once per session — shared with the node-field decorator, which shows the
+   * SAME descriptions as tooltips and must not be able to disagree with this panel.
+   * Resolves to null rather than rejecting when there is none; see `_paint`.
+   */
   _ensureIndex() {
-    if (this._index)   return Promise.resolve(this._index);
-    if (this._loading) return this._loading;
-
-    // No `fetch` is a real environment, not an impossible one: jsdom has none, and the
-    // workbench boots under it in tests. Mounting a panel must never throw — the whole
-    // shell is built in one synchronous pass, so a throw here takes every other panel
-    // with it (which is exactly what `workbench-boot-with-closed-tabs` guards).
-    if (typeof fetch !== 'function') {
-      this._loading = Promise.resolve(null);
-      return this._loading;
-    }
-
-    const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/';
-    this._loading = fetch(`${base}help/help-index.json`)
-      .then(r => (r.ok ? r.json() : null))
-      .catch(() => null)
-      .then((idx) => { this._index = idx; return idx; });
-    return this._loading;
+    return loadHelpIndex(this._index).then((idx) => { this._index = idx; return idx; });
   }
 
   // ── Navigation ──────────────────────────────────────────────────────────────
@@ -146,14 +136,18 @@ export class HelpPlugin extends WorkbenchComponent {
     const a = e.target.closest('a');
     if (!a) return;
 
-    const param = a.dataset.helpParam;
-    const topic = a.dataset.helpTopic;
-    const group = a.dataset.helpGroup;
-    if (param || topic || group) {
+    const param     = a.dataset.helpParam;
+    const topic     = a.dataset.helpTopic;
+    const group     = a.dataset.helpGroup;
+    const node      = a.dataset.helpNode;
+    const nodeField = a.dataset.helpNodeField;
+    if (param || topic || group || node || nodeField) {
       e.preventDefault();
-      this._go(param ? { kind: 'param', key: param }
-             : group ? { kind: 'group', key: group }
-             :         { kind: 'topic', key: topic });
+      this._go(param     ? { kind: 'param', key: param }
+             : group     ? { kind: 'group', key: group }
+             : nodeField ? { kind: 'nodeField', key: nodeField }
+             : node      ? { kind: 'node', key: node }
+             :             { kind: 'topic', key: topic });
       return;
     }
 
@@ -172,6 +166,7 @@ export class HelpPlugin extends WorkbenchComponent {
   _topic(id)        { return this._index?.topics?.find(t => t.id === id) ?? null; }
   _panel(id)        { return this._index?.panels?.find(p => p.id === id) ?? null; }
   _param(key)       { return this._index?.params?.find(p => p.key === key) ?? null; }
+  _node(kind)       { return this._index?.nodes?.find(n => n.kind === kind) ?? null; }
   /** The `kind: panel` topic that claims a panel id — what the gate guarantees exists. */
   _topicForPanel(id) {
     return this._index?.topics?.find(t => t.kind === 'panel' && t.panels?.includes(id)) ?? null;
@@ -209,6 +204,8 @@ export class HelpPlugin extends WorkbenchComponent {
       : v.kind === 'panel' ? this._paintPanel(v.key)
       : v.kind === 'param' ? this._paintParam(v.key)
       : v.kind === 'group' ? this._paintGroup(v.key)
+      : v.kind === 'node'  ? this._paintNode(v.key)
+      : v.kind === 'nodeField' ? this._paintNodeField(v.key)
       : null;
 
     crumb.textContent = painted?.crumb ?? 'Help';
@@ -302,6 +299,60 @@ export class HelpPlugin extends WorkbenchComponent {
           : '<p class="help-meta">No topic cites these yet.</p>'}
         <ul class="help-param-list">${params.map(p =>
           `<li><a href="#" data-help-param="${esc(p.key)}">${esc(p.label ?? p.key)}</a></li>`).join('')}</ul>`,
+    };
+  }
+
+  /**
+   * A node KIND: its topic's overview, then every field on its form.
+   *
+   * The field list is built from tier 1 rather than from the topic, so a control the topic
+   * has not caught up with is still listed — with its description missing, which is what
+   * the gate is failing on and what the reader should see.
+   */
+  _paintNode(kind) {
+    const n = this._node(kind);
+    if (!n) return { crumb: 'Help', html: `<p class="help-empty">No node type <code>${esc(kind)}</code>.</p>` };
+    const t = n.topic ? this._topic(n.topic) : null;
+
+    return {
+      crumb: n.label,
+      html: `${t ? `<div class="help-topic">${t.html}</div>` : `<h3>${esc(n.label)}</h3>`}
+        <h4 class="help-node-fields">Fields (${n.fields.length})</h4>
+        <ul class="help-param-list">${n.fields.map(f =>
+          `<li><a href="#" data-help-node-field="${esc(kind)}.${esc(f.field)}">${esc(f.label ?? f.field)}</a>
+            <span class="help-meta"><code>${esc(f.field)}</code></span></li>`).join('')}</ul>
+        ${t ? this._citesFooter(t) : ''}`,
+    };
+  }
+
+  /** One field of one form — the fix for the truncated tooltip, on this half of the app. */
+  _paintNodeField(key) {
+    const kind  = key.slice(0, key.indexOf('.'));
+    const name  = key.slice(kind.length + 1);
+    const n     = this._node(kind);
+    const f     = n?.fields.find(x => x.field === name);
+    if (!f) return { crumb: 'Help', html: `<p class="help-empty">No field <code>${esc(key)}</code>.</p>` };
+
+    const facts = [
+      ['Field',   f.field],
+      ['Control', f.inputType],
+      ['Node',    n.label],
+      ['Documented in',
+        f.describedBy === 'param' ? 'its record parameter' : `help/nodes/${kind}.md`],
+    ].filter(Boolean);
+
+    return {
+      crumb: f.label ?? f.field,
+      html: `
+        <h3 class="help-param-title">${esc(f.label ?? f.field)}</h3>
+        <p class="help-param-key"><a href="#" data-help-node="${esc(kind)}">${esc(n.label)}</a></p>
+        <p class="help-param-desc">${esc(f.description || 'No description.')}</p>
+        <dl class="help-facts">${facts
+          .map(([k, val]) => `<dt>${esc(k)}</dt><dd>${esc(String(val))}</dd>`).join('')}</dl>
+        ${f.param ? `<p class="help-meta">This field is a scenario <b>parameter</b>: each record
+          gets its own, under the record's name in the Parameters panel, and an edit here
+          writes the parameter rather than the record. That is also where its range, its
+          default and its sweepability live.</p>` : ''}`,
     };
   }
 

@@ -134,13 +134,11 @@ export class PayrollSection {
 
     const label = document.createElement('label');
     label.textContent = meta.label;
-    label.title       = meta.hint;
     row.appendChild(label);
 
     const input = document.createElement('input');
     input.type       = 'number';
     input.dataset.id = electionFieldId(meta.field);
-    input.title      = meta.hint;
     input.step       = meta.kind === ELECTION_KIND.PERCENT ? '0.01' : '100';
     input.min        = '0';
     // `?? ''` — NOT `|| ''`. An explicit 0 election is a real opt-out and has to
@@ -194,7 +192,6 @@ export class PayrollSection {
 
     const label = document.createElement('label');
     label.textContent = meta.label;
-    label.title       = meta.hint;
     block.appendChild(label);
 
     const editor = meta.field === 'wageSplits' ? this._splitEditor() : this._tierEditor();

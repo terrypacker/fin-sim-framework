@@ -23,6 +23,7 @@
 import assert from 'node:assert/strict';
 
 import { HelpPlugin }        from '../../src/visualization/workbench/plugins/finance/help-plugin.js';
+import { _resetHelpIndex } from '../../src/visualization/help/help-index-source.js';
 import { WorkbenchRuntime, WB_EVENTS } from '../../src/visualization/workbench/workbench-runtime.js';
 import { ScenarioTabView }   from '../../src/visualization/scenario/scenario-tab-view.js';
 import { buildHelpIndex }    from '../../scripts/lib/help-index.mjs';
@@ -242,8 +243,11 @@ test('HELP-P12: the group ? lists the group\'s params and the topics behind them
 test('HELP-P13: with no index the panel says how to build one, rather than looking broken', async () => {
   const runtime = new WorkbenchRuntime();
   const plugin  = new HelpPlugin(runtime, { index: { topics: [], params: [], panels: [] } });
+  // The index now comes from the shared source the node-field decorator also reads
+  // (design 111 §6), so "there is no index" is that cache being empty with no `fetch` to
+  // fill it — which is exactly the state a checkout that has never built one is in.
+  _resetHelpIndex();
   plugin._index = null;
-  plugin._loading = Promise.resolve(null);      // a fetch that found nothing
 
   const host = document.createElement('div');
   document.body.appendChild(host);

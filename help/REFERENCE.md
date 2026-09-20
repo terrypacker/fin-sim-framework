@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-223 parameters · 33 panels · 173 action types · 79 tools · 266 state field types · 60 topics · 118 design docs
+223 parameters · 33 panels · 11 node types (164 fields) · 173 action types · 79 tools · 266 state field types · 71 topics · 119 design docs
 
 ---
 
@@ -573,6 +573,403 @@ true statement about the registry, not a gap in this file.
 | `dashboard` | Dashboard | bottom | `src/visualization/workbench/plugins/finance/dashboard-plugin.js` |
 | `perf` | Performance | bottom | `src/visualization/workbench/plugins/finance/perf-plugin.js` |
 | `help` | Help | right | `src/visualization/workbench/plugins/finance/help-plugin.js` |
+
+---
+
+## Node types (11 kinds · 164 fields)
+
+Every kind of record the Nodes panel can open, and every control its edit form offers.
+The inventory is read from the FORM — the `<template>` in `index.html` the editor
+clones, or the editor's own exported field spec — so a control added to a form appears
+here whether or not anyone remembered it (design 111 §3).
+
+**Where** says which tier owns each description: `param` means the field is a generated
+scenario parameter and tier 1 emits its description verbatim; `topic` means the kind's
+tier-2 topic under `help/nodes/` says it. Exactly one of the two, never both — a field
+described twice is the copy that drifts.
+
+### People — `person` (25 fields)
+
+Explained in [`help/nodes`](nodes/person.md). 10 field(s) described by a record parameter.
+
+- **`name`** — Name · `text` · topic
+  What this person is called throughout the app. Free text, but it is also how you will pick them out in every owner dropdown and every per-person chart.
+- **`birthDate`** — Birth Date · `date` · topic
+  Date of birth, and one of the most load-bearing numbers in a plan. Age gates almost every retirement rule modelled here — early-withdrawal penalties, required distributions, Social Security claiming, the Australian preservation age and the over-55 concessions — so an approximate birth date quietly moves several cliffs at once.
+- **`citizen`** — Citizen · `select` · topic
+  Citizenship, and more than one may be selected. It is not residency: a US citizen is taxed by the US on worldwide income wherever they live, which is the whole reason a cross-border plan is hard. Residency is a scenario parameter that changes over the run; this does not.
+- **`residencyState`** — US State · `select` · topic
+  US state of residency, for state income tax. Blank means no state of residency — a military base, or a person living outside the US — and so no state tax. The household's active state is the primary person's.
+- **`lifeExpectancy`** — Life Exp. · `number` · topic
+  The age this person is assumed to die at, in the deterministic run. Under stochastic mortality it is the anchor a draw is taken around rather than a fixed date. It ends wages and Social Security, triggers any bequest, and sets the horizon the plan is judged over.
+- **`socialSecurityMonthly`** — SS /mo · `number` · topic
+  The monthly benefit this person receives once claiming begins, in today's money. Modelled as an authored amount rather than derived from an earnings record, so it is an input to check rather than an output to trust; claiming age and the spousal rules live in the scenario parameters.
+- **`ssCurrency`** — SS Currency · `select` · topic
+  The currency the Social Security benefit is paid in. It follows the paying country, not where the person lives, so an AU-resident US retiree collects USD and takes the exchange-rate risk that comes with it.
+- **`monthlyWage`** — Wage /mo · `number` · param
+  Gross monthly employment wage for this person, before tax, in their native currency.
+- **`selfEmployed`** — Self-employed · `checkbox` · topic
+  Treat this person's wage as self-employment income — a sole trader, or 1099 work. It incurs US self-employment tax, which is both halves of FICA rather than the employee half, and that is a materially different number from the same wage as an employee.
+- **`wageCurrency`** — Wage Currency · `select` · topic
+  The currency this person is paid in. It gates the payroll elections: a 401(k) deferral out of an AUD wage would debit dollars this person was never paid, so the elections that apply are chosen by this field rather than by residency.
+- **`workCountry`** — Work Country · `select` · topic
+  Where the work is physically performed, which decides whether the income is US- or AU-sourced for tax purposes — not the wage currency, and not residency. Leave it as "same as residency" unless modelling a cross-border commuter or someone remote-working for a foreign employer.
+- **`retirementDate`** — Retire Date · `date` · param
+  Date this person stops earning wages (their last working month).
+- **`wageSplits`** — Direct Deposit · `SPLITS` · topic
+  Where this person's net pay lands. Fixed amounts are taken first, in list order, then percentages of the original net pay; whatever remains goes to their transaction account. Cash routing only — it has no tax consequence, and it cannot be used to make a contribution.
+- **`k401DeferralPct`** — 401(k) Deferral · `PERCENT` · param
+  This person's 401(k) deferral as a fraction of annual pay (0.10 = 10%). Pre-tax: it reduces income tax but NOT FICA (§3121(a) has no §402(g) exclusion). Empty inherits the household rate; 0 means they defer nothing.
+- **`k401EmployerMatchPct`** — 401(k) Match Rate · `PERCENT` · param
+  Employer match on this person's plan, read as a 100% match on the first N% of pay. Employer-funded: never debits household cash and is not their deduction. Superseded for this person by a match formula (tiers), if one is set. Empty inherits the household rate.
+- **`k401MatchTiers`** — 401(k) Match Formula · `TIERS` · topic
+  The employer match as tiers consumed in order, e.g. 100% of the first 3% then 50% of the next 2% — the safe-harbor basic match. Someone deferring less than the full band is matched only on what they actually deferred. Set, this supersedes the flat match rate for this person.
+- **`k401NonElectivePct`** — 401(k) Non-Elective · `PERCENT` · param
+  Employer contribution for this person as a fraction of annual pay that does not depend on them deferring anything (profit-sharing / safe-harbor non-elective). Not a match. Empty inherits the household rate.
+- **`k401AnnualCap`** — 401(k) Annual Cap · `MONEY` · param
+  Annual dollar cap applied to this person's deferral and match separately. Empty inherits the household cap. A scenario assumption, not a statutory limit: §402(g), §414(v), §415(c) and §401(a)(17) apply on top of it and are never disabled by leaving it blank — see design 95 phase 3.
+- **`iraAnnualContribution`** — IRA Contribution · `MONEY` · param
+  Deductible Traditional IRA contribution per year for this person, paid in twelfths. Empty inherits the household amount.
+- **`rothAnnualContribution`** — Roth Contribution · `MONEY` · param
+  After-tax Roth contribution per year for this person, paid in twelfths. Empty inherits the household amount. No income phase-out is modelled.
+- **`superGuaranteePct`** — Super Guarantee · `PERCENT` · param
+  Employer Superannuation Guarantee for this person as a fraction of annual pay (0.12 = 12%). Employer-funded and on top of salary, computed on PRE-sacrifice pay (SGAA s10A(1)(h)) and truncated at the s10A(5) maximum contributions base. Empty inherits the household rate.
+- **`superAnnualCap`** — Super Guarantee Cap · `MONEY` · param
+  A scenario cap on this person's EMPLOYER SG alone, measured against their own SG for the financial year. The Div 291 concessional cap applies separately and is never disabled by leaving this blank. Empty inherits the household cap.
+- **`superSalarySacrificePct`** — Salary Sacrifice · `PERCENT` · topic
+  Pre-tax share of pay sacrificed into superannuation. It never reaches the member's cash, reduces PAYG withholding but not the Super Guarantee, and is taxed at 15% inside the fund. The concessional cap applies to it together with the SG.
+- **`superPersonalDeductibleContribution`** — Personal Deductible · `MONEY` · topic
+  An annual after-tax contribution claimed as a deduction on the return. Paid from cash, taxed 15% in the fund, and the deduction is capped at assessable income less other deductions — the excess is lost rather than carried forward, which makes an oversized election quietly wasteful.
+- **`superNonConcessionalContribution`** — Non-Concessional · `MONEY` · topic
+  An annual after-tax contribution with no deduction and no 15% fund tax. It buys a tax-sheltered location rather than a deduction, and is bound by the non-concessional cap and its bring-forward rule.
+
+### Accounts — `account` (26 fields)
+
+Explained in [`help/nodes`](nodes/account.md). 5 field(s) described by a record parameter.
+
+- **`name`** — Name · `text` · topic
+  What this account is called throughout the app, and the label on every chart that breaks the portfolio down. Free text.
+- **`type`** — Type · `select` · topic
+  What kind of account this is: checking, savings, brokerage, 401(k), Roth, traditional IRA, superannuation, loan or offset. It decides the tax treatment of every dollar going in and out, which of the fields below apply, and which age gates stand between you and the balance. Changing it on an existing account is not a relabelling — it re-points the money at a different rule set.
+- **`balance`** — Balance · `number` · param
+  Current total balance of this account.
+- **`country`** — Country · `select` · topic
+  Which country's rules tax this account and which cash pool it belongs to. It also sets the default currency. A US person's Australian account is still theirs for US tax purposes — this decides where it sits, not who is taxed on it.
+- **`currency`** — Currency · `select` · topic
+  The currency the balance is held in. Defaults from the country. A non-base-currency balance is revalued as the rate moves, and for a US person a foreign cash balance is also a §988 pool — see the basis field below.
+- **`ownershipType`** — Ownership · `select` · topic
+  Sole or joint, which decides how this account's income and gains are attributed between the two people. It matters wherever they have different marginal rates or different residencies.
+- **`ownerId`** — Owner · `select` · topic
+  The person who owns it when ownership is sole. Their age gates the retirement wrappers and their rate taxes the earnings, so this is an engine input rather than a label.
+- **`minimumBalance`** — Min Bal. · `number` · param
+  Cash floor for this account. When the balance drops below it, the model replenishes from other liquid accounts.
+- **`cashRate`** — Interest Rate · `number` · topic
+  The interest rate the bank quotes, as an absolute decimal (0.03 = 3%). It is stored as a spread over the central-bank Prime rate, so a Prime move fans out to every linked account at once instead of being re-authored here.
+- **`isTransactionAccount`** — Transaction Account · `checkbox` · param
+  When on, this is the cash account that expenses debit and cross-border transfers replenish for its country of residence. Flag exactly one account per country.
+- **`reinvestDividends`** — Reinvest Dividends · `select` · param
+  When on, this account's dividends buy more of its holdings; when off, they are paid out as cash to the country's transaction account. Leave unset to follow the plan-wide Reinvest Dividends default.
+- **`fxBasisRate`** — §988 FX Basis · `number` · topic
+  Foreign units per USD at which this pool's currency was acquired. Spending foreign cash is a disposition of non-functional currency and realises ordinary gain or loss against this rate. For a balance built up over years it is the balance-weighted average of the rates it came in at, so a long-accumulated pool is not at today's rate. Blank stamps the rate at the first disposition, which understates the exposure rather than inventing one.
+- **`cashDeductibleFraction`** — Income-Producing · `number` · topic
+  The share of this pool put to an income-producing use, 0 to 1. It drives two tests at once: whether §988 applies to the expense at all, and whether a currency loss is deductible as a transaction entered into for profit. Blank means fully personal, which is the safe default — a personal currency loss is disallowed while the matching gain is still taxed. An offset backing a rental should be set explicitly.
+- **`drawdownPriority`** — Drawdown · `number` · topic
+  Where this account sits in the liquidation order, 1 first. BLANK EXCLUDES IT from the drawdown chain entirely: the balance still earns and still counts in net worth, but no spending shortfall will ever reach it, and it is not counted as reserve. That is the right setting for money that is genuinely not available, and the wrong one for an account you expected to fund retirement.
+- **`contributionBasis`** — Contribution Basis · `number` · param
+  After-tax contribution basis for this retirement account — the portion already taxed. Withdrawals of basis come out tax-free; the balance above it is the taxable earnings.
+- **`earningsBasis`** — Earnings Basis · `number` · topic
+  The earnings half of a retirement account's balance, computed as the balance less the contribution basis. Read-only: it is derived, and the two halves matter because a withdrawal takes basis out tax-free and earnings out taxable.
+- **`offsetsPropertyKey`** — Offsets Property · `select` · topic
+  The property whose mortgage this offset account reduces. An offset does not earn interest; it lowers the interest-bearing principal of the linked loan instead, dollar for dollar, which is why draining one costs more than the cash it releases.
+- **`loanRate`** — Interest Rate · `number` · topic
+  The annual rate the lender quotes, as an absolute decimal (0.06 = 6%). Where Prime is configured it is stored as a spread over it, so a Prime move re-rates this loan with every other.
+- **`monthlyPayment`** — Monthly Payment · `number` · topic
+  The fixed monthly principal-and-interest payment. Inert while interest-only is on, and inert again after the interest-only period expires when a maturity year is set, because the loan then re-amortises over the remaining term. A fixed payment below the accrued interest does not error — the balance simply grows.
+- **`interestOnly`** — Interest Only · `checkbox` · topic
+  Pay exactly the interest accrued on the effective, offset-reduced principal each month. The balance is then flat by construction and a variable rate is tracked automatically. This is the safe way to express interest-only: a fixed payment set below the accrued interest negatively amortises instead, silently.
+- **`interestOnlyUntilYear`** — IO Until Year · `number` · topic
+  The calendar year the interest-only period ends. From then the loan reverts to principal-and-interest over the remaining term, which needs a maturity year to amortise against. Blank means interest-only forever — and that payment step-up is exactly the exposure a "hold the leverage" plan is running.
+- **`maturityYear`** — Maturity Year · `number` · topic
+  The calendar year the loan must be discharged: the whole remaining balance plus interest is paid in that year, and a shortfall runs the ordinary replenish path. Blank means no term at all.
+- **`deductibleFraction`** — Deductible Frac. · `number` · topic
+  The income-producing share of the borrowed money's use, 0 to 1 — the use test, not the security. Blank keeps the default rule: fully deductible while a linked property is renting, nil otherwise. It also sets the §988 business share, so it moves the exchange gain or loss treatment too. On a standalone loan a stated fraction deducts the interest in full against Australian assessable income, and on the US return only up to net investment income.
+- **`linkedPropertyKey`** — Linked Property · `select` · topic
+  The property this loan finances. Only properties carrying no mortgage balance of their own are offered, because one that does synthesizes its own loan and a second against it would double-count the debt. The link is also what joins an offset account to this loan.
+- **`paymentSourceKey`** — Payment Source · `select` · topic
+  The account the monthly payment is debited from. Blank resolves in order: a same-currency offset linked to this loan's property, then the country's flagged transaction account, then its savings pool. Paying from the offset is what a real offset facility direct-debits, and it is not cosmetic — draining it raises the interest-bearing principal.
+- **`bookingFxRate`** — §988 Booking FX · `number` · topic
+  Foreign units per USD on the date the debt was incurred. A non-USD loan held by a US person realises ordinary gain or loss on each principal repayment, measured against this rate. Blank stamps it at the first payment, which treats the loan as incurred then and so understates the exposure on a loan already outstanding at the start of the run.
+
+### Real Property — `real-property` (45 fields)
+
+Explained in [`help/nodes`](nodes/real-property.md). 3 field(s) described by a record parameter.
+
+- **`name`** — Name · `text` · topic
+  What this property is called throughout the app. Free text.
+- **`country`** — Country · `select` · topic
+  Which country's rules tax this dwelling's sale, rent and holding costs, and the default currency that follows. It drives the whole capital-gains path — the Australian main-residence exemption and CGT discount, or the US §121 exclusion and depreciation recapture.
+- **`currency`** — Currency · `select` · topic
+  The currency the value, basis, rent and mortgage are stated in. Defaults from the country. A non-USD property held by a US person carries currency exposure on both the asset and its debt.
+- **`value`** — Value · `number` · param
+  Current market value of this property.
+- **`costBasis`** — Cost Basis · `number` · topic
+  What was paid, plus capitalised improvements — the number the taxable gain is measured from. A basis left at 0 taxes the entire sale proceeds as gain. Capitalised repairs lift it over the run; depreciation claimed against rent reduces it, and is recaptured on a US sale.
+- **`appreciationRate`** — Apprec. Rate · `number` · param
+  Annual appreciation rate for this property, as a fraction (0.04 = 4%).
+- **`plannedSaleYear`** — Sale Year · `number` · param
+  Calendar year this property is sold. Leave blank for no planned sale.
+- **`saleDestinationAccount`** — Sale Acct. · `select` · topic
+  Which account receives the net proceeds when this property sells. Blank sends them to the country's cash pool, where the spending rule can consume them. Naming a brokerage account is how a downsize is reinvested rather than quietly spent.
+- **`ownershipType`** — Ownership · `select` · topic
+  Sole or joint, which decides how the gain, the rent and the deductions are split between the two people. With different marginal rates or different residencies it is one of the larger levers on a property plan.
+- **`ownerId`** — Owner · `select` · topic
+  The person who owns it when ownership is sole. Their residency, age and rate at the sale year decide what the gain costs.
+- **`purchaseYear`** — Purchase Year · `number` · topic
+  The calendar year this dwelling is bought. Blank means it is already owned at the start of the run. Set, the property is dormant — worth nothing, costing nothing — until 15 January of that year, when the price is debited and it becomes an ordinary property. The purchase settles after any sale on the same date.
+- **`purchasePrice`** — Purchase Price · `number` · topic
+  What the dwelling costs, in today's money, in its own currency. It is grown to the purchase date at this property's own appreciation rate rather than at CPI, so a price set as a share of what you are selling keeps that share. A purchase year with no price buys nothing.
+- **`purchasePriceIsNominal`** — Price Is Nominal · `checkbox` · topic
+  Tick when the price is already stated as at the purchase date — a contracted price. Unticked, the default, treats it as today's money and grows it to that year.
+- **`purchaseFundFrom`** — Fund From · `select` · topic
+  The account the purchase price is debited from. Blank uses the property country's cash pool. If the balance would breach its minimum the shortfall is raised through the ordinary drawdown queue, which is what makes a purchase interact with the portfolio instead of looking free.
+- **`acquisitionDate`** — Acquired · `date` · topic
+  When the dwelling was actually bought. It is the denominator of the Australian ownership-period fraction and of the CGT discount testing period, and the start of the US nonqualified-use window. LEAVE IT BLANK AND THOSE CONCESSIONS ARE DENIED — it is deliberately not defaulted to the start of the run, because that would inflate every fraction in your favour. Set automatically when a dwelling is bought mid-run.
+- **`mainResidenceMode`** — History · `select` · topic
+  Which main-residence history this dwelling has: never, throughout, from the start then moved out, or became one later. Never is an investment property with no exemption in either country; throughout is fully exempt in Australia and takes the full US exclusion. The two mixed options each prorate, and the order matters — renting after you move out is forgiven by the US look-back rule, renting before you move in is not.
+- **`mainResidenceFrom`** — Moved In · `date` · topic
+  When this dwelling first became the main residence. Australia exempts only the fraction of ownership days it actually was one, so moving into a long-rented house late buys a small fraction of the exemption and not the whole of it.
+- **`mainResidenceUntil`** — Moved Out · `date` · topic
+  When it stopped being the main residence. Everything after this date is a rental period — which the US rules forgive, unlike the years before you moved in.
+- **`claimDownsizerContribution`** — Downsizer Contrib. · `checkbox` · topic
+  Claim the Australian downsizer superannuation contribution on this dwelling's sale: up to A\\$300,000 per owner aged 55 or over, outside the contribution caps, for an Australian dwelling held ten years or more. It requires the main-residence exemption to be at least partly available, so a dwelling never lived in funds nothing.
+- **`mortgageBalance`** — Mortgage Bal. · `number` · topic
+  Outstanding principal, in the property's currency. Above zero this synthesizes a linked loan liability, and the property itself then contributes equity only. Set it to zero and author a separate loan account instead when the debt needs its own payment source or a second lender.
+- **`monthlyMortgage`** — Monthly Mtg. · `number` · topic
+  The fixed monthly principal-and-interest payment. Inert while interest-only is on, because the payment is then derived from the accrued interest, and inert again after the interest-only expiry when a maturity year re-amortises the loan over its remaining term.
+- **`mortgageInterestRate`** — Mtg. Int. Rate · `number` · topic
+  The annual rate the bank quotes, as an absolute decimal. Where Prime is configured it is stored as a spread over it, so a Prime move re-rates this loan along with every other.
+- **`mortgageInterestOnly`** — Interest Only · `checkbox` · topic
+  Pay exactly the interest accrued on the effective, offset-reduced principal each month. The balance is flat by construction and a variable rate is tracked automatically. This is the safe way to express interest-only — a fixed payment below the accrued interest negatively amortises instead, silently.
+- **`mortgageInterestOnlyUntilYear`** — IO Until Year · `number` · topic
+  The calendar year the interest-only period ends. From then the loan reverts to principal-and-interest over the remaining term, which needs a maturity year. Blank means interest-only forever, and the step-up at that expiry is the exposure a leveraged plan is actually carrying.
+- **`mortgageMaturityYear`** — Maturity Year · `number` · topic
+  The calendar year the loan must be discharged: the whole remaining balance plus interest is paid that year, and a shortfall runs the ordinary replenish path. Blank means no term.
+- **`mortgageDeductibleFraction`** — Deductible Frac. · `number` · topic
+  The income-producing share of the borrowed money's use, 0 to 1 — the use test, not what secures the loan. Blank keeps the default rule: fully deductible while the property is renting, nil otherwise. It also decides the §988 business share, so it moves the exchange gain or loss treatment with it.
+- **`mortgagePaymentSourceKey`** — Payment From · `select` · topic
+  The cash pool the monthly payment debits. Blank resolves to a same-currency offset linked to this property when one exists, then the flagged transaction account or country savings pool. Paying from the offset is what a real offset facility direct-debits, and it is not cosmetic — draining it raises the interest-bearing principal.
+- **`mortgageBookingFxRate`** — §988 Booking FX · `number` · topic
+  Foreign units per USD on the date the debt was incurred. A non-USD mortgage held by a US person realises ordinary gain or loss on each principal repayment against this rate. Blank stamps it at the first payment, understating the exposure for a loan already outstanding at the start of the run.
+- **`rentalEnabled`** — Rental Income · `checkbox` · topic
+  Turn this property into a rental. It starts earning rent, its deductible expenses and depreciation begin, and its capital-gains treatment changes in both countries. The fields below it are inert until this is on.
+- **`monthlyRent`** — Monthly Rent · `number` · topic
+  Gross rent at full occupancy, in the property's currency, in today's money. It inflates over the run; what is actually received is this multiplied by the occupancy rate.
+- **`occupancyRate`** — Occupancy · `number` · topic
+  The fraction of gross rent actually realised, covering vacancy, arrears and turnover. A long-term let is around 0.95; a short-term let is far lower, near 0.55, which is the honest cost of the higher headline rent.
+- **`rentalExpenseRatio`** — Expense Ratio · `number` · topic
+  Deductible cash operating expenses as a fraction of gross rent — management, letting fees, maintenance billed as expense. Separate from the fixed annual running cost below, which is charged whether or not the property is let.
+- **`landValueRatio`** — Land Value % · `number` · topic
+  The non-depreciable land share of the cost basis. Only the building depreciates, so this fraction sets how much of the purchase is written off against rent — and, on a US sale, how much is later recaptured.
+- **`annualDepreciationOverride`** — Deprec. Override · `number` · topic
+  An explicit annual depreciation amount, overriding the per-country derivation. For a property whose schedule is known rather than assumed. Blank derives it from the building's share of basis under the country's own rules.
+- **`annualRunningCost`** — Annual Running Cost · `number` · topic
+  The base-year fixed cost of holding this property — rates, insurance, utilities, servicing — in its own currency. It inflates each year and is charged whether the property is let or lived in. Zero turns it off, which understates the cost of owning a house.
+- **`runningCostValuePct`** — Running Cost % Val. · `number` · topic
+  An optional value-proportional running cost, as a fraction of current value per year (0.005 is 0.5% a year). Added on top of the fixed cost, and it grows as the property does, which is the part a fixed bill misses over a long run.
+- **`runningCostGrowth`** — Running Cost Growth · `number` · topic
+  Optional real growth of the running cost, on top of inflation. Zero tracks inflation exactly; above zero models costs outrunning CPI, which rates and insurance have done.
+- **`repairModel`** — Repair Model · `select` · topic
+  Which stochastic repair process this property runs: none, Bernoulli (one large repair in some years), Poisson (a variable count each year), or continuous (a lognormal cost every year). Repairs are drawn from the run's random stream, so they differ across a Monte Carlo batch — which is the point of modelling them at all.
+- **`repairProb`** — Repair Prob. · `number` · topic
+  The annual probability of a repair under the Bernoulli model. 0.25 is roughly one large repair every four years.
+- **`repairLambda`** — Repair Rate λ · `number` · topic
+  The expected number of repairs per year under the Poisson model. Above 1 it models a property with several things going wrong each year rather than one large event.
+- **`repairMedian`** — Repair Median · `number` · topic
+  The median severity of one repair event, in the property's currency. Ignored when the value-proportional anchor below is set.
+- **`repairValuePct`** — Repair % Val. · `number` · topic
+  An alternative severity anchor: the median repair is this fraction of current value (0.02 is about 2% of the house). It overrides the fixed median when above zero, and keeps severity growing with the property instead of staying at a base-year figure.
+- **`repairSigma`** — Repair σ · `number` · topic
+  The lognormal shape of repair severity — how heavy the tail is. Higher means more of the cost arrives in rare, large repairs, which is what actually threatens a plan with a thin cash buffer.
+- **`capitalizeRepairs`** — Capitalize Frac. · `number` · topic
+  The fraction of each repair treated as a capital improvement rather than maintenance. It lifts the cost basis and so cuts the eventual capital-gains tax. Zero treats every repair as pure maintenance.
+- **`speculative`** — Speculative · `checkbox` · topic
+  Simulate this property but do not count it as yours. It still appreciates, still sells in its sale year and still pays the tax — but until it converts it is worth zero in net worth and in everything downstream of it. Disclosed separately as "incl. speculative", so nothing is hidden. Incompatible with a drawdown priority.
+
+### Collectibles — `collectible` (11 fields)
+
+Explained in [`help/nodes`](nodes/collectible.md). 1 field(s) described by a record parameter.
+
+- **`name`** — Name · `text` · topic
+  What this asset is called, in the Nodes list and every chart that breaks net worth down. Free text.
+- **`country`** — Country · `select` · topic
+  Which country's capital-gains rules tax the sale, and the default currency that follows from it. AU puts the asset in the collectables class; US applies the collectibles rate rather than the ordinary long-term one. Not a statement about where the object physically is.
+- **`currency`** — Currency · `select` · topic
+  The currency this asset's value and basis are stated in. Defaults from the country. A value in one currency and a destination account in another is legal — the proceeds are converted on the sale date.
+- **`value`** — Value · `number` · topic
+  Current market value, in this asset's currency. It grows from here at the appreciation rate; nothing marks it to an external series.
+- **`costBasis`** — Cost Basis · `number` · topic
+  What was paid for it, in this asset's currency, plus anything capitalised since. The gain taxed at sale is the sale value less this, so a basis left at 0 taxes the entire proceeds as gain.
+- **`appreciationRate`** — Apprec. Rate · `number` · topic
+  Annual growth as a decimal (0.035 = 3.5%), compounded. Deterministic: unlike a market holding, a collectible does not take a return draw, so this rate is exactly what it earns in every run of a Monte Carlo batch.
+- **`plannedSaleYear`** — Sale Year · `number` · param
+  Calendar year this collectible is sold (proceeds → cash). Leave blank for no planned sale.
+- **`saleDestinationAccount`** — Sale Acct. · `select` · topic
+  Which account receives the net proceeds when this asset sells. Blank sends them to the country's cash pool. Worth setting when the proceeds are meant to be invested rather than spent, because cash landing in a transaction account is cash the spending rule can quietly consume.
+- **`ownershipType`** — Ownership · `select` · topic
+  Sole or joint. It decides how the gain is split across people, which matters whenever the two have different marginal rates or different residencies. Joint splits evenly; an explicit per-person breakdown in a scenario file overrides both.
+- **`ownerId`** — Owner · `select` · topic
+  The person who owns it when ownership is sole. Their residency and marginal rate are what the sale is taxed at, so this is a tax input rather than a label.
+- **`speculative`** — Speculative · `checkbox` · topic
+  Simulate this asset but do not count it as yours. It still appreciates, still sells in its sale year and still pays the tax — but until it converts it is worth zero in net worth and in everything downstream of net worth. For a stake that may never find a buyer. Disclosed separately as "incl. speculative", so nothing is hidden. Incompatible with a drawdown priority.
+
+### Company Equity — `company` (11 fields)
+
+Explained in [`help/nodes`](nodes/company.md). 0 field(s) described by a record parameter.
+
+- **`name`** — Name · `text` · topic
+  What the stake is called, in the Nodes list and in every net-worth breakdown. Free text.
+- **`country`** — Country · `select` · topic
+  Which country's capital-gains rules tax the exit, and the default currency that follows. Not where the company is incorporated in any legal sense — it is the tax regime the gain is assessed under.
+- **`currency`** — Currency · `select` · topic
+  The currency the value and basis are stated in. Defaults from the country. Proceeds are converted on the sale date when the destination account is in another currency.
+- **`value`** — Value · `number` · topic
+  Current market value of the stake, in its own currency: the number you would put on it today, not the exit you are hoping for. It grows from here at the appreciation rate.
+- **`costBasis`** — Cost Basis · `number` · topic
+  What the stake cost — the acquisition price, or the strike paid to exercise. The taxable gain at exit is the sale value less this, so a basis left at 0 taxes the whole exit as gain.
+- **`appreciationRate`** — Apprec. Rate · `number` · topic
+  Annual growth as a decimal, compounded (the default, 0.08, is an equity-like 8%). Deterministic: a private stake takes no return draw, so it grows identically in every run of a Monte Carlo batch, and a plan that depends on it is not being stress-tested by one.
+- **`plannedSaleYear`** — Sale Year · `number` · topic
+  The calendar year of the liquidity event. Blank means the stake is never sold, so it appreciates forever and contributes only to net worth. There is no partial exit: the whole stake converts in that year.
+- **`saleDestinationAccount`** — Sale Acct. · `select` · topic
+  Which account receives the net proceeds. Blank sends them to the country's cash pool, where the spending rule can consume them; naming a brokerage account instead is how an exit is reinvested rather than spent.
+- **`ownershipType`** — Ownership · `select` · topic
+  Sole or joint, which decides how the gain is split between people. It matters most when the two have different marginal rates or different residencies at the exit.
+- **`ownerId`** — Owner · `select` · topic
+  The person holding the stake when ownership is sole. Their residency and rate at the sale year is what the gain is taxed at.
+- **`speculative`** — Speculative · `checkbox` · topic
+  Simulate this stake but do not count it as yours. It still appreciates, still sells in its sale year and still pays the tax — but until it converts it is worth zero in net worth and in everything downstream of net worth. This is the honest setting for an exit that may never come, and it is disclosed separately as "incl. speculative" rather than hidden. Incompatible with a drawdown priority.
+
+### Inheritance — `bequest` (7 fields)
+
+Explained in [`help/nodes`](nodes/bequest.md). 1 field(s) described by a record parameter.
+
+- **`name`** — Name · `text` · topic
+  What this inheritance is called in the Nodes list. Free text — naming it after the decedent is the usual choice, since the assets carry their own names.
+- **`decedentName`** — Decedent name · `text` · topic
+  Who died. Display only, but it is what the promoted assets are tagged with, so it is how you tell inherited records apart from the household's own.
+- **`relationship`** — Relationship (NE class) · `select` · topic
+  The heir's relationship to the decedent, as the Nebraska inheritance-tax classes define it: immediate (child, parent, sibling), remote (aunt, uncle, niece, nephew) or unrelated. Each class has its own exemption and rate, and the difference between them is large.
+- **`decedentState`** — Decedent state (situs) · `select` · topic
+  The US state the decedent was domiciled in — the situs that decides whether a state inheritance tax applies at all. Only Nebraska currently levies one in this model; the other states are selectable and inert, so choosing one is a statement about the plan, not a no-op you can skip.
+- **`heirId`** — Heir · `select` · topic
+  Which person in the household receives it. Their residency and marginal rate govern how the inherited assets are taxed from the inheritance year onward, which is usually a bigger number than the inheritance tax itself.
+- **`inheritanceYear`** — Inheritance year (blank = inert) · `number` · param
+  Calendar year this bequest is inherited. Leave blank to keep it inert — the inherited assets stay invisible (no net-worth, no drawdown) until a year is set.
+- **`paidViaEstate`** — AU super paid via estate (no +2% Medicare) · `check` · topic
+  Tick when an Australian super death benefit is paid to the estate rather than directly to the beneficiary. It avoids the additional 2% Medicare levy on the taxable component, which is the whole of the difference; the 15% (or 30%) tax on the taxable component paid to a non-dependant applies either way.
+
+### Securities — `security` (17 fields)
+
+Explained in [`help/nodes`](nodes/security.md). 0 field(s) described by a record parameter.
+
+- **`id`** — Id · `text` · topic
+  The stable identity every position names. Settable once, at creation, and read-only afterwards: renaming it in place would orphan every lot holding it, silently, because a lot whose id resolves to nothing falls back to its own inline fields with no error anywhere. Pick something durable rather than a ticker.
+- **`symbol`** — Symbol · `text` · topic
+  Ticker, and decoration only. A symbol change is a corporate action, not an edit — nothing in the engine keys on it.
+- **`name`** — Name · `text` · topic
+  Display name, shown wherever a symbol is absent.
+- **`rateKey`** — Market · `rateKey` · topic
+  The market-return series this instrument tracks. It must lie inside the allocation class of any lot that names it — a bond lot may not name an equity market — and that is checked rather than assumed.
+- **`beta`** — Beta (vs sleeve) · `number` · topic
+  Loading on the sleeve's own deviation, not on the market. 1.0 is the identity: the instrument does exactly what its sleeve does.
+- **`idioVol`** — Idiosyncratic vol · `number` · topic
+  Idiosyncratic volatility. A security declaring more than zero takes a random draw every tick whether or not any position holds it, because the draw set is the registry rather than the portfolio — so declaring one perturbs the whole run. Zero, or silent, draws nothing.
+- **`dividendYield`** — Dividend yield · `number` · topic
+  Overrides the lot's own yield; the account rate remains the floor beneath both.
+- **`identityGroup`** — Identity group · `text` · topic
+  Marks two different securities as substantially identical for the wash-sale rule, which only relates them when an author says so. Give both the same group. Silent means identical to itself and nothing else.
+- **`taxExemption`** — Coupon tax treatment · `select` · topic
+  How this instrument's bond coupons are taxed: fully taxable, Treasury (state-exempt), municipal (federal-exempt), or exempt everywhere. A declared value overrides the lot's.
+- **`issuingState`** — Issuing state · `text` · topic
+  The municipal issuer's state. The coupon is state-exempt only when it matches the resident's own state, which is the whole reason this is a field and not a flag.
+- **`parPerUnit`** — Par per unit · `number` · topic
+  Face value of one unit. The units substrate checks its par walk against it.
+- **`couponRate`** — Coupon rate · `number` · topic
+  Annual coupon as a decimal. Silent falls back to the lot's own, then to the prevailing rate.
+- **`couponFrequency`** — Coupon frequency · `select` · topic
+  Payments per year. Each firing pays the coupon rate divided by the frequency.
+- **`maturityDate`** — Maturity · `date` · topic
+  Set makes this an individual bond: the price pulls to par and it redeems on the date. Silent makes it a perpetual bond fund, which never redeems and never rolls.
+- **`duration`** — Duration (yr) · `number` · topic
+  Modified duration — how far a rate move marks the price. The larger it is, the more of the plan's risk is in rates rather than equities.
+- **`zeroCoupon`** — Zero-coupon / OID · `check` · topic
+  No cash coupon: the price accretes to par and the annual accretion is imputed as ordinary income anyway. The tax arrives without the cash, which is the point of modelling it.
+- **`inflationLinked`** — Inflation-linked (TIPS) · `check` · topic
+  Principal indexes to CPI, and the accretion is imputed ordinary income. Same shape as a zero: taxable before it is spendable.
+
+### Events — `event` (7 fields)
+
+Explained in [`help/nodes`](nodes/event.md). 0 field(s) described by a record parameter.
+
+- **`name`** — Label · `text` · topic
+  The label shown on the node and in the graph. Free text, for reading — nothing in the engine keys on it.
+- **`type`** — Event Type · `select` · topic
+  The event type handlers subscribe to. This, not the name, is the wiring: a handler fires when an event of its declared type does, so two events sharing a type are one trigger with two dates. Series sharing a type are also collapsed to one.
+- **`color`** — Color · `color` · topic
+  Node colour in the graph. Presentation only — useful when a family of related events should read as a family.
+- **`enabled`** — Enabled · `checkbox` · topic
+  Off suppresses every firing of this event without deleting it, which is the safe way to A/B a mechanic: the node, its handlers and its history all stay where they are.
+- **`interval`** — Interval · `select` · topic
+  How often a series repeats: monthly, quarterly, semiannual, annually, month-end or year-end. Only on a recurring series.
+- **`startOffset`** — Start Offset · `number` · topic
+  Whole years after the simulation start before the series begins firing. 0 starts immediately; 5 waits five years, which is how a rhythm that begins at retirement is expressed without naming a calendar date.
+- **`date`** — Date · `date` · topic
+  The single calendar date a one-off event fires on. Outside the run's span it simply never fires — that is not an error, and it is the usual cause of an event whose node never lights up during playback.
+
+### Handlers — `handler` (2 fields)
+
+Explained in [`help/nodes`](nodes/handler.md). 0 field(s) described by a record parameter.
+
+- **`handlerClass`** — Handler Type · `select` · topic
+  Which handler implementation this node is. The class decides what the handler does and what configuration it reads; the rest of this form only names and wires it. Changing it on an existing node re-points the same node at different behaviour.
+- **`name`** — Label · `text` · topic
+  The label shown on the node, in the graph and in Node History. Free text: nothing keys on it, but it is what you will be reading when tracing why an action was emitted, so name it after the decision rather than the mechanism.
+
+### Actions — `action` (6 fields)
+
+Explained in [`help/nodes`](nodes/action.md). 0 field(s) described by a record parameter.
+
+- **`name`** — Label · `text` · topic
+  The label on the node and in the graph. Free text — name it after what the action asks for ("sell to fund spending"), because that is what you will read when tracing a chain.
+- **`actionClass`** — Action Class · `select` · topic
+  Which action implementation this node is. It decides the payload shape and which of the sub-editors below appears; the fields under it belong to the class you pick.
+- **`type`** — Type (Discriminator) · `text` · topic
+  The discriminator reducers register against, e.g. RECORD_METRIC. This is the wiring, and it is a free-text string on purpose: a type nothing registers for is a legal, silent action rather than an error. Spelling it differently from the reducer's registration is the most common way to author a dead mechanic.
+- **`fieldName`** — Field name · `text` · topic
+  The state field this action targets. On a field-valued action it is required; on a scripted one it is optional, and leaving it blank lets the script return a partial state instead of a single value.
+- **`value`** — Amount · `number` · topic
+  The fixed amount this action carries. Left blank where the class allows it, the value is taken from the state or from the emitting handler's context instead — which is what makes one action node serve a whole run rather than one date.
+- **`script`** — Script (state, {date, sourceEvent, handlerContext, me}) · `textarea` · topic
+  Inline JavaScript run when the action fires, with state, date, sourceEvent, handlerContext and me in scope. For prototyping a mechanic no action class models. Test it with the button beside the box; a script that throws fails the run at that date rather than being skipped.
+
+### Reducers — `reducer` (7 fields)
+
+Explained in [`help/nodes`](nodes/reducer.md). 0 field(s) described by a record parameter.
+
+- **`name`** — Label · `text` · topic
+  The label on the node, in the graph and on every journal entry this reducer writes. Free text, and worth choosing well: it is the name you will filter journal entries by.
+- **`type`** — Reducer Type · `select` · topic
+  Which reducer implementation this node is. It decides what the reducer writes and which sub-editor appears below. Not to be confused with the action type it consumes — that is a registration, made where the action is wired.
+- **`priority`** — Priority · `select` · topic
+  Where this reducer runs within a single date, lowest first: pre-process (10), cash flow (20), position update (30), cost basis (40), tax calculation (60), tax apply (70), metrics (90), logging (100). Reading a value another reducer has not written yet is a priority mistake, not a logic one, and it shows up as a stale number rather than an error.
+- **`accountKey`** — Account Key · `text` · topic
+  The state key of the account this reducer credits or debits, e.g. usSavingsAccount. It must name an account the plan actually registered; a key that resolves to nothing leaves the transaction with nowhere to land.
+- **`fieldName`** — State field · `text` · topic
+  The state field this reducer writes. On a scripted reducer it is optional: blank lets the script return a partial state object and patch several fields at once.
+- **`value`** — Fixed value (leave blank to use action/state value) · `number` · topic
+  A fixed value to write on every firing. Blank takes the value from the action being applied, or from the state — which is the difference between a reducer that models a rule and one that hard-codes an answer.
+- **`script`** — Script (state, action, date) => value | partialState · `textarea` · topic
+  Inline JavaScript of the shape (state, action, date), returning a value when a target field is set, or a partial state to merge when it is not. For prototyping. Test it with the button beside the box before running, because a throw here stops the run at that date.
 
 ---
 
@@ -1574,7 +1971,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 
 ---
 
-## Topics (60)
+## Topics (71)
 
 Tier 2 — the hand-written prose under `help/`, listed by what it CITES rather than
 summarised. A topic may not restate a param description (design 108 §3), so there is
@@ -1584,13 +1981,18 @@ what the in-app panel keys on.
 
 | topic | kind | words | cites |
 |---|---|---|---|
+| [Account](nodes/account.md) | node | 210 | 4 panels · design 54, 56, 86, 87 |
+| [Action](nodes/action.md) | node | 200 | 3 panels · design 2, 91 |
 | [Action Detail](panels/action-detail.md) | panel | 172 | 1 panel · design 91 |
 | [Allocation](panels/allocation.md) | panel | 185 | 1 panel · design 82 |
 | [Allocation and Rebalancing](concepts/allocation-and-rebalancing.md) | concept | 266 | 2 panels · 14 params · design 61, 82 |
 | [AU Tax and PAYG Instalments](concepts/au-tax.md) | concept | 236 | 2 panels · 6 params · design 107 |
 | [Behavioral Strategies](concepts/behavioral-strategies.md) | concept | 232 | 2 panels · 5 params · design 29 |
+| [Inheritance](nodes/bequest.md) | node | 233 | 2 panels · design 63 |
 | [Bond Ladders](concepts/bond-ladders.md) | concept | 237 | 1 panel · 7 params · design 66 |
 | [Chart](panels/chart.md) | panel | 199 | 1 panel |
+| [Collectible](nodes/collectible.md) | node | 205 | 2 panels · design 57, 88 |
+| [Company Equity](nodes/company.md) | node | 214 | 2 panels · design 49, 72, 88 |
 | [Graph](panels/config-graph.md) | panel | 197 | 1 panel |
 | [Nodes](panels/config-list.md) | panel | 173 | 1 panel |
 | [Contributions and Payroll](concepts/contributions-and-payroll.md) | concept | 242 | 1 panel · 13 params · design 95 |
@@ -1603,10 +2005,12 @@ what the in-app panel keys on.
 | [Drawdown Order](concepts/drawdown-order.md) | concept | 272 | 2 panels · 22 params · design 44, 65, 97 |
 | [Early Withdrawal](concepts/early-withdrawal.md) | concept | 228 | 1 panel · 8 params |
 | [Economic Shocks](concepts/economic-shocks.md) | concept | 242 | 2 panels · 3 params |
+| [Event](nodes/event.md) | node | 220 | 2 panels · design 2 |
 | [Event Sourcing](concepts/event-sourcing.md) | concept | 381 | 3 panels · design 2, 16, 91 |
 | [Node History](panels/exec-history.md) | panel | 191 | 1 panel |
 | [Funding and Instalments](concepts/funding-and-instalments.md) | concept | 248 | 2 panels · 3 params · design 107 |
 | [FX](concepts/fx.md) | concept | 257 | 2 panels · 5 params · design 47, 87 |
+| [Handler](nodes/handler.md) | node | 208 | 2 panels · design 2 |
 | [Help](panels/help.md) | panel | 223 | 1 panel · design 108 |
 | [Holdings](panels/holdings.md) | panel | 188 | 1 panel · design 82 |
 | [Inflation](concepts/inflation.md) | concept | 261 | 2 panels · 18 params · design 103 |
@@ -1627,15 +2031,19 @@ what the in-app panel keys on.
 | [Parameters](panels/parameters.md) | panel | 188 | 1 panel · design 98 |
 | [Paycheque](panels/paycheque.md) | panel | 197 | 1 panel · design 95, 107 |
 | [Performance](panels/perf.md) | panel | 201 | 1 panel · design 78 |
+| [Person](nodes/person.md) | node | 221 | 3 panels · design 34, 95, 83 |
 | [Pool Shapes Over Time](concepts/pool-shapes-over-time.md) | concept | 378 | 2 params · design 109, 97 |
 | [Liquidity Pools](panels/pools.md) | panel | 217 | 1 panel · design 97 |
 | [Randomness and Seeds](concepts/randomness-and-seeds.md) | concept | 251 | 2 panels · 2 params · design 74 |
+| [Real Property](nodes/real-property.md) | node | 221 | 2 panels · design 75, 83, 86, 48 |
+| [Reducer](nodes/reducer.md) | node | 195 | 3 panels · design 2, 16 |
 | [Return Assumptions](concepts/return-assumptions.md) | concept | 266 | 2 panels · 13 params · design 99, 106 |
 | [Roth Conversions](concepts/roth-conversions.md) | concept | 242 | 2 panels · 12 params · design 29 |
 | [Scenario](panels/scenario.md) | panel | 201 | 1 panel |
 | [Scenario Compare](panels/scenario-compare.md) | panel | 205 | 1 panel |
 | [Searching Pool Levers](concepts/searching-pool-levers.md) | concept | 358 | design 110, 97 |
 | [Securities](panels/securities.md) | panel | 188 | 1 panel · design 94 |
+| [Security](nodes/security.md) | node | 209 | 3 panels · design 94, 66, 93 |
 | [Spending](panels/spending.md) | panel | 209 | 1 panel · design 89 |
 | [The Spending Rule](concepts/spending-rule.md) | concept | 296 | 1 panel · 17 params · design 89 |
 | [State](panels/state-panel.md) | panel | 181 | 1 panel |
@@ -1647,7 +2055,7 @@ what the in-app panel keys on.
 
 ---
 
-## Design documents (118)
+## Design documents (119)
 
 Tier 3 — the full argument behind each mechanic, in `design/`. The title is each
 file's own H1, read out of it; there is no summary column, because a one-line precis
@@ -1771,6 +2179,7 @@ between 10 and 11.
 | [`108-help-system.md`](../design/108-help-system.md) | 108 — The help system: generated reference, stamped prose, two surfaces |
 | [`109-time-varying-pool-shapes.md`](../design/109-time-varying-pool-shapes.md) | 109 — Time-varying pool shapes: named shapes, and a schedule that selects one |
 | [`110-liquidity-pool-control-surface.md`](../design/110-liquidity-pool-control-surface.md) | 110 — The liquidity pool control surface (design 97 §14, effort 2) |
+| [`111-node-type-help.md`](../design/111-node-type-help.md) | 111 — Node-type help: the forms you actually author a plan in |
 | [`bus-unification-plan.md`](../design/bus-unification-plan.md) | Bus Unification Plan |
 | [`inconsistencies.md`](../design/inconsistencies.md) | Inconsistencies, Rework Candidates, and Open Questions |
 | [`requirements.md`](../design/requirements.md) | Requirements Tracker |

@@ -60,101 +60,72 @@ export const ELECTION_KIND = {
  * would debit USD they were never paid, design 95 §5). Showing both sets keeps a
  * cross-border household editable in one place.
  *
+ * What each election MEANS is not here: it is in `help/nodes/person.md`, or — for the
+ * eight that are also generated parameters — in their record param template. Prose in a
+ * registry is prose nothing reviews and nothing checks, and this file carried thirteen
+ * descriptions that reached the user only as a truncated `title=` (design 111 §2).
+ *
  * @type {Array<{field: string, label: string, kind: string, country: string|null,
- *               household: string|null, hint: string}>}
+ *               household: string|null}>}
  */
 export const PAYROLL_ELECTION_META = [
   // ── Routing (no country: it follows the wage wherever it is paid) ──────────
   {
     field: 'wageSplits', label: 'Direct Deposit', kind: ELECTION_KIND.SPLITS,
     country: null, household: null,
-    hint: 'Where this person\'s NET pay lands. Fixed amounts are taken first in list '
-        + 'order, then percentages of the original net pay; whatever is left goes to '
-        + 'their transaction account. Cash routing only — it has no tax consequence.',
   },
 
   // ── US ─────────────────────────────────────────────────────────────────────
   {
     field: 'k401DeferralPct', label: '401(k) Deferral', kind: ELECTION_KIND.PERCENT,
     country: 'US', household: 'k401DeferralPct',
-    hint: 'Employee deferral as a share of annual pay. Pre-tax: it reduces income tax '
-        + 'but NOT FICA (§3121(a) has no §402(g) exclusion).',
   },
   {
     field: 'k401EmployerMatchPct', label: '401(k) Match Rate', kind: ELECTION_KIND.PERCENT,
     country: 'US', household: 'k401EmployerMatchPct',
-    hint: 'Read as a 100% match on the first N% of pay. Employer-funded: never debits '
-        + 'household cash and is not the employee\'s deduction. Superseded for this '
-        + 'person by a match formula below, if one is set.',
   },
   {
     field: 'k401MatchTiers', label: '401(k) Match Formula', kind: ELECTION_KIND.TIERS,
     country: 'US', household: 'k401MatchTiers',
-    hint: 'The general match, as tiers consumed in order — e.g. 100% of the first 3% '
-        + 'then 50% of the next 2% (the safe-harbor basic match). Someone deferring '
-        + 'less than the band is matched only what they deferred.',
   },
   {
     field: 'k401NonElectivePct', label: '401(k) Non-Elective', kind: ELECTION_KIND.PERCENT,
     country: 'US', household: 'k401NonElectivePct',
-    hint: 'Employer contribution that does NOT depend on the employee deferring '
-        + 'anything (profit-sharing / safe-harbor non-elective). Not a match, and it '
-        + 'counts toward the §415(c) annual-additions limit.',
   },
   {
     field: 'k401AnnualCap', label: '401(k) Annual Cap', kind: ELECTION_KIND.MONEY,
     country: 'US', household: 'k401AnnualCap',
-    hint: 'A SCENARIO assumption applied to the deferral and the match separately — '
-        + 'not a statutory limit. §402(g), §414(v), §415(c) and §401(a)(17) apply on '
-        + 'top of it and are never disabled by leaving this blank.',
   },
   {
     field: 'iraAnnualContribution', label: 'IRA Contribution', kind: ELECTION_KIND.MONEY,
     country: 'US', household: 'iraAnnualContribution',
-    hint: 'Deductible Traditional IRA contribution per year, paid in twelfths from cash.',
   },
   {
     field: 'rothAnnualContribution', label: 'Roth Contribution', kind: ELECTION_KIND.MONEY,
     country: 'US', household: 'rothAnnualContribution',
-    hint: 'After-tax Roth contribution per year, paid in twelfths from cash. No income '
-        + 'phase-out is modelled.',
   },
 
   // ── AU ─────────────────────────────────────────────────────────────────────
   {
     field: 'superGuaranteePct', label: 'Super Guarantee', kind: ELECTION_KIND.PERCENT,
     country: 'AU', household: 'superGuaranteePct',
-    hint: 'Employer SG as a share of annual pay, on top of salary. Computed on '
-        + 'PRE-sacrifice pay (SGAA s10A(1)(h)) and truncated at the s10A(5) maximum '
-        + 'contributions base.',
   },
   {
     // The one field whose household key is NOT its own name — see the header.
     field: 'superAnnualCap', label: 'Super Guarantee Cap', kind: ELECTION_KIND.MONEY,
     country: 'AU', household: 'superGuaranteeAnnualCap',
-    hint: 'A scenario cap on the EMPLOYER SG alone, measured against this person\'s own '
-        + 'SG for the financial year. The Div 291 concessional cap applies separately '
-        + 'and is never disabled by leaving this blank.',
   },
   {
     field: 'superSalarySacrificePct', label: 'Salary Sacrifice', kind: ELECTION_KIND.PERCENT,
     country: 'AU', household: 'superSalarySacrificePct',
-    hint: 'Pre-tax share of pay sacrificed into super. Never reaches the member\'s cash; '
-        + 'reduces PAYG but NOT the SG. Taxed 15% in the fund (Div 295).',
   },
   {
     field: 'superPersonalDeductibleContribution', label: 'Personal Deductible', kind: ELECTION_KIND.MONEY,
     country: 'AU', household: 'superPersonalDeductibleContribution',
-    hint: 'Annual after-tax contribution deducted on the return (s290-150). Paid from '
-        + 'cash, taxed 15% in the fund, and the deduction is capped by s26-55 at '
-        + 'assessable income less other deductions — the excess is lost, not carried.',
   },
   {
     field: 'superNonConcessionalContribution', label: 'Non-Concessional', kind: ELECTION_KIND.MONEY,
     country: 'AU', household: 'superNonConcessionalContribution',
-    hint: 'Annual after-tax contribution with NO deduction and NO 15% fund tax. Buys a '
-        + 'tax-sheltered location rather than a deduction; bound by the Div 292 cap '
-        + 'and its bring-forward.',
   },
 ];
 

@@ -566,7 +566,7 @@
                state income tax. Options are filled in by PersonEditor from
                US_STATES (finance/tax/state/us-states.js) — the one list of
                modelled states — so this select stays empty here. -->
-          <select data-id="residencyState" title="US state of residency, for state income tax. Leave blank when there is no state of residency (e.g. stationed on a military base, or living outside the US) — a blank state means no state income tax. The household's active state is the primary person's (design 34)."></select>
+          <select data-id="residencyState"></select>
         </div>
         <div class="node-field">
           <label>Life Exp.</label>
@@ -589,7 +589,7 @@
         </div>
         <div class="node-field">
           <label>Self-employed</label>
-          <input type="checkbox" data-id="selfEmployed" title="Treat monthly wage as self-employment income (sole trader / 1099). Incurs US self-employment tax (SECA)."/>
+          <input type="checkbox" data-id="selfEmployed"/>
         </div>
         <div class="node-field">
           <label>Wage Currency</label>
@@ -600,7 +600,7 @@
         </div>
         <div class="node-field">
           <label>Work Country</label>
-          <select data-id="workCountry" title="Country where the work is actually performed. This — not the wage currency — determines whether the income is US- or AU-sourced for tax purposes. Leave as 'Same as residency' unless modelling a cross-border commuter or a remote worker paid from abroad.">
+          <select data-id="workCountry">
             <option value="">Same as residency</option>
             <option value="US">US</option>
             <option value="AU">AU</option>
@@ -690,14 +690,12 @@
         </div>
         <div class="node-field" data-id="cashRateRow" style="display:none">
           <label>Interest Rate</label>
-          <input type="number" step="0.001" data-id="cashRate" placeholder="blank = default"
-                 title="The rate the bank quotes (absolute, e.g. 0.03 = 3%). Stored as a spread over the central-bank Prime rate, so a Prime move fans out to every linked account (design 56)."/>
+          <input type="number" step="0.001" data-id="cashRate" placeholder="blank = default"/>
           <div class="field-hint" data-id="cashRateHint" style="font-size:0.8em;opacity:0.7"></div>
         </div>
         <div class="node-field" data-id="transactionAccountRow" style="display:none">
           <label>Transaction Account</label>
-          <input type="checkbox" data-id="isTransactionAccount"
-                 title="Route this country's household cash (expenses, wages, contributions, taxes) through this account. Flag exactly one cash account per country."/>
+          <input type="checkbox" data-id="isTransactionAccount"/>
         </div>
         <!-- Dividend reinvestment election (design 106 §4). Shown only for the roles
              where a dividend is actually separated from price return and there is a
@@ -707,8 +705,7 @@
              cash. -->
         <div class="node-field" data-id="reinvestDividendsRow" style="display:none">
           <label>Reinvest Dividends</label>
-          <select data-id="reinvestDividends"
-                  title="This broker's DRIP election. Reinvest = dividends (and this account's bond coupons) buy more of its holdings; Pay cash = they are paid out to the country's transaction account. Default follows the plan-wide Reinvest Dividends parameter, so changing that moves this account with it.">
+          <select data-id="reinvestDividends">
             <option value="">Default (plan-wide)</option>
             <option value="true">Reinvest</option>
             <option value="false">Pay cash</option>
@@ -731,14 +728,12 @@
         <div data-id="fxBasisFields" style="display:none">
           <div class="node-field">
             <label>§988 FX Basis</label>
-            <input type="number" step="0.0001" data-id="fxBasisRate" placeholder="blank = rate at first disposition"
-                   title="Foreign units per USD at which this pool's currency was ACQUIRED (design 87). Spending foreign cash is a disposition of nonfunctional currency and realizes ordinary exchange gain or loss against this rate. For a balance built up over years this is the balance-weighted average of the rates it was acquired at — AUD earned in Australia takes the spot rate on the day earned, so a long-accumulated pool is NOT today's rate. Blank stamps the rate at the first disposition, which UNDERSTATES §988 rather than inventing it."/>
+            <input type="number" step="0.0001" data-id="fxBasisRate" placeholder="blank = rate at first disposition"/>
             <div class="field-hint" data-id="fxBasisHint" style="font-size:0.8em;opacity:0.7"></div>
           </div>
           <div class="node-field">
             <label>Income-Producing</label>
-            <input type="number" step="0.01" min="0" max="1" data-id="cashDeductibleFraction" placeholder="blank = 0 (personal)"
-                   title="Share of this pool put to an income-producing use (0–1). Drives two tests at once: §988(e)(3) (expenses meeting §162/§212 — whether §988 applies at all) and §165(c)(2) (a loss must be from a transaction &quot;entered into for profit&quot; to be deductible). &quot;For profit&quot; is the broader test, so one knob over-disallows rather than over-deducts. A personal currency loss is disallowed while the matching gain is still taxed. Blank = fully personal, the safe default — an offset backing a rental should be set explicitly."/>
+            <input type="number" step="0.01" min="0" max="1" data-id="cashDeductibleFraction" placeholder="blank = 0 (personal)"/>
           </div>
         </div>
         <div class="node-field" data-id="drawdownRow">
@@ -752,7 +747,7 @@
           </div>
           <div class="node-field">
             <label>Earnings Basis</label>
-            <input type="number" data-id="earningsBasis" value="0" disabled title="Computed = balance − contributions"/>
+            <input type="number" data-id="earningsBasis" value="0" disabled/>
           </div>
         </div>
         <div data-id="offsetFields" style="display:none">
@@ -771,54 +766,45 @@
           <div class="node-section-head">Loan Terms (design 54 / 86)</div>
           <div class="node-field">
             <label>Interest Rate</label>
-            <input type="number" step="0.001" data-id="loanRate" value="0"
-                   title="Annual rate the lender quotes (absolute, e.g. 0.06 = 6%). When Prime is configured it is stored as a spread over the central-bank Prime rate, so a Prime move re-rates this loan (design 56)."/>
+            <input type="number" step="0.001" data-id="loanRate" value="0"/>
             <div class="field-hint" data-id="loanRateHint" style="font-size:0.8em;opacity:0.7"></div>
           </div>
           <div class="node-field">
             <label>Monthly Payment</label>
-            <input type="number" data-id="monthlyPayment" value="0"
-                   title="Fixed monthly P&amp;I payment. Inert while Interest Only is on (the payment is derived from the accrued interest) and after IO expiry with a maturity year set (the loan re-amortises over the remaining term). A fixed payment below the accrued interest does not error — the balance grows."/>
+            <input type="number" data-id="monthlyPayment" value="0"/>
           </div>
           <div class="node-field">
             <label>Interest Only</label>
-            <input type="checkbox" data-id="interestOnly"
-                   title="Pay exactly the accrued interest on the effective (offset-reduced) principal each month, so the balance is flat by construction and a variable rate is tracked automatically (design 86 G2)."/>
+            <input type="checkbox" data-id="interestOnly"/>
           </div>
           <div class="node-field">
             <label>IO Until Year</label>
-            <input type="number" data-id="interestOnlyUntilYear" placeholder="blank = IO for life"
-                   title="Calendar year the interest-only period ends; from then the loan reverts to P&amp;I amortised over the remaining term (needs a Maturity Year). Blank = interest-only forever (design 86 G6)."/>
+            <input type="number" data-id="interestOnlyUntilYear" placeholder="blank = IO for life"/>
           </div>
           <div class="node-field">
             <label>Maturity Year</label>
-            <input type="number" data-id="maturityYear" placeholder="blank = no term"
-                   title="Calendar year the loan must be discharged — the whole remaining balance plus interest is paid that year. Blank = no term (design 86 G6)."/>
+            <input type="number" data-id="maturityYear" placeholder="blank = no term"/>
             <div class="field-hint" data-id="loanTermHint" style="font-size:0.8em;opacity:0.7"></div>
           </div>
           <div class="node-field">
             <label>Deductible Frac.</label>
-            <input type="number" step="0.05" min="0" max="1" data-id="deductibleFraction" placeholder="blank = auto (rental)"
-                   title="Income-producing share of the borrowed money's USE, 0..1 (s8-1; Munro; TR 95/33) — design 86 G3. Blank keeps the default rule: fully deductible while a linked property rents, nil otherwise. It also sets the §988(e) business share. On a STANDALONE loan (no linked property) a stated fraction deducts the interest paid: in full against AU assessable income (s8-1), and on the US return only up to net investment income, with the excess carried forward (§163(d))."/>
+            <input type="number" step="0.05" min="0" max="1" data-id="deductibleFraction" placeholder="blank = auto (rental)"/>
           </div>
           <div class="node-field">
             <label>Linked Property</label>
-            <select data-id="linkedPropertyKey"
-                    title="The property this loan finances. Only properties with no mortgage balance of their own are offered: a property with one already synthesizes its own &lt;property&gt;Loan, and a second loan against it would double-count the debt. The link is also what joins an offset account to this loan.">
+            <select data-id="linkedPropertyKey">
               <option value="">— none (standalone) —</option>
             </select>
           </div>
           <div class="node-field">
             <label>Payment Source</label>
-            <select data-id="paymentSourceKey"
-                    title="Account the monthly payment is debited from. Blank resolves in order: a same-currency offset linked to this loan's property, then the country's flagged transaction account, then its savings pool.">
+            <select data-id="paymentSourceKey">
               <option value="">— default —</option>
             </select>
           </div>
           <div class="node-field">
             <label>§988 Booking FX</label>
-            <input type="number" step="0.0001" data-id="bookingFxRate" placeholder="blank = rate at first payment"
-                   title="Foreign units per USD on the date the debt was incurred (design 86 G7). A non-USD loan held by a US person realizes ordinary exchange gain or loss on each principal repayment, measured against this rate. Blank stamps the rate at the first payment, which UNDERSTATES §988 for a loan already outstanding at t0."/>
+            <input type="number" step="0.0001" data-id="bookingFxRate" placeholder="blank = rate at first payment"/>
           </div>
         </div>
         <div data-id="holdingsSection" class="holdings-section" style="display:none">
@@ -950,23 +936,19 @@
         <div class="node-section-head">Purchase (buy mid-run)</div>
         <div class="node-field">
           <label>Purchase Year</label>
-          <input type="number" data-id="purchaseYear" placeholder="blank = owned from the start"
-                 title="Calendar year this dwelling is bought. Blank = already owned at the simulation start (today's behaviour). Set it and the property is DORMANT — worth nothing, costing nothing — until 15 January of that year, when the price is debited and it becomes an ordinary property. The purchase settles AFTER any sale on the same date, so selling and buying in one January works."/>
+          <input type="number" data-id="purchaseYear" placeholder="blank = owned from the start"/>
         </div>
         <div class="node-field">
           <label>Purchase Price</label>
-          <input type="number" data-id="purchasePrice" placeholder="blank = no purchase"
-                 title="What the dwelling costs, in TODAY's money, in the property's currency. It is grown to the purchase date at this property's own appreciation rate — not CPI — so a price set as a share of what you are selling keeps that share. A purchase year with no price buys nothing."/>
+          <input type="number" data-id="purchasePrice" placeholder="blank = no purchase"/>
         </div>
         <div class="node-field">
           <label>Price Is Nominal</label>
-          <input type="checkbox" data-id="purchasePriceIsNominal"
-                 title="Tick when the price is already stated as at the purchase date (a contracted price). Unticked — the default — treats it as today's money and grows it."/>
+          <input type="checkbox" data-id="purchasePriceIsNominal"/>
         </div>
         <div class="node-field">
           <label>Fund From</label>
-          <select data-id="purchaseFundFrom"
-                  title="Account the purchase price is debited from. Blank uses the property country's cash pool. If the balance would breach its minimum, the shortfall is raised through the normal drawdown queue — which is what makes a purchase interact with the portfolio instead of looking free.">
+          <select data-id="purchaseFundFrom">
             <option value="">— country cash pool —</option>
           </select>
         </div>
@@ -977,8 +959,7 @@
         <div class="node-section-head">Main Residence History (design 83 G7)</div>
         <div class="node-field">
           <label>Acquired</label>
-          <input type="date" data-id="acquisitionDate"
-                 title="When the dwelling was actually bought. This is the denominator of the AU s118-185 ownership period AND of the s115-105 CGT discount testing period, and the start of the US §121 nonqualified-use window. LEAVE IT BLANK AND THOSE CONCESSIONS ARE DENIED — it is not defaulted to the simulation start, because that would treat a twenty-year hold as a three-year one and inflate every fraction in your favour. Set automatically when a dwelling is bought mid-run."/>
+          <input type="date" data-id="acquisitionDate"/>
         </div>
         <!-- One dropdown plus a conditional date, rather than free-form dates that can
              be set to contradictory combinations (design 83 §7b.2c). The four options
@@ -987,8 +968,7 @@
              rather than merely invalid. -->
         <div class="node-field">
           <label>History</label>
-          <select data-id="mainResidenceMode"
-                  title="Which main-residence history this dwelling has. NEVER = an investment property throughout (no AU exemption, no US §121). THROUGHOUT = the main residence for the whole hold (fully exempt in AU, full §121 cap in the US). The two mixed options each prorate — Australia by the fraction of ownership days, the United States by §121(b)(5) nonqualified use — and the ORDER matters: renting after you move out is forgiven by §121 Exception 1, renting before you move in is not.">
+          <select data-id="mainResidenceMode">
             <option value="never">Never a main residence</option>
             <option value="throughout">Main residence throughout</option>
             <option value="moved-out">From the start, then moved out</option>
@@ -997,18 +977,15 @@
         </div>
         <div class="node-field" data-id="mainResidenceMovedInRow">
           <label>Moved In</label>
-          <input type="date" data-id="mainResidenceFrom"
-                 title="When this dwelling first became the main residence. Australia exempts only the fraction of ownership days it WAS the main residence, so moving into a long-rented house late buys a small fraction — not the lot."/>
+          <input type="date" data-id="mainResidenceFrom"/>
         </div>
         <div class="node-field" data-id="mainResidenceMovedOutRow">
           <label>Moved Out</label>
-          <input type="date" data-id="mainResidenceUntil"
-                 title="When it stopped being the main residence. Everything after this date is a rental period — which §121 Exception 1 forgives, unlike the years before you move in."/>
+          <input type="date" data-id="mainResidenceUntil"/>
         </div>
         <div class="node-field">
           <label>Downsizer Contrib.</label>
-          <input type="checkbox" data-id="claimDownsizerContribution"
-                 title="Claim the AU s292-102 downsizer super contribution on this dwelling's sale: up to A$300,000 per owner aged 55+, outside the contribution caps, for an Australian dwelling held 10+ years. Requires the main-residence exemption to be at least PARTLY available — so a dwelling that was never lived in funds nothing, and this is the same lever as Main Res. From. Figures unverified against the ATO."/>
+          <input type="checkbox" data-id="claimDownsizerContribution"/>
         </div>
 
         <!-- ── MORTGAGE — synthesized into a linked Loan liability at build time
@@ -1016,41 +993,41 @@
         <div class="node-section-head">Mortgage (design 54 / 86)</div>
         <div class="node-field">
           <label>Mortgage Bal.</label>
-          <input type="number" data-id="mortgageBalance" value="0" title="Outstanding principal, in the property's currency. Above 0 this synthesizes a linked Loan liability keyed &lt;property&gt;Loan; the property itself then contributes equity only."/>
+          <input type="number" data-id="mortgageBalance" value="0"/>
         </div>
         <div class="node-field">
           <label>Monthly Mtg.</label>
-          <input type="number" data-id="monthlyMortgage" value="0" title="Fixed monthly P&amp;I payment. Inert while Interest Only is on (the payment is derived from the accrued interest) and while past the IO expiry with a maturity year set (the loan re-amortises over the remaining term)."/>
+          <input type="number" data-id="monthlyMortgage" value="0"/>
         </div>
         <div class="node-field">
           <label>Mtg. Int. Rate</label>
-          <input type="number" data-id="mortgageInterestRate" value="0" step="0.001" title="Annual mortgage interest rate the bank quotes (deductible). When Prime is configured it is stored as a spread over Prime (design 56), so a Prime move re-rates the loan."/>
+          <input type="number" data-id="mortgageInterestRate" value="0" step="0.001"/>
           <div class="field-hint" data-id="mortgageRateHint" style="font-size:0.8em;opacity:0.7"></div>
         </div>
         <div class="node-field">
           <label>Interest Only</label>
-          <input type="checkbox" data-id="mortgageInterestOnly" title="Pay exactly the accrued interest on the effective (offset-reduced) principal each month, so the balance is flat by construction and a variable rate is tracked automatically (design 86 G2). A fixed Monthly Mtg. below the accrued interest silently negatively amortizes instead — this is the safe way to express interest-only."/>
+          <input type="checkbox" data-id="mortgageInterestOnly"/>
         </div>
         <div class="node-field">
           <label>IO Until Year</label>
-          <input type="number" data-id="mortgageInterestOnlyUntilYear" placeholder="blank = IO for life" title="Calendar year the interest-only period ends. From that year the loan reverts to P&amp;I amortised over the REMAINING term (needs a Maturity Year), which is the payment step-up a 'hold the leverage' plan is exposed to. Blank = interest-only forever (design 86 G6)."/>
+          <input type="number" data-id="mortgageInterestOnlyUntilYear" placeholder="blank = IO for life"/>
         </div>
         <div class="node-field">
           <label>Maturity Year</label>
-          <input type="number" data-id="mortgageMaturityYear" placeholder="blank = no term" title="Calendar year the loan must be discharged. In that year the whole remaining balance plus interest is paid; a shortfall runs through the normal replenish / insufficient-funds path. Blank = no term, the loan amortises (or stays interest-only) forever (design 86 G6)."/>
+          <input type="number" data-id="mortgageMaturityYear" placeholder="blank = no term"/>
           <div class="field-hint" data-id="mortgageTermHint" style="font-size:0.8em;opacity:0.7"></div>
         </div>
         <div class="node-field">
           <label>Deductible Frac.</label>
-          <input type="number" data-id="mortgageDeductibleFraction" step="0.05" min="0" max="1" placeholder="blank = auto (rental)" title="Income-producing share of the borrowed money's USE, 0..1 (s8-1; Munro; TR 95/33) — design 86 G3. Blank keeps the default rule: fully deductible while the property is renting, nil otherwise. It also decides the §988(e) business share, so it moves the exchange gain/loss treatment too."/>
+          <input type="number" data-id="mortgageDeductibleFraction" step="0.05" min="0" max="1" placeholder="blank = auto (rental)"/>
         </div>
         <div class="node-field">
           <label>Payment From</label>
-          <select data-id="mortgagePaymentSourceKey" title="The cash pool the monthly mortgage payment debits. Blank = default: a same-currency offset linked to this property when one exists, otherwise the flagged transaction account / country savings pool. Paying from the offset is what a real offset facility direct-debits, and it is not cosmetic — draining the offset raises the interest-bearing principal. When the chosen pool cannot cover the payment the shortfall runs the normal replenish path (sell down, book the tax, escalate cross-border), so an empty offset does not stall the loan."></select>
+          <select data-id="mortgagePaymentSourceKey"></select>
         </div>
         <div class="node-field">
           <label>§988 Booking FX</label>
-          <input type="number" data-id="mortgageBookingFxRate" step="0.0001" placeholder="blank = rate at first payment" title="Foreign units per USD on the date the debt was incurred (design 86 G7). A non-USD mortgage held by a US person realizes ordinary exchange gain or loss on each principal repayment, measured against this rate. Blank stamps the rate at the first payment, which treats the loan as incurred then and so UNDERSTATES §988 for a loan already outstanding at t0."/>
+          <input type="number" data-id="mortgageBookingFxRate" step="0.0001" placeholder="blank = rate at first payment"/>
         </div>
 
         <div class="node-section-head">Rental Income (design 48)</div>
@@ -1060,42 +1037,42 @@
         </div>
         <div class="node-field">
           <label>Monthly Rent</label>
-          <input type="number" data-id="monthlyRent" value="0" title="Gross rent at 100% occupancy"/>
+          <input type="number" data-id="monthlyRent" value="0"/>
         </div>
         <div class="node-field">
           <label>Occupancy</label>
-          <input type="number" data-id="occupancyRate" value="0.95" step="0.01" title="Fraction realized (LTR ≈ 0.95, STR ≈ 0.55)"/>
+          <input type="number" data-id="occupancyRate" value="0.95" step="0.01"/>
         </div>
         <div class="node-field">
           <label>Expense Ratio</label>
-          <input type="number" data-id="rentalExpenseRatio" value="0.25" step="0.01" title="Deductible cash opex as a fraction of gross rent"/>
+          <input type="number" data-id="rentalExpenseRatio" value="0.25" step="0.01"/>
         </div>
         <div class="node-field">
           <label>Land Value %</label>
-          <input type="number" data-id="landValueRatio" value="0.2" step="0.01" title="Non-depreciable land fraction of cost basis"/>
+          <input type="number" data-id="landValueRatio" value="0.2" step="0.01"/>
         </div>
         <div class="node-field">
           <label>Deprec. Override</label>
-          <input type="number" data-id="annualDepreciationOverride" placeholder="blank = derive" title="Explicit annual depreciation $; blank derives per-country"/>
+          <input type="number" data-id="annualDepreciationOverride" placeholder="blank = derive"/>
         </div>
 
         <!-- ── Owner-occupied HOLDING COST — separate from rental opex above (design 75) ── -->
         <div class="node-section-head">Running Costs &amp; Repairs (design 75)</div>
         <div class="node-field">
           <label>Annual Running Cost</label>
-          <input type="number" data-id="annualRunningCost" value="0" title="Base-year fixed holding cost (rates + insurance + utilities + servicing) in the property's currency. Inflates each year. 0 = off."/>
+          <input type="number" data-id="annualRunningCost" value="0"/>
         </div>
         <div class="node-field">
           <label>Running Cost % Val.</label>
-          <input type="number" data-id="runningCostValuePct" value="0" step="0.001" title="Optional value-proportional running cost, as a fraction of current value per year (0.005 = 0.5%/yr). Added on top of the fixed cost. 0 = none."/>
+          <input type="number" data-id="runningCostValuePct" value="0" step="0.001"/>
         </div>
         <div class="node-field">
           <label>Running Cost Growth</label>
-          <input type="number" data-id="runningCostGrowth" value="0" step="0.001" title="Optional REAL growth of the running cost on top of inflation (0 = tracks inflation exactly)."/>
+          <input type="number" data-id="runningCostGrowth" value="0" step="0.001"/>
         </div>
         <div class="node-field">
           <label>Repair Model</label>
-          <select data-id="repairModel" title="Stochastic repair process. NONE = no repairs drawn. BERNOULLI = one big repair some years. POISSON = a variable count per year. CONTINUOUS = a lognormal cost every year.">
+          <select data-id="repairModel">
             <option value="NONE">None</option>
             <option value="BERNOULLI">Bernoulli (one big repair some years)</option>
             <option value="POISSON">Poisson (variable count / year)</option>
@@ -1104,32 +1081,31 @@
         </div>
         <div class="node-field">
           <label>Repair Prob.</label>
-          <input type="number" data-id="repairProb" value="0" step="0.01" title="Annual probability of a repair (BERNOULLI model), e.g. 0.25 ≈ a big repair every 4 years."/>
+          <input type="number" data-id="repairProb" value="0" step="0.01"/>
         </div>
         <div class="node-field">
           <label>Repair Rate λ</label>
-          <input type="number" data-id="repairLambda" value="0" step="0.1" title="Expected number of repairs per year (POISSON model)."/>
+          <input type="number" data-id="repairLambda" value="0" step="0.1"/>
         </div>
         <div class="node-field">
           <label>Repair Median</label>
-          <input type="number" data-id="repairMedian" value="0" title="Median severity per repair event, in the property's currency. Ignored when Repair % Val. is set."/>
+          <input type="number" data-id="repairMedian" value="0"/>
         </div>
         <div class="node-field">
           <label>Repair % Val.</label>
-          <input type="number" data-id="repairValuePct" value="0" step="0.001" title="Alternative severity anchor: median repair = this fraction × current value (0.02 ≈ 2% of the house). Overrides Repair Median when > 0."/>
+          <input type="number" data-id="repairValuePct" value="0" step="0.001"/>
         </div>
         <div class="node-field">
           <label>Repair σ</label>
-          <input type="number" data-id="repairSigma" value="0.6" step="0.05" title="Lognormal shape (tail heaviness) of repair severity. Higher ⇒ fatter tail of large repairs."/>
+          <input type="number" data-id="repairSigma" value="0.6" step="0.05"/>
         </div>
         <div class="node-field">
           <label>Capitalize Frac.</label>
-          <input type="number" data-id="capitalizeRepairs" value="0" step="0.05" title="Fraction of each repair treated as a capital improvement (lifts cost basis, cuts the eventual CGT). 0 = pure maintenance."/>
+          <input type="number" data-id="capitalizeRepairs" value="0" step="0.05"/>
         </div>
         <div class="node-field">
           <label>Speculative</label>
-          <input type="checkbox" data-id="speculative"
-                 title="Simulate this asset but do NOT count it as yours: it still appreciates, still sells on its Sale Year, and still pays capital-gains tax — but until it converts it is worth ZERO in net worth and in everything that follows net worth. For a stake that may never find a buyer. Disclosed separately as &quot;incl. speculative&quot;, so nothing is lost. Incompatible with a drawdown priority (design 88)."/>
+          <input type="checkbox" data-id="speculative"/>
         </div>
       </div>
       <div class="node-buttons">
@@ -1201,8 +1177,7 @@
         </div>
         <div class="node-field">
           <label>Speculative</label>
-          <input type="checkbox" data-id="speculative"
-                 title="Simulate this asset but do NOT count it as yours: it still appreciates, still sells on its Sale Year, and still pays capital-gains tax — but until it converts it is worth ZERO in net worth and in everything that follows net worth. For a stake that may never find a buyer. Disclosed separately as &quot;incl. speculative&quot;, so nothing is lost. Incompatible with a drawdown priority (design 88)."/>
+          <input type="checkbox" data-id="speculative"/>
         </div>
       </div>
       <div class="node-buttons">
@@ -1273,8 +1248,7 @@
         </div>
         <div class="node-field">
           <label>Speculative</label>
-          <input type="checkbox" data-id="speculative"
-                 title="Simulate this asset but do NOT count it as yours: it still appreciates, still sells on its Sale Year, and still pays capital-gains tax — but until it converts it is worth ZERO in net worth and in everything that follows net worth. For a stake that may never find a buyer. Disclosed separately as &quot;incl. speculative&quot;, so nothing is lost. Incompatible with a drawdown priority (design 88)."/>
+          <input type="checkbox" data-id="speculative"/>
         </div>
       </div>
       <div class="node-buttons">

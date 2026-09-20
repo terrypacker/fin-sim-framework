@@ -58,51 +58,43 @@ import { SECURITY_FIELDS, makeSecurity, SYNTHETIC_SECURITY_PREFIX } from '../../
  * a tri-state that cannot be observed is a control that teaches the reader a distinction
  * the model does not have.
  */
-const FIELD_SPECS = Object.freeze([
-  { field: 'symbol', label: 'Symbol', kind: 'text', declarable: false, section: 'id', hint: 'e.g. VTI',
-    title: 'Ticker — decoration. A symbol CHANGE is a corporate action (design 94 §7), not an edit here.' },
-  { field: 'name', label: 'Name', kind: 'text', declarable: false, section: 'id', hint: 'e.g. Total US market ETF',
-    title: 'Display name. Shown wherever a symbol is absent.' },
+export const FIELD_SPECS = Object.freeze([
+  { field: 'symbol', label: 'Symbol', kind: 'text', declarable: false, section: 'id', hint: 'e.g. VTI' },
+  { field: 'name', label: 'Name', kind: 'text', declarable: false, section: 'id', hint: 'e.g. Total US market ETF' },
 
-  { field: 'rateKey', label: 'Market', kind: 'rateKey', section: 'equity',
-    title: 'The market-return series this instrument tracks. Must lie inside the ALLOCATION class '
-         + 'of any lot that names it (assertAllocationMatch) — a BOND lot may not name an equity market.' },
-  { field: 'beta', label: 'Beta (vs sleeve)', kind: 'number', step: '0.05', section: 'equity',
-    title: 'Loading on the sleeve’s own deviation, NOT on the market. 1.0 is the identity: the '
-         + 'instrument does exactly what its sleeve does (design 94 §6.2).' },
-  { field: 'idioVol', label: 'Idiosyncratic vol', kind: 'number', step: '0.01', section: 'equity',
-    title: '⚠ A security with idioVol > 0 takes a random draw EVERY tick whether or not any '
-         + 'position holds it — the draw set is the registry, not the portfolio (design 94 §6.2). '
-         + 'Declaring one perturbs the whole run. 0 (or silent) draws nothing.' },
-  { field: 'dividendYield', label: 'Dividend yield', kind: 'number', step: '0.001', section: 'equity',
-    title: 'Overrides the lot’s inline yield; the account rate stays the floor '
-         + '(inst.dividendYield ?? h.dividendYield ?? account rate — design 94 D11).' },
-  { field: 'identityGroup', label: 'Identity group', kind: 'text', section: 'equity',
-    title: '§1091 "substantially identical" (design 94 §8.1c). Two DIFFERENT securities are related '
-         + 'only when an author says so — give both the same group. Silent ⇒ identical to itself only.' },
+  { field: 'rateKey', label: 'Market', kind: 'rateKey', section: 'equity' },
+  { field: 'beta', label: 'Beta (vs sleeve)', kind: 'number', step: '0.05', section: 'equity' },
+  { field: 'idioVol', label: 'Idiosyncratic vol', kind: 'number', step: '0.01', section: 'equity' },
+  { field: 'dividendYield', label: 'Dividend yield', kind: 'number', step: '0.001', section: 'equity' },
+  { field: 'identityGroup', label: 'Identity group', kind: 'text', section: 'equity' },
 
   { field: 'taxExemption', label: 'Coupon tax treatment', kind: 'select', section: 'bond',
     options: [['none', 'Taxable'], ['state', 'Treasury (state-exempt)'],
-              ['federal', 'Municipal (federal-exempt)'], ['both', 'Muni (all-state)']],
-    title: 'Read for bond coupons (design 66 §G2). A declared value overrides the lot’s.' },
-  { field: 'issuingState', label: 'Issuing state', kind: 'text', maxlength: 2, section: 'bond',
-    title: 'Municipal issuer — the coupon is state-exempt only when it matches the resident’s state.' },
-  { field: 'parPerUnit', label: 'Par per unit', kind: 'number', step: '1', section: 'bond',
-    title: 'Face value of one unit (design 93 §5). The units substrate’s par walk checks against it.' },
-  { field: 'couponRate', label: 'Coupon rate', kind: 'number', step: '0.001', section: 'bond',
-    title: 'Annual coupon as a decimal. Silent ⇒ the lot’s own, then the prevailing rate.' },
+              ['federal', 'Municipal (federal-exempt)'], ['both', 'Muni (all-state)']] },
+  { field: 'issuingState', label: 'Issuing state', kind: 'text', maxlength: 2, section: 'bond' },
+  { field: 'parPerUnit', label: 'Par per unit', kind: 'number', step: '1', section: 'bond' },
+  { field: 'couponRate', label: 'Coupon rate', kind: 'number', step: '0.001', section: 'bond' },
   { field: 'couponFrequency', label: 'Coupon frequency', kind: 'select', section: 'bond',
-    options: [['1', 'Annual'], ['2', 'Semi-annual'], ['4', 'Quarterly']], coerce: 'int',
-    title: 'Payments per year; each firing pays couponRate / frequency (design 66 §G10a).' },
-  { field: 'maturityDate', label: 'Maturity', kind: 'date', section: 'bond',
-    title: 'Set ⇒ an individual bond (pulls to par, redeems at maturity). Silent ⇒ a perpetual bond fund.' },
-  { field: 'duration', label: 'Duration (yr)', kind: 'number', step: '0.1', section: 'bond',
-    title: 'Modified duration — how far a rate move marks the price.' },
-  { field: 'zeroCoupon', label: 'Zero-coupon / OID', kind: 'check', declarable: false, section: 'bond',
-    title: 'No cash coupon; the price accretes to par and the annual OID is imputed ordinary income (design 66 §G6).' },
-  { field: 'inflationLinked', label: 'Inflation-linked (TIPS)', kind: 'check', declarable: false, section: 'bond',
-    title: 'Principal indexes to CPI; the accretion is imputed ordinary income (design 66 §G5).' },
+    options: [['1', 'Annual'], ['2', 'Semi-annual'], ['4', 'Quarterly']], coerce: 'int' },
+  { field: 'maturityDate', label: 'Maturity', kind: 'date', section: 'bond' },
+  { field: 'duration', label: 'Duration (yr)', kind: 'number', step: '0.1', section: 'bond' },
+  { field: 'zeroCoupon', label: 'Zero-coupon / OID', kind: 'check', declarable: false, section: 'bond' },
+  { field: 'inflationLinked', label: 'Inflation-linked (TIPS)', kind: 'check', declarable: false, section: 'bond' },
 ]);
+
+/**
+ * The id row's spec. Kept apart from `FIELD_SPECS` because `_idFieldEl` renders it by hand
+ * — it is the one control whose editability depends on whether the record already exists —
+ * while still being a field of this form, which is what the help generator needs to know.
+ */
+const ID_FIELD_SPEC = Object.freeze({ field: 'id', label: 'Id', kind: 'text', declarable: false, section: 'id' });
+
+/**
+ * Every field this form renders, in render order — the tier-1 field inventory for the
+ * `security` node kind (design 111 §3). Named in `NODE_EDITORS`; the help generator reads
+ * it instead of an HTML template, because this editor builds its rows in JS.
+ */
+export const SECURITY_FORM_FIELDS = Object.freeze([ID_FIELD_SPEC, ...FIELD_SPECS]);
 
 const SECTIONS = Object.freeze([
   { key: 'id',     label: 'Identity' },
@@ -187,9 +179,6 @@ export class SecurityEditor extends BaseComponent {
     input.value         = this._node?.id ?? '';
     input.placeholder   = 'e.g. sec-employer-stock';
     input.disabled      = this._isEdit;
-    input.title = this._isEdit
-      ? 'The id every position names. Fixed once created — a rename would orphan every lot holding it (design 94 §4 rule 3).'
-      : 'Stable identity. Every lot names this, so pick something durable; a ticker change is a corporate action, not an id change.';
     wrap.append(label, input);
     return wrap;
   }
@@ -205,7 +194,6 @@ export class SecurityEditor extends BaseComponent {
     const wrap = document.createElement('div');
     wrap.className = 'node-field';
     wrap.dataset.field = spec.field;
-    if (spec.title) wrap.title = spec.title;
 
     const declared = this._declared(spec.field);
 

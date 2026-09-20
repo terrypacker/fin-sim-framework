@@ -157,12 +157,12 @@ export const PERSON_PARAM_TEMPLATE = [
   // rate — clearing it back to empty puts them back on the household default.
   { field: 'k401DeferralPct', label: '401(k) Deferral', type: 'Number',
     mc: false, opt: true, nullable: true,
-    description: 'This person\'s 401(k) deferral as a fraction of annual pay (0.10 = 10%). Empty inherits the household rate; 0 means they defer nothing.' },
+    description: 'This person\'s 401(k) deferral as a fraction of annual pay (0.10 = 10%). Pre-tax: it reduces income tax but NOT FICA (\u00a73121(a) has no \u00a7402(g) exclusion). Empty inherits the household rate; 0 means they defer nothing.' },
   // Employer-set terms (match, non-elective, Super Guarantee) are not household
   // choices: neither flag (design 98 W2).
   { field: 'k401EmployerMatchPct', label: '401(k) Employer Match', type: 'Number',
     mc: false, opt: false, nullable: true,
-    description: 'Employer match on this person\'s plan, as a fraction of annual pay. Employer-funded: never debits household cash and is not their deduction. Empty inherits the household rate.' },
+    description: 'Employer match on this person\'s plan, read as a 100% match on the first N% of pay. Employer-funded: never debits household cash and is not their deduction. Superseded for this person by a match formula (tiers), if one is set. Empty inherits the household rate.' },
   { field: 'k401NonElectivePct', label: '401(k) Non-Elective', type: 'Number',
     mc: false, opt: false, nullable: true,
     description: 'Employer contribution for this person as a fraction of annual pay that does not depend on them deferring anything (profit-sharing / safe-harbor non-elective). Not a match. Empty inherits the household rate.' },
@@ -171,7 +171,7 @@ export const PERSON_PARAM_TEMPLATE = [
   // it on the Person record directly, or use the household-level match formula.
   { field: 'k401AnnualCap', label: '401(k) Annual Cap', type: 'Number',
     mc: false, opt: false, nullable: true,
-    description: 'Annual dollar cap applied to this person\'s deferral and match separately. Empty inherits the household cap. A scenario assumption, not a statutory limit — see design 95 phase 3.' },
+    description: 'Annual dollar cap applied to this person\'s deferral and match separately. Empty inherits the household cap. A scenario assumption, not a statutory limit: \u00a7402(g), \u00a7414(v), \u00a7415(c) and \u00a7401(a)(17) apply on top of it and are never disabled by leaving it blank — see design 95 phase 3.' },
   { field: 'iraAnnualContribution', label: 'IRA Annual Contribution', type: 'Number',
     mc: false, opt: true, nullable: true,
     description: 'Deductible Traditional IRA contribution per year for this person, paid in twelfths. Empty inherits the household amount.' },
@@ -180,10 +180,10 @@ export const PERSON_PARAM_TEMPLATE = [
     description: 'After-tax Roth contribution per year for this person, paid in twelfths. Empty inherits the household amount. No income phase-out is modelled.' },
   { field: 'superGuaranteePct', label: 'Super Guarantee Rate', type: 'Number',
     mc: false, opt: false, nullable: true,
-    description: 'Employer Superannuation Guarantee for this person as a fraction of annual pay (0.12 = 12%). Employer-funded and on top of salary. Empty inherits the household rate.' },
+    description: 'Employer Superannuation Guarantee for this person as a fraction of annual pay (0.12 = 12%). Employer-funded and on top of salary, computed on PRE-sacrifice pay (SGAA s10A(1)(h)) and truncated at the s10A(5) maximum contributions base. Empty inherits the household rate.' },
   { field: 'superAnnualCap', label: 'Super Annual Cap', type: 'Number',
     mc: false, opt: false, nullable: true,
-    description: 'Annual cap on this person\'s employer Super contribution. Empty inherits the household cap.' },
+    description: 'A scenario cap on this person\'s EMPLOYER SG alone, measured against their own SG for the financial year. The Div 291 concessional cap applies separately and is never disabled by leaving this blank. Empty inherits the household cap.' },
 ];
 
 export const REAL_PROPERTY_PARAM_TEMPLATE = [

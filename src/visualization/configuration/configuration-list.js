@@ -9,20 +9,7 @@
  */
 
 import { BaseComponent } from '../components/base-component.js';
-
-const KIND_LABELS = {
-  person:          'People',
-  account:         'Accounts',
-  'real-property': 'Real Property',
-  collectible:     'Collectibles',
-  company:         'Company Equity',
-  bequest:         'Inheritance',
-  security:        'Securities',
-  event:           'Events',
-  handler:         'Handlers',
-  action:          'Actions',
-  reducer:         'Reducers',
-};
+import { NODE_KIND_LABELS as KIND_LABELS } from './node-editor-registry.js';
 
 /**
  * Design 88: the disclosure badge. A speculative asset is worth zero in every

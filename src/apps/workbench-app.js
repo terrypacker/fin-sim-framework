@@ -42,6 +42,7 @@ import {
 } from '../simulation-framework/bus-messages.js';
 import { PeopleController }           from '../visualization/people/people-controller.js';
 import { PersonEditor }               from '../visualization/people/person-editor.js';
+import { decorateNodeFields }         from '../visualization/help/node-field-help.js';
 import { AccountsController }         from '../visualization/accounts/accounts-controller.js';
 import { AccountEditor }              from '../visualization/accounts/account-editor.js';
 import { RealPropertyEditor }         from '../visualization/assets/real-property-editor.js';
@@ -420,7 +421,7 @@ export class WorkbenchApp extends BaseComponent {
       },
     });
 
-    const editorFactory = (node, container) => {
+    const buildEditor = (node, container) => {
       if (node?.kind === 'person') {
         const editor = new PersonEditor({
           container,
@@ -687,6 +688,29 @@ export class WorkbenchApp extends BaseComponent {
 
       // Graph nodes: event / handler / action / reducer
       return this.configPresenter._view.createAndRenderEditor(node, container);
+    };
+
+    /**
+     * Every node edit form, with its help attached (design 111 §6).
+     *
+     * One wrapper rather than a call inside each of the eight editors: the modal and the
+     * Nodes→Edit pane share this factory, so decorating here is the only place that
+     * cannot be forgotten by the next editor added. It is deliberately not awaited — the
+     * modal calls this synchronously and wants its editor back; the `?` and the tooltips
+     * land a tick later, when the index resolves.
+     */
+    const editorFactory = (node, container) => {
+      const editor = buildEditor(node, container);
+      decorateNodeFields(container, node?.kind, {
+        onOpenHelp: (ref) => {
+          // Activate BEFORE publishing, for the reason the param `?` does: the panel
+          // subscribes on its first mount, so a publish to a never-mounted Help tab would
+          // be delivered to nobody.
+          this._wbShell?.activatePlugin('help');
+          this._wbShell?.runtime.bus.publish({ type: WB_EVENTS.HELP_OPEN, ...ref });
+        },
+      });
+      return editor;
     };
 
     this._editModal.setEditorFactory(editorFactory);

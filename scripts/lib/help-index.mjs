@@ -444,7 +444,11 @@ export async function collectTopics() {
       tools:   t.tools,
       design:  t.design,
       words:   t.words,
-      html:    marked.parse(t.body.trim(), { async: false }),
+      node:    t.node ?? null,
+      // A node topic's HTML is its OVERVIEW only. Its `## Fields` entries are already in
+      // `nodes[]`, keyed per field, which is how the tooltip and the `?` get at one of
+      // them; rendering the list here as well would put the same prose on the page twice.
+      html:    marked.parse((t.kind === 'node' ? t.overview : t.body).trim(), { async: false }),
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
 }
@@ -454,8 +458,9 @@ export async function collectTopics() {
 /** The whole tier-1 index. Deterministic: same tree in, byte-identical index out. */
 export async function buildHelpIndex() {
   const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
-  const [params, panels, actions, state, topics] = await Promise.all([
+  const [params, panels, actions, state, topics, nodes] = await Promise.all([
     collectParams(), collectPanels(), collectActions(), collectState(), collectTopics(),
+    collectNodes(),
   ]);
   const tools  = collectTools(pkg.scripts);
   const design = collectDesign();
@@ -471,7 +476,163 @@ export async function buildHelpIndex() {
       state: state.length,
       topics: topics.length,
       design: design.length,
+      nodes: nodes.length,
+      nodeFields: nodes.reduce((n, k) => n + k.fields.length, 0),
     },
-    params, panels, actions, tools, state, topics, design,
+    params, panels, actions, tools, state, topics, design, nodes,
   };
+}
+
+/* ──────────────────────────────── nodes ──────────────────────────────── */
+
+/**
+ * The record-param templates that already describe a field, by node kind (design 111 §2).
+ *
+ * `RECORD_PARAM_TEMPLATES` names which record fields become generated params, and every
+ * one of those entries carries a `description` written for the Parameters panel. Those
+ * descriptions read correctly as field help — "Current market value of this property." is
+ * the same sentence either way — so tier 1 supplies them and a topic MAY NOT restate them.
+ * That is design 108's rule, not a new one: nothing is written at two tiers.
+ */
+async function recordParamDescriptions() {
+  const t = await import(`${ROOT}/src/scenarios/params/record-param-templates.js`);
+  const flat = (v) => (Array.isArray(v) ? v : Object.values(v ?? {}).flat());
+  const byKind = {
+    person:          flat(t.PERSON_PARAM_TEMPLATE),
+    account:         [...flat(t.ACCOUNT_PARAM_TEMPLATES), ...flat(t.INHERITED_RA_PARAM_TEMPLATE)],
+    'real-property': flat(t.REAL_PROPERTY_PARAM_TEMPLATE),
+    collectible:     flat(t.COLLECTIBLE_PARAM_TEMPLATE),
+    company:         flat(t.COMPANY_EQUITY_PARAM_TEMPLATE),
+    bequest:         flat(t.BEQUEST_PARAM_TEMPLATE),
+  };
+  const out = new Map();
+  for (const [kind, entries] of Object.entries(byKind)) {
+    const m = new Map();
+    for (const e of entries) {
+      // `hidden` templates (balanceTarget) are compile-only levers with no control on any
+      // form, and the ones without a description are not a source of prose.
+      if (!e?.field || !e.description || e.hidden) continue;
+      if (!m.has(e.field)) m.set(e.field, { description: e.description, label: e.label ?? null });
+    }
+    out.set(kind, m);
+  }
+  return out;
+}
+
+/** Text of an HTML fragment: tags dropped, entities un-escaped, whitespace collapsed. */
+function _text(html) {
+  return String(html ?? '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ').replace(/&#\d+;/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * The editable controls of one `<template>` in `index.html`, in document order.
+ *
+ * Read out of the same file `BaseComponent._getTemplate()` clones at runtime, so this is
+ * the form itself rather than a description of it: a field added to the markup appears
+ * here on the next build, which is what makes the gate's "undocumented field" error fire
+ * without anyone having remembered anything.
+ *
+ * A control names its field with `data-id` (the record's own fields) or `data-field` (the
+ * per-subtype config sub-editors) — both are used, and which one is not a fact about the
+ * field. Buttons and the `<div data-id="config">` sub-editor mounts are not controls.
+ */
+export function templateFields(html, templateId) {
+  const body = html.match(
+    new RegExp(`<template id="${templateId}">([\\s\\S]*?)</template>`))?.[1];
+  if (body == null) return null;
+
+  const fields = [];
+  let label = null;
+  for (const m of body.matchAll(
+    /<label\b[^>]*>([\s\S]*?)<\/label>|<(input|select|textarea)\b([^>]*)>/g)) {
+    if (m[1] !== undefined) { label = _text(m[1]) || label; continue; }
+
+    const [, , tag, attrs] = m;
+    const field = attrs.match(/\bdata-(?:id|field)="([^"]+)"/)?.[1];
+    if (!field) continue;
+    const type = attrs.match(/\btype="([^"]+)"/)?.[1] ?? (tag === 'input' ? 'text' : tag);
+    if (type === 'button' || type === 'submit' || type === 'hidden') continue;
+    fields.push({ field, label, inputType: type, template: templateId });
+  }
+  return fields;
+}
+
+/**
+ * Tier 1 for the node edit forms: every kind, and every field its form offers
+ * (design 111 §3).
+ *
+ * The inventory comes from the form, never from prose: HTML templates for the nine
+ * template-driven editors, and an exported spec array for the two that build their rows in
+ * JS. The DESCRIPTION comes from exactly one of two places — a record param template
+ * (tier 1, above) or the kind's `kind: node` topic (tier 2) — and `describedBy` records
+ * which, so the gate can insist it is exactly one and never both.
+ *
+ * A field with no description at all comes back `describedBy: null`. That is not papered
+ * over with a placeholder: it is the state the gate fails on, and half the surface was in
+ * it when design 111 started.
+ */
+export async function collectNodes() {
+  const { NODE_EDITORS } = await import(
+    `${ROOT}/src/visualization/configuration/node-editor-registry.js`);
+  const { readTopics } = await import('./help-topics.mjs');
+
+  const html      = readFileSync(join(ROOT, 'index.html'), 'utf8');
+  const paramDesc = await recordParamDescriptions();
+  const topicFor  = new Map(readTopics()
+    .filter(t => !t.error && t.kind === 'node' && t.node)
+    .map(t => [t.node, t]));
+
+  const nodes = [];
+  for (const [kind, entry] of Object.entries(NODE_EDITORS)) {
+    const raw = [];
+    for (const id of entry.templates ?? []) {
+      const found = templateFields(html, id);
+      if (found === null) throw new Error(`NODE_EDITORS.${kind}: no <template id="${id}"> in index.html`);
+      raw.push(...found);
+    }
+    for (const spec of entry.specs ?? []) {
+      const [file, name] = spec.module.split('#');
+      const mod = await import(`${ROOT}/${file}`);
+      if (!mod[name]) throw new Error(`NODE_EDITORS.${kind}: ${file} exports no ${name}`);
+      raw.push(...mod[name].map(e => ({
+        field: e.field, label: e.label, inputType: e.kind ?? 'text', template: null,
+        // The id the control actually carries in the DOM, which is what the in-app
+        // decorator matches on. The payroll section prefixes its own (`pe_`), and a field
+        // is not renamed by where it happens to be rendered.
+        domId: `${spec.idPrefix ?? ''}${e.field}`,
+      })));
+    }
+
+    const params = paramDesc.get(kind) ?? new Map();
+    const topic  = topicFor.get(kind) ?? null;
+
+    // First occurrence wins. A field named by two sub-editors — `fieldName` appears in
+    // four of the Action sub-editors — is ONE field of this form, and printing it four
+    // times would invite four descriptions of the same box.
+    const seen = new Map();
+    for (const f of raw) {
+      if (seen.has(f.field)) continue;
+      const fromParam = params.get(f.field)?.description ?? null;
+      const fromTopic = topic?.fields?.[f.field] ?? null;
+      seen.set(f.field, {
+        domId: f.field,
+        ...f,
+        param:       fromParam ? true : false,
+        description: fromParam ?? fromTopic ?? null,
+        describedBy: fromParam ? 'param' : fromTopic ? 'topic' : null,
+      });
+    }
+
+    nodes.push({
+      kind,
+      label:  entry.label,
+      topic:  topic?.id ?? null,
+      fields: [...seen.values()],
+    });
+  }
+  return nodes;
 }

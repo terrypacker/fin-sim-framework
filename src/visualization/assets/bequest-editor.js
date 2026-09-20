@@ -32,6 +32,27 @@ const ASSET_TYPES = [
 const STRATEGIES = [['', '— default —'], ['equal', 'Equal'], ['lump', 'Lump'], ['maxDefer', 'Max defer'], ['bracketFill', 'Bracket fill'], ['weights', 'Weights']];
 
 /**
+ * Every field the decedent section renders, in render order (design 111 §3).
+ *
+ * This editor has no HTML template — it builds its rows in JS — so without a declared
+ * inventory the help generator cannot see its fields and the `?` affordance has nothing to
+ * attach to. Driving `render()` from the same list is what keeps the inventory true: a
+ * field added to the form without an entry here does not appear on the form at all.
+ *
+ * The repeatable inherited-asset rows below are deliberately NOT in it: they are a row
+ * table, not node fields (design 111 §9).
+ */
+export const BEQUEST_FORM_FIELDS = Object.freeze([
+  { field: 'name',           label: 'Name',                                        kind: 'text' },
+  { field: 'decedentName',   label: 'Decedent name',                               kind: 'text' },
+  { field: 'relationship',   label: 'Relationship (NE class)',                     kind: 'select', options: RELATIONSHIPS },
+  { field: 'decedentState',  label: 'Decedent state (situs)',                      kind: 'select', options: SITUS },
+  { field: 'heirId',         label: 'Heir',                                        kind: 'select' },
+  { field: 'inheritanceYear', label: 'Inheritance year (blank = inert)',           kind: 'number' },
+  { field: 'paidViaEstate',  label: 'AU super paid via estate (no +2% Medicare)',  kind: 'check' },
+]);
+
+/**
  * BequestEditor — edit form for a Bequest container (design 63). Built
  * programmatically (no HTML template): a decedent section plus a repeatable
  * inherited-asset sub-editor. Emits onSave(data) / onDelete(id).
@@ -65,13 +86,19 @@ export class BequestEditor extends BaseComponent {
 
     root.appendChild(this._el('h3', { text: isEdit ? 'Edit Inheritance' : 'New Inheritance' }));
 
-    this._name        = this._field(root, 'Name',            'text',   this._node?.name ?? '');
-    this._decedent    = this._field(root, 'Decedent name',   'text',   this._node?.decedentName ?? '');
-    this._relationship = this._select(root, 'Relationship (NE class)', RELATIONSHIPS, this._node?.relationship ?? 'immediate');
-    this._decedentState = this._select(root, 'Decedent state (situs)', SITUS, this._node?.decedentState ?? '');
-    this._heir        = this._select(root, 'Heir', this._people.map(p => [p.id, p.name || p.id]), this._node?.heirId ?? '');
-    this._year        = this._field(root, 'Inheritance year (blank = inert)', 'number', this._node?.inheritanceYear ?? '');
-    this._paidViaEstate = this._checkbox(root, 'AU super paid via estate (no +2% Medicare)', !!this._node?.paidViaEstate);
+    // One pass over BEQUEST_FORM_FIELDS, so the form and its declared inventory cannot
+    // disagree. Every control carries `data-id` — the attribute the help decorator and the
+    // param-link badge both look for.
+    this._inputs = {};
+    for (const spec of BEQUEST_FORM_FIELDS) this._inputs[spec.field] = this._specField(root, spec);
+
+    this._name          = this._inputs.name;
+    this._decedent      = this._inputs.decedentName;
+    this._relationship  = this._inputs.relationship;
+    this._decedentState = this._inputs.decedentState;
+    this._heir          = this._inputs.heirId;
+    this._year          = this._inputs.inheritanceYear;
+    this._paidViaEstate = this._inputs.paidViaEstate;
 
     // ── Inherited assets ──────────────────────────────────────────────────────
     root.appendChild(this._el('h4', { text: 'Inherited assets' }));
@@ -194,6 +221,29 @@ export class BequestEditor extends BaseComponent {
   }
 
   // ── DOM helpers ─────────────────────────────────────────────────────────────
+
+  /**
+   * One control from its spec, tagged with `data-id` so the field is addressable.
+   *
+   * `heirId`'s options are the household's people and so cannot be a constant in the spec
+   * list; every other select carries its own.
+   */
+  _specField(root, spec) {
+    const value = this._node?.[spec.field];
+    let input;
+    if (spec.kind === 'select') {
+      const options = spec.options ?? this._people.map(p => [p.id, p.name || p.id]);
+      const fallback = spec.field === 'relationship' ? 'immediate' : '';
+      input = this._select(root, spec.label, options, value ?? fallback);
+    } else if (spec.kind === 'check') {
+      input = this._checkbox(root, spec.label, !!value);
+    } else {
+      input = this._field(root, spec.label, spec.kind, value ?? '');
+    }
+    input.dataset.id = spec.field;
+    return input;
+  }
+
   _el(tag, { class: cls, text, type } = {}) {
     const e = document.createElement(tag);
     if (cls) e.className = cls;

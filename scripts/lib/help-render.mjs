@@ -153,6 +153,34 @@ function renderState(state) {
   return out;
 }
 
+function renderNodes(nodes) {
+  const fields = nodes.reduce((n, k) => n + k.fields.length, 0);
+  const out = [`## Node types (${nodes.length} kinds · ${fields} fields)`, '',
+    'Every kind of record the Nodes panel can open, and every control its edit form offers.',
+    'The inventory is read from the FORM — the `<template>` in `index.html` the editor',
+    'clones, or the editor\'s own exported field spec — so a control added to a form appears',
+    'here whether or not anyone remembered it (design 111 §3).', '',
+    '**Where** says which tier owns each description: `param` means the field is a generated',
+    'scenario parameter and tier 1 emits its description verbatim; `topic` means the kind\'s',
+    'tier-2 topic under `help/nodes/` says it. Exactly one of the two, never both — a field',
+    'described twice is the copy that drifts.', ''];
+
+  for (const n of nodes) {
+    const byParam = n.fields.filter(f => f.describedBy === 'param').length;
+    out.push(`### ${n.label} — \`${n.kind}\` (${n.fields.length} fields)`, '');
+    out.push(n.topic
+      ? `Explained in [\`help/nodes\`](nodes/${n.kind}.md). ${byParam} field(s) described by a record parameter.`
+      : `_No \`kind: node\` topic — the gate fails on this._`, '');
+    for (const f of n.fields) {
+      const where = f.describedBy ?? '**undocumented**';
+      out.push(`- **\`${f.field}\`** — ${esc(f.label ?? f.field)} · \`${f.inputType}\` · ${where}`);
+      if (f.description) out.push(`  ${esc(f.description)}`);
+    }
+    out.push('');
+  }
+  return out;
+}
+
 function renderTopics(topics) {
   const out = [`## Topics (${topics.length})`, '',
     'Tier 2 — the hand-written prose under `help/`, listed by what it CITES rather than',
@@ -205,13 +233,15 @@ export function renderReferenceMarkdown(index) {
     'doc named in the relevant parameter description, or read the tier-2 topic under `help/`',
     'that cites it — the last section of this file lists every one.',
     '',
-    `${c.params} parameters · ${c.panels} panels · ${c.actions} action types · ${c.tools} tools · ${c.state} state field types · ${c.topics} topics · ${c.design} design docs`,
+    `${c.params} parameters · ${c.panels} panels · ${c.nodes} node types (${c.nodeFields} fields) · ${c.actions} action types · ${c.tools} tools · ${c.state} state field types · ${c.topics} topics · ${c.design} design docs`,
     '',
     '---',
     '',
     ...renderParams(index.params),
     '---', '',
     ...renderPanels(index.panels),
+    '---', '',
+    ...renderNodes(index.nodes),
     '---', '',
     ...renderTools(index.tools),
     '---', '',

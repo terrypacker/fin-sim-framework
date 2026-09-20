@@ -31,6 +31,7 @@ import { fileURLToPath }                 from 'node:url';
 
 import {
   parseFrontmatter, readTopics, checkTopics, stampFor, sharedRun, countWords, BUDGETS,
+  FIELD_BUDGET, parseFieldSection,
 } from '../../scripts/lib/help-topics.mjs';
 import { FINANCE_PLUGINS }
   from '../../src/visualization/workbench/plugins/finance/finance-plugin-package.js';
@@ -46,6 +47,16 @@ const INDEX = {
   panels:  [{ id: 'pools', title: 'Liquidity Pools', category: null }],
   actions: [{ type: 'POOL_REFILL' }],
   tools:   [{ path: 'scripts/lab/frontier.mjs' }],
+  // One node kind, shaped like `collectNodes()` output: a field tier 1 already describes
+  // (its record param template) and two the topic owes (design 111 §5).
+  nodes:   [{ kind: 'widget', label: 'Widgets', topic: null, fields: [
+    { field: 'value',  label: 'Value',  inputType: 'number', domId: 'value',
+      param: true,  describedBy: 'param', description: 'Current market value of this widget.' },
+    { field: 'colour', label: 'Colour', inputType: 'select', domId: 'colour',
+      param: false, describedBy: null, description: null },
+    { field: 'sound',  label: 'Sound',  inputType: 'text',   domId: 'sound',
+      param: false, describedBy: null, description: null },
+  ] }],
 };
 
 let dir;
@@ -66,8 +77,13 @@ const GOOD_BODY = 'Pools decide which account pays before another is touched, wh
 
 const msgs = (r) => r.errors.map(e => e.msg).join('\n');
 
-/** Only what the TOPIC got wrong — the fixture index always has an uncovered panel. */
-const topicMsgs = (r) => r.errors.filter(e => e.id !== 'pools').map(e => e.msg).join('\n');
+/**
+ * Only what the TOPIC got wrong — the fixture index always has an uncovered panel and an
+ * uncovered node kind, and those are coverage errors about the REGISTRY, not about the
+ * topic under test.
+ */
+const topicMsgs = (r) => r.errors
+  .filter(e => e.id !== 'pools' && e.id !== 'widget').map(e => e.msg).join('\n');
 
 /* ────────────────────────────── structural ───────────────────────────────── */
 
@@ -313,6 +329,94 @@ describe('check-help — the template it hands an author', () => {
   });
 });
 
+/* ──────────────────────────── node topics (111) ──────────────────────────── */
+
+describe('check-help — `kind: node`, where the FORM is the spec', () => {
+  /** A node topic over the fixture's one kind. */
+  const nodeTopic = (frontmatterExtra, fields) => withTopic(
+    `id: t\nkind: node\ntitle: T\n${frontmatterExtra}stamps:`,
+    `${GOOD_BODY}\n\n## Fields\n\n${fields}`);
+
+  test('a node topic naming a kind that does not exist fails', () => {
+    // The same class as a dead param reference: a page about a form nobody can open.
+    const r = nodeTopic('node: ghost\n', '- `colour` — Any colour.');
+    assert.match(topicMsgs(r), /node: "ghost" is not a kind in NODE_EDITORS/);
+  });
+
+  test('a node topic with no `node:` fails — the stamp has nothing to key on', () => {
+    assert.match(topicMsgs(nodeTopic('', '- `colour` — Any colour.')),
+      /no `node:`/);
+  });
+
+  test('an entry for a field the form does not have fails', () => {
+    const r = nodeTopic('node: widget\n',
+      '- `colour` — Any colour.\n- `flavour` — There is no flavour control.');
+    assert.match(topicMsgs(r), /`flavour` is not a field of the widget form/);
+    assert.doesNotMatch(topicMsgs(r), /`colour` is not a field/);
+  });
+
+  test('a field its record param already describes may NOT be described again', () => {
+    // Design 108 §3, applied to fields: tier 1 emits that description verbatim to the
+    // tooltip and to REFERENCE.md, so a second copy here is the one that drifts.
+    const r = nodeTopic('node: widget\n', '- `value` — What it is worth.');
+    assert.match(topicMsgs(r), /`value` is already described by its record param template/);
+  });
+
+  test('a field on the form with no description at all fails', () => {
+    // The undocumented box. ~144 of 164 fields were in this state when design 111 started,
+    // and every one of them got there because nothing failed when a field was added.
+    const r = nodeTopic('node: widget\n', '- `colour` — Any colour.');
+    const coverage = r.errors.filter(e => e.id === 'widget').map(e => e.msg).join('\n');
+    assert.match(coverage, /1 field\(s\) on the form with no description — sound/);
+  });
+
+  test('a field entry may not use markdown — it is shown as a plain tooltip', () => {
+    // It reaches the user twice, as a native `title=` and as escaped text in the panel,
+    // and neither renders markdown. `**like this**` arrives with the asterisks in it.
+    const r = nodeTopic('node: widget\n', '- `colour` — Any **colour** at all.');
+    assert.match(topicMsgs(r), /`colour` uses markdown/);
+    assert.doesNotMatch(topicMsgs(nodeTopic('node: widget\n', '- `colour` — Any colour at all.')),
+      /uses markdown/);
+  });
+
+  test('a field entry over the field budget fails, and the overview has its own', () => {
+    const long = `- \`colour\` — ${'word '.repeat(FIELD_BUDGET + 1)}`;
+    assert.match(topicMsgs(nodeTopic('node: widget\n', long)),
+      new RegExp(`\`colour\` is \\d+ words over the ${FIELD_BUDGET}-word field budget`));
+
+    // The OVERVIEW budget counts only the prose above `## Fields`. A form with 45 controls
+    // would otherwise blow a whole-file budget by existing, which would be a budget on how
+    // many fields an editor may have.
+    const r = withTopic('id: t\nkind: node\ntitle: T\nnode: widget\nstamps:',
+      `${GOOD_BODY}\n\n## Fields\n\n${'- `colour` — Any colour at all.\n'.repeat(1)}`
+      + `- \`sound\` — ${'word '.repeat(60)}`);
+    assert.doesNotMatch(topicMsgs(r), /overview|node budget/);
+  });
+
+  test('the node stamp moves when the FORM changes, not when the prose does', () => {
+    const before = stampFor('node:widget', INDEX);
+    assert.ok(before, 'a live kind must produce a stamp');
+
+    // Same fields, different descriptions ⇒ same stamp: prose is the topic's business.
+    const reworded = { ...INDEX, nodes: [{ ...INDEX.nodes[0],
+      fields: INDEX.nodes[0].fields.map(f => ({ ...f, description: 'reworded' })) }] };
+    assert.equal(stampFor('node:widget', reworded), before);
+
+    // A field added to the form ⇒ the stamp moves, and the topic must be looked at.
+    const grown = { ...INDEX, nodes: [{ ...INDEX.nodes[0],
+      fields: [...INDEX.nodes[0].fields,
+        { field: 'weight', label: 'Weight', inputType: 'number', domId: 'weight',
+          param: false, describedBy: null, description: null }] }] };
+    assert.notEqual(stampFor('node:widget', grown), before);
+
+    // So does swapping a control for a different one over the same field.
+    const retyped = { ...INDEX, nodes: [{ ...INDEX.nodes[0],
+      fields: INDEX.nodes[0].fields.map(f =>
+        f.field === 'colour' ? { ...f, inputType: 'text' } : f) }] };
+    assert.notEqual(stampFor('node:widget', retyped), before);
+  });
+});
+
 /* ─────────────────────────── the real topic tree ─────────────────────────── */
 
 describe('check-help — the committed help/ tree', () => {
@@ -327,13 +431,13 @@ describe('check-help — the committed help/ tree', () => {
     }
   });
 
-  test('panel and concept are both complete and CLEAN — both are enforced', () => {
+  test('panel, concept and node are all complete and CLEAN — all three are enforced', () => {
     // design 108 phase 4 is done: every panel has a topic and every param is cited, so
     // `npm test` runs the gate with `--enforce panel,concept`. Asserting it here too means
     // a failure names the topic rather than only failing a shell step.
     const gate = execFileSync(process.execPath,
       [fileURLToPath(new URL('../../scripts/dev/check-help.mjs', import.meta.url)),
-       '--quiet', '--enforce', 'panel,concept'], { encoding: 'utf8' });
+       '--quiet', '--enforce', 'panel,concept,node'], { encoding: 'utf8' });
     // Counted from the registry, never written down: a literal here would be its own
     // little drifting index, and it did drift — the design-108 Help panel took the count
     // from 32 to 33 and this line failed for being a copy rather than for being wrong.
