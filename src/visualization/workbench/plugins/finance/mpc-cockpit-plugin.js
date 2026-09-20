@@ -17,6 +17,9 @@ import { readDecisionRecords, readDecisionRuns } from '../../../../finance/mpc/a
 import { harvestDecisions, COLLAPSE_RULES } from '../../../../finance/mpc/harvest.js';
 import { applyHarvestPlan } from '../../../../finance/mpc/harvest-apply.js';
 import { checkHarvestFeasibility, describeFeasibility } from '../../../../finance/mpc/harvest-feasibility.js';
+import { buildRunEntry, makeRunKey, describeRunSource, saveRunToScenario, checkRunFeasibility }
+  from '../../../../finance/mpc/run-record.js';
+import { resolveActiveMpcRun } from '../../../../finance/mpc/run-schedule.js';
 import { resolveStaticLevers, foldScheduleBakes, mergeResolved } from '../../../../finance/mpc/harvest-resolve.js';
 import {
   OPTIMIZATION_OBJECTIVES, DIE_WITH_TARGET_AXES, DIE_WITH_TARGET_FAMILY,
@@ -173,7 +176,16 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
         <button class="btn btn-sm" data-mpc="advance" title="Step &quot;now&quot; forward one year and re-plan">Advance ▶</button>
         <button class="btn btn-sm" data-mpc="auto" title="Auto-accept the recommended move and advance each year to the end of the run">Auto ▶▶</button>
         <button class="btn btn-sm" data-mpc="harvest" title="Copy this run's decisions back into the loaded scenario's parameters (design 39 §13)" disabled>Copy to scenario…</button>
+        <!-- Design 81 §8. Beside "Copy to scenario…", not instead of it: D10 keeps the lossy
+             harvest as an EXPORT (a three-band summary a human can argue with is worth
+             having), while this saves the run itself, which is what the plan becomes. -->
+        <button class="btn btn-sm" data-mpc="save-run" title="Save this run's decisions into the scenario as a recorded MPC run, and play it (design 81 §8)" disabled>Save run to plan…</button>
       </div>
+
+      <!-- Design 81 §8 — live plan vs playing a recorded run must NEVER be ambiguous. A
+           cockpit solving against a base that is itself playing a run is a legitimate thing
+           to do (D8 truncates it at "now"), and an illegible one unless it says so. -->
+      <div class="mpc-mode" data-mpc="mode" style="display:none"></div>
 
       <div class="mpc-toolbar mpc-range" data-mpc="range-row">
         <span class="mpc-range-title" data-mpc="range-title" title="Limits are in real, base-year (today's) dollars — the reducer compounds them to nominal by inflation, so they stay fixed across the run.">Search range (today’s $)</span>
@@ -244,6 +256,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     this._bind('auto',    'click',  () => this._auto());
     this._bind('apply',   'click',  () => this._apply());
     this._bind('harvest',        'click', () => this._openHarvest());
+    this._bind('save-run',       'click', () => this._saveRunToPlan());
     this._bind('harvest-apply',  'click', () => this._applyHarvest());
     this._bind('harvest-cancel', 'click', () => this._closeHarvest());
     this._bind('harvest-resolve','change', () => this._openHarvest());   // re-price the preview
@@ -572,6 +585,16 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
   /** Design 88 D10: the fallback is the LIQUID variant — see resolveTerminalKey. */
   _currentObjective() { return OPTIMIZATION_OBJECTIVES[this._currentObjectiveKey()] ?? OPTIMIZATION_OBJECTIVES.DIE_WITH_TARGET_LIQUID; }
   _currentSolver()    { return this._q('solver')?.value ?? 'CEM'; }
+
+  /**
+   * `CEM/128` — what the run was searched with, for a recorded run's picker label (design 81
+   * §8). Provenance a reader can act on: "the same plan at budget 32" is a different claim
+   * from "the same plan", and the label is the only place that distinction survives.
+   */
+  _solverLabel() {
+    const budget = Number(this._q('budget')?.value);
+    return Number.isFinite(budget) ? `${this._currentSolver()}/${budget}` : this._currentSolver();
+  }
 
   /**
    * The solver options for EVERY solve this panel drives — Advise, Auto, and the
@@ -977,9 +1000,84 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
 
   /** Enable "Copy to scenario…" as soon as the session has a decision to copy. */
   _syncHarvestEnabled() {
+    const has = readDecisionRuns(this._services()?.graph ?? null).length > 0;
     const btn = this._q('harvest');
-    if (!btn) return;
-    btn.disabled = readDecisionRuns(this._services()?.graph ?? null).length === 0;
+    if (btn) btn.disabled = !has;
+    // Design 81 §8 — the same condition: a run with no epochs has nothing to save either.
+    const save = this._q('save-run');
+    if (save) save.disabled = !has;
+    this._syncModeIndicator();
+  }
+
+  // ─── Design 81 §8 — mode, and saving the run itself ───────────────────────
+
+  /**
+   * Say which plan the cockpit is working against.
+   *
+   * The ambiguity this removes is real and is not hypothetical: the base scenario may itself
+   * be playing a recorded run, in which case every rollout the cockpit does is seeded from a
+   * plan somebody already decided. That is legitimate — D8 truncates the run at "now" so the
+   * controller never solves against its own future — but it changes what the numbers mean, and
+   * a panel that does not say so is a panel that reads as a fresh search.
+   */
+  _syncModeIndicator() {
+    const box = this._q('mode');
+    if (!box) return;
+    const run = resolveActiveMpcRun(this._baseParams());
+    if (!run) { box.style.display = 'none'; box.textContent = ''; return; }
+    box.style.display = '';
+    box.textContent = `Base plan is PLAYING recorded run “${run.runId}” `
+      + `(${describeRunSource(run.source, run.runId)}). Rollouts see only its decisions before `
+      + '“now” (design 81 D8), so the search is not competing with its own future.';
+  }
+
+  /**
+   * Promote this run's decision log into the scenario's `mpcRuns` bag and select it (§8, 4a).
+   *
+   * Through the SAME three calls `scripts/scenario/save-run.mjs` uses — `buildRunEntry`,
+   * `checkRunFeasibility`, `saveRunToScenario` — because a button that reconstructed any of
+   * them would be a second answer to "what did this run decide".
+   *
+   * F1-gated (D9): writing a bag entry IS a promotion, so it passes the same feasibility gate
+   * the harvest does. Unlike the harvest there is no override checkbox here, because there is
+   * no truncated-exploratory-bake case to rescue: an insolvent recorded run is simply an
+   * insolvent plan, and the fix is to keep solving.
+   */
+  _saveRunToPlan() {
+    const run = this._harvestRun();
+    const scenario = this._services()?.scenarioService?.getActive?.() ?? null;
+    if (!run || !scenario) return;
+
+    const { entry, warnings } = buildRunEntry(run.records, {
+      controlsByKey:  COCKPIT_CONTROLS,
+      runId:          run.runId,
+      solver:         this._solverLabel(),
+      baseScenarioId: scenario.id ?? scenario.name ?? null,
+    });
+    if (!entry) { this._setNow(warnings[0] ?? 'This run decided nothing that can be saved.'); return; }
+
+    const baseParams = this._baseParams();
+    const key = makeRunKey(entry.source, baseParams?.mpcRuns ?? null);
+
+    this._setNow(`Checking whether “${key}” stays solvent…`);
+    const f = checkRunFeasibility({
+      runId: key, entry, baseParams,
+      simStart: scenario?.simStart ? new Date(scenario.simStart) : this._controller?.simStart,
+      simEnd:   scenario?.simEnd   ? new Date(scenario.simEnd)   : this._controller?.simEnd,
+      cfgTemplate: scenario,
+    });
+    if (f.feasible === false) {
+      this._setNow(`Not saved — ${describeFeasibility(f, { fmtDate: _fmtDate, fmtUsd: _usd })}`);
+      return;
+    }
+
+    saveRunToScenario(scenario, { runId: key, entry });
+    this._runtime?.bus?.publish({ type: WB_EVENTS.PARAMS_CHANGED, scenario, source: 'mpc-save-run' });
+    this._syncModeIndicator();
+
+    const unverified = f.feasible === null ? ' (feasibility could not be checked)' : '';
+    this._setNow(`Saved “${key}” — ${entry.decisions.length} decision(s) over `
+      + `${entry.source.epochs} epoch(s)${unverified}. It is now the active run; Rebuild to play it, then Save.`);
   }
 
   /** The run the harvest targets: the current one if it has epochs, else the newest. */

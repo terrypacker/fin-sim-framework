@@ -132,6 +132,20 @@
   padding: 4px 2px;
 }
 
+/*
+ * Design 81 §8 — the mode indicator. Deliberately louder than `.mpc-now`: "the base plan is
+ * already playing a recorded run" changes what every number on this panel means, and a line
+ * styled like the status text would be read as status text.
+ */
+.mpc-mode {
+  font-size: 13px;
+  border: 1px solid var(--accent-primary);
+  border-left-width: 4px;
+  background: var(--accent-primary-bg);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
 .mpc-card {
   border: 1px solid var(--accent-primary);
   background: var(--accent-primary-bg);

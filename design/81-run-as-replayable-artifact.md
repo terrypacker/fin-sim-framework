@@ -391,7 +391,7 @@ Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`,
 - `mpc-schedule-rewind.test.mjs` — play to simEnd, rewind, replay: identical state. Fails today for SPENDING / ALLOCATION_MIX / BOND_LADDER (§0 bug 1).
 - ~~`mpc-schedule-roth-fold.test.mjs`~~ — **landed as `mpc-run-queue-levers.test.mjs` MRQ-3 / MRQ-4**: the rows reach the compiled event schedules, and the fold happens before the toolsets read them (§6.3).
 - ~~`mpc-schedule-truncation.test.mjs`~~ — **landed as `mpc-run-record.test.mjs` MRR-6 / MRR-7**: `CockpitController` at epoch k sees rows < k and no others (D8).
-- `mpc-run-editor.test.mjs` — the row editor round-trips, sorts by date, and a blank row syncs to `null`; deleting the selected run clears `mpcActiveRun` rather than leaving it dangling.
+- ~~`mpc-run-editor.test.mjs`~~ — **landed as `tests/viz/mpc-run-editors.test.mjs`**: the row editor round-trips, sorts by date, and an emptied bag syncs to `null`. One deviation: deleting the selected run does **not** clear `mpcActiveRun` — it leaves it dangling *visibly*, as `(not found)`, because silently rewriting the selection is the §15 failure this surface exists to prevent.
 - `mpc-run-as-decision-point.test.mjs` — **the §4.2 gate.** A `DecisionPoint` over `mpcActiveRun` with three options expands to three leaves, `makeLeafEntry` writes the selection into each, and the three leaves produce three different results. If this passes, the whole analysis surface reaches MPC runs with no further work; if it is missing, the indirection's main justification is unproven.
 - ~~`mpc-run-refuses-conflicting-axis.test.mjs`~~ — **landed in two halves**: the load-time throw is `mpc-run-queue-levers.test.mjs` MRQ-5/MRQ-6, the launch-time report is `mpc-run-record.test.mjs` MRR-8, and `mpcActiveRun` as the axis itself does neither.
 
@@ -429,11 +429,12 @@ Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`,
 - [x] **4d** — both halves. The first landed in phase 3 (`assertRunIsPlayable`, throws at load). The second is `src/finance/mpc/run-axis-hygiene.js` — `runAxisProblems` reports, never repairs, in `poolAxisProblems`' shape and beside it in the grid-axis surface. `mpcActiveRun` as the axis itself is explicitly never flagged: that is §4.2, the entire justification for the indirection.
 - **Tests**: `mpc-run-record.test.mjs` (MRR-1…8).
 
-**Phase 5 — Picker and UI**
-- [ ] **5a** — `mpcActiveRun` select (labelled from `source`) + `mpcRunEnabled`.
-- [ ] **5b** — `buildMpcRunsEditor` (named blocks + delete + the `derivedFrom` tree) over `buildRowListEditor`.
-- [ ] **5c** — mode indicator; timeline / journal marker from `state.mpcDecisionApplied`.
-- [ ] **5d** — help: param descriptions in the toolset, a `kind: concept` topic for recorded runs, and `npm run help:restamp -- mpc-cockpit` for the panel changes.
+**Phase 5 — Picker and UI** — **BUILT 2026-09-20** (§16.8)
+- [x] **5a** — `buildMpcRunSelect` on a new `MpcRunSelect` param type, not an `Enum`: the options come from a sibling **bag** and each is labelled from its `source` (`describeRunSource`, shared with the editor and `run:save`). A dangling selection renders as `(not found)` and says the base plan runs — §15's sharp edge, and the reason this could not be an `Enum`, which would silently re-point at the first run in the bag and re-save as that.
+- [x] **5b** — `buildMpcRunsEditor` over `buildRowListEditor`: named blocks, provenance line, `derivedFrom` lineage, Delete, and the four-column decision table. Sorted by `(date, lever, key)` **on open**, not only after an edit — that is the comparator `resolveActiveMpcRun` applies on every load, so the sorted form is the canonical one and the file matches what plays.
+- [x] **5c** — the cockpit's `Save run to plan…` beside `Copy to scenario…` (D10's two exits, through the same three calls as `save-run.mjs`), the mode indicator, and the journal marker. The marker needed no new surface: registering the design-81 paths in `StateSchemaRegistry` is what makes `mpcDecisionApplied.date` render as a date and a band amount as currency, in the journal diff and the state viewer both.
+- [x] **5d** — help. The `recorded-mpc-runs` concept topic and the `mpc-cockpit` panel topic carry phases 2–5; no restamp was needed, because `panel:<id>` hashes title + category and neither moved.
+- **Tests**: `tests/viz/mpc-run-editors.test.mjs`.
 
 **Phase 6 — The lab**
 - [ ] **6a** — `scripts/lib/run-lab.mjs`; `run:inspect` / `run:replay` / `run:branch`.
@@ -460,7 +461,7 @@ Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`,
 
 ---
 
-## 16. Notes from the build (§16.1–16.4 phase 1, 2026-09-19; §16.5–16.7 phases 2–4, 2026-09-20)
+## 16. Notes from the build (§16.1–16.4 phase 1, 2026-09-19; §16.5–16.8 phases 2–5, 2026-09-20)
 
 Measured while building phase 1, against the tree rather than against the 2026-07 draft's line
 numbers. Each one changes what a later phase has to do, so it is here rather than in a commit
@@ -654,7 +655,31 @@ reads it. That is Q5's residue, stated in §12 and still open: phase 3's gate ca
 *mechanic* was disabled, which is the failure that was measured; a run whose base merely moved
 is not yet known to be a problem worth refusing.
 
-Phase 5's editors will also need `scenario-tab-view.js` to dispatch on the `MpcRuns` param type
-the way it already does for `LiquidityGraph` / `LiquidityShapes` (`scenario-tab-view.js:630`);
-until then the param renders with the default editor, which is why phase 1 could ship the param
-without the picker.
+~~Phase 5's editors will also need `scenario-tab-view.js` to dispatch on the `MpcRuns` param
+type~~ — **done in 5a/5b**, along with a second dispatch for `MpcRunSelect`.
+
+### 16.8 The two editor params have to see each other, and the marker was already built
+
+**The sibling problem.** `mpcRuns` and `mpcActiveRun` are separate params with separate
+editors, and each invalidates the other: delete or rename a run and the select is either
+offering something gone or *selecting* something gone. The dispatch wires it both ways — the
+runs editor is handed a callback that refreshes the select, and the select reads the bag live
+rather than capturing it. The precedent is `LiquidityGraphSchedule`, which reads its shape ids
+live off `liquidityShapes` for exactly this reason.
+
+It is also why `mpcActiveRun` is a new param type rather than an `Enum` with
+`dynamicOptionsFrom`. That hook reads a sibling **list** and takes each entry's `name`; a run
+bag is an object whose keys are the values and whose labels live inside each entry. Bending
+`Enum` to that would make one mechanism mean two things — and the `Enum` path silently selects
+the first option when the stored value has no match, which is precisely the failure §15 names.
+
+**The journal marker cost one registration block.** §8 asks for a timeline / journal marker
+from `state.mpcDecisionApplied`, and the instinct is to build one. There was nothing to build:
+`diffStates` already emits the field, and `StateSchemaRegistry` already decides how a path
+formats. Phase 1 simply never registered the design-81 paths, so the marker was rendering as a
+raw ISO string and a bare number — present, and illegible. Eight registrations fixed it in both
+surfaces at once.
+
+**One budget note for the next topic.** `check-help` caps a concept topic at 400 words and a
+panel topic at 250, and the count is tight enough that adding three paragraphs means cutting
+three. That is the gate working: the cut fell on history the design doc already tells better.
