@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-226 parameters · 33 panels · 11 node types (164 fields) · 173 action types · 79 tools · 266 state field types · 72 topics · 119 design docs
+226 parameters · 33 panels · 11 node types (164 fields) · 173 action types · 80 tools · 266 state field types · 72 topics · 119 design docs
 
 ---
 
@@ -982,11 +982,11 @@ Explained in [`help/nodes`](nodes/reducer.md). 0 field(s) described by a record 
 
 ---
 
-## Headless tools (79)
+## Headless tools (80)
 
 Command-line entry points under `scripts/`. **Purpose** is harvested from each script's
 docblock, not re-authored here. Arguments come from each script's declarative
-`parseFlags` spec: 66 of 66 entry points carry one (design 108 D6 — all of them).
+`parseFlags` spec: 67 of 67 entry points carry one (design 108 D6 — all of them).
 6 scripts carry no docblock naming themselves and show `(undocumented)`.
 
 ### scripts/config-converters/
@@ -1448,6 +1448,19 @@ docblock, not re-authored here. Arguments come from each script's declarative
     - `--verbose` (flag) — show the simulation's own console output (e.g. OUT_OF_FUNDS)
     - `--json` (flag) — emit machine-readable JSON instead of tables
     - `--fast` (flag) — drop journal/snapshot/bus telemetry (~12x); disables sim.journal readers
+- **`scripts/scenario/save-run.mjs`**
+  write a recorded MPC run into a scenario's `mpcRuns` bag (design 81 §10, 4c)
+    - `--decisions` (string, default `scenarios/fin-sim-decisions.json`) — decision record export
+    - `--scenario` (string, default `scenarios/fin-sim-die-with.json`) — scenario export
+    - `--scenario-name` (string) — scenario NAME inside that file (default: the first)
+    - `--run` (string) — runId to promote (default: the last recorded)
+    - `--out` (string) — write the updated scenario here (default: print, write nothing)
+    - `--as` (string) — bag key for the new entry (default: run:<recorded date>)
+    - `--derived-from` (string) — the bag entry this run was re-solved from (design 81 §4.3)
+    - `--solver` (string) — solver + budget for the picker label, e.g. CEM/128
+    - `--no-select` (flag) — write the entry without selecting it
+    - `--no-check` (flag) — skip the design 80 F1 feasibility gate (not recommended)
+    - `--keep-repeats` (flag) — keep rows that re-decide a value already in force
 - **`scripts/scenario/sweep-scenario.mjs`** — `npm run sweep`
   Vary ONE scenario param across a range, run the scenario once per value, and table the terminal metrics
     - `<file>` (string, required) — scenario export to sweep

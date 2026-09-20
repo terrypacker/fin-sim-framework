@@ -147,3 +147,53 @@ export function allDecisionsOf(run) {
   if (!Array.isArray(rows) || rows.length === 0) return null;
   return activeDecisionsAt(run, rows[rows.length - 1].dateMs)?.byLever ?? null;
 }
+
+/**
+ * DESIGN 81 §7 / D8 — the params a rollout seeded at "now" should compile against.
+ *
+ * A recorded run is an ordinary param, so `MpcCockpitPlugin._ensureController` picks it up
+ * through `_paramsToMap(scenario.params)` like anything else — which means Advise at epoch 12
+ * would solve against a world where epochs 13–44 are ALREADY DECIDED. The controller would be
+ * optimising against its own answers, and the futures fan would be a fan of plans that already
+ * contain their own futures.
+ *
+ * D8 settles it with a rule rather than a mode flag: a rollout seeded at "now" sees only rows
+ * STRICTLY BEFORE "now". That one rule is right in all three cases — a fresh run sees nothing,
+ * a resumed run sees its own committed past (which is exactly the realized plan), and
+ * "re-solve from epoch k" gets the prefix and nothing else, for free.
+ *
+ * Strictly before, not at-or-before: a row dated exactly at "now" is the decision this epoch is
+ * about to make. Including it would seed the search with its own answer.
+ *
+ * Non-destructive, and that is load-bearing. "Now" only moves forward, so truncating
+ * `this.committed` in place at epoch 1 would delete rows epoch 12 is entitled to see. The
+ * controller calls this per rollout instead of once.
+ *
+ * @param {object} params   the scenario parameter bag
+ * @param {Date|string|number} asOf  the snapshot's "now"
+ * @returns {object} `params` itself when nothing is selected, else a copy with the active run
+ *                   truncated (and the selection cleared when nothing survives)
+ */
+export function truncateActiveRunAt(params, asOf) {
+  const asOfMs = asOf != null ? new Date(asOf).getTime() : NaN;
+  if (!Number.isFinite(asOfMs)) return params;
+
+  const run = resolveActiveMpcRun(params);
+  if (!run) return params;
+
+  const kept = run.decisions.filter(r => r.dateMs < asOfMs);
+  if (kept.length === run.decisions.length) return params;
+
+  // Nothing survives ⇒ clear the SELECTION rather than leave an entry with no rows. An empty
+  // `decisions` array resolves to null anyway (with a warning), and a warning on every rollout
+  // of every fresh run is noise the user cannot act on.
+  if (kept.length === 0) return { ...params, mpcActiveRun: null };
+
+  return {
+    ...params,
+    mpcRuns: {
+      ...params.mpcRuns,
+      [run.runId]: { ...params.mpcRuns[run.runId], decisions: kept.map(r => ({ ...r })) },
+    },
+  };
+}

@@ -86,6 +86,11 @@ export function bandKeyAge(key) {
  * plan for the realized past intact (design 39 §13.6.1's last rule, arriving for free).
  */
 export const SPENDING_SCHEDULE = {
+  // The authored table a SPENDING decision addresses. `applyAt` never writes into it (D5) —
+  // this names it so `runAxisProblems` can say that a study axis over a band the run has
+  // decided is sweeping a value the run pins (D11's second half).
+  paramKey: 'spendingExpenseBands',
+
   scheduleKey: (variable) => {
     const age = variable?._startAge;
     return Number.isFinite(age) ? bandKey(age) : (variable?.paramKey ?? null);

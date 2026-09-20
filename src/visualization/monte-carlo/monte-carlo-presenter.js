@@ -19,6 +19,7 @@ import { resolveLiquidityAxisCenters, parsePoolTargetScaleKey }
 import { parseGateAxisKey }   from '../../finance/pools/pool-gate-axis.js';
 import { parseShapeYearShiftKey } from '../../finance/pools/pool-shape-year-axis.js';
 import { poolAxisProblems }   from '../../finance/pools/pool-axis-hygiene.js';
+import { runAxisProblems }    from '../../finance/mpc/run-axis-hygiene.js';
 import { scenarioParamValues, paramSchemaDefaults } from '../../finance/param-schema-utils.js';
 import { ServiceRegistry }         from '../../services/service-registry.js';
 import { APP_EVENTS }              from '../app-display-settings.js';
@@ -355,15 +356,28 @@ export class MonteCarloPresenter {
     // to the app itself — a grid launched from a config the app quietly edited is a grid nobody
     // can reproduce).
     const hygiene = poolAxisProblems(activeCfg);
-    return buildGridAxes(base, this._scenario?.accounts, { cfg: activeCfg })
-      .map(v => ({
-        ...v,
-        planValue: get(withDefaults, v.paramKey),
+    const axes = buildGridAxes(base, this._scenario?.accounts, { cfg: activeCfg });
+    // Design 81 D11, second half (Q1). An active recorded run PINS the params it decides: it
+    // re-stamps its own value as the clock reaches each decision date, so an axis over one of
+    // them produces cells that differ, but not by the lever's effect. Reported per axis rather
+    // than once, because unlike the pool hygiene above this is a statement about THAT axis —
+    // and reported, never repaired, for the reason `poolAxisProblems` records.
+    const pinned = runAxisProblems(withDefaults, axes.map(v => v.paramKey));
+    const pinnedByParam = new Map(pinned.map(r => [r.param, r]));
+
+    return axes.map(v => {
+      const problems = [
         ...(hygiene.length && (parsePoolTargetScaleKey(v.paramKey) != null
                               || parseGateAxisKey(v.paramKey) != null
-                              || parseShapeYearShiftKey(v.paramKey) != null)
-             ? { problems: hygiene } : {}),
-      }));
+                              || parseShapeYearShiftKey(v.paramKey) != null) ? hygiene : []),
+        ...(pinnedByParam.has(v.paramKey) ? [pinnedByParam.get(v.paramKey)] : []),
+      ];
+      return {
+        ...v,
+        planValue: get(withDefaults, v.paramKey),
+        ...(problems.length ? { problems } : {}),
+      };
+    });
   }
 
   /**

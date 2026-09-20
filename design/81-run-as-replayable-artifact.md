@@ -198,14 +198,16 @@ One row per decision variable per epoch. It is the union of the run's `controlPa
 | Lever | `buildVariables` emits | `scheduleKey` returns | anchor already stamped? |
 |---|---|---|---|
 | `SPENDING` | `spendingExpenseBands[19].monthlyAmount` | `band@69` | ✅ `_startAge` |
-| `ROTH` | `rothConversionSchedule[3].incomeTarget` | `roth@2039` | ✅ `_year` |
-| `EARLY_WITHDRAWAL` | `earlyWithdrawalSchedule[3].taxDeferredAmount` | `earlyWithdrawal@2039.taxDeferredAmount` | ✅ `_year` |
+| `ROTH` | `rothConversionSchedule[3].incomeTarget` | `year@2039` | ✅ `_year` |
+| `EARLY_WITHDRAWAL` | `earlyWithdrawalSchedule[3].taxDeferredAmount` | `year@2039::taxDeferredAmount` | ✅ `_year` |
 | `DRAWDOWN_XBORDER` | `crossBorderDrawdown` | *(identity)* | — |
 | `DRAWDOWN_WITHINTIER` | `withinTierDraw` | *(identity)* | — |
 | `DRAWDOWN_WEIGHTS` | `drawdownWeight::<role>` | *(identity)* | — |
 | `DRAWDOWN_SLEEVE` | `sleeveWeight::<class>` | *(identity)* | — |
 | `ALLOCATION_MIX` | `allocWeight::<class>` | *(identity)* | — |
 | `BOND_LADDER` | `bondLadderRungs` | *(identity)* | — |
+
+*(Built with one shared `year@` prefix rather than `roth@` / `earlyWithdrawal@`: the lever column already says which schedule a row addresses, so a second copy of that in the key is a second thing to keep in step. The field separator is `::`, matching the `drawdownWeight::` / `allocWeight::` convention a `.` would break — see `DRAWDOWN_WEIGHT_SEP`.)*
 
 An index is a position into a table *as it stood during that run*. Edit the table and every recorded decision silently points somewhere else — which is not hypothetical: it produced a wrong `A′` during design 80's investigation, and `scripts/lab/replay-vs-bake.mjs:80–120` still carries forty lines of heuristics reconstructing the pre-run band table *by shape*, ending in `process.exit(2)` when a hole makes it impossible.
 
@@ -388,10 +390,10 @@ Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`,
 - `mpc-schedule-state-reads.test.mjs` — for each of the three: the override wins where present, the instance field wins where absent, and **every** read site honours it.
 - `mpc-schedule-rewind.test.mjs` — play to simEnd, rewind, replay: identical state. Fails today for SPENDING / ALLOCATION_MIX / BOND_LADDER (§0 bug 1).
 - ~~`mpc-schedule-roth-fold.test.mjs`~~ — **landed as `mpc-run-queue-levers.test.mjs` MRQ-3 / MRQ-4**: the rows reach the compiled event schedules, and the fold happens before the toolsets read them (§6.3).
-- `mpc-schedule-truncation.test.mjs` — `CockpitController` at epoch k sees rows < k and no others (D8).
+- ~~`mpc-schedule-truncation.test.mjs`~~ — **landed as `mpc-run-record.test.mjs` MRR-6 / MRR-7**: `CockpitController` at epoch k sees rows < k and no others (D8).
 - `mpc-run-editor.test.mjs` — the row editor round-trips, sorts by date, and a blank row syncs to `null`; deleting the selected run clears `mpcActiveRun` rather than leaving it dangling.
 - `mpc-run-as-decision-point.test.mjs` — **the §4.2 gate.** A `DecisionPoint` over `mpcActiveRun` with three options expands to three leaves, `makeLeafEntry` writes the selection into each, and the three leaves produce three different results. If this passes, the whole analysis surface reaches MPC runs with no further work; if it is missing, the indirection's main justification is unproven.
-- `mpc-run-refuses-conflicting-axis.test.mjs` — an active run plus a study axis over a key it pins throws at load / reports at launch, per D11, and `mpcActiveRun` as the axis itself does neither.
+- ~~`mpc-run-refuses-conflicting-axis.test.mjs`~~ — **landed in two halves**: the load-time throw is `mpc-run-queue-levers.test.mjs` MRQ-5/MRQ-6, the launch-time report is `mpc-run-record.test.mjs` MRR-8, and `mpcActiveRun` as the axis itself does neither.
 
 ---
 
@@ -420,11 +422,12 @@ Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`,
 - [x] **3c** *(structural, forced by 3b)* — every lever's `appliesTo` + `requirement` moved from `COCKPIT_CONTROLS` into `LEVER_SCHEDULE` and spread back. One predicate, two consumers (§16.6).
 - **Tests**: `mpc-run-queue-levers.test.mjs` (MRQ-1…7).
 
-**Phase 4 — Record → bag**
-- [ ] **4a** — write a bag entry from the decision log and select it, F1-gated; `source` stamped, `derivedFrom` when re-solved from an existing run.
-- [ ] **4b** — `CockpitController` truncation at "now" (D8).
-- [ ] **4c** — `run:save` headless.
-- [ ] **4d** — the D11 refusals, both halves.
+**Phase 4 — Record → bag** — **BUILT 2026-09-20** (§16.7)
+- [x] **4a** — `src/finance/mpc/run-record.js`. `decisionsFromRecords` routes the log the way `harvest.js:_epochsFor` does (`controlKeys` → `controlVars` → `controlParams`), so record and harvest are two views of one log rather than two parsers that can disagree; `scheduleKey` is where the index dies. `buildRunEntry` stamps `source` (levers, epochs, range, goal, solver, `baseScenarioId`, `derivedFrom`) and `describeRunSource` is §8's picker label, shared by the UI and the CLI. `saveRunToScenario` writes **one store** (`scenario.params`) through `upsertParam`, and selecting a run also sets `mpcRunEnabled: true` — selecting a run whose switch is off looks like a no-op and reads as a bug. **One addition to §4.4**: rows that merely *restate* the value already in force are dropped (`dedupeUnchanged`, default on). That is not D2's collapse — it keeps every CHANGE and discards only repetitions — and MRR-3 asserts both forms have identical decisions in force at every instant.
+- [x] **4b** — D8, as `truncateActiveRunAt(params, asOf)` + `CockpitController._rolloutParams()`, applied at all three rollout seams (`_problem`, `apply`, `advance`). **Non-destructive**, which is the part that is easy to get wrong: "now" only moves forward, so truncating `this.committed` in place at epoch 1 deletes rows epoch 12 is entitled to see. A fresh run clears the *selection* rather than leaving an entry with no rows, because an empty `decisions` warns on every rollout.
+- [x] **4c** — `scripts/scenario/save-run.mjs`, the headless twin of §8's button through the *same* three calls. Takes the two files `replay-vs-bake.mjs` takes (an exported `fin-sim-decisions` log + the scenario), and refuses to write an insolvent plan unless `--no-check`.
+- [x] **4d** — both halves. The first landed in phase 3 (`assertRunIsPlayable`, throws at load). The second is `src/finance/mpc/run-axis-hygiene.js` — `runAxisProblems` reports, never repairs, in `poolAxisProblems`' shape and beside it in the grid-axis surface. `mpcActiveRun` as the axis itself is explicitly never flagged: that is §4.2, the entire justification for the indirection.
+- **Tests**: `mpc-run-record.test.mjs` (MRR-1…8).
 
 **Phase 5 — Picker and UI**
 - [ ] **5a** — `mpcActiveRun` select (labelled from `source`) + `mpcRunEnabled`.
@@ -457,7 +460,7 @@ Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`,
 
 ---
 
-## 16. Notes from the build (§16.1–16.4 phase 1, 2026-09-19; §16.5–16.6 phases 2–3, 2026-09-20)
+## 16. Notes from the build (§16.1–16.4 phase 1, 2026-09-19; §16.5–16.7 phases 2–4, 2026-09-20)
 
 Measured while building phase 1, against the tree rather than against the 2026-07 draft's line
 numbers. Each one changes what a later phase has to do, so it is here rather than in a commit
@@ -624,6 +627,32 @@ off is *reconciling* a contradiction, which is precisely what D11 refuses. The r
 first, so by the time `applyAt` fires the base **is** WEIGHTED and the stamp is an idempotent
 restatement. It is kept only because the snapshot/rollout path may hand the reducer a state
 that does not carry the field, and it is no longer load-bearing.
+
+### 16.7 The F1 gate needed no new machinery, and the record/harvest split held
+
+Two things worth recording from phase 4, both of them "the earlier design was right".
+
+**The promotion gate.** `harvest-feasibility.js`'s header predicted this exact reuse — *"the
+check takes a PLAN, and a plan with one entry is a valid input"* — and it is true with nothing
+added: a bag entry folds as three plan entries (`mpcRuns`, `mpcActiveRun`, `mpcRunEnabled`) and
+`checkHarvestFeasibility` runs the result from t₀. It is in fact a **stronger** gate here than
+over a harvest. There, the check had to mirror `applyHarvestPlan` entry-for-entry and could
+drift from it; here the thing checked *is* the thing saved, byte for byte, so there is nothing
+to mirror.
+
+**The log's shape.** `_epochsFor`'s three fields (`controlKeys` / `controlVars` /
+`controlParams`) were added for the harvest's re-keying problem, and they turn out to be exactly
+what a recorder needs — because the recorder's hard part is the same one: mapping an epoch's
+`paramKey` back to the lever that owns it. Reading the log through the same rule is what keeps
+"record" and "harvest" two views of one thing. The one deliberate difference is the tagging
+fallback: both modules treat untagged `controlVars` as belonging to the single active lever, and
+that rule is now written twice. It is three lines and it is load-bearing for old logs; a third
+copy would be the moment to extract it.
+
+**What phase 4 did NOT resolve.** The bag entry carries `source.baseScenarioId`, and nothing
+reads it. That is Q5's residue, stated in §12 and still open: phase 3's gate catches a run whose
+*mechanic* was disabled, which is the failure that was measured; a run whose base merely moved
+is not yet known to be a problem worth refusing.
 
 Phase 5's editors will also need `scenario-tab-view.js` to dispatch on the `MpcRuns` param type
 the way it already does for `LiquidityGraph` / `LiquidityShapes` (`scenario-tab-view.js:630`);

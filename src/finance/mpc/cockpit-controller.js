@@ -33,6 +33,7 @@ import { ALLOCATION_SCHEDULE }      from '../behavioral/rebalance-to-target-redu
 import { HARVEST_FORMS, collapseConsecutive, ageAt, requiresIncludes } from './harvest.js';
 import { LEVER_SCHEDULE, drawdownPriorityPatch, presentRolesFromState }
   from './lever-schedule.js';
+import { truncateActiveRunAt }  from './run-schedule.js';
 
 /*
  * `_presentRolesFromState` MOVED to `lever-schedule.js` (design 81 §16.2) and is imported
@@ -1209,6 +1210,26 @@ export class CockpitController {
     return parts.join(' · ');
   }
 
+  /**
+   * The params every rollout compiles against — `committed`, with any active recorded run
+   * truncated at "now" (design 81 §7, **D8**).
+   *
+   * A recorded run is an ordinary scenario param, so the cockpit picks it up through
+   * `_paramsToMap(scenario.params)` like anything else. Without this, Advise at epoch 12 would
+   * solve against a world where epochs 13–44 are ALREADY DECIDED: the controller optimising
+   * against its own answers, and a futures fan made of plans that already contain their own
+   * futures. D8 fixes it with a rule rather than a mode flag, and the rule is right in all
+   * three cases at once — a fresh run sees nothing, a resumed run sees its own committed past
+   * (which IS the realized plan), and "re-solve from epoch k" gets the prefix for free.
+   *
+   * Called per rollout rather than once, because `committed` must keep the rows a later epoch
+   * is entitled to see. It returns `committed` itself when nothing is selected, so a cockpit
+   * session with no recorded run allocates nothing and behaves exactly as before.
+   */
+  _rolloutParams() {
+    return truncateActiveRunAt(this.committed, this.snapshot?.date);
+  }
+
   /** Inflation context a lever needs to map its real base-year amount to nominal. */
   _describeCtx() {
     return { asOf: this.snapshot?.date, inflationRate: this.committed?.inflationRate };
@@ -1217,7 +1238,7 @@ export class CockpitController {
   _problem(variables) {
     return new OptimizationProblem({
       variables,
-      baseParams:   this.committed,
+      baseParams:   this._rolloutParams(),          // design 81 D8 — truncated at "now"
       objective:    this.objective,
       simStart:     this.simStart,
       simEnd:       this.simEnd,
@@ -1323,7 +1344,8 @@ export class CockpitController {
     const { result } = rollForwardWithControls({
       snapshot:      this.snapshot,
       controlParams: candidate ?? {},
-      baseParams:    this.committed,
+      baseParams:    this._rolloutParams(),         // design 81 D8 — truncated at "now"
+
       simStart:      this.simStart,
       simEnd:        this.simEnd,
       cfgTemplate:   this.cfgTemplate,
@@ -1384,7 +1406,7 @@ export class CockpitController {
     if (!this.snapshot) throw new Error('CockpitController.advance: no snapshot');
     const problem = new OptimizationProblem({
       variables:    [],
-      baseParams:   this.committed,
+      baseParams:   this._rolloutParams(),          // design 81 D8 — truncated at "now"
       simStart:     this.simStart,
       simEnd:       this.simEnd,
       initialState: { kind: 'snapshot', snapshot: this.snapshot, cfgTemplate: this.cfgTemplate },
