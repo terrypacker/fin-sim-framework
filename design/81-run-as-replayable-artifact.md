@@ -436,9 +436,11 @@ Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`,
 - [x] **5d** — help. The `recorded-mpc-runs` concept topic and the `mpc-cockpit` panel topic carry phases 2–5; no restamp was needed, because `panel:<id>` hashes title + category and neither moved.
 - **Tests**: `tests/viz/mpc-run-editors.test.mjs`.
 
-**Phase 6 — The lab**
-- [ ] **6a** — `scripts/lib/run-lab.mjs`; `run:inspect` / `run:replay` / `run:branch`.
-- [ ] **6b** — `run:sweep` over `grid.mjs`; `run:attribute`; `run:seeds`.
+**Phase 6 — The lab** — **BUILT 2026-09-20** (§16.9)
+- [x] **6a** — `scripts/lib/run-lab.mjs` (`pickRun` / `withActiveRun` / `withoutRun` / `inForceAt` / `branchAt` / `withoutLever` / `parseSet`), plus `run:inspect`, `run:replay`, `run:branch`. All seven commands are `npm run run:*` aliases, and every one is `withActiveRun` + `runCfg` — §9's payoff arriving as an absence of code.
+- [x] **6b** — `run:sweep` over `grid.mjs`, `run:attribute`, `run:seeds`.
+- **Tests**: `mpc-run-lab.test.mjs` (MRL6-1…6) over the shared half; the six tools are thin by construction.
+- **Exercised end to end** on the real 44-epoch, nine-lever log design 80 investigated — which is where the two findings in §16.9 came from.
 
 **Phase 7 — Consolidation**
 - [ ] **7a** — route `_seededSim`'s per-account re-stamp (`optimization-problem.js`) through `drawdownPriorityPatch` (D7), deleting the last copy. `DRAWDOWN_WEIGHTS.actuate` was already routed through it in phase 2a (§16.2), so this is one call site, not a sweep.
@@ -461,7 +463,7 @@ Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`,
 
 ---
 
-## 16. Notes from the build (§16.1–16.4 phase 1, 2026-09-19; §16.5–16.8 phases 2–5, 2026-09-20)
+## 16. Notes from the build (§16.1–16.4 phase 1, 2026-09-19; §16.5–16.9 phases 2–6, 2026-09-20)
 
 Measured while building phase 1, against the tree rather than against the 2026-07 draft's line
 numbers. Each one changes what a later phase has to do, so it is here rather than in a commit
@@ -683,3 +685,38 @@ surfaces at once.
 **One budget note for the next topic.** `check-help` caps a concept topic at 400 words and a
 panel topic at 250, and the count is tight enough that adding three paragraphs means cutting
 three. That is the gate working: the cut fell on history the design doc already tells better.
+
+### 16.9 Two things running the lab on a real log found
+
+Both were found by *running* the tools rather than by testing them, which is the lesson this
+repo has already recorded once (`equityShift` was dead for a month behind a passing suite).
+
+**A refusal is not an unverifiability, and conflating them writes a broken plan.** Phase 4's
+`checkRunFeasibility` calls `checkHarvestFeasibility`, whose try/catch turns *any* exception
+into `feasible: null` — "could not verify". `assertRunIsPlayable` throws. So a run whose
+mechanic the target scenario had switched off came back as `feasible: null`, and both callers
+— `save-run.mjs` and the cockpit button — treat that as a soft warning and save anyway. It
+printed **"created and selected"** for a run that cannot load at all.
+
+The fix is a separate, prior verdict: `checkRunFeasibility` runs the playability assert first
+and returns `playable: false` with the message, and the feasibility check never runs, because
+there is nothing to check. Worth stating as a rule: *a try/catch that flattens every failure
+into one verdict will eventually flatten a refusal into a warning.*
+
+**A leave-one-out table must distinguish INERT from "worth nothing".** On the real log, five of
+the nine levers changed the terminal by exactly zero — not approximately, identically, on every
+metric the probe reports. That is not "this lever broke even": it is *nothing read the rows*.
+In this plan the reasons are already known to the repo (a pool graph claims the classes an
+allocation mix targets; a sleeve-narrowed claim leaves one class per draw), so it is a property
+of the plan rather than a defect in phase 2 — but a table that prints `$0` invites exactly the
+wrong conclusion, and this repo has twice shipped a lever that was dead behind a number that
+looked fine. `run:attribute` now says INERT and names the gates to check.
+
+Note what the probe is and is not: equal on four terminals is strong evidence, not byte
+identity, so it says "check the gate", never "the lever is dead".
+
+**A limitation to know.** `run:replay` warns when the scenario differs from `source.baseScenarioId`,
+because A′ replays the log by INDEX and will address different rows of a different table. But
+`save-run.mjs` stamps the scenario it saves *into*, not the one the log was *recorded against* —
+so the warning catches a moved file, not a re-homed log. Closing that needs the recorder to
+stamp at record time, which is a cockpit change, not a CLI one.

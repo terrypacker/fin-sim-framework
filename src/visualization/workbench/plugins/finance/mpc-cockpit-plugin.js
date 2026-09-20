@@ -1066,6 +1066,12 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
       simEnd:   scenario?.simEnd   ? new Date(scenario.simEnd)   : this._controller?.simEnd,
       cfgTemplate: scenario,
     });
+    // D11's refusal is a different verdict from F1's, and must not be softened into one:
+    // a run whose mechanic the scenario has switched off cannot load at all.
+    if (f.playable === false) {
+      this._setNow(`Not saved — this scenario cannot play that run. ${f.error}`);
+      return;
+    }
     if (f.feasible === false) {
       this._setNow(`Not saved — ${describeFeasibility(f, { fmtDate: _fmtDate, fmtUsd: _usd })}`);
       return;
