@@ -17,6 +17,7 @@ import { registerHoldingActionTypes } from '../../finance/holdings/holding-actio
 import { AssetAppreciateReducer } from '../../finance/handlers/asset-appreciation-handler.js';
 import { LoanPaymentApplyReducer } from '../../finance/account-rules/loan-classes.js';
 import { PeriodService } from '../../finance/period/period-service.js';
+import { assertRunIsPlayable, foldQueueLeverRuns } from '../../finance/mpc/run-compile-fold.js';
 
 /**
  * ScenarioCompiler — consumes a declarative scenario definition and a
@@ -70,7 +71,21 @@ export class ScenarioCompiler {
       });
     }
 
-    const parameters = this._resolveParameters(definition, resolved);
+    // ── design 81 §6.3 / D11 — the ONE load-order dependency in the recorded-run design ──
+    //
+    // Both queue levers' rows must be part of `parameters` BEFORE the toolsets' `schedules()`
+    // run, because that is where `rothConversionSchedule` / `earlyWithdrawalSchedule` are read
+    // and turned into events, and a reducer cannot touch the queue afterwards. This seam is
+    // the only place that ordering can be guaranteed rather than hoped for, so it is asserted
+    // by a test that names the ORDER (an outcome test would pass for a fold that merely
+    // happens to run first today).
+    //
+    // The refusal comes FIRST: a run that names a disabled mechanic must not be half-folded
+    // and then thrown on. Both are no-ops when no run is selected, so a scenario that does not
+    // use design 81 compiles through the same two calls unchanged.
+    const authored = this._resolveParameters(definition, resolved);
+    assertRunIsPlayable(authored);
+    const parameters = foldQueueLeverRuns(authored);
     const paramSchema = resolved.flatMap(t => t.paramSchema?.({}) ?? []);
     const context    = this._buildContext(definition, services, parameters, paramSchema);
 

@@ -127,3 +127,23 @@ export function activeDecisionsAt(run, asOfMs) {
   for (const list of byLever.values()) list.sort((a, b) => a.key.localeCompare(b.key));
   return { throughMs, byLever };
 }
+
+/**
+ * Every decision the run ever made — for each (lever, key), the LAST row — regardless of date.
+ *
+ * `activeDecisionsAt` answers "what is in force now", which is what a reducer riding a period
+ * advance needs. The two QUEUE levers (§6.3) need the other question: their rows fold into
+ * year-keyed schedule params at COMPILE, before any clock exists, and a year-keyed schedule
+ * already carries its own dates. Collapsing to the last row per key is the same last-wins rule
+ * `activeDecisionsAt` applies, with the window opened to the whole run.
+ *
+ * `run.decisions` is sorted ascending, so a plain forward pass leaves the last row per key.
+ *
+ * @param {{decisions:Array}|null} run
+ * @returns {Map<string, Array>|null} byLever, or null when the run decided nothing
+ */
+export function allDecisionsOf(run) {
+  const rows = run?.decisions;
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  return activeDecisionsAt(run, rows[rows.length - 1].dateMs)?.byLever ?? null;
+}

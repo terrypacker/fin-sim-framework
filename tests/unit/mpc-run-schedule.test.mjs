@@ -227,15 +227,16 @@ test('MRS-7: "now" falls back to the period start when the action carries no dat
 });
 
 test('MRS-8: a lever with no `applyAt` warns loudly rather than playing back short', () => {
-  // `ROTH` is the real unhooked lever as of phase 2 — it folds into `rothConversionSchedule`
-  // at COMPILE (§6.3), so it will never gain an `applyAt`, which is what makes it the stable
-  // fixture here. (This test named BOND_LADDER until phase 2b hooked it.)
+  // Phases 2 and 3 hooked every lever the cockpit has, so the honest fixture is a lever this
+  // build does not know — a run recorded by a LATER version, or a hand-edited bag. That is
+  // exactly the case the warning exists for, and unlike a real lever name it cannot be
+  // invalidated by the next phase. (This test named BOND_LADDER, then ROTH, as each was hooked.)
   const run = resolveActiveMpcRun({
-    mpcRuns: { r: { decisions: [{ date: D(2030), lever: 'ROTH', key: 'rothConversionAmount', value: 50000 }] } },
+    mpcRuns: { r: { decisions: [{ date: D(2030), lever: 'LEVER_FROM_THE_FUTURE', key: 'x', value: 1 }] } },
     mpcActiveRun: 'r',
   });
   const r = new MpcDecisionScheduleReducer({ run, baseParams: BASE_PARAMS });
   const { value: out, seen } = capturingWarnings(() => r.reduce({}, ADVANCE(2031), null));
   assert.equal('mpcDecisionApplied' in out, false);
-  assert.match(seen.join('\n'), /ROTH.*no `applyAt` hook/s);
+  assert.match(seen.join('\n'), /LEVER_FROM_THE_FUTURE.*no `applyAt` hook/s);
 });

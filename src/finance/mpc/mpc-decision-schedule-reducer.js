@@ -112,7 +112,16 @@ export class MpcDecisionScheduleReducer extends Reducer {
     let patch = null;
     const applied = [];
     for (const [lever, rows] of active.byLever) {
-      const hook = this.levers?.[lever]?.applyAt;
+      const spec = this.levers?.[lever];
+      // The two QUEUE levers (§6.3) are not this reducer's job: their rows folded into
+      // `rothConversionSchedule` / `earlyWithdrawalSchedule` at COMPILE, before the toolsets
+      // built the events, because a reducer cannot touch the event queue. Skipping them
+      // SILENTLY is the point — the warning below is correct and loud for a lever that
+      // genuinely cannot be applied, and a warning that fires on every run that converts is a
+      // warning nobody reads.
+      if (spec?.foldsAtCompile) continue;
+
+      const hook = spec?.applyAt;
       if (typeof hook !== 'function') {
         // Loud, once per lever. A recorded row for a lever that cannot be applied means the
         // run is playing back as something other than what it was, which is the one failure

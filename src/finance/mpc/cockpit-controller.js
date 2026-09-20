@@ -62,8 +62,6 @@ export const COCKPIT_CONTROLS = {
     defaultRange: { min: 3000, max: 12000, step: 500 },
     // The lever drives the EXPLICIT_BANDS table; it only affects the live sim
     // when that strategy is active (AGE_BANDED/FIXED read other params).
-    appliesTo: (bp) => _hasStrategy(bp?.spendingStrategy, 'EXPLICIT_BANDS'),
-    requirement: 'Switch Spending Strategy to include EXPLICIT_BANDS (Scenario panel) to use this lever.',
     buildVariables: ({ baseParams, range, asOf, state }) => {
       const bands = baseParams?.spendingExpenseBands ?? [{ startAge: 65, monthlyAmount: 6000 }];
       // Target the band active at "now" (matching the reducer's bandForAge), or
@@ -217,6 +215,9 @@ export const COCKPIT_CONTROLS = {
   },
 
   ROTH: {
+    // design 81 §6.3 — `scheduleKey` + `foldAt` + the `appliesTo` gate, spread in
+    // from `lever-schedule.js`. These two fold at COMPILE and have no `applyAt`.
+    ...LEVER_SCHEDULE.ROTH,
     key:     'ROTH',
     label:   'Roth Conversion Ceiling',
     numeric: true,                       // continuous income-fill target ($, real base-year)
@@ -225,8 +226,6 @@ export const COCKPIT_CONTROLS = {
     // brackets. The toolset compounds the target to the year's nominal ceiling.
     defaultRange: { min: 0, max: 500_000, step: 5_000 },
     liveActuatable: true,                // forward-effective live re-wire (Step 10)
-    appliesTo: (bp) => bp?.rothConversionEnabled === true,
-    requirement: 'Enable Roth conversions (Scenario panel) to use this lever.',
     // Per-year schedule needs an entry (with its `year`) for the year at "now"
     // before the solver can tune its incomeTarget — `set()` never creates nodes.
     // Append (preserving prior committed years) and keep chronological so the
@@ -396,6 +395,9 @@ export const COCKPIT_CONTROLS = {
   },
 
   EARLY_WITHDRAWAL: {
+    // design 81 §6.3 — `scheduleKey` + `foldAt` + the `appliesTo` gate, spread in
+    // from `lever-schedule.js`. These two fold at COMPILE and have no `applyAt`.
+    ...LEVER_SCHEDULE.EARLY_WITHDRAWAL,
     key:     'EARLY_WITHDRAWAL',
     label:   'Early Withdrawal (Decant)',
     numeric: true,
@@ -410,13 +412,6 @@ export const COCKPIT_CONTROLS = {
     // execute (save-point text ≠ behavior). Mirror that gate here so the cockpit
     // refuses the inert case and surfaces `requirement` — unlike ROTH, whose
     // annual evaluate events exist whenever rothConversionEnabled is true.
-    appliesTo: (bp) => bp?.earlyWithdrawalEnabled === true && (
-      (Array.isArray(bp?.earlyWithdrawalSchedule) && bp.earlyWithdrawalSchedule.length > 0) ||
-      (Number.isFinite(bp?.earlyWithdrawalStartYear) &&
-       Number.isFinite(bp?.earlyWithdrawalEndYear) &&
-       bp.earlyWithdrawalEndYear >= bp.earlyWithdrawalStartYear)
-    ),
-    requirement: 'Enable early withdrawals and set an optimization window (Scenario panel) to use this lever.',
     // The next actionable withdrawal year needs a schedule entry before the solver
     // can address its amounts (`set()` never creates nodes). Append + keep
     // chronological so the entry index is stable. Idempotent.
@@ -580,7 +575,6 @@ export const COCKPIT_CONTROLS = {
     // compete for a draw is a valid decision whenever the plan spans both. The
     // lever is inert only when the horizon never draws across the border — a data
     // condition, not a config one — so there is no scenario-param gate.
-    appliesTo: () => true,
     // One categorical decision variable over the state-resident policy field. The
     // solver encodes/decodes ENUMs by index; a 2-value lever is fully covered by a
     // grid/pattern search. AUTO is not a search value — the online lever chooses a
@@ -634,7 +628,6 @@ export const COCKPIT_CONTROLS = {
     // Always applicable: how accounts sharing a drawdown tier split a draw is a
     // valid decision whenever a tier has ≥2 members. Inert only when every tier is
     // a singleton — a data condition, not a config one — so no scenario-param gate.
-    appliesTo: () => true,
     buildVariables: () => [{
       paramKey: 'withinTierDraw',
       type:     OPT_PARAM_TYPES.ENUM,
@@ -684,8 +677,6 @@ export const COCKPIT_CONTROLS = {
     liveActuatable: true,
     // Only meaningful under the WEIGHTED strategy — the weights synthesize the order
     // only then (every other strategy fixes it). Gate + surface the requirement.
-    appliesTo: (bp) => bp?.drawdownStrategy === DRAWDOWN_WEIGHT_MODE,
-    requirement: 'Set Drawdown Strategy to WEIGHTED (Scenario panel) to tune the drawdown order online.',
     // No `harvest` hook ⇒ the POINT default (§13.6.3): last-epoch weights + a
     // quantified collapse warning. A faithful bake needs an age-keyed
     // `drawdownWeightSchedule` that does not exist yet (§13.6.5, gated on VoTV).
@@ -775,8 +766,6 @@ export const COCKPIT_CONTROLS = {
     liveActuatable: true,
     // Meaningful only under the WEIGHTED sleeve order — the weights synthesize the
     // sell order only then (FIFO/TAX_COST/PRESERVE_GROWTH fix it). Gate + surface why.
-    appliesTo: (bp) => bp?.drawdownSleeveOrder === SLEEVE_WEIGHT_MODE,
-    requirement: 'Set Drawdown Sleeve Order to WEIGHTED (Scenario panel) to tune the sleeve sell order online.',
     harvestRequires: { drawdownSleeveOrder: SLEEVE_WEIGHT_MODE },
     // One CONTINUOUS variable per drawdown sleeve class; the sell order is the
     // ascending sort of the committed weights.
@@ -848,9 +837,6 @@ export const COCKPIT_CONTROLS = {
     liveActuatable: true,
     // Meaningful only when the allocation lever is selected AND its strategy is
     // OPTIMIZED (the weights synthesize the target only then). Gate + surface why.
-    appliesTo: (bp) => bp?.allocationStrategy === ALLOCATION_OPTIMIZED_MODE
-                    && _hasStrategy(bp?.behavioralStrategies, 'TARGET_ALLOCATION'),
-    requirement: 'Select the TARGET_ALLOCATION behavioral strategy and set Allocation Strategy to OPTIMIZED (Scenario panel) to tune the mix online.',
     // One CONTINUOUS variable per NON-residual class (the last class is the
     // stick-breaking residual, no param), pruned to the classes reachable in the live
     // state (the design-58 build-time-filter analog; all four are reachable today).
@@ -1021,8 +1007,6 @@ export const COCKPIT_CONTROLS = {
     numeric: true,
     defaultRange: { min: 2, max: 15, step: 1 },
     liveActuatable: true,
-    appliesTo: (bp) => _hasStrategy(bp?.behavioralStrategies, 'BOND_LADDER'),
-    requirement: 'Select the BOND_LADDER behavioral strategy (Scenario panel) to tune the ladder length online.',
     harvestRequires: { behavioralStrategies: requiresIncludes('BOND_LADDER') },
     buildVariables: ({ range }) => [{
       paramKey: 'bondLadderRungs',
@@ -1741,11 +1725,12 @@ function _toNominal(real, year, ctx) {
   return nf ? real * nf.factor : real;
 }
 
-/** True when `strategy` (array or string) includes `key`. */
-function _hasStrategy(strategy, key) {
-  if (Array.isArray(strategy)) return strategy.includes(key);
-  return strategy === key;
-}
+/*
+ * `_hasStrategy` MOVED to `lever-schedule.js` (design 81 phase 3) with the `appliesTo` gates
+ * that were its only callers. A gate is a fact about the LEVER, not about the cockpit: the
+ * cockpit asks it to decide whether a lever is worth searching, and the loader asks the same
+ * predicate to decide whether a recorded run can be played at all (§16.3, D11).
+ */
 
 /** Whole years of age at `asOf`, from the snapshot's primary person (mirrors the reducer). */
 function _personAgeAt(asOf, state) {

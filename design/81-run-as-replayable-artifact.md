@@ -373,7 +373,8 @@ Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`,
 - ~~**Q3 — Is `state.mpcSpendingBands` the right shape?**~~ **RESOLVED → D12: a full replacement band table.** The size objection was the only argument for a merge map and it does not survive measurement (~1 KB vs a ~280 KB snapshot). A replacement is the shape `this.bands` already is, so nothing downstream learns a second vocabulary.
 - **Q3b — Does a run re-solved from epoch *k* become its own entry?** Yes — `source.derivedFrom` (§4.3) makes runs a tree held as parent pointers. Open: whether the picker should *offer* "re-solve from here" or whether that stays a cockpit action that happens to write a derived entry.
 - **Q4 — Does the schedule round-trip through `ScenarioSerializer` and the CSV param export?** Dates in a table cell are the usual place that breaks.
-- **Q5 — Staleness.** `source.baseScenarioId` lets us detect that the base moved under a recorded run. What should that *do* — warn, refuse to select, or nothing? A run that stores no param paths is far more robust to a base edit than the 2026-07-26 draft was, so this looked like a badge on the picker entry rather than a gate. **§16.3 found the case that decides it and it is not a badge**: a run recorded with `rothConversionEnabled: true`, selected against a base where it has since been switched off, has every ROTH row dropped by the toolset's opening gate and plays back as a different plan in silence. A run whose levers name a disabled mechanic must refuse at load. Open: whether *any* other base edit rises to a refusal, or whether that one gate is the whole of it.
+- ~~**Q5 — Staleness.**~~ **RESOLVED in phase 3 → a lever-gate refusal at load, and (for now) that is the whole of it.** The answer §16.3 forced is below, and phase 3 built it generalized: every recorded lever's `appliesTo` gate is asserted against the base at compile, and a false gate throws. What phase 3 did **not** add is a general "the base moved" detector — `source.baseScenarioId` still records provenance and still drives nothing. That is deliberate and is the second half of the original question, now standing alone: a run that stores no param paths survives most base edits intact, so the remaining candidates for a refusal are edits that change what a *key* means, not edits that change a number. None has been found. **Q5's residue**: name one, or close it. The original text follows.
+- **Q5 (original) — Staleness.** `source.baseScenarioId` lets us detect that the base moved under a recorded run. What should that *do* — warn, refuse to select, or nothing? A run that stores no param paths is far more robust to a base edit than the 2026-07-26 draft was, so this looked like a badge on the picker entry rather than a gate. **§16.3 found the case that decides it and it is not a badge**: a run recorded with `rothConversionEnabled: true`, selected against a base where it has since been switched off, has every ROTH row dropped by the toolset's opening gate and plays back as a different plan in silence. A run whose levers name a disabled mechanic must refuse at load. Open: whether *any* other base edit rises to a refusal, or whether that one gate is the whole of it.
 - **Q6 — Why does every epoch under-project its own outcome by ~6.5×?** On the real log the last epoch projected a \$16,249 terminal; the realized path delivered **\$106,476**. Every epoch's projection is the terminal of "hold this decision for the rest of life", but the realized path is the *sequence* of first segments, and they are not the same plan. The cockpit only ever displays the projection — so for a die-with-target goal the user is told they will land on target while the plan overshoots by 6.5×. **This design sharpens the question rather than answering it**: once `B ≡ A′` is a regression test, the A-vs-A′ gap is isolated as a pure controller-accuracy problem with the harvest permanently excluded as a suspect. A goal-seeking controller that systematically misses its goal by that margin is either mis-reporting or under-spending, and both matter. Own it in design 39.
 
 ---
@@ -386,7 +387,7 @@ Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`,
 - `mpc-schedule-equals-replay.test.mjs` — **the headline.** A scenario carrying a run's schedule, run from t₀, reproduces `replayDecisions` on the same log. `B ≡ A′`, which is design 80's finding turned into a regression test.
 - `mpc-schedule-state-reads.test.mjs` — for each of the three: the override wins where present, the instance field wins where absent, and **every** read site honours it.
 - `mpc-schedule-rewind.test.mjs` — play to simEnd, rewind, replay: identical state. Fails today for SPENDING / ALLOCATION_MIX / BOND_LADDER (§0 bug 1).
-- `mpc-schedule-roth-fold.test.mjs` — ROTH / EARLY_WITHDRAWAL rows reach the compiled event schedules, and the fold happens before the toolsets read them (§6.3).
+- ~~`mpc-schedule-roth-fold.test.mjs`~~ — **landed as `mpc-run-queue-levers.test.mjs` MRQ-3 / MRQ-4**: the rows reach the compiled event schedules, and the fold happens before the toolsets read them (§6.3).
 - `mpc-schedule-truncation.test.mjs` — `CockpitController` at epoch k sees rows < k and no others (D8).
 - `mpc-run-editor.test.mjs` — the row editor round-trips, sorts by date, and a blank row syncs to `null`; deleting the selected run clears `mpcActiveRun` rather than leaving it dangling.
 - `mpc-run-as-decision-point.test.mjs` — **the §4.2 gate.** A `DecisionPoint` over `mpcActiveRun` with three options expands to three leaves, `makeLeafEntry` writes the selection into each, and the three leaves produce three different results. If this passes, the whole analysis surface reaches MPC runs with no further work; if it is missing, the indirection's main justification is unproven.
@@ -413,9 +414,11 @@ Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`,
 - [x] **2c** *(unplanned — see §16.5)* — `scenarios/params/lever-weights.js`, a leaf module holding the Lever-A/Lever-B weight vocabulary and `synthesizeWeightedPriorities`, re-exported from its two old homes. Not tidying: without it phase 2 cannot be written at all.
 - **Tests**: `mpc-run-levers.test.mjs` (MRL-1…8). MRL-4 is the D7 gate — `actuate` and `applyAt` must produce identical per-account priorities. MRL-8 is the import-cycle gate (§16.5).
 
-**Phase 3 — The two queue levers**
-- [ ] **3a** — `ROTH` / `EARLY_WITHDRAWAL` fold into `rothConversionSchedule` / `earlyWithdrawalSchedule` at compile, before either toolset's `schedules(context)` reads them (`us-roth-conversion-toolset.js:226`, `us-early-withdrawal-toolset.js:209`), with a test that asserts the **order**, not just the outcome (§16.3).
-- [ ] **3b** — the `rothConversionEnabled` / `earlyWithdrawalEnabled` gates drop every recorded row silently when the base has been edited since (§16.3). Refuse at load, D11's first half — this is the case that settles Q5.
+**Phase 3 — The two queue levers** — **BUILT 2026-09-20** (§16.6)
+- [x] **3a** — `ROTH` / `EARLY_WITHDRAWAL` fold into `rothConversionSchedule` / `earlyWithdrawalSchedule` at compile, in `src/finance/mpc/run-compile-fold.js`, called from the one seam in `ScenarioCompiler.compile` between `_resolveParameters` and `_buildContext`. `scheduleKey` is `year@<year>` (and `year@<year>::<field>` for EARLY_WITHDRAWAL, which decides two numbers a year) — D5 in its purest form, because both levers' `buildVariables` emit an index that their own `prepareBaseParams` moves by appending and re-sorting. `foldsAtCompile: true` on the spec is what makes `MpcDecisionScheduleReducer` skip those rows **silently** instead of firing its missing-hook warning on every run that converts. **MRQ-4 asserts the order**, not the outcome: a probe toolset records what `context.parameters` held at the instant its `schedules()` was called.
+- [x] **3b** — D11's first half, **generalized**. Not just the two `Enabled` flags: `assertRunIsPlayable` throws when **any** recorded lever's `appliesTo` gate is false against the base, because the same silent failure exists wherever a gate decides whether a consumer is compiled at all (no `EXPLICIT_BANDS` ⇒ no `ExplicitBandsSpendingReducer` ⇒ a band table stamped and read by nobody). The error names every offending lever and its `requirement` sentence.
+- [x] **3c** *(structural, forced by 3b)* — every lever's `appliesTo` + `requirement` moved from `COCKPIT_CONTROLS` into `LEVER_SCHEDULE` and spread back. One predicate, two consumers (§16.6).
+- **Tests**: `mpc-run-queue-levers.test.mjs` (MRQ-1…7).
 
 **Phase 4 — Record → bag**
 - [ ] **4a** — write a bag entry from the decision log and select it, F1-gated; `source` stamped, `derivedFrom` when re-solved from an existing run.
@@ -454,7 +457,7 @@ Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`,
 
 ---
 
-## 16. Notes from the build (§16.1–16.4 phase 1, 2026-09-19; §16.5 phase 2, 2026-09-20)
+## 16. Notes from the build (§16.1–16.4 phase 1, 2026-09-19; §16.5–16.6 phases 2–3, 2026-09-20)
 
 Measured while building phase 1, against the tree rather than against the 2026-07 draft's line
 numbers. Each one changes what a later phase has to do, so it is here rather than in a commit
@@ -584,6 +587,43 @@ weight-key helpers live in `holdings-selection.js` for exactly this reason.
 **The rule, for every later phase**: every import in `lever-schedule.js` must be a leaf. If a
 hook needs something that is not, move that thing. `MRL-8` imports all seven modules and is
 what stops the loop coming back.
+
+### 16.6 The gate is a lever fact, and the refusal is not ROTH-specific
+
+Phase 3's refusal needs `appliesTo`. It lived on `COCKPIT_CONTROLS`, which the compiler cannot
+import (§16.5), and the obvious move — re-declare the two `Enabled` checks in the loader — is
+two copies of a predicate whose two answers must never diverge. So all nine gates moved into
+`LEVER_SCHEDULE` beside `scheduleKey` / `applyAt`, and are spread back into `COCKPIT_CONTROLS`.
+
+That is the right home on the merits, not just for the import graph. A gate answers one
+question — *is this lever meaningful against this base?* — and two very different consumers ask
+it: the cockpit, to decide whether a lever is worth **searching**; the loader, to decide whether
+a recorded run can be **played at all**. `requirement` travels with it, because the sentence
+that tells a user how to satisfy the gate is exactly the sentence the refusal must print.
+
+Having them in one place made the generalization visible and cheap. §16.3 found the ROTH case,
+but it is not special:
+
+| lever | gate false ⇒ | the silent failure |
+|---|---|---|
+| `ROTH` / `EARLY_WITHDRAWAL` | toolset returns `[]` | every recorded row dropped, no events |
+| `SPENDING` | no `ExplicitBandsSpendingReducer` | band table stamped, read by nobody |
+| `ALLOCATION_MIX` | no `RebalanceToTargetReducer` | mix stamped, read by nobody |
+| `BOND_LADDER` | no `BondLadderReducer` | rung count stamped, read by nobody |
+| `DRAWDOWN_WEIGHTS` | strategy is not `WEIGHTED` | **worse** — the priorities bite anyway, so the run silently imposes a weighted order the base does not use |
+
+`DRAWDOWN_XBORDER` and `DRAWDOWN_WITHINTIER` stay `appliesTo: () => true`: they are inert only
+under a *data* condition (no cross-border draw, every tier a singleton), which no gate can see,
+so they must never refuse.
+
+One phase-2 decision is revised by this. `DRAWDOWN_SLEEVE.applyAt` stamps
+`drawdownSleeveOrder: WEIGHTED` alongside the weights, and §14 phase 2a called that "a free
+partial answer to §16.3" — making the run self-contained against a base switched to FIFO. With
+3b in place that reading is wrong: letting the run quietly re-enable a mechanic the user turned
+off is *reconciling* a contradiction, which is precisely what D11 refuses. The refusal now runs
+first, so by the time `applyAt` fires the base **is** WEIGHTED and the stamp is an idempotent
+restatement. It is kept only because the snapshot/rollout path may hand the reducer a state
+that does not carry the field, and it is no longer load-bearing.
 
 Phase 5's editors will also need `scenario-tab-view.js` to dispatch on the `MpcRuns` param type
 the way it already does for `LiquidityGraph` / `LiquidityShapes` (`scenario-tab-view.js:630`);

@@ -10,9 +10,9 @@
 
 import {
   DRAWDOWN_WEIGHT_ROLES, DRAWDOWN_CASH_ROLES, DEFAULT_DRAWDOWN_WEIGHTS,
-  DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP, drawdownWeightKey,
+  DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP, DRAWDOWN_WEIGHT_MODE, drawdownWeightKey,
   synthesizeWeightedPriorities,
-  ALLOC_WEIGHT_CLASSES, allocWeightKey, synthesizeTargetAllocation,
+  ALLOC_WEIGHT_CLASSES, ALLOCATION_OPTIMIZED_MODE, allocWeightKey, synthesizeTargetAllocation,
 } from '../../scenarios/params/lever-weights.js';
 import {
   DRAWDOWN_SLEEVE_CLASSES, SLEEVE_WEIGHT_MODE, SLEEVE_WEIGHT_PREFIX, SLEEVE_WEIGHT_SEP,
@@ -383,17 +383,183 @@ export const BOND_LADDER_SCHEDULE = {
   },
 };
 
+
+// ─────────────────────────────────────────────────────────────────────────────────
+// Phase 3 — the two QUEUE levers (§6.3): they fold at COMPILE, not at an advance
+// ─────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * `year@<year>` ⇄ the schedule year, and `year@<year>::<field>` for a lever that decides more
+ * than one number per year.
+ *
+ * Both queue levers' `buildVariables` emit an INDEX — `rothConversionSchedule[7].incomeTarget`,
+ * `earlyWithdrawalSchedule[7].taxDeferredAmount` — computed by searching the schedule for the
+ * year at "now". That index is a position in the table AS IT STOOD DURING THAT RUN, and both
+ * levers' `prepareBaseParams` APPEND a row and re-sort, so it moves as the run proceeds. D5's
+ * trap in its purest form; the year is the anchor those very functions searched by.
+ */
+export const YEAR_KEY_PREFIX = 'year@';
+export const YEAR_FIELD_SEP  = '::';
+
+/** @returns {string} `year@2031`, or `year@2031::rothAmount` when a field is named. */
+export function yearKey(year, field = null) {
+  return `${YEAR_KEY_PREFIX}${year}${field ? YEAR_FIELD_SEP + field : ''}`;
+}
+
+/** @returns {{year:number, field:string|null}|null} the parts of a `year@…` key. */
+export function yearKeyParts(key) {
+  if (typeof key !== 'string' || !key.startsWith(YEAR_KEY_PREFIX)) return null;
+  const [y, field = null] = key.slice(YEAR_KEY_PREFIX.length).split(YEAR_FIELD_SEP);
+  const year = Number(y);
+  return Number.isFinite(year) ? { year, field } : null;
+}
+
+/** The trailing `.field` of an indexed param path, e.g. `…[7].rothAmount` → `rothAmount`. */
+function _pathField(paramKey) {
+  const i = typeof paramKey === 'string' ? paramKey.lastIndexOf('.') : -1;
+  return i >= 0 ? paramKey.slice(i + 1) : null;
+}
+
+/**
+ * Fold year-keyed rows into a year-keyed schedule param, preserving every entry the run never
+ * decided and every field of an entry it decided only part of.
+ *
+ * Sorted by year for the same reason the band table is sorted by age: both toolsets iterate
+ * the array to emit events, and `prepareBaseParams` re-sorts after every append, so an
+ * unsorted fold would not be the table the run actually ran against.
+ */
+function _foldYearSchedule(base, rows, fields) {
+  const out = (Array.isArray(base) ? base : []).map(e => ({ ...e }));
+  let touched = false;
+  for (const row of (Array.isArray(rows) ? rows : [])) {
+    const parts = yearKeyParts(row?.key);
+    const value = Number(row?.value);
+    if (parts == null || !Number.isFinite(value)) continue;
+    const field = parts.field ?? fields[0];
+    if (!fields.includes(field)) continue;
+    const i = out.findIndex(e => Number(e?.year) === parts.year);
+    if (i >= 0) out[i] = { ...out[i], [field]: value };
+    else        out.push({ year: parts.year, [field]: value });
+    touched = true;
+  }
+  if (!touched) return null;
+  out.sort((a, b) => Number(a.year) - Number(b.year));
+  return out;
+}
+
+/**
+ * ROTH and EARLY_WITHDRAWAL act on QUEUED EVENTS, and a reducer cannot touch the queue.
+ *
+ * They need no mid-run mechanism anyway, and that is the point of §6.3: their params are
+ * ALREADY year-keyed schedules, consumed at compile to seed those events. So a recorded row
+ * folds into `rothConversionSchedule` / `earlyWithdrawalSchedule` before the toolsets build
+ * anything, and from there the run is indistinguishable from a hand-authored schedule.
+ *
+ * `foldsAtCompile: true` is what tells `MpcDecisionScheduleReducer` these rows are SOMEONE
+ * ELSE'S JOB rather than an unimplemented lever. Without it the reducer's missing-hook warning
+ * — correct and loud for a lever that genuinely cannot be applied — would fire on every run
+ * that converts, and a warning that is always wrong is a warning nobody reads.
+ *
+ * `retargetRothConversionEvents` / `retargetEarlyWithdrawalEvents` are NOT this path. They
+ * exist because `_seededSim` injects a stale snapshot queue into a fresh compile, which is a
+ * rollout problem that does not arise when the clock starts at t₀.
+ */
+export const ROTH_SCHEDULE = {
+  foldsAtCompile: true,
+  paramKey:  'rothConversionSchedule',
+  appliesTo: (bp) => bp?.rothConversionEnabled === true,
+  requirement: 'Enable Roth conversions (Scenario panel) to use this lever.',
+  scheduleKey: (variable) =>
+    (Number.isFinite(variable?._year) ? yearKey(variable._year) : (variable?.paramKey ?? null)),
+  foldAt: ({ rows, baseParams }) =>
+    _foldYearSchedule(baseParams?.rothConversionSchedule, rows, ['incomeTarget', 'bracketCeiling']),
+};
+
+export const EARLY_WITHDRAWAL_SCHEDULE = {
+  foldsAtCompile: true,
+  paramKey:  'earlyWithdrawalSchedule',
+  // Enabling is necessary but not sufficient: the toolset seeds tunable events only when a
+  // schedule or a valid window exists, so the lever would otherwise advise moves it cannot
+  // execute. The recorded run carries its own schedule rows, so the fold satisfies the first
+  // clause by construction — but the gate is asserted against the BASE, before the fold.
+  appliesTo: (bp) => bp?.earlyWithdrawalEnabled === true && (
+    (Array.isArray(bp?.earlyWithdrawalSchedule) && bp.earlyWithdrawalSchedule.length > 0) ||
+    (Number.isFinite(bp?.earlyWithdrawalStartYear) &&
+     Number.isFinite(bp?.earlyWithdrawalEndYear) &&
+     bp.earlyWithdrawalEndYear >= bp.earlyWithdrawalStartYear)
+  ),
+  requirement: 'Enable early withdrawals and set an optimization window (Scenario panel) to use this lever.',
+  // Two variables per year, so the field rides in the key: `year@2031::rothAmount`.
+  scheduleKey: (variable) => (Number.isFinite(variable?._year)
+    ? yearKey(variable._year, _pathField(variable?.paramKey))
+    : (variable?.paramKey ?? null)),
+  foldAt: ({ rows, baseParams }) =>
+    _foldYearSchedule(baseParams?.earlyWithdrawalSchedule, rows, ['taxDeferredAmount', 'rothAmount']),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────────
+// The gates — D11's first half (§16.3, and the case that settles Q5)
+// ─────────────────────────────────────────────────────────────────────────────────
+
+/** `strategy` may be a scalar or a list of selected strategies. */
+function _hasStrategy(strategy, key) {
+  return Array.isArray(strategy) ? strategy.includes(key) : strategy === key;
+}
+
+/**
+ * Every lever's `appliesTo` gate + the sentence that says how to satisfy it.
+ *
+ * These MOVED here from `COCKPIT_CONTROLS` (they are spread back in) for the reason §16.3
+ * found: the gate is not a cockpit concern, it is a fact about the lever that two very
+ * different consumers need. The cockpit asks it to decide whether a lever is worth SEARCHING;
+ * the loader asks it to decide whether a recorded run can be PLAYED at all. A run recorded
+ * with conversions on, selected against a base where they have since been switched off, has
+ * every ROTH row dropped by the toolset's opening `if (!p.rothConversionEnabled) return []`
+ * and plays back as a different plan in silence. Two copies of that predicate is two places
+ * the two answers can diverge.
+ */
+const LEVER_GATES = {
+  SPENDING: {
+    appliesTo: (bp) => _hasStrategy(bp?.spendingStrategy, 'EXPLICIT_BANDS'),
+    requirement: 'Switch Spending Strategy to include EXPLICIT_BANDS (Scenario panel) to use this lever.',
+  },
+  // Always applicable: which country's accounts compete for a draw, and how accounts sharing
+  // a tier split one, are valid decisions whenever the plan spans both / a tier has ≥2
+  // members. Inert only under a DATA condition, which is not something a gate can see.
+  DRAWDOWN_XBORDER:    { appliesTo: () => true },
+  DRAWDOWN_WITHINTIER: { appliesTo: () => true },
+  DRAWDOWN_WEIGHTS: {
+    appliesTo: (bp) => bp?.drawdownStrategy === DRAWDOWN_WEIGHT_MODE,
+    requirement: 'Set Drawdown Strategy to WEIGHTED (Scenario panel) to tune the drawdown order online.',
+  },
+  DRAWDOWN_SLEEVE: {
+    appliesTo: (bp) => bp?.drawdownSleeveOrder === SLEEVE_WEIGHT_MODE,
+    requirement: 'Set Drawdown Sleeve Order to WEIGHTED (Scenario panel) to tune the sleeve sell order online.',
+  },
+  ALLOCATION_MIX: {
+    appliesTo: (bp) => bp?.allocationStrategy === ALLOCATION_OPTIMIZED_MODE
+                    && _hasStrategy(bp?.behavioralStrategies, 'TARGET_ALLOCATION'),
+    requirement: 'Select the TARGET_ALLOCATION behavioral strategy and set Allocation Strategy to OPTIMIZED (Scenario panel) to tune the mix online.',
+  },
+  BOND_LADDER: {
+    appliesTo: (bp) => _hasStrategy(bp?.behavioralStrategies, 'BOND_LADDER'),
+    requirement: 'Select the BOND_LADDER behavioral strategy (Scenario panel) to tune the ladder length online.',
+  },
+};
+
 /**
  * The hooks, by `COCKPIT_CONTROLS` key. Levers absent from this map have no `applyAt` yet and
  * are skipped by the reducer with a warning rather than silently ignored — a recorded row for
  * a lever that cannot be applied is a run playing back as something other than what it was.
  */
 export const LEVER_SCHEDULE = {
-  SPENDING:            SPENDING_SCHEDULE,
-  DRAWDOWN_XBORDER:    DRAWDOWN_XBORDER_SCHEDULE,
-  DRAWDOWN_WITHINTIER: DRAWDOWN_WITHINTIER_SCHEDULE,
-  DRAWDOWN_SLEEVE:     DRAWDOWN_SLEEVE_SCHEDULE,
-  DRAWDOWN_WEIGHTS:    DRAWDOWN_WEIGHTS_SCHEDULE,
-  ALLOCATION_MIX:      ALLOCATION_MIX_SCHEDULE,
-  BOND_LADDER:         BOND_LADDER_SCHEDULE,
+  SPENDING:            { ...LEVER_GATES.SPENDING, ...SPENDING_SCHEDULE },
+  ROTH:                ROTH_SCHEDULE,
+  EARLY_WITHDRAWAL:    EARLY_WITHDRAWAL_SCHEDULE,
+  DRAWDOWN_XBORDER:    { ...LEVER_GATES.DRAWDOWN_XBORDER, ...DRAWDOWN_XBORDER_SCHEDULE },
+  DRAWDOWN_WITHINTIER: { ...LEVER_GATES.DRAWDOWN_WITHINTIER, ...DRAWDOWN_WITHINTIER_SCHEDULE },
+  DRAWDOWN_SLEEVE:     { ...LEVER_GATES.DRAWDOWN_SLEEVE, ...DRAWDOWN_SLEEVE_SCHEDULE },
+  DRAWDOWN_WEIGHTS:    { ...LEVER_GATES.DRAWDOWN_WEIGHTS, ...DRAWDOWN_WEIGHTS_SCHEDULE },
+  ALLOCATION_MIX:      { ...LEVER_GATES.ALLOCATION_MIX, ...ALLOCATION_MIX_SCHEDULE },
+  BOND_LADDER:         { ...LEVER_GATES.BOND_LADDER, ...BOND_LADDER_SCHEDULE },
 };
