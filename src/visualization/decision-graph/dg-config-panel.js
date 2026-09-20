@@ -10,6 +10,7 @@
 
 import { BaseComponent } from '../components/base-component.js';
 import { DecisionGraph, DecisionPoint } from '../../finance/decision-graph/decision-graph-models.js';
+import { mpcRunOptions } from '../../finance/mpc/run-schedule.js';
 
 const OBJECTIVES = [
   { value: 'finalBalance',       label: 'Final Balance (P50)' },
@@ -274,7 +275,7 @@ export class DgConfigPanel extends BaseComponent {
     const renderDpList = () => {
       dpListEl.innerHTML = '';
       dpList.forEach((dp, idx) => {
-        dpListEl.appendChild(this._buildDpRow(dp, idx, dpList, renderDpList));
+        dpListEl.appendChild(this._buildDpRow(dp, idx, dpList, renderDpList, baseSel));
       });
     };
     renderDpList();
@@ -286,7 +287,41 @@ export class DgConfigPanel extends BaseComponent {
       dpList.push({ id: '', label: '', paramKey: '', options: [{ value: '', label: '' }], weights: null, _schemaKey: '', _type: null });
       renderDpList();
     });
-    form.appendChild(addDpBtn);
+
+    /**
+     * Design 81 §4.2 / 8b — "compare these runs", in one click.
+     *
+     * A fully-populated decision point over `mpcActiveRun`: every recorded run in the base
+     * scenario's bag, plus the base plan itself as the control. There is nothing else to it,
+     * and that is the claim §4.2 made — the whole comparison is a decision point over ONE
+     * scalar param, so the ranking, the Monte Carlo per leaf, the crossing with any other
+     * axis and the results table all already exist.
+     *
+     * It appends rather than replacing, so it composes: add it beside a retirement-age point
+     * and the graph is "each recorded plan × each retirement age", ranked, for free.
+     */
+    const compareRunsBtn = document.createElement('button');
+    compareRunsBtn.className = 'btn dg-add-dp-btn dg-compare-runs-btn';
+    compareRunsBtn.textContent = '+ Compare recorded runs';
+    compareRunsBtn.title = 'Add a decision point over every recorded MPC run in the base '
+      + 'scenario, plus the base plan as the control (design 81 §4.2)';
+    this.listen(compareRunsBtn, 'click', () => {
+      const options = this._mpcRunOptionsForBase(baseSel).map(o => ({ value: o.value, label: o.label }));
+      if (!options.length) {
+        // A true and useful state, said plainly: an empty decision point would read as a
+        // broken editor, and silently adding nothing reads as a broken button.
+        this.setStatus('That scenario carries no recorded MPC runs — save one from the cockpit first.');
+        return;
+      }
+      dpList.push({
+        id: 'mpcActiveRun', label: 'Recorded MPC run', paramKey: 'mpcActiveRun',
+        options, weights: null, _schemaKey: 'mpcActiveRun', _type: 'MpcRunSelect',
+      });
+      renderDpList();
+      this.setStatus(`Comparing ${options.length - 1} recorded run(s) against the base plan.`);
+    });
+
+    form.append(addDpBtn, compareRunsBtn);
 
     // Actions
     const actions = document.createElement('div');
@@ -324,7 +359,7 @@ export class DgConfigPanel extends BaseComponent {
 
   // ── Decision-point row ──────────────────────────────────────────────────────
 
-  _buildDpRow(dp, idx, dpList, refreshFn) {
+  _buildDpRow(dp, idx, dpList, refreshFn, baseSel = null) {
     const item = document.createElement('div');
     item.className = 'dg-dp-item';
 
@@ -388,6 +423,15 @@ export class DgConfigPanel extends BaseComponent {
         } else if (Array.isArray(entry.options) && entry.options.length) {
           // Enum schema param: pre-fill the decision point with every choice.
           dp.options = entry.options.map(o => ({ value: o, label: String(o) }));
+        } else if (entry.type === 'MpcRunSelect') {
+          // Design 81 §4.2 / 8a — the options come from the base scenario's RUN BAG, and each
+          // is labelled from its `source`, because a raw run id is not a choice anyone can
+          // make. This is the whole reason a run is reached through a scalar selector: with
+          // the bag as the candidate set, "which of these recorded plans survives a bad
+          // decade" is an ordinary ranking over one param, crossable with any other axis, and
+          // it needed no new machinery in the decision graph at all.
+          dp.options = this._mpcRunOptionsForBase(baseSel)
+            .map(o => ({ value: o.value, label: o.label }));
         } else if (!dp.options.length) {
           dp.options = [{ value: '', label: '' }];
         }
@@ -402,6 +446,29 @@ export class DgConfigPanel extends BaseComponent {
     pickerRow.append(removeBtn, paramSel, schemaInfo, customFields);
     item.append(pickerRow, optionsSection);
     return item;
+  }
+
+  /**
+   * The recorded-run options for whichever scenario the form is currently based on
+   * (design 81 §4.2, 8a).
+   *
+   * Read at the moment the param is picked, not captured at construction: the base-scenario
+   * select sits above the decision points and the user chooses it first, so options captured
+   * earlier would be the previous scenario's runs — offered under this one's name, which is
+   * the worst of both.
+   *
+   * Returns `[]` when that scenario carries no runs, and the caller then leaves the decision
+   * point empty rather than inventing a blank option: "this plan has nothing to compare" is a
+   * true and useful state, and a single empty row reads as a broken editor.
+   */
+  _mpcRunOptionsForBase(baseSel) {
+    const id = baseSel?.value;
+    const scenario = id ? (this._scenarioRegistry?.get?.(id)
+      ?? (this._scenarioRegistry?.getAll?.() ?? []).find(s => s.id === id)) : null;
+    if (!scenario) return [];
+    const params = Object.fromEntries(
+      (scenario.params ?? []).map(p => [p.key ?? p.name, p.value]));
+    return mpcRunOptions(params);
   }
 
   _buildParamSelect(currentKey) {

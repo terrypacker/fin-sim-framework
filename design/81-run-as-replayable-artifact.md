@@ -1,6 +1,15 @@
 # 81 — The MPC run as a dated decision schedule the simulation plays
 
-**Status**: In progress — **phase 1 built 2026-09-19** (§14) · Direction revised 2026-09-19 (§0 — the revision record)
+**Status**: **COMPLETE — all eight phases built, 2026-09-19 → 2026-09-20** (§14) · Direction revised 2026-09-19 (§0) · What the build measured, and where it revised the plan: §16 (eleven notes)
+
+> **What is still open** is small and named: Q2 (sweeping a run's *contents*, which wants a
+> design-110-style resolver axis, not a param path), Q3b (whether the picker should *offer*
+> "re-solve from here"), Q4 (serializer / CSV round-trip), Q5's residue (`source.baseScenarioId`
+> is stamped and read by nothing — no base edit beyond a disabled mechanic is yet known to
+> deserve a refusal), and **Q6**, which this design sharpens rather than answers: with `B ≡ A′`
+> now a regression test and the harvest permanently excluded as a suspect, the A-vs-A′ gap is
+> isolated as a pure controller-accuracy problem. Own it in design 39.
+
 **Related**: `design/39-mpc-financial-controller.md` (the cockpit that produces runs; §13 the harvest this replaces), `design/80-feasibility-preserving-harvest.md` (**the evidence** — §2.11 is why a collapsing harvest is the wrong representation), `design/109-time-varying-pool-shapes.md` (**the precedent** — §8 is the mechanism this reuses wholesale), `design/58-drawdown-levers.md` §11 (the forward-effective state fields), `design/38-optimization-solver-framework.md` (the solver a re-solve calls), `design/30-decision-graph-analysis.md` (the compare surface, corrected in §9), `design/74-stochastic-return-paths.md` (per-seed replay)
 
 > **Reading note**: design 39 treats a controller run as a *process* — you drive it, you harvest it, you throw it away. This design makes it a **scenario parameter**: a dated list of the decisions the controller committed, which the simulation applies as the clock reaches each one. You press Play and the plan unfolds exactly as the controller decided it, with no bake, no collapse and no separate playback engine.
@@ -392,7 +401,7 @@ Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`,
 - ~~`mpc-schedule-roth-fold.test.mjs`~~ — **landed as `mpc-run-queue-levers.test.mjs` MRQ-3 / MRQ-4**: the rows reach the compiled event schedules, and the fold happens before the toolsets read them (§6.3).
 - ~~`mpc-schedule-truncation.test.mjs`~~ — **landed as `mpc-run-record.test.mjs` MRR-6 / MRR-7**: `CockpitController` at epoch k sees rows < k and no others (D8).
 - ~~`mpc-run-editor.test.mjs`~~ — **landed as `tests/viz/mpc-run-editors.test.mjs`**: the row editor round-trips, sorts by date, and an emptied bag syncs to `null`. One deviation: deleting the selected run does **not** clear `mpcActiveRun` — it leaves it dangling *visibly*, as `(not found)`, because silently rewriting the selection is the §15 failure this surface exists to prevent.
-- `mpc-run-as-decision-point.test.mjs` — **the §4.2 gate.** A `DecisionPoint` over `mpcActiveRun` with three options expands to three leaves, `makeLeafEntry` writes the selection into each, and the three leaves produce three different results. If this passes, the whole analysis surface reaches MPC runs with no further work; if it is missing, the indirection's main justification is unproven.
+- ~~`mpc-run-as-decision-point.test.mjs`~~ — **the §4.2 gate, BUILT and PASSING (phase 8).** A `DecisionPoint` over `mpcActiveRun` with three options expands to three leaves, `makeLeafEntry` writes the selection into each, and the three leaves produce three different results. The whole analysis surface reaches MPC runs with no further work.
 - ~~`mpc-run-refuses-conflicting-axis.test.mjs`~~ — **landed in two halves**: the load-time throw is `mpc-run-queue-levers.test.mjs` MRQ-5/MRQ-6, the launch-time report is `mpc-run-record.test.mjs` MRR-8, and `mpcActiveRun` as the axis itself does neither.
 
 ---
@@ -446,9 +455,10 @@ Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`,
 - [x] **7a** — D7's last drift, which was **not** where the plan expected it (§16.10). `_seededSim` turns out not to be a third implementation at all: it FORWARDS what the compile produced across snapshot injection, which is already the one authority and is stronger than re-deriving — routing it through `drawdownPriorityPatch` would have replaced a capture of the truth with a second computation of it. What *was* duplicated is the owner-banding **table**: the cascade read it off the `accountPriority` node and the online/replay path re-derived it from hard-coded literals. Both now call `resolveOwnerBanding` over one `DRAWDOWN_OWNER_MODES`, and `_seededSim` shares the `WEIGHTED` sentinel. **MRL-9** compares the two PATHS on a real compile, for every mode in the table, and was mutation-tested to prove it is not vacuous.
 - [x] **7b** — D10. The harvest is kept and demoted: `Save run to plan…` is the primary action, `Export as settings…` the secondary, and the review panel states in its own words that what it writes is a lossy summary and names the lossless exit. Nothing was deleted — "explain this run in settings someone can argue with" is a real question the lossless representation answers badly.
 
-**Phase 8 — Lean into the decision graph** (§4.2 — mostly wiring, once Phase 1–5 land)
-- [ ] **8a** — offer `mpcActiveRun` in the `DecisionPoint` param picker, with options auto-populated from the bag and labelled from `source`.
-- [ ] **8b** — "compare these runs" straight from the picker: build the `DecisionGraph`, run it, show the ranked table.
+**Phase 8 — Lean into the decision graph** — **BUILT 2026-09-20** (§16.11). §4.2 said "mostly wiring"; it was.
+- [x] **8a** — `mpcRunOptions(params)` is the one candidate-set builder (leaf, beside the resolver). The `DecisionPoint` param picker fills its options from the **base scenario's** bag when `MpcRunSelect` is chosen, read at pick time rather than captured; the optimizer gets an `ENUM` over the same set via `buildMpcRunOptConfigs`. The schema entry stays `opt: false` and that is the honest answer — see §16.11.
+- [x] **8b** — `+ Compare recorded runs` on the decision-graph form: one click builds the whole decision point, every run plus the base plan as the control. It **appends**, so it composes — add it beside a retirement-age point and the graph is "each recorded plan × each retirement age", ranked, for free.
+- **Tests**: `mpc-run-as-decision-point.test.mjs` (MDP-1…5) — **§13's gate**, and it passes: the leaves produce three different results, so the indirection's main justification is proven rather than asserted. `tests/viz/dg-mpc-runs.test.mjs` (DGR-1…4) covers the two affordances, mutation-checked.
 
 ---
 
@@ -463,7 +473,7 @@ Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`,
 
 ---
 
-## 16. Notes from the build (§16.1–16.4 phase 1, 2026-09-19; §16.5–16.10 phases 2–7, 2026-09-20)
+## 16. Notes from the build (§16.1–16.4 phase 1, 2026-09-19; §16.5–16.11 phases 2–8, 2026-09-20)
 
 Measured while building phase 1, against the tree rather than against the 2026-07 draft's line
 numbers. Each one changes what a later phase has to do, so it is here rather than in a commit
@@ -754,3 +764,37 @@ the first version passed `drawdownStrategy` through the harness's `params`, wher
 `buildDefaultConfig` consumes it to stamp per-account priorities directly and the cascade never
 runs — the two-param-stores trap, which would have compared the DEFAULT order against itself.
 It now goes through `cfg.parameters` and asserts the cascade ran before comparing anything.
+
+### 16.11 §4.2 was right, and the one wrinkle is a flag that cannot be plan-independent
+
+Phase 8 is the shortest in the design and the one that most needed to be true: the entire case
+for a bag plus a scalar selector (§4.1), rather than one flat `mpcDecisionSchedule` array, was
+that a scalar is something the rest of the app already treats as a choice. It held. The decision
+graph needed **no changes at all** below the panel — `_expandLeaves` and `makeLeafEntry` already
+do the right thing with a run id, because a run id is an ordinary param value. What phase 8 adds
+is one option builder and two places to reach it.
+
+`MDP-4` is the claim under test and is worth keeping as a gate: three leaves, three different
+terminals. Without it the surface could "support" recorded runs while every arm ran the same
+plan, which is the exact shape of a dead axis this repo has shipped twice.
+
+**The wrinkle: `opt` cannot answer this param honestly.** `mpcActiveRun` is searchable on a plan
+that carries recorded runs and on no other — its sweepability is a property of the SCENARIO. The
+schema is plan-independent, so:
+
+- `opt: true` fails `SWEEP-18` on a bag-less reference, and correctly: it would be "a promise no
+  panel can keep".
+- `opt: false` with a plain curated row would fail `SWEEP-10`'s converse rule on a plan that
+  *does* carry runs.
+
+The resolution is the `synthetic` escape hatch, used in the sense that gate actually means: the
+row is **not derived from the schema entry**. Two different things share the key — a schema
+entry describing a selector, and a contributor row whose candidate values come from the bag —
+and the design-98 harvest cannot build the second from the first, because the values are
+scenario data rather than schema. `MDP-5` pins both halves so the next reader does not "fix" the
+flag.
+
+Worth naming as a general shape rather than a one-off: **a param whose candidate set is scenario
+data will always sit awkwardly in a plan-independent schema flag.** The pool axes already live
+this way (they are curated rows over generated keys with no schema entry at all); this is the
+first one where the key exists in the schema too.

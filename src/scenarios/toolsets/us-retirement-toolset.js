@@ -610,10 +610,16 @@ export const US_RETIREMENT = {
       },
       {
         key: 'mpcActiveRun', label: 'Active MPC Run',
-        // `opt: false` for now, deliberately: design 81 §9 wants this as an optimizer ENUM
-        // over the bag's keys, but the candidate set has to come FROM the bag and that is
-        // phase 8. A flag whose engine cannot yet sweep it is a promise no panel can keep
-        // (SWEEP-18), so it is turned on with the machinery, not ahead of it.
+        // `opt: true` since phase 8 (design 81 §9): the optimizer searches OVER recorded
+        // plans, with the candidate set built from the bag by `buildMpcRunOptConfigs` — a
+        // CURATED row, because `MpcRunSelect` is not a harvestable type and never will be
+        // (the values are scenario data, not schema). It shipped `opt: false` from phase 1
+        // until that contributor existed, because SWEEP-18 refuses a flag whose engine
+        // cannot yet sweep it, which is exactly the right refusal.
+        //
+        // `mc: false` stands: Monte Carlo perturbs a value per iteration, and a recorded run
+        // is not a distribution. "MC this plan" is a SELECTION plus an ordinary MC study
+        // (§9), not an axis.
         //
         // `MpcRunSelect` (design 81 5a) rather than `Enum`: the options come from a sibling
         // BAG param and each one is LABELLED from its `source`, because a raw run id is not a
