@@ -1,7 +1,7 @@
 # 39 — MPC Financial Controller (closed-loop advisor cockpit)
 
-**Status**: Proposed (draft 2026-06-26)
-**Related**: `design/38-optimization-solver-framework.md` (**hard dependency** — the controller's inner solve *is* an `OptimizationProblem` + solver), `design/40-after-tax-net-worth.md` (**prerequisite for the Roth flagship** — the objective re-pricing that gives the conversion lever a gradient; see §12.5), `design/30-decision-graph-analysis.md` (the implemented scenario-comparison surface the "futures fan" rides on), `design/17-scenario-as-graph-node.md` (`DERIVES_FROM` parent edges — how a candidate future is recorded as a scenario derived from "now"), `design/33-age-banded-spending.md` / `EXPLICIT_BANDS` (the spending control lever), `design/18-performance-enhancements.md` (rollout cost), `design/61-holding-allocation-lever.md` §7/OQ7 + `design/58` / `design/65` / `design/66` (the levers whose **harvest** back into a scenario §13 specifies).
+**Status**: Proposed (draft 2026-06-26) · §13's harvest is **superseded** by `design/81` (a run is stored, not baked) · **§14 is the live open problem**: every epoch under-projects its own outcome, and design 81 isolated it as a controller-accuracy question
+**Related**: `design/81-run-as-replayable-artifact.md` (**what §13 became** — the run is a scenario param the simulation plays; its §10 lab supplies §14's measurement surface), `design/38-optimization-solver-framework.md` (**hard dependency** — the controller's inner solve *is* an `OptimizationProblem` + solver), `design/40-after-tax-net-worth.md` (**prerequisite for the Roth flagship** — the objective re-pricing that gives the conversion lever a gradient; see §12.5), `design/30-decision-graph-analysis.md` (the implemented scenario-comparison surface the "futures fan" rides on), `design/17-scenario-as-graph-node.md` (`DERIVES_FROM` parent edges — how a candidate future is recorded as a scenario derived from "now"), `design/33-age-banded-spending.md` / `EXPLICIT_BANDS` (the spending control lever), `design/18-performance-enhancements.md` (rollout cost), `design/61-holding-allocation-lever.md` §7/OQ7 + `design/58` / `design/65` / `design/66` (the levers whose **harvest** back into a scenario §13 specifies).
 
 > **Reading note**: design 38 is the *engine* (search over a horizon, offline). This is the *driver* — a closed-loop, receding-horizon controller that calls that engine repeatedly as life unfolds, and a cockpit UI to drive it. They share one `evaluate`/objective core; nothing here re-implements search.
 
@@ -913,3 +913,136 @@ VoTV measurement is what should keep that easiness from becoming overfitting.
 4. If ≥2 levers show a real `VoTV`, write design 79 (§13.13.4) and factor the type
    **once**, retrofitting the eight existing params — rather than adding a ninth
    bespoke `*List`.
+
+---
+
+## 14. The projection gap — why every epoch under-projects its own outcome
+
+**Status**: open, and now *isolated*. Inherited from `design/81` Q6, which sharpened the
+question and handed it here. Nothing below is built; this section exists so the next session
+starts from the measurement rather than from the surprise.
+
+### 14.1 The phenomenon
+
+On a real 44-epoch, nine-lever run under a `DIE_WITH_TARGET` goal, **the last epoch projected a
+terminal roughly 6.5× smaller than the path the run actually delivered** (the numbers are in
+design 81 §12 Q6). A second run, against a different base, reproduced the same *sign* at a
+smaller magnitude — so it is not a one-off of that plan, and the magnitude is not a constant
+either.
+
+The direction matters more than the size. A goal-seeking controller aimed at "die with ≈ target"
+told the user, at every epoch, that it was landing on target — while the plan it was actually
+flying overshot by multiples. §7's recommended-move card shows the projection and nothing else,
+so **the one number the user reads is the one that is wrong.**
+
+### 14.2 What design 81 excluded, and why that is the whole reason this is tractable
+
+Before design 81 there were two suspects and no way to separate them: the run might be bad, or
+the *harvest* of it might be. Design 80 established the harvest could turn a solvent run
+insolvent, which made it the obvious culprit and buried the other.
+
+Design 81 removed the harvest from the path entirely — a recorded run is now played decision for
+decision, and `B ≡ A′` is a regression test rather than a finding. So the three terms are now
+cleanly separable and `run:replay` prints all of them in one command:
+
+| term | what it is | how to get it |
+|---|---|---|
+| **A** | what an epoch **projected** — the winning candidate's rollout terminal | off the decision record |
+| **A′** | what the run **realized** — the sequence of first segments | `replayDecisions` |
+| **B** | the recorded run **played from t₀** | `npm run run:replay` |
+
+`B ≡ A′` is the design-81 gate. **`A′ − A` is this section's subject**, and it is now a pure
+controller-accuracy question with no second execution path in it.
+
+### 14.3 The structural fact underneath it
+
+An epoch's projection is the terminal of *"commit this control and hold it for the rest of
+life"* — an **open-loop tail** from "now". The realized path is the **sequence of first
+segments**, each re-decided at the next epoch. Those are different plans, and in classical MPC
+they are *expected* to differ: closed-loop performance is generally better than any single
+open-loop prediction whenever feedback can exploit what arrives.
+
+So a gap is not by itself a defect. **The defect is that the cockpit presents an open-loop
+number as the forecast**, and that a systematically one-sided gap of this size means the
+controller is also probably choosing differently than it would if it priced the gap.
+
+### 14.4 Hypotheses, with what would discriminate them
+
+Convert the ratio to a **per-epoch rate before hunting**: 6.5× over 44 annual epochs is ≈4.4%/yr
+and the smaller observation is ≈1.3%/yr. Both are small enough per epoch to be invisible in any
+single solve, which is itself a strong hint — it points away from one dramatic cause and toward
+something that accretes.
+
+- **H1 — The projection is honest; feedback really is worth that much.** Each epoch under-values
+  the plan because it cannot see its own future re-decisions. *Prediction*: an explicitly
+  open-loop arm — hold epoch 1's decision for the whole horizon — lands near **A**, and the
+  per-epoch gap is roughly constant. *If true*: nothing is wrong with the search; the **display**
+  is wrong, and §7's card must stop showing an open-loop terminal as the forecast.
+
+- **H2 — The objective is asymmetric and every epoch sits on the safe side.** `feasibilityFirst`
+  (design 80 U2) makes solvency outrank reward *structurally*, and an open-loop tail is far more
+  fragile than the closed-loop path because it cannot re-decide. Each epoch therefore under-spends
+  to protect a tail that will never be flown. *Prediction*: the gap shrinks materially with
+  `feasibilityFirst: false`, and is larger for plans closer to the solvency boundary. *If true*:
+  the closed-loop objective should price solvency the way feedback actually supplies it — which
+  is exactly the argument the `DEFAULT_DEFICIT_PENALTY` docblock already makes and §13.12 already
+  cites ("a closed-loop objective is indifferent to solvency margin because feedback supplies it").
+
+- **H3 — A is not a projection of what was committed.** The record's `result` is the *winning
+  candidate's* rollout. If what `apply()` commits differs from what that rollout modelled —
+  `prepareBaseParams` scaffolding, a lever whose `actuate` does more than the rollout did, a
+  forward-effective re-stamp the rollout lacked — then A answers a different question and the gap
+  is bookkeeping. *Prediction*: re-running one epoch's rollout from its own snapshot with the
+  **committed** params fails to reproduce the recorded `result`. **Check this first**: it is the
+  cheapest, and it would invalidate every measurement built on A.
+
+- **H4 — Horizon / terminal-value mis-specification** (design 41, §10 Q2). Only bites in windowed
+  mode; the die-with-target family is full-life today. *Prediction*: absent on full-life runs.
+  Listed to be ruled out, not because it is likely.
+
+H1 and H2 are not exclusive and are probably both true to some degree. The useful question is
+their **ratio**, because they have opposite remedies: H1 is fixed by reporting, H2 by re-pricing.
+
+### 14.5 The experiment order
+
+Cheapest-first, and each one answers something even if the next is never run. The design-81 lab
+supplies the arms, so none of this needs a new driver.
+
+1. **Rule out H3.** One epoch. Re-run its rollout from its own snapshot with the committed
+   params; compare to the recorded `result`. If it does not reproduce, stop and fix that.
+2. **Decompose per epoch.** For each epoch *k*: the projection at *k*, and the realized terminal
+   of the path that actually followed from *k*. `replayDecisions` already returns per-epoch
+   entries, so this is a reporting change over an existing structure. The **shape of the series**
+   is the discriminator: evenly accreting ⇒ H1/H2; arriving in a few steps ⇒ a specific lever or
+   event, and the epoch dates name it.
+3. **Build the open-loop arm** (H1). Hold epoch 1's decision for the whole horizon — one bag
+   entry with the first epoch's rows and nothing else, which is `withoutLever`'s sibling and a
+   few lines in `run-lab.mjs`. Does it land near A?
+4. **Flip `feasibilityFirst`** (H2) and re-run the loop. Does the gap shrink, and by how much of
+   it?
+5. **Across seeds** (`npm run run:seeds`). If the gap is feedback value, it should *grow* with
+   path variance; if it is a fixed conservatism, it should not.
+
+### 14.6 What the answer changes
+
+- **If H1 dominates** — §7's card is the fix, and it is not cosmetic. The honest forecast for a
+  closed-loop controller is a **closed-loop** number, which means the cockpit must either
+  simulate forward under its own policy (expensive, exact) or report the projection *as* a lower
+  bound and say so (cheap, honest). The fan already shows a distribution of open-loop futures; it
+  should not be read as a distribution of outcomes.
+- **If H2 dominates** — the controller is leaving real consumption on the table for decades, for
+  a tail risk that feedback already covers. That is a live money question, not a display one, and
+  it is the same shape as design 80's finding pointed the other way: there, the *bake* lost the
+  margin feedback supplied; here, the *search* pays for margin feedback already supplies.
+- **Either way** — `DIE_WITH_TARGET`'s degeneracy at target 0 (design 80 §4.1: a perfect
+  spend-down and a plan that went broke both read \$0) means the goal metric cannot referee this.
+  Use the solvency axis and the realized terminal separately, as design 80 established.
+
+### 14.7 What this is not
+
+- Not a harvest problem. Design 81 closed that, and re-opening it would be re-litigating a
+  measured result.
+- Not a stochastic question (§10 Q5). Every term above is deterministic on one path; seeds enter
+  only as experiment 5, to test a prediction.
+- Not blocked on anything. The measurement surface exists (`design/81` §10), the decision log
+  exists, and the first experiment is one epoch.
