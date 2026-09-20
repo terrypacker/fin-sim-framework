@@ -51,7 +51,7 @@ The bakes are *faithful* — their errors are a ±1-year step shift, an ε-colla
 
 ### Moved to design 81
 
-**P1-1b** (full effective param set per epoch) is now `design/81` **Phase 1a** — do it there, not here. It is the fix for index-keyed decisions silently re-keying when the band table changes.
+**P1-1b** (full effective param set per epoch) moved to `design/81`, and `design/81`'s 2026-09-19 revision then **dissolved it**: the dated decision schedule stores no param paths at all, so there is nothing to re-key. See `design/81` §0 and §4.1. Do not build it.
 
 ### Method note
 
@@ -562,7 +562,7 @@ Without A′ a user cannot tell whether the harvest broke the plan or the scenar
 | **U5** budget + seed cockpit controls | **DONE** (2026-07-26) | One Budget + one Seed feeding Advise, Auto and the harvest RESOLVE, with the evals/dimension readout U4 item 1 asked for. §10.1 |
 | **U2** feasibility-first ranking | **DONE** | Correct, tested, byte-identical at budget 64. Insurance, not a fix — matters once U5 lets a user lower the budget. |
 | **F5** ruin diagnostics on the record | **DONE** | Landed with U2 as `extra.feasibility`. |
-| **P1-1b** per-epoch effective params | **MOVED** → `design/81` Phase 1a | Prerequisite there; index-keyed decisions re-key silently without it. |
+| **P1-1b** per-epoch effective params | **DISSOLVED** by `design/81` (rev. 2026-09-19) | Moved there, then made unnecessary: the decision schedule stores a stable per-lever key, never `spendingExpenseBands[i].monthlyAmount`, so the silent re-key cannot happen. `design/81` §4.1. |
 | **U4** search adequacy | **DEMOTED** | §2.10 — at budget 64 the search stays feasible. Readout survives in U5; feasibility-seeking init unjustified. |
 | **F2** margin-aware re-solve | **DE-PRIORITISED** | Out-competed by `design/81`, not refuted. §2.11's analysis is why 81 exists. |
 | **U1** un-saturate terminal λ | **REFUTED** | §2.9 — objective ranks feasible above infeasible ~50×. |

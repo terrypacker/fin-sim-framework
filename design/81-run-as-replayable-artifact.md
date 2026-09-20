@@ -1,289 +1,450 @@
-# 81 — The run as a replayable artifact: playback, branching, and a decision graph rooted at an epoch
+# 81 — The MPC run as a dated decision schedule the simulation plays
 
-**Status**: Proposed (2026-07-26)
-**Related**: `design/39-mpc-financial-controller.md` (the cockpit that produces runs; §13 the harvest this reframes), `design/80-feasibility-preserving-harvest.md` (**the evidence** — §2.11 is why whole-run harvesting is the wrong granularity), `design/30-decision-graph-analysis.md` (the container/leaf/compare patterns reused wholesale), `design/17-scenario-as-graph-node.md` (the `SimGraphNode` + `DERIVES_FROM` substrate), `design/38-optimization-solver-framework.md` (the solver a re-solve calls), `design/74-stochastic-return-paths.md` (per-seed replay)
+**Status**: Proposed (2026-07-26) · **Direction revised 2026-09-19** (§0 — the revision record)
+**Related**: `design/39-mpc-financial-controller.md` (the cockpit that produces runs; §13 the harvest this replaces), `design/80-feasibility-preserving-harvest.md` (**the evidence** — §2.11 is why a collapsing harvest is the wrong representation), `design/109-time-varying-pool-shapes.md` (**the precedent** — §8 is the mechanism this reuses wholesale), `design/58-drawdown-levers.md` §11 (the forward-effective state fields), `design/38-optimization-solver-framework.md` (the solver a re-solve calls), `design/30-decision-graph-analysis.md` (the compare surface, corrected in §9), `design/74-stochastic-return-paths.md` (per-seed replay)
 
-> **Reading note**: design 39 treats a controller run as a *process* — you drive it, you harvest it, you throw it away. This design treats it as an **artifact**: a recorded, replayable, inspectable, branchable object that keeps paying out long after the solve. The enabling fact is a measured cost asymmetry — a full solve is minutes, replaying the same run is **0.8 seconds**.
+> **Reading note**: design 39 treats a controller run as a *process* — you drive it, you harvest it, you throw it away. This design makes it a **scenario parameter**: a dated list of the decisions the controller committed, which the simulation applies as the clock reaches each one. You press Play and the plan unfolds exactly as the controller decided it, with no bake, no collapse and no separate playback engine.
+
+---
+
+## 0. The revision record — what changed on 2026-09-19, and why
+
+The version of this document dated 2026-07-26 proposed an **offline playback surface**: a `replayDecisions` engine driving a scrubber inside the MPC cockpit, with a snapshot cache to make a drag interactive, branch variants as `analysis-leaf` nodes, and an as-of-T mode bolted onto the Scenario panel.
+
+That design is superseded by a simpler one with the same goal:
+
+> Save the controller's choices at each solve point into the scenario, select "use optimized parameters", and **play the simulation**. The ordinary time controls move the clock; the decisions apply as it passes them.
+
+This is better for a reason that is not taste. The old design built a *second* execution path for a recorded run and a *second* place to read parameters, and then had to keep both honest against the real one. This one has no second path: the run becomes a parameter, and the one simulation plays it.
+
+And a run reached through a **scalar selector** (§4) is reachable by every analysis surface the app already has. The 2026-07-26 draft spent §7 arguing for an epoch-rooted decision graph with a new evaluator; selecting among recorded runs turns out to be a `DecisionPoint` over one param, with no new machinery at all (§4.2). That is the part worth leaning into.
+
+### What that dissolves
+
+| Old item | Fate |
+|---|---|
+| **§4.2 / design 80 P1-1b** — a full effective param set on every decision record, ~13 KB × 44 epochs, because `spendingExpenseBands[19].monthlyAmount` silently re-keys | **Dissolved.** The schedule never addresses a band by index. Each lever applies its own value through a hook that speaks the lever's vocabulary (§4.2). There is nothing to re-key. |
+| **§4.3** — a snapshot cache, declared "load-bearing for the interaction" | **Dropped from v1.** Its only justification was a debounced live-drag. "Toggle the mode and press Play" does not need it. *(Measured, so the trade is on the record: 45 ms per epoch roll and ~280 KB per snapshot on a real 44-year plan — a 44-epoch cache is ~12 MB of RAM to save ~2 s.)* |
+| **§6.1 / D4** — an as-of-T mode in the Scenario panel | **Dissolved.** The schedule *is* a scenario param, so it is already in that panel, edited by the same typed-editor machinery as every other param. |
+| **§6.2** — branch by dragging a control against a debounced replay | **Replaced** by: edit a row, press Play. |
+| **§3 / D3** — playback as a mode of the cockpit | **Replaced.** Playback is the normal time controls. The only new UI is a master switch and a way to get a run into the param (§8). |
+| **§4.1** — an `MpcRun` container node mirroring `DecisionGraphRegistry` | **Revived, in a different substrate.** The instinct was right — a run *is* a named artifact that owns its decisions — but a graph node cannot carry it: `DecisionRecordStorage` persists nodes without edges, so a graph-held run does not survive a reload, and a graph node is not reachable by `DecisionPoint`, the optimizer or an export. It becomes a `mpcRuns` bag entry instead (§4.1, §4.3). |
+
+### What survives
+
+`replayDecisions` (`src/finance/mpc/replay.js`) stays, in the role it was built for: the **A′ verification term**, and the engine behind the headless `run:*` scripts (§10). It is no longer the playback engine.
+
+The run-file-as-interface argument (old §9) survives intact and gets stronger: the exported decision log is still what the scripts consume, and now what they *emit* is a single param.
+
+### Two bugs this found in the running app
+
+Both are consequences of the same fact and are fixed by the mechanism rather than patched:
+
+1. **Apply-then-scrub-back replays the whole run at the last epoch's values.** `COCKPIT_CONTROLS.SPENDING.actuate` mutates `ExplicitBandsSpendingReducer.bands` in place via `reducerService.updateReducer`. `TimeControls._doRewindTo` → `sim.rewindToStart()` restores **state, `rngState` and queue only** (`simulation-history.js:42`); `configPresenter.resetForReplay()` only clears UI debug flags. So the mutated reducer survives the rewind and the run replays from t₀ at the new amount. This is design 80's "last-epoch-wins applied from t₀" failure happening live, with no harvest involved.
+2. **`actuate` writes each epoch's value into the active scenario param.** Harmless for SPENDING (age-keyed — each epoch writes a different band) but `bondLadderRungs` and `allocWeight::*` are point params, so the saved scenario silently accumulates last-epoch-wins.
 
 ---
 
 ## 1. Purpose
 
-Design 80 established, against the user's real 44-epoch decision log, that a **solvent** controller run harvests into an **insolvent** scenario, and that *every schedule bake individually causes ruin while being faithful* (§2.11). The natural conclusion is "make the bakes better." That is wrong: the bake errors were already tiny, and the plan had no margin for any of them.
+Design 80 established, against the user's real 44-epoch decision log, that a **solvent** controller run harvests into an **insolvent** scenario, and that *every schedule bake individually causes ruin while being faithful* (§2.11). The bake errors were tiny — an ε-collapse, a ±1-year step shift, a glidepath L1 tolerance — and the plan had no margin for any of them, because a die-with-zero objective spends the margin by construction and **feedback was silently paying for it**.
 
-The right conclusion is that **whole-run harvesting is the wrong granularity.** Committing nine levers × 44 epochs in one shot is an all-or-nothing operation where every approximation compounds. What the user actually wants is smaller and more powerful:
+The old conclusion was "harvest at a finer granularity". The right conclusion is stronger:
 
-> Stop the controller at any point, look at exactly what it decided and what state it was looking at, take the one value that is good, and try variations from there — cheaply enough to do it dozens of times.
+> **Stop collapsing.** A controller run already *is* a schedule — one decision per epoch per lever, each with a date. Store that, play that. Every collapse rule in the harvest is a lossy compression of something the engine can hold exactly.
 
-That is not a harvest feature. It is a **playback and branching** feature, and it makes the expensive solve worth paying for, because a run stops being a one-shot and becomes a substrate you interrogate.
+A run then stops being a thing you approximate into a scenario and becomes a thing the scenario *contains*. `B ≡ A′` by construction: the baked plan and the realized closed-loop path are the same object, so design 80's central confound — was it the run or the bake? — cannot recur.
 
-**Non-goal.** This does not replace the params harvest (design 39 §13). Params remain the legible, editable, searchable, shareable representation and the only thing downstream consumers (MC, OPT, the goldens, CSV export) understand. Replay is instrumentation and an iteration loop; it is not a scenario.
-
----
-
-## 2. Why this is possible now
-
-| Operation | Cost |
-|---|---|
-| Full cockpit solve, 44 epochs × budget 64 × 9 levers | minutes |
-| `replayDecisions` over the same 44 epochs | **0.8 s** (measured, design 80 §2.11) |
-| A branch at epoch *k* with a snapshot cache | proportional to `n − k` |
-
-`src/finance/mpc/replay.js` already exists (design 80 F6). It is the MPC loop with the solve deleted: apply what the controller committed, roll to the next epoch, repeat. It reconstructs the realized trajectory exactly, deterministically, from the decision log alone.
-
-Two orders of magnitude changes what interactions are possible. A slider you drag is a different product from a button you press and wait on.
+**Non-goal.** This does not delete the legible harvest (design 39 §13). Collapsing forty-four decisions into three age bands produces something a human can read, edit and argue with, and that remains worth having as an **export**. What it stops being is the only representation, and the one the plan is judged on.
 
 ---
 
-## 3. Conceptual model — a run is a path in the graph
+## 2. The constraint that decides the mechanism
 
-Designs 17 and 30 already put everything in **one shared `Graph`**, partitioned by `layer`, with `DERIVES_FROM` as the only derivation edge:
-
-| Layer | Owner | Contents |
-|---|---|---|
-| `scenario` | `ScenarioRegistry` | user saves |
-| `analysis` | `DecisionGraphRegistry` | `DecisionGraph` containers |
-| `analysis-leaf` | the runner | cartesian leaves; cleared between analyses, opt-in persistence |
-| `decision` | `DecisionRecordRegistry` | MPC epochs (design 39 §13 H4) |
-
-So MPC records and decision-graph leaves are already siblings in one graph. The concepts were built on a shared substrate and never wired together. The distinction that matters:
-
-- a **decision graph** is a *fan* — independent leaves off one base, explored combinatorially;
-- an **MPC run** is a *chain* — epoch *k*'s state is the product of epoch *k−1*'s decision.
-
-Both are `DERIVES_FROM` structures. The comparison surface (design 30 §5.1) already "operates on two graph-node IDs" and does not care which.
-
-### 3.1 The mismatch to fix first
-
-`CockpitController.parentId` is assigned once in the constructor and never updated, so all 44 epochs attach `DERIVES_FROM` **the same base scenario**. A run that is inherently a chain is stored as a fan, and its temporal order survives only as an `asOfDate` field.
-
-Chaining the epochs (`epoch_k DERIVES_FROM epoch_{k−1}`) is a one-line change with disproportionate payoff, because `graph-query-api.js` already has the traversals:
-
-- **`traceBackward(epoch_k)`** = exactly the decisions needed to reconstruct state at *k*. This *is* `paramsAt(date)` — a graph query, not a new fold.
-- **`traceForward(epoch_k)`** = everything a branch at *k* invalidates, which is what the UI must grey out.
-
----
-
-## 4. Substrate changes
-
-### 4.1 `MpcRun` — the missing container node
-
-Today a run exists only as a `runId` string repeated across 44 records. Design 30 already solved this shape with `DecisionGraph` (layer `analysis`), which owns its leaves and carries the analysis configuration. The direct analogue:
+Measured, because everything below turns on it.
 
 ```js
-MpcRun {                       // layer: 'analysis', kind: 'mpc-run'
-  id, name,
-  baseScenarioId,              // DERIVES_FROM this
-  goal, goalMetric,            // objective + primary metric
-  controlKeys, controlRanges,  // the lever set and its search bounds
-  solverKey, budget, seed,     // reproducibility (see design 80 U5)
-  simStart, simEnd,
-  epochRange, epochCount,
-  createdAt,
+// src/simulation-framework/reducers.js:128
+reduce(state, _action, _date) { … }
+```
+
+That is the whole signature. A reducer sees **state, the action, and the date**. It has no service registry, no event queue, and no reach into another reducer's instance fields. `PoolShapeScheduleReducer` confirms the shape: it takes its resolved schedule at construction and emits one state patch.
+
+The consequence is not obvious and it is the crux:
+
+> A lever whose runtime value lives on **another reducer's instance field** cannot be changed mid-run by anything inside the simulation.
+
+The only alternative is `ReducerService.updateReducer`, which mutates the instance in place and publishes `SERVICE_ACTION` → `SimulationSync`. That is a **configuration-layer** edit: not an event, not in the journal, not in a snapshot, and nothing drives it on a schedule. It exists for the UI's live Apply. If the schedule rode on it, then Monte Carlo, the optimizer, the CLI tools and the goldens would all play the run **without** the decisions — the plan would be one thing on screen and another everywhere the numbers are actually checked.
+
+So the values have to live where the simulation can reach them: **state**, or the **event queue**, or **compiled in from a param**.
+
+This is a forward-play constraint, not a rewind constraint. Rewind-safety (§0 bug 1) comes along for free.
+
+---
+
+## 3. Where the nine levers keep their value today
+
+| Lever | runtime home | reached by the engine? |
+|---|---|---|
+| `DRAWDOWN_XBORDER`, `DRAWDOWN_WITHINTIER`, `DRAWDOWN_WEIGHTS`, `DRAWDOWN_SLEEVE` | state — `FORWARD_DRAWDOWN_STATE_FIELDS` (`optimization-problem.js:49`) plus per-account `drawdownPriority` | ✅ already |
+| `ROTH`, `EARLY_WITHDRAWAL` | queued events, seeded at compile from `rothConversionSchedule` / `earlyWithdrawalSchedule` (both already **year-keyed params**) | ✅ via compile (§6.3) |
+| `SPENDING` | `ExplicitBandsSpendingReducer.bands` | ❌ instance field |
+| `ALLOCATION_MIX` | `RebalanceToTargetReducer.targetAllocation` | ❌ instance field |
+| `BOND_LADDER` | `BondLadderReducer.targetRungs` | ❌ instance field |
+
+`bond-ladder-reducer.js:27-31` states the property outright — *"its target (the rung count) is held on the reducer instance (`targetRungs`), NOT in a per-account state field, so it survives MPC snapshot injection and re-wires live via `reducerService.updateReducer(reducer, { targetRungs })` with no `_seededSim` re-stamp."* That is a **feature** for a snapshot-seeded rollout, where the fresh compile carries the new value, and precisely the wrong property here.
+
+Three accessors close the gap. §6 says what they are.
+
+### 3.1 There are already two implementations of "apply a lever forward"
+
+Worth stating before adding a third:
+
+- **`COCKPIT_CONTROLS[*].actuate`** — live, mutates services, UI-only, not rewind-safe.
+- **`OptimizationProblem._seededSim`'s re-stamp block** (`optimization-problem.js:400–475`) — state fields, per-account priorities, `repinExpensesIfChanged`, `retargetRothConversionEvents`, `retargetEarlyWithdrawalEvents`.
+
+They exist for different reasons (a live sim vs a fresh compile with an injected stale snapshot) and they have drifted. The `applyAt` hook of §4.2 is the third, and it is the one that runs **inside** the simulation, so it is the one the numbers come from. **D7** makes it the authority the other two route through.
+
+---
+
+## 4. The structure: a bag of runs, and a parameter that selects one
+
+Two params, declared in the strategy-registry form every other param uses (`{ key, label, type, group, mc, opt, defaultValue, description, visibleWhen }`), plus a convenience switch.
+
+```
+mpcRuns: {
+  '<runId>': {
+    source:    { recordedAt, baseScenarioId, goal, goalMetric, levers[],
+                 solverKey, budget, seed, epochs, first, last, derivedFrom },
+    decisions: [ { date, lever, key, value }, … ],
+  },
+  …
 }
+
+mpcActiveRun:  '<runId>' | null      // which one governs this run of the plan
+mpcRunEnabled: true                  // the OFF switch that keeps the selection
 ```
 
-Naming, storage, lifecycle and the picker all come from mirroring `DecisionGraphRegistry`. "Runs as named artifacts" becomes reuse rather than new machinery.
+This is `liquidityShapes` + `liquidityGraphSchedule` again, and deliberately: **named payloads in a bag, a scalar that selects one.** Design 109 §4 chose that shape for referential-integrity reasons that do not apply here, and it turns out to be the right shape for a second, larger reason that does.
 
-### 4.2 Per-epoch effective params (design 80 P1-1b) — a prerequisite, not a nicety
+### 4.1 Why the indirection, and not a single flat param
 
-Records write `spendingExpenseBands[19].monthlyAmount` — an **index into the band table as it stood during that run**. Edit the scenario's bands and every recorded decision silently points somewhere else. This is not hypothetical: it produced a wrong `A′` during design 80's investigation, and it failed *silently*, which is exactly how it will fail in a UI.
+A single `mpcDecisionSchedule: [ … ]` array — the previous draft of this section — works, and it is simpler to describe. It is also a dead end, for three reasons that only show up downstream:
 
-Each record therefore stores the **full effective param set** alongside the `controlParams` delta. The delta stays authoritative for "what the controller decided"; the full set makes the record self-describing, survives scenario edits, and is what `paramsAt` returns.
+1. **A scenario holds one plan at a time.** Recording a second run overwrites the first, so comparing two runs means two scenario files and a study. Runs are the *cheapest* thing the cockpit produces and the thing you most want several of.
+2. **An array param cannot be an axis.** `DecisionPoint.options` are `{ value, label }` pairs and `makeLeafEntry` writes `p.value = leafParams[p.name]`. A scalar run id is a perfect option value. A four-hundred-row array is not, and `liquidityGraphSchedule[i].year` is the exact trap `generated-param-keys.js:37` and `pool-shape-year-axis.js` were written for — a nested path is not a dotted key.
+3. **Provenance drifts from its payload.** The previous draft had a sibling `mpcDecisionScheduleSource` param, and §15 had to list "two params to keep in agreement" as an honest limit. Folding `source` into each bag entry removes the limit rather than documenting it.
 
-### 4.3 Snapshot cache — load-bearing for the interaction, not an optimisation
+### 4.2 The payoff: two MPC runs compared **is** a decision graph
 
-`OptimizationProblem.rollToSnapshot` already produces a snapshot per epoch. Caching them on first replay makes a branch at epoch *k* cost `n − k` epochs instead of `n`. Late branches become near-instant; early ones stay sub-second. **Without this the live-drag interaction in §6 is not viable**, so it belongs in the design rather than in a later performance pass.
+This is the part worth leaning into, and it needs no new machinery at all.
 
----
+```js
+new DecisionPoint({
+  id: 'plan', label: 'Plan', paramKey: 'mpcActiveRun',
+  options: [
+    { value: null,            label: 'No MPC run (base plan)' },
+    { value: 'run:2026-09-14', label: 'Spending-only, CEM/64' },
+    { value: 'run:2026-09-18', label: 'Nine levers, CEM/128' },
+  ],
+});
+```
 
-## 5. Replay semantics — two modes, always labelled
+Three leaves. `DecisionGraphRunner._expandLeaves` builds the cartesian product, `makeLeafEntry` writes the selection into each leaf scenario, and each leaf gets `mcDrawsPerLeaf` Monte Carlo draws with its own reproducible seed offset. The ranked view then answers the question design 80 §14 said a single replay *cannot*:
 
-A branch changes a decision at epoch *k*. Everything after *k* was decided by a controller that never saw that change. Two honest responses, and the UI must never blur them:
+> Which of these recorded plans is actually robust, rather than which one happened to land well on one path?
 
-| Mode | What it does | Cost | What it is |
+And because a `DecisionPoint` is one axis among several, crossing it with anything else is free — "is run A still the better plan if the move slips two years" is a 2 × 3 grid, not a project.
+
+**The old §7.1 objection dissolves too.** The 2026-07-26 draft noted that design 30's cartesian assumption does not generalise to branching *within* a run, because changing epoch 5 changes the state epoch 20 starts from. True, and irrelevant here: whole runs are **independent by construction**, which is exactly the leaf model design 30 already has. The thing that did not fit was branching mid-run; selecting among recorded runs fits perfectly.
+
+The same scalar reaches the optimizer as an `ENUM` variable over run ids, and `scripts/lib/variant.mjs`'s generic `params {name: value}` escape hatch, with no plumbing in either.
+
+### 4.3 What stays in the graph, and what moves to the param
+
+The bag is **not** a replacement for the `decision` graph layer, and conflating them would repeat design 39 Step 5c's bug in a new place. They are different objects with different lifecycles:
+
+| | the recording | the plan |
+|---|---|---|
+| **What** | `layer:'decision'` nodes — one per epoch, with the projection, the fan, `extra.feasibility` | a `mpcRuns` bag entry — dates, levers, keys, values |
+| **Where** | `fin-sim-decisions` storage, via `DecisionRecordRegistry` | the scenario, like any other param |
+| **Travels with an export?** | no | yes |
+| **Read by the engine?** | never | every period advance |
+| **Lifecycle** | a session's log; deletable | part of the plan; versioned with it |
+
+Promotion from one to the other is the **design 80 F1-gated** step (§8). That direction is one-way: a bag entry is not re-recordable into the log.
+
+**Note for anyone tempted to put the bag in the graph instead.** The `decision` layer cannot carry a plan today: `DecisionRecordStorage.save` persists `{ records }` — **nodes only, no edges** — and `DecisionRecordRegistry._init` re-adds nodes without them. Every `DERIVES_FROM` edge the cockpit lays is lost on reload. That is also why the 2026-07-26 draft's D2 ("epoch nodes chain, so `paramsAt` is a `traceBackward`") would not have survived a page refresh.
+
+**Lineage without edges.** Old **Q3** asked whether a run re-solved from epoch *k* is a new run sharing a prefix. It is, and `source.derivedFrom: '<runId>'` records it inside the entry — a tree, held as a parent pointer, needing no edge persistence and travelling with the export. The run picker can render the tree from the bag alone.
+
+### 4.4 A run's `decisions` — a flat table
+
+```
+decisions: [ { date, lever, key, value }, … ]
+```
+
+One row per decision variable per epoch. It is the union of the run's `controlParams`, with the date attached and nothing else — no projection, no feasibility block, no param bag.
+
+**Flat, and four scalar columns, deliberately.** A nested `{ date, params: {…} }` row would be a JSON blob in a table cell: unsortable, unfilterable, undeletable row-by-row, and it is the shape every structured editor in this repo exists to avoid. Flat buys the interaction for free — filter to one lever, sort by date, delete the one epoch that was wrong, change the one value you want to try. That is the 2026-07-26 draft's "pin one value and try variations" ask, arriving as a table rather than as a feature.
+
+- **`date`** — the epoch's `asOfDate`. A row takes effect at the **first period advance on or after** it.
+- **`lever`** — a `COCKPIT_CONTROLS` key. It selects the `applyAt` hook; it is not decoration.
+- **`key`** — the lever's **stable** decision key, from a new `scheduleKey(variable)` hook on the lever spec.
+- **`value`** — the committed scalar.
+
+**The index-keyed trap, closed at the root.** Six of the nine levers already emit a stable `paramKey` from `buildVariables` and `scheduleKey` is the identity for them. **Three do not** — and they are exactly the three whose decision is inherently dated, so each already stamps the anchor it needs:
+
+| Lever | `buildVariables` emits | `scheduleKey` returns | anchor already stamped? |
 |---|---|---|---|
-| **Frozen policy** (default) | replay forward with the recorded decisions unchanged | `n − k` epochs, sub-second | a *counterfactual under the same policy* — legitimate and useful |
-| **Re-solve from here** | run the real solver from *k* forward | epochs × budget, minutes | a plan the controller endorses |
+| `SPENDING` | `spendingExpenseBands[19].monthlyAmount` | `band@69` | ✅ `_startAge` |
+| `ROTH` | `rothConversionSchedule[3].incomeTarget` | `roth@2039` | ✅ `_year` |
+| `EARLY_WITHDRAWAL` | `earlyWithdrawalSchedule[3].taxDeferredAmount` | `earlyWithdrawal@2039.taxDeferredAmount` | ✅ `_year` |
+| `DRAWDOWN_XBORDER` | `crossBorderDrawdown` | *(identity)* | — |
+| `DRAWDOWN_WITHINTIER` | `withinTierDraw` | *(identity)* | — |
+| `DRAWDOWN_WEIGHTS` | `drawdownWeight::<role>` | *(identity)* | — |
+| `DRAWDOWN_SLEEVE` | `sleeveWeight::<class>` | *(identity)* | — |
+| `ALLOCATION_MIX` | `allocWeight::<class>` | *(identity)* | — |
+| `BOND_LADDER` | `bondLadderRungs` | *(identity)* | — |
 
-Frozen-policy variants carry a badge; the re-solve button shows its estimated cost. Design 30 never needed this distinction because all its leaves are open-loop by construction. It is genuinely new vocabulary and getting it wrong means people read a patched trace as an optimum.
+An index is a position into a table *as it stood during that run*. Edit the table and every recorded decision silently points somewhere else — which is not hypothetical: it produced a wrong `A′` during design 80's investigation, and `scripts/lab/replay-vs-bake.mjs:80–120` still carries forty lines of heuristics reconstructing the pre-run band table *by shape*, ending in `process.exit(2)` when a hole makes it impossible.
+
+Under this design **no index is ever stored**, because nothing ever writes back into those tables: `applyAt` stamps state keyed by age or year. The old §4.2's 13 KB-per-epoch param bag was the fix for a problem this mechanism does not have.
+
+### 4.5 `applyAt` — the hook that makes a row mean something
+
+```js
+applyAt({ state, rows, asOfMs }) → statePatch | null
+```
+
+Seven of the nine levers get one, beside their existing `buildVariables` / `describe` / `harvest` / `actuate`. It receives the rows in force for this lever at `asOfMs` and returns a state patch, or `null` for "nothing to do" — the same no-op discipline `PoolShapeScheduleReducer` keeps (§5). `ROTH` and `EARLY_WITHDRAWAL` act on queued events and take a different route; §6.3 says why, and it is the one place the mechanism is not uniform.
+
+The hook speaks **the lever's vocabulary**, not the param system's. `SPENDING.applyAt` returns a band table; it does not address a band by index. `DRAWDOWN_SLEEVE.applyAt` writes `drawdownSleeveOrder` / `drawdownSleeveWeights` directly, which is what its `actuate` already does. That is why the bag needs no param paths and no re-keying.
+
+### 4.6 Size
+
+Measured on a real 44-year plan: ~44 epochs × up to 9 levers ≈ 400 rows, ~24 KB serialized per run. Ten recorded runs is ~240 KB in a scenario that already serializes at ~350 KB. The bag is affordable; a cap is not needed in v1, and a "delete run" in the picker is (§8).
+
+## 5. The application: `MpcDecisionScheduleReducer`
+
+Straight from design 109 §8, which is the precedent in every particular.
+
+- Fires on **`US_PERIOD_ADVANCE` / `AU_PERIOD_ADVANCE`**, like `PoolFlowReducer` and `PoolShapeScheduleReducer`.
+- Priority **`PRE_PROCESS + 0.25`**. The slot is narrower than it looks and the reasoning is worth recording, because both obvious answers are wrong.
+
+  It must be **after** `PRIORITY.PRE_PROCESS` (`10`), where **fifteen reducers already sit** — among them `UsPeriodAdvanceReducer` / `AuPeriodAdvanceReducer`, which write `state.currentPeriods[cc] = action.period` and whose docstring says they run there *"so the correct period and filing status are in state before any tax or cash-flow reducers run on the same step."* A decision reducer placed below `10` would resolve its "now" against the **previous** period whenever it fell back off `action.date` — a silent one-period error, on exactly the date the controller chose, of precisely the kind this design exists to remove.
+
+  It must not **join** the tie at `10` either: fifteen reducers on one priority are ordered only by the stable sort's tie-break, i.e. by where their `push` lands in `US_RETIREMENT.reducers`. Position by accident is not position.
+
+  And it must be **before** every consumer — `MarketIndexReducer` (+0.5), `PoolShapeScheduleReducer` (+1), `PoolFlowReducer` (+3), `ExplicitBandsSpendingReducer` (+4), `RebalanceToTargetReducer` (+4), `BondLadderReducer` (+5) — because a period that applies a decision must evaluate its flows and size its targets on the decision that has just taken over. Switching after them makes the first period of every decision run on the previous one.
+
+  Fractional priorities are an established idiom here, with the precedent documenting this exact reasoning: *"It runs at PRE_PROCESS + 0.5, after PeriodAdvanceReducer (10) and BEFORE RegimeApplyReducer"* (`market-index.js:46`). `+0.25` is free; `+0.5` is not.
+- **Resolves once, applies the delta.** It asks each lever named in the active rows for a patch and merges. A lever whose rows have not changed since the last advance returns `null`.
+- **No change ⇒ no patch at all**, via `this.newState(state)`. In every period of every run but the handful that decide something, this reducer costs a map lookup and writes nothing, and the journal carries no diff.
+- **Registered only when `mpcActiveRun` resolves to a run in the bag and `mpcRunEnabled` is not `false`**, in `US_RETIREMENT.reducers(context)` beside `PoolShapeScheduleReducer` (`us-retirement-toolset.js:1510`). A scenario with no active run has an identical reducer list, an identical journal and an identical run. **Absent is absent** — every golden stays byte-identical. Note the condition is on the *selection*, not on the bag: a scenario can carry ten recorded runs and play none of them, which is what makes the bag safe to accumulate.
+
+**Why not an event.** A `MPC_DECISION` event on the queue is the natural-looking design and is the one to refuse, for the reason design 109 §8 records and the goldens have measured: this engine's event queue is not a total order, so adding any event re-resolves tie-breaks among events already scheduled on the same instant. A feature whose job is to change a *policy* must not perturb the ordering of the *transactions*, or every A/B between two plans is confounded by an ordering change it did not ask for.
+
+**The consequence to state rather than discover.** A decision bites at the first period advance on or after its date. On a semi-annual advance cadence that is up to six months of lag, deterministically. The panel should show the date a decision *became live*, not the date that was recorded.
+
+**One visible marker.** The patch carries `state.mpcDecisionApplied = { date, levers }` so the journal diff and the timeline show *that* a decision landed. Without it the whole feature is invisible in exactly the surface a user watches while it plays.
 
 ---
 
-## 6. UI — Playback mode inside the cockpit
+## 6. The three state reads
 
-**Decision: Playback lives inside the existing MPC cockpit plugin**, with the run controls collapsed when no run is attached. The cockpit already has every widget this needs, pointed at a live solver instead of a recording:
+Each is the `_poolGraphOf` refactor design 109 already did on this same reducer:
 
-| Cockpit widget (Record mode) | Same widget (Playback mode) |
-|---|---|
-| "now" scrubber | observation scrubber over recorded epochs |
-| recommended-move card | **what the controller decided here** — `describeRecord` already renders exactly this |
-| futures fan | the fan drawn *at that epoch*, plus variant lines |
-| Apply / Advance | **Pin** / **Branch** |
-
-If it outgrows the cockpit it can be split out later; the renderers are shared either way.
-
-```
-┌ ⏺ RUN: die-with-zero · 9 levers · CEM/64 · 44 epochs ── [Runs ▾] [Re-solve] [×] ┐
-│ 2026 ●─●─●─●─●─●─●─●─●─●─●─●─●─●─●─●─▮─●─●─●─●─●─●─●─●─●─●─● 2070              │
-│                                       ▲ T = 2049-01-01  epoch 24 of 44          │
-│ [◀]  [▶ play]  [▶]                    realized ──  projected-at-T ···  variant ─│
-└─────────────────────────────────────────────────────────────────────────────────┘
-┌ DECIDED AT THIS EPOCH ──────────────────────────────────────────────────────────┐
-│ Set monthly spend for age 69 to $8,831/mo   ·   Draw order: ira → us-stock → …   │
-│ projected terminal $12,401   ·   realized $106,476   ·   ✅ solvent, deficit $0   │
-└─────────────────────────────────────────────────────────────────────────────────┘
+```js
+// rebalance-to-target-reducer.js:387 — the pattern, already in the tree
+_poolGraphOf(state) { return state?.liquidityGraph ?? this.poolGraph; }
 ```
 
-### 6.1 Parameters are shown in the Scenario panel, not a new one
+### 6.1 `ExplicitBandsSpendingReducer`
 
-A second place to read parameters would drift from the first. The existing Scenario panel gains an **as-of-T mode** fed by `paramsAt(T)`:
+`_bandsOf(state) { return state?.mpcSpendingBands ?? this.bands; }` — a **full replacement band table**, not a merge map (old Q3, resolved).
 
-```
-Scenario params                    ⏱ as of 2049-01-01   [ live | as-of-T ]
-● Monthly Spending    $8,831   was $8,470     [pin] [branch] [sweep]
-  Drawdown Order      ira 0.66, us-stock 0.30, …
-● allocWeight::EQUITY 0.43     was 0.31       [pin] [branch] [sweep]
-  Roth income target  —        (skip year)
-```
+A merge would be smaller in state and would need merge semantics that only one reader understands; a replacement is the same shape `this.bands` already is, so `bandForAge` and the re-pin logic work unchanged and there is one vocabulary rather than two. The cost objection is measured and does not survive: a 21-band table is ~1 KB against the ~280 KB a snapshot of this plan already carries.
 
-`●` marks a param the controller changed **at** this epoch; the `was` column diffs against the previous epoch. Scrub anywhere and every parameter in force is visible, with the just-moved ones called out. This is the core ask.
+The reducer's existing re-pin logic then does the rest untouched: it already re-pins when `band.monthlyAmount !== state.explicitBandSpending.appliedAmount`, which is exactly the case an override creates. Within an unchanged band it stays hands-off, so inflation and the reactive strategies keep their say — the property the lever was built around, preserved.
 
-### 6.2 The interaction loop
+### 6.2 `RebalanceToTargetReducer` and `BondLadderReducer`
 
-- **Observe** — scrub or step; params, decision card and chart follow. The chart shows the realized path against *what the controller projected from here*, which is where the design 80 §2.6 divergence becomes visible (projected \$16,249, realized \$106,476).
-- **Pin** — copy one value into the live scenario. The smallest possible edit, landing in the normal params diff, feasibility-checked. This is design 39 §13.1's missing "copy" step at single-decision granularity.
-- **Branch** — inline control on the row; dragging runs a debounced replay and draws a variant line against the original.
-- **Sweep** — 3–5 values (or min/max/step) → N replays → N lines + a ranked table (§7).
-- **Compare / Promote** — two variants into design 30's existing side-by-side; promote a variant to a saved scenario, gated by design 80 F1.
+`_targetAllocationOf(state) ?? this.targetAllocation` and `_targetRungsOf(state) ?? this.targetRungs`. Both have several read sites (`rebalance-to-target-reducer.js:630, 657`; `bond-ladder-reducer.js:91`); **every** read must route through the accessor or the override applies in some paths and not others, which is worse than not applying at all.
 
-### 6.3 Honesty affordances
+### 6.3 `ROTH` and `EARLY_WITHDRAWAL` — the one place the mechanism is not uniform
 
-- **Frozen-policy badge** on every branched variant, beside a costed **[Re-solve from here]**.
-- **Feasibility chip** on every variant and every pin, from the `extra.feasibility` block records now carry (design 80 U2). Non-negotiable: `finalNetLiquidity` is degenerate at target 0, so a ruined plan renders as "\$0 — on target" (§2.6). Solvency must be shown separately, always.
-- **An unmissable mode indicator** — live scenario / run playback / unsaved variant must never be ambiguous.
+These two levers act on **queued events**, and a reducer cannot touch the queue. But they are also the two levers whose params are *already* year-keyed schedules, consumed at compile to seed those events. So under play-from-t₀ they need no mid-run mechanism at all: their rows **fold into `rothConversionSchedule` / `earlyWithdrawalSchedule` at compile**, before the toolsets build the events.
+
+`retargetRothConversionEvents` / `retargetEarlyWithdrawalEvents` exist only because `_seededSim` injects a *stale snapshot queue* into a fresh compile — a rollout-specific problem that does not arise when the clock starts at t₀.
+
+This is the one load-order dependency in the design: the fold must happen before `US_ROTH_CONVERSION` and `US_EARLY_WITHDRAWAL` build their schedules. It needs a test that names it, not a comment.
 
 ---
 
-## 7. A decision graph rooted at an epoch
+## 7. Record mode and play mode are mutually exclusive
 
-Design 30's `DecisionPoint {paramKey, options}` expands a cartesian product off one base scenario at t₀. **Branch-from-epoch is the same object rooted at epoch *k*'s snapshot.** The runner generalises from "base = scenario node" to "base = any node with a resolvable initial state," and an epoch node has one.
+Because the schedule is a param, `MpcCockpitPlugin._ensureController` reads it through `_paramsToMap(scenario.params)` like anything else — which means **Advise at epoch 12 would solve against a world where epochs 13–44 are already decided.** The controller would be optimising against its own answers, and the futures fan would be a fan of plans that already contain their own futures.
 
-**This is where the two features stop being neighbours and become one thing — because of cost.** Design 30 §4.5 caps analyses at *"dozens of leaves, not thousands"* because each leaf is N Monte Carlo draws. A replay leaf is 0.8 seconds. Rooting a decision graph at an MPC epoch and evaluating leaves by **replay** instead of MC moves that ceiling by two orders of magnitude: "spend 7000/7500/8000/8500 at 2035" × "move 2031/2033" is 8 leaves in about 7 seconds, each an exact reconstruction.
+**D8** settles it with a rule rather than a mode flag:
 
-The two evaluators are complementary rather than competing, and the funnel is the point:
+> A rollout seeded at "now" sees only schedule rows **strictly before** "now".
 
-| Evaluator | Produces | Cost | Use |
-|---|---|---|---|
-| **replay** | one exact number per leaf, one path | ~0.8 s | sweep wide, narrow the field |
-| **Monte Carlo** | p10 / p50 / p90 / success rate | minutes | confirm the survivors |
+`CockpitController` truncates the resolved schedule at `this.snapshot.date` before every `advise` / `apply` / `advance`. That one rule gives the correct behaviour in all three cases: a fresh run sees nothing, a resumed run sees its own committed past (which is exactly right — it *is* the realized plan), and "re-solve from epoch k" gets the prefix and nothing else, for free.
 
-So a leaf gets **"run MC on this leaf"** as a promotion step. Cheap to explore, expensive to decide.
-
-Leaf lifecycle needs no new thinking: `analysis-leaf` semantics already are ephemeral-by-default, cleared between analyses, opt-in persistence — exactly right for replay variants.
-
-### 7.1 Where the analogy breaks
-
-- **Branching is a tree, not a product.** Design 30's leaves are independent by construction. Changing epoch 5 changes the state epoch 20 starts from, so multi-epoch branching does not factor and `expandLeaves`' cartesian assumption does not generalise. **v1 branches at one epoch at a time**; a genuine tree is the honest structure if multi-point branching is wanted later.
-- **Different epistemics.** A replay leaf is a single deterministic path; an MC leaf is a distribution. The evaluator must be visible on every result, or a one-path number gets read as a forecast.
+The UI still wants an unmissable indicator of which mode it is in; that is §8, not this rule.
 
 ---
 
-## 8. The script surface
+## 8. UI — a picker, a switch, and a way in
 
-The UI is the user's half; the scripts are the other half, and design 80 demonstrated that the scripts are where the answers actually came from. Every UI capability must be reachable headlessly, fast, and `--json`-able for chaining. A shared `scripts/lib/run-lab.mjs` (sibling of `harvest-lab.mjs`) holds load / replay / branch / sweep.
+Small, because the runs are params and the params panel already exists.
+
+- **`mpcActiveRun`** — a select over the bag's keys, with `— none —` first. This *is* the "use optimized parameters" control; no separate mode flag is needed to turn it on. Each option is labelled from the entry's `source` (`Nine levers · CEM/128 · 2026-09-18 · 44 epochs`), because a raw run id is not a choice anyone can make.
+- **`mpcRunEnabled`** — the OFF switch that **keeps the selection**, mirroring `liquidityGraphEnabled` (`behavioral-strategy-registry.js:733`). Selecting `— none —` also turns it off but forgets which run you were on, and toggling a plan on and off is the most common thing anyone will do with this.
+- **The run picker** — `buildMpcRunsEditor`, a list of named blocks like `buildLiquidityShapesEditor`: each entry shows its `source` line, a row count, **Delete**, and expands to the decision table. `source.derivedFrom` (§4.3) renders the tree.
+- **The decision table** — `buildRowListEditor` (`src/visualization/components/row-list-editor.js`) scoped to the expanded entry, four typed columns: `date` (date), `lever` (select over `COCKPIT_CONTROLS`), `key` (select, options provided by the selected lever), `value` (number/select by the lever's variable type). Sorted by date, filterable, row-deletable. Same machinery as `buildLiquidityGraphScheduleEditor`.
+- **Cockpit: "Save run to plan"** beside the existing "Copy to scenario…", writing a new `mpcRuns` entry from the decision log and selecting it, through the **design 80 F1 feasibility gate** (which takes a plan, and a run's decisions are a valid plan).
+- **Mode indicator** — live plan / playing a recorded run must never be ambiguous. §6.3 of the original design was right about this and it still holds.
+- **Timeline / journal marker** — from `state.mpcDecisionApplied` (§5), so a decision landing is visible while it plays.
+
+The ordinary time controls do the rest. **Step-back is not dropped**: it stays a full re-simulation from t₀ and therefore stays slow, but with the schedule compiled in and the reducer reading state it becomes *correct*, which it is not today (§0 bug 1).
+
+---
+
+## 9. What the rest of the app gets for free
+
+This is the strongest argument for the runs being ordinary scenario params rather than a session overlay, and for §4's indirection: every one of these reaches a run through the **scalar selector**, not through the payload.
+
+| Consumer | What it gains | Cost |
+|---|---|---|
+| **`DecisionGraph`** | N recorded runs ranked by MC, crossable with any other axis — §4.2 | — |
+| **Monte Carlo** | "MC this plan" — the 2026-07-26 draft's §7 promotion step, arriving as nothing at all | Q1 |
+| **Optimizer** | `mpcActiveRun` as an `ENUM` variable: search *over* recorded plans | — |
+| **`ScenarioCompareRunner`** | A/B a run against its own base, side by side | — |
+| **Goldens** | one fixture carrying an active run pins the whole mechanism | — |
+| **`variant.mjs` / `grid.mjs`** | a run is an axis value through the generic `params` escape hatch | — |
+| **Export / diff / CSV** | runs are shareable and diffable like any other plan | — |
+
+**A correction to the original §3.** It claimed design 30's compare surface "operates on two graph-node IDs and does not care which". It does not: `ScenarioCompareRunner.run(entry)` takes a **full serialized scenario** and runs it from t₀ through `ScenarioLoader`. An epoch node is not one. That was the load-bearing claim under the old §6.2's compare step, and it was wrong. Under this design the point is moot — a run *is* a scenario, so compare works with no new code.
+
+---
+
+## 10. The script surface
+
+Unchanged in intent from the original §8; `replayDecisions` still drives it, and `scripts/lib/grid.mjs` (serial in-process cells, progress + ETA + a results envelope) hosts the sweep rather than a new driver. A shared `scripts/lib/run-lab.mjs` holds load / schedule / branch / sweep.
 
 | Command | Purpose |
 |---|---|
-| `run:inspect <run> [--at DATE]` | epoch table; with `--at`, the full param set in force — `paramsAt` on the CLI |
-| `run:replay <run> --scenario <s>` | the A / A′ / B table (generalises `replay-vs-bake.mjs`) |
+| `run:inspect <run> [--at DATE]` | the epoch table; with `--at`, the decisions in force |
+| `run:save <run> --out <scenario>` | write the decision log into the scenario's `mpcRuns` bag and select it — the headless twin of §8's button |
+| `run:replay <run> --scenario <s>` | the A / A′ / B table (generalises `replay-vs-bake.mjs`). **Under this design B ≡ A′ is a regression test, not a finding.** |
 | `run:branch <run> --at DATE --set 'key=value'` | one counterfactual: terminal, solvency, delta vs baseline |
-| `run:sweep <run> --at DATE --param K --values a,b,c` | N replays, ranked — §7 headless |
-| `run:attribute <run>` | swap-one-lever-group table (built by hand in design 80 §2.11; promote to a tool) |
-| `run:seeds <run> --seeds 1,2,3` | the recorded policy across design-74 seeds → robustness |
+| `run:sweep <run> --at DATE --key K --values a,b,c` | N runs, ranked |
+| `run:attribute <run>` | swap-one-lever-group table (built by hand in design 80 §2.11) |
+| `run:seeds <run> --seeds 1,2,3` | the recorded plan across design-74 seeds → robustness |
+
+Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`, so the only help work is the topics (§14 Phase 5).
 
 ---
 
-## 9. The run file is the interface between the two halves
+## 11. Decisions locked
 
-This deserves to be a stated goal rather than an accident of how design 80 went. The browser's `fin-sim-decisions` export — `{ records: [...] }` — is exactly what the scripts consume. The user dumps localStorage, the analysis happens headlessly, a scenario file comes back. **That loop is what solved design 80**, after four in-code reconstructions produced four different wrong mechanisms.
-
-Therefore: keep the export format stable, give the UI a one-click **Export run**, make every script accept it directly, and let the scripts *write* a scenario back. Two additions make the file self-sufficient — the **base scenario identity** it was recorded against (§4.1) and the **per-epoch effective params** (§4.2).
-
----
-
-## 10. Decisions locked
-
-- **D1 — A run is a first-class artifact**, an `MpcRun` container node (layer `analysis`) owning its epoch nodes, mirroring `DecisionGraph`.
-- **D2 — Epoch nodes chain.** `epoch_k DERIVES_FROM epoch_{k−1}`, making `paramsAt` a `traceBackward` and branch-invalidation a `traceForward`.
-- **D3 — Playback is a mode of the existing cockpit**, not a new surface, reusing its scrubber / card / fan / `describeRecord`. Revisit only if it outgrows the panel.
-- **D4 — Parameters are shown in the Scenario panel** in an as-of-T mode. No parallel params UI.
-- **D5 — Frozen-policy and re-solved variants are always distinguished**, with the re-solve cost shown.
-- **D6 — Replay is instrumentation, not a harvest destination.** Params remain the shareable, searchable representation; promotion to a scenario goes through the design 80 F1 gate.
-- **D7 — Per-epoch effective params are a prerequisite**, not a follow-up: index-keyed decisions fail silently without them.
-- **D8 — Leaf evaluator is selectable and labelled** — replay to explore, MC to confirm.
+- **D1 — A run is a scenario param, reached through a scalar selector.** `mpcRuns` is a bag of named recorded runs, each carrying its own `source`; `mpcActiveRun` picks one; `mpcRunEnabled` turns it off without forgetting which. The indirection is not tidiness — a scalar is what makes a run an axis for `DecisionPoint`, the optimizer's `ENUM` and `variant.mjs` (§4.1, §4.2). Not a graph container, not a session overlay.
+- **D1a — The graph keeps the recording; the param keeps the plan** (§4.3). They have different lifecycles, and `DecisionRecordStorage` persists nodes without edges, so the graph cannot hold a plan that survives a reload anyway. Lineage between runs rides on `source.derivedFrom`, not on edges.
+- **D2 — All nine levers go through one mechanism.** Design 80 §2.11 exonerated the POINT collapse on *one* log; that is not a general result, and two representations of a run's decisions is two places a fidelity bug can hide.
+- **D3 — The switch is a reducer, not an event** (design 109 §8). Adding to the queue re-resolves tie order portfolio-wide.
+- **D4 — Absent is absent, and the condition is the *selection*.** No active run ⇒ no reducer registered ⇒ every existing golden byte-identical. A scenario may carry runs it does not play.
+- **D5 — A run stores no param paths.** Each lever's `scheduleKey` returns a stable key and its `applyAt` writes state. The index-keyed re-key trap is closed at the root, not mitigated.
+- **D6 — A decision bites at the first period advance on or after its date**, with the lag stated in the UI.
+- **D7 — `applyAt` is the single "apply a lever forward" authority.** `actuate` and `_seededSim`'s re-stamp block both route through it; three implementations is how they drift.
+- **D8 — A rollout seeded at "now" sees only rows strictly before "now"**, so the controller never solves against its own future (§7).
+- **D9 — Promotion stays gated** by design 80 F1. Writing a bag entry is a promotion.
+- **D10 — The lossy harvest survives as an export**, not as the representation. A three-band summary a human can argue with is worth having; it is no longer what the plan is judged on.
+- **D11 — An active run and a study axis over a key it pins are refused, not reconciled** (Q1, resolved). Split the way design 110 already splits it: a scenario-level contradiction **throws at load**, the way `normalizeLiquidityGraph` throws on a hand-authored `drawdownSequence` beside a graph; a *study* misconfiguration **reports and never repairs**, the way `poolAxisProblems` does at `monte-carlo-presenter.js:354`. Silently letting either side win is how an arm and its control come to differ in two ways.
+- **D12 — `SPENDING.applyAt` stamps a full replacement band table** (Q3, resolved), not a merge map — one vocabulary, `bandForAge` unchanged, and ~1 KB against a ~280 KB snapshot.
 
 ---
 
-## 11. Open questions
+## 12. Open questions
 
-- **Q1 — Does `paramsAt` fold deltas or read the stored effective set?** Folding is elegant and makes the chain edges load-bearing; reading is robust to a corrupted/partial log. Probably read, with folding as a cross-check that can flag divergence.
-- **Q2 — How much of a run should persist?** 44 epochs × a full param set is not free in localStorage. Options: store the full set only every *k*-th epoch and fold deltas between; or compress by storing only changed keys plus a periodic keyframe. A keyframe-plus-delta scheme is the obvious answer but wants measurement first.
-- **Q3 — Should a branch be re-recordable as its own run?** A variant that has been re-solved from epoch *k* is arguably a new run sharing a prefix. If so, runs form a tree and the picker needs to show it.
-- **Q4 — Does the fan replay too?** Each record stores its projection's terminal but not the full fan series. Re-deriving the fan at epoch *k* costs a handful of rollouts. Worth it for the "what it was thinking" overlay, or is the single projected number enough?
-- **Q6 — Why does every epoch under-project its own outcome by ~6.5×, and does that matter?** On the real log the last epoch projected a \$16,249 terminal; the realized path (A′) delivered **\$106,476**. Every epoch's projection is the terminal of "hold this decision for the rest of life," but the realized path is the *sequence* of first segments, and they are not the same plan. The cockpit only ever displays the projection — so for a die-with-target goal the user is being told they will land on target while the plan actually overshoots by 6.5×. **Playback makes this visible for the first time** (§6.2 plots both), which is reason enough to build it, but the gap itself may be a design-39 controller-accuracy problem worth its own investigation. Do not assume it is benign: a goal-seeking controller that systematically misses its goal by that margin is either mis-reporting or under-spending, and both matter.
-- **Q5 — What happens when the base scenario is edited after a run?** The run's decisions may no longer apply cleanly. Detect via the stored base identity and mark the run stale rather than replaying it against a scenario it never saw.
-
----
-
-## 12. Testing sketch
-
-- `run-graph.test.mjs` — epochs chain; `traceBackward(epoch_k)` returns exactly epochs 1…k in order; `traceForward` returns k+1…n.
-- `params-at.test.mjs` — `paramsAt(T)` equals the folded deltas up to T; equals the stored effective set; the two agree on a real log.
-- `replay-branch.test.mjs` — a branch at epoch *k* leaves epochs < k byte-identical and diverges only after; a no-op branch reproduces the baseline exactly.
-- `snapshot-cache.test.mjs` — a cached branch at *k* produces the identical result to an uncached full replay (correctness), and issues `n − k` rolls rather than `n` (the performance contract).
-- `epoch-rooted-decision-graph.test.mjs` — leaves expand off an epoch snapshot; replay and MC evaluators produce results tagged with which one ran.
-- `run-staleness.test.mjs` — editing the base scenario's band table marks the run stale instead of silently re-keying (the §4.2 failure).
+- ~~**Q1 — What does Monte Carlo do to a pinned key?**~~ **RESOLVED → D11: refuse to author both.** An active run pins `allocWeight::EQUITY` at 44 dates; an MC or optimizer variable perturbs it; today the later write wins and nothing says which. Neither "the run wins" nor "MC wins" is honest, because both produce a grid that *looks* comparable and is not. The refusal has two halves, following design 110's existing split — a load-time throw for a scenario-level contradiction, and a report-never-repair warning at study launch (`poolAxisProblems`' home). **Note what this does *not* refuse**: `mpcActiveRun` as the axis itself is the whole point of §4.2, and it pins nothing MC is perturbing.
+- **Q2 — Should a run's *contents* be sweepable?** Selecting *among* runs is solved (§4.2). Transforming one — shift every date a year, scale every spending decision by 0.95 — is not, and `mpcRuns['<id>'].decisions[i].value` is the exact trap `generated-param-keys.js:37` and `pool-shape-year-axis.js` were written for: a nested path is not a dotted key. If that is wanted it needs a resolver-level axis family in the design-110 style, not a param path. **Cheap interim**: a "duplicate run with a transform" action in the picker, which is `buildLiquidityShapesEditor`'s `+ Duplicate` argument (§11 of design 109) applied here.
+- ~~**Q3 — Is `state.mpcSpendingBands` the right shape?**~~ **RESOLVED → D12: a full replacement band table.** The size objection was the only argument for a merge map and it does not survive measurement (~1 KB vs a ~280 KB snapshot). A replacement is the shape `this.bands` already is, so nothing downstream learns a second vocabulary.
+- **Q3b — Does a run re-solved from epoch *k* become its own entry?** Yes — `source.derivedFrom` (§4.3) makes runs a tree held as parent pointers. Open: whether the picker should *offer* "re-solve from here" or whether that stays a cockpit action that happens to write a derived entry.
+- **Q4 — Does the schedule round-trip through `ScenarioSerializer` and the CSV param export?** Dates in a table cell are the usual place that breaks.
+- **Q5 — Staleness.** `source.baseScenarioId` lets us detect that the base moved under a recorded run. What should that *do* — warn, refuse to select, or nothing? A run that stores no param paths is far more robust to a base edit than the 2026-07-26 draft was, so this is probably a badge on the picker entry rather than a gate.
+- **Q6 — Why does every epoch under-project its own outcome by ~6.5×?** On the real log the last epoch projected a \$16,249 terminal; the realized path delivered **\$106,476**. Every epoch's projection is the terminal of "hold this decision for the rest of life", but the realized path is the *sequence* of first segments, and they are not the same plan. The cockpit only ever displays the projection — so for a die-with-target goal the user is told they will land on target while the plan overshoots by 6.5×. **This design sharpens the question rather than answering it**: once `B ≡ A′` is a regression test, the A-vs-A′ gap is isolated as a pure controller-accuracy problem with the harvest permanently excluded as a suspect. A goal-seeking controller that systematically misses its goal by that margin is either mis-reporting or under-spending, and both matter. Own it in design 39.
 
 ---
 
-## 13. Step-by-step plan
+## 13. Testing sketch
+
+- `mpc-run-absent.test.mjs` — no active run (and, separately, **a bag with entries but `mpcActiveRun: null`**) ⇒ `MpcDecisionScheduleReducer` is not in the reducer list, and a golden fixture is byte-identical. **The gate for D4**, and the second case is the one that makes the bag safe to accumulate.
+- `mpc-schedule-noop.test.mjs` — a period that changes nothing emits no patch and no journal diff.
+- `mpc-schedule-boundary.test.mjs` — a row dated mid-period takes effect at the next advance, not at the instant; the lag is the stated one.
+- `mpc-schedule-equals-replay.test.mjs` — **the headline.** A scenario carrying a run's schedule, run from t₀, reproduces `replayDecisions` on the same log. `B ≡ A′`, which is design 80's finding turned into a regression test.
+- `mpc-schedule-state-reads.test.mjs` — for each of the three: the override wins where present, the instance field wins where absent, and **every** read site honours it.
+- `mpc-schedule-rewind.test.mjs` — play to simEnd, rewind, replay: identical state. Fails today for SPENDING / ALLOCATION_MIX / BOND_LADDER (§0 bug 1).
+- `mpc-schedule-roth-fold.test.mjs` — ROTH / EARLY_WITHDRAWAL rows reach the compiled event schedules, and the fold happens before the toolsets read them (§6.3).
+- `mpc-schedule-truncation.test.mjs` — `CockpitController` at epoch k sees rows < k and no others (D8).
+- `mpc-run-editor.test.mjs` — the row editor round-trips, sorts by date, and a blank row syncs to `null`; deleting the selected run clears `mpcActiveRun` rather than leaving it dangling.
+- `mpc-run-as-decision-point.test.mjs` — **the §4.2 gate.** A `DecisionPoint` over `mpcActiveRun` with three options expands to three leaves, `makeLeafEntry` writes the selection into each, and the three leaves produce three different results. If this passes, the whole analysis surface reaches MPC runs with no further work; if it is missing, the indirection's main justification is unproven.
+- `mpc-run-refuses-conflicting-axis.test.mjs` — an active run plus a study axis over a key it pins throws at load / reports at launch, per D11, and `mpcActiveRun` as the axis itself does neither.
+
+---
+
+## 14. Step-by-step plan
 
 ### Status legend
 - [ ] not started · [x] done
 
-**Phase 1 — Substrate** (small, independently useful, unblocks everything)
-- [ ] **1a** — Per-epoch effective params on the decision record. **This is design 80's P1-1b — the same task, moved here; do not do it twice.** *Do it first; §4.2 says why it fails silently otherwise.*
-- [ ] **1b** — Chain the epoch `DERIVES_FROM` edges; `parentId` advances per epoch.
-- [ ] **1c** — `MpcRun` container node + registry mirroring `DecisionGraphRegistry`; base-scenario identity stamped.
-- [ ] **1d** — `paramsAt(run, date)` over the graph, plus `run:inspect`.
+**Phase 1 — The whole path, end to end, on one lever**
+- [ ] **1a** — `mpcRuns` / `mpcActiveRun` / `mpcRunEnabled` param declarations; `resolveActiveMpcRun(params)` + an `activeDecisionsAt(run, asOfMs)` selector, exported and used by every consumer — the `activeGraphAt` discipline (design 109 §7: *"normalizing it three times with three slightly different option sets is how the same object comes to mean three things"*).
+- [ ] **1b** — `scheduleKey(variable)` and `applyAt({ state, rows, asOfMs })` on the lever spec.
+- [ ] **1c** — `MpcDecisionScheduleReducer`, registered only when a run is selected and enabled.
+- [ ] **1d** — `SPENDING`: `scheduleKey` → `band@<startAge>`, `applyAt` → a full `state.mpcSpendingBands` table (D12), and `ExplicitBandsSpendingReducer._bandsOf(state)`.
+- [ ] **1e** — the absent / no-op / boundary / equals-replay tests.
+- **Milestone**: record a spending run, hand-write a bag entry, select it, press Play, and watch it reproduce the run.
 
-**Phase 2 — Replay as a service**
-- [ ] **2a** — Snapshot cache in `replayDecisions`; branch cost proportional to the tail.
-- [ ] **2b** — `branchFrom(run, epoch, overrides)` → frozen-policy variant as an `analysis-leaf` node.
-- [ ] **2c** — `run:replay` / `run:branch` / `run:attribute` / `run:seeds`.
+**Phase 2 — The rest of the state-backed levers**
+- [ ] **2a** — the four `DRAWDOWN_*` levers. No reducer refactor — they already write `FORWARD_DRAWDOWN_STATE_FIELDS` and per-account `drawdownPriority`.
+- [ ] **2b** — `ALLOCATION_MIX` + `RebalanceToTargetReducer._targetAllocationOf`; `BOND_LADDER` + `BondLadderReducer._targetRungsOf`. Every read site.
 
-**Phase 3 — Playback UI**
-- [ ] **3a** — Run picker + attach/detach; epoch ticks on the timeline; observation scrubber.
-- [ ] **3b** — Decision card via `describeRecord`; projected-vs-realized readout; feasibility chip.
-- [ ] **3c** — Scenario panel as-of-T mode with the `●` changed-here marker and `was` diff.
-- [ ] **3d** — Pin (single value → live scenario, F1-gated).
-- [ ] **3e** — Branch with live drag; variant line on the fan; frozen-policy badge + costed re-solve.
+**Phase 3 — The two queue levers**
+- [ ] **3a** — `ROTH` / `EARLY_WITHDRAWAL` fold into `rothConversionSchedule` / `earlyWithdrawalSchedule` at compile, before the toolsets read them, with the load-order test.
 
-**Phase 4 — Epoch-rooted decision graph**
-- [ ] **4a** — Generalise the decision-graph base from "scenario node" to "any node with an initial state."
-- [ ] **4b** — Replay evaluator alongside the MC evaluator; results tagged with which ran.
-- [ ] **4c** — Sweep UI + ranked table; "run MC on this leaf" promotion.
-- [ ] **4d** — `run:sweep`.
+**Phase 4 — Record → bag**
+- [ ] **4a** — write a bag entry from the decision log and select it, F1-gated; `source` stamped, `derivedFrom` when re-solved from an existing run.
+- [ ] **4b** — `CockpitController` truncation at "now" (D8).
+- [ ] **4c** — `run:save` headless.
+- [ ] **4d** — the D11 refusals, both halves.
 
-**Phase 5 — Promotion**
-- [ ] **5a** — Promote a variant/leaf to a saved scenario through the design 80 F1 feasibility gate; unify with `applyHarvestPlan`.
+**Phase 5 — Picker and UI**
+- [ ] **5a** — `mpcActiveRun` select (labelled from `source`) + `mpcRunEnabled`.
+- [ ] **5b** — `buildMpcRunsEditor` (named blocks + delete + the `derivedFrom` tree) over `buildRowListEditor`.
+- [ ] **5c** — mode indicator; timeline / journal marker from `state.mpcDecisionApplied`.
+- [ ] **5d** — help: param descriptions in the toolset, a `kind: concept` topic for recorded runs, and `npm run help:restamp -- mpc-cockpit` for the panel changes.
+
+**Phase 6 — The lab**
+- [ ] **6a** — `scripts/lib/run-lab.mjs`; `run:inspect` / `run:replay` / `run:branch`.
+- [ ] **6b** — `run:sweep` over `grid.mjs`; `run:attribute`; `run:seeds`.
+
+**Phase 7 — Consolidation**
+- [ ] **7a** — route `actuate` and `_seededSim`'s re-stamp through `applyAt` (D7), deleting the drift.
+- [ ] **7b** — demote the collapsing harvest to an explicit "export a legible plan" action (D10).
+
+**Phase 8 — Lean into the decision graph** (§4.2 — mostly wiring, once Phase 1–5 land)
+- [ ] **8a** — offer `mpcActiveRun` in the `DecisionPoint` param picker, with options auto-populated from the bag and labelled from `source`.
+- [ ] **8b** — "compare these runs" straight from the picker: build the `DecisionGraph`, run it, show the ranked table.
 
 ---
 
-## 14. Honest limits
+## 15. Honest limits
 
-- **A replay is one path.** Everything in Phases 2–4 reconstructs or perturbs a single deterministic trajectory. It says nothing about robustness until `run:seeds` or an MC promotion is run, and the UI must not let a one-path number read as a forecast.
-- **A frozen-policy branch is not a plan.** The controller would have re-decided. It is a clean counterfactual under a fixed policy, which is genuinely useful and genuinely not the same thing.
-- **This does not fix design 80's failure; it routes around it.** A whole-run harvest of a zero-margin plan will still go insolvent. What changes is that the user no longer has to do one — they can take the values they want and check each edit. Design 80 **F1** (block an infeasible promotion) remains required. **F2** (margin-aware re-solve) is de-prioritised by this design rather than refuted: if you can sweep eight margin levels by replay in seven seconds and *look* at them, having the harvest guess a margin for you is a much weaker offer.
-- **Storage is unbounded-ish.** Q2 is real: keeping many runs with full per-epoch param sets will strain localStorage well before it strains anything else.
+- **A schedule is one path.** Playing a recorded run reproduces one deterministic trajectory. It says nothing about robustness until `run:seeds` or an MC promotion is run, and the UI must not let a one-path number read as a forecast.
+- **A plan with no margin still has no margin.** This makes the *representation* lossless; it does not add the error budget design 80 §2.1 showed a die-with-zero objective spends by construction. What changes is that there is no longer a bake to blame, so the next investigation starts in the right place (Q6).
+- **Editing a row is not re-planning.** A hand-edited schedule is a counterfactual under a fixed policy — legitimate, useful, and not a plan the controller endorses. The distinction the original §5 drew between *frozen policy* and *re-solve from here* survives this redesign intact, and the UI must keep drawing it.
+- **The lag is real.** A decision takes effect at the next period advance (§5). On an annual cadence that is invisible; on a semi-annual one it is up to six months and it is not a bug.
+- **The bag grows and nothing prunes it.** Ten runs is ~240 KB (§4.6) and fine; a hundred is not, and only Delete in the picker stands between them. A cap or an age-out may be wanted once this is used in anger.
+- **A selection is a sharp edge.** `mpcActiveRun` pointing at a deleted or renamed entry must degrade to "no run", visibly — the `liquidityGraphSchedule` editor's *"not found"* row is the precedent for saying so rather than silently playing the base plan.
