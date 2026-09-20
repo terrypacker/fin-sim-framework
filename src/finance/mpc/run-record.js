@@ -10,6 +10,7 @@
 
 import { upsertParam }            from './harvest-apply.js';
 import { checkHarvestFeasibility } from './harvest-feasibility.js';
+import { assertRunIsPlayable }     from './run-compile-fold.js';
 
 /**
  * DESIGN 81 phase 4 — RECORD: the decision log becomes a bag entry.
@@ -177,14 +178,37 @@ export function checkRunFeasibility({ runId, entry, baseParams = {}, simStart, s
                                       cfgTemplate = null, objective = undefined,
                                       check = checkHarvestFeasibility } = {}) {
   const bag = { ...(baseParams?.mpcRuns ?? {}), [runId]: entry };
-  return check({
+  const folded = { ...baseParams, mpcRuns: bag, mpcActiveRun: runId, mpcRunEnabled: true };
+
+  // ── UNPLAYABLE is not UNVERIFIABLE, and conflating them writes a broken plan ──
+  //
+  // `assertRunIsPlayable` throws when a recorded lever's mechanic has since been switched off
+  // (D11, phase 3). Run inside the feasibility check, that throw is caught by its try/catch
+  // and reported as `feasible: null` — "could not verify" — which both callers treat as a
+  // soft warning and save anyway. Measured on a real 44-epoch log against a plan that had
+  // moved off EXPLICIT_BANDS: the tool printed "created and selected" for a run that cannot
+  // load at all.
+  //
+  // So it runs FIRST and separately, and its verdict is its own field. A refusal is a
+  // statement about the plan; `feasible: null` is a statement about the checker.
+  try {
+    assertRunIsPlayable(folded);
+  } catch (err) {
+    return {
+      playable: false, feasible: null, shortfall: 0, outOfFundsDate: null,
+      cumulativeDeficit: 0, deficitMonths: 0, scenarioFailed: false,
+      result: null, params: folded, error: err?.message ?? String(err),
+    };
+  }
+
+  return { playable: true, ...check({
     plan: { entries: [
       { paramKey: 'mpcRuns',       to: bag },
       { paramKey: 'mpcActiveRun',  to: runId },
       { paramKey: 'mpcRunEnabled', to: true },
     ] },
     baseParams, simStart, simEnd, cfgTemplate, objective,
-  });
+  }) };
 }
 
 /**

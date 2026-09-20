@@ -97,6 +97,14 @@ if (!opts.noCheck) {
     simStart: new Date(cfg.simStart), simEnd: new Date(cfg.simEnd),
     cfgTemplate: cloneCfg(cfg),
   });
+  if (f.playable === false) {
+    // D11's refusal, not the F1 gate. Saving here writes a scenario that THROWS at load, so
+    // it is refused louder and separately from "this plan runs out of money".
+    console.error(`\n${f.error}\n`);
+    console.error('Refusing to save a run this scenario cannot play. '
+      + 'Fix the scenario, or re-run with --no-check to write it anyway.\n');
+    process.exit(1);
+  }
   console.log(`  F1: ${describeFeasibility(f)}`);
   if (f.feasible === false) {
     console.error('\nRefusing to save an insolvent plan. Re-run with --no-check to override.\n');

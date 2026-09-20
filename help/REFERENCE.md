@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-226 parameters · 33 panels · 11 node types (164 fields) · 173 action types · 80 tools · 274 state field types · 72 topics · 119 design docs
+226 parameters · 33 panels · 11 node types (164 fields) · 173 action types · 86 tools · 274 state field types · 72 topics · 119 design docs
 
 ---
 
@@ -982,11 +982,11 @@ Explained in [`help/nodes`](nodes/reducer.md). 0 field(s) described by a record 
 
 ---
 
-## Headless tools (80)
+## Headless tools (86)
 
 Command-line entry points under `scripts/`. **Purpose** is harvested from each script's
 docblock, not re-authored here. Arguments come from each script's declarative
-`parseFlags` spec: 67 of 67 entry points carry one (design 108 D6 — all of them).
+`parseFlags` spec: 73 of 73 entry points carry one (design 108 D6 — all of them).
 6 scripts carry no docblock naming themselves and show `(undocumented)`.
 
 ### scripts/config-converters/
@@ -1114,6 +1114,48 @@ docblock, not re-authored here. Arguments come from each script's declarative
     - `--index` (number, default `0`) — scenario index in that file
     - `--levers` (string) — lever bag as inline JSON (see lib/variant.mjs)
     - `--csv` (string) — also write the rows here as CSV
+- **`scripts/lab/run-attribute.mjs`** — `npm run run:attribute`
+  which lever did the work? (design 81 §10)
+    - `--scenario` (string, default `scenarios/fin-sim-die-with.json`) — scenario carrying the run
+    - `--scenario-name` (string) — scenario NAME inside that file (default: the first)
+    - `--run` (string) — runId (default: the scenario's selection)
+    - `--only` (list, default ``) — restrict to these levers
+- **`scripts/lab/run-branch.mjs`** — `npm run run:branch`
+  one counterfactual against a recorded run (design 81 §10)
+    - `--scenario` (string, default `scenarios/fin-sim-die-with.json`) — scenario carrying the run
+    - `--scenario-name` (string) — scenario NAME inside that file (default: the first)
+    - `--run` (string) — runId (default: the scenario's selection)
+    - `--at` (string) — the date the change takes over (required)
+    - `--set` (string, default ``) — LEVER:key=value, or key=value when only one lever decides it
+- **`scripts/lab/run-inspect.mjs`** — `npm run run:inspect`
+  what does this recorded run decide, and when? (design 81 §10)
+    - `--scenario` (string, default `scenarios/fin-sim-die-with.json`) — scenario export
+    - `--scenario-name` (string) — scenario NAME inside that file (default: the first)
+    - `--run` (string) — runId (default: the scenario's selection, or the only one)
+    - `--at` (string) — show the decisions IN FORCE at this date instead of the table
+    - `--list` (flag) — list the scenario's recorded runs and stop
+- **`scripts/lab/run-replay.mjs`** — `npm run run:replay`
+  the A / A′ / B table (design 81 §10; generalises `replay-vs-bake.mjs`)
+    - `--scenario` (string, default `scenarios/fin-sim-die-with.json`) — scenario carrying the run
+    - `--scenario-name` (string) — scenario NAME inside that file (default: the first)
+    - `--run` (string) — runId (default: the scenario's selection)
+    - `--decisions` (string) — decision-record export, for the A and A′ terms
+    - `--tolerance` (string, default `0.005`) — B≡A′ tolerance, as a fraction of A′
+- **`scripts/lab/run-seeds.mjs`** — `npm run run:seeds`
+  is the recorded plan robust, or was it lucky? (design 81 §10)
+    - `--scenario` (string, default `scenarios/fin-sim-die-with.json`) — scenario carrying the run
+    - `--scenario-name` (string) — scenario NAME inside that file (default: the first)
+    - `--run` (string) — runId (default: the scenario's selection)
+    - `--seeds` (list, default `1,2,3,4,5`) — randomSeed values
+- **`scripts/lab/run-sweep.mjs`** — `npm run run:sweep`
+  N branches of one decision, ranked (design 81 §10)
+    - `--scenario` (string, default `scenarios/fin-sim-die-with.json`) — scenario carrying the run
+    - `--scenario-name` (string) — scenario NAME inside that file (default: the first)
+    - `--run` (string) — runId (default: the scenario's selection)
+    - `--at` (string) — the date the change takes over (required)
+    - `--key` (string) — LEVER:key, or key when only one lever decides it (required)
+    - `--values` (list, default ``) — comma-separated values to try
+    - `--markdown` (flag) — also print a markdown table
 - **`scripts/lab/score-decomposition.mjs`**
   WHY did the controller commit an infeasible plan?
     - `<file>` (string, default `scenarios/fin-sim-die-with.json`) — scenario export to decompose
@@ -1448,7 +1490,7 @@ docblock, not re-authored here. Arguments come from each script's declarative
     - `--verbose` (flag) — show the simulation's own console output (e.g. OUT_OF_FUNDS)
     - `--json` (flag) — emit machine-readable JSON instead of tables
     - `--fast` (flag) — drop journal/snapshot/bus telemetry (~12x); disables sim.journal readers
-- **`scripts/scenario/save-run.mjs`**
+- **`scripts/scenario/save-run.mjs`** — `npm run run:save`
   write a recorded MPC run into a scenario's `mpcRuns` bag (design 81 §10, 4c)
     - `--decisions` (string, default `scenarios/fin-sim-decisions.json`) — decision record export
     - `--scenario` (string, default `scenarios/fin-sim-die-with.json`) — scenario export

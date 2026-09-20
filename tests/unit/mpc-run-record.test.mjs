@@ -175,11 +175,18 @@ test('MRR-4: `--no-select` writes the entry and leaves the selection alone', () 
 
 // ─── MRR-5 ───────────────────────────────────────────────────────────────────
 
+/** The gates LOG's two levers need, so D11's refusal is not what is under test here. */
+const GATES = {
+  spendingStrategy: ['EXPLICIT_BANDS'],
+  allocationStrategy: 'OPTIMIZED', behavioralStrategies: ['TARGET_ALLOCATION'],
+};
+
 test('MRR-5: D9/F1 — promotion folds the bag AND the selection, then runs the plan', () => {
   const { entry } = buildRunEntry(LOG, OPTS);
   let sawPlan = null;
   checkRunFeasibility({
-    runId: 'run:new', entry, baseParams: { mpcRuns: { 'run:old': {} }, inflationRate: 0.03 },
+    runId: 'run:new', entry,
+    baseParams: { ...GATES, mpcRuns: { 'run:old': {} }, inflationRate: 0.03 },
     simStart: new Date(D(2026)), simEnd: new Date(D(2040)),
     check: (args) => { sawPlan = args; return { feasible: true }; },
   });
@@ -189,6 +196,25 @@ test('MRR-5: D9/F1 — promotion folds the bag AND the selection, then runs the 
   assert.equal(byKey.mpcActiveRun, 'run:new');
   assert.equal(byKey.mpcRunEnabled, true);
   assert.equal(byKey.mpcRuns['run:new'], entry);
+});
+
+test('MRR-5: UNPLAYABLE is its own verdict, and the check never runs', () => {
+  // Measured on a real 44-epoch log: `assertRunIsPlayable`'s throw, raised INSIDE the
+  // feasibility check, came back as `feasible: null` — "could not verify" — and both callers
+  // saved anyway. A refusal is a statement about the plan; `feasible: null` is a statement
+  // about the checker, and a tool that conflates them writes a scenario that cannot load.
+  const { entry } = buildRunEntry(LOG, OPTS);
+  let ran = false;
+  const f = checkRunFeasibility({
+    runId: 'run:new', entry,
+    baseParams: { ...GATES, spendingStrategy: ['FIXED'] },      // EXPLICIT_BANDS switched off
+    simStart: new Date(D(2026)), simEnd: new Date(D(2040)),
+    check: () => { ran = true; return { feasible: true }; },
+  });
+  assert.equal(f.playable, false);
+  assert.equal(f.feasible, null);
+  assert.match(f.error, /SPENDING.*EXPLICIT_BANDS/s);
+  assert.equal(ran, false, 'there is nothing to check — the plan cannot load');
 });
 
 // ─── MRR-6 / MRR-7 ───────────────────────────────────────────────────────────
