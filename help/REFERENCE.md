@@ -9,11 +9,11 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-223 parameters · 33 panels · 11 node types (164 fields) · 173 action types · 79 tools · 266 state field types · 71 topics · 119 design docs
+226 parameters · 33 panels · 11 node types (164 fields) · 173 action types · 79 tools · 266 state field types · 72 topics · 119 design docs
 
 ---
 
-## Parameters (223)
+## Parameters (226)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
@@ -330,6 +330,15 @@ scenario's own schema), which is where to go to change it.
   Fraction of discretionary expenses retained after a spouse dies (default 0.50)
 - **`survivorEssentialMultiplier`** — Survivor Essential Multiplier · `Number` · default `0.85` · via US_RETIREMENT
   Fraction of essential expenses retained after a spouse dies (default 0.85)
+
+### MPC Runs (3)
+
+- **`mpcActiveRun`** — Active MPC Run · `Text` · default — · via US_RETIREMENT
+  Which recorded run governs this plan — a key of Recorded MPC Runs, or blank for none (design 81 §4). This is the "use optimized parameters" switch: select a run and the simulation plays the decisions the controller committed, as the clock reaches each one. Because it is a SCALAR it is also an axis — a decision graph point over this param ranks recorded plans against each other under Monte Carlo, and the optimizer can search over it as an ENUM. A selection naming an entry the bag does not have warns and runs the base plan rather than failing silently.
+- **`mpcRunEnabled`** — MPC Run Enabled · `Boolean` · default `true` · conditional · via US_RETIREMENT
+  The OFF switch that KEEPS the selection (design 81 §8), mirroring Liquidity Pools Enabled. False makes the active run inert without forgetting which run you were on — toggling a plan on and off against its own base is the most common thing anyone does with a recorded run, and clearing Active MPC Run to do it loses the selection every time.
+- **`mpcRuns`** — Recorded MPC Runs · `MpcRuns` · default — · via US_RETIREMENT
+  Recorded closed-loop controller runs, as { <runId>: { source, decisions } } (design 81). A run is the dated list of decisions the MPC cockpit actually committed: `decisions` is a flat table of { date, lever, key, value } — one row per decision variable per epoch — and `source` is its provenance (when it was recorded, the goal, the levers, the solver and budget, the epoch count, and `derivedFrom` when it was re-solved from another run). Storing the run instead of collapsing it into age bands is the whole point: design 80 measured that every faithful bake of a SOLVENT run produced an INSOLVENT scenario, because a die-with-zero plan has no margin for an epsilon. A run stores no param paths — each lever applies its own value through its own hook, keyed by age or year — so editing the band table or the conversion schedule cannot silently re-point a recorded decision. Rows take effect at the first period advance on or after their date. The bag is inert on its own: nothing plays until Active MPC Run selects one, so a scenario can carry ten runs and play none. Blank (the default) = no recorded runs, byte-identical to before.
 
 ### Optimization (7)
 
@@ -1971,7 +1980,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 
 ---
 
-## Topics (71)
+## Topics (72)
 
 Tier 2 — the hand-written prose under `help/`, listed by what it CITES rather than
 summarised. A topic may not restate a param description (design 108 §3), so there is
@@ -2036,6 +2045,7 @@ what the in-app panel keys on.
 | [Liquidity Pools](panels/pools.md) | panel | 217 | 1 panel · design 97 |
 | [Randomness and Seeds](concepts/randomness-and-seeds.md) | concept | 251 | 2 panels · 2 params · design 74 |
 | [Real Property](nodes/real-property.md) | node | 221 | 2 panels · design 75, 83, 86, 48 |
+| [Recorded MPC Runs](concepts/recorded-mpc-runs.md) | concept | 400 | 1 panel · 3 params · design 81, 80 |
 | [Reducer](nodes/reducer.md) | node | 195 | 3 panels · design 2, 16 |
 | [Return Assumptions](concepts/return-assumptions.md) | concept | 266 | 2 panels · 13 params · design 99, 106 |
 | [Roth Conversions](concepts/roth-conversions.md) | concept | 242 | 2 panels · 12 params · design 29 |
@@ -2149,7 +2159,7 @@ between 10 and 11.
 | [`78-simulation-telemetry-cost.md`](../design/78-simulation-telemetry-cost.md) | 78 — Simulation performance: telemetry cost and history-proportional work |
 | [`79-real-vs-nominal-display.md`](../design/79-real-vs-nominal-display.md) | 79 — Real vs. Nominal value display (constant-dollar toggle) |
 | [`80-feasibility-preserving-harvest.md`](../design/80-feasibility-preserving-harvest.md) | 80 — Feasibility-preserving harvest: why a baked plan goes broke and the controller doesn't |
-| [`81-run-as-replayable-artifact.md`](../design/81-run-as-replayable-artifact.md) | 81 — The run as a replayable artifact: playback, branching, and a decision graph rooted at an epoch |
+| [`81-run-as-replayable-artifact.md`](../design/81-run-as-replayable-artifact.md) | 81 — The MPC run as a dated decision schedule the simulation plays |
 | [`82-allocation-over-time-reporting.md`](../design/82-allocation-over-time-reporting.md) | 82 — Allocation over time: reporting the realized asset mix |
 | [`83-us-au-tax-treaty-intricacies.md`](../design/83-us-au-tax-treaty-intricacies.md) | 83 — US–AU tax treaty intricacies: §904 baskets, resourcing, and the limitation |
 | [`84-roth-s99b-decant-vs-hold.md`](../design/84-roth-s99b-decant-vs-hold.md) | 84 — Roth IRA under s99B: decant before the move, or hold and pay Australia? |

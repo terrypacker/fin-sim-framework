@@ -1,6 +1,6 @@
 # 81 — The MPC run as a dated decision schedule the simulation plays
 
-**Status**: Proposed (2026-07-26) · **Direction revised 2026-09-19** (§0 — the revision record)
+**Status**: In progress — **phase 1 built 2026-09-19** (§14) · Direction revised 2026-09-19 (§0 — the revision record)
 **Related**: `design/39-mpc-financial-controller.md` (the cockpit that produces runs; §13 the harvest this replaces), `design/80-feasibility-preserving-harvest.md` (**the evidence** — §2.11 is why a collapsing harvest is the wrong representation), `design/109-time-varying-pool-shapes.md` (**the precedent** — §8 is the mechanism this reuses wholesale), `design/58-drawdown-levers.md` §11 (the forward-effective state fields), `design/38-optimization-solver-framework.md` (the solver a re-solve calls), `design/30-decision-graph-analysis.md` (the compare surface, corrected in §9), `design/74-stochastic-return-paths.md` (per-seed replay)
 
 > **Reading note**: design 39 treats a controller run as a *process* — you drive it, you harvest it, you throw it away. This design makes it a **scenario parameter**: a dated list of the decisions the controller committed, which the simulation applies as the clock reaches each one. You press Play and the plan unfolds exactly as the controller decided it, with no bake, no collapse and no separate playback engine.
@@ -399,13 +399,13 @@ Every one is discovered into `help/REFERENCE.md` automatically via `parseFlags`,
 ### Status legend
 - [ ] not started · [x] done
 
-**Phase 1 — The whole path, end to end, on one lever**
-- [ ] **1a** — `mpcRuns` / `mpcActiveRun` / `mpcRunEnabled` param declarations; `resolveActiveMpcRun(params)` + an `activeDecisionsAt(run, asOfMs)` selector, exported and used by every consumer — the `activeGraphAt` discipline (design 109 §7: *"normalizing it three times with three slightly different option sets is how the same object comes to mean three things"*).
-- [ ] **1b** — `scheduleKey(variable)` and `applyAt({ state, rows, asOfMs })` on the lever spec.
-- [ ] **1c** — `MpcDecisionScheduleReducer`, registered only when a run is selected and enabled.
-- [ ] **1d** — `SPENDING`: `scheduleKey` → `band@<startAge>`, `applyAt` → a full `state.mpcSpendingBands` table (D12), and `ExplicitBandsSpendingReducer._bandsOf(state)`.
-- [ ] **1e** — the absent / no-op / boundary / equals-replay tests.
-- **Milestone**: record a spending run, hand-write a bag entry, select it, press Play, and watch it reproduce the run.
+**Phase 1 — The whole path, end to end, on one lever** — **BUILT 2026-09-19**
+- [x] **1a** — `mpcRuns` / `mpcActiveRun` / `mpcRunEnabled` param declarations (`us-retirement-toolset.js`, group `MPC Runs`); `resolveActiveMpcRun(params)` + `activeDecisionsAt(run, asOfMs)` in `src/finance/mpc/run-schedule.js`, exported and used by every consumer — the `activeGraphAt` discipline (design 109 §7: *"normalizing it three times with three slightly different option sets is how the same object comes to mean three things"*). `mpcActiveRun` ships `opt: false`: §9's ENUM-over-runs needs its candidate set to come from the bag, which is phase 8, and `SWEEP-18` refuses a flag whose engine cannot yet sweep it.
+- [x] **1b** — `scheduleKey(variable)` and `applyAt({ state, rows, asOfMs, baseParams })` on the lever spec. *Two deviations, both recorded here rather than discovered later.* (i) The hooks are **defined** in `src/finance/mpc/lever-schedule.js` and spread into `COCKPIT_CONTROLS`, so the spec surface is the one §4.5 describes while the reducer and the toolset that registers it reach them without importing `cockpit-controller.js` and the solver registry behind it. (ii) `applyAt` also receives **`baseParams`**: SPENDING rebuilds the whole authored band table (§6.1) and a reducer cannot reach the param bag any other way.
+- [x] **1c** — `MpcDecisionScheduleReducer` (`PRE_PROCESS + 0.25`), registered only when a run is selected and enabled. Change detection is one scalar — the greatest row date not after "now" — because the active set can only change when a row's date is crossed; that covers every lever at once and keeps `mpcDecisionApplied` the `{ date, levers }` marker §5 asks for. A lever named by a row with no `applyAt` **warns once, loudly**, rather than playing the run back short.
+- [x] **1d** — `SPENDING`: `scheduleKey` → `band@<startAge>`, `applyAt` → a full `state.mpcSpendingBands` table (D12), and `ExplicitBandsSpendingReducer._bandsOf(state)`. The table is rebuilt from the **authored base** every period rather than from the previously stamped one, because `rows` is already the whole history in force — so the patch is a pure function of (base, rows, now) and cannot accumulate drift across a rewind.
+- [x] **1e** — `mpc-run-schedule.test.mjs` (MRS-1…8) and `mpc-run-absent.test.mjs` (MRA-1…5), plus the design 37 §6 coverage row. **Equals-replay is covered in its stronger, cheaper form**: MRA-4 asserts a played run is state-for-state identical to the from-scratch run whose band table is date-keyed the same way. The `replayDecisions` comparison proper waits on phase 4a — there is no recorder yet, so a `records` log would have to be hand-built and would test the hand-building.
+- **Milestone**: ✅ hand-write a bag entry, select it, press Play, and the run reproduces the date-keyed plan exactly (MRA-4). Recording one from the cockpit is 4a.
 
 **Phase 2 — The rest of the state-backed levers**
 - [ ] **2a** — the four `DRAWDOWN_*` levers. No reducer refactor — they already write `FORWARD_DRAWDOWN_STATE_FIELDS` and per-account `drawdownPriority`.
