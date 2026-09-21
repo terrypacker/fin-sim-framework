@@ -168,7 +168,19 @@ export const US_ROTH_CONVERSION = {
         type: 'RothScheduleList', group: 'Roth Conversion', mc: false, opt: false,
         controllable: true,
         defaultValue: [],
-        description: 'Per-year income-fill schedule [{ year, incomeTarget }] for the closed-loop controller (design 39 §12). incomeTarget is real base-year (2025) USD, compounded by inflation to the year\'s nominal ordinary-income ceiling. Years absent = not converted (skip-years). Legacy { year, bracketCeiling } (statutory rate) entries are still accepted. Empty = use the start/end/maxBracket window.',
+        description: 'Per-year income-fill schedule [{ year, incomeTarget }] for the closed-loop controller (design 39 §12). incomeTarget is real base-year (2025) USD, compounded by inflation to the year\'s nominal ordinary-income ceiling. Years absent = not converted (skip-years), unless Roth Conversion Schedule Mode is OVERLAY. Legacy { year, bracketCeiling } (statutory rate) entries are still accepted. Empty = use the start/end/maxBracket window.',
+      },
+      {
+        // Design 39 §14.10 — how a non-empty schedule composes with the window. REPLACE (the
+        // default, and the only behaviour before this param) reads the schedule as the whole
+        // plan. OVERLAY is what an MPC session saves on a window-form plan: it decides one year
+        // at a time, so every year it did not decide must keep the window's bracket-fill, and
+        // under REPLACE a Rebuild or a design 81 replay of the session cancelled them all.
+        key: 'rothConversionScheduleMode', label: 'Roth Conversion Schedule Mode',
+        type: 'Enum', group: 'Roth Conversion', mc: false, opt: false,
+        options: ['REPLACE', 'OVERLAY'],
+        defaultValue: 'REPLACE',
+        description: 'How a non-empty Roth Conversion Schedule combines with the start/end/maxBracket window. REPLACE: the schedule is the whole plan, and a year it does not list is not converted. OVERLAY: the window converts every year in it, a schedule row overrides its own year, and a row with incomeTarget 0 skips that year. The MPC cockpit switches a window-form plan to OVERLAY when it first saves a Roth decision, so the years it never decided keep converting.',
       },
     ];
   },
@@ -229,15 +241,16 @@ export const US_ROTH_CONVERSION = {
     // schedule are simply not converted (skip-years), so the schedule expresses
     // both "which years" and "how much". Empty schedule ⇒ the legacy window below.
     const schedule = Array.isArray(p.rothConversionSchedule) ? p.rothConversionSchedule : [];
-    if (schedule.length > 0) {
+    const rowTarget = (entry) => (Number.isFinite(entry.incomeTarget)
+      ? entry.incomeTarget * Math.pow(1 + inflationRate, entry.year - BRACKET_BASE_YEAR)
+      : Number.isFinite(entry.bracketCeiling)
+        ? usBracketGrossIncomeCeiling(entry.bracketCeiling, entry.year, inflationRate)
+        : NaN);
+    const overlay = p.rothConversionScheduleMode === 'OVERLAY';
+    if (schedule.length > 0 && !overlay) {
       for (const entry of schedule) {
         if (!entry || !Number.isFinite(entry.year)) continue;
-        const targetIncome = Number.isFinite(entry.incomeTarget)
-          ? entry.incomeTarget * Math.pow(1 + inflationRate, entry.year - BRACKET_BASE_YEAR)
-          : Number.isFinite(entry.bracketCeiling)
-            ? usBracketGrossIncomeCeiling(entry.bracketCeiling, entry.year, inflationRate)
-            : NaN;
-        emitYear(entry.year, targetIncome);
+        emitYear(entry.year, rowTarget(entry));
       }
       return events;
     }
@@ -254,8 +267,22 @@ export const US_ROTH_CONVERSION = {
     const convStartYear = toFiniteYear(p.rothConversionStartYear, defaultStartYear);
     const convEndYear   = toFiniteYear(p.rothConversionEndYear,   defaultEndYear);
 
-    for (let year = convStartYear; year <= convEndYear; year++) {
-      emitYear(year, usBracketGrossIncomeCeiling(p.rothConversionMaxBracket, year, inflationRate));
+    // OVERLAY: a row overrides its own year (0 skips it), in or out of the window; every other
+    // window year keeps the window's fill. Emitted in YEAR order, so a schedule that overrides
+    // nothing compiles the window's own events in the window's own order — no tie moves.
+    const rows = new Map();
+    if (overlay) {
+      for (const entry of schedule) {
+        if (entry && Number.isFinite(entry.year)) rows.set(entry.year, entry);
+      }
+    }
+    const years = new Set();
+    for (let year = convStartYear; year <= convEndYear; year++) years.add(year);
+    for (const y of rows.keys()) years.add(y);
+    for (const year of [...years].sort((a, b) => a - b)) {
+      emitYear(year, rows.has(year)
+        ? rowTarget(rows.get(year))
+        : usBracketGrossIncomeCeiling(p.rothConversionMaxBracket, year, inflationRate));
     }
     return events;
   },

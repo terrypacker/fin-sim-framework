@@ -261,15 +261,27 @@ export const COCKPIT_CONTROLS = {
         ? baseParams.rothConversionSchedule.slice()
         : [];
       const infl = baseParams?.inflationRate ?? 0.03;
+      // A window-form base plans in OVERLAY from here on, as `actuate` will save it: the
+      // committed params then compile the realized past correctly too, not just the future.
+      const mode = (sched.length === 0 || baseParams?.rothConversionScheduleMode === 'OVERLAY')
+        ? 'OVERLAY' : (baseParams?.rothConversionScheduleMode ?? 'REPLACE');
       for (const row of _liveConversionRows(snapshot, asOf, sched, baseParams, infl)) sched.push(row);
 
       const idx = sched.findIndex(e => e?.year === year);
-      if (idx < 0) sched.push({ year, incomeTarget: 0 });
-      else if (!Number.isFinite(sched[idx]?.incomeTarget)) {
+      if (idx < 0) {
+        // Under OVERLAY a 0 row is a SKIP, so a new row starts at the window's own target when
+        // the year is inside an explicit window: the no-op candidate stays the plan.
+        const inWindow = mode === 'OVERLAY'
+          && Number.isFinite(baseParams?.rothConversionStartYear)
+          && Number.isFinite(baseParams?.rothConversionEndYear)
+          && year >= baseParams.rothConversionStartYear && year <= baseParams.rothConversionEndYear;
+        sched.push({ year, incomeTarget: inWindow
+          ? _rowRealTarget({ year, bracketCeiling: baseParams?.rothConversionMaxBracket }, infl) : 0 });
+      } else if (!Number.isFinite(sched[idx]?.incomeTarget)) {
         sched[idx] = { ...sched[idx], incomeTarget: _rowRealTarget(sched[idx], infl) };
       }
       sched.sort((a, b) => (a?.year ?? 0) - (b?.year ?? 0));
-      return { ...baseParams, rothConversionSchedule: sched };
+      return { ...baseParams, rothConversionSchedule: sched, rothConversionScheduleMode: mode };
     },
     buildVariables: ({ baseParams, range, asOf, state }) => {
       // Decide the NEXT actionable year's income-fill target (annual epoch, §6;
@@ -332,7 +344,14 @@ export const COCKPIT_CONTROLS = {
      * trusting the side effect, which also covers the case where the user edited
      * or reverted the param mid-run.
      */
-    harvest: ({ epochs }) => {
+    harvest: ({ epochs, baseParams }) => {
+      // Design 39 §14.10 — on a WINDOW-FORM base the bake is an OVERLAY: the run decided one
+      // year at a time, so every year it did not decide keeps the window, and a skip has to be
+      // written as a 0 row because absence now means "the window". Under REPLACE (an authored
+      // schedule) the old rule stands: absence is a skip, and the bake is the whole plan.
+      const authored = baseParams?.rothConversionSchedule;
+      const overlay = baseParams?.rothConversionScheduleMode === 'OVERLAY'
+        || !Array.isArray(authored) || authored.length === 0;
       const byYear = new Map();
       let dropped = 0;
       for (const e of epochs) {
@@ -340,7 +359,7 @@ export const COCKPIT_CONTROLS = {
         const year   = v?._year;
         const target = v ? e.candidate?.[v.paramKey] : undefined;
         if (!Number.isFinite(year) || !Number.isFinite(Number(target))) continue;
-        if (Number(target) > 0) byYear.set(year, Number(target));
+        if (Number(target) > 0 || overlay) byYear.set(year, Math.max(0, Number(target)));
         else { byYear.delete(year); dropped++; }     // decided NOT to convert
       }
       const sched = [...byYear.entries()]
@@ -359,6 +378,7 @@ export const COCKPIT_CONTROLS = {
             + (sched.length > 3 ? ' …' : '')
           : 'no conversion years' },
         varied: { rothConversionSchedule: sched.length > 1 },
+        ...(overlay ? { requires: { rothConversionScheduleMode: 'OVERLAY' } } : {}),
         warnings: dropped ? [...warnings,
           `Roth Conversion: ${dropped} skip-year decision(s) recorded as "no conversion" (year omitted).`] : warnings,
       };
@@ -397,12 +417,18 @@ export const COCKPIT_CONTROLS = {
       const p = paramOf('rothConversionSchedule');
       if (p) {
         const sched = Array.isArray(p.value) ? p.value.slice() : [];
-        const idx   = sched.findIndex(e => e?.year === year);
-        if (realTarget > 0) {
-          if (idx >= 0) sched[idx] = { ...sched[idx], incomeTarget: realTarget };
-          else          sched.push({ year, incomeTarget: realTarget });
+        // Design 39 §14.10 — a window-form plan (empty schedule) is switched to OVERLAY on its
+        // first saved decision, so the years this session never decides keep the window's
+        // fill on a Rebuild or a replay. Under REPLACE this one row would cancel all of them.
+        const mode = _ensureRothOverlayMode(scenario, sched);
+        const idx  = sched.findIndex(e => e?.year === year);
+        if (realTarget > 0 || mode === 'OVERLAY') {
+          // Under OVERLAY absence means "the window", so a skip must be an explicit 0 row.
+          const target = Math.max(0, realTarget);
+          if (idx >= 0) sched[idx] = { ...sched[idx], incomeTarget: target };
+          else          sched.push({ year, incomeTarget: target });
         } else if (idx >= 0) {
-          sched.splice(idx, 1);   // cancel a prior conversion; absence == skip-year
+          sched.splice(idx, 1);   // REPLACE: cancel a prior conversion; absence == skip-year
         }
         sched.sort((a, b) => (a?.year ?? 0) - (b?.year ?? 0));
         p.value = sched;
@@ -1746,6 +1772,26 @@ function _plannedShapeAt(bp, year) {
     if (Number(r?.year) <= year) shape = r.shape ?? null;
   }
   return shape;
+}
+
+/**
+ * Put the scenario in OVERLAY mode when its schedule is still window-form (empty), and return
+ * the mode now in force. An authored non-empty schedule under REPLACE is left alone: absent
+ * years are that author's skips, and the live queue agrees with them.
+ */
+function _ensureRothOverlayMode(scenario, sched) {
+  const params = scenario?.params;
+  if (!Array.isArray(params)) return 'REPLACE';
+  let entry = params.find(pp => (pp.key ?? pp.name) === 'rothConversionScheduleMode');
+  if (entry?.value === 'OVERLAY') return 'OVERLAY';
+  if (sched.length > 0) return entry?.value ?? 'REPLACE';
+  if (!entry) {
+    entry = { name: 'rothConversionScheduleMode', label: 'Roth Conversion Schedule Mode',
+      type: 'Enum', group: 'Roth Conversion', options: ['REPLACE', 'OVERLAY'] };
+    params.push(entry);
+  }
+  entry.value = 'OVERLAY';
+  return 'OVERLAY';
 }
 
 /**

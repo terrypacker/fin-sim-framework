@@ -125,6 +125,9 @@ describe('design 39 §13.6.1 — SPENDING bakes to age bands', () => {
   });
 });
 
+/** A plan whose ROTH schedule is AUTHORED (REPLACE semantics): the pre-§14.10 bake rules. */
+const AUTHORED_ROTH = { rothConversionEnabled: true, rothConversionSchedule: [{ year: 2035, incomeTarget: 1 }] };
+
 describe('design 39 §13.6.2 — per-year schedules', () => {
   test('ROTH bakes the union of decided years, dropping non-conversion years', () => {
     const records = [
@@ -135,7 +138,8 @@ describe('design 39 §13.6.2 — per-year schedules', () => {
       rec({ year: 2028, key: 'ROTH', candidate: { 'rothConversionSchedule[2].incomeTarget': 120000 },
             vars: [{ paramKey: 'rothConversionSchedule[2].incomeTarget', _year: 2029 }] }),
     ];
-    const entry = harvestDecisions(records, { controlsByKey: CONTROLS })
+    // An AUTHORED schedule (REPLACE): absence is a skip, so a non-conversion year is dropped.
+    const entry = harvestDecisions(records, { controlsByKey: CONTROLS, baseParams: AUTHORED_ROTH })
       .entries.find(e => e.paramKey === 'rothConversionSchedule');
     assert.equal(entry.form, HARVEST_FORMS.SCHEDULE);
     assert.deepEqual(entry.to, [
@@ -148,9 +152,28 @@ describe('design 39 §13.6.2 — per-year schedules', () => {
     const mk = (y, target) => rec({ year: y, key: 'ROTH',
       candidate: { 'rothConversionSchedule[0].incomeTarget': target },
       vars: [{ paramKey: 'rothConversionSchedule[0].incomeTarget', _year: 2030 }] });
-    const entry = harvestDecisions([mk(2026, 80000), mk(2027, 0)], { controlsByKey: CONTROLS })
+    const entry = harvestDecisions([mk(2026, 80000), mk(2027, 0)],
+      { controlsByKey: CONTROLS, baseParams: AUTHORED_ROTH })
       .entries.find(e => e.paramKey === 'rothConversionSchedule');
     assert.deepEqual(entry.to, []);
+  });
+
+  test('on a WINDOW-FORM base the ROTH bake is an OVERLAY: skips kept as 0, mode required', () => {
+    // Design 39 §14.10. Baked under REPLACE, these rows would be the whole plan and every year
+    // the run never decided would stop converting on the next Rebuild.
+    const records = [
+      rec({ year: 2026, key: 'ROTH', candidate: { 'rothConversionSchedule[0].incomeTarget': 90000 },
+            vars: [{ paramKey: 'rothConversionSchedule[0].incomeTarget', _year: 2027 }] }),
+      rec({ year: 2027, key: 'ROTH', candidate: { 'rothConversionSchedule[1].incomeTarget': 0 },
+            vars: [{ paramKey: 'rothConversionSchedule[1].incomeTarget', _year: 2028 }] }),
+    ];
+    const plan = harvestDecisions(records, { controlsByKey: CONTROLS,
+      baseParams: { rothConversionEnabled: true, rothConversionSchedule: [] } });
+    assert.deepEqual(plan.entries.find(e => e.paramKey === 'rothConversionSchedule').to, [
+      { year: 2027, incomeTarget: 90000 },
+      { year: 2028, incomeTarget: 0 },
+    ]);
+    assert.deepEqual(plan.requires.find(r => r.paramKey === 'rothConversionScheduleMode')?.to, 'OVERLAY');
   });
 
   test('EARLY_WITHDRAWAL bakes both class amounts per year', () => {

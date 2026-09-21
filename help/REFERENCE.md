@@ -9,11 +9,11 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-226 parameters · 33 panels · 11 node types (164 fields) · 173 action types · 86 tools · 274 state field types · 72 topics · 119 design docs
+227 parameters · 33 panels · 11 node types (164 fields) · 173 action types · 86 tools · 274 state field types · 72 topics · 119 design docs
 
 ---
 
-## Parameters (226)
+## Parameters (227)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
@@ -357,7 +357,7 @@ scenario's own schema), which is where to go to change it.
 - **`terminalWealthTargetPenalty`** — Terminal Wealth Penalty (λ) · `Number` · default `10` · via SCENARIO
   Penalty weight on missing the terminal wealth target; larger makes the target binding (Die With Target objective).
 
-### Roth Conversion (8)
+### Roth Conversion (9)
 
 - **`rothConversionDay`** — Roth Conversion Day · `Number` · default `1` · via US_ROTH_CONVERSION
   Day of month when the policy fires
@@ -372,7 +372,9 @@ scenario's own schema), which is where to go to change it.
 - **`rothConversionOwner`** — Roth Conversion Owner · `Enum` · default `both` · one of `primary`, `spouse`, `both` · via US_ROTH_CONVERSION
   Whose IRA to convert: 'primary', 'spouse', or 'both'
 - **`rothConversionSchedule`** — Roth Conversion Schedule (per-year income targets) · `RothScheduleList` · default `` · via US_ROTH_CONVERSION
-  Per-year income-fill schedule [{ year, incomeTarget }] for the closed-loop controller (design 39 §12). incomeTarget is real base-year (2025) USD, compounded by inflation to the year's nominal ordinary-income ceiling. Years absent = not converted (skip-years). Legacy { year, bracketCeiling } (statutory rate) entries are still accepted. Empty = use the start/end/maxBracket window.
+  Per-year income-fill schedule [{ year, incomeTarget }] for the closed-loop controller (design 39 §12). incomeTarget is real base-year (2025) USD, compounded by inflation to the year's nominal ordinary-income ceiling. Years absent = not converted (skip-years), unless Roth Conversion Schedule Mode is OVERLAY. Legacy { year, bracketCeiling } (statutory rate) entries are still accepted. Empty = use the start/end/maxBracket window.
+- **`rothConversionScheduleMode`** — Roth Conversion Schedule Mode · `Enum` · default `REPLACE` · one of `REPLACE`, `OVERLAY` · via US_ROTH_CONVERSION
+  How a non-empty Roth Conversion Schedule combines with the start/end/maxBracket window. REPLACE: the schedule is the whole plan, and a year it does not list is not converted. OVERLAY: the window converts every year in it, a schedule row overrides its own year, and a row with incomeTarget 0 skips that year. The MPC cockpit switches a window-form plan to OVERLAY when it first saves a Roth decision, so the years it never decided keep converting.
 - **`rothConversionStartYear`** — Roth Conversion Start Year · `Number` · default — · sweep: opt · via US_ROTH_CONVERSION
   First year to convert; null = primary person's retirement year
 
@@ -2111,7 +2113,7 @@ what the in-app panel keys on.
 | [Recorded MPC Runs](concepts/recorded-mpc-runs.md) | concept | 400 | 1 panel · 3 params · design 81, 80 |
 | [Reducer](nodes/reducer.md) | node | 195 | 3 panels · design 2, 16 |
 | [Return Assumptions](concepts/return-assumptions.md) | concept | 266 | 2 panels · 13 params · design 99, 106 |
-| [Roth Conversions](concepts/roth-conversions.md) | concept | 242 | 2 panels · 12 params · design 29 |
+| [Roth Conversions](concepts/roth-conversions.md) | concept | 272 | 2 panels · 13 params · design 29 |
 | [Scenario](panels/scenario.md) | panel | 201 | 1 panel |
 | [Scenario Compare](panels/scenario-compare.md) | panel | 205 | 1 panel |
 | [Searching Pool Levers](concepts/searching-pool-levers.md) | concept | 358 | design 110, 97 |

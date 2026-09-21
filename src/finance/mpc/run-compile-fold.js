@@ -119,8 +119,14 @@ export function foldQueueLeverRuns(parameters) {
   for (const [lever, rows] of byLever) {
     const spec = LEVER_SCHEDULE[lever];
     if (!spec?.foldsAtCompile || typeof spec.foldAt !== 'function') continue;
-    const next = spec.foldAt({ rows, baseParams: folded ?? parameters });
-    if (next) folded = { ...(folded ?? parameters), [spec.paramKey]: next };
+    const before = folded ?? parameters;
+    const next = spec.foldAt({ rows, baseParams: before });
+    if (next) {
+      // `foldAlso` sees the bag BEFORE this lever's fold, so it can ask what the authored plan
+      // was (ROTH: "was it window-form?") rather than what the fold just made it.
+      const also = spec.foldAlso?.({ rows, baseParams: before }) ?? null;
+      folded = { ...before, [spec.paramKey]: next, ...(also ?? {}) };
+    }
   }
   return folded ?? parameters;
 }

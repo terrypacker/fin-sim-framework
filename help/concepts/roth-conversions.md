@@ -3,7 +3,7 @@ id: roth-conversions
 kind: concept
 title: Roth Conversions
 panels: [paycheque, journal-report]
-params: [rothConversionEnabled, rothConversionStartYear, rothConversionEndYear, rothConversionMaxBracket, rothConversionOwner, rothConversionMonth, rothConversionDay, rothConversionSchedule, k401ToIraConversionEnabled, k401ToIraConversionMonth, k401ToIraConversionDay, k401ToIraConversionYear]
+params: [rothConversionEnabled, rothConversionStartYear, rothConversionEndYear, rothConversionMaxBracket, rothConversionOwner, rothConversionMonth, rothConversionDay, rothConversionSchedule, rothConversionScheduleMode, k401ToIraConversionEnabled, k401ToIraConversionMonth, k401ToIraConversionDay, k401ToIraConversionYear]
 design: [29-behavioral-layer.md]
 stamps:
   param:rothConversionEnabled: dd5059
@@ -13,7 +13,8 @@ stamps:
   param:rothConversionOwner: 9b12f2
   param:rothConversionMonth: 8df28e
   param:rothConversionDay: 60869a
-  param:rothConversionSchedule: 508923
+  param:rothConversionSchedule: b17ede
+  param:rothConversionScheduleMode: ab7ce6
   param:k401ToIraConversionEnabled: 6b2a99
   param:k401ToIraConversionMonth: d27d49
   param:k401ToIraConversionDay: b8b57a
@@ -34,7 +35,9 @@ Two ways to express it. **Bracket filling** converts as much as fits below a mar
 bracket ceiling each year — the standard rule, and it adapts automatically as other
 income moves. **A schedule** states an income target per year, in real base-year
 dollars compounded to nominal, which is what the closed-loop controller produces and
-what you want when the amounts came out of a solve rather than a rule.
+what you want when the amounts came out of a solve rather than a rule. The two also
+combine: a schedule can override single years of the bracket-filling window and leave the
+rest to the rule, which is how a year-at-a-time controller's decisions are saved.
 
 Conversions interact with more than they look like they should. Converted income
 raises the year's taxable income, which can change bracket-dependent decisions

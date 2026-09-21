@@ -1569,6 +1569,34 @@ things keep it from being closed in the app:
   (design 81 Q6). That is §14.4's H5 (recommendation instability), not a defect, and §14.9.3's
   seed spread is the scale to quote it against.
 
+#### 14.9.11 Built — the ROTH persistence half: `rothConversionScheduleMode`
+
+§14.9.10 priced the last divergence: an MPC session on a window-form plan saved only its decided
+rows, the toolset read a non-empty schedule as the whole plan, and a Rebuild or a design 81
+replay cancelled every year the session never decided, realized years included. The operator
+chose an **overlay mode** over materializing the window into rows, because it keeps the window
+editable after a session and the saved schedule short.
+
+- **The param.** `rothConversionScheduleMode: REPLACE | OVERLAY`, default REPLACE, so every
+  existing plan compiles unchanged. Under OVERLAY the window converts every year in it, a row
+  overrides its own year, a row with target 0 skips it, and a row outside the window adds a
+  year. Events come out in year order, so an OVERLAY schedule that overrides nothing compiles
+  the window's own events in the window's own order, and no tie moves.
+- **Four writers, one rule:** a window-form plan (empty schedule) becomes OVERLAY the first
+  time the MPC writes into it, and an authored REPLACE schedule is left alone.
+  - `ROTH.actuate` sets it in the scenario, and under OVERLAY saves a skip as an explicit 0
+    row, because absence now means "the window".
+  - `ROTH.prepareBaseParams` sets it in `committed`, so the committed plan compiles the
+    realized past correctly too.
+  - The design 81 fold gets a generic `foldAlso` hook: the companion params a lever's fold must
+    set, computed against the bag before the fold. ROTH uses it to set OVERLAY.
+  - The harvest export keeps skips as 0 rows and lists OVERLAY as a requirement.
+
+**Measured:** on the author's plan the §14.9.10 arm's B, now taken straight from `committed`
+with no correction, equals A′ to the dollar (study, Part 8 addendum). `roth-schedule-overlay`
+ROV-1..6 pin the toolset, the three writers and the Rebuild, whose invariant is that the saved
+params compiled from t₀ carry every window year and match the live queue's future to the bit.
+
 ### 14.10 Where the next session starts
 
 Everything above is measured. This is the order to act in, and the order matters: step 3 is unsafe
@@ -1592,8 +1620,8 @@ have reverted a realized shape switch in every rollout after it. `KNOWN_BROKEN` 
 - **~~The interim cockpit refusal~~: RETIRED by steps 2–3.** No lever is known to be blind to
   its rollout: the gate's `KNOWN_BROKEN` is empty and the lab verifier passes the state-borne
   levers. If a new one is found, the gate is where it goes first.
-- **~~`ROTH.prepareBaseParams`~~ (§14.9.6): rollout half BUILT (§14.9.8).** Still open, and
-  now the largest measured divergence (§14.9.10): the persistence half. `actuate` writes only the decided year into `scenario.params`, so a Rebuild
+- **~~`ROTH.prepareBaseParams`~~ (§14.9.6): BOTH halves BUILT.** Rollout half §14.9.8,
+  persistence half §14.9.11 (`rothConversionScheduleMode: OVERLAY`). `actuate` writes only the decided year into `scenario.params`, so a Rebuild
   of a window-form plan after a session cancels every undecided year. The same fix applies:
   persist the rows the live queue implies.
 - **Design 81 drawdown decisions in rollouts (§14.9.9).** The t₀ picks revert a recorded

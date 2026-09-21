@@ -480,6 +480,16 @@ export const ROTH_SCHEDULE = {
     (Number.isFinite(variable?._year) ? yearKey(variable._year) : (variable?.paramKey ?? null)),
   foldAt: ({ rows, baseParams }) =>
     _foldYearSchedule(baseParams?.rothConversionSchedule, rows, ['incomeTarget', 'bracketCeiling']),
+  // Design 39 §14.10 — the companion param the fold must also set. A run recorded on a
+  // WINDOW-FORM plan decided one year at a time; folded under REPLACE its rows would be the
+  // whole plan and every year it never decided would stop converting. OVERLAY keeps them on the
+  // window, which is what the live session flew.
+  foldAlso: ({ baseParams }) => {
+    const authored = baseParams?.rothConversionSchedule;
+    const windowForm = !Array.isArray(authored) || authored.length === 0;
+    return (windowForm && baseParams?.rothConversionScheduleMode !== 'OVERLAY')
+      ? { rothConversionScheduleMode: 'OVERLAY' } : null;
+  },
 };
 
 export const EARLY_WITHDRAWAL_SCHEDULE = {
