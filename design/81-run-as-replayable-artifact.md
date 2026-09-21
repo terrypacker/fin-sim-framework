@@ -799,3 +799,22 @@ Worth naming as a general shape rather than a one-off: **a param whose candidate
 data will always sit awkwardly in a plan-independent schema flag.** The pool axes already live
 this way (they are curated rows over generated keys with no schema entry at all); this is the
 first one where the key exists in the schema too.
+
+### 16.12 D8 was half a rule: the past also has to reach the params (design 39 §14.10, 20 Sep 2026)
+
+D8 keeps a rollout from solving against its own future. It said nothing about the past, and
+design 39's derivation manifest made that matter. A snapshot rollout keeps drawdown-policy
+state from its compile, and the compile reads params. On a scenario playing a run those params
+are the authored ones, while the run's past rows are the policy the snapshot carries. The
+rollout's decision reducer inherits the snapshot's `throughMs` and never re-stamps, so every
+field the run had changed reverted to its authored value for the rest of the rollout. This
+happens on a resumed or re-solved run; a fresh cockpit session is unaffected, because
+`committed` carries each decision as a param.
+
+`foldInForceDecisions` completes the rule: after truncation, each `rowsAreParams` lever's
+latest row before now becomes its param (`_rolloutParams()`), and the candidate still
+overrides the lever being decided. It writes no companion params, because D11 only lets a run
+play when its base already satisfies each lever's gate. It is for snapshot rollouts only; a
+t₀ replay still applies each row at its own date. Pinned by `mpc-rollout-inforce-decisions`
+IFD-1..4, which fail with the fold removed.
+

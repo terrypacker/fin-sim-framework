@@ -31,8 +31,8 @@ import {
 } from '../holdings/holdings-selection.js';
 import { ALLOCATION_SCHEDULE }      from '../behavioral/rebalance-to-target-reducer.js';
 import { HARVEST_FORMS, collapseConsecutive, ageAt, requiresIncludes } from './harvest.js';
-import { LEVER_SCHEDULE, drawdownPriorityPatch, presentRolesFromState, shapeIdsOf }
-  from './lever-schedule.js';
+import { LEVER_SCHEDULE, drawdownPriorityPatch, presentRolesFromState, shapeIdsOf,
+         foldInForceDecisions } from './lever-schedule.js';
 import { resolveLiquidityGraph, resolveLiquidityGraphSchedule } from '../pools/liquidity-graph.js';
 import { PoolShapeScheduleReducer, liquidityStateAt } from '../pools/pool-shape-schedule-reducer.js';
 import { applyShapeYearShifts, shapeYearShiftsFrom } from '../pools/pool-shape-year-axis.js';
@@ -1375,7 +1375,10 @@ export class CockpitController {
    * session with no recorded run allocates nothing and behaves exactly as before.
    */
   _rolloutParams() {
-    return truncateActiveRunAt(this.committed, this.snapshot?.date);
+    // Truncate the run at now (D8), then restate its past as params (design 39 §14.10), so the
+    // derivation manifest's t₀ picks read the policy the snapshot is actually running.
+    const now = this.snapshot?.date;
+    return foldInForceDecisions(truncateActiveRunAt(this.committed, now), now);
   }
 
   /** Inflation context a lever needs to map its real base-year amount to nominal. */

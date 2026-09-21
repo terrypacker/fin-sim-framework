@@ -1536,9 +1536,8 @@ the rollout equals a t₀ compile of the same schedule **to the dollar**. That i
 invariant in its strongest form, and it holds because the swap adds no events, so there is no
 tie to re-resolve (contrast §14.9.8's ROTH measurement).
 
-**Still limited:** a design 81 decision applied at its date (the drawdown fields) is reverted by
-the t₀ picks. The fix is the same move: declare those fields `derivedStateAt`, answered from
-the active run's rows at now.
+**Still limited, then fixed:** a design 81 decision applied at its date (the drawdown fields)
+was reverted by the t₀ picks. §14.9.12 fixed it in the params rather than as `derivedStateAt`.
 
 #### 14.9.10 §14's question, re-asked after the fix
 
@@ -1597,6 +1596,18 @@ with no correction, equals A′ to the dollar (study, Part 8 addendum). `roth-sc
 ROV-1..6 pin the toolset, the three writers and the Rebuild, whose invariant is that the saved
 params compiled from t₀ carry every window year and match the live queue's future to the bit.
 
+#### 14.9.12 Built — a played run's past reaches its rollouts
+
+§14.9.9 left one revert standing: on a scenario playing a recorded run, the manifest's t₀
+picks put every drawdown field the run had changed back to its authored value, and the
+rollout's decision reducer never re-stamped it. The cause was not the manifest. The rollout's
+params described the authored plan rather than the plan at now, and design 81's D8 truncated
+the run's future without restating its past. `foldInForceDecisions` (design 81 §16.12) does
+that in `_rolloutParams()`. With the params right, the t₀ pick is right, and no
+`derivedStateAt` was needed for these fields. The candidate still wins for the lever being
+decided (IFD-3), the no-op is exact against the snapshot (IFD-2), and the per-account order
+from a recorded weights row survives (IFD-4). Suite green, lab verifier identical.
+
 ### 14.10 Where the next session starts
 
 Everything above is measured. This is the order to act in, and the order matters: step 3 is unsafe
@@ -1624,9 +1635,8 @@ have reverted a realized shape switch in every rollout after it. `KNOWN_BROKEN` 
   persistence half §14.9.11 (`rothConversionScheduleMode: OVERLAY`). `actuate` writes only the decided year into `scenario.params`, so a Rebuild
   of a window-form plan after a session cancels every undecided year. The same fix applies:
   persist the rows the live queue implies.
-- **Design 81 drawdown decisions in rollouts (§14.9.9).** The t₀ picks revert a recorded
-  decision applied mid-run. Declare those fields `derivedStateAt`, answered from the active
-  run at now.
+- **~~Design 81 drawdown decisions in rollouts~~: BUILT (§14.9.12).** Fixed in the params
+  (`foldInForceDecisions`), not with `derivedStateAt`.
 - **`targetScale` as an MPC control (design 110 §13.11).** It needs a saved form first.
 - **Queue total order (§14.9.8).** Removing no-op events moved the author's plan by a few
   percent of terminal wealth. Decide whether the comparator gets a stable tiebreak. It would

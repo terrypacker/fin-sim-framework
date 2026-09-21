@@ -15,6 +15,7 @@ import {
   ALLOC_WEIGHT_CLASSES, ALLOCATION_OPTIMIZED_MODE, allocWeightKey, synthesizeTargetAllocation,
   resolveOwnerBanding,
 } from '../../scenarios/params/lever-weights.js';
+import { resolveActiveMpcRun, activeDecisionsAt } from './run-schedule.js';
 import {
   DRAWDOWN_SLEEVE_CLASSES, SLEEVE_WEIGHT_MODE, SLEEVE_WEIGHT_PREFIX, SLEEVE_WEIGHT_SEP,
   sleeveWeightKey,
@@ -130,7 +131,12 @@ export const SPENDING_SCHEDULE = {
  * already satisfied by the `::` convention, which exists so `set()` writes the key flat) and
  * no anchor to invent, so the param key is the stable key.
  */
-const paramKeySchedule = { scheduleKey: (variable) => variable?.paramKey ?? null };
+const paramKeySchedule = {
+  scheduleKey: (variable) => variable?.paramKey ?? null,
+  // A row's key IS a param key and its value IS that param's value — which is what lets
+  // `foldInForceDecisions` restate a run's past as params for a snapshot rollout.
+  rowsAreParams: true,
+};
 
 /** The single row a scalar lever's `rows` carries, or null. */
 function _soleValue(rows) {
@@ -513,6 +519,51 @@ export const EARLY_WITHDRAWAL_SCHEDULE = {
   foldAt: ({ rows, baseParams }) =>
     _foldYearSchedule(baseParams?.earlyWithdrawalSchedule, rows, ['taxDeferredAmount', 'rothAmount']),
 };
+
+/**
+ * The params a snapshot rollout should compile, given the active run's decisions before now
+ * (design 39 §14.10).
+ *
+ * A rollout keeps derived state from its compile (the derivation manifest), and the compile
+ * reads params. On a scenario PLAYING a recorded run those params are the authored ones, while
+ * the run's past rows are the policy the snapshot actually carries: the reducer stamped them
+ * into state as their dates passed. So every drawdown field the manifest picks at t₀ was
+ * reverted to its authored value, and the rollout's reducer, which inherits the snapshot's
+ * `throughMs`, never re-stamped it. The rollout priced the authored policy for the rest of the
+ * horizon.
+ *
+ * The fix is to make the params say what the plan is at now: each `rowsAreParams` lever's
+ * latest row before `asOf` becomes its param. The candidate is applied AFTER this, so the
+ * lever being decided still takes the candidate. Companion params (WEIGHTED modes, strategy
+ * selections) are not written: a run is only playable when its base already satisfies each
+ * lever's gate (D11), and those gates are exactly the companions.
+ *
+ * Only for a compile whose history is REALIZED. A t₀ replay must apply each row at its own
+ * date, which the reducer does.
+ *
+ * @param {object} params  the rollout's params (already truncated at `asOf`)
+ * @param {Date|string|number} asOf
+ * @returns {object} `params` itself when nothing applies, else a copy
+ */
+export function foldInForceDecisions(params, asOf) {
+  const asOfMs = asOf != null ? new Date(asOf).getTime() : NaN;
+  const run = resolveActiveMpcRun(params);
+  if (!run || !Number.isFinite(asOfMs)) return params;
+  const active = activeDecisionsAt({ decisions: run.decisions.filter(r => r.dateMs < asOfMs) },
+    asOfMs);
+  if (!active) return params;
+  let out = null;
+  for (const [lever, rows] of active.byLever) {
+    if (!LEVER_SCHEDULE[lever]?.rowsAreParams) continue;
+    for (const row of rows) {
+      if (row?.key == null || row.value === undefined) continue;
+      if (Object.is((out ?? params)[row.key], row.value)) continue;
+      out ??= { ...params };
+      out[row.key] = row.value;
+    }
+  }
+  return out ?? params;
+}
 
 /**
  * POOL_SHAPE (design 39 §14.10 step 3) — which design 109 shape governs from a year on.
