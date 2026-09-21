@@ -41,9 +41,8 @@
  *   **AMOUNT-ONLY** — `_seededSim` carries forward-effective shims for the two queue levers
  *   (`retargetRothConversionEvents`, `retargetEarlyWithdrawalEvents`) which rewrite the AMOUNTS on
  *   queued events. They cannot add or remove events, so a decision that changes which events
- *   EXIST is lost while one that changes a number is honoured — from the same lever. Only the lost
- *   half is asserted here; the amount half is blocked on §14.9.7's open thread, and the CASES
- *   comment below says why.
+ *   EXIST is lost while one that changes a number is honoured — from the same lever. Both halves
+ *   are asserted: ROTH_AMOUNT reaches, ROTH_EVENT_SET is lost.
  *
  * ─── the known-broken list ───────────────────────────────────────────────────────
  *
@@ -121,15 +120,17 @@ const queueProbe = (type) => (sim) => sim.cloneQueue()
   .sort((a, b) => a.date.localeCompare(b.date) || JSON.stringify(a.data).localeCompare(JSON.stringify(b.data)));
 
 const CASES = [
-  // ROTH_AMOUNT is deliberately ABSENT, and the reason is a bigger thread than this file.
-  //
-  // `retargetRothConversionEvents` does rewrite the decided year's target, and on a clean snapshot
-  // the number it writes matches the compiled plan's exactly. But the two queues cannot be
-  // compared event-for-event, because the SNAPSHOT IS MISSING EVENTS THE COMPILE SCHEDULED: a t₀
-  // compile of this base carries two ROTH_CONVERSION_POLICY_EVALUATE events per year (one per
-  // owner, `rothConversionOwner: 'both'`) and a snapshot rolled forward from that same compile
-  // carries one. No lever is involved. Until that is explained, an "amount reaches the rollout"
-  // assertion would be measuring the wrong thing — see design 39 §14.9.7.
+  {
+    lever: 'ROTH_AMOUNT', expect: 'reaches',
+    // The half of the ROTH lever the shim CAN express: a number on an event that exists. Held back
+    // until §14.9.7's "missing sibling" was explained — it was the helpers compiling two different
+    // plans (see `seededFrom`), and with that fixed the decided year matches event-for-event.
+    params: { rothConversionSchedule: [{ year: 2050, incomeTarget: 250_000 }] },
+    probe: (sim) => queueProbe('ROTH_CONVERSION_POLICY_EVALUATE')(sim)
+      .filter(e => e.date.startsWith('2050'))
+      .map(e => [e.data.iraKey, Math.round(e.data.targetIncome)]),
+    probeName: 'the queued 2050 ROTH conversion target, per owner',
+  },
   {
     lever: 'ROTH_EVENT_SET', expect: 'lost',
     // The same lever, deciding something the shim cannot express. `schedules()` returns early on
@@ -184,15 +185,25 @@ const problem = (params, initialState) => new OptimizationProblem({
  * `evaluate()` would answer with a terminal, which is the economic question this file exists to
  * stop asking (see the header), and `rollToSnapshot` would step past the thing being inspected.
  */
+//
+// Both helpers hand `_seededSim` the RESOLVED base, never the raw `params` — the params every
+// production caller (`evaluate`, `rollToSnapshot`, `rolloutSeries`) compiles. The template's own
+// values reach a compile ONLY through `_resolveBase()`: the default template is a flat
+// `cfg.parameters` bag and `serializeScenario` keeps only the `cfg.params` list, so `_compile`
+// sees none of them and the toolset schema defaults fill in instead. Passing raw `params` here
+// once compiled `rothConversionOwner: 'both'` (schema) against a snapshot rolled with
+// `'primary'` (template) — two conversions a year against one, read as a snapshot "missing" an
+// event (design 39 §14.9.7). It was two plans, not a queue defect.
+const seededFrom = (p) => p._seededSim({ ...p._resolveBase(), endDate: SIM_END });
+
 const compiled = (params) =>
-  quiet(() => problem(params, { kind: 'compile', cfgTemplate: null })._seededSim(params));
+  quiet(() => seededFrom(problem(params, { kind: 'compile', cfgTemplate: null })));
 
 const SNAPSHOT = quiet(() =>
   problem(BASE, { kind: 'compile', cfgTemplate: null }).rollToSnapshot({}, AS_OF));
 
 const seeded = (params) =>
-  quiet(() => problem(params, { kind: 'snapshot', snapshot: SNAPSHOT, cfgTemplate: null })
-    ._seededSim(params));
+  quiet(() => seededFrom(problem(params, { kind: 'snapshot', snapshot: SNAPSHOT, cfgTemplate: null })));
 
 /**
  * The probe on a compiled sim and on a snapshot-seeded one, for the base and the candidate.
@@ -298,7 +309,7 @@ test('MLR-4: seeding a rollout must not mutate the SNAPSHOT (§14.9.4)', () => {
   const snap = quiet(() =>
     problem(BASE, { kind: 'compile', cfgTemplate: null }).rollToSnapshot({}, AS_OF));
   const seededOn = (params) => quiet(() =>
-    problem(params, { kind: 'snapshot', snapshot: snap, cfgTemplate: null })._seededSim(params));
+    seededFrom(problem(params, { kind: 'snapshot', snapshot: snap, cfgTemplate: null })));
 
   const probe = () => (snap.queue ?? [])
     .filter(e => e.type === 'SCHEDULED_EARLY_WITHDRAWAL' && new Date(e.date) > AS_OF)

@@ -928,8 +928,9 @@ section was chartered to explain. H1 and H2 are not needed and are not supported
 
 The fix is chosen — **§14.9.4's derivation manifest**, after the cheaper per-lever shim was tested
 against design 110's pool levers and failed (§14.9.4's table: half-live, 76% of the truth). The
-gate is BUILT (§14.9.5). Two further defects surfaced while building it, one fixed and one open
-(§14.9.7), and the open one is upstream of every measurement here. **§14.10 is the ordered plan.**
+gate is BUILT (§14.9.5). Two further findings surfaced while building it (§14.9.7): one real
+defect, fixed, and one that turned out to be the gate's own harness comparing two different plans,
+also fixed. **§14.10 is the ordered plan.**
 What follows is kept as written, because the reasoning is what got here.
 
 **Status of the original framing**: open, and now *isolated*. Inherited from `design/81` Q6, which sharpened the
@@ -1355,17 +1356,34 @@ altogether. The seeded row must carry the year's window-equivalent target, not 0
 
 Both found while building §14.9.5, and the second is fixed.
 
-**Open — a snapshot is missing events its own compile scheduled.** On the gate's base a t₀ compile
-carries TWO `ROTH_CONVERSION_POLICY_EVALUATE` events per year, one per owner
-(`rothConversionOwner: 'both'`); a snapshot rolled forward from that same compile carries ONE per
-year. No lever is involved, and the missing sibling is dated years after the snapshot, so it was
-not consumed. Either `rollToSnapshot`'s capture or `IndexedMinHeap`'s bookkeeping is dropping a
-same-date sibling — and same-date siblings are exactly what design 34 §13's `order` band and the
-"queue is not a total order" finding are about. If a rollout silently holds half the conversion
-events, that is a larger error than everything above it, and it is upstream of every A term.
-Reproduction: compile the gate's base, `rollToSnapshot` to 2045, compare the two queues filtered
-to that type. `mpc-lever-reaches-rollout.test.mjs` documents it where a ROTH_AMOUNT case would
-otherwise sit, and cannot assert the amount half of the lever until it is explained.
+**Resolved — the "missing sibling" was two plans, not a queue defect.** On the gate's base a t₀
+compile carried TWO `ROTH_CONVERSION_POLICY_EVALUATE` events per year (one per owner) and a
+snapshot rolled forward from "the same" base carried ONE. The heap and `cloneQueue` were never
+involved: the instanceIds did not even line up, because the two queues came from two different
+compiles. The test's `compiled()` helper handed `_seededSim` the raw param bag, while
+`rollToSnapshot` compiles `_resolveBase()`. Those differ because of the
+two-param-stores trap: the default template (`buildDefaultConfig`) is a flat `cfg.parameters` bag,
+and `serializeScenario` keeps only the `cfg.params` list. So `_cfgTemplate()` drops all 37 of the
+template's values, and a compile only sees what its params carry. `_resolveBase()` puts them back.
+The raw bag had no `rothConversionOwner`, so the toolset schema's default (`'both'`) applied,
+while the resolved base carried the template's (`INTL_RETIREMENT_DEFAULTS`: `'primary'`).
+
+What it did and did not touch:
+
+- **Production: nothing.** Every production caller (`evaluate`, `rollToSnapshot`,
+  `rolloutSeries`) compiles `_resolveBase()`, and every UI caller passes the active scenario,
+  whose `params` list survives serialization. The STUDY's measurements ran through a headless
+  `CockpitController` on the real plan, so they stand.
+- **The gate: fixed, verdicts unchanged.** Both helpers now compile the resolved base, the way
+  production does. MLR-1..4 still hold with both sides on one plan, and the ROTH amount case the
+  thread had blocked is added and **reaches**. ROTH is now pinned as a true split: the amount
+  reaches the rollout, the event set does not.
+- **The trap: still armed for direct callers.** `_seededSim(params)` / `_compile(params)` called
+  with a partial bag and `cfgTemplate: null` run the toolset schema defaults, not the scenario's.
+  The fix is not to merge inside `_compile`: a worker is handed a pre-serialized template and
+  must not re-merge (`_resolveBase`'s docstring). The two disagreeing defaults
+  (`rothConversionOwner` is `'primary'` in the scenario and `'both'` in the toolset schema) are a
+  separate small cleanup.
 
 **Fixed — a rollout wrote its candidate into the shared snapshot.** `Simulation.cloneQueue()` and
 `_injectSnapshot` both copied events with `{ ...e }`, so every restored event shared its `data`
@@ -1382,18 +1400,12 @@ one of them was silently corrupting the measurement the others were there to pro
 
 ### 14.10 Where the next session starts
 
-Everything above is measured. This is the order to act in, and the order matters: step 1 can
-invalidate numbers the rest of §14 quotes, and step 3 is unsafe before step 2.
+Everything above is measured. This is the order to act in, and the order matters: step 3 is unsafe
+before step 2.
 
-**1. The missing sibling (§14.9.7, OPEN).** A snapshot carries ONE
-`ROTH_CONVERSION_POLICY_EVALUATE` event per year where a t₀ compile of the same base carries two,
-one per owner. No lever involved; the missing event is dated years after the snapshot. Repro:
-compile the gate's base (`tests/unit/mpc-lever-reaches-rollout.test.mjs`), `rollToSnapshot` to
-2045, diff the two queues filtered to that type. Suspects: `rollToSnapshot`'s `cloneQueue`
-capture, or `IndexedMinHeap` bookkeeping for same-date siblings — `keyFn` is `instanceId` and the
-comparator is `(date, order)` only, which is the "queue is not a total order" territory. **First,
-because a rollout holding half the conversion events is a larger error than anything else here,
-and it sits upstream of every A term.**
+**1. ~~The missing sibling~~ (§14.9.7): RESOLVED 2026-09-20.** The gate's harness was comparing a
+raw-bag compile against a resolved-base snapshot, which are two plans. No queue defect, production
+untouched, and every number above stands. The gate now also asserts the ROTH amount half.
 
 **2. The derivation manifest (§14.9.4).** Toolsets declare `derivedState` (with a path form such
 as `'*.drawdownPriority'`) and `derivedEvents`; injection becomes
