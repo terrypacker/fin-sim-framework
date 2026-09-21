@@ -1854,7 +1854,7 @@ function _rowRealTarget(row, infl) {
  */
 function _convertibleRealCap(state, baseParams, year) {
   if (!state || !Number.isFinite(year)) return Infinity;
-  const owner = baseParams?.rothConversionOwner ?? 'both';
+  const owner = baseParams?.rothConversionOwner ?? 'primary';   // the toolset's default
   let ira = 0;
   if (owner === 'primary' || owner === 'both') ira += state.iraAccount?.balance       ?? 0;
   if (owner === 'spouse'  || owner === 'both') ira += state.spouseIraAccount?.balance ?? 0;

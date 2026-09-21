@@ -1666,7 +1666,8 @@ have reverted a realized shape switch in every rollout after it. `KNOWN_BROKEN` 
 - **Queue total order (§14.9.8).** Removing no-op events moved the author's plan by a few
   percent of terminal wealth. Decide whether the comparator gets a stable tiebreak. It would
   move every golden.
-- **Two defaults for `rothConversionOwner`** (§14.9.7): `'primary'` in the scenario, `'both'`
-  in the toolset schema.
+- **~~Two defaults for `rothConversionOwner`~~ (§14.9.7): RESOLVED 2026-09-20 as `'primary'`
+  in both places**, because a single-person scenario ships. No golden moved: every golden names
+  its owner or inherits the template's.
 - **~~Report a flat objective~~: BUILT (§14.9.13).** Both reports are on the card. Still true:
   quote any A against the seed spread §14.9.3 measured, never against zero.

@@ -369,7 +369,7 @@ scenario's own schema), which is where to go to change it.
   Fill ordinary income up to top of this marginal bracket
 - **`rothConversionMonth`** — Roth Conversion Month · `Number` · default `12` · via US_ROTH_CONVERSION
   Month (1–12) when the policy fires each year
-- **`rothConversionOwner`** — Roth Conversion Owner · `Enum` · default `both` · one of `primary`, `spouse`, `both` · via US_ROTH_CONVERSION
+- **`rothConversionOwner`** — Roth Conversion Owner · `Enum` · default `primary` · one of `primary`, `spouse`, `both` · via US_ROTH_CONVERSION
   Whose IRA to convert: 'primary', 'spouse', or 'both'
 - **`rothConversionSchedule`** — Roth Conversion Schedule (per-year income targets) · `RothScheduleList` · default `` · via US_ROTH_CONVERSION
   Per-year income-fill schedule [{ year, incomeTarget }] for the closed-loop controller (design 39 §12). incomeTarget is real base-year (2025) USD, compounded by inflation to the year's nominal ordinary-income ceiling. Years absent = not converted (skip-years), unless Roth Conversion Schedule Mode is OVERLAY. Legacy { year, bracketCeiling } (statutory rate) entries are still accepted. Empty = use the start/end/maxBracket window.

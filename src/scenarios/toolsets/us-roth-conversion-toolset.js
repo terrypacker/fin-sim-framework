@@ -141,7 +141,10 @@ export const US_ROTH_CONVERSION = {
         key: 'rothConversionOwner', label: 'Roth Conversion Owner',
         type: 'Enum', group: 'Roth Conversion', mc: false, opt: false,
         options: ['primary', 'spouse', 'both'],
-        defaultValue: 'both',
+        // 'primary', matching INTL_RETIREMENT_DEFAULTS. The two disagreed (design 39 §14.9.7):
+        // a bag compiled without the scenario template converted BOTH owners' IRAs where the
+        // template converted one, and a single-person scenario ships.
+        defaultValue: 'primary',
         description: "Whose IRA to convert: 'primary', 'spouse', or 'both'",
       },
       {
