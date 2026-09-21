@@ -918,7 +918,21 @@ VoTV measurement is what should keep that easiness from becoming overfitting.
 
 ## 14. The projection gap — why every epoch under-projects its own outcome
 
-**Status**: open, and now *isolated*. Inherited from `design/81` Q6, which sharpened the
+**Status**: **ANSWERED 2026-09-20 — H3, and the mechanism is named in §14.9.** A
+snapshot-seeded rollout restores the snapshot's state and event QUEUE over the freshly compiled
+ones, so what a candidate DERIVED at compile is discarded. For the two levers whose effect is
+*which events the toolset schedules* (`ROTH`, `EARLY_WITHDRAWAL` — the `foldsAtCompile` pair) two
+in-place shims patch the AMOUNTS and nothing patches the event SET, which is the half that pays:
+measured at ~20% of terminal wealth on a real plan, an order of magnitude more than the gap this
+section was chartered to explain. H1 and H2 are not needed and are not supported.
+
+The fix is chosen — **§14.9.4's derivation manifest**, after the cheaper per-lever shim was tested
+against design 110's pool levers and failed (§14.9.4's table: half-live, 76% of the truth). The
+gate is BUILT (§14.9.5). Two further defects surfaced while building it, one fixed and one open
+(§14.9.7), and the open one is upstream of every measurement here. **§14.10 is the ordered plan.**
+What follows is kept as written, because the reasoning is what got here.
+
+**Status of the original framing**: open, and now *isolated*. Inherited from `design/81` Q6, which sharpened the
 question and handed it here. This section exists so the next session starts from the
 measurement rather than from the surprise.
 
@@ -1018,6 +1032,11 @@ neither should be quoted again.)
   is bookkeeping. *Prediction*: re-running one epoch's rollout from its own snapshot with the
   **committed** params fails to reproduce the recorded `result`. **Check this first**: it is the
   cheapest, and it would invalidate every measurement built on A.
+
+  ***CONFIRMED 2026-09-20 — see §14.9.*** The clause that bit is the third one, "a
+  forward-effective re-stamp the rollout lacked", in its strongest form: the rollout does not
+  re-derive the event queue at all. The rest of this bullet is the partial rule-out that led
+  there, and it still stands for the levers that are NOT queue levers.
 
   *Partly ruled out already, 2026-09-20.* Four epochs of a headless `CockpitController`
   (`cfgTemplate` = a real plan, `DIE_WITH_TARGET_LIQUID`, one lever) projected the SAME terminal
@@ -1187,3 +1206,215 @@ no lever it had could close that, and nothing said so.
 
 Both belong with §7's card, and neither is a gate. Left open deliberately, because the honest
 form of "the search found nothing" depends on what §14.6 decides the card should say.
+
+### 14.9 The answer — a rollout cannot see a lever that works through the queue
+
+Measured 2026-09-20. H3, in the form §14.4 flagged as "check this first: it would invalidate
+every measurement built on A". It does.
+
+#### 14.9.1 The mechanism
+
+`OptimizationProblem._injectSnapshot` seeds a rollout by replacing the freshly compiled sim's
+state and **queue** with the snapshot's:
+
+```js
+sim.state = structuredClone(snap.state);
+sim.queue.restoreData(queue);      // ← the compiled queue is discarded
+```
+
+That is the whole point of apply-forward (§5): don't re-simulate the past. But the queue is not
+past — it holds every future event the toolsets scheduled **under the params the snapshot was
+taken with**. So for a lever whose effect *is* which events exist, a rollout prices the old plan
+no matter what the candidate says.
+
+Two levers are in that class, and design 81 §6.3 already named them: `ROTH` and
+`EARLY_WITHDRAWAL`, the `foldsAtCompile: true` pair. They fold into year-keyed schedule params
+that `us-roth-conversion-toolset.js` and its early-withdrawal sibling read **in `schedules()`,
+at compile**. A rollout never compiles the future, so the fold never happens.
+
+**Corrected 2026-09-20, while building §14.9.5's gate.** `_seededSim` is not silent about this:
+it already carries `retargetRothConversionEvents` and `retargetEarlyWithdrawalEvents`, two
+forward-effective shims that rewrite the AMOUNTS on queued events after injection. So the two
+levers are not wholly blind — **they are amount-only**. A shim can change a number on an event
+that exists; it can neither add one nor remove one. Every decision that changes which events
+exist is still lost, and that is the expensive class: a single `rothConversionSchedule` row
+switches the toolset out of window mode and cancels bracket-fill for every year the run did not
+decide, which is where the measured fifth of terminal wealth goes. The shims patch the cheap half
+of the lever and leave the expensive half invisible.
+
+#### 14.9.2 The measurement
+
+One ROTH schedule row dated a year strictly inside the rollout's own horizon, on a real plan:
+through the COMPILE path it moves terminal wealth by **−20%**; through the SNAPSHOT path every
+rollout uses, by **exactly 0** — byte-identical. A fifth of the plan's terminal wealth, invisible
+to the controller and fully paid by the plan it hands back.
+
+#### 14.9.3 What it explains, and what it retires
+
+- **The sign and the size of A − A′**, with no appeal to feedback value or objective asymmetry.
+  H1 and H2 are not needed; nothing measured supports either, and the ratio they were invoked to
+  explain is the artifact §14.1 now says it is.
+- **Why every ROTH recommendation in the log is the bottom of its range.** What the rollout can
+  see of the axis is the amount on events it already holds; the part that pays — the event set —
+  is invisible, so the landscape the solver searches is flat or nearly so and it returns what a
+  flat landscape hands back — the §14.8 failure again, from a different cause.
+- **Why every controlled arm in §14.5 measured a gap of exactly zero.** `SPENDING` mutates a
+  reducer's band table, which injection does not overwrite, so A ≡ A′ to the dollar over 2, 3
+  and 10 epochs, at both ends of the horizon, in and out of the solvency boundary. The gap was
+  never a property of closed-loop control. It is a property of two levers.
+
+A second amplifier is real but secondary: a die-with-target goal parks the optimum on the
+solvency cliff, where terminal wealth is near-vertical in the decision. At the app's own budget
+of 64, five solver seeds at one epoch agree on the move to within ~1,400/mo and still project
+terminals spanning 4.1M. Any future A-vs-A′ number must be quoted against that spread, not
+against zero.
+
+#### 14.9.4 The fix — not a patch, a boundary
+
+The first draft of this section offered three options: re-derive the queue levers' events on
+injection (targeted), recompile the whole future queue (more correct, re-resolves every same-date
+tie in the plan — the \$391k-across-the-goldens hazard), or compile rollouts from t₀ (exact,
+abandons §5 outright and, in the app, replaces the live sim the user is looking at with a
+reconstruction of it, because the cockpit snapshots the LIVE sim: state, `cloneQueue()`,
+`rngState`).
+
+**The targeted option was then tested against the next thing to be built — design 110's pool
+levers — and failed.** Two pool changes, made through the optimizer's own paths:
+
+| pool change | COMPILE | SNAPSHOT (every rollout) | verdict |
+|---|---|---|---|
+| a pool's size target (= D110 leg C's `targetScale`) | − 5.6% of terminal wealth | − 4.2% | **HALF-LIVE — 76% of the truth** |
+| a pool's `spendOrder` | − 2.5% | **0** | **BLIND** |
+
+The split is mechanical. `RebalanceToTargetReducer` takes `poolGraph: resolveLiquidityGraph(…)`
+in its **constructor** at compile, and injection does not touch reducer objects — so the SIZING
+half of a pool lever sees the candidate. `state.liquidityGraph` and `state.drawdownSequence` are
+compile-time **state** projections, and injection replaces state wholesale — so the DRAW-ORDER
+half sees the stale graph. One lever, two halves, two worlds.
+
+**Half-live is worse than blind.** A blind lever shows a flat fan, which is eventually noticed —
+that is how ROTH surfaced. A half-live lever shows a moving fan of plausible numbers that are
+wrong by a quarter, and nothing in the app or the suite can tell.
+
+So a per-lever shim is the wrong shape, because it is a shim in a place that already has two:
+`_seededSim` carries `FORWARD_DRAWDOWN_STATE_FIELDS` (six field names, design 58 §11.2) and
+`forwardPriorities` (§11.3). ROTH would be the third and the pool levers the fourth and fifth,
+and nobody adding a pool axis edits a hardcoded list inside the optimizer. That is design 110
+§12.2's trap and the `targetScale` dead-axis failure, returning a WRONG number instead of an
+identical one.
+
+**Invert the boundary.** Injection restores everything and then re-applies a growing list of
+exceptions. Classify once instead:
+
+- **realized history** — balances, holdings, cumulative counters, dates, `rngState`, and events
+  already consumed. From the snapshot, always.
+- **derived from params** — control-policy state fields, compiled sequences
+  (`drawdownSequence`), the compiled graph, and the event series of toolsets whose `schedules()`
+  is a pure function of params. From the fresh compile, always.
+
+Mechanically: a toolset declares `derivedState` (with a path form such as
+`'*.drawdownPriority'` for the per-account case) and `derivedEvents`. Injection becomes
+`state = { ...snapshot.state, ...pick(compiled, derivedState) }` and
+`queue = snapshot.queue − derivedEvents + compiled(derivedEvents)`. The two existing shims are
+DELETED and become declarations; the queue levers add two event types; design 110's MPC portion
+declares `liquidityGraph` + `drawdownSequence` and is correct on arrival instead of by memory.
+
+Two consequences to plan for, not discover: splicing events re-resolves same-`(date, order)`
+ties around them, so the whole-state goldens may legitimately move and must be measured and
+regolded deliberately; and `derivedEvents` is only sound for a `schedules()` that reads no sim
+state (both queue levers qualify today — they read `context.parameters`, `.people`, `.accounts`
+and an inflation rate).
+
+#### 14.9.5 The gate — one assertion that catches both failures
+
+> For every MPC lever, on a loaded plan: **compile-delta == snapshot-delta**.
+
+Non-zero is not enough; that is what lets half-live through. Equality is the invariant, and it is
+the generalisation of `lever-reaches-loaded-sim`'s LRS-2 and §14.8's PLG-2. It fails today for
+ROTH, EARLY_WITHDRAWAL and both pool axes, and it would have caught all four in minutes.
+
+Built as `tests/unit/mpc-lever-reaches-rollout.test.mjs`, with the known-broken levers named in
+an explicit list the test also *verifies are still broken* — so the suite stays green today and
+tells whoever fixes one to strike it from the list, rather than quietly passing.
+
+Until the boundary is fixed, an **interim refusal** belongs in the cockpit, on §14.8's rule and
+one degree worse: a lever the rollout cannot see is not merely inert, it is *advised on wrongly*.
+`inertWhen` carries the vocabulary; this needs a third kind, because "the search cannot see this
+lever" is neither DISABLED nor INERT.
+
+#### 14.9.6 A defect found alongside it
+
+`ROTH.prepareBaseParams` appends `{ year, incomeTarget: 0 }` so the solver has a row to tune.
+On a plan that converts through the **window** form (`rothConversionStartYear`/`EndYear` +
+`rothConversionMaxBracket`), the toolset returns early on a non-empty schedule — so that one
+scaffolding row silently cancels bracket-fill conversions for every year the run never decided.
+Measured at −20% of terminal wealth on a real plan — worse than switching conversions off
+altogether. The seeded row must carry the year's window-equivalent target, not 0.
+
+#### 14.9.7 An open thread the gate surfaced, and the defect it already fixed
+
+Both found while building §14.9.5, and the second is fixed.
+
+**Open — a snapshot is missing events its own compile scheduled.** On the gate's base a t₀ compile
+carries TWO `ROTH_CONVERSION_POLICY_EVALUATE` events per year, one per owner
+(`rothConversionOwner: 'both'`); a snapshot rolled forward from that same compile carries ONE per
+year. No lever is involved, and the missing sibling is dated years after the snapshot, so it was
+not consumed. Either `rollToSnapshot`'s capture or `IndexedMinHeap`'s bookkeeping is dropping a
+same-date sibling — and same-date siblings are exactly what design 34 §13's `order` band and the
+"queue is not a total order" finding are about. If a rollout silently holds half the conversion
+events, that is a larger error than everything above it, and it is upstream of every A term.
+Reproduction: compile the gate's base, `rollToSnapshot` to 2045, compare the two queues filtered
+to that type. `mpc-lever-reaches-rollout.test.mjs` documents it where a ROTH_AMOUNT case would
+otherwise sit, and cannot assert the amount half of the lever until it is explained.
+
+**Fixed — a rollout wrote its candidate into the shared snapshot.** `Simulation.cloneQueue()` and
+`_injectSnapshot` both copied events with `{ ...e }`, so every restored event shared its `data`
+object with the snapshot's. The two re-target shims above rewrite that data IN PLACE, and the
+write landed in the controller's snapshot: measured, one rollout's committed early-withdrawal
+amount became the baseline the NEXT candidate was scored against, and a rollout of the untouched
+base read it back. A fan stopped being a comparison of candidates against a fixed "now" and became
+order-dependent, in a way no output made visible. Both copies now copy `data` a level down, the
+whole suite is unchanged by it, and `MLR-4` pins it — with its own pristine snapshot, because the
+shared one is already contaminated by the time it runs, which is the defect hiding itself.
+
+This is also the sharpest argument for §14.9.4's boundary over any further shim: **four shims in,
+one of them was silently corrupting the measurement the others were there to protect.**
+
+### 14.10 Where the next session starts
+
+Everything above is measured. This is the order to act in, and the order matters: step 1 can
+invalidate numbers the rest of §14 quotes, and step 3 is unsafe before step 2.
+
+**1. The missing sibling (§14.9.7, OPEN).** A snapshot carries ONE
+`ROTH_CONVERSION_POLICY_EVALUATE` event per year where a t₀ compile of the same base carries two,
+one per owner. No lever involved; the missing event is dated years after the snapshot. Repro:
+compile the gate's base (`tests/unit/mpc-lever-reaches-rollout.test.mjs`), `rollToSnapshot` to
+2045, diff the two queues filtered to that type. Suspects: `rollToSnapshot`'s `cloneQueue`
+capture, or `IndexedMinHeap` bookkeeping for same-date siblings — `keyFn` is `instanceId` and the
+comparator is `(date, order)` only, which is the "queue is not a total order" territory. **First,
+because a rollout holding half the conversion events is a larger error than anything else here,
+and it sits upstream of every A term.**
+
+**2. The derivation manifest (§14.9.4).** Toolsets declare `derivedState` (with a path form such
+as `'*.drawdownPriority'`) and `derivedEvents`; injection becomes
+`state = { ...snapshot.state, ...pick(compiled, derivedState) }` and
+`queue = snapshot.queue − derivedEvents + compiled(derivedEvents)`. The four existing shims in
+`_seededSim` are DELETED and become declarations. Expect the whole-state goldens to move where
+spliced events re-resolve same-`(date, order)` ties — measure and regold deliberately. The gate
+from §14.9.5 is the acceptance test: strike each lever from its `KNOWN_BROKEN` as it starts
+reaching the rollout.
+
+**3. Design 110's MPC portion.** After step 2 it is two declarations (`liquidityGraph`,
+`drawdownSequence`). **Before step 2 it ships a lever that shows 76% of its own effect**, which
+is why it is not started yet.
+
+**Independent of all three, and small:**
+
+- **The interim cockpit refusal.** A lever the rollout cannot see is worse than inert — it is
+  advised on wrongly. `inertWhen` carries the vocabulary; this needs a third kind, because "the
+  search cannot see this lever" is neither DISABLED nor INERT (§14.8, §14.9.4).
+- **`ROTH.prepareBaseParams` (§14.9.6).** Seed the year's window-equivalent target, not 0, so
+  scaffolding a row stops silently cancelling bracket-fill for every undecided year.
+- **Report a flat objective (§14.9.3, §14.8.4).** The card renders a confident move chosen from a
+  flat surface, and says nothing when the goal's own target is unreachable. Quote any A against
+  the seed spread §14.9.3 measured, never against zero.

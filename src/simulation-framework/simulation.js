@@ -1366,7 +1366,20 @@ export class Simulation {
 
   /*  SNAPSHOT SUPPORT — delegated to SimulationHistory */
   takeSnapshot()            { return this.history.takeSnapshot(); }
-  cloneQueue()              { return this.queue.data.map(e => ({ ...e, date: new Date(e.date) })); }
+  /**
+   * A copy of the pending queue, for a snapshot.
+   *
+   * `data` is copied a level down, not shared. A shallow `{ ...e }` leaves every snapshot event
+   * pointing at the LIVE sim's `data` object, and design 39 §14.9.4 measured what that costs: the
+   * MPC's forward-effective re-target shims rewrite `sim.queue.data` in place on a rollout, wrote
+   * straight through into the controller's snapshot, and the next candidate in the same fan
+   * inherited the previous one's committed amounts. A snapshot has to be a value.
+   */
+  cloneQueue() {
+    return this.queue.data.map(e => ({
+      ...e, date: new Date(e.date), ...(e.data ? { data: { ...e.data } } : {}),
+    }));
+  }
   restoreSnapshot(i)        { return this.history.restoreSnapshot(i); }
   rewind(steps)             { return this.history.rewind(steps); }
   rewindToStart()           { return this.history.rewindToStart(); }

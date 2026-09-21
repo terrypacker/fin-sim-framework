@@ -375,7 +375,12 @@ export class OptimizationProblem {
    */
   _injectSnapshot(sim, snap) {
     sim.state = structuredClone(snap.state);
-    const queue = (snap.queue ?? []).map(e => ({ ...e, date: new Date(e.date) }));
+    // `data` copied a level down for the same reason `cloneQueue` does it (design 39 §14.9.4):
+    // the re-target shims below rewrite queued event data IN PLACE, and a shared `data` object
+    // makes that write land in the snapshot every later rollout is measured against.
+    const queue = (snap.queue ?? []).map(e => ({
+      ...e, date: new Date(e.date), ...(e.data ? { data: { ...e.data } } : {}),
+    }));
     sim.queue.restoreData(queue);
     sim.currentDate = sim.normalizeDate(new Date(snap.date));
     // Carry the snapshot's RNG cursor forward so a rollout seeded from "now"
