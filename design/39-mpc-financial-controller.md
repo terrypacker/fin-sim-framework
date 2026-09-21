@@ -1692,7 +1692,9 @@ have reverted a realized shape switch in every rollout after it. `KNOWN_BROKEN` 
   persist the rows the live queue implies.
 - **~~Design 81 drawdown decisions in rollouts~~: BUILT (§14.9.12).** Fixed in the params
   (`foldInForceDecisions`), not with `derivedStateAt`.
-- **`targetScale` as an MPC control (design 110 §13.11).** It needs a saved form first.
+- **`targetScale` as an MPC control (design 110 §13.11): PROPOSED as design 112** (dated
+  pool targets: a `liquidityTargetSchedule` resolved into design 109's step function, and a
+  `POOL_TARGET` control on the `POOL_SHAPE` template). Four open questions await the operator.
 - **~~Queue total order~~: BUILT (§14.9.14),** with an explicit period-advance band for the
   one semantic tie the regold exposed.
 - **~~Two defaults for `rothConversionOwner`~~ (§14.9.7): RESOLVED 2026-09-20 as `'primary'`
