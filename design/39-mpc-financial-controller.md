@@ -1608,6 +1608,31 @@ that in `_rolloutParams()`. With the params right, the t₀ pick is right, and n
 decided (IFD-3), the no-op is exact against the snapshot (IFD-2), and the per-account order
 from a recorded weights row survives (IFD-4). Suite green, lab verifier identical.
 
+#### 14.9.13 Built — the card says when the search found nothing, and when the goal is out of reach
+
+§14.8.4 left both open "because the honest form depends on what §14.6 decides the card should
+say". The form chosen: **report beside the move, never replace it.** What to do about a flat
+surface (keep the plan, widen the range, search a live lever) is the user's call, and a card
+that silently swapped in "no change" would be a second decision nobody made.
+
+`adviceSignals` (`src/finance/mpc/advice-signals.js`, pure) reads the solver's evaluated
+candidates, and `advise()` returns its answer as `signals`:
+
+- **flat:** at least two distinct candidates, and every score within max(\$1, 1e-9 × best).
+  A single candidate is not flat: the range collapsed, which the move's own label already says
+  (e.g. "No Roth conversion this year" when the IRA is empty).
+- **target out of reach** (Die-With-Target goals only): every candidate's REAL terminal lands
+  on the same side of the target, beyond max(\$1,000, 0.5% of target). Two candidates
+  straddling the target count as reachable, because a value between them reaches it.
+
+The card renders each as a warning line under the projected outcome, and the panel help topic
+says what they mean. On the author's plan (study, Part 9) the signals agree with §14.8's
+observations: a POOL_SHAPE epoch where both shapes score identically reads **flat**. So does
+the cockpit recording an arbitrary switch year, which is §14.8.4's failure, now visible. A
+die-with-target-liquid goal reads **out of reach**, its nearest candidate landing at many
+times the target, which is §14.8.4's "missed by the whole portfolio, unremarked". A ROTH epoch
+through the conversion years reads neither.
+
 ### 14.10 Where the next session starts
 
 Everything above is measured. This is the order to act in, and the order matters: step 3 is unsafe
@@ -1643,6 +1668,5 @@ have reverted a realized shape switch in every rollout after it. `KNOWN_BROKEN` 
   move every golden.
 - **Two defaults for `rothConversionOwner`** (§14.9.7): `'primary'` in the scenario, `'both'`
   in the toolset schema.
-- **Report a flat objective (§14.9.3, §14.8.4).** The card renders a confident move chosen from a
-  flat surface, and says nothing when the goal's own target is unreachable. Quote any A against
-  the seed spread §14.9.3 measured, never against zero.
+- **~~Report a flat objective~~: BUILT (§14.9.13).** Both reports are on the card. Still true:
+  quote any A against the seed spread §14.9.3 measured, never against zero.

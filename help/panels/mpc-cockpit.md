@@ -20,14 +20,15 @@ of foresight; this one only ever commits to the next decision.
 Open it when the question is not "what is the best plan" but "what should I do this
 year".
 
-Budget and seed control how hard the controller searches. Lowering the budget walks
-back toward a regime where it commits to worse moves, which is why the evaluation
-readout ships beside the control.
+A warning under the move means every option scored the same (the move is arbitrary) or
+that no option reaches your goal's target.
+
+Budget and seed control how hard it searches; a low budget commits to worse moves, which
+is why the evaluation readout is shown.
 
 Two ways out of a finished run. **Copy to scenario** squashes the moves into ordinary
 settings — small, arguable, lossy. **Save run to plan** keeps the moves and plays them.
-Reach for the first to explain a run, the second to keep it. Both refuse a plan that
-runs out of money.
+Both refuse a plan that runs out of money.
 
 When the loaded plan is already playing a recording, a line above the controls says so.
 The advisor is then standing on decisions somebody already made, and sees only those

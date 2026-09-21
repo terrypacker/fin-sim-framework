@@ -343,6 +343,26 @@ test('MpcCockpitPlugin._renderAdvice: shows the move card + projected outcome', 
   assert.match(plugin._q('outcome').innerHTML, /1,250,000/, 'projected terminal net worth rendered');
 });
 
+test('MpcCockpitPlugin._renderAdvice: a flat search and an unreachable target are SAID (§14.8.4)', () => {
+  const plugin = mountPlugin();
+  const advice = { ...syntheticAdvice(), signals: {
+    flat:   { flat: true, distinct: 12, spread: 0, metricSpread: 0 },
+    target: { reachable: false, target: 50_000, nearest: 4_800_000, side: 'above' },
+  } };
+  plugin._controller = { lastAdvice: advice };
+  plugin._renderAdvice(advice);
+  const host = plugin._q('signals');
+  assert.equal(host.style.display, '', 'shown');
+  assert.match(host.textContent, /No candidate beat another.*12 candidates/);
+  assert.match(host.textContent, /out of reach.*above the \$50,000 target.*\$4,800,000/);
+
+  // And gone again on the next advice that has neither.
+  plugin._renderAdvice({ ...syntheticAdvice(), signals: {
+    flat: { flat: false, distinct: 12 }, target: { reachable: true } } });
+  assert.equal(host.style.display, 'none');
+  assert.equal(host.textContent, '');
+});
+
 test('MpcCockpitPlugin._renderFan: draws one path per fan line, recommended highlighted', () => {
   const plugin = mountPlugin();
   plugin._renderFan(syntheticAdvice().fan);

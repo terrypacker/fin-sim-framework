@@ -168,6 +168,10 @@
   color: var(--text);
 }
 .mpc-card-outcome { font-size: 13px; color: var(--text-dim); }
+/* Design 39 §14.8.4 — a flat search / an unreachable target, beside the move it qualifies. */
+.mpc-card-signals { margin-top: 6px; font-size: 12px; }
+.mpc-card-signal  { color: var(--warn, #c88); border-left: 2px solid var(--warn, #c88);
+                    padding: 2px 0 2px 8px; margin-top: 4px; }
 .mpc-card-actions {
   display: flex;
   align-items: flex-end;

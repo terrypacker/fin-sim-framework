@@ -210,6 +210,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
         <div class="mpc-card-head">Recommended next move</div>
         <div class="mpc-card-move" data-mpc="move">—</div>
         <div class="mpc-card-outcome" data-mpc="outcome">—</div>
+        <div class="mpc-card-signals" data-mpc="signals" style="display:none"></div>
         <div class="mpc-card-actions">
           <button class="btn btn-sm btn-primary" data-mpc="apply">Apply</button>
           <label class="mpc-field mpc-override">Override
@@ -984,11 +985,37 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
       afterTaxBits +
       (target ? ` &nbsp;·&nbsp; ${targetLabel} ${_usd(target)}` : '') +
       ` &nbsp;·&nbsp; as of ${_fmtDate(advice.now.date)}`;
+    this._renderSignals(advice.signals);
     const ov = this._q('override');
     if (ov) ov.value = '';
     card.style.display = '';
     this._renderFan(advice.fan);
     this._setNow(`Advice ready for ${_fmtDate(advice.now.date)}. Apply or override, then Advance.`);
+  }
+
+  /**
+   * Design 39 §14.8.4 — the two results a search can return that are not advice. Rendered
+   * beside the move rather than instead of it: the recommendation is unchanged, and what to do
+   * about a flat surface or an out-of-reach target is the user's call.
+   */
+  _renderSignals(signals) {
+    const host = this._q('signals');
+    if (!host) return;
+    const lines = [];
+    if (signals?.flat?.flat) {
+      lines.push(`<b>No candidate beat another.</b> All ${signals.flat.distinct} candidates the search `
+        + 'tried scored the same, so the move above is an arbitrary point, not a recommendation. '
+        + 'Keeping the current plan is as good; to get advice, widen the range or search a lever '
+        + 'this plan responds to.');
+    }
+    const t = signals?.target;
+    if (t && !t.reachable) {
+      lines.push(`<b>The goal target is out of reach.</b> Every candidate lands ${t.side} the `
+        + `${_usd(t.target)} target (today's $); the nearest is ${_usd(t.nearest)}. No value in `
+        + 'the searched range closes that gap.');
+    }
+    host.innerHTML = lines.map(l => `<div class="mpc-card-signal">${l}</div>`).join('');
+    host.style.display = lines.length ? '' : 'none';
   }
 
   /** Inline SVG fan: realized "now" point → diverging candidate futures. */

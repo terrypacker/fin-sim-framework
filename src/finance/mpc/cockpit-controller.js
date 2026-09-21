@@ -37,6 +37,7 @@ import { resolveLiquidityGraph, resolveLiquidityGraphSchedule } from '../pools/l
 import { PoolShapeScheduleReducer, liquidityStateAt } from '../pools/pool-shape-schedule-reducer.js';
 import { applyShapeYearShifts, shapeYearShiftsFrom } from '../pools/pool-shape-year-axis.js';
 import { truncateActiveRunAt }  from './run-schedule.js';
+import { adviceSignals }        from './advice-signals.js';
 
 /*
  * `_presentRolesFromState` MOVED to `lever-schedule.js` (design 81 §16.2) and is imported
@@ -1476,6 +1477,8 @@ export class CockpitController {
       fan,
       variables,
       feasibility,
+      // Design 39 §14.8.4 — a flat surface and an unreachable target, said rather than implied.
+      signals: adviceSignals({ candidates: solution.candidates ?? [], objective: this.objective }),
     };
     return this.lastAdvice;
   }
