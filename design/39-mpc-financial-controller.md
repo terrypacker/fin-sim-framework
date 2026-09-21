@@ -1540,6 +1540,35 @@ tie to re-resolve (contrast §14.9.8's ROTH measurement).
 the t₀ picks. The fix is the same move: declare those fields `derivedStateAt`, answered from
 the active run's rows at now.
 
+#### 14.9.10 §14's question, re-asked after the fix
+
+The section was chartered to explain why each epoch's projection missed the played plan. With
+steps 1–3 built, the measurement that answers it is **A′ against B**. A′ is the chained
+snapshot rollouts, which is also what `replayDecisions` computes. B is the controller's
+committed plan compiled from t₀. Before the fix A′ was no referee at all: it ran through the
+same blind injection as A, which is why every earlier A ≡ A′ arm came out exact.
+
+On the author's plan (values in the study, Part 8), a real cockpit loop with the ROTH lever
+through the conversion years:
+
+- **before the fix**, A′ exceeded B by several percent of terminal wealth. Every projection
+  priced the window's later conversions as intact, while the committed schedule (the decided rows
+  only) cancelled them;
+- **after**, A′ ≡ B to the dollar, with the same decisions and the same projections. The fix
+  changed what "committed" means, not what the search chose;
+- a joint ROTH + POOL_SHAPE arm is also exact.
+
+So for the levers that fold at compile, the projection gap H3 named is closed. Two
+things keep it from being closed in the app:
+
+- **The ROTH persistence half is now priced.** It is the pre-fix B exactly: a Rebuild after such
+  a session, or a design 81 replay of it, cancels every undecided window year, including
+  realized years before the first epoch. It is the largest measured divergence left, and the
+  first item below.
+- **A ≠ A′ remains, by design.** Each epoch prices its tail at values later epochs overwrite
+  (design 81 Q6). That is §14.4's H5 (recommendation instability), not a defect, and §14.9.3's
+  seed spread is the scale to quote it against.
+
 ### 14.10 Where the next session starts
 
 Everything above is measured. This is the order to act in, and the order matters: step 3 is unsafe
@@ -1560,11 +1589,11 @@ have reverted a realized shape switch in every rollout after it. `KNOWN_BROKEN` 
 
 **Independent of all three, and small:**
 
-- **The interim cockpit refusal.** A lever the rollout cannot see is worse than inert — it is
-  advised on wrongly. `inertWhen` carries the vocabulary; this needs a third kind, because "the
-  search cannot see this lever" is neither DISABLED nor INERT (§14.8, §14.9.4).
-- **~~`ROTH.prepareBaseParams`~~ (§14.9.6): rollout half BUILT (§14.9.8).** Still open: the
-  persistence half. `actuate` writes only the decided year into `scenario.params`, so a Rebuild
+- **~~The interim cockpit refusal~~: RETIRED by steps 2–3.** No lever is known to be blind to
+  its rollout: the gate's `KNOWN_BROKEN` is empty and the lab verifier passes the state-borne
+  levers. If a new one is found, the gate is where it goes first.
+- **~~`ROTH.prepareBaseParams`~~ (§14.9.6): rollout half BUILT (§14.9.8).** Still open, and
+  now the largest measured divergence (§14.9.10): the persistence half. `actuate` writes only the decided year into `scenario.params`, so a Rebuild
   of a window-form plan after a session cancels every undecided year. The same fix applies:
   persist the rows the live queue implies.
 - **Design 81 drawdown decisions in rollouts (§14.9.9).** The t₀ picks revert a recorded
