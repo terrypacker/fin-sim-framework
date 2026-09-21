@@ -178,11 +178,21 @@ export class Simulation {
     // framework fixture that has no toolsets and so no manifest to gate against.
     this._typeRegistry = opts.typeRegistry ?? null;
 
-    // Total order: by date, then by event `order` (lower runs first). The order
-    // band makes same-date sequencing explicit — income/earnings default to 0 and
-    // tax settlements sit in a high band so they always process after the year's
-    // income (federal before state). See design 34 §13.
-    this.queue = new IndexedMinHeap((a, b) => (a.date - b.date) || ((a.order ?? 0) - (b.order ?? 0)),
+    // Total order: by date, then by event `order` (lower runs first), then by `instanceId`
+    // (first scheduled runs first). The order band makes same-date sequencing explicit —
+    // income/earnings default to 0 and tax settlements sit in a high band so they always
+    // process after the year's income (federal before state). See design 34 §13.
+    //
+    // The `instanceId` tiebreak is what makes it a TOTAL order (design 39 §14.10). Without it,
+    // two events on the same `(date, order)` ran in whatever order the heap's layout happened
+    // to produce, so adding or removing ANY event re-resolved ties elsewhere: deleting thirty
+    // conversion events that converted nothing moved a real plan by several percent of
+    // terminal wealth. `instanceId` is unique and increasing, assigned in `schedule()` and
+    // carried through every snapshot and restore, so the order it gives is FIFO and does not
+    // depend on the heap.
+    this.queue = new IndexedMinHeap((a, b) => (a.date - b.date)
+            || ((a.order ?? 0) - (b.order ?? 0))
+            || ((a.instanceId ?? 0) - (b.instanceId ?? 0)),
             item => item.instanceId, item => item.type);
     this.bus = bus;
 

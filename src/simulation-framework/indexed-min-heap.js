@@ -199,6 +199,10 @@ export class IndexedMinHeap {
       if (!this.typeMap.has(type)) this.typeMap.set(type, new Set());
       this.typeMap.get(type).add(key);
     }
+    // Re-establish the heap property rather than trust the caller's array. A snapshot taken
+    // under a looser comparator (or edited by hand) is not guaranteed to be a heap under this
+    // one, and popping from a non-heap returns events out of order without any error. O(n).
+    for (let i = Math.floor(this.data.length / 2) - 1; i >= 0; i--) this.bubbleDown(i);
   }
 
   removeAllByType(type) {

@@ -20,7 +20,7 @@
     "acquisitionDateByCountry": {
      "AU": 1940630400000
     },
-    "acquisitionPriceLevel": 1.1592740743,
+    "acquisitionPriceLevel": 1.19405229653,
     "allocation": "BOND",
     "appreciationSchedule": null,
     "costBaseByCountry": {
@@ -136,7 +136,7 @@
   "spouse": 0
  },
  "auPersonFrankingCreditYTD": {
-  "primary": 1226.22857143,
+  "primary": 1266.32571429,
   "spouse": 0
  },
  "auPersonNonResidentWithholdingYTD": {
@@ -152,8 +152,8 @@
   "spouse": 0
  },
  "auPersonOrdinaryIncomeYTD": {
-  "primary": 474215.84664,
-  "spouse": 43488.635564
+  "primary": 474286.53014,
+  "spouse": 43415.775564
  },
  "auPersonRealCapitalGainsYTD": {
   "primary": 0,
@@ -168,7 +168,7 @@
   "spouse": 0
  },
  "auPersonUsSourceOrdinaryAudYTD": {
-  "primary": 469274.65664,
+  "primary": 469284.54014,
   "spouse": 43124.995564
  },
  "auPersonUsSourceRealCapGainsAudYTD": {
@@ -178,7 +178,7 @@
  "auRealCapitalGainsYTD": 0,
  "auSavingsAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 3000,
+  "balance": 3011.25,
   "country": "AU",
   "currency": {
    "code": "AUD",
@@ -186,7 +186,7 @@
   },
   "drawdownPriority": 0,
   "fxBasisRate": 1.55,
-  "fxBasisUsd": 1935.48387097,
+  "fxBasisUsd": 1942.74193548,
   "holdings": [
    {
     "acquisitionDateByCountry": null,
@@ -194,7 +194,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 2999.99654505,
+    "costBasis": 3011.24654505,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -205,7 +205,7 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 2999.99654505,
+    "marketValue": 3011.24654505,
     "maturityDate": null,
     "purchaseDate": null,
     "rateKey": "SAVINGS_AU",
@@ -237,7 +237,7 @@
     "acquisitionDateByCountry": {
      "AU": 1940630400000
     },
-    "acquisitionPriceLevel": 1.1592740743,
+    "acquisitionPriceLevel": 1.19405229653,
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": {
@@ -271,7 +271,7 @@
     "acquisitionDateByCountry": {
      "AU": 1940630400000
     },
-    "acquisitionPriceLevel": 1.1592740743,
+    "acquisitionPriceLevel": 1.19405229653,
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": {
@@ -304,7 +304,7 @@
     "acquisitionDateByCountry": {
      "AU": 1940630400000
     },
-    "acquisitionPriceLevel": 1.1592740743,
+    "acquisitionPriceLevel": 1.19405229653,
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": {
@@ -339,7 +339,7 @@
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 2861.2,
+    "costBasis": 2954.76,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -351,7 +351,7 @@
     "label": "Reinvested dividends",
     "marketValue": 2954.76,
     "maturityDate": null,
-    "pricePerUnit": 121.29555913,
+    "pricePerUnit": 121.29560033,
     "purchaseDate": "2031-07-01T00:00:00.000Z",
     "rateKey": "EQUITY_AU",
     "rollAtMaturity": false,
@@ -359,7 +359,7 @@
     "securityId": "sec-auto-EQUITY_AU",
     "taxExemption": "none",
     "taxLossPartner": null,
-    "units": 24.36000148,
+    "units": 24.35999321,
     "zeroCoupon": false
    }
   ],
@@ -537,7 +537,7 @@
   "acquisitionDateByCountry": {
    "AU": 1940630400000
   },
-  "acquisitionPriceLevel": 1.1592740743,
+  "acquisitionPriceLevel": 1.19405229653,
   "appreciationRate": 0.03,
   "appreciationSchedule": null,
   "balanceAtResidencyChange": 115927.41,
@@ -559,7 +559,7 @@
   "acquisitionDateByCountry": {
    "AU": 1940630400000
   },
-  "acquisitionPriceLevel": 1.1592740743,
+  "acquisitionPriceLevel": 1.19405229653,
   "appreciationRate": 0.08,
   "appreciationSchedule": null,
   "balanceAtResidencyChange": 734664.04,
@@ -587,7 +587,7 @@
  "cumulativeConsumptionUtility": 142.138661376,
  "cumulativeConsumptionUtilityCount": 72,
  "cumulativeDeficit": 0,
- "cumulativeTaxesPaid": 882094.140628,
+ "cumulativeTaxesPaid": 881323.362471,
  "currentPeriods": {
   "AU": {
    "endMs": 1972252800000,
@@ -665,7 +665,7 @@
     "acquisitionDateByCountry": {
      "AU": 1940630400000
     },
-    "acquisitionPriceLevel": 1.1592740743,
+    "acquisitionPriceLevel": 1.19405229653,
     "allocation": "BOND",
     "appreciationSchedule": null,
     "costBaseByCountry": {
@@ -1059,8 +1059,8 @@
  },
  "marketIndexAsOfMs": 1956441600000,
  "metrics": {
-  "netLiquidity": 4429003.71,
-  "netWorth": 7793585.7,
+  "netLiquidity": 4427561.11,
+  "netWorth": 7792143.11,
   "offsetAppliedCapacity": 0,
   "offsetIdleCapacity": 0
  },
@@ -1717,8 +1717,8 @@
    }
   },
   "US": {
-   "agi": 629165.55,
-   "tax": 166047.46,
+   "agi": 628865.45,
+   "tax": 165940.03,
    "year": 2031
   }
  },
@@ -1737,7 +1737,7 @@
   "acquisitionDateByCountry": {
    "AU": 1940630400000
   },
-  "acquisitionPriceLevel": 1.1592740743,
+  "acquisitionPriceLevel": 1.19405229653,
   "annualDepreciationOverride": null,
   "annualRunningCost": 0,
   "appreciationRate": 0.04,
@@ -1797,7 +1797,7 @@
  "usPersonHousehold": true,
  "usSavingsAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 2076500.24993,
+  "balance": 2075050.39712,
   "country": "US",
   "currency": {
    "code": "USD",
@@ -1811,7 +1811,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 2076500.24993,
+    "costBasis": 2075050.39712,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -1822,7 +1822,7 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 2076500.24993,
+    "marketValue": 2075050.39712,
     "maturityDate": null,
     "purchaseDate": null,
     "rateKey": "SAVINGS_US",
@@ -1870,7 +1870,7 @@
     "acquisitionDateByCountry": {
      "AU": 1940630400000
     },
-    "acquisitionPriceLevel": 1.1592740743,
+    "acquisitionPriceLevel": 1.19405229653,
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": {
@@ -1904,7 +1904,7 @@
     "acquisitionDateByCountry": {
      "AU": 1940630400000
     },
-    "acquisitionPriceLevel": 1.1592740743,
+    "acquisitionPriceLevel": 1.19405229653,
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": {
@@ -1938,7 +1938,7 @@
     "acquisitionDateByCountry": {
      "AU": 1940630400000
     },
-    "acquisitionPriceLevel": 1.1592740743,
+    "acquisitionPriceLevel": 1.19405229653,
     "allocation": "BOND",
     "appreciationSchedule": null,
     "costBaseByCountry": {
@@ -1972,7 +1972,7 @@
     "acquisitionDateByCountry": {
      "AU": 1940630400000
     },
-    "acquisitionPriceLevel": 1.1592740743,
+    "acquisitionPriceLevel": 1.19405229653,
     "allocation": "BOND",
     "appreciationSchedule": null,
     "costBaseByCountry": {
@@ -2003,7 +2003,7 @@
     "acquisitionDateByCountry": {
      "AU": 1940630400000
     },
-    "acquisitionPriceLevel": 1.1592740743,
+    "acquisitionPriceLevel": 1.19405229653,
     "allocation": "BOND",
     "appreciationSchedule": null,
     "costBaseByCountry": {
@@ -2038,7 +2038,7 @@
   "stateKey": "usStockAccount",
   "type": "brokerage"
  },
- "usTaxPaidOnUsSourceAud": 134858.365965,
+ "usTaxPaidOnUsSourceAud": 134821.94154,
  "usWithheldYTD": 0,
  "withinTierDraw": "SEQUENTIAL",
  "yieldCurve": {

@@ -1633,6 +1633,36 @@ die-with-target-liquid goal reads **out of reach**, its nearest candidate landin
 times the target, which is §14.8.4's "missed by the whole portfolio, unremarked". A ROTH epoch
 through the conversion years reads neither.
 
+#### 14.9.14 Built — the event queue is a total order, and the year opens first
+
+The comparator is now `(date, order, instanceId)`. `instanceId` is unique and increasing,
+assigned in `schedule()` and carried through every snapshot and restore, so ties run first
+scheduled, first run, independent of the heap's layout. `restoreData` heapifies instead of
+trusting its array. Removing or adding an event no longer reorders anyone else: on the author's
+plan, deleting the no-op conversion events of §14.9.8 now moves terminal wealth by exactly 0.
+
+**The regold found a semantic tie hiding behind the arbitrary one.** On the move date, the AU
+year-open and `CHANGE_RESIDENCY` share 1 July at order 0. The year-open's rebalance and pool
+flows can sell, and whether that sale is the departing US resident's or the arriving AU
+resident's decides how it is sourced and taxed. Plain FIFO put the residency change first, and
+the author's plan moved by 6%. The old heap had put the year-open first by luck. The operator
+chose **the year opens first**: `PERIOD_ADVANCE_ORDER = −1` gives both period advances an
+explicit band, so a period opens its instant, and the paycheck (order 1) still sees the new
+residency.
+
+**What still moved, and why it is accepted.** Thirteen goldens moved by under 0.05%. The two
+single-homeowner goldens moved +1.2% and +1.7%, traced to accumulated same-day monthly timing
+(for example, expenses now always before payroll on the same day, because that is their
+scheduling order), compounding over decades rather than any single flipped decision. The
+author's plan moved by a few percent as authored and about 1% with its stochastic processes
+off. The largest remaining step traced to a draw landing either side of an AU financial-year
+boundary, which shifts tax between two years. The old numbers were one arbitrary resolution
+of ties, and the new ones are a stable resolution. If same-day income should precede same-day
+spending, that is an explicit `order` band to add (design 34 §13), not a tie-break.
+
+A′ ≡ B, the no-op exactness tests and rollout ≡ compile for POOL_SHAPE all still hold.
+`event-queue-total-order` EQO-1..4 pin the contract (three fail without the tiebreak).
+
 ### 14.10 Where the next session starts
 
 Everything above is measured. This is the order to act in, and the order matters: step 3 is unsafe
@@ -1663,9 +1693,8 @@ have reverted a realized shape switch in every rollout after it. `KNOWN_BROKEN` 
 - **~~Design 81 drawdown decisions in rollouts~~: BUILT (§14.9.12).** Fixed in the params
   (`foldInForceDecisions`), not with `derivedStateAt`.
 - **`targetScale` as an MPC control (design 110 §13.11).** It needs a saved form first.
-- **Queue total order (§14.9.8).** Removing no-op events moved the author's plan by a few
-  percent of terminal wealth. Decide whether the comparator gets a stable tiebreak. It would
-  move every golden.
+- **~~Queue total order~~: BUILT (§14.9.14),** with an explicit period-advance band for the
+  one semantic tie the regold exposed.
 - **~~Two defaults for `rothConversionOwner`~~ (§14.9.7): RESOLVED 2026-09-20 as `'primary'`
   in both places**, because a single-person scenario ships. No golden moved: every golden names
   its owner or inherits the template's.

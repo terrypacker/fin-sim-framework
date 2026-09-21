@@ -152,8 +152,8 @@
   "spouse": 0
  },
  "auPersonOrdinaryIncomeYTD": {
-  "primary": 104719.452128,
-  "spouse": 43488.635564
+  "primary": 104669.865628,
+  "spouse": 43415.775564
  },
  "auPersonRealCapitalGainsYTD": {
   "primary": 0,
@@ -168,7 +168,7 @@
   "spouse": 0
  },
  "auPersonUsSourceOrdinaryAudYTD": {
-  "primary": 99644.6021279,
+  "primary": 99667.8756279,
   "spouse": 43124.995564
  },
  "auPersonUsSourceRealCapGainsAudYTD": {
@@ -178,7 +178,7 @@
  "auRealCapitalGainsYTD": 0,
  "auSavingsAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 3000,
+  "balance": 3011.25,
   "country": "AU",
   "currency": {
    "code": "AUD",
@@ -186,7 +186,7 @@
   },
   "drawdownPriority": 0,
   "fxBasisRate": 1.55,
-  "fxBasisUsd": 1935.48387097,
+  "fxBasisUsd": 1942.74193548,
   "holdings": [
    {
     "acquisitionDateByCountry": null,
@@ -194,7 +194,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 2999.99654505,
+    "costBasis": 3011.24654505,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -205,7 +205,7 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 2999.99654505,
+    "marketValue": 3011.24654505,
     "maturityDate": null,
     "purchaseDate": null,
     "rateKey": "SAVINGS_AU",
@@ -225,7 +225,7 @@
  },
  "auStockAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 89099.51,
+  "balance": 89099.52,
   "country": "AU",
   "currency": {
    "code": "AUD",
@@ -277,7 +277,7 @@
     "costBaseByCountry": {
      "AU": 10177.82
     },
-    "costBasis": 9179.31,
+    "costBasis": 9409.97,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -289,7 +289,7 @@
     "label": "Reinvested dividends",
     "marketValue": 10510.63,
     "maturityDate": null,
-    "pricePerUnit": 121.29561504,
+    "pricePerUnit": 121.29569999,
     "purchaseDate": "2026-07-01T00:00:00.000Z",
     "rateKey": "EQUITY_AU",
     "rollAtMaturity": false,
@@ -297,7 +297,7 @@
     "securityId": "sec-auto-EQUITY_AU",
     "taxExemption": "none",
     "taxLossPartner": null,
-    "units": 86.65300882,
+    "units": 86.65294813,
     "zeroCoupon": false
    },
    {
@@ -308,9 +308,9 @@
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": {
-     "AU": 2766.31
+     "AU": 2766.32
     },
-    "costBasis": 2678.72,
+    "costBasis": 2766.32,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -320,9 +320,9 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "Reinvested dividends",
-    "marketValue": 2856.77,
+    "marketValue": 2856.78,
     "maturityDate": null,
-    "pricePerUnit": 121.29548812,
+    "pricePerUnit": 121.29566674,
     "purchaseDate": "2030-07-01T00:00:00.000Z",
     "rateKey": "EQUITY_AU",
     "rollAtMaturity": false,
@@ -330,7 +330,7 @@
     "securityId": "sec-auto-EQUITY_AU",
     "taxExemption": "none",
     "taxLossPartner": null,
-    "units": 23.55215387,
+    "units": 23.55220163,
     "zeroCoupon": false
    },
    {
@@ -351,7 +351,7 @@
     "label": "Reinvested dividends",
     "marketValue": 2954.76,
     "maturityDate": null,
-    "pricePerUnit": 121.29558404,
+    "pricePerUnit": 121.29560033,
     "purchaseDate": "2031-07-01T00:00:00.000Z",
     "rateKey": "EQUITY_AU",
     "rollAtMaturity": false,
@@ -359,7 +359,7 @@
     "securityId": "sec-auto-EQUITY_AU",
     "taxExemption": "none",
     "taxLossPartner": null,
-    "units": 24.35999648,
+    "units": 24.35999321,
     "zeroCoupon": false
    }
   ],
@@ -588,7 +588,7 @@
  "cumulativeConsumptionUtility": 142.138661376,
  "cumulativeConsumptionUtilityCount": 72,
  "cumulativeDeficit": 0,
- "cumulativeTaxesPaid": 181413.10907,
+ "cumulativeTaxesPaid": 181369.403018,
  "currentPeriods": {
   "AU": {
    "endMs": 1972252800000,
@@ -980,9 +980,9 @@
  },
  "marketIndexAsOfMs": 1956441600000,
  "metrics": {
-  "netLiquidity": 2035588.13,
-  "netWorth": 4606732.97,
-  "netWorthInclSpeculative": 5400170.13,
+  "netLiquidity": 2035227.85,
+  "netWorth": 4606372.69,
+  "netWorthInclSpeculative": 5399809.85,
   "offsetAppliedCapacity": 0,
   "offsetIdleCapacity": 0
  },
@@ -1581,8 +1581,8 @@
    }
   },
   "US": {
-   "agi": 188819.35,
-   "tax": 33657.13,
+   "agi": 188619.25,
+   "tax": 33613.11,
    "year": 2031
   }
  },
@@ -1661,7 +1661,7 @@
  "usPersonHousehold": true,
  "usSavingsAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 413253.17149,
+  "balance": 412885.626573,
   "country": "US",
   "currency": {
    "code": "USD",
@@ -1675,7 +1675,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 413253.17149,
+    "costBasis": 412885.626573,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -1686,7 +1686,7 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 413253.17149,
+    "marketValue": 412885.626573,
     "maturityDate": null,
     "purchaseDate": null,
     "rateKey": "SAVINGS_US",
@@ -1902,7 +1902,7 @@
   "stateKey": "usStockAccount",
   "type": "brokerage"
  },
- "usTaxPaidOnUsSourceAud": 22706.8037997,
+ "usTaxPaidOnUsSourceAud": 22678.6514747,
  "usWithheldYTD": 0,
  "withinTierDraw": "SEQUENTIAL",
  "yieldCurve": {

@@ -1462,9 +1462,9 @@ export const ECONOMIC_REGIMES = {
     // an interval snap, all of which land on period ENDS, which is why `EventBuilder` grew the
     // two accessors.
     //
-    // `order: 1` puts the paycheck AFTER every order-0 event it shares a date with, and both
-    // of the ones that matter are order 0: `PERIOD_ADVANCE_*` and, on the move date itself,
-    // `CHANGE_RESIDENCY`. Two things follow, and both are the reason for the number:
+    // `order: 1` puts the paycheck AFTER every event it shares a date with that matters:
+    // `PERIOD_ADVANCE_*` (order −1, `PERIOD_ADVANCE_ORDER`) and, on the move date itself,
+    // `CHANGE_RESIDENCY` (order 0). Two things follow, and both are the reason for the number:
     //
     //   · **the move year works at all.** The household moves on 1 July. Running first, the
     //     paycheck would read the OLD residency, decline to fire on the AU calendar, and leave

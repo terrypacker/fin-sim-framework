@@ -45,6 +45,17 @@ import { UsTaxFileHandler, UsTaxFileApplyReducer } from './tax/us/tax-file-class
 
 // Per-country handler/reducer factories — keyed by country code.
 const PERIOD_ADVANCE_HANDLER = { US: UsPeriodAdvanceHandler, AU: AuPeriodAdvanceHandler };
+
+/**
+ * The period advance OPENS its instant: it runs before every other event dated the same moment
+ * (design 39 §14.10). Before the queue had a total order this held only by luck of the heap's
+ * layout, and the one place it mattered was measured: on the move date the AU year-open and
+ * `CHANGE_RESIDENCY` share 1 July, the year-open's rebalance and pool flows can SELL, and which
+ * residency that sale is made under moved a real plan by 6%. The year opening first means the
+ * sale is the departing resident's, and the move follows; the paycheck (order 1) still sees
+ * the new residency.
+ */
+export const PERIOD_ADVANCE_ORDER = -1;
 const PERIOD_ADVANCE_REDUCER = { US: UsPeriodAdvanceReducer, AU: AuPeriodAdvanceReducer };
 const TAX_SETTLE_HANDLER     = { US: UsTaxSettleHandler,     AU: AuTaxSettleHandler     };
 const TAX_SETTLE_APPLY_REDUCER = { US: UsTaxSettleApplyReducer, AU: AuTaxSettleApplyReducer };
@@ -134,6 +145,7 @@ export class TaxService {
         name:     `${cc} Period Advance`,
         type:     `PERIOD_ADVANCE_${cc}`,
         interval: 'annually',
+        order:    PERIOD_ADVANCE_ORDER,
         month:    paMonth,
         day:      paDay,
         data:     { cc, periods },
