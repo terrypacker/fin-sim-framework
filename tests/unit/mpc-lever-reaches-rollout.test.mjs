@@ -38,16 +38,17 @@
  *   its constructor at compile and therefore survives injection, while `state.liquidityGraph` and
  *   `state.drawdownSequence` stay stale. The rollout moves by ~76% of the real effect: a moving
  *   fan of plausible numbers, wrong by a quarter. A "does it move at all" check passes it.
- *   **AMOUNT-ONLY** — `_seededSim` carries forward-effective shims for the two queue levers
- *   (`retargetRothConversionEvents`, `retargetEarlyWithdrawalEvents`) which rewrite the AMOUNTS on
- *   queued events. They cannot add or remove events, so a decision that changes which events
- *   EXIST is lost while one that changes a number is honoured — from the same lever. Both halves
- *   are asserted: ROTH_AMOUNT reaches, ROTH_EVENT_SET is lost.
+ *   **AMOUNT-ONLY** — `_seededSim` used to carry re-target shims for the two queue levers, which
+ *   rewrote the AMOUNTS on queued events and could not add or remove one: a decision that changed
+ *   which events EXIST was lost while one that changed a number was honoured, from the same lever.
+ *   The derivation manifest (design 39 §14.9.4) replaced them, and both halves are asserted:
+ *   ROTH_AMOUNT and ROTH_EVENT_SET both reach.
  *
  * ─── the known-broken list ───────────────────────────────────────────────────────
  *
- * Three probes fail today. `KNOWN_BROKEN` names them and the test asserts they are STILL failing,
- * so the suite stays green while the boundary (§14.9.4) is unfixed and the list self-destructs:
+ * Two probes fail today: design 110's pool levers, which §14.10 step 3 declares. `KNOWN_BROKEN`
+ * names them and the test asserts they are STILL failing, so the suite stays green while they
+ * are undeclared and the list self-destructs:
  * fix one and this test fails telling you to strike it, rather than quietly passing.
  *
  * MLR-1  the candidate is a REAL lever — it changes the probe on a compiled sim
@@ -132,11 +133,12 @@ const CASES = [
     probeName: 'the queued 2050 ROTH conversion target, per owner',
   },
   {
-    lever: 'ROTH_EVENT_SET', expect: 'lost',
-    // The same lever, deciding something the shim cannot express. `schedules()` returns early on
-    // a non-empty schedule, so this row does not just retarget 2050 — it CANCELS the window
-    // form's conversions for every other year. The shim rewrites amounts on events that exist and
-    // can neither add nor remove one, so the rollout keeps every cancelled year.
+    lever: 'ROTH_EVENT_SET', expect: 'reaches',
+    // The same lever, deciding something no amount shim could express. `schedules()` returns
+    // early on a non-empty schedule, so this row does not just retarget 2050 — it CANCELS the
+    // window form's conversions for every other year. The old re-target shim rewrote amounts on
+    // events that existed and kept every cancelled year; the manifest takes the event SET from
+    // the candidate's compile (design 39 §14.9.4), so the rollout holds 2050 alone.
     params: { rothConversionSchedule: [{ year: 2050, incomeTarget: 250_000 }] },
     probe: (sim) => queueProbe('ROTH_CONVERSION_POLICY_EVALUATE')(sim).map(e => e.date),
     probeName: 'WHICH years have a queued ROTH conversion',
@@ -165,7 +167,7 @@ const CASES = [
 ];
 
 /** The probes §14.9.4 measured as lost. Strike an entry when you fix it. */
-const KNOWN_BROKEN = new Set(['ROTH_EVENT_SET', 'POOL_TARGET', 'POOL_SPEND_ORDER']);
+const KNOWN_BROKEN = new Set(['POOL_TARGET', 'POOL_SPEND_ORDER']);
 
 const quiet = (fn) => {
   const l = console.log, w = console.warn;
@@ -296,9 +298,10 @@ test('MLR-2b: SPENDING reaches the rollout — the control, and why it is not in
 
 test('MLR-4: seeding a rollout must not mutate the SNAPSHOT (§14.9.4)', () => {
   // The defect: `Simulation.cloneQueue()` and `_injectSnapshot` both copy events with `{ ...e }`,
-  // a SHALLOW copy, so a restored event shares its `data` object with the snapshot's. The two
-  // forward-effective re-target shims then rewrite `sim.queue.data` IN PLACE — and write straight
-  // through into the controller's snapshot.
+  // a SHALLOW copy, so a restored event shares its `data` object with the snapshot's. The
+  // re-target shims of the time then rewrote `sim.queue.data` IN PLACE, straight through into
+  // the controller's snapshot. The shims are gone (the manifest swaps `data` objects rather
+  // than writing into them), and this still guards any future in-place write.
   //
   // The consequence is not cosmetic: the snapshot is the baseline for every other candidate in the
   // same fan and for the next epoch, so one rollout's committed amounts become the starting point
@@ -325,4 +328,44 @@ test('MLR-4: seeding a rollout must not mutate the SNAPSHOT (§14.9.4)', () => {
     'a rollout wrote its candidate into the shared snapshot. Fix the two shallow event copies '
     + '(deep-copy `data`), do not relax this test — and then re-check every arm measured against '
     + 'a contaminated snapshot.');
+});
+
+// ─── MLR-5 ───────────────────────────────────────────────────────────────────
+
+test('MLR-5: a no-op candidate leaves the rollout\'s queue IDENTICAL to the snapshot\'s', () => {
+  // The manifest splices derived events by PAIRING them with their snapshot twins, so a
+  // candidate that changes nothing must change nothing: same events, same heap slots, same
+  // instanceIds. A splice that removed and re-added every derived event would re-resolve
+  // same-(date, order) ties across the queue (the "queue is not a total order" hazard) and move
+  // every rollout for no reason.
+  const strip = (q) => JSON.stringify(q.map(e => ({ ...e, date: new Date(e.date).toISOString() })));
+  assert.equal(strip(seeded(BASE).cloneQueue()), strip(SNAPSHOT.queue),
+    'a rollout of the unchanged base must start from exactly the snapshot\'s queue');
+});
+
+// ─── MLR-6 ───────────────────────────────────────────────────────────────────
+
+test('MLR-6: the cockpit\'s prepared base reproduces the live plan\'s conversions (§14.9.6)', async () => {
+  // Under the manifest a rollout's future ROTH events come from compiling the cockpit's
+  // `committed` params, and the toolset reads a non-empty schedule as the WHOLE plan. The
+  // scaffolding row `prepareBaseParams` adds used to cancel every undecided window year in
+  // every rollout. With the snapshot in hand it must describe the plan being flown exactly,
+  // including after `actuate` has persisted a decided year (the schedule is then non-empty and
+  // names that year alone, the case an "only when empty" rule misses).
+  const { COCKPIT_CONTROLS } = await import('../../src/finance/mpc/cockpit-controller.js');
+  const future = (q) => q
+    .filter(e => e.type === 'ROTH_CONVERSION_POLICY_EVALUATE' && new Date(e.date) > AS_OF)
+    .map(e => `${new Date(e.date).toISOString().slice(0, 10)} ${e.data.iraKey} ${e.data.targetIncome}`)
+    .sort();
+  const live = future(SNAPSHOT.queue);
+  assert.ok(live.length > 1, 'the fixture must have window-form conversions ahead of the snapshot');
+
+  for (const authored of [[], [{ year: 2040, incomeTarget: 90_000 }]]) {
+    const base = { ...BASE, rothConversionSchedule: authored };
+    const prepared = COCKPIT_CONTROLS.ROTH.prepareBaseParams({
+      baseParams: base, asOf: AS_OF, snapshot: SNAPSHOT });
+    assert.deepEqual(future(seeded(prepared).cloneQueue()), live,
+      `authored ${JSON.stringify(authored)}: the prepared base must compile the live plan's `
+      + 'conversions, to the bit');
+  }
 });

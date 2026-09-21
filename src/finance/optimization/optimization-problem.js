@@ -21,36 +21,13 @@ import { computeAfterTaxNetWorth, computeAfterTaxNetLiquidity, afterTaxOptionsFr
 import { set }                 from '../monte-carlo/mc-param-paths.js';
 import { scenarioParamValues } from '../param-schema-utils.js';
 import { repinExpensesIfChanged } from '../spending/strategies/explicit-bands-spending-reducer.js';
-import { retargetRothConversionEvents } from '../../scenarios/toolsets/us-roth-conversion-toolset.js';
-import { retargetEarlyWithdrawalEvents } from '../../scenarios/toolsets/us-early-withdrawal-toolset.js';
+import { captureDerivedState, applyDerivedState, captureDerivedEvents, spliceDerivedEvents }
+                               from '../../scenarios/toolsets/derived-manifest.js';
 import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES, objectiveIsWindowable,
          infeasibilityOf, INFEASIBLE_OFFSET } from './optimization-objectives.js';
 import { valuesForConfig }     from './opt-values.js';
 import { DateUtils }           from '../../simulation-framework/date-utils.js';
 import { rolloutProfiler }     from './rollout-profiler.js';
-import { DRAWDOWN_WEIGHT_MODE } from '../../scenarios/params/lever-weights.js';
-
-/**
- * Design 58 §11.2 — compile-time drawdown-control state fields a committed online
- * control must re-stamp AFTER snapshot injection. `_injectSnapshot` overwrites the
- * whole state with the now-snapshot, whose values reflect the OLD control from when
- * the snapshot was taken; without re-stamping, a committed Lever-A/C candidate is
- * inert under MPC (verified by scripts/verify-mpc-lever.mjs). These are scalar
- * toolset-resolved state fields (crossBorderDrawdown = design-58 Lever A;
- * withinTierDraw = design-58 Lever C). The design-58 Lever-B role-weight order bakes
- * into per-account drawdownPriority and needs a cascade re-run instead (§11.3 Phase
- * 3-MPC), handled separately.
- *
- * Design 65 (allocation-aware drawdown) adds its own toolset-resolved policy fields:
- * the sleeve order / lot strategy (Levers A/B) and the rebalance-coupling weight
- * (Lever C). `drawdownSleeveWeights` is an object, but the spread-apply below handles
- * it like any other field; all four are read fresh from state by the disposal
- * primitive each draw, so forwarding them is enough (no per-account re-stamp).
- */
-const FORWARD_DRAWDOWN_STATE_FIELDS = [
-  'crossBorderDrawdown', 'withinTierDraw',
-  'drawdownSleeveOrder', 'drawdownLotStrategy', 'drawdownSleeveWeights', 'drawdownRebalanceWeight',
-];
 
 /** Deep-ish equality good enough for ENUM value matching (primitives + arrays of primitives). */
 function _eq(a, b) {
@@ -405,91 +382,37 @@ export class OptimizationProblem {
   _seededSim(params) {
     const sim = this._compile(params);
     if (this.initialState?.kind === 'snapshot') {
-      // Design 58 §11.2 — capture the compile-time RESOLVED drawdown-control state
-      // fields (the toolset already turned the candidate params into these via
-      // state()) BEFORE snapshot injection overwrites them with the snapshot's OLD
-      // values. Reading the compiled state avoids re-implementing the AUTO→coupling
-      // / unknown-value resolver here.
-      const forwardDrawdown = {};
-      for (const f of FORWARD_DRAWDOWN_STATE_FIELDS) {
-        if (sim.state?.[f] !== undefined) forwardDrawdown[f] = sim.state[f];
-      }
-      // Design 58 §11.3 Phase 3-MPC (Lever B online): the role-weight order bakes
-      // into per-account `drawdownPriority` via the compile cascade — there is no
-      // scalar state field to re-stamp. Capture the compile-resolved priorities
-      // (already correct for the committed weights) so we can re-apply them onto the
-      // injected snapshot's accounts, which carry the OLD order. Only under WEIGHTED:
-      // every other strategy fixes the order at authoring/compile time and the
-      // candidate never changes it, so the injected priorities are already right.
+      // ─── design 39 §14.9.4: the derivation manifest ─────────────────────────────
       //
-      // ─── design 81 phase 7a: this FORWARDS, it does not re-derive ───────────────
+      // Injection takes realized history from the snapshot and everything the candidate
+      // DERIVED from params from this compile. Capture the derived half BEFORE injection
+      // overwrites it; the toolsets declare what it is (derived-manifest.js), so a new lever
+      // declares its own facts instead of adding a case here.
       //
-      // §14's 7a expected this block to route through `drawdownPriorityPatch` as the third
-      // copy of the cascade. It is not one. It reads what the COMPILE has already produced
-      // in `sim.state` and carries it across snapshot injection — so it is already using the
-      // one authority, for every strategy, without knowing anything about weights or banding.
-      // Re-deriving here would replace a capture of the truth with a second computation of
-      // it, which is a step backwards; the surviving drift was the owner-banding TABLE, and
-      // that is fixed at the source (`resolveOwnerBanding`). What this block did share with
-      // the copies is the `'WEIGHTED'` string, now the sentinel both sides import.
-      let forwardPriorities = null;
-      if (params.drawdownStrategy === DRAWDOWN_WEIGHT_MODE) {
-        forwardPriorities = {};
-        for (const [k, v] of Object.entries(sim.state)) {
-          if (v && typeof v === 'object' && !Array.isArray(v) && 'drawdownPriority' in v) {
-            forwardPriorities[k] = v.drawdownPriority;
-          }
-        }
-      }
-      this._injectSnapshot(sim, this.initialState.snapshot);
-      // Re-stamp the committed drawdown controls forward-effective (design 58 Lever
-      // A/C online) so the rollout from "now" honors the candidate instead of the
-      // snapshot's stale value. A no-op when the candidate didn't change them.
-      if (Object.keys(forwardDrawdown).length > 0) {
-        sim.state = { ...sim.state, ...forwardDrawdown };
-      }
-      // Re-stamp per-account drawdownPriority (Lever B online). Guard each key: the
-      // injected snapshot and the fresh compile share stateKeys by the
-      // deterministic-compile invariant, but skip any account absent on either side.
-      if (forwardPriorities) {
-        const patched = { ...sim.state };
-        let changed = false;
-        for (const [k, pr] of Object.entries(forwardPriorities)) {
-          const acct = patched[k];
-          if (acct && typeof acct === 'object' && acct.drawdownPriority !== pr) {
-            patched[k] = { ...acct, drawdownPriority: pr };
-            changed = true;
-          }
-        }
-        if (changed) sim.state = patched;
-      }
+      // This replaced four hand-written cases: the design 58 drawdown-field forward, the
+      // WEIGHTED per-account priority forward, and the ROTH / early-withdrawal re-target
+      // shims. The shims could change an AMOUNT on a queued event but never add or remove
+      // one, so a schedule deciding WHICH years convert was lost in every rollout (§14.9).
+      const snap      = this.initialState.snapshot;
+      const manifest  = sim.derivedManifest ?? { state: [], events: [] };
+      const derived   = captureDerivedState(sim.state, manifest.state);
+      const events    = captureDerivedEvents(
+        sim.queue?.data, manifest.events, new Date(snap.date).getTime());
+
+      this._injectSnapshot(sim, snap);
+      sim.state = applyDerivedState(sim.state, derived);
+      spliceDerivedEvents(sim, events, manifest.events);
+
       // Forward-effective EXPLICIT_BANDS edit (design 39 §5 / Step 5b): when the
       // controls changed the band active at "now" vs the injected snapshot's pin,
       // actuate it immediately rather than waiting for the next annual period
       // advance — so the current year reflects the decision and the projection
       // matches the live Apply (which re-pins the same way). No-op otherwise.
+      // Not a manifest entry: `monthlyExpenses` is realized (inflated to "now" by the run),
+      // and this re-derives it from the candidate's band AT now.
       const patch = repinExpensesIfChanged(
         sim.state, params.spendingExpenseBands, new Date(sim.currentDate).getTime());
       if (patch) sim.state = { ...sim.state, ...patch };
-
-      // Forward-effective Roth re-target (design 42): the injected snapshot queue
-      // holds the conversion events frozen at compile-time targets, so the
-      // rothConversionSchedule param alone wouldn't move the rollout. Rewrite the
-      // future queued conversions for the scheduled years to the committed targets
-      // (the rollout-side twin of the live ROTH.actuate). No-op when empty.
-      retargetRothConversionEvents(sim.queue?.data, params.rothConversionSchedule ?? [], {
-        inflationRate: params.inflationRate ?? 0.03,
-        nowMs:         new Date(sim.currentDate).getTime(),
-      });
-
-      // Forward-effective early-withdrawal re-target (design 45 Phase 3): same as
-      // the Roth twin above — rewrite the future queued SCHEDULED_EARLY_WITHDRAWAL
-      // events (seeded by the schedule or the opt-in optimization window) to the
-      // committed per-class amounts so the EARLY_WITHDRAWAL lever moves the rollout.
-      retargetEarlyWithdrawalEvents(sim.queue?.data, params.earlyWithdrawalSchedule ?? [], {
-        inflationRate: params.inflationRate ?? 0.03,
-        nowMs:         new Date(sim.currentDate).getTime(),
-      });
     }
     return sim;
   }

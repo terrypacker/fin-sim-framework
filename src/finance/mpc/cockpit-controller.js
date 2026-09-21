@@ -19,7 +19,7 @@ import { retargetRothConversionEvents, BRACKET_BASE_YEAR } from '../../scenarios
 import { retargetEarlyWithdrawalEvents } from '../../scenarios/toolsets/us-early-withdrawal-toolset.js';
 import { set }                     from '../monte-carlo/mc-param-paths.js';
 import { DateUtils }               from '../../simulation-framework/date-utils.js';
-import { usRatesForYear }         from '../tax-settle-service.js';
+import { usRatesForYear, usBracketGrossIncomeCeiling } from '../tax-settle-service.js';
 import {
   DRAWDOWN_WEIGHT_ROLES, DRAWDOWN_WEIGHT_MODE,
   DRAWDOWN_ROLE_LABELS, drawdownWeightKey,
@@ -231,7 +231,24 @@ export const COCKPIT_CONTROLS = {
     // before the solver can tune its incomeTarget — `set()` never creates nodes.
     // Append (preserving prior committed years) and keep chronological so the
     // entry index is stable. Idempotent.
-    prepareBaseParams: ({ baseParams, asOf }) => {
+    //
+    // ─── design 39 §14.9.6: the schedule must describe the plan being flown ─────
+    //
+    // A rollout takes its future conversion events from compiling THESE params (the
+    // derivation manifest, §14.9.4), and the toolset reads a non-empty schedule as the
+    // WHOLE plan: every year without a row converts nothing. The live sim does not work
+    // that way. It keeps the window form's events and `actuate` only re-targets the
+    // decided year. So on a window-form plan, one scaffolding row used to tell every
+    // rollout that no undecided year would ever convert: −20% of terminal wealth on a
+    // real plan, worse than switching conversions off.
+    //
+    // Given the snapshot, every future conversion the live queue holds and the schedule
+    // does not name becomes a row. A window-form year becomes `{ year, bracketCeiling }`,
+    // which the toolset resolves through the same function as the window, so the compile
+    // is exact. Anything else keeps its queued target. The now-year row then starts at
+    // the plan's own target instead of 0, so the solver's baseline is the plan. Without
+    // a snapshot (unit callers) it falls back to the old 0-row.
+    prepareBaseParams: ({ baseParams, asOf, snapshot = null }) => {
       if (!asOf) return baseParams;
       // The NEXT actionable conversion year — not the calendar year of "now": at
       // Dec 31 the year's conversion date (default Dec 1) has already passed, so
@@ -240,7 +257,14 @@ export const COCKPIT_CONTROLS = {
       const sched = Array.isArray(baseParams?.rothConversionSchedule)
         ? baseParams.rothConversionSchedule.slice()
         : [];
-      if (!sched.some(e => e?.year === year)) sched.push({ year, incomeTarget: 0 });
+      const infl = baseParams?.inflationRate ?? 0.03;
+      for (const row of _liveConversionRows(snapshot, asOf, sched, baseParams, infl)) sched.push(row);
+
+      const idx = sched.findIndex(e => e?.year === year);
+      if (idx < 0) sched.push({ year, incomeTarget: 0 });
+      else if (!Number.isFinite(sched[idx]?.incomeTarget)) {
+        sched[idx] = { ...sched[idx], incomeTarget: _rowRealTarget(sched[idx], infl) };
+      }
       sched.sort((a, b) => (a?.year ?? 0) - (b?.year ?? 0));
       return { ...baseParams, rothConversionSchedule: sched };
     },
@@ -1141,7 +1165,8 @@ export class CockpitController {
     // earlyWithdrawalSchedule, spendingExpenseBands) so they don't clobber.
     for (const control of this.controls) {
       if (control?.prepareBaseParams) {
-        this.committed = control.prepareBaseParams({ baseParams: this.committed, asOf: this.snapshot.date });
+        this.committed = control.prepareBaseParams({
+          baseParams: this.committed, asOf: this.snapshot.date, snapshot: this.snapshot });
       }
     }
   }
@@ -1597,6 +1622,47 @@ function _nextConversionYear(asOf, baseParams) {
   const start = baseParams?.rothConversionStartYear;
   if (Number.isFinite(start) && year < start) year = start;
   return year;
+}
+
+/**
+ * Schedule rows for every future conversion the live queue holds that `sched` does not name
+ * (design 39 §14.9.6). One row per year: every owner's event in a year carries the same target.
+ *
+ * A year whose queued target IS the window's (`rothConversionMaxBracket` filled at that year)
+ * becomes `{ year, bracketCeiling }`: the toolset resolves both through
+ * `usBracketGrossIncomeCeiling`, so the compiled event is bit-identical. Any other target (a
+ * live re-target the schedule lost, a 0 skip-year) is kept as its real equivalent.
+ */
+function _liveConversionRows(snapshot, asOf, sched, baseParams, infl) {
+  if (!Array.isArray(snapshot?.queue)) return [];
+  const named = new Set(sched.map(e => e?.year));
+  const asOfMs = new Date(asOf).getTime();
+  const byYear = new Map();
+  for (const e of snapshot.queue) {
+    if (e?.type !== 'ROTH_CONVERSION_POLICY_EVALUATE') continue;
+    const d = new Date(e.date);
+    const y = d.getUTCFullYear();
+    if (d.getTime() <= asOfMs || named.has(y) || byYear.has(y)) continue;
+    const t = e.data?.targetIncome;
+    if (Number.isFinite(t)) byYear.set(y, t);
+  }
+  const bracket = baseParams?.rothConversionMaxBracket;
+  const rows = [];
+  for (const [y, nominal] of byYear) {
+    const windowNominal = Number.isFinite(bracket) ? usBracketGrossIncomeCeiling(bracket, y, infl) : NaN;
+    rows.push(nominal === windowNominal
+      ? { year: y, bracketCeiling: bracket }
+      : { year: y, incomeTarget: nominal / Math.pow(1 + infl, y - BRACKET_BASE_YEAR) });
+  }
+  return rows;
+}
+
+/** A row's target in the lever's units (real base-year USD), whichever form it was authored in. */
+function _rowRealTarget(row, infl) {
+  if (Number.isFinite(row?.incomeTarget)) return row.incomeTarget;
+  if (!Number.isFinite(row?.bracketCeiling) || !Number.isFinite(row?.year)) return 0;
+  return usBracketGrossIncomeCeiling(row.bracketCeiling, row.year, infl)
+    / Math.pow(1 + infl, row.year - BRACKET_BASE_YEAR);
 }
 
 /**

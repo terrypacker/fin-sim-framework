@@ -242,6 +242,16 @@ export const US_RETIREMENT = {
   capabilities: ['retirement'],
   dependencies: ['US_BANKING', 'US_TAX', 'US_INCOME', 'US_BROKERAGE'],
 
+  // Design 39 §14.9.4 — the drawdown-policy fields `state()` resolves from params, and the
+  // per-account order the loader's cascade bakes from them. A snapshot-seeded MPC rollout
+  // keeps these from the candidate's compile, not from the snapshot (derived-manifest.js).
+  // Every one is read fresh from state by the disposal path, so the compiled value is enough.
+  derivedState: [
+    'drawdownMode', 'crossBorderDrawdown', 'withinTierDraw',
+    'drawdownSleeveOrder', 'drawdownLotStrategy', 'drawdownSleeveWeights', 'drawdownRebalanceWeight',
+    '*.drawdownPriority',
+  ],
+
   types: {
     handlers: [
       MonthlyExpensesHandler, HouseRunningCostHandler, RealPropertyRepairTickHandler, PayrollHandler, MonthlySocialSecurityHandler,

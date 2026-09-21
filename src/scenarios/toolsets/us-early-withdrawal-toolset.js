@@ -118,6 +118,10 @@ export const US_EARLY_WITHDRAWAL = {
   capabilities: ['early-withdrawal'],
   dependencies: ['US_RETIREMENT', 'US_BROKERAGE', 'US_TAX'],
 
+  // Design 39 §14.9.4 — `schedules()` reads params, people and accounts only, so a rollout
+  // takes these events from the candidate's compile rather than the snapshot's queue.
+  derivedEvents: ['SCHEDULED_EARLY_WITHDRAWAL'],
+
   types: {
     handlers: [EarlyWithdrawalPolicyHandler],
     reducers: [ScheduledEarlyWithdrawalApplyReducer],

@@ -926,8 +926,9 @@ in-place shims patch the AMOUNTS and nothing patches the event SET, which is the
 measured at ~20% of terminal wealth on a real plan, an order of magnitude more than the gap this
 section was chartered to explain. H1 and H2 are not needed and are not supported.
 
-The fix is chosen — **§14.9.4's derivation manifest**, after the cheaper per-lever shim was tested
-against design 110's pool levers and failed (§14.9.4's table: half-live, 76% of the truth). The
+The fix is **BUILT (2026-09-20): §14.9.4's derivation manifest**, chosen after the cheaper
+per-lever shim was tested against design 110's pool levers and failed (§14.9.4's table: half-live,
+76% of the truth). It needed §14.9.6 fixed first, and that is built too (§14.9.8). The
 gate is BUILT (§14.9.5). Two further findings surfaced while building it (§14.9.7): one real
 defect, fixed, and one that turned out to be the gate's own harness comparing two different plans,
 also fixed. **§14.10 is the ordered plan.**
@@ -1398,6 +1399,79 @@ shared one is already contaminated by the time it runs, which is the defect hidi
 This is also the sharpest argument for §14.9.4's boundary over any further shim: **four shims in,
 one of them was silently corrupting the measurement the others were there to protect.**
 
+#### 14.9.8 Built — the manifest, and the §14.9.6 fix it could not ship without
+
+**The manifest** (`src/scenarios/toolsets/derived-manifest.js`). A toolset declares
+`derivedState` (a top-level key, or `'*.<field>'` for a per-object field) and `derivedEvents`
+(event types). `ScenarioCompiler` stamps the union onto the sim as `sim.derivedManifest`. The
+stamp is not state, so no golden or serializer sees it. `_seededSim` captures the derived half of
+the fresh compile, injects the snapshot, then lays the derived half back over it. The four
+special cases in `_seededSim` are deleted: `FORWARD_DRAWDOWN_STATE_FIELDS`, the WEIGHTED
+per-account priority forward, and both re-target shims. Declared today:
+
+| toolset | declares |
+|---|---|
+| `US_RETIREMENT` | `drawdownMode`, the six fields the old list forwarded, `'*.drawdownPriority'` |
+| `AU_RETIREMENT` | `'*.drawdownPriority'` (an AU-only plan has no US_RETIREMENT) |
+| `US_ROTH_CONVERSION` | `ROTH_CONVERSION_POLICY_EVALUATE` |
+| `US_EARLY_WITHDRAWAL` | `SCHEDULED_EARLY_WITHDRAWAL` |
+
+`drawdownMode` is new: it is derived from `drawdownStrategy` the same way and was never forwarded.
+The retirement toolsets retain their `retarget*` exports, because the LIVE `actuate` paths still
+use them. Only the rollout-side use is gone.
+
+Two decisions in the splice are load-bearing:
+
+- **Events are replaced by pairing, through the heap's own operations.** `restoreData` trusts
+  its array to already be a heap, so it cannot be filtered. A compiled event whose
+  `(type, date, name)` matches a snapshot event only swaps in its `data`, keeping the heap slot
+  and `instanceId`. Only a genuine difference removes or pushes a node. So a no-op candidate
+  leaves the queue bit-identical to the snapshot's, and `MLR-5` pins it.
+- **"After the snapshot" is strict.** `stepTo` runs events dated ≤ its target, so the snapshot
+  holds exactly the events after its date, and the compiled twins are the ones strictly after.
+
+**Known limit (written into the module):** a derived value is the compile's value at **t₀**. A
+value that legitimately changes mid-run from params (a design 81 recorded decision applied at
+its date, which `MpcDecisionScheduleReducer` writes into `drawdownPriority`; a design 109
+scheduled pool shape) is reverted by the pick. The four deleted cases had the same limit.
+Design 110's MPC portion (step 3) meets it head-on for `liquidityGraph`, because shapes swap the
+graph mid-run. It needs "the compile's value AS OF now", which is not built.
+
+**The goldens did not move, and should not have.** They compile from t₀ and never inject a
+snapshot. The splice hazard §14.9.4 predicted is real, but it lives in rollouts: see the
+measurement on the author's plan below.
+
+**§14.9.6 had to come first.** Under the manifest a rollout's future ROTH events come from
+compiling the cockpit's `committed` params, and the toolset reads a non-empty schedule as the
+whole plan. `ROTH.prepareBaseParams`'s `{year, incomeTarget: 0}` scaffold would therefore have
+told every rollout on a window-form plan that no undecided year converts. The old shims had been
+hiding that. "Materialize the window when the schedule is empty" is not enough, because the
+cockpit builds a fresh controller per Advise from `scenario.params`, and after the first
+`actuate` that schedule names the decided year alone. The rule is instead: **the committed
+schedule must describe the plan being flown**, and the snapshot's queue is that plan. Given the
+snapshot, `prepareBaseParams` adds a row for every future conversion year the queue holds and the
+schedule does not name. A window year becomes `{year, bracketCeiling}`, which the toolset resolves
+through the same `usBracketGrossIncomeCeiling` as the window, so it is bit-exact. The now-year
+row starts at the plan's own target, not 0. `MLR-6` asserts the prepared base compiles the live
+future conversions to the bit, both from an empty schedule and after a decided row. Without the
+snapshot it compiles one \$0 conversion where the live plan has ten. The live `actuate` still
+persists only the decided year into `scenario.params`, so a **Rebuild** of a window-form plan
+after an MPC session still cancels the undecided years. That is §14.9.6's other half, on the
+persistence side, and it is still open.
+
+**Measured on the author's plan** (values in `scenarios/d39-projection-gap/STUDY.md`, Part 6),
+snapshot at an epoch inside the conversion window. The base reproduces exactly. A raw one-row
+schedule now moves the rollout (it read exactly 0 before), and a no-op on the cockpit-prepared
+base is exact. The study also found that on that plan **no conversion after the snapshot changes
+anything**: the IRAs are already drained, and zeroing every remaining year's target, event set
+held, is bit-identical to the base. So the raw row's entire delta, a few percent of terminal
+wealth, is the no-op events it DELETES. The policy handler returns nothing at a 0 target, so the
+difference can only be same-`(date, order)` ties re-resolving on the conversion date every
+remaining year. That is the "queue is not a total order" property, now reachable from a rollout
+because a rollout can change the event set. A t₀ compile of the same row carries the same noise,
+so rollout ≡ compile holds. A total-order tiebreak in the queue comparator would remove it, and
+would move every golden. That is a decision in its own right, not part of this step.
+
 ### 14.10 Where the next session starts
 
 Everything above is measured. This is the order to act in, and the order matters: step 3 is unsafe
@@ -1407,26 +1481,30 @@ before step 2.
 raw-bag compile against a resolved-base snapshot, which are two plans. No queue defect, production
 untouched, and every number above stands. The gate now also asserts the ROTH amount half.
 
-**2. The derivation manifest (§14.9.4).** Toolsets declare `derivedState` (with a path form such
-as `'*.drawdownPriority'`) and `derivedEvents`; injection becomes
-`state = { ...snapshot.state, ...pick(compiled, derivedState) }` and
-`queue = snapshot.queue − derivedEvents + compiled(derivedEvents)`. The four existing shims in
-`_seededSim` are DELETED and become declarations. Expect the whole-state goldens to move where
-spliced events re-resolve same-`(date, order)` ties — measure and regold deliberately. The gate
-from §14.9.5 is the acceptance test: strike each lever from its `KNOWN_BROKEN` as it starts
-reaching the rollout.
+**2. ~~The derivation manifest~~ (§14.9.4): BUILT 2026-09-20, see §14.9.8.** ROTH_EVENT_SET
+struck from the gate's `KNOWN_BROKEN`. The four `_seededSim` special cases are deleted, §14.9.6's
+rollout half is fixed as the prerequisite, and the suite is unchanged. The lab verifier
+(`verify-mpc-lever.mjs`) is byte-identical before and after.
 
-**3. Design 110's MPC portion.** After step 2 it is two declarations (`liquidityGraph`,
-`drawdownSequence`). **Before step 2 it ships a lever that shows 76% of its own effect**, which
-is why it is not started yet.
+**3. Design 110's MPC portion: NEXT.** Two declarations (`liquidityGraph`, `drawdownSequence`)
+plus striking `POOL_TARGET` / `POOL_SPEND_ORDER` from the gate. First, settle §14.9.8's known
+limit: design 109 shapes swap the graph mid-run, so a t₀ pick would revert a realized shape
+change on any plan that schedules one, and the author's plan does.
 
 **Independent of all three, and small:**
 
 - **The interim cockpit refusal.** A lever the rollout cannot see is worse than inert — it is
   advised on wrongly. `inertWhen` carries the vocabulary; this needs a third kind, because "the
   search cannot see this lever" is neither DISABLED nor INERT (§14.8, §14.9.4).
-- **`ROTH.prepareBaseParams` (§14.9.6).** Seed the year's window-equivalent target, not 0, so
-  scaffolding a row stops silently cancelling bracket-fill for every undecided year.
+- **~~`ROTH.prepareBaseParams`~~ (§14.9.6): rollout half BUILT (§14.9.8).** Still open: the
+  persistence half. `actuate` writes only the decided year into `scenario.params`, so a Rebuild
+  of a window-form plan after a session cancels every undecided year. The same fix applies:
+  persist the rows the live queue implies.
+- **Queue total order (§14.9.8).** Removing no-op events moved the author's plan by a few
+  percent of terminal wealth. Decide whether the comparator gets a stable tiebreak. It would
+  move every golden.
+- **Two defaults for `rothConversionOwner`** (§14.9.7): `'primary'` in the scenario, `'both'`
+  in the toolset schema.
 - **Report a flat objective (§14.9.3, §14.8.4).** The card renders a confident move chosen from a
   flat surface, and says nothing when the goal's own target is unreachable. Quote any A against
   the seed spread §14.9.3 measured, never against zero.

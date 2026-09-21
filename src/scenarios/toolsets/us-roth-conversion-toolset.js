@@ -94,6 +94,11 @@ export const US_ROTH_CONVERSION = {
   capabilities: ['roth-conversion'],
   dependencies: ['US_TAX'],
 
+  // Design 39 §14.9.4 — `schedules()` is a pure function of params (it reads parameters,
+  // people, accounts), so a rollout takes these events from the candidate's compile. That is
+  // what lets a schedule decide WHICH years convert, not only how much.
+  derivedEvents: ['ROTH_CONVERSION_POLICY_EVALUATE'],
+
   types: {
     handlers: [RothConversionHandler, RothConversionPolicyHandler],
     reducers: [RothConversionApplyReducer],

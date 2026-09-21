@@ -81,6 +81,10 @@ export const AU_RETIREMENT = {
   capabilities: ['superannuation'],
   dependencies: ['AU_TAX', 'AU_BANKING', 'AU_INCOME'],
 
+  // Design 39 §14.9.4 — the per-account order the loader's cascade bakes from params. Also
+  // declared by US_RETIREMENT; the manifest is a union, and an AU-only plan still needs it.
+  derivedState: ['*.drawdownPriority'],
+
   types: {
     handlers: [
       MonthlyExpensesHandler, MonthlySocialSecurityHandler,

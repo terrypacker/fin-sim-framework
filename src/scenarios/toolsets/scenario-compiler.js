@@ -18,6 +18,7 @@ import { AssetAppreciateReducer } from '../../finance/handlers/asset-appreciatio
 import { LoanPaymentApplyReducer } from '../../finance/account-rules/loan-classes.js';
 import { PeriodService } from '../../finance/period/period-service.js';
 import { assertRunIsPlayable, foldQueueLeverRuns } from '../../finance/mpc/run-compile-fold.js';
+import { collectDerivedManifest } from './derived-manifest.js';
 
 /**
  * ScenarioCompiler — consumes a declarative scenario definition and a
@@ -134,6 +135,11 @@ export class ScenarioCompiler {
     } catch {
       Object.assign(sim.state, JSON.parse(JSON.stringify(statePatches)));
     }
+
+    // Design 39 §14.9.4 — what this compile DERIVED from params, as opposed to what a run
+    // realizes. Read only by a snapshot-seeded MPC rollout, which keeps these from the compile
+    // and everything else from the snapshot. Not state, so no golden or serializer sees it.
+    sim.derivedManifest = collectDerivedManifest(resolved);
 
     // Note: display-format currency codes for accounts/assets are stamped by
     // ScenarioLoader._registerDisplayCurrencies() (covers both the compile and
