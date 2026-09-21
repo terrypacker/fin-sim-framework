@@ -512,6 +512,16 @@ legal is the sentence §15 asks for and it has not been written.
 Steps 2 and 3 are separately shippable and separately verifiable, which is the point of the
 split: step 2 cannot change a run, and step 3 changes exactly one thing.
 
+**Addendum, 20 Sep 2026 — a row can select the base graph.** Design 39 §14.9.9 needed it for the
+MPC's graph-swap lever and it is now part of this schedule: `{ year, shape: null }` selects the
+`liquidityGraph` param, so a plan can return to its own structure after borrowing a shape, and a
+decision to stay on the base graph in a year before the first row can be saved at all. It has to
+be an explicit null; a row with no `shape` key is refused as before. §9's identity rule is
+unchanged, so a pool carried by the base graph, dropped by a shape and back in the base graph
+retires and restarts, and `_collectResurrectedPools` says so ("… → the base graph"). The
+schedule editor offers "Base graph" in the shape cell and carries a null row through its
+build-time sync, which previously would have deleted it.
+
 ## 15. Open questions
 
 - **Q1 — the switch year as a lever.** The obvious sweep is *"what does moving the bridge shape

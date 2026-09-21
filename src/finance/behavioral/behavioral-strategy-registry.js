@@ -701,7 +701,8 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
         type: 'LiquidityGraphSchedule', group: 'Spending', mc: false, opt: false,
         defaultValue: null,
         description: 'When each pool shape takes over: [{ year, shape }], the shape naming a key of '
-          + 'Liquidity Pool Shapes (design 109). A step function — the row with the greatest year '
+          + 'Liquidity Pool Shapes (design 109), or null for the base Liquidity Pools (graph) — how a '
+          + 'plan returns to it, and how the MPC Pool Shape lever saves a decision to stay on it. A step function — the row with the greatest year '
           + 'not after the current one governs, and BEFORE the first row the base Liquidity Pools '
           + '(graph) governs, so adding a schedule never requires copying the existing graph into a '
           + 'shape. One row per year (two rows for one year is refused; only one shape can be active '

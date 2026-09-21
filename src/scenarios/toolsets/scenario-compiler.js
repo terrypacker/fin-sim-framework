@@ -139,7 +139,7 @@ export class ScenarioCompiler {
     // Design 39 §14.9.4 — what this compile DERIVED from params, as opposed to what a run
     // realizes. Read only by a snapshot-seeded MPC rollout, which keeps these from the compile
     // and everything else from the snapshot. Not state, so no golden or serializer sees it.
-    sim.derivedManifest = collectDerivedManifest(resolved);
+    sim.derivedManifest = collectDerivedManifest(resolved, context);
 
     // Note: display-format currency codes for accounts/assets are stamped by
     // ScenarioLoader._registerDisplayCurrencies() (covers both the compile and

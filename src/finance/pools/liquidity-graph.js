@@ -1509,8 +1509,9 @@ function _scheduleAdvisories(p, accounts) {
     // console for one graph.
     const quiet = [];
     const shapes = _normalizeShapes(p, accounts, null, quiet);
-    const entries = [{ shapeId: null, graph: _normalizeFromParams(p, accounts, quiet) },
-                     ...rows.map(r => ({ shapeId: r.shape, graph: shapes.get(r.shape) }))];
+    const base = _normalizeFromParams(p, accounts, quiet);
+    const entries = [{ shapeId: null, graph: base },
+                     ...rows.map(r => ({ shapeId: r.shape, graph: r.shape === null ? base : shapes.get(r.shape) }))];
     return [..._collectUnscheduledShapes(shapes, rows),
             ..._collectResurrectedPools(entries)];
   } catch {
@@ -1600,7 +1601,8 @@ export function resolveLiquidityGraphSchedule(params, accounts = []) {
       fromMs:  januaryFirstUtc(row.year),
       year:    row.year,
       shapeId: row.shape,
-      graph:   shapes.get(row.shape),
+      // A base row (`shape: null`) re-selects the opening entry's graph.
+      graph:   row.shape === null ? out[0].graph : shapes.get(row.shape),
     });
   }
   // Design 110 §4.3 — the same collectors `collectAuthoredGraphProblems` returns as
@@ -1638,8 +1640,20 @@ function _normalizeSchedule(rawSchedule, rawShapes) {
       err(`liquidityGraphSchedule[${i}] year '${raw.year}' is not a whole year`);
     }
     const shape = raw.shape;
+    // `shape: null` selects the BASE graph (design 39 §14.9.8). The opening entry is the base
+    // graph but is not a row, so without this a plan could never return to it, and an MPC
+    // decision could not say "stay on the base graph" in a year before the first row. It must
+    // be an explicit null: a row with no `shape` key is the typo it always was.
+    if (shape === null && Object.hasOwn(raw, 'shape')) {
+      if (seen.has(year)) {
+        err(`liquidityGraphSchedule has two rows for ${year} ('${seen.get(year)}' and the base `
+          + 'graph) — only one shape can be active for a pool at a time');
+      }
+      seen.set(year, null);
+      return { year, shape: null };
+    }
     if (typeof shape !== 'string' || !shape) {
-      err(`liquidityGraphSchedule[${i}] (year ${year}) names no shape`);
+      err(`liquidityGraphSchedule[${i}] (year ${year}) names no shape (null selects the base graph)`);
     }
     if (!known.has(shape)) {
       err(`liquidityGraphSchedule[${i}] (year ${year}) names shape '${shape}', which is not in `

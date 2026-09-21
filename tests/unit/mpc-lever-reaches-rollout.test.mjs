@@ -46,9 +46,9 @@
  *
  * ─── the known-broken list ───────────────────────────────────────────────────────
  *
- * Two probes fail today: design 110's pool levers, which §14.10 step 3 declares. `KNOWN_BROKEN`
- * names them and the test asserts they are STILL failing, so the suite stays green while they
- * are undeclared and the list self-destructs:
+ * No probe fails today (§14.9.8 declared the last, the pool graph). `KNOWN_BROKEN` is where a
+ * newly found one goes: the test asserts it is STILL failing, so the suite stays green while it
+ * is undeclared and the list self-destructs:
  * fix one and this test fails telling you to strike it, rather than quietly passing.
  *
  * MLR-1  the candidate is a REAL lever — it changes the probe on a compiled sim
@@ -152,22 +152,26 @@ const CASES = [
     probeName: 'the queued 2050 early-withdrawal amount',
   },
   {
-    lever: 'POOL_TARGET', expect: 'lost',
+    lever: 'POOL_TARGET', expect: 'reaches',
     // design 110 leg C's `pool.<id>.targetScale`, as the target it resolves to.
     params: { liquidityGraph: graphWith('buffer', p => { p.target.value = 1; }) },
     probe: (sim) => sim.state?.liquidityGraph?.pools?.map(p => [p.id, p.target?.value ?? null]),
     probeName: 'state.liquidityGraph\'s pool targets',
   },
   {
-    lever: 'POOL_SPEND_ORDER', expect: 'lost',
+    lever: 'POOL_SPEND_ORDER', expect: 'reaches',
     params: { liquidityGraph: graphWith('wrappers', p => { p.spendOrder = 5; }) },
     probe: (sim) => sim.state?.drawdownSequence?.map(e => e.key),
     probeName: 'state.drawdownSequence, the compiled spend order',
   },
 ];
 
-/** The probes §14.9.4 measured as lost. Strike an entry when you fix it. */
-const KNOWN_BROKEN = new Set(['POOL_TARGET', 'POOL_SPEND_ORDER']);
+/**
+ * The probes §14.9.4 measured as lost. Strike an entry when you fix it. Empty since §14.9.8;
+ * kept, with MLR-3, so the next lever that derives something at compile has somewhere to be
+ * named while it is broken.
+ */
+const KNOWN_BROKEN = new Set([]);
 
 const quiet = (fn) => {
   const l = console.log, w = console.warn;
@@ -368,4 +372,56 @@ test('MLR-6: the cockpit\'s prepared base reproduces the live plan\'s conversion
       `authored ${JSON.stringify(authored)}: the prepared base must compile the live plan's `
       + 'conversions, to the bit');
   }
+});
+
+// ─── MLR-5b ──────────────────────────────────────────────────────────────────
+
+test('MLR-5b: a no-op candidate leaves the rollout\'s STATE identical to the snapshot\'s', () => {
+  // The state half of MLR-5. Every manifest answer — the t₀ picks and the `derivedStateAt`
+  // answers alike — must come back equal to what the snapshot already holds when the candidate
+  // is the plan, or every rollout differs from "now" before it has stepped at all.
+  assert.equal(JSON.stringify(seeded(BASE).state), JSON.stringify(SNAPSHOT.state));
+});
+
+// ─── MLR-7 ───────────────────────────────────────────────────────────────────
+
+/**
+ * A plan whose shape SWITCHES before the snapshot (design 109). The shape moves the wrappers
+ * ahead of growth: a different compiled spend order, so the switch is visible in state.
+ */
+const SHAPED = {
+  ...BASE,
+  liquidityShapes: { late: graphWith('wrappers', p => { p.spendOrder = 30; }) },
+  liquidityGraphSchedule: [{ year: 2040, shape: 'late' }],
+};
+
+test('MLR-7: a shape switched before "now" is KEPT, and a candidate edit to it reaches (§14.9.8)', () => {
+  // The t₀-pick limit, made concrete. The compile's t₀ projection is the BASE graph; the run
+  // switched to `late` in 2040. A t₀ pick would put the rollout back on the base graph — a
+  // realized switch undone — so the graph is answered AT now instead.
+  const snap = quiet(() =>
+    problem(SHAPED, { kind: 'compile', cfgTemplate: null }).rollToSnapshot({}, AS_OF));
+  const seededOn = (params) => quiet(() =>
+    seededFrom(problem(params, { kind: 'snapshot', snapshot: snap, cfgTemplate: null })));
+  const order = (st) => st.drawdownSequence?.map(e => e.key);
+
+  assert.equal(snap.state.liquidityShapeId, 'late', 'fixture: the run must have switched by AS_OF');
+  const base = seededOn(SHAPED).state;
+  assert.equal(base.liquidityShapeId, 'late', 'a rollout must not undo a realized switch');
+  assert.deepEqual(order(base), order(snap.state));
+  assert.equal(JSON.stringify(base), JSON.stringify(snap.state), 'and the no-op is exact');
+
+  // A candidate that edits the LIVE shape reaches the rollout; the same edit on a compiled sim
+  // at AS_OF is the reference.
+  const edited = { ...SHAPED, liquidityShapes: {
+    late: graphWith('wrappers', p => { p.spendOrder = 5; }) } };
+  const cand = seededOn(edited).state;
+  assert.notDeepEqual(order(cand), order(base), 'the candidate must move the rollout');
+  const ref = quiet(() => {
+    const sim = compiled(edited);
+    sim.stepTo(AS_OF);
+    return sim.state;
+  });
+  assert.deepEqual(order(cand), order(ref),
+    'the rollout starts from the order the candidate\'s own plan has at AS_OF');
 });

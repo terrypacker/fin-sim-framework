@@ -504,6 +504,67 @@ export const EARLY_WITHDRAWAL_SCHEDULE = {
     _foldYearSchedule(baseParams?.earlyWithdrawalSchedule, rows, ['taxDeferredAmount', 'rothAmount']),
 };
 
+/**
+ * POOL_SHAPE (design 39 §14.10 step 3) — which design 109 shape governs from a year on.
+ *
+ * The graph-swap lever. A decision is a `liquidityGraphSchedule` row, `{ year, shape }`, with
+ * `shape: null` selecting the base graph; so, like ROTH, a recorded row folds into the param
+ * before the toolsets build anything, and a replay is a hand-authored schedule. No `applyAt`:
+ * the swap is carried out by `PoolShapeScheduleReducer` at the row's year, in a replay exactly
+ * as in the live run and in a rollout.
+ *
+ * The gate asks for something to swap between (a named shape) and something that already runs
+ * the pools (a base graph or a schedule). A plan with shapes and neither has no pool reducers
+ * registered, and the lever would decide a shape no reducer is there to apply.
+ */
+export const POOL_SHAPE_SCHEDULE = {
+  foldsAtCompile: true,
+  paramKey:  'liquidityGraphSchedule',
+  appliesTo: (bp) => bp?.liquidityGraphEnabled !== false
+    && shapeIdsOf(bp).length > 0
+    && (_isGraph(bp?.liquidityGraph)
+        || (Array.isArray(bp?.liquidityGraphSchedule) && bp.liquidityGraphSchedule.length > 0)),
+  requirement: 'Author at least one Liquidity Pool Shape, and a base Liquidity Pools graph or a '
+    + 'Liquidity Pool Schedule (Scenario panel), to use this lever.',
+  scheduleKey: (variable) =>
+    (Number.isFinite(variable?._year) ? yearKey(variable._year) : (variable?.paramKey ?? null)),
+  foldAt: ({ rows, baseParams }) => _foldShapeSchedule(baseParams?.liquidityGraphSchedule, rows),
+};
+
+/** The named shapes a plan authors, in authored order. */
+export function shapeIdsOf(bp) {
+  const shapes = bp?.liquidityShapes;
+  return (shapes && typeof shapes === 'object' && !Array.isArray(shapes)) ? Object.keys(shapes) : [];
+}
+
+function _isGraph(g) {
+  return g != null && typeof g === 'object' && Array.isArray(g.pools) && g.pools.length > 0;
+}
+
+/**
+ * Fold `year@Y` rows into the schedule: one `{ year, shape }` per decided year, replacing an
+ * authored row for the same year. A value must be a shape id or null (the base graph);
+ * anything else is dropped rather than folded, for `_modePatch`'s reason — a recorded run is
+ * data on disk, and the normalizer's refusal is a better place to meet a typo than a silent
+ * substitution.
+ */
+function _foldShapeSchedule(base, rows) {
+  const out = (Array.isArray(base) ? base : []).map(e => ({ ...e }));
+  let touched = false;
+  for (const row of (Array.isArray(rows) ? rows : [])) {
+    const parts = yearKeyParts(row?.key);
+    const shape = row?.value;
+    if (parts == null || !(shape === null || (typeof shape === 'string' && shape))) continue;
+    const i = out.findIndex(e => Number(e?.year) === parts.year);
+    if (i >= 0) out[i] = { year: parts.year, shape };
+    else        out.push({ year: parts.year, shape });
+    touched = true;
+  }
+  if (!touched) return null;
+  out.sort((a, b) => Number(a.year) - Number(b.year));
+  return out;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────────
 // The gates — D11's first half (§16.3, and the case that settles Q5)
 // ─────────────────────────────────────────────────────────────────────────────────
@@ -659,6 +720,7 @@ export const LEVER_SCHEDULE = {
   DRAWDOWN_WEIGHTS:    { ...LEVER_GATES.DRAWDOWN_WEIGHTS, ...DRAWDOWN_WEIGHTS_SCHEDULE },
   ALLOCATION_MIX:      { ...LEVER_GATES.ALLOCATION_MIX, ...ALLOCATION_MIX_SCHEDULE },
   BOND_LADDER:         { ...LEVER_GATES.BOND_LADDER, ...BOND_LADDER_SCHEDULE },
+  POOL_SHAPE:          POOL_SHAPE_SCHEDULE,
 };
 
 /**

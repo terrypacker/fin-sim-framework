@@ -10,7 +10,7 @@ design: [109-time-varying-pool-shapes.md, 97-liquidity-pools-and-drawdown-sequen
 sources: []
 stamps:
   param:liquidityShapes: c6dadc
-  param:liquidityGraphSchedule: b78f3a
+  param:liquidityGraphSchedule: 2508ac
 ---
 
 A plan rarely wants the same buffer for forty years. While a wage is coming in, cash is
@@ -22,7 +22,7 @@ reachable, so what is sensible to spend first is no longer what it was.
 Held to one structure, you pick an average that is wrong at both ends. So the structure
 can be named, several named alternatives can sit in a plan together, and a small table
 says which is in charge from which year — the move [Allocation](allocation.md) already
-makes for a target mix.
+makes for a target mix. A row can also hand control back to the plan's own structure.
 
 Two rules make this safe rather than merely flexible.
 

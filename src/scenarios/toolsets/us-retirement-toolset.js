@@ -34,7 +34,7 @@ import { SLEEVE_ORDER_MODES, LOT_STRATEGIES, sleeveWeightsFromParams } from '../
 import { normalizeDrawdownSequence } from '../../finance/holdings/drawdown-sequence.js';
 import { resolveLiquidityGraph, compileToDrawdownSequence, resolveLiquidityGraphSchedule }
   from '../../finance/pools/liquidity-graph.js';
-import { PoolShapeScheduleReducer } from '../../finance/pools/pool-shape-schedule-reducer.js';
+import { PoolShapeScheduleReducer, liquidityStateAt } from '../../finance/pools/pool-shape-schedule-reducer.js';
 import { MpcDecisionScheduleReducer } from '../../finance/mpc/mpc-decision-schedule-reducer.js';
 import { resolveActiveMpcRun }      from '../../finance/mpc/run-schedule.js';
 import { OutOfFundsHandler }            from '../../finance/handlers/out-of-funds-handler.js';
@@ -251,6 +251,24 @@ export const US_RETIREMENT = {
     'drawdownSleeveOrder', 'drawdownLotStrategy', 'drawdownSleeveWeights', 'drawdownRebalanceWeight',
     '*.drawdownPriority',
   ],
+
+  // Design 39 §14.9.8 — the liquidity graph, its compiled spend order and the live shape id,
+  // answered AT the rollout's "now" rather than at t₀. A t₀ pick would revert a design 109
+  // shape switch the run has already made, and the snapshot's stamp is the old plan's graph.
+  // Resolved lazily: only a snapshot-seeded rollout ever calls it, and the resolvers are the
+  // same two the projection and the reducers use, over the same params.
+  derivedStateAt(context) {
+    const p = context.parameters;
+    const accounts = context.accounts ?? [];
+    let compiled = null;
+    return (state, nowMs) => {
+      compiled ??= {
+        graph:    resolveLiquidityGraph(p, accounts),
+        schedule: resolveLiquidityGraphSchedule(p, accounts),
+      };
+      return liquidityStateAt(compiled, state, nowMs);
+    };
+  },
 
   types: {
     handlers: [

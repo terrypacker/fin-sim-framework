@@ -21,8 +21,8 @@ import { computeAfterTaxNetWorth, computeAfterTaxNetLiquidity, afterTaxOptionsFr
 import { set }                 from '../monte-carlo/mc-param-paths.js';
 import { scenarioParamValues } from '../param-schema-utils.js';
 import { repinExpensesIfChanged } from '../spending/strategies/explicit-bands-spending-reducer.js';
-import { captureDerivedState, applyDerivedState, captureDerivedEvents, spliceDerivedEvents }
-                               from '../../scenarios/toolsets/derived-manifest.js';
+import { captureDerivedState, applyDerivedState, applyDerivedStateAt, captureDerivedEvents,
+         spliceDerivedEvents } from '../../scenarios/toolsets/derived-manifest.js';
 import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES, objectiveIsWindowable,
          infeasibilityOf, INFEASIBLE_OFFSET } from './optimization-objectives.js';
 import { valuesForConfig }     from './opt-values.js';
@@ -394,13 +394,15 @@ export class OptimizationProblem {
       // shims. The shims could change an AMOUNT on a queued event but never add or remove
       // one, so a schedule deciding WHICH years convert was lost in every rollout (§14.9).
       const snap      = this.initialState.snapshot;
-      const manifest  = sim.derivedManifest ?? { state: [], events: [] };
+      const manifest  = sim.derivedManifest ?? { state: [], events: [], at: [] };
+      const nowMs     = new Date(snap.date).getTime();
       const derived   = captureDerivedState(sim.state, manifest.state);
-      const events    = captureDerivedEvents(
-        sim.queue?.data, manifest.events, new Date(snap.date).getTime());
+      const events    = captureDerivedEvents(sim.queue?.data, manifest.events, nowMs);
 
       this._injectSnapshot(sim, snap);
       sim.state = applyDerivedState(sim.state, derived);
+      // After the t₀ picks: a value the plan changes mid-run is answered AT now (§14.9.8).
+      sim.state = applyDerivedStateAt(sim.state, manifest.at, nowMs);
       spliceDerivedEvents(sim, events, manifest.events);
 
       // Forward-effective EXPLICIT_BANDS edit (design 39 §5 / Step 5b): when the

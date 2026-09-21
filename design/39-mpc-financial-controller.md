@@ -928,8 +928,9 @@ section was chartered to explain. H1 and H2 are not needed and are not supported
 
 The fix is **BUILT (2026-09-20): §14.9.4's derivation manifest**, chosen after the cheaper
 per-lever shim was tested against design 110's pool levers and failed (§14.9.4's table: half-live,
-76% of the truth). It needed §14.9.6 fixed first, and that is built too (§14.9.8). The
-gate is BUILT (§14.9.5). Two further findings surfaced while building it (§14.9.7): one real
+76% of the truth). It needed §14.9.6 fixed first, and that is built too (§14.9.8). Design
+110's MPC portion is BUILT as a graph-swap lever (§14.9.9), and the gate's known-broken list is
+empty. The gate is BUILT (§14.9.5). Two further findings surfaced while building it (§14.9.7): one real
 defect, fixed, and one that turned out to be the gate's own harness comparing two different plans,
 also fixed. **§14.10 is the ordered plan.**
 What follows is kept as written, because the reasoning is what got here.
@@ -1472,6 +1473,73 @@ because a rollout can change the event set. A t₀ compile of the same row carri
 so rollout ≡ compile holds. A total-order tiebreak in the queue comparator would remove it, and
 would move every golden. That is a decision in its own right, not part of this step.
 
+#### 14.9.9 Built — the pool graph in rollouts, and a graph swap the solver can test and actuate
+
+§14.9.8 left one known limit, and step 3 walked into it. Design 109 shapes swap the graph
+mid-run, and declaring `liquidityGraph` / `drawdownSequence` as t₀ picks would put every
+rollout taken after a switch back on the opening graph. The operator's framing of the fix was
+that supporting shapes at all needs **a way to swap the graph that the solver can test and
+actuate**. That is what was built, in three parts.
+
+**1. `derivedStateAt`: the compile's value at now.** A manifest entry may be a function instead
+of a path. The toolset builds it from its own compile's context, and it answers "what does this
+plan say at `nowMs`, given the run so far?" `US_RETIREMENT` declares one for the liquidity
+state, `liquidityStateAt` beside the shape reducer. It asks the candidate's resolved schedule
+at the **last period advance the run made**, the latest `state.currentPeriods` start ≤ now,
+because the reducer only switches on an advance. It returns only keys that differ, so a
+no-op is exact. It narrows the pool cube only when the shape itself changes (design 109 §9).
+What it cannot re-derive stays realized: pool history, streaks, trailing highs.
+
+The half that was already right stays untouched. The flow reducers and the shape reducer hold
+graph and schedule from their constructors, and in a rollout those constructors are the
+candidate's. Only the state half was stale.
+
+**2. Base-graph rows.** A schedule row could only name a shape, and the base graph is the
+opening entry, not a row. So a plan could never return to it, and a decision to stay on it
+before the first row could not be written down. `{ year, shape: null }` now selects it (design
+109 addendum). The schedule editor had been dropping any non-string row in its build-time sync,
+so a saved base row would have been deleted by opening the panel. It now carries one through.
+
+**3. `POOL_SHAPE`, the lever.** One ENUM variable per epoch: which shape governs from the next
+1 January at or after the epoch, over `[base, ...authored shapes]`.
+
+- *Scaffold:* the row for that year, carrying the shape **already in force** there, so the
+  unchanged candidate is the plan (§14.9.6's lesson, applied from the start).
+- *Test:* a rollout compiles the candidate's schedule. At a 1-January epoch `derivedStateAt`
+  applies it on the spot; otherwise the candidate's reducer applies it at the row.
+- *Actuate:* saves the row into `scenario.params`, updates the running sim's
+  `PoolShapeScheduleReducer` and both flow reducers (registering the shape reducer if the plan
+  had no schedule), and re-stamps state at now.
+- *Replay:* `foldsAtCompile` into `liquidityGraphSchedule`, as ROTH does. No `applyAt` and no
+  mid-run graph mutation anywhere: the swap is always the shape reducer at a row.
+- *Gate:* needs a named shape, plus a base graph or a schedule. Without the latter no pool
+  reducer is registered to carry a decision out.
+
+**Why the shape and not `targetScale`.** Design 110 §13.11: a candidate factor now reaches a
+rollout, but the factor is a hidden overlay with no saved form, so a live decision could not be
+persisted for a Rebuild or a replay. A shape is authored, saved, and already what an author means
+by "a bigger buffer from year Y".
+
+**Tests.** `mpc-lever-reaches-rollout` strikes `POOL_TARGET` and `POOL_SPEND_ORDER`, so
+`KNOWN_BROKEN` is now empty. It adds MLR-5b (the no-op leaves STATE identical, not just the
+queue) and MLR-7 (a shape switched before now is kept, and an edit to it reaches). Both MLR-7
+mutations fail as they should: a disabled `derivedStateAt`, and a naive t₀ declaration.
+`mpc-pool-shape-lever` PSL-1..8 cover the gate, the scaffold, the variable, the fold, no-op
+exactness with and without a schedule, reach at both epoch kinds, and live actuation matching a
+t₀ compile of the saved schedule. That includes a mid-year case on an unscheduled plan, where
+only the runtime-registered reducer can make the swap. Suite green, goldens unchanged, lab
+verifier byte-identical.
+
+**On the author's plan** (values in the study, Part 7), with a snapshot after its scheduled
+switch: the gate applies, the no-op leaves state byte-identical, and for both candidate shapes
+the rollout equals a t₀ compile of the same schedule **to the dollar**. That is the §14.9.5
+invariant in its strongest form, and it holds because the swap adds no events, so there is no
+tie to re-resolve (contrast §14.9.8's ROTH measurement).
+
+**Still limited:** a design 81 decision applied at its date (the drawdown fields) is reverted by
+the t₀ picks. The fix is the same move: declare those fields `derivedStateAt`, answered from
+the active run's rows at now.
+
 ### 14.10 Where the next session starts
 
 Everything above is measured. This is the order to act in, and the order matters: step 3 is unsafe
@@ -1486,10 +1554,9 @@ struck from the gate's `KNOWN_BROKEN`. The four `_seededSim` special cases are d
 rollout half is fixed as the prerequisite, and the suite is unchanged. The lab verifier
 (`verify-mpc-lever.mjs`) is byte-identical before and after.
 
-**3. Design 110's MPC portion: NEXT.** Two declarations (`liquidityGraph`, `drawdownSequence`)
-plus striking `POOL_TARGET` / `POOL_SPEND_ORDER` from the gate. First, settle §14.9.8's known
-limit: design 109 shapes swap the graph mid-run, so a t₀ pick would revert a realized shape
-change on any plan that schedules one, and the author's plan does.
+**3. ~~Design 110's MPC portion~~: BUILT 2026-09-20, see §14.9.9.** Built as `derivedStateAt`,
+base-graph schedule rows and the `POOL_SHAPE` lever, not as two t₀ declarations. Those would
+have reverted a realized shape switch in every rollout after it. `KNOWN_BROKEN` is empty.
 
 **Independent of all three, and small:**
 
@@ -1500,6 +1567,10 @@ change on any plan that schedules one, and the author's plan does.
   persistence half. `actuate` writes only the decided year into `scenario.params`, so a Rebuild
   of a window-form plan after a session cancels every undecided year. The same fix applies:
   persist the rows the live queue implies.
+- **Design 81 drawdown decisions in rollouts (§14.9.9).** The t₀ picks revert a recorded
+  decision applied mid-run. Declare those fields `derivedStateAt`, answered from the active
+  run at now.
+- **`targetScale` as an MPC control (design 110 §13.11).** It needs a saved form first.
 - **Queue total order (§14.9.8).** Removing no-op events moved the author's plan by a few
   percent of terminal wealth. Decide whether the comparator gets a stable tiebreak. It would
   move every golden.

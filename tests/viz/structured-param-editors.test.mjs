@@ -1650,7 +1650,21 @@ test('LiquidityGraphSchedule: the shape cell is a SELECT over live ids, not free
   const host = mount(buildLiquidityGraphScheduleEditor(param, () => ['bridge', 'late']));
   const sel = cell(host, 'shape');
   assert.equal(sel.tagName, 'SELECT');
-  assert.deepStrictEqual([...sel.options].map(o => o.value), ['bridge', 'late']);
+  // The live ids, then the base graph (design 39 §14.9.8), which is always selectable.
+  assert.deepStrictEqual([...sel.options].map(o => o.textContent), ['bridge', 'late', 'Base graph']);
+});
+
+test('LiquidityGraphSchedule: a base-graph row (shape: null) survives opening the editor', () => {
+  // `sync()` runs on build. Before base rows existed it kept only string shapes, so a row the
+  // MPC Pool Shape lever saved as `shape: null` would have been deleted by merely opening the
+  // Scenario panel.
+  const param = { name: 'liquidityGraphSchedule',
+    value: [{ year: 2035, shape: 'bridge' }, { year: 2045, shape: null }] };
+  const host = mount(buildLiquidityGraphScheduleEditor(param, () => ['bridge']));
+  assert.deepStrictEqual(param.value, [{ year: 2035, shape: 'bridge' }, { year: 2045, shape: null }]);
+  const sel = cells(host, 'shape').at(-1);
+  assert.equal(sel.selectedOptions[0].textContent, 'Base graph');
+  assert.doesNotMatch([...sel.options].map(o => o.textContent).join(' '), /not found/);
 });
 
 test('LiquidityGraphSchedule: a row pointing at a DELETED shape is kept and marked', () => {

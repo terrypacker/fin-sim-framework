@@ -120,6 +120,70 @@ export class PoolShapeScheduleReducer extends Reducer {
 }
 
 /**
+ * The liquidity state a compile implies AT `asOfMs`, as a patch over `state` (design 39 §14.9.8).
+ *
+ * The same answer this reducer and the toolset's projection give, asked at an arbitrary
+ * instant instead of on a period advance. A snapshot-seeded MPC rollout needs exactly that:
+ * the candidate's compile knows its own schedule and graph, and the snapshot knows which
+ * shape the run is in and what the pools have done. Neither t₀'s projection (it would revert a
+ * shape switch the run has already made) nor the snapshot's stamp (it is the OLD plan's graph)
+ * is right on its own.
+ *
+ * Only keys whose value differs are returned, so a candidate that changes nothing returns an
+ * empty patch and the rollout's state stays bit-identical to the snapshot's. For the same
+ * reason `liquidityShapeId` is only written when the run has one or the answer is a named
+ * shape, and the pool cube is narrowed only when the shape itself changes (§9's rule, as the
+ * reducer applies it).
+ *
+ * Asked at the LAST PERIOD ADVANCE the run made, not at `asOfMs` itself: this reducer only
+ * switches on an advance, so a row whose 1 January falls between the last advance and "now" has
+ * not taken effect yet (on a plan without a 1-January advance that gap is up to six months,
+ * as the param's description says). The advance is read off `state.currentPeriods`, the period
+ * starts the advances stamped; with none yet, `asOfMs` is the answer.
+ *
+ * @param {{graph: object|null, schedule: Array|null}} compiled  what the compile resolved
+ * @param {object} state    the injected snapshot state
+ * @param {number} asOfMs
+ * @returns {object} a patch, possibly empty
+ */
+export function liquidityStateAt({ graph = null, schedule = null } = {}, state, asOfMs) {
+  let next;
+  if (Array.isArray(schedule) && schedule.length) {
+    const active = activeGraphAt(schedule, _lastAdvanceMs(state, asOfMs));
+    const g   = active?.graph ?? null;
+    const id  = active?.shapeId ?? null;
+    const seq = g ? compileToDrawdownSequence(g) : null;
+    next = { liquidityGraph: g, drawdownSequence: seq };
+    if ('liquidityShapeId' in (state ?? {}) || id !== null) next.liquidityShapeId = id;
+    if (id !== (state?.liquidityShapeId ?? null) && state?.liquidityPools) {
+      next.liquidityPools = _keepLivePools(state.liquidityPools, g);
+    }
+  } else if (graph) {
+    const seq = compileToDrawdownSequence(graph);
+    next = { liquidityGraph: graph, ...(seq ? { drawdownSequence: seq } : {}) };
+  } else {
+    return {};
+  }
+  const patch = {};
+  for (const [k, v] of Object.entries(next)) {
+    // Absent and null are the same answer: the projection omits a key the reducer writes null.
+    if ((v ?? null) === null && (state?.[k] ?? null) === null) continue;
+    if (JSON.stringify(v) !== JSON.stringify(state?.[k])) patch[k] = v;
+  }
+  return patch;
+}
+
+/** The latest period start at or before `asOfMs` — the last advance this reducer saw. @private */
+function _lastAdvanceMs(state, asOfMs) {
+  let last = null;
+  for (const p of Object.values(state?.currentPeriods ?? {})) {
+    const t = p?.startMs;
+    if (Number.isFinite(t) && t <= asOfMs && (last == null || t > last)) last = t;
+  }
+  return last ?? asOfMs;
+}
+
+/**
  * The cube, narrowed to the pools the incoming shape actually has.
  *
  * Design 109 §9's third rule. A pool id present in both shapes CONTINUES — it keeps its

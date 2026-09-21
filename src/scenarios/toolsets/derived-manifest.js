@@ -29,15 +29,17 @@
  *
  *   derivedState:  ['withinTierDraw', '*.drawdownPriority']   // top-level key, or `*.<field>`
  *   derivedEvents: ['ROTH_CONVERSION_POLICY_EVALUATE']         // event types
+ *   derivedStateAt(context) { return (state, nowMs) => patch } // the compile's value AT now
  *
  * `derivedEvents` is only sound for a `schedules()` that reads no sim state: the compile has
  * to be able to produce the same events a run would, from params alone.
  *
- * **Known limit.** "From the compile" means the compile's value at t₀. A value that legitimately
- * changes MID-RUN from params (a design 81 recorded decision applied at its date, a design 109
- * scheduled pool shape) is reverted to its t₀ value by the pick. The four shims this replaced
- * had the same limit; a time-varying derived fact needs "the compile's value AS OF now", which
- * is not built.
+ * **`derivedState` is the compile's value at t₀.** A value that legitimately changes MID-RUN
+ * from params would be reverted to its t₀ value by that pick. Such a value declares
+ * `derivedStateAt` instead: a function, built from the compile's own context, that answers
+ * "what does this plan say the value is at `nowMs`, given the run so far?" The design 109 pool
+ * shapes are the first (design 39 §14.9.8). A design 81 recorded decision applied at its date
+ * is still reverted, because the drawdown fields it writes are declared t₀-style.
  */
 
 const WILDCARD = '*.';
@@ -46,16 +48,40 @@ const WILDCARD = '*.';
  * The union of every toolset's declarations, deduplicated and in first-seen order.
  *
  * @param {Array<object>} toolsets  resolved toolsets, in compile order
- * @returns {{ state: string[], events: string[] }}
+ * @param {object} [context]  the compile's context; `derivedStateAt` is bound to it
+ * @returns {{ state: string[], events: string[], at: Function[] }}
  */
-export function collectDerivedManifest(toolsets) {
+export function collectDerivedManifest(toolsets, context = null) {
   const state = new Set();
   const events = new Set();
+  const at = [];
   for (const t of toolsets ?? []) {
     for (const p of t?.derivedState  ?? []) state.add(p);
     for (const e of t?.derivedEvents ?? []) events.add(e);
+    if (typeof t?.derivedStateAt === 'function' && context) {
+      const fn = t.derivedStateAt(context);
+      if (typeof fn === 'function') at.push(fn);
+    }
   }
-  return { state: [...state], events: [...events] };
+  return { state: [...state], events: [...events], at };
+}
+
+/**
+ * Apply every `derivedStateAt` answer to an injected state, in toolset order. Each sees the
+ * state the previous one produced. Pure.
+ *
+ * @param {object}     state
+ * @param {Function[]} fns    `manifest.at`
+ * @param {number}     nowMs  the snapshot's date
+ * @returns {object}
+ */
+export function applyDerivedStateAt(state, fns, nowMs) {
+  let out = state;
+  for (const fn of fns ?? []) {
+    const patch = fn(out, nowMs);
+    if (patch && Object.keys(patch).length) out = { ...out, ...patch };
+  }
+  return out;
 }
 
 /**

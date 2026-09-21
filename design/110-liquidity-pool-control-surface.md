@@ -1163,3 +1163,23 @@ it read as a lever, swept as a lever and returned byte-identical rollouts. Every
 was found in about five minutes by running the axis list against a plan the author had actually
 written — §12.2's last trap, proving itself again on the phase that was most confident it did
 not need the check.
+
+### 13.11 The MPC portion, built as a shape lever (design 39 §14.9.9, 20 Sep 2026)
+
+§13.7 left `controllable` unset on `pool.<id>.targetScale` because the graph was resolved once, at
+reducer build, so a controller re-deciding it between periods would change nothing. Design 39
+§14.10 step 3 took that up, and it is answered differently than the axis surface suggested:
+**the MPC control is the SHAPE, not the scale.** `POOL_SHAPE` decides which design 109 shape
+governs from a year on, and saves the decision as a `liquidityGraphSchedule` row. That route
+gives it a rollout that sees the candidate (design 39's `derivedStateAt`), a live actuation (the
+constructor-held schedules are updated in place), and a design 81 replay that folds the same row
+at compile, with no mid-run mutation of a graph anywhere.
+
+`targetScale` stays uncontrollable, and the reason sharpened. A rollout WOULD see a candidate
+factor now: the gate's `POOL_TARGET` probe reaches, because the candidate's compile resolves the
+scaled graph and `derivedStateAt` stamps it. What is missing is persistence. The factor is a
+hidden runner-only overlay that never enters `cfg.params` (§13.7's CTRL-9 property), so a live
+decision would have nowhere to be saved that a Rebuild or a replay reads. To make it
+controllable, give it a saved form first. An author who wants a different buffer from 2045 can
+already say so as a shape with that target and let the lever choose it.
+

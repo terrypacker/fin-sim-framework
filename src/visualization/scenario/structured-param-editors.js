@@ -974,13 +974,20 @@ const sizeAttr = (modeField, key) => (row) => boundsFor(row?.[modeField])?.[key]
  * @param {function(): Array<string>} shapeIdsProvider  the live `liquidityShapes` keys
  */
 export function buildLiquidityGraphScheduleEditor(param, shapeIdsProvider = () => []) {
+  // A row may select the BASE graph with `shape: null` (design 39 §14.9.8), which is how an
+  // MPC decision to stay on or return to it is saved. A select cannot hold null, so the editor
+  // carries it as a sentinel that never leaves this function. Without it, `sync()` below
+  // (which runs on build) would drop every base row the moment the panel opened.
   const rows = (Array.isArray(param.value) ? param.value : []).map(r => ({
     year:  Number.isFinite(Number(r?.year)) ? Number(r.year) : null,
-    shape: typeof r?.shape === 'string' ? r.shape : null,
+    shape: typeof r?.shape === 'string' ? r.shape
+      : (r?.shape === null && r && Object.hasOwn(r, 'shape')) ? BASE_SHAPE_OPTION : null,
   }));
   const sync = () => {
     const kept = rows.filter(r => r.year != null && r.shape);
-    param.value = kept.length ? kept.map(r => ({ year: r.year, shape: r.shape })) : null;
+    param.value = kept.length
+      ? kept.map(r => ({ year: r.year, shape: r.shape === BASE_SHAPE_OPTION ? null : r.shape }))
+      : null;
   };
   sync();
 
@@ -1006,8 +1013,10 @@ export function buildLiquidityGraphScheduleEditor(param, shapeIdsProvider = () =
         // and is shown as missing, the same way a claim pointing at a renamed pool is.
         { field: 'shape', label: 'Shape', type: 'select', width: '1.6fr',
           options: (row) => {
-            const opts = ids.map(id => [id, id]);
-            if (row?.shape && !ids.includes(row.shape)) opts.unshift([row.shape, `${row.shape} — not found`]);
+            const opts = [...ids.map(id => [id, id]), [BASE_SHAPE_OPTION, 'Base graph']];
+            if (row?.shape && row.shape !== BASE_SHAPE_OPTION && !ids.includes(row.shape)) {
+              opts.unshift([row.shape, `${row.shape} — not found`]);
+            }
             return opts;
           } },
       ],
@@ -1025,6 +1034,9 @@ export function buildLiquidityGraphScheduleEditor(param, shapeIdsProvider = () =
   render();
   return container;
 }
+
+/** The schedule editor's stand-in for `shape: null` (the base graph). Never saved. */
+const BASE_SHAPE_OPTION = '\u0000base';
 
 /**
  * `LiquidityShapes` — the named alternative graphs (design 109 §11).

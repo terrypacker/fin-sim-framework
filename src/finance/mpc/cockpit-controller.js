@@ -31,8 +31,11 @@ import {
 } from '../holdings/holdings-selection.js';
 import { ALLOCATION_SCHEDULE }      from '../behavioral/rebalance-to-target-reducer.js';
 import { HARVEST_FORMS, collapseConsecutive, ageAt, requiresIncludes } from './harvest.js';
-import { LEVER_SCHEDULE, drawdownPriorityPatch, presentRolesFromState }
+import { LEVER_SCHEDULE, drawdownPriorityPatch, presentRolesFromState, shapeIdsOf }
   from './lever-schedule.js';
+import { resolveLiquidityGraph, resolveLiquidityGraphSchedule } from '../pools/liquidity-graph.js';
+import { PoolShapeScheduleReducer, liquidityStateAt } from '../pools/pool-shape-schedule-reducer.js';
+import { applyShapeYearShifts, shapeYearShiftsFrom } from '../pools/pool-shape-year-axis.js';
 import { truncateActiveRunAt }  from './run-schedule.js';
 
 /*
@@ -1063,6 +1066,100 @@ export const COCKPIT_CONTROLS = {
       return true;
     },
   },
+  POOL_SHAPE: {
+    // design 39 §14.10 step 3 — the graph-swap lever. `foldAt` + the gate, spread in from
+    // `lever-schedule.js`; like ROTH it folds at COMPILE and has no `applyAt`.
+    ...LEVER_SCHEDULE.POOL_SHAPE,
+    key:     'POOL_SHAPE',
+    label:   'Liquidity Pool Shape',
+    numeric: false,
+    liveActuatable: true,
+    // The decision is "which authored shape governs from year Y": a schedule row. `set()`
+    // never creates nodes, so the row for Y is scaffolded here, carrying the shape the plan
+    // ALREADY has in force at Y. That makes the unchanged candidate the plan itself, which is
+    // §14.9.6's lesson: a scaffold that means anything else is a decision nobody made.
+    prepareBaseParams: ({ baseParams, asOf }) => {
+      if (!asOf) return baseParams;
+      const year  = _nextShapeYear(asOf);
+      const sched = Array.isArray(baseParams?.liquidityGraphSchedule)
+        ? baseParams.liquidityGraphSchedule.map(e => ({ ...e }))
+        : [];
+      if (!sched.some(e => Number(e?.year) === year)) {
+        sched.push({ year, shape: _plannedShapeAt(baseParams, year) });
+        sched.sort((a, b) => Number(a.year) - Number(b.year));
+      }
+      return { ...baseParams, liquidityGraphSchedule: sched };
+    },
+    buildVariables: ({ baseParams, asOf }) => {
+      if (!asOf) return [];
+      const year = _nextShapeYear(asOf);
+      const idx  = (baseParams?.liquidityGraphSchedule ?? []).findIndex(e => Number(e?.year) === year);
+      if (idx < 0) return [];
+      return [{
+        paramKey: `liquidityGraphSchedule[${idx}].shape`,
+        type:     OPT_PARAM_TYPES.ENUM,
+        // null is the base graph (design 39 §14.9.8), always a candidate: "go back to the plan's
+        // own pools" is a decision the search must be able to make.
+        values:   [null, ...shapeIdsOf(baseParams)],
+        group:    'Liquidity Pools',
+        _year:    year,
+      }];
+    },
+    describe: (candidate, vars) => {
+      const v = vars?.[0];
+      if (!v) return 'No pool shape decision';
+      const shape = candidate?.[v.paramKey] ?? null;
+      return shape == null
+        ? `Run the base pool graph from ${v._year}`
+        : `Run pool shape '${shape}' from ${v._year}`;
+    },
+    /**
+     * Forward-effective LIVE SWAP. Three writes, and all three are needed:
+     *   1) the scenario's `liquidityGraphSchedule` row for the year, so a Rebuild, the next
+     *      Advise (which recompiles from `scenario.params`) and a design 81 replay (which folds
+     *      the same row) all describe the plan the live sim is flying;
+     *   2) the running sim's pool reducers, which hold the schedule from their constructors —
+     *      `PoolShapeScheduleReducer` (registered now if the plan had no schedule), and both
+     *      flow reducers;
+     *   3) the live state, re-stamped AT now, for a decision that takes effect on the instant
+     *      it is made (an epoch on 1 January). Otherwise the reducer swaps at the row's year.
+     * Returns true when the live sim now carries the decision.
+     */
+    actuate: ({ services, scenario, candidate, vars }) => {
+      const v = vars?.[0];
+      if (!v || !Number.isFinite(v._year)) return false;
+      const shape = candidate?.[v.paramKey] ?? null;
+      const p = (scenario?.params ?? []).find(pp => (pp.key ?? pp.name) === 'liquidityGraphSchedule');
+      if (!p) return false;
+      const sched = (Array.isArray(p.value) ? p.value : []).map(e => ({ ...e }))
+        .filter(e => Number(e?.year) !== v._year);
+      sched.push({ year: v._year, shape });
+      sched.sort((a, b) => Number(a.year) - Number(b.year));
+      p.value = sched;
+
+      const sim = services?.simulationRegistry?.getPrimary?.();
+      const rs  = services?.reducerService;
+      if (!sim?.state || !rs) return false;
+      const bag = { ...(scenario?.parameters ?? {}),
+        ...Object.fromEntries((scenario?.params ?? []).map(pp => [pp.key ?? pp.name, pp.value])) };
+      const accounts = services?.accountService?.getAll?.() ?? [];
+      const schedule = resolveLiquidityGraphSchedule(bag, accounts);
+      const graph    = resolveLiquidityGraph(bag, accounts);
+
+      const all = rs.getAll?.() ?? [];
+      const byType = (t) => all.filter(r => r?.constructor?.type === t);
+      const shapeReducers = byType('PoolShapeScheduleReducer');
+      if (shapeReducers.length) for (const r of shapeReducers) rs.updateReducer(r, { schedule });
+      else if (schedule) rs.register(new PoolShapeScheduleReducer({ schedule }));
+      for (const r of [...byType('PoolFlowReducer'), ...byType('PoolFlowApplyReducer')]) {
+        rs.updateReducer(r, { schedule });
+      }
+
+      const patch = liquidityStateAt({ graph, schedule }, sim.state, new Date(sim.currentDate).getTime());
+      if (Object.keys(patch).length) sim.state = { ...sim.state, ...patch };
+      return true;
+    },
+  },
 };
 
 /**
@@ -1622,6 +1719,33 @@ function _nextConversionYear(asOf, baseParams) {
   const start = baseParams?.rothConversionStartYear;
   if (Number.isFinite(start) && year < start) year = start;
   return year;
+}
+
+/**
+ * The year a POOL_SHAPE decision taken at `asOf` addresses: the first 1 January at or after it.
+ *
+ * At or after, not after. A cockpit epoch dated exactly 1 January has already run that day's
+ * period advance, and a row for THIS year is still the next switch the plan can make; the live
+ * actuate and a rollout both apply it on the spot (`liquidityStateAt`), and a replay's reducer
+ * applies it at the same instant. Any later instant in the year addresses next year's row.
+ */
+function _nextShapeYear(asOf) {
+  const d = new Date(asOf);
+  const y = d.getUTCFullYear();
+  return d.getTime() === Date.UTC(y, 0, 1) ? y : y + 1;
+}
+
+/**
+ * The shape a plan has in force at 1 January of `year`: the last row at or before it, after the
+ * design 110 year-shift overlay the resolver applies; null (the base graph) before the first.
+ */
+function _plannedShapeAt(bp, year) {
+  const rows = applyShapeYearShifts(bp?.liquidityGraphSchedule, shapeYearShiftsFrom(bp ?? {})) ?? [];
+  let shape = null;
+  for (const r of [...rows].sort((a, b) => Number(a.year) - Number(b.year))) {
+    if (Number(r?.year) <= year) shape = r.shape ?? null;
+  }
+  return shape;
 }
 
 /**
