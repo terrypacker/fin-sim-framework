@@ -1,7 +1,7 @@
 # 112 — Dated pool targets: a pool size the MPC can decide
 
 **Status:** BUILT — phases 1–4, 21 Sep 2026 (GitHub #736). Phase 4's proof on the author's
-plan found and fixed the 1-January epoch gap (§8). Open: the Pools panel mark (R11). Every §5 question is answered and folded into §2–§4: Q1 is the factor plus two
+plan found and fixed the 1-January epoch gap (§8). Nothing open. Every §5 question is answered and folded into §2–§4: Q1 is the factor plus two
 properties borrowed from authored levels (§5.1). The §6 review findings are all folded in,
 R11–R13 included. §8 records what the build decided that the text above did not. §7 is a
 follow-up outside this design's scope. Answers the last open item of design 39 §14.10:
@@ -434,5 +434,9 @@ imprecise:
   under the old rule. Roth and early withdrawal were already correct: they target the next
   event that has not fired. The spending card now labels a year-end decision with the year it
   governs. Month-granular rows are deferred until the cockpit solves twice a year.
-- **Not built:** the Pools panel timeline mark for a scale step (R11's second half). The stamp
-  is in state and in the journal, but the panel does not yet draw it.
+- **R11's panel half, built.** `buildPoolHistory` replays `liquidityTargetScales` onto each
+  period, from all three diff shapes: whole object, per-key, and null on lapse.
+  `poolTargetScaleSteps` derives the changes, with the opening factors kept apart and not
+  counted as a step. From that one derivation the Pools panel draws a dotted marker per step,
+  labelled with the change ("cash ×1→1.5"), distinct from the dashed shape-switch marker. The
+  provenance strip lists the steps, and the CSV gains a `targetScale` column.

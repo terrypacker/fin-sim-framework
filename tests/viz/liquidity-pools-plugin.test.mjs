@@ -1028,3 +1028,57 @@ test('CTRL-7: the viewBox is wide enough for the longest edge label', () => {
     `label overflows: starts at ${x}, needs ${label.textContent.length} chars, viewBox is ${width}`);
   plugin.unmount();
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Design 112 R11 — dated SIZE steps on the panel: a marker per step, named by what changed,
+// and a line in the strip. A scale step keeps the shape, so the shape markers never show it.
+// ═════════════════════════════════════════════════════════════════════════════
+
+const SIZE_RUN = () => [
+  entry('2030-01-01', [
+    { field: 'liquidityPools', before: null, after: { offset: CUBE(), growth: CUBE() } },
+  ]),
+  entry('2032-01-01', [
+    { field: 'liquidityTargetScales', before: null, after: { offset: 1.5 } },
+    { field: 'liquidityPools.offset.balance', before: 400_000, after: 420_000 },
+  ]),
+  entry('2036-01-01', [
+    { field: 'liquidityTargetScales', before: { offset: 1.5 }, after: null },
+    { field: 'liquidityPools.offset.balance', before: 420_000, after: 440_000 },
+  ]),
+];
+
+test('R11: each size step draws a marker at the date it landed, named by the change', () => {
+  const { plugin } = mountPlugin(simOf(SIZE_RUN()));
+  const hist = plugin._history();
+  const axis = ['2030-01-01', '2032-01-01', '2036-01-01'];
+  const marks = plugin._scaleMarks(hist, axis);
+  assert.deepEqual(marks.map(m => [axis[m.x], m.name]),
+    [['2032-01-01', 'offset ×1→1.5'], ['2036-01-01', 'offset ×1.5→1']]);
+  plugin.unmount();
+});
+
+test('R11: the size markers reach every time-series view as their own hideable series', () => {
+  const { plugin } = mountPlugin(simOf(SIZE_RUN()));
+  const hist = plugin._history();
+  const ids  = plugin._visiblePools(hist);
+  const axis = poolSeries(hist, 'balance', ids).labels;
+  for (const view of ['cover', 'stock', 'flows']) {
+    plugin._view = view;
+    const specs = plugin._seriesSpecs(hist, ids, { dark: false, ink: '#000', axis });
+    const sp = specs.find(x => x.key === '__reserve::sizes');
+    assert.ok(sp, `the ${view} view must carry the size steps`);
+    assert.deepEqual(sp.series.markLine.data.map(d => d.name), ['offset ×1→1.5', 'offset ×1.5→1']);
+    assert.equal(specs.find(x => x.key === '__reserve::shapes'), undefined, 'no shape switch, no shape marker');
+  }
+  plugin.unmount();
+});
+
+test('R11: the strip lists the size steps; a run with no target rows says nothing about sizes', () => {
+  const { plugin } = mountPlugin(simOf(SIZE_RUN()));
+  assert.match(q(plugin, 'provenance').textContent, /sizes offset ×1→1\.5 2032-01-01 → offset ×1\.5→1 2036-01-01/);
+  plugin.unmount();
+  const other = mountPlugin(simOf(RUN)).plugin;
+  assert.doesNotMatch(q(other, 'provenance').textContent, /sizes/);
+  other.unmount();
+});

@@ -2109,7 +2109,7 @@ what the in-app panel keys on.
 | [Performance](panels/perf.md) | panel | 201 | 1 panel · design 78 |
 | [Person](nodes/person.md) | node | 221 | 3 panels · design 34, 95, 83 |
 | [Pool Shapes Over Time](concepts/pool-shapes-over-time.md) | concept | 400 | 3 params · design 109, 112, 97 |
-| [Liquidity Pools](panels/pools.md) | panel | 217 | 1 panel · design 97 |
+| [Liquidity Pools](panels/pools.md) | panel | 236 | 1 panel · design 97 |
 | [Randomness and Seeds](concepts/randomness-and-seeds.md) | concept | 251 | 2 panels · 2 params · design 74 |
 | [Real Property](nodes/real-property.md) | node | 221 | 2 panels · design 75, 83, 86, 48 |
 | [Recorded MPC Runs](concepts/recorded-mpc-runs.md) | concept | 400 | 1 panel · 3 params · design 81, 80 |

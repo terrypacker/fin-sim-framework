@@ -27,7 +27,7 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { buildPoolHistory, poolHistoryRows, poolSeries, tiePoolHistory, poolShapeSpans,
+import { buildPoolHistory, poolHistoryRows, poolSeries, tiePoolHistory, poolShapeSpans, poolTargetScaleSteps,
          POOL_EVENT_KIND }
   from '../../src/finance/pools/pool-history.js';
 import { PoolFlowReducer } from '../../src/finance/pools/pool-flow-reducer.js';
@@ -487,4 +487,56 @@ test('HIST-9: the CSV row carries the shape, empty before the first switch', () 
 test('HIST-9: an empty history reports no spans rather than throwing', () => {
   assert.deepEqual(poolShapeSpans(buildPoolHistory({ journal: [] })), []);
   assert.deepEqual(poolShapeSpans(null), []);
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// HIST-10 / design 112 R11 — poolTargetScaleSteps: the dated SIZE changes, replayed
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * The three diff shapes `diffStates` produces for `liquidityTargetScales`: a whole object from
+ * absent (first stamp), per-key rows between two objects, and a whole null (last factor lapsed).
+ */
+const SCALE_RUN = () => [
+  entry('2030-01-01', [{ field: 'liquidityPools', before: null, after: { a: CUBE(), b: CUBE() } }]),
+  entry('2031-01-01', [
+    { field: 'liquidityTargetScales', before: null, after: { a: 1.5 } },
+    { field: 'liquidityPools.a.balance', before: 100, after: 110 },
+  ]),
+  entry('2033-01-01', [
+    { field: 'liquidityTargetScales.a', before: 1.5, after: 1.25 },
+    { field: 'liquidityTargetScales.b', before: null, after: 0.5 },
+  ]),
+  entry('2035-01-01', [{ field: 'liquidityTargetScales', before: { a: 1.25, b: 0.5 }, after: null }]),
+];
+
+test('HIST-10: size steps are replayed from all three diff shapes, with from → to per pool', () => {
+  const h = buildPoolHistory({ journal: SCALE_RUN() });
+  assert.equal('targetScales' in h.periods[0], false, 'absent until first stamped');
+  assert.deepEqual(h.periods.map(p => p.targetScales ?? null), [null, { a: 1.5 }, { a: 1.25, b: 0.5 }, null]);
+  const { opening, steps } = poolTargetScaleSteps(h);
+  assert.equal(opening, null, 'nothing in force at the run start');
+  assert.deepEqual(steps.map(s => [s.at.toISOString().slice(0, 10), s.changes]), [
+    ['2031-01-01', [{ pool: 'a', from: 1, to: 1.5 }]],
+    ['2033-01-01', [{ pool: 'a', from: 1.5, to: 1.25 }, { pool: 'b', from: 1, to: 0.5 }]],
+    ['2035-01-01', [{ pool: 'a', from: 1.25, to: 1 }, { pool: 'b', from: 0.5, to: 1 }]],
+  ]);
+});
+
+test('HIST-10: a factor in force at the run start is the opening, not a step', () => {
+  const run = [entry('2030-01-01', [
+    { field: 'liquidityTargetScales', before: null, after: { a: 2 } },
+    { field: 'liquidityPools', before: null, after: { a: CUBE() } },
+  ])];
+  const { opening, steps } = poolTargetScaleSteps(buildPoolHistory({ journal: run }));
+  assert.deepEqual(opening, { a: 2 });
+  assert.deepEqual(steps, []);
+});
+
+test('HIST-10: a run with no target rows has no steps and an empty CSV column', () => {
+  const h = buildPoolHistory({ journal: SHAPE_RUN() });
+  assert.deepEqual(poolTargetScaleSteps(h), { opening: null, steps: [] });
+  assert.ok(poolHistoryRows(h).every(r => r.targetScale === ''));
+  const rows = poolHistoryRows(buildPoolHistory({ journal: SCALE_RUN() }));
+  assert.deepEqual(rows.filter(r => r.pool === 'a').map(r => r.targetScale), ['', 1.5, 1.25, '']);
 });

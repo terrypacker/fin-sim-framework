@@ -22,11 +22,13 @@ marked point on the chart and a row in the log, with the reason it was gated, ve
 or capped. A refill that was blocked looks exactly like a refill that was never
 configured, unless something says so.
 
+Policy changes are marked too — dashed where the structure switched, dotted where a pool
+was resized ("cash ×1→1.5") — so a jumping target line has its cause beside it.
+
 Open it whenever a drawdown came from somewhere you did not expect, or when a pool
 you configured appears to be doing nothing.
 
-Needs a scenario built and stepped, with pools configured — an unconfigured plan has
-no pool state to show.
+Needs a scenario built and stepped, with pools configured.
 
 Exports the whole cube as CSV, including the per-period reserve figures repeated on
 each pool's row.

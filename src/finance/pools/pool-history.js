@@ -98,6 +98,10 @@ export function buildPoolHistory({ journal, graph = null } = {}) {
   // landed on. `undefined` until a diff sets it, which is how a run with no schedule stays
   // distinguishable from one sitting on the base graph (`null`).
   let shapeId = undefined;
+  // Design 112 R11 — the dated target factors in force (`liquidityTargetScales`), replayed the
+  // same way. `undefined` until first stamped (a run with no target rows never has it), `null`
+  // once the last factor lapses, otherwise `{ poolId: factor }`.
+  let targetScales = undefined;
   const periods = [];
   const events  = [];
   const fromActions = [];              // FIRED rows read from POOL_FLOW_APPLY (the fallback)
@@ -123,6 +127,17 @@ export function buildPoolHistory({ journal, graph = null } = {}) {
         touched = true;
       } else if (field === 'liquidityShapeId') {
         shapeId = diff.after ?? null;
+        touched = true;
+      } else if (field === 'liquidityTargetScales') {
+        targetScales = diff.after == null ? null : _clone(diff.after);
+        touched = true;
+      } else if (field.startsWith('liquidityTargetScales.')) {
+        // Both sides were objects, so the diff walked into the keys: one row per pool whose
+        // factor moved, `after` undefined/null for a pool whose factor lapsed.
+        const pool = field.slice('liquidityTargetScales.'.length);
+        targetScales = { ...(targetScales ?? {}) };
+        if (diff.after == null) delete targetScales[pool];
+        else targetScales[pool] = diff.after;
         touched = true;
       } else if (field === 'poolRefillPlan') {
         plan = _clone(diff.after ?? {});
@@ -220,7 +235,9 @@ export function buildPoolHistory({ journal, graph = null } = {}) {
                    // Spread so a run with no schedule adds NO key, for the reason the cube
                    // fields follow the same rule: absent has to stay distinguishable from
                    // "on the base graph".
-                   ...(shapeId !== undefined ? { shapeId } : {}) });
+                   ...(shapeId !== undefined ? { shapeId } : {}),
+                   // Same rule: a run with no target rows adds no key.
+                   ...(targetScales !== undefined ? { targetScales: targetScales ? { ...targetScales } : null } : {}) });
   }
 
   // Pool order: the author's spend order when the graph is at hand, first-seen otherwise.
@@ -293,6 +310,10 @@ export function poolHistoryRows(history) {
         // not a named shape, and writing 'base' would put a name in the column that appears
         // in no scenario file. A run with no schedule leaves it empty throughout.
         shape: p.shapeId ?? '',
+        // Design 112 R11 — this pool's dated target factor, so a sized pool's rows can be read
+        // against the decision that sized it. Empty when no factor is in force for the pool
+        // (the authored target), for the reason `shape` is empty before the first switch.
+        targetScale: p.targetScales?.[id] ?? '',
       });
     }
   }
@@ -342,6 +363,44 @@ export function poolShapeSpans(history) {
     if (last && last.shapeId === id) continue;
     out.push({ shapeId: id, at: p.at, seq: p.seq, opening: out.length === 0 });
   }
+  return out;
+}
+
+/**
+ * Design 112 R11 — every period where the dated target factors CHANGED, with what changed.
+ *
+ * The size counterpart of {@link poolShapeSpans}. A scale step keeps the shape, so without this
+ * the only trace of a resize is a moved target line with no stated cause. Each step lists the
+ * pools whose factor moved, `from`/`to` as factors (1 = the authored target, including a factor
+ * that lapsed), in pool-id order.
+ *
+ * The run's opening state is not a step: a factor already in force at the first recorded period
+ * has nothing to its left to change from, exactly as the opening shape is not a switch. It is
+ * returned separately as `opening` so the strip can still say which factors the run began with.
+ *
+ * @param {object} history  from {@link buildPoolHistory}
+ * @returns {{opening: Object<string,number>|null,
+ *            steps: Array<{at: Date, seq: number, changes: Array<{pool: string, from: number, to: number}>}>}}
+ */
+export function poolTargetScaleSteps(history) {
+  const periods = history?.periods ?? [];
+  const out = { opening: null, steps: [] };
+  if (!periods.some(p => p.targetScales !== undefined)) return out;
+  let prev = null;
+  periods.forEach((p, i) => {
+    const cur = p.targetScales ?? {};
+    if (i === 0) {
+      if (Object.keys(cur).length) out.opening = { ...cur };
+      prev = cur;
+      return;
+    }
+    const ids = [...new Set([...Object.keys(prev), ...Object.keys(cur)])].sort();
+    const changes = ids
+      .map(pool => ({ pool, from: prev[pool] ?? 1, to: cur[pool] ?? 1 }))
+      .filter(c => c.from !== c.to);
+    if (changes.length) out.steps.push({ at: p.at, seq: p.seq, changes });
+    prev = cur;
+  });
   return out;
 }
 

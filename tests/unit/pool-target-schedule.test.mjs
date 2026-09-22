@@ -526,3 +526,21 @@ test('DPT-12d: the same warning in several graphs is ONE row naming each of them
   // Base graph alone reads exactly as before — no parenthetical.
   assert.match(targetVocabularyProblems({ liquidityGraph: g }, null)[0].message, /^Pool 'cash' has a/);
 });
+
+import { buildPoolHistory, poolTargetScaleSteps } from '../../src/finance/pools/pool-history.js';
+
+test('DPT-15c: a real run\'s journal carries the size step to the Pools panel derivation (R11)', () => {
+  const { sim } = loadScenarioSim({
+    params: {
+      behavioralStrategies: ['LIQUIDITY_POOLS', 'TARGET_ALLOCATION'], liquidityGraph: LIVE,
+      liquidityTargetSchedule: [{ year: 2028, pool: 'bonds', scale: 1.5 }, { year: 2030, pool: 'bonds', scale: 1 }],
+    },
+    simStart: '2026-01-01', simEnd: '2031-06-01', stepTo: '2030-06-01',
+  });
+  const { opening, steps } = poolTargetScaleSteps(buildPoolHistory({ journal: sim.journal }));
+  assert.equal(opening, null);
+  assert.deepEqual(steps.map(s => [s.at.toISOString().slice(0, 4), s.changes]), [
+    ['2028', [{ pool: 'bonds', from: 1, to: 1.5 }]],
+    ['2030', [{ pool: 'bonds', from: 1.5, to: 1 }]],
+  ]);
+});

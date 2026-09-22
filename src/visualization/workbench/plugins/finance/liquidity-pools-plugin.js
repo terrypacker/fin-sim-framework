@@ -15,7 +15,7 @@ import { ServiceRegistry }    from '../../../../services/service-registry.js';
 import { withBom }            from '../../../../utils/csv.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../../../simulation-framework/bus-messages.js';
 import { buildPoolHistory, poolHistoryRows, poolSeries, reserveSeries, tiePoolHistory,
-         poolShapeSpans, poolTopology, POOL_EVENT_KIND }
+         poolShapeSpans, poolTargetScaleSteps, poolTopology, POOL_EVENT_KIND }
   from '../../../../finance/pools/pool-history.js';
 import { colorForSeriesKey } from '../../../../finance/allocation-reporting/allocation-palette.js';
 
@@ -32,6 +32,8 @@ export const POOL_CSV_COLUMNS = Object.freeze([
   // Design 110 §5.3. `shapeId` was on `history.periods[]` and not here, so the fact table
   // could not be grouped by the thing that changed the policy halfway through the run.
   'shape',
+  // Design 112 R11 — the pool's dated target factor, empty when its authored target governs.
+  'targetScale',
 ]);
 
 /**
@@ -435,6 +437,23 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
       notes.push(`shape <strong>${_esc(this._sim.state.liquidityShapeId ?? 'base graph')}</strong>`);
     }
 
+    // Design 112 R11 — the dated SIZE changes, beside the shape story. A scale step keeps the
+    // shape, so it is invisible in the line above; without this the strip describes a run whose
+    // targets moved and never says that they did, or why.
+    const sizes = poolTargetScaleSteps(hist);
+    if (sizes.opening || sizes.steps.length) {
+      const parts = [];
+      if (sizes.opening) {
+        parts.push(`${_fmtScales(sizes.opening)} <span class="pool-dim">from `
+          + `${_esc(hist.periods[0].at.toISOString().slice(0, 10))}</span>`);
+      }
+      for (const st of sizes.steps) {
+        parts.push(`${_fmtScaleChanges(st.changes)} <span class="pool-dim">`
+          + `${_esc(st.at.toISOString().slice(0, 10))}</span>`);
+      }
+      notes.push('sizes ' + parts.join(' → '));
+    }
+
     const fired  = hist.events.filter(e => e.kind === POOL_EVENT_KIND.FIRED);
     const gated  = hist.events.filter(e => e.kind === POOL_EVENT_KIND.GATED);
     const vetoed = hist.events.filter(e => e.kind === POOL_EVENT_KIND.VETOED);
@@ -685,6 +704,41 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
           data: boundaries.map(b => ({ xAxis: b.x, name: b.name })),
         },
       });
+    }
+
+    // Design 112 R11 — the dated SIZE steps, as their own markers. A different colour and line
+    // from the shape switches because they are a different decision: a shape switch changes
+    // the structure, a size step moves one pool's target and nothing else. Each is labelled
+    // with the change itself ("cash ×1→1.5"), since the target line jumping is the effect and
+    // the marker exists to name the cause.
+    const steps = this._scaleMarks(hist, axis);
+    if (steps.length) {
+      add('__reserve', 'sizes', 'size steps', {
+        name: 'size steps', type: 'line', data: [], z: 7, silent: true,
+        markLine: {
+          symbol: 'none', silent: true,
+          label: { show: true, formatter: (p) => p.name, color: ink, fontSize: 9,
+                   position: 'insideEndBottom' },
+          lineStyle: { color: dark ? '#2dd4bf' : '#0f766e', type: 'dotted', width: 1 },
+          data: steps.map(b => ({ xAxis: b.x, name: b.name })),
+        },
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Where the chart's x-axis crosses a dated size step (design 112 R11), labelled with what
+   * changed. Positioned by the period's own date for `_shapeMarks`' reason: a row takes effect
+   * at the first advance on or after its 1 January, which is where the chart actually moves.
+   */
+  _scaleMarks(hist, axis) {
+    const idx = new Map(axis.map((label, i) => [label, i]));
+    const out = [];
+    for (const st of poolTargetScaleSteps(hist).steps) {
+      const x = idx.get(st.at.toISOString().slice(0, 10));
+      if (x == null) continue;
+      out.push({ x, name: st.changes.map(c => `${c.pool} ×${_num(c.from)}→${_num(c.to)}`).join(', ') });
     }
     return out;
   }
@@ -1282,4 +1336,18 @@ function _compact(n) {
   if (a >= 1e6) return `${(n / 1e6).toFixed(1)}m`;
   if (a >= 1e3) return `${Math.round(n / 1e3)}k`;
   return String(Math.round(n));
+}
+
+/** A factor for a label: two decimals, no trailing zeros. */
+function _num(k) { return Number.isFinite(k) ? String(Number(k.toFixed(2))) : '?'; }
+
+/** `{ cash: 1.5 }` → "<strong>cash ×1.5</strong>" for the strip. */
+function _fmtScales(scales) {
+  return Object.keys(scales).sort()
+    .map(id => `<strong>${_esc(id)} ×${_num(scales[id])}</strong>`).join(', ');
+}
+
+/** A step's changes → "<strong>cash ×1→1.5</strong>" for the strip. */
+function _fmtScaleChanges(changes) {
+  return changes.map(c => `<strong>${_esc(c.pool)} ×${_num(c.from)}→${_num(c.to)}</strong>`).join(', ');
 }
