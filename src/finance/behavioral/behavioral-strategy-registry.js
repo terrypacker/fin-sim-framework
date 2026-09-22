@@ -726,6 +726,28 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
         ] },
       },
       {
+        // ── design 112 — dated pool targets ──────────────────────────────────────────
+        key: 'liquidityTargetSchedule', label: 'Liquidity Pool Target Schedule',
+        type: 'LiquidityTargetSchedule', group: 'Spending', mc: false, opt: false,
+        defaultValue: null,
+        description: 'Dated changes to a pool\'s SIZE: [{ year, pool, scale }]. From 1 January of '
+          + '`year` the pool holds `scale` × the target its graph authors, until the next row for '
+          + 'that pool. The factor is always relative to the authored target, never to an earlier '
+          + 'row: 1.5 then 1.2 means 1.2 × authored. It is a factor rather than a figure so it works '
+          + 'for every target mode and keeps the difference between shapes: a pool authored at 2 '
+          + 'years in one shape and 4 in another holds 3 and 6 at 1.5. A row is about the POOL, not '
+          + 'a shape, so it carries across a later shape switch; while the shape in force has no '
+          + 'pool of that id the row does nothing, and it applies again if a later shape brings the '
+          + 'id back. A factor that takes a PERCENT target past 1.0 is refused when the plan loads, '
+          + 'naming the row. Rows the MPC cockpit writes carry `by` (the session), which changes '
+          + 'nothing about the run. Multiplies with the searchable pool.<id>.targetScale axis. '
+          + 'Blank (the default) = the authored targets for the whole run.',
+        visibleWhen: { anyOf: [
+          { param: 'behavioralStrategies', includes: 'LIQUIDITY_POOLS' },
+          { param: 'liquidityGraph', exists: true },
+        ] },
+      },
+      {
         // The MASTER switch (design 97 §12.5). Gated on the GRAPH existing, never on the
         // LIQUIDITY_POOLS selection: the whole point is that it governs the two consumers
         // that strategy never reached, so hiding it behind that checkbox would reproduce

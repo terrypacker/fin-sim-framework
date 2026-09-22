@@ -59,6 +59,8 @@ import { normalizeLiquidityGraph, compileToDrawdownSequence }
   from '../../finance/pools/liquidity-graph.js';
 import { claimValueNative } from '../../finance/pools/pool-metrics.js';
 import { describeRunSource } from '../../finance/mpc/run-schedule.js';
+import { describeScaledTarget } from '../../finance/pools/pool-target-scale.js';
+import { collapseTargetRuns }   from '../../finance/pools/pool-target-schedule.js';
 
 // ─── small DOM helpers (shared shape with the band editors in scenario-tab-view) ──
 
@@ -1027,6 +1029,111 @@ export function buildLiquidityGraphScheduleEditor(param, shapeIdsProvider = () =
       addLabel:  '+ Add Year',
       emptyText: 'One shape for the whole run — the base graph governs throughout.',
       sortBy:    (a, b) => (a.year ?? 0) - (b.year ?? 0),
+      onChange:  () => { sync(); render(); },
+    }));
+  };
+
+  render();
+  return container;
+}
+
+/**
+ * `LiquidityTargetSchedule` — dated changes to a pool's size (design 112).
+ *
+ * `[{ year, pool, scale, by? }]`. The pool cell is a select over every pool id in the base graph
+ * and the shapes, because an unknown pool is refused at LOAD. The size column is DERIVED
+ * (`describeScaledTarget`, the one formatter every surface uses): a factor is less legible than
+ * a size, so the row says what the factor resolves to, in each graph the pool is in.
+ *
+ * Two design 112 obligations beyond the table:
+ *   · R12 — a row an MPC session wrote carries `by`. The editor shows it and preserves it
+ *     across edits (a hand edit of the factor keeps the mark, since the row still came from
+ *     that session's decision; removing the row removes it).
+ *   · R13 — a session that re-decides every year writes a row per pool per year. Above the
+ *     table the rows are shown as RUNS of an unchanged factor ("cash 3y (×1.5), 2031–2040,
+ *     10 rows"). Display only: storage keeps every row, so a replay is unchanged.
+ *
+ * @param {object} param
+ * @param {function(): object} graphsProvider  live `{ liquidityGraph, liquidityShapes }`
+ */
+export function buildLiquidityTargetScheduleEditor(param, graphsProvider = () => ({})) {
+  const rows = (Array.isArray(param.value) ? param.value : []).map(r => ({
+    year:  Number.isFinite(Number(r?.year)) ? Number(r.year) : null,
+    pool:  typeof r?.pool === 'string' && r.pool ? r.pool : null,
+    scale: Number.isFinite(r?.scale) ? r.scale : null,
+    by:    typeof r?.by === 'string' && r.by ? r.by : null,
+  }));
+  const sync = () => {
+    const kept = rows.filter(r => r.year != null && r.pool && r.scale != null);
+    param.value = kept.length
+      ? kept.map(r => ({ year: r.year, pool: r.pool, scale: r.scale, ...(r.by ? { by: r.by } : {}) }))
+      : null;
+  };
+  sync();
+
+  const container = el('div', 'age-band-list-editor liquidity-target-schedule-editor');
+
+  const poolIds = (g) => {
+    const out = new Set();
+    const add = (graph) => {
+      for (const p of (Array.isArray(graph?.pools) ? graph.pools : [])) {
+        if (p && typeof p.id === 'string' && p.id) out.add(p.id);
+      }
+    };
+    add(g.liquidityGraph);
+    const shapes = g.liquidityShapes;
+    if (shapes && typeof shapes === 'object' && !Array.isArray(shapes)) Object.values(shapes).forEach(add);
+    return [...out];
+  };
+
+  const render = () => {
+    container.innerHTML = '';
+    const g   = graphsProvider() ?? {};
+    const ids = poolIds(g);
+
+    const runs = collapseTargetRuns(param.value);
+    if (runs.length) {
+      const summary = el('div', 'row-list-empty liquidity-target-runs');
+      summary.dataset.id = 'target-runs';
+      for (const run of runs) {
+        const line = el('div', 'liquidity-target-run');
+        const span = run.lastYear === run.fromYear ? `from ${run.fromYear}`
+          : `${run.fromYear}–${run.lastYear}`;
+        const rowsNote = run.count > 1 ? `, ${run.count} rows` : '';
+        const byNote   = run.by.length ? ` · by ${run.by.join(', ')}` : '';
+        line.textContent = `${describeScaledTarget(g, run.pool, run.scale)}, ${span}${rowsNote}${byNote}`;
+        summary.appendChild(line);
+      }
+      container.appendChild(summary);
+    }
+
+    container.appendChild(buildRowListEditor({
+      rows,
+      columns: [
+        { field: 'year',  label: 'From year', type: 'number', step: '1', min: '1900', width: '0.7fr' },
+        { field: 'pool',  label: 'Pool', type: 'select', width: '1fr',
+          options: (row) => {
+            const opts = ids.map(id => [id, id]);
+            if (row?.pool && !ids.includes(row.pool)) opts.unshift([row.pool, `${row.pool} — not found`]);
+            return opts;
+          } },
+        { field: 'scale', label: 'Factor', type: 'number', step: '0.05', min: '0', width: '0.6fr' },
+        { field: 'size',  label: 'Size', type: 'note', width: '1.8fr',
+          text: (row) => (row.pool && row.scale != null) ? describeScaledTarget(g, row.pool, row.scale) : '' },
+        { field: 'by',    label: 'By', type: 'note', width: '0.8fr',
+          text: (row) => row.by ?? '',
+          title: (row) => row.by ? `Written by MPC session ${row.by}` : 'Written by hand' },
+      ],
+      newRow: () => {
+        const last = rows[rows.length - 1];
+        return { year: (last?.year ?? new Date().getUTCFullYear()) + 1,
+                 pool: last?.pool ?? ids[0] ?? null, scale: 1, by: null };
+      },
+      addLabel:  '+ Add Row',
+      emptyText: ids.length
+        ? 'Every pool holds its authored target for the whole run.'
+        : 'No pools defined yet — add one under Liquidity Pools (graph).',
+      sortBy:    (a, b) => (a.year ?? 0) - (b.year ?? 0) || String(a.pool).localeCompare(String(b.pool)),
       onChange:  () => { sync(); render(); },
     }));
   };

@@ -31,7 +31,7 @@ import {
   buildMixListEditor, buildAllocationGlidepathEditor, buildAllocationRegimeTargetsEditor,
   buildLocationPolicyEditor, buildYieldCurveShapeEditor, buildYieldCurveScheduleEditor,
   buildRateKeyMapEditor, buildDrawdownSequenceEditor, buildLiquidityGraphEditor,
-  buildLiquidityShapesEditor, buildLiquidityGraphScheduleEditor,
+  buildLiquidityShapesEditor, buildLiquidityGraphScheduleEditor, buildLiquidityTargetScheduleEditor,
 } from '../../src/visualization/scenario/structured-param-editors.js';
 import { ALLOCATION_VALUES } from '../../src/finance/holdings/allocation.js';
 import { assertTotalMix }    from '../../src/finance/holdings/allocation.js';
@@ -1885,4 +1885,70 @@ test('LiquidityGraph: ids on BOTH sides of a `not` go to rawGate rather than los
   assert.strictEqual(cell(host, 'gateId'), null, 'no clause row is drawn for it');
   type(cell(host, 'priority'), '4', 'change');
   assert.deepStrictEqual(param.value.flows[0].gate, gate, 'and the gate survives verbatim');
+});
+
+// ─── design 112 — LiquidityTargetSchedule ─────────────────────────────────────
+
+const TGT_GRAPHS = () => ({
+  liquidityGraph: { pools: [
+    { id: 'cash',  spendOrder: 10, target: { mode: 'YEARS_OF_SPEND', value: 2 }, claims: [{ key: 'usSavingsAccount' }] },
+    { id: 'bonds', spendOrder: 20, target: { mode: 'YEARS_OF_SPEND', value: 3 }, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }] },
+  ] },
+  liquidityShapes: { bridge: { pools: [
+    { id: 'bonds', spendOrder: 20, target: { mode: 'YEARS_OF_SPEND', value: 5 }, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }] },
+  ] } },
+});
+
+test('LiquidityTargetSchedule: the pool cell is a SELECT over every graph\'s pool ids', () => {
+  const param = { name: 'liquidityTargetSchedule', value: [{ year: 2030, pool: 'bonds', scale: 1.5 }] };
+  const host = mount(buildLiquidityTargetScheduleEditor(param, TGT_GRAPHS));
+  const sel = cell(host, 'pool');
+  assert.equal(sel.tagName, 'SELECT');
+  assert.deepStrictEqual([...sel.options].map(o => o.textContent), ['cash', 'bonds']);
+});
+
+test('LiquidityTargetSchedule: the size column shows the resolved size first, per graph (§2.3)', () => {
+  const param = { name: 'liquidityTargetSchedule', value: [{ year: 2030, pool: 'bonds', scale: 1.5 }] };
+  const host = mount(buildLiquidityTargetScheduleEditor(param, TGT_GRAPHS));
+  assert.equal(cell(host, 'size').textContent, 'bonds base 4.5y / bridge 7.5y (×1.5)');
+});
+
+test('LiquidityTargetSchedule: an MPC row keeps its `by` mark through an edit (R12)', () => {
+  const param = { name: 'liquidityTargetSchedule',
+    value: [{ year: 2030, pool: 'bonds', scale: 1.5, by: 'mpc-1' }, { year: 2031, pool: 'cash', scale: 2 }] };
+  const host = mount(buildLiquidityTargetScheduleEditor(param, TGT_GRAPHS));
+  assert.deepStrictEqual(cells(host, 'by').map(c => c.textContent), ['mpc-1', '']);
+  type(cells(host, 'scale')[0], '1.25', 'change');
+  assert.deepStrictEqual(param.value, [
+    { year: 2030, pool: 'bonds', scale: 1.25, by: 'mpc-1' },
+    { year: 2031, pool: 'cash', scale: 2 },
+  ]);
+});
+
+test('LiquidityTargetSchedule: equal consecutive rows collapse in DISPLAY only (R13)', () => {
+  const value = [2031, 2032, 2033].map(year => ({ year, pool: 'cash', scale: 1.5, by: 'mpc-1' }));
+  const param = { name: 'liquidityTargetSchedule', value: value.map(r => ({ ...r })) };
+  const host = mount(buildLiquidityTargetScheduleEditor(param, TGT_GRAPHS));
+  const runs = cell(host, 'target-runs');
+  assert.equal(runs.children.length, 1);
+  assert.equal(runs.textContent, 'cash 3y (×1.5), 2031–2033, 3 rows · by mpc-1');
+  assert.deepStrictEqual(param.value, value, 'storage keeps every row');
+  assert.equal(cells(host, 'year').length, 3, 'and the table edits every row');
+});
+
+test('LiquidityTargetSchedule: a row naming a pool no graph has is kept and marked', () => {
+  const param = { name: 'liquidityTargetSchedule', value: [{ year: 2030, pool: 'gone', scale: 2 }] };
+  const host = mount(buildLiquidityTargetScheduleEditor(param, TGT_GRAPHS));
+  assert.strictEqual(cell(host, 'pool').value, 'gone');
+  assert.match([...cell(host, 'pool').options].map(o => o.textContent).join(' '), /not found/);
+});
+
+test('LiquidityTargetSchedule: empty is null, and an added row defaults to factor 1', () => {
+  const param = { name: 'liquidityTargetSchedule', value: null };
+  const host = mount(buildLiquidityTargetScheduleEditor(param, TGT_GRAPHS));
+  assert.equal(param.value, null);
+  button(host, 'Add Row').click();
+  assert.equal(param.value.length, 1);
+  assert.equal(param.value[0].scale, 1);
+  assert.equal(param.value[0].pool, 'cash');
 });

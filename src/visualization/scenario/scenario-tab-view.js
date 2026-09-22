@@ -14,7 +14,7 @@ import { normalizeFilter, matchesFilter, FilteredFoldState } from '../components
 import {
   buildMixListEditor, buildAllocationGlidepathEditor, buildAllocationRegimeTargetsEditor,
   buildDrawdownSequenceEditor, buildLiquidityGraphEditor,
-  buildLiquidityShapesEditor, buildLiquidityGraphScheduleEditor,
+  buildLiquidityShapesEditor, buildLiquidityGraphScheduleEditor, buildLiquidityTargetScheduleEditor,
   buildMpcRunsEditor, buildMpcRunSelect,
   buildLocationPolicyEditor, buildYieldCurveShapeEditor, buildYieldCurveScheduleEditor,
   buildRateKeyMapEditor,
@@ -657,6 +657,13 @@ export class ScenarioTabView {
           const src = scenario.params.find(x => x.name === 'liquidityShapes')?.value;
           return isPlainObject_(src) ? Object.keys(src) : [];
         });
+      } else if (param.type === 'LiquidityTargetSchedule') {
+        // Design 112. The graphs are read LIVE, like the shape ids above: the pool options and
+        // the derived size column describe the pools as they are now, not when this was built.
+        valueInput = buildLiquidityTargetScheduleEditor(param, () => ({
+          liquidityGraph:  scenario.params.find(x => x.name === 'liquidityGraph')?.value,
+          liquidityShapes: scenario.params.find(x => x.name === 'liquidityShapes')?.value,
+        }));
       } else if (param.type === 'MpcRuns') {
         // Design 81 §8 / 5b. The two params are siblings and each has to see the other: the
         // editor renames or deletes a run, and the select above has to stop offering it (or

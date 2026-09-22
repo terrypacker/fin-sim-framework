@@ -190,12 +190,26 @@ export function poolAxisProblems(cfg) {
   // never clamps, so a swept value outside what the normalizer accepts is refused with its own
   // sentence. Saying so before a grid is launched is the difference between a hole the author
   // expected and one they spend an afternoon explaining.
+  // Design 112 R7 — a dated row multiplies the axis, so the ceiling is a property of the
+  // PRODUCT. The largest row factor for each pool widens the top of the span it is checked at.
+  const rowMax = new Map();
+  for (const r of (Array.isArray(val('liquidityTargetSchedule')) ? val('liquidityTargetSchedule') : [])) {
+    if (typeof r?.pool === 'string' && Number.isFinite(r?.scale)) {
+      rowMax.set(r.pool, Math.max(rowMax.get(r.pool) ?? 1, r.scale));
+    }
+  }
   for (const row of scalablePoolTargets(authored)) {
     const worst = row.authored
       .filter(a => a.mode === 'PERCENT')
       .reduce((m, a) => Math.max(m, a.value), 0);
-    if (worst > 0 && worst * POOL_TARGET_SCALE_RANGE.max > 1) {
-      const limit = trimTo(1 / worst);
+    const rowK = rowMax.get(row.poolId) ?? 1;
+    if (worst > 0 && rowK > 1 && worst * rowK > 1) {
+      row_(out, 'liquidityTargetSchedule', POOL_AXIS_PROBLEM_KIND.REFUSES,
+        `Pool '${row.label}' is sized as a PERCENT of the book (${trimTo(worst * 100)}%), and a target `
+        + `schedule row scales it by ${trimTo(rowK)}, past 1.0 of the book. The plan will not load until `
+        + 'that row is lowered.');
+    } else if (worst > 0 && worst * rowK * POOL_TARGET_SCALE_RANGE.max > 1) {
+      const limit = trimTo(1 / (worst * rowK));
       row_(out, 'liquidityGraph', POOL_AXIS_PROBLEM_KIND.REFUSES,
         `Pool '${row.label}' is sized as a PERCENT of the book (${trimTo(worst * 100)}%), and a `
         + `PERCENT target is a FRACTION — above 1.0 the graph refuses to compile. Factors over `
@@ -204,6 +218,10 @@ export function poolAxisProblems(cfg) {
         + 'size the pool in years of spending, which has no ceiling.');
     }
   }
+  // Design 112 §2.5 — what a factor does to the rest of the pool vocabulary. Applies to the
+  // hidden axis and to dated target rows alike, so the span checked is the axis range widened
+  // by the most extreme row factor the plan authors.
+  if (hasPoolTarget) out.push(...targetVocabularyProblems(authored, val('liquidityTargetSchedule')));
   if (shapeAxes.length) {
     const years = shapeAxes.flatMap(r => r.years).sort((a, b) => a - b);
     let closest = Infinity;
@@ -223,6 +241,106 @@ export function poolAxisProblems(cfg) {
 
 /** Round a display number without trailing float noise. */
 const trimTo = (n) => Number(n.toPrecision(12));
+
+/**
+ * Design 112 §2.5 — four ways a pool's other settings change what a size factor MEANS.
+ *
+ * A factor touches only `target.value`. Two target modes and three capacity modes then make it
+ * do less than its label claims, and neither design 110 nor the first draft of design 112 said
+ * so. Each row names the pool (and the shape, when it is not the base graph):
+ *
+ *   · CONFOUNDED — a REMAINDER pool: the factor multiplies the aggregate, so the residual moves
+ *     by more than the factor.
+ *   · CONFOUNDED — a pool a REMAINDER pool sits behind (with a target and no real ceiling): it
+ *     contributes its TARGET, so scaling it shrinks the remainder one for one and total cover
+ *     does not move. A mix lever, not a size lever.
+ *   · INERT — a static ceiling (`AMOUNT` / `YEARS_OF_SPEND` capacity, in the target's own unit)
+ *     below the top of the span: the pool is capped, and the search sees a plateau. `OFFSET_CAP`
+ *     gets its own sentence, because that ceiling falls with the loan.
+ *   · CONFOUNDED — a floor in the target's unit above the bottom of the span: the refills stop
+ *     short of what the pool refuses to release.
+ *
+ * @param {{liquidityGraph:*, liquidityShapes:*}} authored  the raw graphs
+ * @param {*} targetRows  the raw `liquidityTargetSchedule`
+ */
+export function targetVocabularyProblems(authored, targetRows) {
+  const factors = (Array.isArray(targetRows) ? targetRows : [])
+    .map(r => r?.scale).filter(k => Number.isFinite(k) && k >= 0);
+  const lo = POOL_TARGET_SCALE_RANGE.min * Math.min(1, ...factors);
+  const hi = POOL_TARGET_SCALE_RANGE.max * Math.max(1, ...factors);
+  const scalable = new Set(scalablePoolTargets(authored).map(r => r.poolId));
+  const graphs = [[null, authored.liquidityGraph]];
+  const shapes = authored.liquidityShapes;
+  if (shapes && typeof shapes === 'object' && !Array.isArray(shapes)) {
+    for (const [id, g] of Object.entries(shapes)) graphs.push([id, g]);
+  }
+  const out = [];
+  const push = (kind, pool, shape, message) => out.push({
+    param: 'liquidityGraph', index: null, field: null, pool, shape,
+    severity: PROBLEM_SEVERITY.WARN, kind, message,
+  });
+  const valueOf = (spec) => (typeof spec === 'number' ? spec
+    : (spec && typeof spec === 'object' && Number.isFinite(spec.value)) ? spec.value : null);
+  const modeOf  = (spec, dflt) => (spec && typeof spec === 'object' && typeof spec.mode === 'string')
+    ? spec.mode : dflt;
+  const fmt = (n) => trimTo(n);
+
+  for (const [where, graph] of graphs) {
+    const pools = Array.isArray(graph?.pools) ? graph.pools : [];
+    const inShape = where == null ? '' : ` in shape '${where}'`;
+    for (const pool of pools) {
+      if (!pool || typeof pool.id !== 'string' || !scalable.has(pool.id)) continue;
+      const tValue = valueOf(pool.target);
+      if (tValue == null || tValue === 0) continue;
+      const tMode = modeOf(pool.target, 'YEARS_OF_SPEND');
+
+      if (tMode === 'YEARS_OF_SPEND_REMAINDER') {
+        push(POOL_AXIS_PROBLEM_KIND.CONFOUNDED, pool.id, where,
+          `Pool '${pool.id}'${inShape} is a REMAINDER of ${fmt(tValue)} years across other pools. A factor `
+          + 'multiplies that AGGREGATE, not the pool\'s own share, so its residual moves by more than '
+          + 'the factor says (6y behind 4y is 2y; ×1.5 makes it 5y). Read its results as sizes, not '
+          + 'as the factor.');
+      }
+
+      const behind = pools.filter(q => q && q !== pool
+        && modeOf(q.target, null) === 'YEARS_OF_SPEND_REMAINDER'
+        && Array.isArray(q.target?.after) && q.target.after.includes(pool.id));
+      const capMode = modeOf(pool.capacity, 'BALANCE');
+      const realCeiling = capMode !== 'BALANCE';
+      for (const q of behind) {
+        if (realCeiling) continue;         // a capped pool contributes what it HOLDS, not its target
+        push(POOL_AXIS_PROBLEM_KIND.CONFOUNDED, pool.id, where,
+          `Pool '${pool.id}'${inShape} sits in front of REMAINDER pool '${q.id}', which counts '${pool.id}' `
+          + `at its target. Scaling '${pool.id}' shrinks '${q.id}' by the same amount, so total cover does `
+          + `not move until '${q.id}' reaches zero: this factor trades one pool against the other rather `
+          + 'than sizing the reserve.');
+      }
+
+      const capValue = valueOf(pool.capacity);
+      if (capMode === 'OFFSET_CAP') {
+        push(POOL_AXIS_PROBLEM_KIND.INERT, pool.id, where,
+          `Pool '${pool.id}'${inShape} is capped at its offset ceiling, min(cash, loan owed), which falls as `
+          + 'the loan amortises. A factor that fits today can sit above that ceiling in a few years, '
+          + 'where every larger value runs the same capped pool.');
+      } else if (capValue != null && capMode === tMode && tValue * hi > capValue) {
+        push(POOL_AXIS_PROBLEM_KIND.INERT, pool.id, where,
+          `Pool '${pool.id}'${inShape} has a ${capMode} capacity of ${fmt(capValue)}, and factors above `
+          + `${fmt(capValue / tValue)} take its target (${fmt(tValue)}) past it. The pool is capped there, `
+          + 'so the top of the range is a plateau: those factors all run the same plan.');
+      }
+
+      const floorValue = valueOf(pool.floor);
+      const floorMode  = modeOf(pool.floor, 'AMOUNT');
+      if (floorValue != null && floorValue > 0 && floorMode === tMode && tValue * lo < floorValue) {
+        push(POOL_AXIS_PROBLEM_KIND.CONFOUNDED, pool.id, where,
+          `Pool '${pool.id}'${inShape} has a floor of ${fmt(floorValue)}, and factors below `
+          + `${fmt(floorValue / tValue)} take its target (${fmt(tValue)}) under it. The floor is not scaled, `
+          + 'so the pool then refills to less than it refuses to release.');
+      }
+    }
+  }
+  return out;
+}
 
 /** Push a row — the same shape `row()` builds, for the checks that run after it is out of scope. */
 function row_(out, param, kind, message) {

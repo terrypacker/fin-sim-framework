@@ -9,11 +9,11 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-227 parameters · 33 panels · 11 node types (164 fields) · 173 action types · 86 tools · 274 state field types · 72 topics · 120 design docs
+228 parameters · 33 panels · 11 node types (164 fields) · 173 action types · 86 tools · 274 state field types · 72 topics · 120 design docs
 
 ---
 
-## Parameters (227)
+## Parameters (228)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
@@ -378,7 +378,7 @@ scenario's own schema), which is where to go to change it.
 - **`rothConversionStartYear`** — Roth Conversion Start Year · `Number` · default — · sweep: opt · via US_ROTH_CONVERSION
   First year to convert; null = primary person's retirement year
 
-### Spending (46)
+### Spending (47)
 
 - **`ageBandDeclineRate`** — Age-Band Decline Rate · `Number` · default — · sweep: mc+opt · conditional · via US_RETIREMENT
   Convenience: a single real %/yr decline anchored at the primary person's retirement age. When set, overrides Spending Age Bands with a synthesized one-band glide (e.g. -0.01 = Blanchett's ~1%/yr smile)
@@ -444,6 +444,8 @@ scenario's own schema), which is where to go to change it.
   When each pool shape takes over: [{ year, shape }], the shape naming a key of Liquidity Pool Shapes (design 109), or null for the base Liquidity Pools (graph) — how a plan returns to it, and how the MPC Pool Shape lever saves a decision to stay on it. A step function — the row with the greatest year not after the current one governs, and BEFORE the first row the base Liquidity Pools (graph) governs, so adding a schedule never requires copying the existing graph into a shape. One row per year (two rows for one year is refused; only one shape can be active at a time). A row takes effect at the first period advance on or after 1 January of its year, which on a semi-annual cadence can be up to six months later — shapes govern DECISIONS, and decisions are taken at advances. A change moves no money by itself: the new shape's targets are honoured by the rebalancer and the flows at their own cadence, through their own gates. Pool identity across a change is the pool `id` — the same id continues and keeps its trailing high, a new id starts cold, a dropped id is retired. Blank (the default) = one graph for the whole run.
 - **`liquidityShapes`** — Liquidity Pool Shapes · `LiquidityShapes` · default — · conditional · via ECONOMIC_REGIMES
   Named alternative pool GRAPHS, as { <shapeId>: { pools, flows } } — each one exactly the value Liquidity Pools (graph) takes, so a shape is not a new vocabulary, it is the existing one given a name (design 109). A shape is the WHOLE graph, not one pool's settings: flows name pools, remainder targets name pools and cycle detection is a property of the whole edge set, so a per-pool timeline would let a composition that validates in 2030 and 2040 be invalid in 2035. Every shape is compiled and validated at LOAD, beside the base graph, so a shape that takes effect in twenty years fails now rather than mid-run. Selected by Liquidity Pool Schedule; a shape no row selects warns and governs nothing. Blank (the default) = one graph for the whole run, byte-identical to before.
+- **`liquidityTargetSchedule`** — Liquidity Pool Target Schedule · `LiquidityTargetSchedule` · default — · conditional · via ECONOMIC_REGIMES
+  Dated changes to a pool's SIZE: [{ year, pool, scale }]. From 1 January of `year` the pool holds `scale` × the target its graph authors, until the next row for that pool. The factor is always relative to the authored target, never to an earlier row: 1.5 then 1.2 means 1.2 × authored. It is a factor rather than a figure so it works for every target mode and keeps the difference between shapes: a pool authored at 2 years in one shape and 4 in another holds 3 and 6 at 1.5. A row is about the POOL, not a shape, so it carries across a later shape switch; while the shape in force has no pool of that id the row does nothing, and it applies again if a later shape brings the id back. A factor that takes a PERCENT target past 1.0 is refused when the plan loads, naming the row. Rows the MPC cockpit writes carry `by` (the session), which changes nothing about the run. Multiplies with the searchable pool.<id>.targetScale axis. Blank (the default) = the authored targets for the whole run.
 - **`monthlyExpenses`** — Monthly Expenses · `Money` · default `6000` · USD · sweep: mc+opt · via US_RETIREMENT
   Monthly household expenses drawn from savings
 - **`monthlyExpensesCurrency`** — Expense Denomination · `Enum` · default `RESIDENCE` · one of `RESIDENCE`, `USD`, `AUD` · via US_RETIREMENT
@@ -2106,7 +2108,7 @@ what the in-app panel keys on.
 | [Paycheque](panels/paycheque.md) | panel | 197 | 1 panel · design 95, 107 |
 | [Performance](panels/perf.md) | panel | 201 | 1 panel · design 78 |
 | [Person](nodes/person.md) | node | 221 | 3 panels · design 34, 95, 83 |
-| [Pool Shapes Over Time](concepts/pool-shapes-over-time.md) | concept | 390 | 2 params · design 109, 97 |
+| [Pool Shapes Over Time](concepts/pool-shapes-over-time.md) | concept | 400 | 3 params · design 109, 112, 97 |
 | [Liquidity Pools](panels/pools.md) | panel | 217 | 1 panel · design 97 |
 | [Randomness and Seeds](concepts/randomness-and-seeds.md) | concept | 251 | 2 panels · 2 params · design 74 |
 | [Real Property](nodes/real-property.md) | node | 221 | 2 panels · design 75, 83, 86, 48 |

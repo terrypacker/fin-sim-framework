@@ -10,6 +10,7 @@
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { activeGraphAt, compileToDrawdownSequence } from './liquidity-graph.js';
+import { stepKeyOf } from './pool-target-schedule.js';
 
 /**
  * DESIGN 109 §8 — the shape switch.
@@ -91,12 +92,18 @@ export class PoolShapeScheduleReducer extends Reducer {
     const active = activeGraphAt(this.schedule, asOfMs);
     if (!active) return this.newState(state);
 
-    // `?? null` on both sides: the opening entry's id IS null (it is the base graph, not a
+    // Design 112 §2.2 — the STEP, not just the shape: a dated target row keeps the shape and
+    // changes its factors, and that has to restamp too. Both sides are derived the same way
+    // (`stepKeyOf`), the state side from what an earlier advance stamped, so a snapshot-seeded
+    // rollout compares correctly without this reducer remembering anything. With no target rows
+    // both keys are the bare shape id, which is the comparison this reducer always made.
+    //
+    // `?? null` on the shape: the opening entry's id IS null (it is the base graph, not a
     // named shape), and an unstamped state has no field at all. Without the coalesce the
     // first period of every run would read `undefined !== null` and emit a patch that changes
     // nothing — a diff on every scenario with a schedule, for no reason.
-    const stamped = state.liquidityShapeId ?? null;
-    if ((active.shapeId ?? null) === stamped) return this.newState(state);
+    const stamped = stepKeyOf(state.liquidityShapeId ?? null, state.liquidityTargetScales);
+    if (stepKeyOf(active.shapeId ?? null, active.scales) === stamped) return this.newState(state);
 
     const seq = active.graph ? compileToDrawdownSequence(active.graph) : null;
 
@@ -106,6 +113,7 @@ export class PoolShapeScheduleReducer extends Reducer {
       // go on plotting a pool that no longer exists, flat, forever.
       ...(state.liquidityPools ? { liquidityPools: _keepLivePools(state.liquidityPools, active.graph) } : {}),
       liquidityShapeId: active.shapeId ?? null,
+      ..._scalesPatch(state, active),
       // Both halves, one patch. See the header.
       liquidityGraph:   active.graph ?? null,
       drawdownSequence: seq,
@@ -153,7 +161,7 @@ export function liquidityStateAt({ graph = null, schedule = null } = {}, state, 
     const g   = active?.graph ?? null;
     const id  = active?.shapeId ?? null;
     const seq = g ? compileToDrawdownSequence(g) : null;
-    next = { liquidityGraph: g, drawdownSequence: seq };
+    next = { liquidityGraph: g, drawdownSequence: seq, ..._scalesPatch(state, active) };
     if ('liquidityShapeId' in (state ?? {}) || id !== null) next.liquidityShapeId = id;
     if (id !== (state?.liquidityShapeId ?? null) && state?.liquidityPools) {
       next.liquidityPools = _keepLivePools(state.liquidityPools, g);
@@ -171,6 +179,22 @@ export function liquidityStateAt({ graph = null, schedule = null } = {}, state, 
     if (JSON.stringify(v) !== JSON.stringify(state?.[k])) patch[k] = v;
   }
   return patch;
+}
+
+/**
+ * Design 112 R11 — the row factors in force, stamped where a reader can see them.
+ *
+ * A scale step keeps `liquidityShapeId`, so without this the only trace of it in the journal is
+ * a graph-sized diff with no readable cause. The field is ABSENT until a factor is first in
+ * force (a plan without target rows never writes it, so every golden holds), and null once the
+ * last one lapses — null rather than deleted, because a patch cannot delete a key and the
+ * journal then records the lapse as `cash: 1.5 → null`.
+ * @private
+ */
+function _scalesPatch(state, active) {
+  const scales = active?.scales ?? {};
+  if (Object.keys(scales).length) return { liquidityTargetScales: scales };
+  return (state?.liquidityTargetScales != null) ? { liquidityTargetScales: null } : {};
 }
 
 /** The latest period start at or before `asOfMs` — the last advance this reducer saw. @private */

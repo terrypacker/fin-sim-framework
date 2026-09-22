@@ -27,6 +27,10 @@ import { poolTargetScalesFrom, scaleRawPoolGraph } from './pool-target-scale.js'
 import { gateOverridesFrom, applyGateOverridesToGraph, GATE_CLAUSE_ID_RE } from './pool-gate-axis.js';
 // Design 110 §6.4 / design 109 Q1 — the shape-switch YEAR axis, as a shift.
 import { shapeYearShiftsFrom, applyShapeYearShifts } from './pool-shape-year-axis.js';
+// Design 112 — dated target rows, a leaf module (see its header for why).
+import {
+  normalizeTargetSchedule, scalesInForceAt, appliedScales, stepKeyOf, composeScales, knownPoolIds,
+} from './pool-target-schedule.js';
 
 /**
  * DESIGN 97 PART II — the LIQUIDITY GRAPH.
@@ -1282,9 +1286,11 @@ function _normalizeFromParams(p, accounts, advisories = null) {
  * it: see `pool-target-scale.js` for why the resolver rather than a loader cascade is the seam.
  * @private
  */
-function _overlayRawGraph(raw, p) {
+function _overlayRawGraph(raw, p, rowScales = null) {
+  // Design 112 §2.2 — a step's dated row factors compose with the whole-run axis (axis × row),
+  // through the SAME scaler, so there is one way a pool's target gets multiplied.
   return applyGateOverridesToGraph(
-    scaleRawPoolGraph(raw, poolTargetScalesFrom(p)), gateOverridesFrom(p));
+    scaleRawPoolGraph(raw, composeScales(poolTargetScalesFrom(p), rowScales)), gateOverridesFrom(p));
 }
 
 /**
@@ -1420,6 +1426,24 @@ export function collectAuthoredGraphProblems(params, accounts = []) {
       index: null, field: null, pool: null, shape: m ? m[1] : null,
       severity: PROBLEM_SEVERITY.ERROR, message: e.message,
     });
+  }
+
+  // Design 112 — the target rows, through the resolver's own step builder. Only once the graphs
+  // above compile: a row scaling a pool in a shape that does not compile would report that
+  // shape's error a second time, under the wrong param.
+  if (p.liquidityTargetSchedule != null && !blockingProblems(problems).length) {
+    try {
+      const targetRows = _normalizeTargetRows(p);
+      if (targetRows.length) {
+        const quiet = [];
+        _datedSteps(p, accounts, _normalizeSchedule(_overlayRawSchedule(p), p.liquidityShapes),
+          targetRows, _normalizeFromParams(p, accounts, quiet), _normalizeShapes(p, accounts, null, quiet),
+          quiet);
+      }
+    } catch (e) {
+      problems.push({ param: 'liquidityTargetSchedule', index: null, field: null, pool: null,
+                      shape: null, severity: PROBLEM_SEVERITY.ERROR, message: e.message });
+    }
   }
 
   // Design 110 §4.3 and §13.2 — all SIX advisories, in the same list as the refusals rather
@@ -1572,8 +1596,11 @@ function januaryFirstUtc(year) {
  *
  * @param {object} params   - the scenario parameter bag
  * @param {Array}  accounts - context.accounts; every shape validates against the SAME list
- * @returns {Array<{fromMs:number, year:number|null, shapeId:string|null, graph:object|null}>|null}
- *          sorted ascending by `fromMs`; entry 0 is the `liquidityGraph` param
+ * @returns {Array<{fromMs:number, year:number|null, shapeId:string|null, graph:object|null,
+ *                  scales:Object<string,number>, stepKey:string}>|null}
+ *          sorted ascending by `fromMs`; entry 0 is the `liquidityGraph` param. `scales` are the
+ *          design 112 row factors applied at that step (empty without rows) and `stepKey` is the
+ *          shape id plus those factors — what the shape reducer compares.
  */
 export function resolveLiquidityGraphSchedule(params, accounts = []) {
   const p = params ?? {};
@@ -1583,9 +1610,13 @@ export function resolveLiquidityGraphSchedule(params, accounts = []) {
   if (p.liquidityGraphEnabled === false) return null;
 
   const rows = _normalizeSchedule(_overlayRawSchedule(p), p.liquidityShapes);
-  if (!rows.length) return null;
+  // Design 112 — dated target rows are more steps in the same function. With neither kind of
+  // row the answer is still null, so a plan that uses neither is on exactly today's path.
+  const targetRows = _normalizeTargetRows(p);
+  if (!rows.length && !targetRows.length) return null;
 
   const shapes = _normalizeShapes(p, accounts);
+  const base   = _normalizeFromParams(p, accounts);
   const out = [{
     fromMs:  OPENING_FROM_MS,
     year:    null,
@@ -1594,17 +1625,12 @@ export function resolveLiquidityGraphSchedule(params, accounts = []) {
     // live" needs to see that the answer is "the base graph" rather than a name they never
     // wrote.
     shapeId: null,
-    graph:   _normalizeFromParams(p, accounts),
+    graph:   base,
+    scales:  {},
+    stepKey: stepKeyOf(null, null),
   }];
-  for (const row of rows) {
-    out.push({
-      fromMs:  januaryFirstUtc(row.year),
-      year:    row.year,
-      shapeId: row.shape,
-      // A base row (`shape: null`) re-selects the opening entry's graph.
-      graph:   row.shape === null ? out[0].graph : shapes.get(row.shape),
-    });
-  }
+
+  out.push(..._datedSteps(p, accounts, rows, targetRows, base, shapes));
   // Design 110 §4.3 — the same collectors `collectAuthoredGraphProblems` returns as
   // `severity: 'warn'` rows, rendered here to the console for the ENGINE path, which has no
   // authoring surface. One derivation, two renderers: the advisory the author reads in the
@@ -1613,6 +1639,71 @@ export function resolveLiquidityGraphSchedule(params, accounts = []) {
     console.warn(w.message);
   }
   return out;
+}
+
+/**
+ * The dated entries after the opening one: one per year in the UNION of shape rows and target
+ * rows (design 112 §2.2). EVERY entry gets the shape in force at its year and the row factors
+ * in force at its year — whichever list produced it. A shape switch after a target row
+ * therefore carries the row's factor into the new shape; stamping factors only on the row's own
+ * step would end the row silently at the next switch (design 112 R1).
+ *
+ * Shared by the resolver and the authoring path (`collectAuthoredGraphProblems`), so a row the
+ * editor calls fine is a row the load accepts. `advisories` is the reporting path's sink.
+ * @private
+ */
+function _datedSteps(p, accounts, rows, targetRows, base, shapes, advisories = null) {
+  const out = [];
+  const shapeAt = new Map(rows.map(r => [r.year, r.shape]));
+  const years = [...new Set([...rows.map(r => r.year), ...targetRows.map(r => r.year)])]
+    .sort((a, b) => a - b);
+  const scaled = new Map();                 // stepKey → normalized graph, built once
+  let shapeId = null;
+  for (const year of years) {
+    if (shapeAt.has(year)) shapeId = shapeAt.get(year);
+    const rawGraph = shapeId === null ? p.liquidityGraph : p.liquidityShapes?.[shapeId];
+    const factors  = appliedScales(scalesInForceAt(targetRows, year), rawGraph);
+    const stepKey  = stepKeyOf(shapeId, factors);
+    // A base row (`shape: null`) re-selects the opening entry's graph.
+    let graph = shapeId === null ? base : shapes.get(shapeId);
+    if (Object.keys(factors).length) {
+      graph = scaled.get(stepKey);
+      if (graph === undefined) {
+        graph = _normalizeScaledStep(p, accounts, rawGraph, factors, shapeId, year, advisories);
+        scaled.set(stepKey, graph);
+      }
+    }
+    out.push({ fromMs: januaryFirstUtc(year), year, shapeId, graph, scales: factors, stepKey });
+  }
+  return out;
+}
+
+/**
+ * `liquidityTargetSchedule`, validated against every pool id the plan authors (design 112).
+ * @private
+ */
+function _normalizeTargetRows(p) {
+  if (p.liquidityTargetSchedule == null) return [];
+  return normalizeTargetSchedule(p.liquidityTargetSchedule,
+    knownPoolIds(p.liquidityGraph, _shapesObject(p.liquidityShapes)));
+}
+
+/**
+ * One step's graph with its row factors applied, normalized with the same options as every
+ * other graph (design 110 §17.2: no second validator, no clamp). A factor that pushes a
+ * PERCENT target past 1.0 is therefore refused with the normalizer's own sentence, re-thrown
+ * with the row's year and shape so the author knows which row to look at.
+ * @private
+ */
+function _normalizeScaledStep(p, accounts, rawGraph, factors, shapeId, year, advisories = null) {
+  try {
+    return normalizeLiquidityGraph(_overlayRawGraph(rawGraph, p, factors), accounts,
+      _graphOptsFrom(p, advisories));
+  } catch (e) {
+    const where = shapeId === null ? 'the base graph' : `shape '${shapeId}'`;
+    err(`liquidityTargetSchedule (from ${year}, ${where}): ${e.message.replace(/^liquidityGraph: /, '')}`);
+  }
+  return null;
 }
 
 /**

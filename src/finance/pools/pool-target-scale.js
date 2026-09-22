@@ -332,3 +332,78 @@ export function poolTargetScaleLabel(row) {
   const scope = shapes > 1 ? ` — one factor, ${shapes} shapes` : '';
   return `Pool '${row.label}' target × (${parts.join(', ')})${scope}`;
 }
+
+/**
+ * DESIGN 112 §2.3 "Legibility" — a factor as the SIZE it resolves to, then the factor:
+ * `cash 3y (×1.5)`, or `bonds base 4.5y / bridge 7.5y (×1.5)` for a pool in several graphs.
+ *
+ * One formatter for every place a factor is shown — the target-schedule row editor, the MPC
+ * control's search list and `describe`, and the Pools panel — so the four cannot disagree. It is
+ * the axis label's (`poolTargetScaleLabel`) obligation carried one step further: that label
+ * names the authored values a factor multiplies; this one does the multiplication.
+ *
+ * A `YEARS_OF_SPEND_REMAINDER` pool is shown as its RESIDUAL, because the factor multiplies the
+ * aggregate and the residual moves by more than the factor (§2.5): 6y behind 4y is 2y, and ×1.5
+ * makes it 5y, not 3y. The residual is computed when every pool it sits behind has a years
+ * target in that graph (a static figure); otherwise the aggregate is shown and labelled so.
+ *
+ * Reads the RAW graphs, like `scalablePoolTargets`, so it never throws on a plan that does not
+ * compile. A pool no graph contains reads as `pool (not in any graph)`.
+ *
+ * @param {object} params  a flat bag carrying `liquidityGraph` / `liquidityShapes`
+ * @param {string} poolId
+ * @param {number} factor
+ * @returns {string}
+ */
+export function describeScaledTarget(params, poolId, factor) {
+  const k = Number(factor);
+  const graphs = [];
+  const base = params?.liquidityGraph;
+  if (base && typeof base === 'object') graphs.push([null, base]);
+  const shapes = params?.liquidityShapes;
+  if (shapes && typeof shapes === 'object' && !Array.isArray(shapes)) {
+    for (const [id, shape] of Object.entries(shapes)) {
+      if (shape && typeof shape === 'object') graphs.push([id, shape]);
+    }
+  }
+  const parts = [];
+  let label = poolId;
+  for (const [where, graph] of graphs) {
+    const pools = Array.isArray(graph.pools) ? graph.pools : [];
+    const pool = pools.find(p => p?.id === poolId);
+    if (!pool) continue;
+    if (typeof pool.label === 'string' && pool.label && label === poolId) label = pool.label;
+    parts.push([where, _scaledSize(pool.target, pools, Number.isFinite(k) ? k : 1)]);
+  }
+  const f = Number.isFinite(k) ? `×${trim(k)}` : '×?';
+  if (!parts.length) return `${label} (not in any graph) (${f})`;
+  const sizes = parts.length === 1
+    ? parts[0][1]
+    : parts.map(([where, s]) => `${where ?? 'base'} ${s}`).join(' / ');
+  return `${label} ${sizes} (${f})`;
+}
+
+/** Years a raw target states, when it is a plain years figure; otherwise null. @private */
+function _yearsOf(target) {
+  if (typeof target === 'number') return target;
+  if (target && typeof target === 'object' && Number.isFinite(target.value)
+      && (target.mode == null || target.mode === 'YEARS_OF_SPEND')) return target.value;
+  return null;
+}
+
+/** One raw target at factor `k`, in its own unit. @private */
+function _scaledSize(target, pools, k) {
+  if (target == null) return 'no target';
+  if (typeof target === 'number') return describeAuthored({ mode: null, value: trim(target * k) });
+  if (typeof target !== 'object' || !Number.isFinite(target.value)) return 'no target';
+  const value = trim(target.value * k);
+  if (target.mode !== 'YEARS_OF_SPEND_REMAINDER') return describeAuthored({ mode: target.mode, value });
+  const after = Array.isArray(target.after) ? target.after : [];
+  let covered = 0;
+  for (const ref of after) {
+    const y = _yearsOf(pools.find(p => p?.id === ref)?.target);
+    if (y == null) return `${value}y aggregate`;
+    covered += y;
+  }
+  return `${trim(Math.max(0, value - covered))}y left of ${value}y`;
+}
