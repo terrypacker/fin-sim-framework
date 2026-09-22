@@ -411,8 +411,10 @@ imprecise:
   by the plugin. The harvest marks rows the same way, from the epoch's record.
 - **POOL_TARGET has a SCHEDULE harvest.** The POINT default would have kept the last epoch's
   value under an index key (`liquidityTargetSchedule[3].scale`). That is one year of a dated
-  decision, keyed to a position in a table that has since moved. `POOL_SHAPE` still uses the
-  POINT default, and has the same weakness.
+  decision, keyed to a position in a table that has since moved. `POOL_SHAPE` had the same
+  weakness and now has the same SCHEDULE harvest: every decided year becomes a
+  `liquidityGraphSchedule` row, with `shape: null` (back to the base graph) kept as a decision
+  and no `by` mark, since that schedule carries only `{ year, shape }`.
 - **The gate is INERT, not disabled, with no target reader.** With neither TARGET_ALLOCATION
   nor LIQUIDITY_POOLS selected, rows still resolve and stamp but nothing realizes a target,
   so `inertWhen` is true and a recorded run warns instead of refusing to load.

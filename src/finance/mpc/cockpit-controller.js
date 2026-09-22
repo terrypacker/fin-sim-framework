@@ -1134,6 +1134,40 @@ export const COCKPIT_CONTROLS = {
         _year:    year,
       }];
     },
+    /**
+     * SCHEDULE bake (design 39 §13.6.2) — every epoch's decided year becomes a
+     * `liquidityGraphSchedule` row over the authored ones, the rows `actuate` would have written.
+     * Not the POINT default, which kept only the LAST epoch's shape under an index key
+     * (`liquidityGraphSchedule[1].shape`): one year of a dated decision, addressed by a position
+     * in a table the scaffold keeps re-sorting. `shape: null` (the base graph) is a decision and
+     * is kept. No `by` mark: the schedule's editor and normalizer carry only `{ year, shape }`.
+     */
+    harvest: ({ epochs, baseParams }) => {
+      const rows = (Array.isArray(baseParams?.liquidityGraphSchedule)
+        ? baseParams.liquidityGraphSchedule : []).map(e => ({ ...e }));
+      let decided = 0;
+      for (const e of epochs) {
+        const v = e.vars?.[0];
+        if (!Number.isFinite(v?._year) || !e.candidate || !Object.hasOwn(e.candidate, v.paramKey)) continue;
+        const shape = e.candidate[v.paramKey];
+        if (!(shape === null || (typeof shape === 'string' && shape))) continue;
+        const i = rows.findIndex(r => Number(r?.year) === v._year);
+        if (i >= 0) rows[i] = { year: v._year, shape }; else rows.push({ year: v._year, shape });
+        decided++;
+      }
+      if (!decided) {
+        return { form: HARVEST_FORMS.SCHEDULE, params: {},
+          warnings: ['Liquidity Pool Shape: no decision could be keyed to a year — nothing harvested.'] };
+      }
+      rows.sort((a, b) => Number(a.year) - Number(b.year));
+      const label = rows.map(r => `${r.year} ${r.shape ?? 'base'}`);
+      return {
+        form: HARVEST_FORMS.SCHEDULE,
+        params: { liquidityGraphSchedule: rows },
+        labels: { liquidityGraphSchedule: `${decided} decision(s): ${label.slice(0, 4).join(' · ')}`
+          + (label.length > 4 ? ' …' : '') },
+      };
+    },
     describe: (candidate, vars) => {
       const v = vars?.[0];
       if (!v) return 'No pool shape decision';

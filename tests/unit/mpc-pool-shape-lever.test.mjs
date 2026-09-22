@@ -24,6 +24,7 @@
  * PSL-6  a candidate reaches the rollout: on the spot at a 1-January epoch, at the row otherwise
  * PSL-7  the live actuate: the running sim swaps, and matches a t₀ compile of the saved schedule
  * PSL-8  base-graph rows (`shape: null`) — the schedule can return to the base graph
+ * PSL-9  the harvest bakes every decided year as a schedule row (SCHEDULE, not the POINT default)
  */
 
 import { test } from 'node:test';
@@ -316,4 +317,51 @@ test('PSL-8: a `shape: null` row returns the schedule to the base graph', () => 
   assert.throws(() => quiet(() => compiledAt(
     { ...SCHEDULED, liquidityGraphSchedule: [{ year: 2050 }] }, new Date(Date.UTC(2027, 0, 2)))),
     /names no shape/);
+});
+
+// ─── PSL-9 — the harvest ─────────────────────────────────────────────────────
+
+import { harvestDecisions } from '../../src/finance/mpc/harvest.js';
+
+test('PSL-9: the harvest bakes every decided year as a schedule row (SCHEDULE, not POINT)', () => {
+  // Two epochs, each deciding its own scaffolded row. The index keys differ epoch to epoch —
+  // the scaffold re-sorts the table — which is exactly why an index-keyed POINT bake was wrong.
+  const v46 = { paramKey: 'liquidityGraphSchedule[1].shape', _year: 2046, _controlKey: 'POOL_SHAPE' };
+  const v47 = { paramKey: 'liquidityGraphSchedule[2].shape', _year: 2047, _controlKey: 'POOL_SHAPE' };
+  const records = [
+    { asOfDate: '2045-12-31', runId: 'run:1', controlKeys: ['POOL_SHAPE'], controlVars: [v46],
+      controlParams: { [v46.paramKey]: 'early' } },
+    { asOfDate: '2046-12-31', runId: 'run:1', controlKeys: ['POOL_SHAPE'], controlVars: [v47],
+      controlParams: { [v47.paramKey]: null } },
+  ];
+  const plan = harvestDecisions(records, { controlsByKey: { POOL_SHAPE: SHAPE }, baseParams: SCHEDULED });
+  assert.equal(plan.entries.length, 1);
+  assert.equal(plan.entries[0].paramKey, 'liquidityGraphSchedule');
+  assert.equal(plan.entries[0].form, 'SCHEDULE');
+  assert.deepEqual(plan.entries[0].to, [
+    { year: 2040, shape: 'early' },           // authored, kept
+    { year: 2046, shape: 'early' },
+    { year: 2047, shape: null },              // back to the base graph is a decision, kept
+  ]);
+  assert.match(plan.entries[0].label, /2 decision\(s\)/);
+});
+
+test('PSL-9b: a harvested schedule replays as the decisions — compile of the bake ≡ compile of the rows', () => {
+  const v = { paramKey: 'liquidityGraphSchedule[0].shape', _year: 2046, _controlKey: 'POOL_SHAPE' };
+  const plan = harvestDecisions([{ asOfDate: '2045-12-31', runId: 'r', controlKeys: ['POOL_SHAPE'],
+    controlVars: [v], controlParams: { [v.paramKey]: 'early' } }],
+    { controlsByKey: { POOL_SHAPE: SHAPE }, baseParams: UNSCHEDULED });
+  const baked = { ...UNSCHEDULED, liquidityGraphSchedule: plan.entries[0].to };
+  const at = new Date(Date.UTC(2046, 2, 1));
+  assert.equal(compiledAt(baked, at).liquidityShapeId, 'early');
+  assert.equal(compiledAt(baked, new Date(Date.UTC(2045, 2, 1))).liquidityShapeId ?? null, null,
+    'not before its year-open');
+});
+
+test('PSL-9c: epochs with nothing keyable harvest nothing, and say so', () => {
+  const plan = harvestDecisions([{ asOfDate: '2045-12-31', controlKeys: ['POOL_SHAPE'],
+    controlVars: [{ paramKey: 'x', _controlKey: 'POOL_SHAPE' }], controlParams: { x: 'early' } }],
+    { controlsByKey: { POOL_SHAPE: SHAPE }, baseParams: UNSCHEDULED });
+  assert.deepEqual(plan.entries, []);
+  assert.ok(plan.warnings.some(w => /nothing harvested/.test(w)));
 });
