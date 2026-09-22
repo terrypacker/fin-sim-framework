@@ -2118,7 +2118,7 @@ what the in-app panel keys on.
 | [Roth Conversions](concepts/roth-conversions.md) | concept | 272 | 2 panels · 13 params · design 29 |
 | [Scenario](panels/scenario.md) | panel | 201 | 1 panel |
 | [Scenario Compare](panels/scenario-compare.md) | panel | 205 | 1 panel |
-| [Searching Pool Levers](concepts/searching-pool-levers.md) | concept | 358 | design 110, 97 |
+| [Searching Pool Levers](concepts/searching-pool-levers.md) | concept | 396 | design 110, 97 |
 | [Securities](panels/securities.md) | panel | 188 | 1 panel · design 94 |
 | [Security](nodes/security.md) | node | 209 | 3 panels · design 94, 66, 93 |
 | [Spending](panels/spending.md) | panel | 209 | 1 panel · design 89 |

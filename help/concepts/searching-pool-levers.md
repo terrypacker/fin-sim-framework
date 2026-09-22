@@ -9,7 +9,7 @@ tools: []
 design: [110-liquidity-pool-control-surface.md, 97-liquidity-pools-and-drawdown-sequence.md]
 sources: [src/finance/pools/pool-target-scale.js, src/finance/pools/pool-axis-hygiene.js]
 stamps:
-  src/finance/pools/pool-target-scale.js: cc920f
+  src/finance/pools/pool-target-scale.js: fe0568
   src/finance/pools/pool-axis-hygiene.js: 97fa2c
 ---
 
@@ -37,6 +37,10 @@ a second moving part, such as a glide path still governing whatever the pools do
 returns a larger effect than the lever has; and a range that runs past what the plan will
 accept returns holes rather than results, because a value out of bounds is refused outright
 rather than quietly corrected into a policy nobody chose.
+
+The MPC cockpit can also decide a size one year at a time rather than once for the whole
+run; its decisions are saved as dated multipliers (see
+[Pool Shapes Over Time](pool-shapes-over-time.md)), and the same reports appear there.
 
 Those reports are never acted on for you. A comparison run against a plan the app silently
 corrected is one that cannot be reproduced, so the plan stays as written and the change is

@@ -1,9 +1,10 @@
 # 112 — Dated pool targets: a pool size the MPC can decide
 
-**Status:** ACCEPTED — 21 Sep 2026, ready to build. Every §5 question is answered and folded
-into §2–§4: Q1 is the factor plus two properties borrowed from authored levels (§5.1). The §6
-review findings are all folded in, R11–R13 included. §7 is a follow-up outside this design's
-scope. Nothing is built. Answers the last open item of design 39 §14.10:
+**Status:** PHASES 1–3 BUILT — 21 Sep 2026 (GitHub #736). Phase 4 (proof on the author's plan)
+is open. Every §5 question is answered and folded into §2–§4: Q1 is the factor plus two
+properties borrowed from authored levels (§5.1). The §6 review findings are all folded in,
+R11–R13 included. §8 records what the build decided that the text above did not. §7 is a
+follow-up outside this design's scope. Answers the last open item of design 39 §14.10:
 `pool.<id>.targetScale` as an MPC control (design 110 §13.11).
 
 ## 1. The ask, and why the existing axis cannot simply be switched on
@@ -376,3 +377,48 @@ not apply. Questions for that design: whether a reference may override fields
 (`{ ref: 'cash', target: … }`), whether flows can be referenced too, and how the editor shows an
 inherited pool against a local one. It would also make §5.1's levels cheap to author, if levels
 are ever wanted. This belongs in its own design doc, numbered when it is picked up.
+
+
+## 8. As built (21 Sep 2026, phases 1–3)
+
+Where the build had to decide something the design left open, or found the design's wording
+imprecise:
+
+- **The row rules live in a leaf module**, `pools/pool-target-schedule.js`, which imports
+  nothing. The resolver, the shape reducer and `lever-schedule.js` all import it, which settles
+  R10 without moving the axis helpers. `lever-schedule.js` also imports `pool-target-scale.js`
+  for the gate. That is allowed: its only imports are two pool modules that import nothing.
+- **A row of 1.0 is not a factor in force.** `appliedScales` drops identity, so a 1.0 row makes
+  no step, leaves no stamp, and reuses the unscaled graph object. This is what keeps the MPC
+  scaffold (which writes the factor already in force, usually 1) byte-identical to the plan.
+- **A row naming a pool that no graph contains is refused at load**, naming the known pools. A
+  pool absent from the shape in force is dormant (Q2). A pool absent from *every* graph can
+  never wake, so a dormant row there would really be a typo.
+- **A factor of 0 is accepted** ("hold nothing from this year"), matching the axis's own rule.
+- **Target rows alone make a schedule.** `resolveLiquidityGraphSchedule` used to return null
+  without shape rows. It now returns a schedule when either kind of row exists, so the shape
+  reducer is registered for a plan that only resizes. No rows of either kind is still null.
+- **`liquidityTargetScales` is null after the last factor lapses**, not deleted: a patch cannot
+  delete a key, and the journal then reads `cash: 1.5 → null`.
+- **Eligibility is measured over the rest of the run, not the rollout horizon** (§2.3 said
+  horizon). `buildVariables` does not receive the horizon. The rest of the run is a superset:
+  it can admit a pool that is dead inside a short horizon, but never refuses a live one.
+- **The search list's empty case.** An absent `pools` means every eligible pool, and an
+  **empty** list means none. The operator who unticks every pool asked for nothing, and
+  searching everything would do the opposite. The cockpit sends no `pools` at all while the
+  list is untouched (all ticked, no bounds).
+- **`by` is the cockpit run id** (`run:<ms>:<n>`, design 39 §13.2), passed into `actuate`
+  by the plugin. The harvest marks rows the same way, from the epoch's record.
+- **POOL_TARGET has a SCHEDULE harvest.** The POINT default would have kept the last epoch's
+  value under an index key (`liquidityTargetSchedule[3].scale`). That is one year of a dated
+  decision, keyed to a position in a table that has since moved. `POOL_SHAPE` still uses the
+  POINT default, and has the same weakness.
+- **The gate is INERT, not disabled, with no target reader.** With neither TARGET_ALLOCATION
+  nor LIQUIDITY_POOLS selected, rows still resolve and stamp but nothing realizes a target,
+  so `inertWhen` is true and a recorded run warns instead of refusing to load.
+- **The rollout gate probes the schedule, not t₀ state** (`POOL_TARGET_ROW` in
+  `mpc-lever-reaches-rollout`). An unstepped t₀ compile has not reached a dated row, so its
+  state holds the opening graph. What a rollout is about to step is the shape reducer's
+  schedule, asked at the snapshot. MLR-2c asserts the seeded state's own stamp separately.
+- **Not built:** the Pools panel timeline mark for a scale step (R11's second half). The stamp
+  is in state and in the journal, but the panel does not yet draw it.

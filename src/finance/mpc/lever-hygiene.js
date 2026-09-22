@@ -10,6 +10,8 @@
 
 import { resolveLiquidityGraph, poolsClaimingClass } from '../pools/liquidity-graph.js';
 import { ALLOC_WEIGHT_CLASSES }                      from '../../scenarios/params/lever-weights.js';
+import { targetVocabularyProblems }                  from '../pools/pool-axis-hygiene.js';
+import { authoredPoolGraphs }                        from '../pools/pool-target-scale.js';
 
 /**
  * DESIGN 39 §14.8, SECOND HALF — the levers a config makes inert that a GATE should not refuse.
@@ -51,6 +53,8 @@ import { ALLOC_WEIGHT_CLASSES }                      from '../../scenarios/param
 export const LEVER_PROBLEM_KIND = Object.freeze({
   /** The lever is searchable, the search will run, and every candidate returns the same run. */
   INERT: 'inert',
+  /** The lever moves, and so does something else: the result reads larger or different than it is. */
+  CONFOUNDED: 'confounded',
 });
 
 /** The classes `ALLOCATION_MIX.buildVariables` emits a variable for (the last is the residual). */
@@ -97,6 +101,19 @@ export function leverHygieneProblems(params, leverKeys = [], accounts = []) {
         + 'every candidate returns the identical run. Free a class (drop its claim, or leave a '
         + 'claiming pool unsized) to make this lever live, or search a different one.',
     });
+  }
+  // Design 112 §2.5 — what a size factor does to the rest of the pool vocabulary: a REMAINDER
+  // pool, a pool in front of one, a capacity plateau, a floor. The same rows the grid's
+  // preflight reports for the hidden axis, because the MPC variable is the same factor.
+  if (leverKeys.includes('POOL_TARGET')) {
+    let rows = [];
+    try {
+      rows = targetVocabularyProblems(authoredPoolGraphs({ parameters: params }),
+        params?.liquidityTargetSchedule);
+    } catch { rows = []; }
+    for (const r of rows) {
+      out.push({ lever: 'POOL_TARGET', severity: 'warn', kind: r.kind, message: r.message });
+    }
   }
   return out;
 }

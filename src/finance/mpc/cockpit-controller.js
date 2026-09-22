@@ -36,6 +36,8 @@ import { LEVER_SCHEDULE, drawdownPriorityPatch, presentRolesFromState, shapeIdsO
 import { resolveLiquidityGraph, resolveLiquidityGraphSchedule } from '../pools/liquidity-graph.js';
 import { PoolShapeScheduleReducer, liquidityStateAt } from '../pools/pool-shape-schedule-reducer.js';
 import { applyShapeYearShifts, shapeYearShiftsFrom } from '../pools/pool-shape-year-axis.js';
+import { POOL_TARGET_SCALE_RANGE, poolTargetScaleKey, scaledTargetDescriptor, describeScaledDescriptor }
+  from '../pools/pool-target-scale.js';
 import { truncateActiveRunAt }  from './run-schedule.js';
 import { adviceSignals }        from './advice-signals.js';
 
@@ -1163,31 +1165,184 @@ export const COCKPIT_CONTROLS = {
       sched.push({ year: v._year, shape });
       sched.sort((a, b) => Number(a.year) - Number(b.year));
       p.value = sched;
+      return _restampLivePools(services, scenario);
+    },
+  },
 
-      const sim = services?.simulationRegistry?.getPrimary?.();
-      const rs  = services?.reducerService;
-      if (!sim?.state || !rs) return false;
-      const bag = { ...(scenario?.parameters ?? {}),
-        ...Object.fromEntries((scenario?.params ?? []).map(pp => [pp.key ?? pp.name, pp.value])) };
-      const accounts = services?.accountService?.getAll?.() ?? [];
-      const schedule = resolveLiquidityGraphSchedule(bag, accounts);
-      const graph    = resolveLiquidityGraph(bag, accounts);
-
-      const all = rs.getAll?.() ?? [];
-      const byType = (t) => all.filter(r => r?.constructor?.type === t);
-      const shapeReducers = byType('PoolShapeScheduleReducer');
-      if (shapeReducers.length) for (const r of shapeReducers) rs.updateReducer(r, { schedule });
-      else if (schedule) rs.register(new PoolShapeScheduleReducer({ schedule }));
-      for (const r of [...byType('PoolFlowReducer'), ...byType('PoolFlowApplyReducer')]) {
-        rs.updateReducer(r, { schedule });
+  POOL_TARGET: {
+    // Design 112 §2.3 — a pool's SIZE from a year on, as a factor on its authored target. The
+    // POOL_SHAPE template: a dated row, folded at compile, applied by the shape reducer.
+    ...LEVER_SCHEDULE.POOL_TARGET,
+    key:     'POOL_TARGET',
+    label:   'Liquidity Pool Target',
+    numeric: true,
+    liveActuatable: true,
+    defaultRange: { ...POOL_TARGET_SCALE_RANGE },
+    // One row per ELIGIBLE pool at the next 1 January, carrying the factor ALREADY in force
+    // there (§14.9.6: the unchanged candidate is the plan). A factor of 1 is not a factor in
+    // force (`appliedScales`), so on a plan with no rows the scaffold is byte-identical.
+    // Every eligible pool, not only the searched ones: this hook does not see the range, and a
+    // scaffold row that restates the plan cannot change a rollout.
+    prepareBaseParams: ({ baseParams, asOf }) => {
+      if (!asOf) return baseParams;
+      const year  = _nextShapeYear(asOf);
+      const pools = _eligibleTargetPools(baseParams, year);
+      if (!pools.length) return baseParams;
+      const rows = (Array.isArray(baseParams?.liquidityTargetSchedule)
+        ? baseParams.liquidityTargetSchedule : []).map(e => ({ ...e }));
+      let added = false;
+      for (const pool of pools) {
+        if (rows.some(e => Number(e?.year) === year && e?.pool === pool)) continue;
+        rows.push({ year, pool, scale: _targetFactorInForce(rows, pool, year) });
+        added = true;
       }
-
-      const patch = liquidityStateAt({ graph, schedule }, sim.state, new Date(sim.currentDate).getTime());
-      if (Object.keys(patch).length) sim.state = { ...sim.state, ...patch };
-      return true;
+      if (!added) return baseParams;
+      rows.sort((a, b) => Number(a.year) - Number(b.year) || String(a.pool).localeCompare(String(b.pool)));
+      return { ...baseParams, liquidityTargetSchedule: rows };
+    },
+    // §5 Q3 — one variable per pool in the search list (`range.pools`, absent ⇒ every eligible
+    // pool), each with its own bounds (§5.1): an entry is a pool id or `{ pool, min?, max? }`.
+    buildVariables: ({ baseParams, range, asOf }) => {
+      if (!asOf) return [];
+      const year     = _nextShapeYear(asOf);
+      const eligible = _eligibleTargetPools(baseParams, year);
+      const entries  = _targetSearchList(range, eligible);
+      const skipped  = entries.filter(e => !eligible.includes(e.pool)).map(e => e.pool);
+      const sched    = baseParams?.liquidityTargetSchedule ?? [];
+      const out = [];
+      for (const e of entries) {
+        if (!eligible.includes(e.pool)) continue;
+        const idx = sched.findIndex(r => Number(r?.year) === year && r?.pool === e.pool);
+        if (idx < 0) continue;
+        const min = e.min ?? range?.min ?? POOL_TARGET_SCALE_RANGE.min;
+        let   max = e.max ?? range?.max ?? POOL_TARGET_SCALE_RANGE.max;
+        // A PERCENT target past 1.0 is refused (§17.2, no clamp), so the search never asks for
+        // one: the top is capped at the factor the normalizer accepts, against the axis the
+        // session runs at (Q4 — effective = axis × row).
+        const cap = _percentFactorCap(baseParams, e.pool);
+        if (cap != null) max = Math.min(max, cap);
+        out.push({
+          paramKey: `liquidityTargetSchedule[${idx}].scale`,
+          type:     OPT_PARAM_TYPES.CONTINUOUS,
+          min, max: Math.max(min, max),
+          step:     range?.step ?? POOL_TARGET_SCALE_RANGE.step,
+          group:    'Liquidity Pools',
+          _year:    year,
+          _pool:    e.pool,
+          // Small JSON, not the graphs: enough for `describe` to label any candidate factor as a
+          // size (§2.3 "Legibility") without every recorded epoch carrying the whole plan.
+          _desc:    scaledTargetDescriptor(baseParams, e.pool),
+          ...(skipped.length ? { _skipped: skipped } : {}),
+        });
+      }
+      return out;
+    },
+    /**
+     * SCHEDULE bake (design 39 §13.6.2) — every epoch's decided `(year, pool)` becomes a
+     * `liquidityTargetSchedule` row over the authored ones, the rows `actuate` would have written.
+     * Not the POINT default: that keeps the LAST epoch's value under an index key
+     * (`liquidityTargetSchedule[3].scale`), which is one year of a dated decision and a position
+     * in a table that has since moved. Each row is marked `by` with the run (R12).
+     */
+    harvest: ({ epochs, baseParams }) => {
+      const rows = (Array.isArray(baseParams?.liquidityTargetSchedule)
+        ? baseParams.liquidityTargetSchedule : []).map(e => ({ ...e }));
+      let decided = 0;
+      const pools = new Set();
+      for (const e of epochs) {
+        for (const v of (e.vars ?? [])) {
+          const k = e.candidate?.[v.paramKey];
+          if (!Number.isFinite(v?._year) || typeof v?._pool !== 'string' || !Number.isFinite(k)) continue;
+          const row = { year: v._year, pool: v._pool, scale: k, by: e.record?.runId ?? 'mpc' };
+          const i = rows.findIndex(r => Number(r?.year) === v._year && r?.pool === v._pool);
+          if (i >= 0) rows[i] = row; else rows.push(row);
+          decided++;
+          pools.add(v._pool);
+        }
+      }
+      if (!decided) {
+        return { form: HARVEST_FORMS.SCHEDULE, params: {},
+          warnings: ['Liquidity Pool Target: no decision could be keyed to a year and pool — nothing harvested.'] };
+      }
+      rows.sort((a, b) => Number(a.year) - Number(b.year) || String(a.pool).localeCompare(String(b.pool)));
+      return {
+        form: HARVEST_FORMS.SCHEDULE,
+        params: { liquidityTargetSchedule: rows },
+        labels: { liquidityTargetSchedule: `${decided} decision(s) over ${pools.size} pool(s)` },
+      };
+    },
+    describe: (candidate, vars) => {
+      if (!vars?.length) return 'No pool target decision';
+      const parts = vars.map(v => describeScaledDescriptor(v._desc, candidate?.[v.paramKey]));
+      const skipped = vars[0]._skipped?.length
+        ? ` (not decided: ${vars[0]._skipped.join(', ')} — no target in force from ${vars[0]._year})` : '';
+      return `Hold ${parts.join(', ')} from ${vars[0]._year}${skipped}`;
+    },
+    /**
+     * Forward-effective LIVE resize. POOL_SHAPE's three writes with a different param:
+     *   1) the scenario's `liquidityTargetSchedule` rows for the year, each marked `by` with the
+     *      cockpit run (R12) so the row editor can say which rows a session wrote;
+     *   2) the running sim's pool reducers get the re-resolved schedule;
+     *   3) the live state is restamped AT now.
+     * Returns true when the live sim now carries the decision.
+     */
+    actuate: ({ services, scenario, candidate, vars, runId = null }) => {
+      const decided = (vars ?? []).filter(v => Number.isFinite(v?._year) && typeof v?._pool === 'string'
+        && Number.isFinite(candidate?.[v.paramKey]));
+      if (!decided.length) return false;
+      const params = scenario?.params;
+      if (!Array.isArray(params)) return false;
+      let p = params.find(pp => (pp.key ?? pp.name) === 'liquidityTargetSchedule');
+      if (!p) {
+        p = { name: 'liquidityTargetSchedule', label: 'Liquidity Pool Target Schedule',
+              type: 'LiquidityTargetSchedule', group: 'Spending', value: null };
+        params.push(p);
+      }
+      const rows = (Array.isArray(p.value) ? p.value : []).map(e => ({ ...e }));
+      for (const v of decided) {
+        const i = rows.findIndex(e => Number(e?.year) === v._year && e?.pool === v._pool);
+        const row = { year: v._year, pool: v._pool, scale: candidate[v.paramKey], by: runId ?? 'mpc' };
+        if (i >= 0) rows[i] = row; else rows.push(row);
+      }
+      rows.sort((a, b) => Number(a.year) - Number(b.year) || String(a.pool).localeCompare(String(b.pool)));
+      p.value = rows;
+      return _restampLivePools(services, scenario);
     },
   },
 };
+
+/**
+ * The live half of a pool actuate (POOL_SHAPE and POOL_TARGET): re-resolve the schedule from
+ * the scenario's params, hand it to the running sim's pool reducers (registering the shape
+ * reducer if the plan had none), and restamp the live state at now.
+ *
+ * The reducers hold the schedule from their constructors, so writing the param alone would
+ * change nothing until a Rebuild; restamping at now is what makes a 1-January decision take
+ * effect on the instant it is made. Returns true when the live sim carries the decision.
+ */
+function _restampLivePools(services, scenario) {
+  const sim = services?.simulationRegistry?.getPrimary?.();
+  const rs  = services?.reducerService;
+  if (!sim?.state || !rs) return false;
+  const bag = { ...(scenario?.parameters ?? {}),
+    ...Object.fromEntries((scenario?.params ?? []).map(pp => [pp.key ?? pp.name, pp.value])) };
+  const accounts = services?.accountService?.getAll?.() ?? [];
+  const schedule = resolveLiquidityGraphSchedule(bag, accounts);
+  const graph    = resolveLiquidityGraph(bag, accounts);
+
+  const all = rs.getAll?.() ?? [];
+  const byType = (t) => all.filter(r => r?.constructor?.type === t);
+  const shapeReducers = byType('PoolShapeScheduleReducer');
+  if (shapeReducers.length) for (const r of shapeReducers) rs.updateReducer(r, { schedule });
+  else if (schedule) rs.register(new PoolShapeScheduleReducer({ schedule }));
+  for (const r of [...byType('PoolFlowReducer'), ...byType('PoolFlowApplyReducer')]) {
+    rs.updateReducer(r, { schedule });
+  }
+
+  const patch = liquidityStateAt({ graph, schedule }, sim.state, new Date(sim.currentDate).getTime());
+  if (Object.keys(patch).length) sim.state = { ...sim.state, ...patch };
+  return true;
+}
 
 /**
  * CockpitController — the headless brain of the MPC cockpit (design 39 §7).
@@ -1778,6 +1933,80 @@ function _plannedShapeAt(bp, year) {
     if (Number(r?.year) <= year) shape = r.shape ?? null;
   }
   return shape;
+}
+
+/**
+ * The pools a POOL_TARGET decision at `year` can move (design 112 §2.3): a non-zero target in
+ * the graph in force at `year` or in any shape scheduled after it. A pool sized only in a shape
+ * the plan has already left for good would be a variable whose every value prices the same —
+ * the design 110 §13.10 dead-axis defect — so it is not offered.
+ *
+ * Measured against the rest of the RUN rather than the rollout horizon: this hook does not see
+ * the horizon, and the rest of the run is the conservative superset (a pool it admits may still
+ * be dead inside a short horizon, never the reverse). Sorted, so variables are in a stable order.
+ */
+function _eligibleTargetPools(bp, year) {
+  const rows = applyShapeYearShifts(bp?.liquidityGraphSchedule, shapeYearShiftsFrom(bp ?? {})) ?? [];
+  const live = new Set([_plannedShapeAt(bp, year)]);
+  for (const r of rows) if (Number(r?.year) > year) live.add(r.shape ?? null);
+  const out = new Set();
+  for (const shapeId of live) {
+    const g = shapeId === null ? bp?.liquidityGraph : bp?.liquidityShapes?.[shapeId];
+    for (const pool of (Array.isArray(g?.pools) ? g.pools : [])) {
+      const t = pool?.target;
+      const v = typeof t === 'number' ? t : (t && typeof t === 'object') ? t.value : undefined;
+      if (typeof pool?.id === 'string' && Number.isFinite(v) && v !== 0) out.add(pool.id);
+    }
+  }
+  return [...out].sort();
+}
+
+/** The factor a pool's rows put in force at `year` — the latest at or before it, else 1. */
+function _targetFactorInForce(rows, pool, year) {
+  let k = 1;
+  let at = -Infinity;
+  for (const r of rows) {
+    const y = Number(r?.year);
+    if (r?.pool === pool && y <= year && y > at && Number.isFinite(r?.scale)) { k = r.scale; at = y; }
+  }
+  return k;
+}
+
+/**
+ * The search list as `{ pool, min?, max? }` entries (§5 Q3, §5.1). `range.pools` may name pools
+ * as bare ids or as objects. ABSENT means every eligible pool, in eligible order; an EMPTY list
+ * means none — the operator unticked them all, and searching everything instead would be the
+ * opposite of what they asked.
+ */
+function _targetSearchList(range, eligible) {
+  if (!Array.isArray(range?.pools)) return eligible.map(pool => ({ pool }));
+  const raw = range.pools;
+  const list = raw.map(e => (typeof e === 'string' ? { pool: e }
+    : (e && typeof e.pool === 'string') ? {
+        pool: e.pool,
+        ...(Number.isFinite(e.min) ? { min: e.min } : {}),
+        ...(Number.isFinite(e.max) ? { max: e.max } : {}),
+      } : null)).filter(Boolean);
+  return list;
+}
+
+/**
+ * The largest row factor a PERCENT-sized pool accepts: 1 / (worst authored fraction × axis
+ * factor), over every graph the pool is in. Null when the pool is not PERCENT-sized anywhere.
+ */
+function _percentFactorCap(bp, pool) {
+  let worst = 0;
+  const graphs = [bp?.liquidityGraph, ...Object.values(
+    (bp?.liquidityShapes && typeof bp.liquidityShapes === 'object') ? bp.liquidityShapes : {})];
+  for (const g of graphs) {
+    const t = (Array.isArray(g?.pools) ? g.pools : []).find(p => p?.id === pool)?.target;
+    if (t && typeof t === 'object' && t.mode === 'PERCENT' && Number.isFinite(t.value)) {
+      worst = Math.max(worst, t.value);
+    }
+  }
+  if (!(worst > 0)) return null;
+  const axis = Number(bp?.[poolTargetScaleKey(pool)]);
+  return 1 / (worst * (Number.isFinite(axis) && axis > 0 ? axis : 1));
 }
 
 /**

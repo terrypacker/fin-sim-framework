@@ -63,6 +63,7 @@ import assert   from 'node:assert/strict';
 
 import { OptimizationProblem }     from '../../src/finance/optimization/optimization-problem.js';
 import { OPTIMIZATION_OBJECTIVES } from '../../src/finance/optimization/optimization-objectives.js';
+import { activeGraphAt }           from '../../src/finance/pools/liquidity-graph.js';
 
 const SIM_START = new Date(Date.UTC(2026, 0, 1));
 const SIM_END   = new Date(Date.UTC(2060, 0, 1));
@@ -157,6 +158,20 @@ const CASES = [
     params: { liquidityGraph: graphWith('buffer', p => { p.target.value = 1; }) },
     probe: (sim) => sim.state?.liquidityGraph?.pools?.map(p => [p.id, p.target?.value ?? null]),
     probeName: 'state.liquidityGraph\'s pool targets',
+  },
+  {
+    lever: 'POOL_TARGET_ROW', expect: 'reaches',
+    // Design 112 — the MPC's POOL_TARGET control, a DATED row. A t₀ compile has not reached 2045,
+    // so its state still holds the opening graph; what the rollout is about to step is the
+    // schedule the shape reducer carries, asked at the snapshot. (The seeded state's own stamp
+    // is asserted separately in MLR-2c.)
+    params: { liquidityTargetSchedule: [{ year: 2045, pool: 'buffer', scale: 1.5 }] },
+    probe: (sim) => {
+      const r = [...sim.reducers.map.values()].flat().map(e => e.reducer)
+        .find(x => x?.constructor?.type === 'PoolShapeScheduleReducer');
+      return r ? activeGraphAt(r.schedule, AS_OF.getTime())?.graph?.pools?.map(p => [p.id, p.target?.value ?? null]) : null;
+    },
+    probeName: 'the shape reducer\'s graph in force at the snapshot',
   },
   {
     lever: 'POOL_SPEND_ORDER', expect: 'reaches',
@@ -278,6 +293,14 @@ test('MLR-3b: KNOWN_BROKEN has no stale entries', () => {
   for (const lever of KNOWN_BROKEN) {
     assert.ok(covered.has(lever), `KNOWN_BROKEN names ${lever}, which no case measures`);
   }
+});
+
+test('MLR-2c: a dated target row decided at the epoch is already in the rollout\'s STATE', () => {
+  // The other half of POOL_TARGET_ROW: `derivedStateAt` restamps the seeded state from the
+  // candidate's schedule, so the first step prices the resized pool rather than the old one.
+  const st = seeded({ ...BASE, liquidityTargetSchedule: [{ year: 2045, pool: 'buffer', scale: 1.5 }] }).state;
+  assert.equal(st.liquidityGraph.pools.find(p => p.id === 'buffer').target.value, 7.5);
+  assert.deepEqual(st.liquidityTargetScales, { buffer: 1.5 });
 });
 
 // ─── MLR-2b ──────────────────────────────────────────────────────────────────

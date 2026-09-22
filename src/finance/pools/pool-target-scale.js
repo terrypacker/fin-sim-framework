@@ -356,7 +356,18 @@ export function poolTargetScaleLabel(row) {
  * @returns {string}
  */
 export function describeScaledTarget(params, poolId, factor) {
-  const k = Number(factor);
+  return describeScaledDescriptor(scaledTargetDescriptor(params, poolId), factor);
+}
+
+/**
+ * What {@link describeScaledTarget} needs about one pool, as small plain JSON: its label and,
+ * per graph containing it, the raw target and (for a REMAINDER) the years the pools it sits
+ * behind state. An MPC variable carries this instead of the graphs, so `describe` can label any
+ * candidate factor without the variable dragging the whole plan into every record.
+ *
+ * @returns {{label:string, parts:Array<{where:string|null, target:*, covered:number|null}>}}
+ */
+export function scaledTargetDescriptor(params, poolId) {
   const graphs = [];
   const base = params?.liquidityGraph;
   if (base && typeof base === 'object') graphs.push([null, base]);
@@ -373,14 +384,40 @@ export function describeScaledTarget(params, poolId, factor) {
     const pool = pools.find(p => p?.id === poolId);
     if (!pool) continue;
     if (typeof pool.label === 'string' && pool.label && label === poolId) label = pool.label;
-    parts.push([where, _scaledSize(pool.target, pools, Number.isFinite(k) ? k : 1)]);
+    parts.push({ where, target: pool.target ?? null, covered: _coveredYears(pool.target, pools) });
   }
+  return { label, parts };
+}
+
+/** A descriptor at factor `k` — the string {@link describeScaledTarget} returns. */
+export function describeScaledDescriptor(desc, factor) {
+  const k = Number(factor);
   const f = Number.isFinite(k) ? `×${trim(k)}` : '×?';
+  const parts = desc?.parts ?? [];
+  const label = desc?.label ?? '?';
   if (!parts.length) return `${label} (not in any graph) (${f})`;
+  const at = Number.isFinite(k) ? k : 1;
   const sizes = parts.length === 1
-    ? parts[0][1]
-    : parts.map(([where, s]) => `${where ?? 'base'} ${s}`).join(' / ');
+    ? _scaledSize(parts[0].target, parts[0].covered, at)
+    : parts.map(p => `${p.where ?? 'base'} ${_scaledSize(p.target, p.covered, at)}`).join(' / ');
   return `${label} ${sizes} (${f})`;
+}
+
+/**
+ * For a REMAINDER target, the years the pools it sits behind state — or null when one of them
+ * has no static years figure (then only the aggregate can be shown). A referenced pool with a
+ * real ceiling contributes what it HOLDS at run time, which no static label can know, so its
+ * target is used as the best available statement of it. @private
+ */
+function _coveredYears(target, pools) {
+  if (!target || typeof target !== 'object' || target.mode !== 'YEARS_OF_SPEND_REMAINDER') return null;
+  let covered = 0;
+  for (const ref of (Array.isArray(target.after) ? target.after : [])) {
+    const y = _yearsOf(pools.find(p => p?.id === ref)?.target);
+    if (y == null) return null;
+    covered += y;
+  }
+  return covered;
 }
 
 /** Years a raw target states, when it is a plain years figure; otherwise null. @private */
@@ -392,18 +429,12 @@ function _yearsOf(target) {
 }
 
 /** One raw target at factor `k`, in its own unit. @private */
-function _scaledSize(target, pools, k) {
+function _scaledSize(target, covered, k) {
   if (target == null) return 'no target';
   if (typeof target === 'number') return describeAuthored({ mode: null, value: trim(target * k) });
   if (typeof target !== 'object' || !Number.isFinite(target.value)) return 'no target';
   const value = trim(target.value * k);
   if (target.mode !== 'YEARS_OF_SPEND_REMAINDER') return describeAuthored({ mode: target.mode, value });
-  const after = Array.isArray(target.after) ? target.after : [];
-  let covered = 0;
-  for (const ref of after) {
-    const y = _yearsOf(pools.find(p => p?.id === ref)?.target);
-    if (y == null) return `${value}y aggregate`;
-    covered += y;
-  }
+  if (covered == null) return `${value}y aggregate`;
   return `${trim(Math.max(0, value - covered))}y left of ${value}y`;
 }

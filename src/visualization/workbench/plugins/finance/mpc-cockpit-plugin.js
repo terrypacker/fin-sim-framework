@@ -22,6 +22,7 @@ import { buildRunEntry, makeRunKey, describeRunSource, saveRunToScenario, checkR
 import { resolveActiveMpcRun } from '../../../../finance/mpc/run-schedule.js';
 import { leverRequirement }    from '../../../../finance/mpc/lever-schedule.js';
 import { leverHygieneProblems } from '../../../../finance/mpc/lever-hygiene.js';
+import { scalablePoolTargets, describeScaledTarget } from '../../../../finance/pools/pool-target-scale.js';
 import { resolveStaticLevers, foldScheduleBakes, mergeResolved } from '../../../../finance/mpc/harvest-resolve.js';
 import {
   OPTIMIZATION_OBJECTIVES, DIE_WITH_TARGET_AXES, DIE_WITH_TARGET_FAMILY,
@@ -203,6 +204,10 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
            selected NUMERIC lever, since a single shared range can't span their
            different unit scales (design 45 §8; design 58). Built dynamically. -->
       <div class="mpc-toolbar mpc-range mpc-range-multi" data-mpc="range-multi" style="display:none"></div>
+
+      <!-- Design 112 §2.3 — which pools the Liquidity Pool Target lever decides, each with its
+           own factor bounds, shown as the sizes they resolve to. Built dynamically. -->
+      <div class="mpc-toolbar mpc-range mpc-pool-list" data-mpc="pool-list" style="display:none"></div>
 
       <div class="mpc-now" data-mpc="now">Run a simulation, then ask for advice.</div>
 
@@ -443,12 +448,16 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     const multiRow  = this._q('range-multi');
     if (singleRow) singleRow.style.display = multi ? 'none' : '';
     if (multiRow)  multiRow.style.display  = multi ? '' : 'none';
+    this._renderPoolList();
     if (multi) { this._renderMultiRanges(); return; }
 
     const numeric = !!this._currentControl()?.numeric;
     if (singleRow) singleRow.style.opacity = numeric ? '' : '0.4';
     const title = this._q('range-title');
-    if (title) title.textContent = 'Search range (today’s $)';
+    // A factor lever's range is not dollars; saying so is the difference between a sensible
+    // 0.5–2 and an operator typing 3000.
+    if (title) title.textContent = this._currentControl()?.key === 'POOL_TARGET'
+      ? 'Search range (factor on the authored target)' : 'Search range (today’s $)';
     for (const n of ['rmin', 'rmax', 'rstep']) {
       const el = this._q(n);
       if (el) el.disabled = !numeric;
@@ -498,10 +507,10 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
         return { min, max, step };
       };
       for (const inp of row.querySelectorAll('input')) {
-        inp.addEventListener('change', () => this._controller?.setControlRangeFor(c.key, readRow()));
+        inp.addEventListener('change', () => this._controller?.setControlRangeFor(c.key, this._withPoolList(c.key, readRow())));
       }
       // Seed the controller now so an un-edited row still contributes its shown range.
-      this._controller?.setControlRangeFor(c.key, { ...seed });
+      this._controller?.setControlRangeFor(c.key, this._withPoolList(c.key, { min: seed.min, max: seed.max, step: seed.step }));
       container.appendChild(row);
     }
 
@@ -530,6 +539,10 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
       if (!Number.isFinite(min) || !Number.isFinite(max)) continue;
       if (max < min) [min, max] = [max, min];
       out[key] = { min, max, step: Number.isFinite(step) ? Math.max(1e-9, step) : 1 };
+      if (key === 'POOL_TARGET') {
+        const pools = this._poolSearchList();
+        if (pools) out[key].pools = pools;
+      }
     }
     return out;
   }
@@ -539,9 +552,117 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     const num = (n, d) => { const v = Number(this._q(n)?.value); return Number.isFinite(v) ? v : d; };
     let min  = num('rmin', 3000);
     let max  = num('rmax', 12000);
-    const step = Math.max(1, num('rstep', 500));
+    // A dollar lever's step is at least 1; a lever whose natural step is fractional (a factor,
+    // design 112) keeps it — clamping 0.25 to 1 would search 0.5 and 1.5 and nothing between.
+    const fine = (this._currentControl()?.defaultRange?.step ?? 1) < 1;
+    const step = Math.max(fine ? 1e-9 : 1, num('rstep', 500));
     if (max < min) [min, max] = [max, min];
-    return { min, max, step };
+    const pools = this._currentControl()?.key === 'POOL_TARGET' ? this._poolSearchList() : null;
+    return pools ? { min, max, step, pools } : { min, max, step };
+  }
+
+  /**
+   * Design 112 §2.3 / §5.1 — the Liquidity Pool Target search list: one row per pool with a
+   * target, ticked to be decided, with optional factor bounds of its own. Each bound is shown as
+   * the size it resolves to ("cash 1y (×0.5) – 4y (×2)"), so a bound is set in the pool's units
+   * rather than guessed as a bare factor. Visible only while that lever is selected.
+   *
+   * State lives in the DOM and is re-read before a re-render, the way `_renderMultiRanges`
+   * keeps an edited range across adding another lever.
+   */
+  _renderPoolList() {
+    const box = this._q('pool-list');
+    if (!box) return;
+    const on = this._currentControls().some(c => c?.key === 'POOL_TARGET');
+    box.style.display = on ? '' : 'none';
+    if (!on) { box.innerHTML = ''; return; }
+    const prev = new Map(this._poolListRows().map(r => [r.pool, r]));
+    box.innerHTML = '';
+    const bp   = this._baseParams();
+    const rows = scalablePoolTargets(bp);
+    const title = document.createElement('span');
+    title.className = 'mpc-range-title';
+    title.textContent = rows.length ? 'Pools to decide' : 'Pools to decide — no pool has a target';
+    box.appendChild(title);
+    for (const { poolId } of rows) {
+      const was = prev.get(poolId);
+      const row = document.createElement('span');
+      row.className = 'mpc-lever-range mpc-pool-row';
+      row.dataset.mpcPool = poolId;
+      row.innerHTML =
+        `<label class="mpc-field"><input type="checkbox" data-r="on"${was?.on === false ? '' : ' checked'}> ${_esc(poolId)}</label>` +
+        `<label class="mpc-field">Min × <input class="wb-input mpc-num" type="number" step="0.05" data-r="min" value="${was?.min ?? ''}" placeholder="range"></label>` +
+        `<label class="mpc-field">Max × <input class="wb-input mpc-num" type="number" step="0.05" data-r="max" value="${was?.max ?? ''}" placeholder="range"></label>` +
+        '<span class="mpc-hint" data-r="sizes"></span>';
+      const sizes = () => {
+        const r = this._poolListRows().find(x => x.pool === poolId) ?? {};
+        const lever = COCKPIT_CONTROLS.POOL_TARGET?.defaultRange ?? {};
+        const range = this._isMultiLever() ? {} : this._currentRangeNumbers();
+        const lo = r.min ?? range.min ?? lever.min;
+        const hi = r.max ?? range.max ?? lever.max;
+        row.querySelector('[data-r="sizes"]').textContent =
+          `${describeScaledTarget(bp, poolId, lo)} – ${describeScaledTarget(bp, poolId, hi)}`;
+      };
+      for (const inp of row.querySelectorAll('input')) {
+        inp.addEventListener('change', () => { sizes(); this._pushPoolList(); });
+      }
+      box.appendChild(row);
+      sizes();
+    }
+  }
+
+  /** `range` with the pool search list attached when `key` is the pool target lever. */
+  _withPoolList(key, range) {
+    if (key !== 'POOL_TARGET') return range;
+    const pools = this._poolSearchList();
+    return pools ? { ...range, pools } : range;
+  }
+
+  /** The pool-list rows as read from the DOM: `{ pool, on, min?, max? }`. */
+  _poolListRows() {
+    const box = this._q('pool-list');
+    if (!box) return [];
+    return [...box.querySelectorAll('[data-mpc-pool]')].map(row => {
+      const num = (k) => {
+        const raw = row.querySelector(`[data-r="${k}"]`)?.value;
+        const v = raw === '' || raw == null ? NaN : Number(raw);
+        return Number.isFinite(v) ? v : undefined;
+      };
+      return { pool: row.dataset.mpcPool, on: !!row.querySelector('[data-r="on"]')?.checked,
+               min: num('min'), max: num('max') };
+    });
+  }
+
+  /**
+   * The search list the controller receives, or null for "every eligible pool at the lever's
+   * range" (all ticked, no bounds) — so an untouched list adds nothing to the range at all.
+   */
+  _poolSearchList() {
+    const rows = this._poolListRows();
+    if (!rows.length) return null;
+    if (rows.every(r => r.on && r.min == null && r.max == null)) return null;
+    return rows.filter(r => r.on).map(r => ({
+      pool: r.pool,
+      ...(r.min != null ? { min: r.min } : {}),
+      ...(r.max != null ? { max: r.max } : {}),
+    }));
+  }
+
+  /** The single-lever min/max without the pool list — for the size readout only. */
+  _currentRangeNumbers() {
+    const num = (n) => { const v = Number(this._q(n)?.value); return Number.isFinite(v) ? v : undefined; };
+    return { min: num('rmin'), max: num('rmax') };
+  }
+
+  /** Hand an edited pool list to a live controller, in whichever range mode is showing. */
+  _pushPoolList() {
+    if (this._isMultiLever()) {
+      const r = this._currentControlRanges().POOL_TARGET;
+      if (r) this._controller?.setControlRangeFor('POOL_TARGET', r);
+    } else {
+      this._controller?.setControlRange(this._currentRange());
+    }
+    this._syncEvalsReadout();
   }
 
   _bind(name, ev, fn) {
@@ -786,6 +907,8 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
           scenario: this._services()?.scenarioService?.getActive?.() ?? null,
           candidate,
           vars:     subset,
+          // Design 112 R12 — a lever that saves rows marks them with the run that decided them.
+          runId:    this._currentRunId(),
         });
         actuated = actuated || !!hit;
       }

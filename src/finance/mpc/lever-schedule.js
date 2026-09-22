@@ -16,6 +16,8 @@ import {
   resolveOwnerBanding,
 } from '../../scenarios/params/lever-weights.js';
 import { resolveActiveMpcRun, activeDecisionsAt } from './run-schedule.js';
+// Leaves: `pool-target-scale.js` imports only two pool modules that import nothing.
+import { scalablePoolTargets } from '../pools/pool-target-scale.js';
 import {
   DRAWDOWN_SLEEVE_CLASSES, SLEEVE_WEIGHT_MODE, SLEEVE_WEIGHT_PREFIX, SLEEVE_WEIGHT_SEP,
   sleeveWeightKey,
@@ -592,6 +594,82 @@ export const POOL_SHAPE_SCHEDULE = {
   foldAt: ({ rows, baseParams }) => _foldShapeSchedule(baseParams?.liquidityGraphSchedule, rows),
 };
 
+/**
+ * POOL_TARGET (design 112 §2.3) — a pool's SIZE from a year on, as a factor on its authored
+ * target. A decision is a `liquidityTargetSchedule` row, `{ year, pool, scale }`, keyed
+ * `year@<year>::<pool>`; like POOL_SHAPE it folds into the param before the toolsets build, and
+ * `PoolShapeScheduleReducer` applies it at the row's year in a replay exactly as in a rollout.
+ *
+ * The gate asks for a pool with a non-zero target (a factor cannot lift a zero off the floor —
+ * design 110 §13.10) and for something that runs the pools (a base graph or a shape schedule).
+ * It is INERT rather than disabled when neither TARGET_ALLOCATION nor LIQUIDITY_POOLS is
+ * selected: the rows still resolve and stamp, but the rebalancer that realises a target and the
+ * flows that fill one `toTarget` are both absent, so a recorded row plays back as a no-op.
+ */
+export const POOL_TARGET_SCHEDULE = {
+  foldsAtCompile: true,
+  paramKey:  'liquidityTargetSchedule',
+  appliesTo: (bp) => bp?.liquidityGraphEnabled !== false
+    && scalablePoolTargets(bp ?? {}).length > 0
+    && (_isGraph(bp?.liquidityGraph)
+        || (Array.isArray(bp?.liquidityGraphSchedule) && bp.liquidityGraphSchedule.length > 0))
+    && !_poolTargetsUnread(bp),
+  inertWhen: (bp) => _poolTargetsUnread(bp),
+  requirement: (bp) => (_poolTargetsUnread(bp)
+    ? 'Select TARGET_ALLOCATION or LIQUIDITY_POOLS (Scenario panel): with neither, nothing realises '
+      + 'a pool target, so a size decision changes nothing.'
+    : 'Give at least one pool a non-zero target in the Liquidity Pools graph or a shape, with a base '
+      + 'graph or a Liquidity Pool Schedule (Scenario panel), to use this lever.'),
+  scheduleKey: (variable) => ((Number.isFinite(variable?._year) && typeof variable?._pool === 'string')
+    ? yearKey(variable._year, variable._pool) : (variable?.paramKey ?? null)),
+  foldAt: ({ rows, baseParams }) => _foldTargetSchedule(baseParams?.liquidityTargetSchedule, rows),
+};
+
+/** Neither target reader is selected (an absent list is the permissive reading). @private */
+function _poolTargetsUnread(bp) {
+  const sel = bp?.behavioralStrategies;
+  if (!Array.isArray(sel)) return false;
+  return !sel.includes('TARGET_ALLOCATION') && !sel.includes('LIQUIDITY_POOLS');
+}
+
+/**
+ * The `(year, pool)` of a POOL_TARGET key. The pool is everything after the FIRST separator: a
+ * pool id is any non-empty string, so `yearKeyParts`' two-part split would truncate one that
+ * happened to contain the separator.
+ */
+export function poolTargetKeyParts(key) {
+  if (typeof key !== 'string' || !key.startsWith(YEAR_KEY_PREFIX)) return null;
+  const rest = key.slice(YEAR_KEY_PREFIX.length);
+  const i = rest.indexOf(YEAR_FIELD_SEP);
+  if (i < 0) return null;
+  const year = Number(rest.slice(0, i));
+  const pool = rest.slice(i + YEAR_FIELD_SEP.length);
+  return Number.isInteger(year) && pool ? { year, pool } : null;
+}
+
+/**
+ * Fold `year@Y::pool` rows into the target schedule, replacing an authored row for the same
+ * year and pool. A value must be a factor ≥ 0; anything else is dropped rather than folded
+ * (`_foldShapeSchedule`'s reason). Sorted by year then pool, the order the resolver reads.
+ */
+function _foldTargetSchedule(base, rows) {
+  const out = (Array.isArray(base) ? base : []).map(e => ({ ...e }));
+  let touched = false;
+  for (const row of (Array.isArray(rows) ? rows : [])) {
+    const parts = poolTargetKeyParts(row?.key);
+    const scale = row?.value;
+    if (parts == null || typeof scale !== 'number' || !Number.isFinite(scale) || scale < 0) continue;
+    const i = out.findIndex(e => Number(e?.year) === parts.year && e?.pool === parts.pool);
+    const next = { year: parts.year, pool: parts.pool, scale };
+    if (i >= 0) out[i] = { ...out[i], ...next };
+    else        out.push(next);
+    touched = true;
+  }
+  if (!touched) return null;
+  out.sort((a, b) => Number(a.year) - Number(b.year) || String(a.pool).localeCompare(String(b.pool)));
+  return out;
+}
+
 /** The named shapes a plan authors, in authored order. */
 export function shapeIdsOf(bp) {
   const shapes = bp?.liquidityShapes;
@@ -782,6 +860,7 @@ export const LEVER_SCHEDULE = {
   ALLOCATION_MIX:      { ...LEVER_GATES.ALLOCATION_MIX, ...ALLOCATION_MIX_SCHEDULE },
   BOND_LADDER:         { ...LEVER_GATES.BOND_LADDER, ...BOND_LADDER_SCHEDULE },
   POOL_SHAPE:          POOL_SHAPE_SCHEDULE,
+  POOL_TARGET:         POOL_TARGET_SCHEDULE,
 };
 
 /**

@@ -41,7 +41,7 @@ test('MpcCockpitPlugin.render: root + toolbar selects + action buttons', () => {
 test('MpcCockpitPlugin: lever select lists the built-in controls', () => {
   const el = new MpcCockpitPlugin(fakeRuntime()).render();
   const opts = [...el.querySelectorAll('[data-mpc="control"] option')].map(o => o.value);
-  assert.deepStrictEqual(opts.sort(), ['ALLOCATION_MIX', 'BOND_LADDER', 'DRAWDOWN_SLEEVE', 'DRAWDOWN_WEIGHTS', 'DRAWDOWN_WITHINTIER', 'DRAWDOWN_XBORDER', 'EARLY_WITHDRAWAL', 'POOL_SHAPE', 'ROTH', 'SPENDING']);
+  assert.deepStrictEqual(opts.sort(), ['ALLOCATION_MIX', 'BOND_LADDER', 'DRAWDOWN_SLEEVE', 'DRAWDOWN_WEIGHTS', 'DRAWDOWN_WITHINTIER', 'DRAWDOWN_XBORDER', 'EARLY_WITHDRAWAL', 'POOL_SHAPE', 'POOL_TARGET', 'ROTH', 'SPENDING']);
 });
 
 // ─── multi-lever selection (design 45 §8 / Phase 4) ──────────────────────────
@@ -831,4 +831,57 @@ test('MpcCockpitPlugin: the evals readout reports budget per search dimension', 
   plugin._q('budget').dispatchEvent(new Event('change'));
   assert.match(plugin._q('evals').textContent, /4 evals · 4\.0\/dim/);
   assert.equal(plugin._q('evals').classList.contains('mpc-evals--sparse'), true);
+});
+
+// ─── design 112 — the Liquidity Pool Target search list ──────────────────────
+
+const POOL_PARAMS = [
+  { name: 'liquidityGraph', value: { pools: [
+    { id: 'cash',   target: { mode: 'YEARS_OF_SPEND', value: 2 }, claims: [] },
+    { id: 'buffer', target: { mode: 'YEARS_OF_SPEND', value: 5 }, claims: [] },
+    { id: 'growth', claims: [] },
+  ] } },
+];
+
+function mountWithPools() {
+  const plugin = new MpcCockpitPlugin(fakeRuntime());
+  plugin.setServices({ scenarioService: { getActive: () => ({ params: POOL_PARAMS }) } });
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  plugin.mount(container);
+  const sel = plugin._q('control');
+  for (const o of sel.options) o.selected = o.value === 'POOL_TARGET';
+  plugin._applyControlDefaultRange();
+  plugin._syncRangeEnabled();
+  return plugin;
+}
+
+test('MpcCockpitPlugin: POOL_TARGET shows one row per sized pool, with sizes, and a factor range', () => {
+  const plugin = mountWithPools();
+  const box = plugin._q('pool-list');
+  assert.equal(box.style.display, '');
+  const rows = [...box.querySelectorAll('[data-mpc-pool]')];
+  assert.deepStrictEqual(rows.map(r => r.dataset.mpcPool), ['cash', 'buffer'], 'unsized pools are not offered');
+  assert.equal(rows[1].querySelector('[data-r="sizes"]').textContent, 'buffer 2.5y (×0.5) – buffer 10y (×2)');
+  assert.match(plugin._q('range-title').textContent, /factor/);
+  // An untouched list adds nothing: absent means every eligible pool.
+  assert.deepStrictEqual(plugin._currentRange(), { min: 0.5, max: 2, step: 0.25 },
+    'and the fractional step survives (not clamped to 1)');
+});
+
+test('MpcCockpitPlugin: unticking and bounding a pool reaches the range the controller gets', () => {
+  const plugin = mountWithPools();
+  const [cash, buffer] = [...plugin._q('pool-list').querySelectorAll('[data-mpc-pool]')];
+  cash.querySelector('[data-r="on"]').checked = false;
+  buffer.querySelector('[data-r="max"]').value = '1.5';
+  assert.deepStrictEqual(plugin._currentRange().pools, [{ pool: 'buffer', max: 1.5 }]);
+  cash.querySelector('[data-r="on"]').checked = false;
+  buffer.querySelector('[data-r="on"]').checked = false;
+  assert.deepStrictEqual(plugin._currentRange().pools, [], 'none ticked is none, not all');
+});
+
+test('MpcCockpitPlugin: the pool list is hidden for other levers', () => {
+  const plugin = mountPlugin();
+  plugin._syncRangeEnabled();
+  assert.equal(plugin._q('pool-list').style.display, 'none');
 });
