@@ -176,7 +176,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
         </label>
         <span class="mpc-hint mpc-evals" data-mpc="evals" title="Search budget per dimension. Below ~10 the search is sparse: it may land marginally outside the feasible set rather than mis-price the trade-off (design 80 §2.9)."></span>
         <button class="btn btn-sm btn-primary" data-mpc="advise">Advise next move</button>
-        <button class="btn btn-sm" data-mpc="advance" title="Step &quot;now&quot; forward one year and re-plan">Advance ▶</button>
+        <button class="btn btn-sm" data-mpc="advance" title="Step &quot;now&quot; to the next 31 December and re-plan. Year-end epochs let a decision take effect at the next day's year-open, the same instant a replay applies it.">Advance ▶</button>
         <button class="btn btn-sm" data-mpc="auto" title="Auto-accept the recommended move and advance each year to the end of the run">Auto ▶▶</button>
         <!-- Design 81 D10 — the two exits, in the order they should be reached for.
              SAVING the run is what keeps the plan: it is lossless, and design 80 measured
@@ -944,16 +944,23 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
   }
 
   /**
-   * Step the live primary sim forward one year (clamped to simEnd) and return the
+   * Step the live primary sim to the next 31 December (clamped to simEnd) and return the
    * target date. Shared by manual Advance and the autopilot loop. `_onSimStep`
    * (via the sim bus) then refreshes "now" and clears the stale card.
+   *
+   * Year-END, not +1 year (design 112 §8). A snapshot includes every event on its own date,
+   * so an epoch on 1 January stands AFTER that day's year-open — the rebalance to the pool
+   * targets has already run — and a pool decision there could only bite at the next advance,
+   * while a replay applied it at the year-open. On 31 December the year is finished (its tax
+   * settles included) and only the year-open is ahead, so rollout, live run and replay all apply
+   * a decision at that one instant. Measured: A′ ≡ B to the dollar with year-end epochs.
    */
   _stepLiveForward() {
     const sim = this._sim;
     if (!sim) { this._setNow('Build/run a scenario first.'); return null; }
 
     const simEnd = new Date(this._services()?.scenarioService?.getActive?.()?.simEnd ?? sim.currentDate);
-    let next = DateUtils.addYears(new Date(sim.currentDate), 1);
+    let next = _nextYearEnd(new Date(sim.currentDate));
     if (next > simEnd) next = simEnd;
 
     const tc = this._runtime?.timeControls;
@@ -1649,4 +1656,11 @@ function _afterPaint() {
     // visible the (faster) rAF path wins and the paint still lands first.
     setTimeout(finish, 120);
   });
+}
+
+/** The first 31 December strictly after `d` (UTC) — the cockpit's epoch date. */
+export function _nextYearEnd(d) {
+  const y = d.getUTCFullYear();
+  const end = new Date(Date.UTC(y, 11, 31));
+  return d.getTime() < end.getTime() ? end : new Date(Date.UTC(y + 1, 11, 31));
 }

@@ -709,3 +709,17 @@ describe('CockpitController — autoRun (autopilot)', () => {
     await assert.rejects(() => c.autoRun(), /call setSnapshot/);
   });
 });
+
+describe('COCKPIT_CONTROLS.SPENDING — a year-end epoch labels the year it governs (design 112 §8)', () => {
+  const bp = { spendingExpenseBands: [{ startAge: 40, monthlyAmount: 8000 }], inflationRate: 0.03 };
+  const state = { people: { p1: { birthDate: new Date(Date.UTC(1980, 0, 1)) } } };
+
+  test('31 December names the NEXT year; any other day names its own', () => {
+    const yearEnd = COCKPIT_CONTROLS.SPENDING.buildVariables({ baseParams: bp, asOf: new Date(Date.UTC(2034, 11, 31)), state })[0];
+    assert.equal(yearEnd._effectiveYear, 2035, 'the ending year has no days left for the decision to shape');
+    const midYear = COCKPIT_CONTROLS.SPENDING.buildVariables({ baseParams: bp, asOf: new Date(Date.UTC(2034, 5, 1)), state })[0];
+    assert.equal(midYear._effectiveYear, 2034);
+    assert.match(COCKPIT_CONTROLS.SPENDING.describe({ [yearEnd.paramKey]: 8000 }, [yearEnd],
+      { asOf: new Date(Date.UTC(2034, 11, 31)), inflationRate: 0.03 }), /in 2035/);
+  });
+});

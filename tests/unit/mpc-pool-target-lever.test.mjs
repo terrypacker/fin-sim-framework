@@ -20,7 +20,7 @@
  * PTL-3  one CONTINUOUS variable per pool in the search list, with per-pool bounds (§5.1, DPT-10/13)
  * PTL-4  the fold: `year@Y::pool` rows become schedule rows; junk is dropped
  * PTL-5  a no-op candidate prices EXACTLY the plan (DPT-7)
- * PTL-6  a candidate reaches the rollout at a 1-January epoch
+ * PTL-6  a candidate lands at the next year-open; from any epoch the rollout ≡ a t₀ compile (§8)
  * PTL-7  the live actuate resizes the running sim, marks `by`, and matches a compile of what it saved
  * PTL-8  lever hygiene carries the §2.5 rows
  * PTL-9  the harvest bakes dated rows (SCHEDULE), not the POINT default's index key
@@ -45,8 +45,11 @@ const TARGET = COCKPIT_CONTROLS.POOL_TARGET;
 
 const SIM_START = new Date(Date.UTC(2026, 0, 1));
 const SIM_END   = new Date(Date.UTC(2060, 0, 1));
+/** Any epoch in a year addresses the next year's row (design 112 §8) — 1 January included. */
 const JAN_1     = new Date(Date.UTC(2045, 0, 1));
 const MID_YEAR  = new Date(Date.UTC(2045, 5, 15));
+/** The cockpit's epoch date: the year-open is the next day, so there is no lag. */
+const YEAR_END  = new Date(Date.UTC(2044, 11, 31));
 
 const GRAPH = {
   pools: [
@@ -125,8 +128,10 @@ test('PTL-1b: with no target reader it is INERT, and the requirement says which 
 
 test('PTL-2: the scaffold carries the factor already in force; the year follows the epoch', () => {
   const at = (p, y) => p.liquidityTargetSchedule.filter(e => e.year === y);
-  assert.deepEqual(at(TARGET.prepareBaseParams({ baseParams: BASE, asOf: JAN_1 }), 2045),
-    [{ year: 2045, pool: 'buffer', scale: 1 }], 'only the sized pool; 1 before any row');
+  assert.deepEqual(at(TARGET.prepareBaseParams({ baseParams: BASE, asOf: JAN_1 }), 2046),
+    [{ year: 2046, pool: 'buffer', scale: 1 }], 'only the sized pool; 1 before any row');
+  assert.deepEqual(at(TARGET.prepareBaseParams({ baseParams: BASE, asOf: YEAR_END }), 2045),
+    [{ year: 2045, pool: 'buffer', scale: 1 }], 'a year-end epoch addresses the next day');
   const rowed = { ...BASE, liquidityTargetSchedule: [{ year: 2040, pool: 'buffer', scale: 1.5 }] };
   assert.deepEqual(at(TARGET.prepareBaseParams({ baseParams: rowed, asOf: MID_YEAR }), 2046),
     [{ year: 2046, pool: 'buffer', scale: 1.5 }], 'the 2040 row is in force at 2046');
@@ -147,9 +152,9 @@ test('PTL-3: one CONTINUOUS variable per eligible pool, keyed by year and pool',
   assert.equal(v.paramKey, 'liquidityTargetSchedule[0].scale');
   assert.equal(v.type, OPT_PARAM_TYPES.CONTINUOUS);
   assert.deepEqual([v.min, v.max, v.step], [0.5, 2, 0.25]);
-  assert.equal(TARGET.scheduleKey(v), 'year@2045::buffer', 'recorded by year and pool, never by index');
+  assert.equal(TARGET.scheduleKey(v), 'year@2046::buffer', 'recorded by year and pool, never by index');
   // §2.3 "Legibility": the size first, then the factor.
-  assert.equal(TARGET.describe({ [v.paramKey]: 1.5 }, [v]), 'Hold buffer 7.5y (×1.5) from 2045');
+  assert.equal(TARGET.describe({ [v.paramKey]: 1.5 }, [v]), 'Hold buffer 7.5y (×1.5) from 2046');
   assert.equal(TARGET.describe({}, []), 'No pool target decision');
 });
 
@@ -175,7 +180,7 @@ test('PTL-3d: a named pool with no target in force is skipped, and describe says
   const prepared = TARGET.prepareBaseParams({ baseParams: BASE, asOf: JAN_1 });
   const vars = TARGET.buildVariables({ baseParams: prepared, asOf: JAN_1, range: { pools: ['buffer', 'cash'] } });
   assert.deepEqual(vars.map(v => v._pool), ['buffer']);
-  assert.match(TARGET.describe({ [vars[0].paramKey]: 1 }, vars), /not decided: cash — no target in force from 2045/);
+  assert.match(TARGET.describe({ [vars[0].paramKey]: 1 }, vars), /not decided: cash — no target in force from 2046/);
 });
 
 test('PTL-3e: a PERCENT pool is capped where the normalizer would refuse, against the axis', () => {
@@ -234,13 +239,28 @@ test('PTL-5: a no-op candidate prices EXACTLY the plan (DPT-7)', () => {
 
 // ─── PTL-6 ───────────────────────────────────────────────────────────────────
 
-test('PTL-6: at a 1-January epoch the candidate reaches the rollout on the spot', () => {
-  const snap = snapshotOf(BASE, JAN_1);
-  const { params } = candidate(BASE, JAN_1, 1.5);
-  const st = seeded(params, snap).state;
-  assert.equal(bufferTarget(st), 7.5);
-  assert.deepEqual(st.liquidityTargetScales, { buffer: 1.5 });
+test('PTL-6: from a year-end epoch the candidate lands at the next day\'s year-open', () => {
+  const snap = snapshotOf(BASE, YEAR_END);
+  const { params } = candidate(BASE, YEAR_END, 1.5);
+  const sim = seeded(params, snap);
+  assert.equal(bufferTarget(sim.state), 5, 'not yet at "now" (31 December)');
+  quiet(() => sim.stepTo(new Date(Date.UTC(2045, 0, 2))));
+  assert.equal(bufferTarget(sim.state), 7.5);
+  assert.deepEqual(sim.state.liquidityTargetScales, { buffer: 1.5 });
   assert.notEqual(terminal(params, snap), terminal(BASE, snap), 'and the rollout prices a different plan');
+});
+
+test('PTL-6b: from any epoch — year-end, 1 January, mid-year — the rollout ≡ a t₀ compile (§8)', () => {
+  for (const asOf of [YEAR_END, JAN_1, MID_YEAR]) {
+    const { params } = candidate(BASE, asOf, 1.5);
+    const snap = snapshotOf(BASE, asOf);
+    const compile = quiet(() => {
+      const sim = seededFrom(problem(params, { kind: 'compile', cfgTemplate: null }));
+      sim.stepTo(SIM_END);
+      return computeNetWorth(sim.state, 'USD');
+    });
+    assert.equal(terminal(params, snap), compile, `epoch ${asOf.toISOString().slice(0, 10)}: rollout and compile differ`);
+  }
 });
 
 // ─── PTL-7 ───────────────────────────────────────────────────────────────────

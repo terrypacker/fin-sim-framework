@@ -236,7 +236,7 @@ test('MpcCockpitPlugin: range inputs enabled for the numeric levers (Roth + Spen
 
 // ─── Phase A: Advance drives the live clock via TimeControls ─────────────────
 
-test('MpcCockpitPlugin._advance: steps the live sim +1yr through TimeControls', () => {
+test('MpcCockpitPlugin._advance: steps the live sim to the next 31 December through TimeControls', () => {
   const calls = [];
   const plugin = new MpcCockpitPlugin({ bus: { subscribe() {} }, timeControls: { stepToDate: (d) => calls.push(new Date(d)) } });
   plugin.setServices({ scenarioService: { getActive: () => ({ simEnd: '2070-01-01T00:00:00.000Z' }) } });
@@ -247,7 +247,11 @@ test('MpcCockpitPlugin._advance: steps the live sim +1yr through TimeControls', 
 
   plugin._advance();
   assert.equal(calls.length, 1, 'TimeControls.stepToDate called once');
-  assert.equal(calls[0].getUTCFullYear(), 2035, 'advanced one year on the real clock');
+  assert.equal(+calls[0], Date.UTC(2034, 11, 31), 'to year-end, so the next year-open is still ahead (design 112 §8)');
+  // From a year-end epoch, the next year-end.
+  plugin._sim = { currentDate: new Date(Date.UTC(2034, 11, 31)) };
+  plugin._advance();
+  assert.equal(+calls[1], Date.UTC(2035, 11, 31));
 });
 
 test('MpcCockpitPlugin._advance: clamps to simEnd', () => {

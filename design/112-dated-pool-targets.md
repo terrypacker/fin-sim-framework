@@ -1,7 +1,7 @@
 # 112 — Dated pool targets: a pool size the MPC can decide
 
-**Status:** PHASES 1–3 BUILT — 21 Sep 2026 (GitHub #736). Phase 4 (proof on the author's plan)
-is open. Every §5 question is answered and folded into §2–§4: Q1 is the factor plus two
+**Status:** BUILT — phases 1–4, 21 Sep 2026 (GitHub #736). Phase 4's proof on the author's
+plan found and fixed the 1-January epoch gap (§8). Open: the Pools panel mark (R11). Every §5 question is answered and folded into §2–§4: Q1 is the factor plus two
 properties borrowed from authored levels (§5.1). The §6 review findings are all folded in,
 R11–R13 included. §8 records what the build decided that the text above did not. §7 is a
 follow-up outside this design's scope. Answers the last open item of design 39 §14.10:
@@ -420,5 +420,19 @@ imprecise:
   `mpc-lever-reaches-rollout`). An unstepped t₀ compile has not reached a dated row, so its
   state holds the opening graph. What a rollout is about to step is the shape reducer's
   schedule, asked at the snapshot. MLR-2c asserts the seeded state's own stamp separately.
+- **Phase 4 found the 1-January gap, and the fix changed POOL_SHAPE too.** On the author's
+  plan, five 1-January epochs gave A′ − B = +170,909, while mid-year epochs gave exactly 0. A
+  snapshot includes every event on its own date, so at 1 January that day's year-open (the
+  advance that rebalances to the pool targets) had already run. The old "at or after" rule
+  addressed that same year's row. A rollout and the live run then realized it at the next
+  advance, but a t₀ compile or replay applied it at the year-open. Fix, chosen by the operator
+  over month-granular rows: (1) a pool decision addresses the first 1 January whose advance has
+  not run, which is always the year after the snapshot's (`_nextShapeYear`, shared by both pool
+  levers); (2) the cockpit's Advance steps to the next 31 December, so that year-open is the
+  next day and the lag is zero. After the fix, A′ ≡ B at 1-January epochs (7,218,546) and at
+  year-end epochs (7,362,149). PTL-6b pins "rollout ≡ t₀ compile from any epoch", and fails
+  under the old rule. Roth and early withdrawal were already correct: they target the next
+  event that has not fired. The spending card now labels a year-end decision with the year it
+  governs. Month-granular rows are deferred until the cockpit solves twice a year.
 - **Not built:** the Pools panel timeline mark for a scale step (R11's second half). The stamp
   is in state and in the journal, but the panel does not yet draw it.

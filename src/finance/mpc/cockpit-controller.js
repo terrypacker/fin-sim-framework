@@ -1150,8 +1150,10 @@ export const COCKPIT_CONTROLS = {
      *   2) the running sim's pool reducers, which hold the schedule from their constructors —
      *      `PoolShapeScheduleReducer` (registered now if the plan had no schedule), and both
      *      flow reducers;
-     *   3) the live state, re-stamped AT now, for a decision that takes effect on the instant
-     *      it is made (an epoch on 1 January). Otherwise the reducer swaps at the row's year.
+     *   3) the live state, re-stamped AT now. A decision always addresses a future year-open
+     *      (`_nextShapeYear`), so this changes nothing for the row just written; it keeps the
+     *      stamp honest if the re-resolved schedule differs at now for any other reason.
+     *      The reducer swaps at the row's year-open, as it does in a rollout and a replay.
      * Returns true when the live sim now carries the decision.
      */
     actuate: ({ services, scenario, candidate, vars }) => {
@@ -1283,7 +1285,8 @@ export const COCKPIT_CONTROLS = {
      *   1) the scenario's `liquidityTargetSchedule` rows for the year, each marked `by` with the
      *      cockpit run (R12) so the row editor can say which rows a session wrote;
      *   2) the running sim's pool reducers get the re-resolved schedule;
-     *   3) the live state is restamped AT now.
+     *   3) the live state is restamped AT now (a no-op for the row just written, which is
+     *      always a future year-open's — see `_nextShapeYear`).
      * Returns true when the live sim now carries the decision.
      */
     actuate: ({ services, scenario, candidate, vars, runId = null }) => {
@@ -1316,9 +1319,11 @@ export const COCKPIT_CONTROLS = {
  * the scenario's params, hand it to the running sim's pool reducers (registering the shape
  * reducer if the plan had none), and restamp the live state at now.
  *
- * The reducers hold the schedule from their constructors, so writing the param alone would
- * change nothing until a Rebuild; restamping at now is what makes a 1-January decision take
- * effect on the instant it is made. Returns true when the live sim carries the decision.
+  * The reducers hold the schedule from their constructors, so writing the param alone would
+ * change nothing until a Rebuild. The decision itself lands at its row's year-open, applied by
+ * the shape reducer exactly as a rollout and a replay apply it (design 112 §8); the restamp at
+ * now only keeps the live stamp consistent with the re-resolved schedule. Returns true when the
+ * live sim carries the decision.
  */
 function _restampLivePools(services, scenario) {
   const sim = services?.simulationRegistry?.getPrimary?.();
@@ -1909,17 +1914,24 @@ function _nextConversionYear(asOf, baseParams) {
 }
 
 /**
- * The year a POOL_SHAPE decision taken at `asOf` addresses: the first 1 January at or after it.
+ * The year a pool decision (POOL_SHAPE, POOL_TARGET) taken at `asOf` addresses: the first
+ * 1 January whose period advance has NOT run yet — which, for any snapshot in year Y, is Y + 1.
  *
- * At or after, not after. A cockpit epoch dated exactly 1 January has already run that day's
- * period advance, and a row for THIS year is still the next switch the plan can make; the live
- * actuate and a rollout both apply it on the spot (`liquidityStateAt`), and a replay's reducer
- * applies it at the same instant. Any later instant in the year addresses next year's row.
+ * A snapshot at `asOf` has processed every event dated on or before it (`stepTo` is inclusive),
+ * so from 00:00 on 1 January onward that day's `PERIOD_ADVANCE_US` — the year-open, which
+ * rebalances to the pool targets and runs the flows — has already fired. This used to be "at or
+ * after", addressing THIS year's row from a 1-January epoch and restamping the graph on the spot.
+ * That was exact in nothing: the restamp came after the year-open's rebalance, so a rollout and
+ * the live run realised the decision at the NEXT advance, while a t₀ compile or a design 81 replay
+ * applied the same row AT the year-open, before rebalancing. Measured on the author's plan:
+ * A′ − B = +170,909 over five 1-January epochs, exactly 0 at mid-year epochs (design 112 §8).
+ *
+ * The lag this could imply is removed by the epoch date, not here: the cockpit's Advance steps to
+ * 31 December, so a decision addresses the very next day's year-open and every arm — rollout,
+ * live, replay — applies it at that one advance.
  */
 function _nextShapeYear(asOf) {
-  const d = new Date(asOf);
-  const y = d.getUTCFullYear();
-  return d.getTime() === Date.UTC(y, 0, 1) ? y : y + 1;
+  return new Date(asOf).getUTCFullYear() + 1;
 }
 
 /**
@@ -2262,7 +2274,7 @@ function _activeBandIndex(bands, asOf, state) {
  * to the "now" year whenever age/birthDate are unknown (pre-design-39 behaviour).
  */
 function _bandEffectiveYear(bands, i, asOf, state) {
-  const nowYear = asOf ? new Date(asOf).getUTCFullYear() : null;
+  const nowYear = asOf ? _governedYear(asOf) : null;
   const startAge = bands?.[i]?.startAge;
   const age = _personAgeAt(asOf, state);
   if (age == null || !Number.isFinite(startAge) || age >= startAge) {
@@ -2275,6 +2287,18 @@ function _bandEffectiveYear(bands, i, asOf, state) {
   const year = bd ? new Date(bd).getUTCFullYear() + startAge
                   : (nowYear != null ? nowYear + (startAge - age) : null);
   return { year, future: true };
+}
+
+/**
+ * The first year a decision taken at `asOf` actually governs. The calendar year of `asOf`, except
+ * on 31 December — the cockpit's year-end epoch — where the decision's own year has no days left
+ * and the first year it runs through is the next one. Labelling it with the ending year would
+ * show a nominal amount for a year the decision never shapes.
+ */
+function _governedYear(asOf) {
+  const d = new Date(asOf);
+  const y = d.getUTCFullYear();
+  return (d.getUTCMonth() === 11 && d.getUTCDate() === 31) ? y + 1 : y;
 }
 
 /** The year a spending variable's amount actually applies (stamped at build time). */

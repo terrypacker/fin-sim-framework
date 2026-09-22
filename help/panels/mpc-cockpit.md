@@ -12,10 +12,12 @@ The closed-loop advisor. It stands at the run's "now", snapshots what has actual
 happened, asks the controller for the next move, and draws a fan of candidate futures
 with the recommendation highlighted.
 
-The distinction that makes it useful: it is an **advisor, not an autopilot**. Apply the
-recommendation or an override, then Advance "now" forward — at which point it re-plans
-against the world as it then is. A plan optimised once at year zero assumes forty years
-of foresight; this one only ever commits to the next decision.
+It is an **advisor, not an autopilot**. Apply the recommendation or an override, then
+Advance — it re-plans against the world as it then is. A plan optimised once at year zero
+assumes forty years of foresight; this one commits only to the next decision.
+
+Advance stops on 31 December, so each decision takes effect at the next day's year-open —
+exactly when a replay applies it.
 
 Open it when the question is not "what is the best plan" but "what should I do this
 year".
@@ -30,8 +32,7 @@ Two ways out of a finished run. **Copy to scenario** squashes the moves into ord
 settings — small, arguable, lossy. **Save run to plan** keeps the moves and plays them.
 Both refuse a plan that runs out of money.
 
-When the loaded plan is already playing a recording, a line above the controls says so.
-The advisor is then standing on decisions somebody already made, and sees only those
-dated before where you stand — so it never competes with its own future.
+When the loaded plan is already playing a recording, a line above the controls says so;
+the advisor then sees only its decisions dated before where you stand.
 
 Needs a scenario loaded and a run stepped to the date you want to stand at.

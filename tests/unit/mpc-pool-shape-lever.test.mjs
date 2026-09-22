@@ -43,10 +43,14 @@ const SHAPE = COCKPIT_CONTROLS.POOL_SHAPE;
 
 const SIM_START = new Date(Date.UTC(2026, 0, 1));
 const SIM_END   = new Date(Date.UTC(2060, 0, 1));
-/** A 1-January epoch: the decision addresses THIS year and takes effect on the spot. */
+/**
+ * Every epoch addresses the first 1 January whose year-open has not run (design 112 §8): a
+ * snapshot includes its own date's events, so at 1 January that day's advance is behind it.
+ */
 const JAN_1     = new Date(Date.UTC(2045, 0, 1));
-/** A mid-year epoch: the decision addresses NEXT year's row. */
 const MID_YEAR  = new Date(Date.UTC(2045, 5, 15));
+/** The cockpit's own epoch date: the year-open is the next day, so there is no lag. */
+const YEAR_END  = new Date(Date.UTC(2044, 11, 31));
 
 const GRAPH = {
   pools: [
@@ -136,16 +140,19 @@ test('PSL-1: the gate needs a named shape, and a graph or schedule to swap from'
 test('PSL-2: the scaffold carries the shape already in force; the year follows the epoch', () => {
   const rowAt = (p, y) => p.liquidityGraphSchedule.find(e => e.year === y);
 
-  // A 1-January epoch addresses its own year; any later instant, the next.
-  assert.deepEqual(rowAt(SHAPE.prepareBaseParams({ baseParams: UNSCHEDULED, asOf: JAN_1 }), 2045),
-    { year: 2045, shape: null }, 'before any row the base graph is in force');
+  // Any instant in a year addresses the next year's row — including 1 January itself, whose
+  // year-open has already run — and a year-end epoch addresses the very next day.
+  assert.deepEqual(rowAt(SHAPE.prepareBaseParams({ baseParams: UNSCHEDULED, asOf: JAN_1 }), 2046),
+    { year: 2046, shape: null }, 'before any row the base graph is in force');
+  assert.deepEqual(rowAt(SHAPE.prepareBaseParams({ baseParams: UNSCHEDULED, asOf: YEAR_END }), 2045),
+    { year: 2045, shape: null }, 'a year-end epoch addresses the next day\'s year-open');
   assert.deepEqual(rowAt(SHAPE.prepareBaseParams({ baseParams: SCHEDULED, asOf: MID_YEAR }), 2046),
     { year: 2046, shape: 'early' }, 'after the 2040 row, its shape is in force');
 
   const once  = SHAPE.prepareBaseParams({ baseParams: SCHEDULED, asOf: JAN_1 });
   const twice = SHAPE.prepareBaseParams({ baseParams: once, asOf: JAN_1 });
   assert.deepEqual(twice.liquidityGraphSchedule, once.liquidityGraphSchedule, 'idempotent');
-  assert.deepEqual(once.liquidityGraphSchedule.map(e => e.year), [2040, 2045], 'sorted');
+  assert.deepEqual(once.liquidityGraphSchedule.map(e => e.year), [2040, 2046], 'sorted');
   assert.deepEqual(SCHEDULED.liquidityGraphSchedule, [{ year: 2040, shape: 'early' }],
     'the caller\'s schedule is not mutated');
 });
@@ -158,10 +165,10 @@ test('PSL-3: one ENUM variable over [base, ...shapes], addressing the scaffolded
   assert.equal(rest.length, 0);
   assert.equal(v.paramKey, 'liquidityGraphSchedule[1].shape');
   assert.deepEqual(v.values, [null, 'early']);
-  assert.equal(v._year, 2045);
-  assert.match(SHAPE.describe({ [v.paramKey]: 'early' }, [v]), /'early' from 2045/);
-  assert.match(SHAPE.describe({ [v.paramKey]: null }, [v]), /base pool graph from 2045/);
-  assert.equal(SHAPE.scheduleKey(v), 'year@2045', 'recorded by year, never by row index');
+  assert.equal(v._year, 2046);
+  assert.match(SHAPE.describe({ [v.paramKey]: 'early' }, [v]), /'early' from 2046/);
+  assert.match(SHAPE.describe({ [v.paramKey]: null }, [v]), /base pool graph from 2046/);
+  assert.equal(SHAPE.scheduleKey(v), 'year@2046', 'recorded by year, never by row index');
 });
 
 // ─── PSL-4 ───────────────────────────────────────────────────────────────────
@@ -191,13 +198,15 @@ test('PSL-5: a no-op candidate prices EXACTLY the plan, with or without a schedu
 
 // ─── PSL-6 ───────────────────────────────────────────────────────────────────
 
-test('PSL-6: a candidate reaches the rollout — on the spot at 1 January, at the row otherwise', () => {
-  // 1-January epoch: the decision takes effect at "now", so the seeded state already carries it.
-  const snapJ = snapshotOf(UNSCHEDULED, JAN_1);
-  const candJ = candidate(UNSCHEDULED, JAN_1, 'early');
-  const stJ   = seeded(candJ, snapJ).state;
-  assert.equal(stJ.liquidityShapeId, 'early');
-  assert.notDeepEqual(order(stJ), order(snapJ.state), 'the spend order must move at once');
+test('PSL-6: a candidate reaches the rollout at the next year-open, and prices what a compile prices', () => {
+  // Year-end epoch: nothing moves at "now"; the swap lands at the next day's year-open.
+  const snapE = snapshotOf(UNSCHEDULED, YEAR_END);
+  const candE = candidate(UNSCHEDULED, YEAR_END, 'early');
+  const simE  = seeded(candE, snapE);
+  assert.equal(simE.state.liquidityShapeId ?? null, null, 'not yet: the row is 2045\'s');
+  quiet(() => simE.stepTo(new Date(Date.UTC(2045, 0, 2))));
+  assert.equal(simE.state.liquidityShapeId, 'early', 'swapped at the 1 January 2045 year-open');
+  assert.deepEqual(order(simE.state), order(compiledAt(candE, new Date(Date.UTC(2045, 0, 2)))));
 
   // Mid-year epoch: the row is next year's, so "now" is untouched and the swap lands at the row.
   const snapM = snapshotOf(SCHEDULED, MID_YEAR);
@@ -208,6 +217,23 @@ test('PSL-6: a candidate reaches the rollout — on the spot at 1 January, at th
   assert.equal(simM.state.liquidityShapeId ?? null, null, 'swapped back to the base graph at the row');
   assert.deepEqual(order(simM.state), order(compiledAt(UNSCHEDULED, new Date(Date.UTC(2046, 1, 1)))),
     'and runs the base graph\'s spend order');
+});
+
+test('PSL-6b: from any epoch — year-end, 1 January, mid-year — the rollout ≡ a t₀ compile of the rows', () => {
+  // The design 112 §8 property. The old "at or after" rule addressed THIS year's row from a
+  // 1-January epoch, after its year-open had run: the rollout realised it one advance late and a
+  // compile (a replay) did not, and the two terminals differed.
+  for (const asOf of [YEAR_END, JAN_1, MID_YEAR]) {
+    const cand = candidate(UNSCHEDULED, asOf, 'early');
+    const snap = snapshotOf(UNSCHEDULED, asOf);
+    const rollout = terminal(cand, snap);
+    const compile = quiet(() => {
+      const sim = seededFrom(problem(cand, { kind: 'compile', cfgTemplate: null }));
+      sim.stepTo(SIM_END);
+      return computeNetWorth(sim.state, 'USD');
+    });
+    assert.equal(rollout, compile, `epoch ${asOf.toISOString().slice(0, 10)}: rollout and compile differ`);
+  }
 });
 
 // ─── PSL-7 ───────────────────────────────────────────────────────────────────
