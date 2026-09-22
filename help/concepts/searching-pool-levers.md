@@ -9,8 +9,8 @@ tools: []
 design: [110-liquidity-pool-control-surface.md, 97-liquidity-pools-and-drawdown-sequence.md]
 sources: [src/finance/pools/pool-target-scale.js, src/finance/pools/pool-axis-hygiene.js]
 stamps:
-  src/finance/pools/pool-target-scale.js: fe0568
-  src/finance/pools/pool-axis-hygiene.js: 97fa2c
+  src/finance/pools/pool-target-scale.js: 9a3f7a
+  src/finance/pools/pool-axis-hygiene.js: 3c8b0c
 ---
 
 A pool's size, how patient a refill rule is, and when the plan re-plumbs itself can all be

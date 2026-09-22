@@ -392,16 +392,23 @@ export function scaledTargetDescriptor(params, poolId) {
 /** A descriptor at factor `k` — the string {@link describeScaledTarget} returns. */
 export function describeScaledDescriptor(desc, factor) {
   const k = Number(factor);
-  const f = Number.isFinite(k) ? `×${trim(k)}` : '×?';
+  // Two decimals: a solver's factor is continuous, and "×1.25493289449" is noise to a reader.
+  const f = Number.isFinite(k) ? `×${round2(k)}` : '×?';
   const parts = desc?.parts ?? [];
   const label = desc?.label ?? '?';
   if (!parts.length) return `${label} (not in any graph) (${f})`;
   const at = Number.isFinite(k) ? k : 1;
-  const sizes = parts.length === 1
-    ? _scaledSize(parts[0].target, parts[0].covered, at)
-    : parts.map(p => `${p.where ?? 'base'} ${_scaledSize(p.target, p.covered, at)}`).join(' / ');
+  const each = parts.map(p => [p.where ?? 'base', _scaledSize(p.target, p.covered, at)]);
+  // One size when every graph resolves to the same one: "base 2y / wrapLast 2y" says the same
+  // thing twice and hides the case where the shapes genuinely differ.
+  const sizes = new Set(each.map(([, sz]) => sz)).size === 1
+    ? each[0][1]
+    : each.map(([where, sz]) => `${where} ${sz}`).join(' / ');
   return `${label} ${sizes} (${f})`;
 }
+
+/** Two decimals, without trailing zeros: 1.25493 → 1.25, 2 → 2. */
+const round2 = (n) => Number(n.toFixed(2));
 
 /**
  * For a REMAINDER target, the years the pools it sits behind state — or null when one of them
@@ -431,10 +438,12 @@ function _yearsOf(target) {
 /** One raw target at factor `k`, in its own unit. @private */
 function _scaledSize(target, covered, k) {
   if (target == null) return 'no target';
-  if (typeof target === 'number') return describeAuthored({ mode: null, value: trim(target * k) });
+  if (typeof target === 'number') return describeAuthored({ mode: null, value: round2(target * k) });
   if (typeof target !== 'object' || !Number.isFinite(target.value)) return 'no target';
-  const value = trim(target.value * k);
+  const raw = target.value * k;
+  // A PERCENT value is a fraction, so it keeps two more places (37.04%, not 37%).
+  const value = target.mode === 'PERCENT' ? Number(raw.toFixed(4)) : round2(raw);
   if (target.mode !== 'YEARS_OF_SPEND_REMAINDER') return describeAuthored({ mode: target.mode, value });
   if (covered == null) return `${value}y aggregate`;
-  return `${trim(Math.max(0, value - covered))}y left of ${value}y`;
+  return `${round2(Math.max(0, value - covered))}y left of ${value}y`;
 }

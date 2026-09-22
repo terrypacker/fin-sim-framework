@@ -274,11 +274,16 @@ export function targetVocabularyProblems(authored, targetRows) {
   if (shapes && typeof shapes === 'object' && !Array.isArray(shapes)) {
     for (const [id, g] of Object.entries(shapes)) graphs.push([id, g]);
   }
-  const out = [];
-  const push = (kind, pool, shape, message) => out.push({
-    param: 'liquidityGraph', index: null, field: null, pool, shape,
-    severity: PROBLEM_SEVERITY.WARN, kind, message,
-  });
+  // One row per (kind, pool, sentence), naming every graph it holds in. A pool carried unchanged
+  // into three shapes would otherwise say the same thing three times — measured on the author's
+  // plan, eight rows for four facts.
+  const grouped = new Map();
+  const push = (kind, pool, shape, message) => {
+    const key = `${kind}\u0000${pool}\u0000${message}`;
+    const g = grouped.get(key) ?? { kind, pool, message, shapes: [] };
+    g.shapes.push(shape);
+    grouped.set(key, g);
+  };
   const valueOf = (spec) => (typeof spec === 'number' ? spec
     : (spec && typeof spec === 'object' && Number.isFinite(spec.value)) ? spec.value : null);
   const modeOf  = (spec, dflt) => (spec && typeof spec === 'object' && typeof spec.mode === 'string')
@@ -287,7 +292,6 @@ export function targetVocabularyProblems(authored, targetRows) {
 
   for (const [where, graph] of graphs) {
     const pools = Array.isArray(graph?.pools) ? graph.pools : [];
-    const inShape = where == null ? '' : ` in shape '${where}'`;
     for (const pool of pools) {
       if (!pool || typeof pool.id !== 'string' || !scalable.has(pool.id)) continue;
       const tValue = valueOf(pool.target);
@@ -296,7 +300,7 @@ export function targetVocabularyProblems(authored, targetRows) {
 
       if (tMode === 'YEARS_OF_SPEND_REMAINDER') {
         push(POOL_AXIS_PROBLEM_KIND.CONFOUNDED, pool.id, where,
-          `Pool '${pool.id}'${inShape} is a REMAINDER of ${fmt(tValue)} years across other pools. A factor `
+          `Pool '${pool.id}' is a REMAINDER of ${fmt(tValue)} years across other pools. A factor `
           + 'multiplies that AGGREGATE, not the pool\'s own share, so its residual moves by more than '
           + 'the factor says (6y behind 4y is 2y; ×1.5 makes it 5y). Read its results as sizes, not '
           + 'as the factor.');
@@ -310,7 +314,7 @@ export function targetVocabularyProblems(authored, targetRows) {
       for (const q of behind) {
         if (realCeiling) continue;         // a capped pool contributes what it HOLDS, not its target
         push(POOL_AXIS_PROBLEM_KIND.CONFOUNDED, pool.id, where,
-          `Pool '${pool.id}'${inShape} sits in front of REMAINDER pool '${q.id}', which counts '${pool.id}' `
+          `Pool '${pool.id}' sits in front of REMAINDER pool '${q.id}', which counts '${pool.id}' `
           + `at its target. Scaling '${pool.id}' shrinks '${q.id}' by the same amount, so total cover does `
           + `not move until '${q.id}' reaches zero: this factor trades one pool against the other rather `
           + 'than sizing the reserve.');
@@ -319,12 +323,12 @@ export function targetVocabularyProblems(authored, targetRows) {
       const capValue = valueOf(pool.capacity);
       if (capMode === 'OFFSET_CAP') {
         push(POOL_AXIS_PROBLEM_KIND.INERT, pool.id, where,
-          `Pool '${pool.id}'${inShape} is capped at its offset ceiling, min(cash, loan owed), which falls as `
+          `Pool '${pool.id}' is capped at its offset ceiling, min(cash, loan owed), which falls as `
           + 'the loan amortises. A factor that fits today can sit above that ceiling in a few years, '
           + 'where every larger value runs the same capped pool.');
       } else if (capValue != null && capMode === tMode && tValue * hi > capValue) {
         push(POOL_AXIS_PROBLEM_KIND.INERT, pool.id, where,
-          `Pool '${pool.id}'${inShape} has a ${capMode} capacity of ${fmt(capValue)}, and factors above `
+          `Pool '${pool.id}' has a ${capMode} capacity of ${fmt(capValue)}, and factors above `
           + `${fmt(capValue / tValue)} take its target (${fmt(tValue)}) past it. The pool is capped there, `
           + 'so the top of the range is a plateau: those factors all run the same plan.');
       }
@@ -333,13 +337,23 @@ export function targetVocabularyProblems(authored, targetRows) {
       const floorMode  = modeOf(pool.floor, 'AMOUNT');
       if (floorValue != null && floorValue > 0 && floorMode === tMode && tValue * lo < floorValue) {
         push(POOL_AXIS_PROBLEM_KIND.CONFOUNDED, pool.id, where,
-          `Pool '${pool.id}'${inShape} has a floor of ${fmt(floorValue)}, and factors below `
+          `Pool '${pool.id}' has a floor of ${fmt(floorValue)}, and factors below `
           + `${fmt(floorValue / tValue)} take its target (${fmt(tValue)}) under it. The floor is not scaled, `
           + 'so the pool then refills to less than it refuses to release.');
       }
     }
   }
-  return out;
+  const whereOf = (shapes) => {
+    const named = shapes.map(s => (s == null ? 'the base graph' : `shape '${s}'`));
+    return named.length === 1 && shapes[0] == null ? '' : ` (in ${named.join(', ')})`;
+  };
+  return [...grouped.values()].map(g => ({
+    param: 'liquidityGraph', index: null, field: null, pool: g.pool,
+    // The first graph that carries it, for a renderer that localizes by shape.
+    shape: g.shapes[0] ?? null,
+    severity: PROBLEM_SEVERITY.WARN, kind: g.kind,
+    message: g.message.replace(/^(Pool '[^']+')/, `$1${whereOf(g.shapes)}`),
+  }));
 }
 
 /** Push a row — the same shape `row()` builds, for the checks that run after it is out of scope. */

@@ -510,3 +510,19 @@ test('authoring: a bad target row is an ERROR against liquidityTargetSchedule, w
   assert.deepEqual(blockingProblems(collectAuthoredGraphProblems(
     paramsOf({ liquidityTargetSchedule: [{ year: 2030, pool: 'cash', scale: 2 }] }), ACCOUNTS)), []);
 });
+
+test('DPT-14c: a solver\'s continuous factor reads at two decimals; equal sizes across shapes read once', () => {
+  const same = { liquidityGraph: BASE, liquidityShapes: { late: { pools: [BASE.pools[0]] } } };
+  assert.equal(describeScaledTarget(same, 'cash', 1.25493289449), 'cash 2.51y (×1.25)');
+  const pct = { liquidityGraph: { pools: [{ id: 'p', target: { mode: 'PERCENT', value: 0.3 } }] } };
+  assert.equal(describeScaledTarget(pct, 'p', 1.2346), 'p 37.04% (×1.23)');
+});
+
+test('DPT-12d: the same warning in several graphs is ONE row naming each of them', () => {
+  const g = { pools: [{ id: 'cash', target: yrs(2), capacity: { mode: 'YEARS_OF_SPEND', value: 3 } }] };
+  const rows = targetVocabularyProblems({ liquidityGraph: g, liquidityShapes: { a: g, b: g } }, null);
+  assert.equal(rows.length, 1);
+  assert.match(rows[0].message, /^Pool 'cash' \(in the base graph, shape 'a', shape 'b'\) has a YEARS_OF_SPEND capacity/);
+  // Base graph alone reads exactly as before — no parenthetical.
+  assert.match(targetVocabularyProblems({ liquidityGraph: g }, null)[0].message, /^Pool 'cash' has a/);
+});
