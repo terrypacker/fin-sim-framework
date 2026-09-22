@@ -887,3 +887,32 @@ test('_renderParamsList: EnumMulti reads a bare string value as one selection', 
   const boxes = [...document.querySelectorAll('#paramsList .enum-multi-option input')];
   assert.deepStrictEqual(boxes.map(b => b.checked), [false, true, false]);
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Recorded MPC runs — a param stays DATA after its editor is built
+// ═════════════════════════════════════════════════════════════════════════════
+
+test('MPC run params stay cloneable after rendering (MC workers structured-clone them)', () => {
+  // Regression: the MpcRunSelect editor used to be stored ON its param (`param._editor`), so
+  // every Monte Carlo run on a plan with an active recorded run failed in postMessage with
+  // `DataCloneError: HTMLDivElement object could not be cloned`.
+  const run = { source: { kind: 'cockpit' }, decisions: [{ date: '2030-12-31', lever: 'SPENDING', key: 'band@55', value: 9000 }] };
+  const scenario = { id: 'u:0', name: 'S', simStart: '2026-01-01', simEnd: '2041-01-01', initialState: {}, params: [
+    { name: 'mpcRuns', type: 'MpcRuns', value: { 'run:a': run } },
+    { name: 'mpcActiveRun', type: 'MpcRunSelect', value: 'run:a' },
+  ] };
+  const view = new ScenarioTabView();
+  view._renderParamsList(scenario);
+
+  // jsdom has no structuredClone; a DOM node anywhere in the params is exactly what it rejects.
+  const domIn = (v, depth = 0) => !!v && typeof v === 'object' && depth < 8
+    && (v instanceof Node || Object.values(v).some(x => domIn(x, depth + 1)));
+  assert.equal(domIn(scenario.params), false, 'no DOM node anywhere in the params');
+
+  // The sibling refresh still works without the field: deleting the playing (and only) run
+  // re-renders the select's note.
+  const note = () => document.querySelector('[data-id="mpcActiveRunNote"]').textContent;
+  assert.match(note(), /Playing 1 recorded decision/);
+  document.querySelector('[data-id="mpc-run-0"] .mix-block-head button').click();
+  assert.match(note(), /No recorded runs in this scenario/);
+});

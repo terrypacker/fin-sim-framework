@@ -23,6 +23,15 @@ import {
 /** Local plain-object test — the structured editors' own helper is not exported. */
 const isPlainObject_ = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 
+/**
+ * The live `MpcRunSelect` editor for a param object, so the sibling `MpcRuns` editor can refresh
+ * it. A WeakMap and NOT a field on the param: a param is DATA. It is structured-cloned into the
+ * Monte Carlo workers and serialized with the scenario, and a DOM element stored on it made every
+ * MC run on a plan with an active recorded run fail with `DataCloneError: HTMLDivElement object
+ * could not be cloned`. Keyed weakly, so a re-rendered panel's old editors are not retained.
+ */
+const _mpcRunSelectEditors = new WeakMap();
+
 export class ScenarioTabView {
   constructor() {
 
@@ -670,7 +679,7 @@ export class ScenarioTabView {
         // start saying "(not found)" when it was the one selected) without a full re-render.
         valueInput = buildMpcRunsEditor(param, () => {
           const sel = scenario.params.find(x => x.name === 'mpcActiveRun');
-          sel?._editor?.refresh?.();
+          (sel && _mpcRunSelectEditors.get(sel))?.refresh?.();
         });
       } else if (param.type === 'MpcRunSelect') {
         // Read the bag LIVE off the sibling param for the same reason the liquidity schedule
@@ -678,7 +687,7 @@ export class ScenarioTabView {
         // must still be offered here.
         valueInput = buildMpcRunSelect(param, () =>
           scenario.params.find(x => x.name === 'mpcRuns')?.value);
-        param._editor = valueInput;
+        _mpcRunSelectEditors.set(param, valueInput);
       } else if (param.type === 'DrawdownStrategyList') {
         valueInput = _buildDrawdownStrategyListEditor(
           param, () => this._maybeRerenderForController(param, scenario),
