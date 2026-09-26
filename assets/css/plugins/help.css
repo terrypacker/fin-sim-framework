@@ -158,3 +158,8 @@
 
 /* On a group header the button sits at the far right, away from the fold caret. */
 .param-help-btn--group { margin-left: auto; }
+
+/* On an MC / Optimize variable row it sits BESIDE the label, which ellipsizes and would
+   clip it; the row's own flex gap does the spacing. */
+.mc-var-label-row .param-help-btn,
+.opt-var-label-row .param-help-btn { flex: 0 0 auto; margin-left: 0; }

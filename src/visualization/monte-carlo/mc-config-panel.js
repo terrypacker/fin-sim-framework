@@ -38,11 +38,14 @@ import { formatAxisValue, formatDuration } from './mc-grid-format.js';
  *   onRunGrid(getGridConfig())      — fired by Run Grid in Grid mode (design 100 §7).
  *   onResolveScenarioCenters()      — must return Map(paramKey → current scenario
  *                                     value); used to re-sync untouched centers.
+ *   onOpenHelp(ref)                 — a variable row's `?`; a constructor option, because
+ *                                     the rows are built before a caller could assign it.
  */
 export class McConfigPanel extends BaseComponent {
-  constructor(containerEl) {
+  constructor(containerEl, { onOpenHelp = null } = {}) {
     super();
     this._container  = containerEl;
+    this.onOpenHelp  = onOpenHelp;
     this._rowMap     = new Map(); // paramKey → { enabledCb, typeSel, meanInp, stdDevInp, valueInp, minDateInp, maxDateInp }
     this._variables  = DEFAULT_MC_VARIABLE_CONFIGS; // current variable list
     this._iterEl     = null;

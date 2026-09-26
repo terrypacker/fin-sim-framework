@@ -41,8 +41,9 @@ export class MonteCarloPresenter {
    * @param {import('./monte-carlo-controller.js').MonteCarloController} opts.controller
    * @param {import('./monte-carlo-view.js').MonteCarloView}             opts.view
    * @param {object}                                                     opts.scenario
+   * @param {function}                                                   opts.onOpenHelp — a variable row's `?` → the Help panel
    */
-  constructor({ controller, view, scenario, appBus = null }) {
+  constructor({ controller, view, scenario, appBus = null, onOpenHelp = null }) {
     this._controller    = controller;
     this._view          = view;
     this._scenario      = scenario;
@@ -59,7 +60,7 @@ export class MonteCarloPresenter {
     this._msPerPath     = null;
     this._unsubSettings = null;
 
-    this._configPanel  = new McConfigPanel(view.configPane);
+    this._configPanel  = new McConfigPanel(view.configPane, { onOpenHelp });
     this._resultsPanel = new McResultsPanel(view.resultsPane);
     this._runsPanel    = new McRunsPanel(view.runsPane);
 

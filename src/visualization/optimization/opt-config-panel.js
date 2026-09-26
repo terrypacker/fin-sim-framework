@@ -31,11 +31,14 @@ import { SweepVariableTable }           from '../common/sweep-variable-table.js'
  *
  * Callbacks:
  *   onRun({ optimizationConfigs, objective, objectiveKey, candidateCount })
+ *   onOpenHelp(ref) — a variable row's `?`; a constructor option, because the rows are
+ *                     built before a caller could assign it.
  */
 export class OptConfigPanel extends BaseComponent {
-  constructor(containerEl) {
+  constructor(containerEl, { onOpenHelp = null } = {}) {
     super();
     this._container    = containerEl;
+    this.onOpenHelp    = onOpenHelp;
     this._rowMap       = new Map(); // paramKey → { enabledCb, rangeEl, minInp?, maxInp?, stepInp? }
     this._variables    = DEFAULT_OPTIMIZATION_CONFIGS; // current variable list
     this._objectiveSel = null;
@@ -327,7 +330,10 @@ export class OptConfigPanel extends BaseComponent {
     rangeRow.className = 'opt-var-range-row';
     if (!cfg.enabled) rangeRow.style.display = 'none';
 
-    let refs = { enabledCb: labelRow.querySelector('input[type="checkbox"]') };
+    let refs = {
+      enabledCb: labelRow.querySelector('input[type="checkbox"]'),
+      labelEl:   labelRow.querySelector('.opt-var-label'),
+    };
 
     if (cfg.type === OPT_PARAM_TYPES.ENUM) {
       // Read-only pills for enum values

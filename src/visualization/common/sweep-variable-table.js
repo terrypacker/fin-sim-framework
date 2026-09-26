@@ -8,6 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { decorateSweepRows } from '../help/sweep-row-help.js';
+
 /**
  * SweepVariableTable — the grouped variable list shared by the Monte Carlo and
  * Optimization config panels (design 98 W4): a live filter, collapsible groups and
@@ -36,7 +38,9 @@ export class SweepVariableTable {
    *                            handlers so they are released on destroy()
    * @param {HTMLElement} parentEl  where the filter box and the group list mount
    * @param {{ prefix: string, buildRow: (cfg: object) => { el: HTMLElement, refs: object } }} opts
-   *        `refs.enabledCb` must be the row's enable checkbox.
+   *        `refs.enabledCb` must be the row's enable checkbox; `refs.labelEl`, when
+   *        present, gets the row's help (its description as hover, and a `?` when the
+   *        owner has an `onOpenHelp`).
    */
   constructor(owner, parentEl, { prefix, buildRow }) {
     this._prefix   = prefix;
@@ -128,6 +132,8 @@ export class SweepVariableTable {
 
     this._apply();
     this._updateCounts();
+    // Not awaited: the help lands a tick later, when the index resolves.
+    decorateSweepRows(this._groups.flatMap(g => g.rows), { onOpenHelp: this._owner.onOpenHelp ?? null });
   }
 
   _matches(cfg) {

@@ -29,15 +29,16 @@ export class OptimizationPresenter {
    * @param {import('./optimization-controller.js').OptimizationController} opts.controller
    * @param {import('./optimization-view.js').OptimizationView}             opts.view
    * @param {object}                                                        opts.scenario
+   * @param {function}                                                      opts.onOpenHelp — a variable row's `?` → the Help panel
    */
-  constructor({ controller, view, scenario, appBus = null }) {
+  constructor({ controller, view, scenario, appBus = null, onOpenHelp = null }) {
     this._controller = controller;
     this._view       = view;
     this._scenario   = scenario;
     this._lastResult = null;
     this._unsubSettings = null;
 
-    this._configPanel  = new OptConfigPanel(view.configPane);
+    this._configPanel  = new OptConfigPanel(view.configPane, { onOpenHelp });
     this._resultsPanel = new OptResultsPanel(view.resultsPane);
     this._runsPanel    = new OptRunsPanel(view.runsPane);
 

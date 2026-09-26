@@ -285,14 +285,7 @@ export class WorkbenchApp extends BaseComponent {
     // The `?` beside a param label or group header → the Help panel (design 108 §8).
     // Wired here rather than in ScenarioTabPresenter because the presenter holds the
     // SERVICE bus, and this is a workbench-UI event; the view stays ignorant of both.
-    // Activate BEFORE publishing: the panel subscribes on its first mount, so a publish
-    // to a never-mounted Help tab would be delivered to nobody. Activating first also
-    // means the TAB_ACTIVATED it triggers (which the panel ignores for its own id)
-    // cannot land after the HELP_OPEN and overwrite it.
-    this._scenarioTabView.onOpenHelp = (ref) => {
-      this._wbShell.activatePlugin('help');
-      this._wbShell.runtime.bus.publish({ type: WB_EVENTS.HELP_OPEN, ...ref });
-    };
+    this._scenarioTabView.onOpenHelp = (ref) => this._openHelp(ref);
 
     // The toolbar's `? HELP` button, which until now was wired to nothing at all — it
     // has sat in the markup since before the workbench, pointing at the five-line
@@ -313,6 +306,20 @@ export class WorkbenchApp extends BaseComponent {
   }
 
   // ── Scenario lifecycle ────────────────────────────────────────────────────
+
+  /**
+   * Every `?` in the app → the Help panel: a param label, a group header, an edit-form
+   * field, an MC or Optimize variable row. `ref` is a HELP_OPEN payload.
+   *
+   * Activate BEFORE publishing: the panel subscribes on its first mount, so a publish to
+   * a never-mounted Help tab would be delivered to nobody. Activating first also means the
+   * TAB_ACTIVATED it triggers (which the panel ignores for its own id) cannot land after
+   * the HELP_OPEN and overwrite it.
+   */
+  _openHelp(ref) {
+    this._wbShell?.activatePlugin('help');
+    this._wbShell?.runtime.bus.publish({ type: WB_EVENTS.HELP_OPEN, ...ref });
+  }
 
   /**
    * The DOM host for a panel, from the runtime rather than from the document.
@@ -702,13 +709,7 @@ export class WorkbenchApp extends BaseComponent {
     const editorFactory = (node, container) => {
       const editor = buildEditor(node, container);
       decorateNodeFields(container, node?.kind, {
-        onOpenHelp: (ref) => {
-          // Activate BEFORE publishing, for the reason the param `?` does: the panel
-          // subscribes on its first mount, so a publish to a never-mounted Help tab would
-          // be delivered to nobody.
-          this._wbShell?.activatePlugin('help');
-          this._wbShell?.runtime.bus.publish({ type: WB_EVENTS.HELP_OPEN, ...ref });
-        },
+        onOpenHelp: (ref) => this._openHelp(ref),
       });
       return editor;
     };
@@ -980,6 +981,7 @@ export class WorkbenchApp extends BaseComponent {
       view:       new MonteCarloView({ hostFor: (id) => this._paneHost(id, { innerClass: '' }) }),
       scenario:   this.scenario,
       appBus:     this.appBus,
+      onOpenHelp: (ref) => this._openHelp(ref),
     });
     this.mcPresenter.onReplayRun = (run) => this._replayMcRun(run);
     this.mcPresenter.onClearReplaySeed = () => this.clearReplaySeed();
@@ -1039,6 +1041,7 @@ export class WorkbenchApp extends BaseComponent {
       view:       new OptimizationView({ hostFor: (id) => this._paneHost(id, { innerClass: '' }) }),
       scenario:   this.scenario,
       appBus:     this.appBus,
+      onOpenHelp: (ref) => this._openHelp(ref),
     });
     this.optPresenter.onApplyCandidate = (params) => this._applyOptCandidate(params);
 
