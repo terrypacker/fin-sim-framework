@@ -350,7 +350,7 @@ export function gateAxisLabel(row, field) {
  *
  * A hidden generated param is in neither `cfg.params` nor `paramSchemaDefaults`, so without
  * this a grid axis on a threshold has no plan value and no reference cell — the gap
- * `resolveBalanceCenters` and `resolvePoolTargetScaleCenters` fill for their own levers.
+ * `resolveRecordCenters` and `resolvePoolTargetScaleCenters` fill for their own levers.
  * Unlike the pool factor, the centre is the AUTHORED number rather than a fixed identity: a
  * threshold has no natural 1.0, and the plan value is whatever the clause says.
  */

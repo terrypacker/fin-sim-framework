@@ -49,6 +49,7 @@ import assert   from 'node:assert/strict';
 import { DEFAULT_MC_VARIABLE_CONFIGS, IntlRetirementMcConfig }
   from '../../src/finance/monte-carlo/intl-retirement-mc-config.js';
 import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
+import { resolveRecordCenters }   from '../../src/scenarios/scenario-param-apply.js';
 import { ServiceRegistry }        from '../../src/services/service-registry.js';
 import { ScenarioLoader }         from '../../src/scenarios/scenario-loader.js';
 import { paramSchemaDefaults, scenarioParamValues } from '../../src/finance/param-schema-utils.js';
@@ -145,14 +146,21 @@ function harvestedReferenceRows() {
     simStart: SPEC.simStart, simEnd: SPEC.simEnd }).buildSim();
   const cfg = buildGoldenCfg(SPEC);
   new ScenarioLoader().load(cfg, registry);
+  // Record centers too, layered as the runner and the presenter layer them: every record's
+  // balance / wage / sale-year row is harvested only where its center is in the base (the
+  // hidden balanceTarget is on the account record alone), and each one is offered, so each
+  // must be live.
   const base = { ...paramSchemaDefaults(IntlRetirementScenario.buildFullParamSchema()),
-    ...scenarioParamValues(cfg) };
+    ...resolveRecordCenters(cfg), ...scenarioParamValues(cfg) };
   return new IntlRetirementMcConfig().buildVariables(base, { cfg })
     .filter(v => v.harvested);
 }
 
 /** A perturbation large enough to be unmistakable, by sweep kind. */
 function nudged(v) {
+  // An unset row (a sale that does not happen) is live when SETTING it makes the event
+  // happen: a year inside the run.
+  if (v.unset) return SPEC.simStart.getUTCFullYear() + 3;
   switch (v.sweepKind) {
     case 'year':   return Math.round(v.mean) - 2;
     case 'rate':   return v.mean + 0.02;
@@ -164,6 +172,9 @@ function nudged(v) {
 test('MC-LIVE-4: every harvested MC row on the reference plan moves the end state', () => {
   const rows = harvestedReferenceRows();
   assert.ok(rows.length > 0, 'the reference plan should harvest some rows');
+  const balances = rows.filter(v => /^acct\.[^.]+\.balance(Target)?$/.test(v.paramKey));
+  assert.ok(balances.length >= 10, `every funded account offers a balance row, got ${balances.length}`);
+  assert.ok(rows.some(v => v.unset), 'a blank sale year is offered (and so gated) as an unset row');
   const base = endStateWith(null);
   const dead = [];
   for (const v of rows) {

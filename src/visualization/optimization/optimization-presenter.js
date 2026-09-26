@@ -138,7 +138,7 @@ export class OptimizationPresenter {
    * and to evaluate each variable's `visibleWhen`, so a stale snapshot silently drops
    * whole DIMENSIONS from the search rather than merely mis-labelling one.
    *
-   * Deliberately NO `resolveBalanceCenters()` here, unlike the MC presenter: MC writes
+   * Deliberately NO `resolveRecordCenters()` here, unlike the MC presenter: MC writes
    * a value for every variable each iteration and so must carry the true balance,
    * whereas Opt only writes the keys a candidate actually searches. Injecting balance
    * keys would push them through the `balanceTarget` alias cascade and rescale holdings

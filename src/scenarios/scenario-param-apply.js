@@ -11,6 +11,48 @@
 import { ScenarioLoader } from './scenario-loader.js';
 import { applyRealPropertySaleYearParams } from './intl-retirement-scenario.js';
 import { scenarioParamValues } from '../finance/param-schema-utils.js';
+import { ScenarioParamGenerator } from './params/scenario-param-generator.js';
+
+/**
+ * The record's own value for every generated per-record MC/Opt lever, keyed by its
+ * generated key (`acct.<sk>.balanceTarget`, `person.<id>.monthlyWage`,
+ * `prop.<sk>.plannedSaleYear`, …) — including an explicit `null` for a blank one.
+ *
+ * Layer it UNDER the cfg's own params, never over: a typed param the user edited since
+ * the last Rebuild is fresher than the record it will cascade onto. What it adds is the
+ * value where the params carry none:
+ *
+ *   - a holdings-bearing account's `balanceTarget`, which is hidden and never persisted,
+ *     so the record is its only source (design 55 §13);
+ *   - every record lever of an UNLOADED cfg (`buildDefaultConfig`, the MC runner's
+ *     fallback template), whose generated params do not exist until the loader runs.
+ *
+ * The harvest offers a row only where the base carries a center, so this is what makes
+ * one balance / wage / sale-year row appear per record, under that record's own id. It
+ * replaced `resolveBalanceCenters` and the legacy-keyed rows it fed, which named the
+ * reference plan's record ids only (design 98 W3.2 rule 1 amendment).
+ *
+ * A disabled row writes its center into every MC iteration; the record's own value is a
+ * no-op there (verified byte-identical, whole state and a seeded MC batch), and a `null`
+ * is skipped by `perturbParams` because the base already holds the key.
+ *
+ * @param {object} cfg  scenario config (records carry the values)
+ * @returns {Object<string, *>} generated key → the record's value (possibly null)
+ */
+export function resolveRecordCenters(cfg) {
+  if (!cfg) return {};
+  const centers = {};
+  for (const e of ScenarioParamGenerator.generate(cfg)) {
+    // `node`-less entries (pool / gate / shape axes) are not record fields; their centers
+    // come from `resolveLiquidityAxisCenters`.
+    if (!e?.node || !(e.mc || e.opt)) continue;
+    // A `sweepUnset` field an unloaded record simply omits is blank, as the loader will
+    // materialize it: carry the explicit null, so the unset row is offered there too.
+    const value = e.defaultValue === undefined && e.sweepUnset ? null : e.defaultValue;
+    if (value !== undefined) centers[e.key] = value;
+  }
+  return centers;
+}
 
 /**
  * The plan value of every legacy alias key, read from its generated successor.
@@ -19,7 +61,7 @@ import { scenarioParamValues } from '../finance/param-schema-utils.js';
  * renamed it), but some MC / Opt levers are still keyed on the legacy name
  * (`auHouseSaleYear`, `primaryMonthlyWage`, …). Without this a lever base has no value
  * for them: the MC row centres on its hardcoded default and a grid axis has no plan
- * value or reference cell. Merge it into a lever base alongside `resolveBalanceCenters`.
+ * value or reference cell. Merge it into a lever base alongside `resolveRecordCenters`.
  * A legacy key the cfg already carries is left alone.
  *
  * @param {object} cfg  scenario config

@@ -12,6 +12,7 @@ import { DISTRIBUTION_TYPES }       from '../../simulation-framework/distributio
 import { INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_ALIASES, IntlRetirementScenario }
   from '../../scenarios/intl-retirement-scenario.js';
 import { ScenarioParamGenerator }   from '../../scenarios/params/scenario-param-generator.js';
+import { isGeneratedParamKey }      from '../../scenarios/params/generated-param-keys.js';
 import { MARKET_GROWTH_PARAMS } from '../../scenarios/toolsets/economic-regimes-toolset.js';
 import { SHOCK_LIBRARY }            from '../economic-shocks/shock-library.js';
 import { get }                      from './mc-param-paths.js';
@@ -38,6 +39,9 @@ function schemaByKey() {
 function mcRowFor(kind, center, entry) {
   switch (kind) {
     case 'year':
+      // An UNSET year (a sale that does not happen) has nothing to sample around: the row
+      // carries its spread and no mean, and cannot run enabled until the user types one.
+      if (center === null) return { type: DISTRIBUTION_TYPES.NORMAL, stdDev: 1.5, integer: true };
       // A date-backed year writes a date, not Date.UTC(year, …), so its draw keeps the
       // fraction — rounding it would erase the sub-year position of §121's 730-day cliff.
       if (entry?.fractionalYear) return { type: DISTRIBUTION_TYPES.NORMAL, mean: center, stdDev: 1 };
@@ -202,129 +206,16 @@ export const DEFAULT_MC_VARIABLE_CONFIGS = [
     group: 'Transfer & Expenses',      enabled: false,
   },
 
-  // ── Wages (disabled by default) ───────────────────────────────────────────
-  {
-    paramKey: 'primaryMonthlyWage',    label: 'Primary Monthly Wage (USD)',
-    type: DISTRIBUTION_TYPES.NORMAL,   mean: D.primaryMonthlyWage, stdDev: 500,
-    group: 'People',                   enabled: false,
-  },
-  {
-    paramKey: 'spouseMonthlyWage',     label: 'Spouse Monthly Wage (USD)',
-    type: DISTRIBUTION_TYPES.NORMAL,   mean: D.spouseMonthlyWage, stdDev: 300,
-    group: 'People',                   enabled: false,
-  },
-
-  // ── Account balances (disabled by default — starting values are known) ────
-  // Every account bootstraps at least one holding at compile time, so its `balance` is
-  // DERIVED from Σ holdings and is not a plain param (design 55 §13). These levers keep
-  // their flat legacy keys — the names saved MC configs carry; they were first chosen
-  // because mc-param-paths `set()` dropped dotted generated keys, which design 98 W0
-  // fixed — and INTL_RETIREMENT_PARAM_ALIASES resolves each to the generated,
-  // hidden `acct.<stateKey>.balanceTarget`, whose loader cascade rescales that account's
-  // holdings to the sampled dollar total non-destructively. The sampled value is still an
-  // absolute balance in the account's native currency.
-  {
-    paramKey: 'initialUsSavings',      label: 'US Savings Initial Balance (USD)',
-    type: DISTRIBUTION_TYPES.CONSTANT, value: D.initialUsSavings,
-    group: 'US Account Balances',      enabled: false,
-  },
-  {
-    paramKey: 'rothBalance',           label: 'Roth IRA Balance (USD)',
-    type: DISTRIBUTION_TYPES.CONSTANT, value: D.rothBalance,
-    group: 'US Account Balances',      enabled: false,
-  },
-  {
-    paramKey: 'iraBalance',            label: 'Traditional IRA Balance (USD)',
-    type: DISTRIBUTION_TYPES.CONSTANT, value: D.iraBalance,
-    group: 'US Account Balances',      enabled: false,
-  },
-  {
-    paramKey: 'k401Balance',           label: '401(k) Balance (USD)',
-    type: DISTRIBUTION_TYPES.CONSTANT, value: D.k401Balance,
-    group: 'US Account Balances',      enabled: false,
-  },
-  {
-    paramKey: 'stockBalance',          label: 'US Stock Balance (USD)',
-    type: DISTRIBUTION_TYPES.CONSTANT, value: D.stockBalance,
-    group: 'US Account Balances',      enabled: false,
-  },
-  {
-    paramKey: 'fixedIncomeBalance',    label: 'Fixed Income Balance (USD)',
-    type: DISTRIBUTION_TYPES.CONSTANT, value: D.fixedIncomeBalance,
-    group: 'US Account Balances',      enabled: false,
-  },
-  {
-    paramKey: 'auSavingsBalance',      label: 'AU Savings Initial Balance (AUD)',
-    type: DISTRIBUTION_TYPES.CONSTANT, value: D.auSavingsBalance,
-    group: 'AU Account Balances',      enabled: false,
-  },
-  {
-    paramKey: 'superBalance',          label: 'Superannuation Balance (AUD)',
-    type: DISTRIBUTION_TYPES.CONSTANT, value: D.superBalance,
-    group: 'AU Account Balances',      enabled: false,
-  },
-  {
-    paramKey: 'auStockBalance',        label: 'AU Stock Balance (AUD)',
-    type: DISTRIBUTION_TYPES.CONSTANT, value: D.auStockBalance,
-    group: 'AU Account Balances',      enabled: false,
-  },
-  {
-    paramKey: 'spouseRothBalance',     label: 'Spouse Roth IRA Balance (USD)',
-    type: DISTRIBUTION_TYPES.CONSTANT, value: D.spouseRothBalance,
-    group: 'Spouse Account Balances',  enabled: false,
-  },
-  {
-    paramKey: 'spouseIraBalance',      label: 'Spouse Traditional IRA Balance (USD)',
-    type: DISTRIBUTION_TYPES.CONSTANT, value: D.spouseIraBalance,
-    group: 'Spouse Account Balances',  enabled: false,
-  },
-  {
-    paramKey: 'spouseK401Balance',     label: 'Spouse 401(k) Balance (USD)',
-    type: DISTRIBUTION_TYPES.CONSTANT, value: D.spouseK401Balance,
-    group: 'Spouse Account Balances',  enabled: false,
-  },
-  {
-    paramKey: 'spouseSuperBalance',    label: 'Spouse Superannuation Balance (AUD)',
-    type: DISTRIBUTION_TYPES.CONSTANT, value: D.spouseSuperBalance,
-    group: 'Spouse Account Balances',  enabled: false,
-  },
+  // ── Record levers: balances, wages, sale years ────────────────────────────
+  // Not listed here: every per-record lever comes from the harvest in buildVariables,
+  // keyed by the record's own generated param — `acct.<sk>.balance` / the hidden
+  // `acct.<sk>.balanceTarget` (design 55 §13), `person.<id>.monthlyWage`,
+  // `prop.<sk>.plannedSaleYear` — and centred on the record by `resolveRecordCenters`.
+  // The legacy rows that stood here (`rothBalance` …, `primaryMonthlyWage`,
+  // `usHouseSaleYear`) aliased to the REFERENCE plan's record ids, so on another plan some
+  // were inert and that plan's other records had no row. A blank sale year still gets an
+  // UNSET row (`sweepUnset`). `fromVariableConfigs` maps a saved legacy key.
 ];
-
-/**
- * Build MC variables for real property sale years.
- *
- * Only emits a variable when the param is non-null — a null sale year has no
- * meaningful distribution center, so there is nothing to perturb.
- * stdDev of 1.5 years covers realistic uncertainty about timing (roughly ±3 yr
- * at 2σ).  `integer: true` has perturbParams round each draw (design 98 W0b);
- * applyRealPropertySaleYearParams also rounds, for the headless/library path.
- */
-function buildRealPropertyMcConfigs(params) {
-  const vars = [];
-  if (params.usHouseSaleYear != null) {
-    vars.push({
-      paramKey: 'usHouseSaleYear', label: 'US House Sale Year',
-      type: DISTRIBUTION_TYPES.NORMAL,
-      mean:   params.usHouseSaleYear,
-      stdDev: 1.5,
-      integer: true,
-      group:  'Real Properties',
-      enabled: false,
-    });
-  }
-  if (params.auHouseSaleYear != null) {
-    vars.push({
-      paramKey: 'auHouseSaleYear', label: 'AU House Sale Year',
-      type: DISTRIBUTION_TYPES.NORMAL,
-      mean:   params.auHouseSaleYear,
-      stdDev: 1.5,
-      integer: true,
-      group:  'Real Properties',
-      enabled: false,
-    });
-  }
-  return vars;
-}
 
 /**
  * Build one set of MC variables per configured shock.
@@ -415,6 +306,9 @@ function buildMortalityMcConfigs(params) {
  *              paramKey isn't resolvable in the params passed to buildVariables().
  *              The silent-wrong-answer case: nothing ties it to what the sim runs.
  *   n/a      — no single numeric center (UNIFORM_DATE carries min/max instead).
+ *   unset    — the plan leaves it null because the event does not happen (a blank sale
+ *              year, `sweepUnset`). There is no center until the user types one, and an
+ *              enabled unset row with none cannot run (`variablesMissingCenter`).
  *
  * `schema` is never emitted by buildVariables — which sees one merged bag and cannot
  * tell the layers apart — only by refineCenterSource(), given those layers.
@@ -425,6 +319,7 @@ export const CENTER_SOURCES = {
   OVERRIDE: 'override',
   DEFAULT:  'default',
   NA:       'n/a',
+  UNSET:    'unset',
 };
 
 /**
@@ -476,12 +371,40 @@ function centerProvenance(resolved, scenarioValue, override) {
   const declared = overridden && override.centerDirty === false ? override.centerSource : null;
   const centerSource = declared                 ? declared
                      : overridden               ? CENTER_SOURCES.OVERRIDE
+                     : resolved.unset           ? CENTER_SOURCES.UNSET
                      : scenarioValue !== undefined ? CENTER_SOURCES.SCENARIO
                      :                               CENTER_SOURCES.DEFAULT;
   const centerDiverges =
     typeof center === 'number' && typeof scenarioValue === 'number'
       && Math.abs(center - scenarioValue) > 1e-9;
   return { centerSource, center, scenarioValue, centerDiverges };
+}
+
+/**
+ * The enabled variables that have nothing to sample around — an unset row (a blank sale
+ * year) the user switched on without typing a mean. Sampling one would draw from
+ * `N(undefined, σ)` and write NaN as the year, so the runner refuses it and the panel
+ * says which row before it gets that far.
+ *
+ * @param {Array<object>} variables  resolved variables (buildVariables output)
+ * @returns {Array<object>} the offending variables
+ */
+export function variablesMissingCenter(variables) {
+  const centerOf = v => v.type === DISTRIBUTION_TYPES.CONSTANT ? v.value
+    : (v.type === DISTRIBUTION_TYPES.NORMAL || v.type === DISTRIBUTION_TYPES.LOG_NORMAL) ? v.mean
+    : 0;   // the rest carry a range (min/max) or a table, not a center
+  return (variables ?? []).filter(v => v.enabled && !Number.isFinite(centerOf(v)));
+}
+
+/**
+ * A retired legacy row's generated successor (`rothBalance` → `acct.rothAccount.balanceTarget`,
+ * `usHouseSaleYear` → `prop.usHouseProperty.plannedSaleYear`), or undefined for any other
+ * key. No MC row is keyed by a legacy alias any more, so every one with a generated
+ * successor maps.
+ */
+function retiredLegacyKey(paramKey) {
+  const target = INTL_RETIREMENT_PARAM_ALIASES[paramKey];
+  return isGeneratedParamKey(target) ? target : undefined;
 }
 
 /**
@@ -497,7 +420,6 @@ export class IntlRetirementMcConfig {
   static contributors = [
     ()          => DEFAULT_MC_VARIABLE_CONFIGS,
     ({ params }) => buildShockMcConfigs(params),
-    ({ params }) => buildRealPropertyMcConfigs(params),
     // State Move Year (and the cross-border moveYear) now arrive through the schema
     // harvest in buildVariables — `mc: true`, a year kind, so `integer: true` and
     // emitted only when set (design 98 W3.7 retired buildStateMoveMcConfigs).
@@ -592,6 +514,11 @@ export class IntlRetirementMcConfig {
    * user's enabled/distribution settings after the fix:
    *   usInflationRate   → inflationRate
    *
+   * And a retired legacy record row to the generated key it aliased
+   * (`rothBalance` → `acct.rothAccount.balanceTarget`, `primaryMonthlyWage` →
+   * `person.primary.monthlyWage`). On a plan with no such record the setting finds no row
+   * and is dropped, which is what the legacy row did silently.
+   *
    * The retired equity axes (the per-wrapper growth rates, the per-account dividend
    * rates and their aliases — design 99 P2) need no entry: `applyOverride` only stores
    * settings for a paramKey, and a stored setting for a key no contributor emits is never
@@ -605,7 +532,7 @@ export class IntlRetirementMcConfig {
     };
     const config = new IntlRetirementMcConfig();
     for (const v of variableConfigs) {
-      const key = ALIASES[v.paramKey] ?? v.paramKey;
+      const key = ALIASES[v.paramKey] ?? retiredLegacyKey(v.paramKey) ?? v.paramKey;
       config.applyOverride(key, v);
     }
     return config;

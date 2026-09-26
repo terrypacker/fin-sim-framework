@@ -12,8 +12,8 @@ import { McConfigPanel }           from './mc-config-panel.js';
 import { McResultsPanel }          from './mc-results-panel.js';
 import { McRunsPanel }             from './mc-runs-panel.js';
 import { IntlRetirementMcConfig, refineCenterSource } from '../../finance/monte-carlo/intl-retirement-mc-config.js';
-import { resolveBalanceCenters, IntlRetirementScenario } from '../../scenarios/intl-retirement-scenario.js';
-import { resolveAliasCenters } from '../../scenarios/scenario-param-apply.js';
+import { IntlRetirementScenario } from '../../scenarios/intl-retirement-scenario.js';
+import { resolveAliasCenters, resolveRecordCenters } from '../../scenarios/scenario-param-apply.js';
 import { resolveLiquidityAxisCenters, parsePoolTargetScaleKey }
                               from '../../finance/pools/pool-target-scale.js';
 import { parseGateAxisKey }   from '../../finance/pools/pool-gate-axis.js';
@@ -183,8 +183,7 @@ export class MonteCarloPresenter {
    * The schema-defaults layer is added here and NOT in `_resolveBaseParams()` on
    * purpose. The runner layers it in weakest-first; `_resolveBaseParams()` is handed
    * to the runner as `baseParams`, its STRONGEST layer, so folding schema defaults
-   * into that would let a stale `stockBalance` default outrank the account's real
-   * balance. Here it only affects what the panel displays — which is exactly the
+   * into that would let a stale schema default outrank a value the cfg really carries. Here it only affects what the panel displays — which is exactly the
    * point, since the panel should show the value the sim will actually run at.
    */
   _resolveVariables() {
@@ -395,14 +394,13 @@ export class MonteCarloPresenter {
     const activeCfg = ServiceRegistry.getInstance()?.scenarioService?.getActive?.() ?? null;
     const instance  = this._scenario?.params;
     const snapshot  = (instance && !Array.isArray(instance)) ? instance : {};
-    // Balance MC levers key on legacy flat keys whose value lives on the account records
-    // (a holdings-bearing balance isn't a plain param), so resolve them from the cfg;
-    // they win over the params bag, which can hold a stale copy. Other legacy-keyed
-    // levers (the house sale years, the wages) take their generated successor's value.
+    // Every record lever's value on its record, UNDER the cfg's params (which are fresher):
+    // a hidden `balanceTarget` has no other source, and without a center the harvest offers
+    // no row. `resolveAliasCenters` keeps a legacy key in a saved or replayed bag in step.
     // Leg C's axes are hidden and generated (design 110 §6.2 / §6.3), so their plan value is
     // in neither store: a pool factor runs at 1.0 and a gate threshold at whatever the clause
     // says. Without them the grid panel shows an axis with no plan value and no reference cell.
-    return { ...snapshot, ...scenarioParamValues(activeCfg), ...resolveAliasCenters(activeCfg),
-             ...resolveBalanceCenters(activeCfg), ...resolveLiquidityAxisCenters(activeCfg) };
+    return { ...snapshot, ...resolveRecordCenters(activeCfg), ...scenarioParamValues(activeCfg),
+             ...resolveAliasCenters(activeCfg), ...resolveLiquidityAxisCenters(activeCfg) };
   }
 }

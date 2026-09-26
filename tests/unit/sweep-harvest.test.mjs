@@ -16,13 +16,15 @@
 import { test }  from 'node:test';
 import assert    from 'node:assert/strict';
 
-import { IntlRetirementMcConfig, CENTER_SOURCES }
+import { IntlRetirementMcConfig, CENTER_SOURCES, variablesMissingCenter }
   from '../../src/finance/monte-carlo/intl-retirement-mc-config.js';
 import { buildOptVariables }      from '../../src/finance/optimization/intl-retirement-opt-config.js';
 import { OPT_PARAM_TYPES }        from '../../src/finance/optimization/optimization-objectives.js';
 import { DISTRIBUTION_TYPES }     from '../../src/simulation-framework/distributions.js';
 import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
 import { ScenarioParamGenerator } from '../../src/scenarios/params/scenario-param-generator.js';
+import { resolveRecordCenters }   from '../../src/scenarios/scenario-param-apply.js';
+import { perturbParams }          from '../../src/finance/monte-carlo/parallel/mc-worker-core.js';
 import { paramSchemaDefaults, scenarioParamValues }
   from '../../src/finance/param-schema-utils.js';
 
@@ -59,22 +61,32 @@ test('W3-2: an absent or null value is not harvested — no synthesized centers'
 // field: design 99 P2 generates no per-account growth rate. That also settles design 98
 // §7 Q1 (null-centered per-account rows) — there are none left to center.
 
-test('W3-4: an alias-covered generated key does not appear twice', () => {
+test('W3-4: a quantity with a legacy alias appears once, under its generated key', () => {
   const { cfg, base } = reference();
   const vars = mcVars({ ...base, usHouseSaleYear: 2035,
     'prop.usHouseProperty.plannedSaleYear': 2035 }, { cfg });
-  assert.ok(byKey(vars, 'usHouseSaleYear'), 'the legacy row stays for saved configs');
-  assert.equal(byKey(vars, 'prop.usHouseProperty.plannedSaleYear'), undefined);
+  // The legacy row is retired (design 98 W3.2 amendment); fromVariableConfigs maps a saved one.
+  assert.equal(byKey(vars, 'usHouseSaleYear'), undefined);
+  assert.equal(vars.filter(v => v.paramKey === 'prop.usHouseProperty.plannedSaleYear').length, 1);
 });
 
-test('W3-5: hidden entries never appear', () => {
+// W3-5 was "hidden entries never appear" — the rule design 98 W3.2 withdrew on 2026-09-26:
+// the curated legacy balance rows it protected named the reference plan's accounts only.
+test('W3-5: a hidden entry is harvested with a center, and never without one', () => {
   const { cfg, base } = reference();
   const generated = ScenarioParamGenerator.generate(cfg);
-  const hidden = new Set(generated.filter(e => e.hidden).map(e => e.key));
-  assert.ok(hidden.size > 0);
-  const withHidden = { ...base, ...Object.fromEntries(generated.map(e => [e.key, e.defaultValue])) };
-  const leaked = mcVars(withHidden, { cfg }).filter(v => v.harvested && hidden.has(v.paramKey));
-  assert.deepEqual(leaked.map(v => v.paramKey), []);
+  const hidden = generated.filter(e => e.hidden && e.mc && e.defaultValue);
+  assert.ok(hidden.length > 0, 'the reference plan has holdings-bearing accounts');
+
+  // Without its center in the base (the loaded cfg's own params never carry it)…
+  const none = mcVars(base, { cfg }).filter(v => hidden.some(e => e.key === v.paramKey));
+  assert.deepEqual(none.map(v => v.paramKey), [], 'no synthesized center (rule 3)');
+
+  // …and with it: every one, once.
+  const withHidden = { ...base, ...Object.fromEntries(hidden.map(e => [e.key, e.defaultValue])) };
+  const rows = mcVars(withHidden, { cfg }).filter(v => hidden.some(e => e.key === v.paramKey));
+  assert.deepEqual(rows.map(v => v.paramKey).sort(), hidden.map(e => e.key).sort());
+  assert.ok(rows.every(v => v.harvested && !v.enabled));
 });
 
 test('W3-6: every harvested row on the reference plan is scenario-centred, never default', () => {
@@ -112,4 +124,87 @@ test('W3-8: Opt harvests rates as a ±0.02 range and Booleans as a two-value enu
   assert.deepEqual([reinvest.type, reinvest.values], [OPT_PARAM_TYPES.ENUM, [false, true]]);
   // opt: false entries (W2) are never harvested.
   assert.equal(byKey(buildOptVariables({ goldGrowthRate: 0.05 }), 'goldGrowthRate'), undefined);
+});
+
+// ── Unset years (design 98 W3.2 rule 3 amendment) ──────────────────────────────
+//
+// A sale year left blank means the sale does not happen. It is still offered — as an
+// UNSET row — because "and if we did sell, when?" is a question both engines can ask.
+
+/** A plan with one house that has no planned sale, and one that does. */
+function unsetPlan() {
+  const cfg = {
+    simStart: '2026-01-01T00:00:00.000Z', simEnd: '2060-01-01T00:00:00.000Z',
+    realProperties: [
+      { stateKey: 'cabin', name: 'Cabin', country: 'US', value: 400_000, plannedSaleYear: null },
+      { stateKey: 'flat',  name: 'Flat',  country: 'AU', value: 600_000, plannedSaleYear: 2035 },
+    ],
+  };
+  return { cfg, base: { ...resolveRecordCenters(cfg) } };
+}
+
+test('W3-8: a blank sale year is an UNSET MC row — disabled, no center, tagged', () => {
+  const { cfg, base } = unsetPlan();
+  const vars = mcVars(base, { cfg });
+  const cabin = byKey(vars, 'prop.cabin.plannedSaleYear');
+  assert.ok(cabin, 'the blank sale year is offered');
+  assert.equal(cabin.unset, true);
+  assert.equal(cabin.enabled, false);
+  assert.equal(cabin.mean, undefined, 'no synthesized center');
+  assert.equal(cabin.integer, true);
+  assert.equal(cabin.centerSource, CENTER_SOURCES.UNSET);
+  // The set one is an ordinary row.
+  const flat = byKey(vars, 'prop.flat.plannedSaleYear');
+  assert.equal(flat.unset, undefined);
+  assert.equal(flat.mean, 2035);
+});
+
+test('W3-9: an unset Opt row searches the plan window', () => {
+  const { cfg, base } = unsetPlan();
+  const cabin = byKey(buildOptVariables(base, null, { cfg }), 'prop.cabin.plannedSaleYear');
+  assert.deepEqual([cabin.unset, cabin.type, cabin.min, cabin.max, cabin.step],
+    [true, OPT_PARAM_TYPES.INTEGER, 2026, 2060, 1]);
+});
+
+test('W3-10: only a `sweepUnset` null is offered — a null meaning "use the default" is not', () => {
+  const { cfg, base } = unsetPlan();
+  const generated = ScenarioParamGenerator.generate(cfg);
+  assert.ok(generated.find(e => e.key === 'prop.cabin.plannedSaleYear').sweepUnset);
+  // A blank move-in date is a null year without the flag: still no row (design 83 G7).
+  const withBlankMoveIn = { ...base, 'prop.cabin.mainResidenceFromYear': null };
+  assert.equal(byKey(mcVars(withBlankMoveIn, { cfg }), 'prop.cabin.mainResidenceFromYear'), undefined);
+  // And the flag does not open the harvest to a key whose value is simply ABSENT.
+  const absent = { ...base };
+  delete absent['prop.cabin.plannedSaleYear'];
+  assert.equal(byKey(mcVars(absent, { cfg }), 'prop.cabin.plannedSaleYear'), undefined);
+});
+
+test('W3-11: a disabled unset row writes nothing; an enabled one without a mean is refused', () => {
+  const { cfg, base } = unsetPlan();
+  const cabin = byKey(mcVars(base, { cfg }), 'prop.cabin.plannedSaleYear');
+  // Base holds the null → untouched. Base without the key → still nothing written.
+  assert.strictEqual(perturbParams(base, 0, [cabin])['prop.cabin.plannedSaleYear'], null);
+  assert.ok(!('prop.cabin.plannedSaleYear' in perturbParams({}, 0, [cabin])));
+
+  assert.deepEqual(variablesMissingCenter([{ ...cabin, enabled: true }]).map(v => v.paramKey),
+    ['prop.cabin.plannedSaleYear']);
+  // With a typed mean it samples integer years around it.
+  const typed = { ...cabin, enabled: true, mean: 2040 };
+  assert.deepEqual(variablesMissingCenter([typed]), []);
+  const y = perturbParams(base, 0, [typed])['prop.cabin.plannedSaleYear'];
+  assert.ok(Number.isInteger(y) && Math.abs(y - 2040) < 10, `sampled ${y}`);
+});
+
+test('W3-12: a saved legacy wage / sale-year setting moves to the generated key it aliased', () => {
+  const cfg = IntlRetirementScenario.buildDefaultConfig({ usHouseSaleYear: 2035 });
+  const base = { ...resolveRecordCenters(cfg) };
+  const mc = IntlRetirementMcConfig.fromVariableConfigs([
+    { paramKey: 'usHouseSaleYear',    enabled: true, type: DISTRIBUTION_TYPES.NORMAL, mean: 2036, stdDev: 1 },
+    { paramKey: 'primaryMonthlyWage', enabled: true, type: DISTRIBUTION_TYPES.NORMAL, mean: 9000, stdDev: 100 },
+  ]);
+  const vars = mc.buildVariables(base, { cfg });
+  assert.equal(byKey(vars, 'prop.usHouseProperty.plannedSaleYear')?.mean, 2036);
+  assert.equal(byKey(vars, 'person.primary.monthlyWage')?.mean, 9000);
+  assert.equal(byKey(vars, 'usHouseSaleYear'), undefined);
+  assert.equal(byKey(vars, 'primaryMonthlyWage'), undefined);
 });

@@ -385,7 +385,7 @@ the MC panel does not offer:
 
 | Field | `mc` rows | Status today |
 |---|---|---|
-| `acct.*.balanceTarget` (hidden) | 14 | reached through the 13 legacy balance aliases |
+| `acct.*.balanceTarget` (hidden) | 14 | reached through the 13 legacy balance aliases (retired — see W3.2 rule 1 amendment) |
 | `acct.*.growthRate` | 12 | **not offered**; value is `null` unless the account is pinned |
 | `acct.*.dividendRate` | 4 | **not offered** |
 | `person.*.monthlyWage` | 2 | reached through `primaryMonthlyWage` / `spouseMonthlyWage` aliases |
@@ -649,7 +649,33 @@ entries are not enough — `_mergeParamSchema`'s `_toEntry` does not copy `mc`/`
 **W3.2 — which rows it emits.** A schema entry flagged for the engine becomes a row when
 all of these hold:
 
-1. it is not `hidden` (the balance levers stay on their curated alias rows);
+1. ~~it is not `hidden` (the balance levers stay on their curated alias rows);~~
+   **Amended 2026-09-26: rule withdrawn.** The 13 curated rows (`rothBalance`,
+   `stockBalance`, …) alias to the *reference plan's* account stateKeys. On a user plan
+   whose accounts use other stateKeys, a row whose target account does not exist is
+   offered but inert (verified: sampling it leaves the end state byte-identical), and
+   every account the aliases do not name has no balance row at all. The curated rows are
+   retired; each account's row is harvested from its own generated key —
+   `acct.<sk>.balanceTarget` (hidden, holdings-bearing) or `acct.<sk>.balance`
+   (holdings-free) — centred by `resolveBalanceCenters`, now keyed by those generated
+   keys for every account. `hidden` only keeps a param out of the editor and the
+   persisted `cfg.params`; it was never a statement about sweeping, and `balanceTarget`
+   is the only hidden flagged entry. Both balance templates declare `mc: 'amount'`,
+   because inference reads a Number with |center| ≤ 1 as a rate — a $0 account was
+   offered as a 0% rate; as an amount, a zero center gets no row (rule 3).
+   Disabled rows write the account's own balance each iteration, which the loader's
+   rescale leaves byte-identical (checked on the reference plan and a user plan, whole
+   end state and a seeded MC batch). A saved legacy key is mapped to its generated
+   successor in `fromVariableConfigs`.
+
+   The same day, the same reasoning retired the other legacy-keyed record rows: the two
+   wages (`primaryMonthlyWage` → `person.<id>.monthlyWage`) and the two house sale years
+   (`usHouseSaleYear` → `prop.<sk>.plannedSaleYear`, MC and Opt), and
+   `buildRealPropertyMcConfigs` with them. `resolveBalanceCenters` became
+   `resolveRecordCenters` (`scenario-param-apply.js`): every generated MC/Opt record
+   lever, centred on its record and layered UNDER the cfg's own params, which are fresher.
+   `fromVariableConfigs` maps any legacy alias with a generated successor. Seeded MC
+   batches on the reference plan and a user plan are byte-identical before and after.
 2. it is not already **covered** — covered = the overlay's keys **plus the alias targets
    of those keys** (`INTL_RETIREMENT_PARAM_ALIASES`). Without alias awareness,
    `person.primary.monthlyWage` and `prop.usHouseProperty.plannedSaleYear` would appear
@@ -661,6 +687,20 @@ all of these hold:
    run*; and a `null` `acct.*.growthRate` means "inherit the role rate", which has no
    center of its own. Precedent: `buildRealPropertyMcConfigs` already skips null sale
    years.
+
+   **Amended 2026-09-26: one declared exception.** A template field flagged `sweepUnset`
+   — today the property and collectible `plannedSaleYear` — whose value is an explicit
+   `null` means *the event does not happen*, and "and if it did, when?" is a question
+   both engines can ask. It is emitted as an **unset** row (`unset: true`), still with no
+   synthesized center: Opt searches the plan window (simStart year → simEnd year); MC
+   carries a spread and no mean (`centerSource: 'unset'`), and an enabled unset row with
+   no typed mean is refused — by the panel, naming the row, and by the runner
+   (`variablesMissingCenter`), since `N(undefined, σ)` would write NaN as the year. A
+   disabled one writes nothing (the base already holds the `null`; `perturbParams` also
+   no longer writes an `undefined` reference). A null that means "use the default"
+   (`lumpYear`, `fillCeiling`, `acct.*.growthRate`) is not flagged and still gets no
+   row, as does a blank move-in date (a deliberate G7 choice). An unloaded record that
+   omits a `sweepUnset` field counts as blank.
 
 Point 3 has a useful consequence for F5: an account's `growthRate` row appears exactly
 when the account is pinned — which is exactly when the role axis stops reaching it. The

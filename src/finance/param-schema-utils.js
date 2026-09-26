@@ -340,14 +340,28 @@ function _isScalarFor(kind, v) {
  * Harvest sweep rows from the param schema (design 98 W3): every entry flagged for
  * the engine that the overlay does not already offer becomes a DISABLED row.
  *
- * Emitted only when all hold:
- *   1. the entry is not `hidden` (compile-only balance levers keep their alias rows);
- *   2. it is not covered — covered = the overlay's keys plus their alias targets, so
+ * Emitted only when both hold:
+ *   1. it is not covered — covered = the overlay's keys plus their alias targets, so
  *      `prop.usHouseProperty.plannedSaleYear` does not double `usHouseSaleYear`;
- *   3. its value in `baseParams` is a non-null scalar of its kind. Never a
+ *   2. its value in `baseParams` is a non-null scalar of its kind. Never a
  *      synthesized center: perturbParams WRITES a disabled row's reference value
  *      when the key is absent from the base, and a null `acct.*.growthRate` means
  *      "inherit the role rate", which has no center of its own.
+ *
+ *      One exception, declared by the entry: a `sweepUnset` year whose value is an
+ *      explicit `null` — a sale year left blank, i.e. the event does not happen. It is
+ *      emitted as an UNSET row (`unset: true`, `rowFor(kind, null, entry)`), still with
+ *      no synthesized center: the engine decides what an unset row can be (Opt a range
+ *      over the plan window; MC nothing to sample until the user types a mean), and a
+ *      disabled one writes nothing, because the base already holds its `null`.
+ *
+ * A `hidden` entry is harvested like any other. `hidden` keeps a param out of the
+ * editor and out of the persisted `cfg.params`; it says nothing about sweeping. The one
+ * hidden flagged entry, the compile-only `acct.*.balanceTarget`, used to be skipped here
+ * in favour of 13 curated legacy rows (`rothBalance`, …) — which named the reference
+ * plan's accounts, so on any other plan some pointed at accounts that did not exist
+ * (inert) while the plan's own accounts had no balance row at all. Rule 2 still applies:
+ * it appears only where the base carries its center (`resolveRecordCenters`).
  *
  * The engine supplies the spread/range through `rowFor(kind, center, entry)`
  * (return null to skip a kind it cannot sweep). Identity (label, options,
@@ -368,12 +382,13 @@ export function harvestSweepVariables(entries, schema, baseParams, { flag, alias
   }
   const out = [];
   for (const s of schema) {
-    if (!s?.key || !s[flag] || s.hidden || covered.has(s.key)) continue;
+    if (!s?.key || !s[flag] || covered.has(s.key)) continue;
     const center = baseParams?.[s.key];
-    if (center == null) continue;
+    const unset  = center === null && s.sweepUnset === true;
+    if (center == null && !unset) continue;
     const kind = sweepKindOf(s, flag, center);
-    if (!kind || !_isScalarFor(kind, center)) continue;
-    const sweep = rowFor(kind, center, s);
+    if (unset ? kind !== 'year' : (!kind || !_isScalarFor(kind, center))) continue;
+    const sweep = rowFor(kind, unset ? null : center, s);
     if (!sweep) continue;
     covered.add(s.key);
     out.push({
@@ -386,6 +401,7 @@ export function harvestSweepVariables(entries, schema, baseParams, { flag, alias
       enabled:   false,
       harvested: true,
       sweepKind: kind,
+      ...(unset ? { unset: true } : {}),
     });
   }
   return out;

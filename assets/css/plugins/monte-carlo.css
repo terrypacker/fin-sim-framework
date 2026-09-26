@@ -652,6 +652,7 @@
 
 .mc-var-source--default { color: var(--warning); }
 .mc-var-source--user    { color: var(--purple); }
+.mc-var-source--unset   { color: var(--text-muted); font-style: italic; }
 
 /* ── Runs panel: replay pin ──
    A pinned replay seed changes what every subsequent Rebuild simulates, so it is

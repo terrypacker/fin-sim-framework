@@ -261,7 +261,8 @@ test('GEN-13: a holdings-bearing account swaps `balance` for a hidden `balanceTa
 
   // Holdings-free savings keeps its scalar balance param (mc:true), no balanceTarget.
   assert.ok(byKey.has('acct.usSavingsAccount.balance'), 'holdings-free account keeps scalar balance');
-  assert.strictEqual(byKey.get('acct.usSavingsAccount.balance').mc, true);
+  assert.strictEqual(byKey.get('acct.usSavingsAccount.balance').mc, 'amount',
+    'an MC lever swept as an AMOUNT — inference would read a $0 balance as a rate');
   assert.ok(!byKey.has('acct.usSavingsAccount.balanceTarget'), 'holdings-free account has no balanceTarget');
 
   // Holdings-bearing brokerage: no scalar balance, a hidden balanceTarget instead.
@@ -269,7 +270,7 @@ test('GEN-13: a holdings-bearing account swaps `balance` for a hidden `balanceTa
   const target = byKey.get('acct.usStockAccount.balanceTarget');
   assert.ok(target, 'holdings-bearing account emits balanceTarget');
   assert.strictEqual(target.hidden, true, 'balanceTarget is hidden (compile-only, not editor/persisted)');
-  assert.strictEqual(target.mc, true, 'balanceTarget is an MC lever');
+  assert.strictEqual(target.mc, 'amount', 'balanceTarget is an MC lever, swept as an amount');
   assert.strictEqual(target.opt, false);
   assert.strictEqual(target.defaultValue, 150000, 'balanceTarget seeds from the record balance');
   assert.deepStrictEqual(target.node, { type: 'account', stateKey: 'usStockAccount', field: 'balanceTarget' });

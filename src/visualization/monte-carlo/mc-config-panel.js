@@ -9,7 +9,7 @@
  */
 
 import { BaseComponent }              from '../components/base-component.js';
-import { DEFAULT_MC_VARIABLE_CONFIGS, CENTER_SOURCES } from '../../finance/monte-carlo/intl-retirement-mc-config.js';
+import { DEFAULT_MC_VARIABLE_CONFIGS, CENTER_SOURCES, variablesMissingCenter } from '../../finance/monte-carlo/intl-retirement-mc-config.js';
 import { DISTRIBUTION_TYPES }          from '../../simulation-framework/distributions.js';
 import { SweepVariableTable }          from '../common/sweep-variable-table.js';
 import { valuesForConfig }             from '../../finance/optimization/opt-values.js';
@@ -161,6 +161,19 @@ export class McConfigPanel extends BaseComponent {
   }
 
   /**
+   * The message for enabled rows with nothing to sample around, or null. Only an unset
+   * row (a blank sale year the user switched on) can get here — every other row has a
+   * center — and the runner would refuse it anyway; saying so here names the row.
+   */
+  _missingCenterError(variableConfigs) {
+    const missing = variablesMissingCenter(variableConfigs);
+    return missing.length
+      ? `Type a mean to sample around for: ${missing.map(v => v.label ?? v.paramKey).join(', ')}. `
+        + 'The plan leaves it unset, so there is no center of its own.'
+      : null;
+  }
+
+  /**
    * Render a row's center-provenance tag, BEFORE anything is run.
    *
    * Answering "is this variable centered on my plan?" only after a run is too late —
@@ -178,6 +191,7 @@ export class McConfigPanel extends BaseComponent {
       default:  'Centered on a framework default: neither the scenario nor the schema has a value here, so nothing ties this center to what the simulation runs.',
       user:     'You typed this center. It is used as-is and is not re-synced from the scenario.',
       'n/a':    'No single numeric center — this variable is sampled over a date range.',
+      unset:    'The plan leaves this unset — the event does not happen. To sample it, type a mean to center on, then enable it.',
     };
     el.textContent = source && source !== CENTER_SOURCES.SCENARIO ? source : '';
     el.title       = TITLES[source] ?? '';
@@ -233,14 +247,16 @@ export class McConfigPanel extends BaseComponent {
 
       if (type === DISTRIBUTION_TYPES.CONSTANT) {
         out.value  = parseFloat(row.valueInp.value);
-        if (!isFinite(out.value)) out.value = cfg.value ?? cfg.mean ?? 0;
+        // An unset row (a blank sale year) stays centerless rather than falling to 0 — a
+        // sale in year 0 — so the run check below can name it (variablesMissingCenter).
+        if (!isFinite(out.value)) out.value = cfg.unset ? undefined : cfg.value ?? cfg.mean ?? 0;
       } else if (type === DISTRIBUTION_TYPES.UNIFORM_DATE) {
         out.min = row.minDateInp.value || cfg.min || '';
         out.max = row.maxDateInp.value || cfg.max || '';
       } else {
         out.mean   = parseFloat(row.meanInp.value);
         out.stdDev = parseFloat(row.stdDevInp.value);
-        if (!isFinite(out.mean))   out.mean   = cfg.mean   ?? 0;
+        if (!isFinite(out.mean))   out.mean   = cfg.unset ? undefined : cfg.mean ?? 0;
         if (!isFinite(out.stdDev)) out.stdDev = cfg.stdDev ?? 0;
       }
       return out;
@@ -323,7 +339,10 @@ export class McConfigPanel extends BaseComponent {
       // Re-sync untouched centers from the live scenario FIRST, so what runs is
       // what the panel shows and both are the current plan (see syncScenarioCenters).
       this.syncScenarioCenters();
-      if (this.onRun) this.onRun(this.getConfig());
+      const config = this.getConfig();
+      const missing = this._missingCenterError(config.variableConfigs);
+      if (missing) { this.setStatus(missing); return; }
+      if (this.onRun) this.onRun(config);
     });
 
     this.listen(this._copyBtn, 'click', () => {
@@ -383,6 +402,10 @@ export class McConfigPanel extends BaseComponent {
       else if (count > MAX_AXIS_VALUES) error ??= `${label}: ${count} values; at most ${MAX_AXIS_VALUES} per axis.`;
       axes.push({ paramKey: axis.cfg.paramKey, label, values, count });
     }
+    // An axis row is taken out of sampling for the grid, so only the OTHER enabled rows
+    // need a center.
+    const axisKeys = new Set(axes.map(a => a.paramKey));
+    error ??= this._missingCenterError(variableConfigs.filter(v => !axisKeys.has(v.paramKey)));
     if (!this._gridAxis?.[0]?.cfg) error = 'Choose a lever for the rows.';
     else if (axes.length === 2 && axes[0].paramKey === axes[1].paramKey) {
       error ??= 'Rows and columns must be different levers.';

@@ -93,7 +93,10 @@ test('LRS-1 a legacy-keyed lever centres on its generated successor\'s plan valu
     if (!target || get(ctx.base, target) === undefined) continue;
     assert.notStrictEqual(get(ctx.base, v.paramKey), undefined, `${v.paramKey} has a plan value`);
   }
-  const wage = ctx.variables.find(v => v.paramKey === 'primaryMonthlyWage');
+  // The wage row is the person's own generated key now (design 98 W3.2 amendment), centred
+  // on the plan's wage — the legacy `primaryMonthlyWage` row is retired.
+  assert.equal(ctx.variables.find(v => v.paramKey === 'primaryMonthlyWage'), undefined);
+  const wage = ctx.variables.find(v => v.paramKey === 'person.primary.monthlyWage');
   assert.strictEqual(wage.mean, get(ctx.base, 'person.primary.monthlyWage'),
     'the wage variable centres on the plan\'s wage, not the hardcoded default');
 });
@@ -170,12 +173,12 @@ test('LRS-5 a house\'s value and sale year share one group, in the batch list an
   const cfg = loadedCfg();
   const { ctx } = new IntlRetirementMcRunner({ simEnd: SIM_END, cfgTemplate: cfg })._prepare({});
   const groupsIn = (rows) => Object.fromEntries(rows
-    .filter(v => ['prop.auHouseProperty.value', 'auHouseSaleYear'].includes(v.paramKey))
+    .filter(v => ['prop.auHouseProperty.value', 'prop.auHouseProperty.plannedSaleYear'].includes(v.paramKey))
     .map(v => [v.paramKey, v.group]));
   for (const [mode, rows] of [['batch', ctx.variables], ['grid', buildGridAxes(ctx.base, null, { cfg })]]) {
     const g = groupsIn(rows);
     assert.ok(g['prop.auHouseProperty.value'], `${mode}: the house value is offered`);
-    assert.strictEqual(g.auHouseSaleYear, g['prop.auHouseProperty.value'],
+    assert.strictEqual(g['prop.auHouseProperty.plannedSaleYear'], g['prop.auHouseProperty.value'],
       `${mode}: the sale year sits in the house's own group`);
   }
 });

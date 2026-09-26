@@ -9,11 +9,11 @@
  */
 
 import { ScenarioRunner }             from '../../simulation-framework/scenario.js';
-import { IntlRetirementScenario, resolveBalanceCenters } from '../../scenarios/intl-retirement-scenario.js';
+import { IntlRetirementScenario } from '../../scenarios/intl-retirement-scenario.js';
 import { ScenarioSerializer }         from '../../scenarios/scenario-serializer.js';
-import { resolveAliasCenters }        from '../../scenarios/scenario-param-apply.js';
+import { resolveAliasCenters, resolveRecordCenters } from '../../scenarios/scenario-param-apply.js';
 import { resolveLiquidityAxisCenters } from '../pools/pool-target-scale.js';
-import { IntlRetirementMcConfig, CENTER_SOURCES, refineCenterSource } from './intl-retirement-mc-config.js';
+import { IntlRetirementMcConfig, CENTER_SOURCES, refineCenterSource, variablesMissingCenter } from './intl-retirement-mc-config.js';
 import { scenarioParamValues, paramSchemaDefaults } from '../param-schema-utils.js';
 import { buildIterationRunner, perturbParams, samplingSignature, mcEquityModel, mcInflationModel, mcPrimeModel } from './parallel/mc-worker-core.js';
 import { McWorkerPool }              from './parallel/mc-worker-pool.js';
@@ -214,13 +214,13 @@ export class IntlRetirementMcRunner {
     //
     //   1. schema defaults  — what ScenarioLoader materializes for keys the cfg
     //                         doesn't carry, i.e. what the sim will actually run at.
-    //   2. template params  — the loaded scenario's own values.
-    //   3. balance centers  — a holdings-bearing account's balance is derived from
-    //                         its holdings, not a plain param, so the account record
-    //                         beats the params bag (design 55 §13).
+    //   2. record centers   — each record lever's value on its record, under its generated
+    //                         key: the only source for a hidden `balanceTarget` and for
+    //                         every record lever of an unloaded template.
+    //   3. template params  — the loaded scenario's own values; fresher than a record.
     //   4. baseParams       — an explicit caller override wins over all of them.
     const schemaDefaults = paramSchemaDefaults(IntlRetirementScenario.buildFullParamSchema());
-    const balanceCenters = resolveBalanceCenters(cfgTemplate);
+    const recordCenters  = resolveRecordCenters(rawTemplate);
     // Legacy-keyed levers (`auHouseSaleYear`, the wages) centre on their generated
     // successor's value — a loaded cfg carries only that one.
     const aliasCenters   = resolveAliasCenters(rawTemplate);
@@ -229,11 +229,17 @@ export class IntlRetirementMcRunner {
     // their plan value. Without it a grid on one has no reference cell and a disabled row has
     // no centre (design 110 §6.2 / §6.3).
     const poolCenters    = resolveLiquidityAxisCenters(rawTemplate);
-    const base = { ...schemaDefaults, ...templateParams, ...aliasCenters, ...balanceCenters,
+    const base = { ...schemaDefaults, ...recordCenters, ...templateParams, ...aliasCenters,
                    ...poolCenters, ...baseParams, endDate: simEnd };
     // Harvest from the raw template: its records carry the generated per-record params
     // (design 98 W3). Once, here on the main thread — workers get resolved `variables`.
     const variables  = this.mcConfig.buildVariables(base, { cfg: rawTemplate });
+    const centerless = variablesMissingCenter(variables);
+    if (centerless.length) {
+      throw new Error('Monte Carlo cannot sample an enabled variable with no center: '
+        + centerless.map(v => v.label ?? v.paramKey).join(', ')
+        + '. The plan leaves it unset — type a mean to sample around, or disable it.');
+    }
     const provenance = summarizeProvenance(variables, { ownParams: templateParams, schemaDefaults });
 
     return {

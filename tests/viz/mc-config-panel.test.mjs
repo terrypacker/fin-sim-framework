@@ -323,3 +323,50 @@ describe('McConfigPanel — pool axis hygiene', () => {
     panel.destroy();
   });
 });
+
+// ── Unset rows: a blank sale year (design 98 W3.2 rule 3 amendment) ─────────────
+describe('McConfigPanel — an unset row', () => {
+  const UNSET = {
+    paramKey: 'prop.cabin.plannedSaleYear', label: 'Cabin — Planned Sale Year', group: 'US · Cabin',
+    type: DISTRIBUTION_TYPES.NORMAL, stdDev: 1.5, integer: true,
+    enabled: false, unset: true, harvested: true, centerSource: 'unset',
+  };
+  const row = (panel) => panel._rowMap.get(UNSET.paramKey);
+
+  test('shows no center and says it is unset', () => {
+    const { panel } = makePanel();
+    panel.setVariables([UNSET]);
+    expect(row(panel).meanInp.value).toBe('');
+    expect(row(panel).sourceEl.textContent).toBe('unset');
+    expect(row(panel).sourceEl.title).toMatch(/does not happen/);
+    panel.destroy();
+  });
+
+  test('stays centerless in getConfig rather than falling to year 0', () => {
+    const { panel } = makePanel();
+    panel.setVariables([UNSET]);
+    const cfg = panel.getConfig().variableConfigs.find(v => v.paramKey === UNSET.paramKey);
+    expect(cfg.mean).toBeUndefined();
+    panel.destroy();
+  });
+
+  test('Run refuses it enabled without a mean, naming the row; a typed mean runs', () => {
+    const { container, panel } = makePanel();
+    const runs = [];
+    panel.onRun = (config) => runs.push(config);
+    panel.setVariables([UNSET]);
+    row(panel).enabledCb.checked = true;
+
+    container.querySelector('.mc-batch-run').click();
+    expect(runs).toHaveLength(0);
+    expect(container.querySelector('.mc-status-el').textContent).toMatch(/Cabin — Planned Sale Year/);
+
+    row(panel).meanInp.value = '2040';
+    row(panel).meanInp.dispatchEvent(new Event('input'));
+    container.querySelector('.mc-batch-run').click();
+    expect(runs).toHaveLength(1);
+    const sent = runs[0].variableConfigs.find(v => v.paramKey === UNSET.paramKey);
+    expect([sent.enabled, sent.mean, sent.centerDirty]).toEqual([true, 2040, true]);
+    panel.destroy();
+  });
+});

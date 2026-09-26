@@ -769,33 +769,6 @@ export const INTL_RETIREMENT_PARAM_ALIASES = Object.freeze({
 });
 
 /**
- * Design 55 §13: resolve the live scenario value that each balance MC/Opt lever should
- * center on, keyed by the lever's legacy flat key (`stockBalance`, `rothBalance`, …).
- *
- * A holdings-bearing account's balance is derived from Σ holdings and is not a plain
- * param, so it can't be read from the flat `cfg.parameters` map the way a rate can. This
- * inverts the balance aliases (legacy key → `acct.<stateKey>.balanceTarget`) and reads the
- * matching account record's balance from the config. The result is merged into the MC
- * params snapshot so that (a) the panel presets and Copy-from-Scenario show the real
- * balance, and (b) a *disabled* balance lever no longer falls back to a hardcoded default
- * that would rescale the account's holdings when the runner writes it.
- *
- * @param {object} cfg - a serialized scenario config (needs cfg.accounts with balances)
- * @returns {Object<string, number>} legacy balance key → live account balance
- */
-export function resolveBalanceCenters(cfg) {
-  const centers = {};
-  const accounts = Array.isArray(cfg?.accounts) ? cfg.accounts : [];
-  for (const [legacy, target] of Object.entries(INTL_RETIREMENT_PARAM_ALIASES)) {
-    const m = target ? /^acct\.(.+)\.balanceTarget$/.exec(target) : null;
-    if (!m) continue;
-    const acct = accounts.find(a => a?.stateKey === m[1]);
-    if (acct && acct.balance != null) centers[legacy] = acct.balance;
-  }
-  return centers;
-}
-
-/**
  * IntlRetirementScenario — International two-person retirement simulation.
  *
  * Two people (primary + spouse), US→AU migration on Jul 1 of moveYear.

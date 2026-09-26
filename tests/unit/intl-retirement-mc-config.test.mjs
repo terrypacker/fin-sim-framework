@@ -16,7 +16,8 @@ import {
   DEFAULT_MC_VARIABLE_CONFIGS,
 } from '../../src/finance/monte-carlo/intl-retirement-mc-config.js';
 import { DISTRIBUTION_TYPES } from '../../src/simulation-framework/distributions.js';
-import { INTL_RETIREMENT_DEFAULTS, resolveBalanceCenters } from '../../src/scenarios/intl-retirement-scenario.js';
+import { INTL_RETIREMENT_DEFAULTS } from '../../src/scenarios/intl-retirement-scenario.js';
+import { resolveRecordCenters }     from '../../src/scenarios/scenario-param-apply.js';
 
 const D = INTL_RETIREMENT_DEFAULTS;
 
@@ -143,26 +144,47 @@ test('buildVariables: 2-shock scenario emits 4 shock rows', () => {
   assert.ok(keys.includes('shocks[1].startDate'));
 });
 
-// ── resolveBalanceCenters ──────────────────────────────────────────────────────
+// ── resolveRecordCenters ──────────────────────────────────────────────────────
 
-test('resolveBalanceCenters: maps legacy balance keys to live account balances', () => {
-  const cfg = { accounts: [
-    { stateKey: 'usStockAccount', balance: 600_000 },
-    { stateKey: 'rothAccount',    balance: 90_000  },
-    { stateKey: 'usSavingsAccount', balance: 12_000 },
-  ] };
-  const centers = resolveBalanceCenters(cfg);
-  assert.strictEqual(centers.stockBalance,     600_000, 'stockBalance ← usStockAccount');
-  assert.strictEqual(centers.rothBalance,      90_000,  'rothBalance ← rothAccount');
-  assert.strictEqual(centers.initialUsSavings, 12_000,  'initialUsSavings ← usSavingsAccount');
-  // Accounts absent from the cfg produce no center (rather than a bogus 0).
-  assert.ok(!('iraBalance' in centers), 'missing account → no center key');
+/**
+ * Accounts under stateKeys the reference plan does not use — the case the 13 legacy
+ * balance rows got wrong. A holdings-bearing account, a holdings-free one, and an empty one.
+ */
+const OWN_ACCOUNTS_CFG = { accounts: [
+  { stateKey: 'myBrokerage', name: 'My Brokerage', type: 'brokerage', country: 'US',
+    balance: 600_000, holdings: [{ marketValue: 600_000 }] },
+  { stateKey: 'myCash', name: 'My Cash', type: 'savings', country: 'US', balance: 12_000 },
+  { stateKey: 'emptyIra', name: 'Empty IRA', type: 'ira', country: 'US',
+    balance: 0, holdings: [{ marketValue: 0 }] },
+] };
+
+test('resolveRecordCenters: every account balance, under the generated key its lever uses', () => {
+  const centers = resolveRecordCenters(OWN_ACCOUNTS_CFG);
+  const balances = Object.fromEntries(Object.entries(centers)
+    .filter(([k]) => /\.balance(Target)?$/.test(k)));
+  assert.deepStrictEqual(balances, {
+    'acct.myBrokerage.balanceTarget': 600_000,   // holdings-bearing → the hidden lever
+    'acct.myCash.balance':            12_000,    // holdings-free → the plain param
+    'acct.emptyIra.balanceTarget':    0,
+  });
+  // No legacy flat keys: they named the reference plan's accounts, not this plan's.
+  assert.ok(!('stockBalance' in centers) && !('rothBalance' in centers));
 });
 
-test('resolveBalanceCenters: tolerates a missing/empty cfg', () => {
-  assert.deepStrictEqual(resolveBalanceCenters(null), {});
-  assert.deepStrictEqual(resolveBalanceCenters({}), {});
-  assert.deepStrictEqual(resolveBalanceCenters({ accounts: [] }), {});
+test('resolveRecordCenters: a person\'s wage and a blank sale year, from the records', () => {
+  const centers = resolveRecordCenters({
+    persons: [{ id: 'alex', name: 'Alex', monthlyWage: 9_000 }],
+    realProperties: [{ stateKey: 'cabin', name: 'Cabin', country: 'US', plannedSaleYear: null }],
+  });
+  assert.strictEqual(centers['person.alex.monthlyWage'], 9_000);
+  assert.ok('prop.cabin.plannedSaleYear' in centers, 'a blank sale year is carried …');
+  assert.strictEqual(centers['prop.cabin.plannedSaleYear'], null, '… as an explicit null');
+});
+
+test('resolveRecordCenters: tolerates a missing/empty cfg', () => {
+  assert.deepStrictEqual(resolveRecordCenters(null), {});
+  assert.deepStrictEqual(resolveRecordCenters({}), {});
+  assert.deepStrictEqual(resolveRecordCenters({ accounts: [] }), {});
 });
 
 // ── buildVariables: resolveDefault ────────────────────────────────────────────
@@ -177,18 +199,39 @@ test('buildVariables: defaultValue is set to the scenario param value', () => {
 
 test('buildVariables: presets mean/value from the live scenario value (config wins over hardcoded default)', () => {
   const cfg  = new IntlRetirementMcConfig();
-  // A config whose stock balance and growth rate differ from the template defaults.
-  const vars = cfg.buildVariables({
-    ...FLAT_PARAMS, shocks: [],
-    stockBalance: 600_000,        // holdings-bearing balance, resolved from account records
-    usEquityGrowthRate: 0.09,     // the market total from the config
-  });
-  const bal = vars.find(v => v.paramKey === 'stockBalance');
-  assert.strictEqual(bal.value, 600_000, 'CONSTANT balance lever presets its value from config');
-  assert.strictEqual(bal.mean,  600_000, 'balance lever mean also tracks config');
-
+  const vars = cfg.buildVariables({ ...FLAT_PARAMS, shocks: [], usEquityGrowthRate: 0.09 });
   const gr = vars.find(v => v.paramKey === 'usEquityGrowthRate');
   assert.strictEqual(gr.mean, 0.09, 'rate lever mean presets from the config value, not D default');
+});
+
+// ── Account balance rows: one per account on the plan, from the harvest ──────
+
+test('buildVariables: every account with a balance gets ONE balance row, keyed by its own generated param', () => {
+  const vars = new IntlRetirementMcConfig().buildVariables(
+    { ...FLAT_PARAMS, shocks: [], ...resolveRecordCenters(OWN_ACCOUNTS_CFG) },
+    { cfg: OWN_ACCOUNTS_CFG });
+  const bal = vars.filter(v => /^acct\.[^.]+\.(balance|balanceTarget)$/.test(v.paramKey));
+
+  assert.deepStrictEqual(bal.map(v => v.paramKey).sort(),
+    ['acct.myBrokerage.balanceTarget', 'acct.myCash.balance'],
+    'the hidden balanceTarget is harvested, the plain balance too — and nothing for $0');
+  const brk = bal.find(v => v.paramKey === 'acct.myBrokerage.balanceTarget');
+  assert.strictEqual(brk.mean, 600_000, 'centred on the account record');
+  assert.strictEqual(brk.enabled, false);
+  assert.strictEqual(brk.centerSource, 'scenario');
+  assert.strictEqual(brk.sweepKind, 'amount',
+    'an amount, not a rate — a $0 center would otherwise be read as a 0% rate');
+});
+
+test('buildVariables: the 13 legacy balance rows are retired', () => {
+  const keys = new IntlRetirementMcConfig()
+    .buildVariables({ ...FLAT_PARAMS, shocks: [] }, { cfg: OWN_ACCOUNTS_CFG })
+    .map(v => v.paramKey);
+  for (const k of ['initialUsSavings', 'rothBalance', 'iraBalance', 'k401Balance', 'stockBalance',
+    'fixedIncomeBalance', 'auSavingsBalance', 'superBalance', 'auStockBalance',
+    'spouseRothBalance', 'spouseIraBalance', 'spouseK401Balance', 'spouseSuperBalance']) {
+    assert.ok(!keys.includes(k), `${k} retired`);
+  }
 });
 
 test('buildVariables: falls back to the hardcoded default when the param is absent from params', () => {
@@ -294,4 +337,16 @@ test('fromVariableConfigs: a saved setting for a retired equity axis simply disa
     'no contributor emits a retired axis, so its stored setting resolves to nothing');
   assert.ok(vars.find(v => v.paramKey === 'inflationRate')?.enabled,
     'saved usInflationRate setting migrated to inflationRate');
+});
+
+test('fromVariableConfigs: a saved legacy balance setting moves to the account it aliased', () => {
+  const cfg = { accounts: [{ stateKey: 'rothAccount', name: 'Roth IRA', type: 'roth', country: 'US',
+    balance: 90_000, holdings: [{ marketValue: 90_000 }] }] };
+  const mc   = IntlRetirementMcConfig.fromVariableConfigs([
+    { paramKey: 'rothBalance', enabled: true, type: 'normal', mean: 95_000, stdDev: 5_000 },
+  ]);
+  const roth = mc.buildVariables({ ...FLAT_PARAMS, shocks: [], ...resolveRecordCenters(cfg) }, { cfg })
+    .find(v => v.paramKey === 'acct.rothAccount.balanceTarget');
+  assert.ok(roth?.enabled, 'the saved setting follows rothBalance → acct.rothAccount.balanceTarget');
+  assert.strictEqual(roth.mean, 95_000);
 });

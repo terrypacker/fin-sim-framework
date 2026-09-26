@@ -31,6 +31,12 @@
  *                  display parity with the static params they replace; Phase 2 (§8)
  *                  flips this on alongside per-account rates.
  *     - nullable : field legitimately holds null (e.g. plannedSaleYear = "never")
+ *     - sweepUnset : null means the EVENT DOES NOT HAPPEN (a sale year left blank), so an
+ *                  unset value is still offered as a disabled MC/Opt row — sweeping it
+ *                  is the what-if "and if it did, when?". Opt searches a default range
+ *                  over the plan window; MC has no center until the user types one. Not
+ *                  for a null that means "use the default" (`lumpYear`, `fillCeiling`),
+ *                  which has no event to switch on (design 98 W3.2 rule 3 amendment).
  *
  * Phase 1 (design 55 §12) covered balances/basis, person wage/retirementDate, and
  * property value/appreciation/sale-year; Phase 2 added the per-account rates; Phase 3
@@ -52,8 +58,11 @@ const CONTRIBUTION_BASIS = {
     'taxable earnings.',
 };
 
-// Cash / investment balance — the field every account type exposes.
-const BALANCE = { field: 'balance', label: 'Balance', type: 'Number', mc: true, opt: false,
+// Cash / investment balance — the field every account type exposes. `mc: 'amount'`, not
+// `true`: inference reads a Number whose |center| ≤ 1 as a RATE, so a $0 account (an
+// uninherited bequest, an empty IRA) was offered as a 0% rate with a ±0.005 spread. As an
+// amount, a zero center has no multiplicative spread and gets no row at all.
+const BALANCE = { field: 'balance', label: 'Balance', type: 'Number', mc: 'amount', opt: false,
   description: 'Current total balance of this account.' };
 
 // Holdings-bearing balance MC/Opt lever (design 55 §13). A holdings-bearing account's
@@ -68,7 +77,7 @@ const BALANCE = { field: 'balance', label: 'Balance', type: 'Number', mc: true, 
 // as a stale value. The generator seeds its defaultValue from the record's balance.
 export const BALANCE_TARGET = {
   field: 'balanceTarget', label: 'Balance', type: 'Number',
-  mc: true, opt: false, hidden: true, deriveDefaultFrom: 'balance',
+  mc: 'amount', opt: false, hidden: true, deriveDefaultFrom: 'balance',   // amount: see BALANCE
 };
 
 // Cash floor (design 55 §7 / §13). The replenish threshold that drives
@@ -192,6 +201,7 @@ export const REAL_PROPERTY_PARAM_TEMPLATE = [
   { field: 'appreciationRate', label: 'Appreciation Rate', type: 'Number', mc: true, opt: false,
     description: 'Annual appreciation rate for this property, as a fraction (0.04 = 4%).' },
   { field: 'plannedSaleYear',  label: 'Planned Sale Year', type: 'Number', mc: true, opt: true, nullable: true,
+    sweepUnset: true,
     description: 'Calendar year this property is sold. Leave blank for no planned sale.' },
   // The move-in date (`mainResidenceFrom`, design 83 G7) as a sweepable FRACTIONAL year,
   // filed in Cross Border beside moveYear. Sweep it against the sale year: the AU
@@ -220,6 +230,7 @@ export const REAL_PROPERTY_PARAM_TEMPLATE = [
 // §14 — the bequest-specific `saleAsset.` template is retired in favor of this).
 export const COLLECTIBLE_PARAM_TEMPLATE    = [
   { field: 'plannedSaleYear',  label: 'Planned Sale Year', type: 'Number', mc: true, opt: true, nullable: true,
+    sweepUnset: true,
     description: 'Calendar year this collectible is sold (proceeds → cash). Leave blank for no planned sale.' },
 ];
 export const COMPANY_EQUITY_PARAM_TEMPLATE = [];

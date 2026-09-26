@@ -325,6 +325,7 @@ export class ScenarioParamGenerator {
         };
         if (t.hidden)  entry.hidden  = t.hidden;
         if (t.fractionalYear) entry.fractionalYear = true;
+        if (t.sweepUnset) entry.sweepUnset = true;
         if (t.options) entry.options = t.options;
         // Field-level description (design 55 §4) → the param's hover tooltip in the
         // Scenario panel. Without it the tooltip falls back to the generated key

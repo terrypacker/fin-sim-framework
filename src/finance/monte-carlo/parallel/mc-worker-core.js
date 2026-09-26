@@ -70,7 +70,9 @@ import { runsToRows }            from '../mc-analysis.js';
  *     ~half a year early (design 98 F10). Rounding here means r.params records
  *     the year the sim actually ran, and replay applies the same integer.
  *   - Disabled: if the path is absent from baseParams, fill the reference
- *     value (cfg.value ?? cfg.mean) so r.params is self-contained.
+ *     value (cfg.value ?? cfg.mean) so r.params is self-contained — when it has one.
+ *     An unset row (a blank sale year) has none, and writing `undefined` would put a
+ *     key in the bag that means nothing.
  */
 export function perturbParams(baseParams, i, variables) {
   const rng       = makeMcSeededRng(i + 1);
@@ -80,7 +82,7 @@ export function perturbParams(baseParams, i, variables) {
     if (cfg.enabled) {
       const sample = createDistribution(cfg).sample(rng);
       set(perturbed, cfg.paramKey, cfg.integer && typeof sample === 'number' ? Math.round(sample) : sample);
-    } else if (get(baseParams, cfg.paramKey) === undefined) {
+    } else if (get(baseParams, cfg.paramKey) === undefined && (cfg.value ?? cfg.mean) != null) {
       set(perturbed, cfg.paramKey, cfg.value ?? cfg.mean);
     }
   }

@@ -268,7 +268,7 @@ export function authoredPoolGraphs(cfg) {
  * A hidden generated param is deliberately absent from `cfg.params` and from
  * `paramSchemaDefaults` (both exclude `hidden`), so the lever base has no value for it and
  * a grid axis would have no plan value or reference cell. Merged into the base alongside
- * `resolveBalanceCenters` / `resolveAliasCenters` for exactly the same reason those exist.
+ * `resolveRecordCenters` / `resolveAliasCenters` for exactly the same reason those exist.
  *
  * @param {object} cfg  a scenario config (loaded or serialized)
  * @returns {Object<string, number>}

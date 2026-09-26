@@ -42,9 +42,16 @@ const _round6 = x => Math.round(x * 1e6) / 1e6;
  * Default Opt range for a harvested row, by sweep kind (design 98 W3.4). Every
  * harvested row ships disabled; these are starting ranges for the user to narrow.
  */
-function optRowFor(kind, center, entry) {
+function optRowFor(kind, center, entry, window = null) {
   switch (kind) {
     case 'year': {
+      // An UNSET year (a sale that does not happen, `sweepUnset`) has no center to range
+      // around, so it searches the plan window — every year the sale could land in. The
+      // window comes from the cfg, so without one there is no row.
+      if (center === null) {
+        return window ? { type: OPT_PARAM_TYPES.INTEGER, min: window.from, max: window.to, step: 1 }
+          : null;
+      }
       // A date-backed year (the move-in date) keeps its fraction: §121's 2-of-5 test is
       // a cliff at 730 days, which whole-year steps would stride straight over.
       if (entry?.fractionalYear) {
@@ -72,6 +79,16 @@ function optRowFor(kind, center, entry) {
     default:     // 'date': the optimizer has no date variable type
       return null;
   }
+}
+
+/**
+ * The calendar years a plan runs over, for an unset year's search range: the start year
+ * through the end year. Null without a cfg or its dates.
+ */
+function planWindow(cfg) {
+  const year = d => (d == null ? NaN : new Date(d).getUTCFullYear());
+  const from = year(cfg?.simStart), to = year(cfg?.simEnd);
+  return Number.isFinite(from) && Number.isFinite(to) && to >= from ? { from, to } : null;
 }
 
 const D = INTL_RETIREMENT_DEFAULTS;
@@ -197,22 +214,9 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
   },
 
   // ── Real Property sale timing ─────────────────────────────────────────────
-  {
-    paramKey: 'usHouseSaleYear',
-    label:    'US House Sale Year',
-    type:     OPT_PARAM_TYPES.INTEGER,
-    min: 2027, max: 2045, step: 1,
-    group:    'Real Properties',
-    enabled:  false,
-  },
-  {
-    paramKey: 'auHouseSaleYear',
-    label:    'AU House Sale Year',
-    type:     OPT_PARAM_TYPES.INTEGER,
-    min: 2030, max: 2045, step: 1,
-    group:    'Real Properties',
-    enabled:  false,
-  },
+  // Harvested per property, as `prop.<sk>.plannedSaleYear` — including a property with no
+  // planned sale, as an UNSET row searched over the plan window (`sweepUnset`). The two
+  // legacy rows (`usHouseSaleYear` / `auHouseSaleYear`) named the reference plan's houses.
 
   // ── Drawdown order (decision lever) ───────────────────────────────────────
   {
@@ -767,8 +771,10 @@ export function buildOptVariables(params, accounts = null, { cfg = null } = {}) 
     ...IntlRetirementScenario.buildFullParamSchema(),
     ...(cfg ? ScenarioParamGenerator.generate(cfg) : []),
   ];
+  const window = planWindow(cfg);
   list = [...list, ...harvestSweepVariables(list, schema, params,
-    { flag: 'opt', aliases: INTL_RETIREMENT_PARAM_ALIASES, rowFor: optRowFor })];
+    { flag: 'opt', aliases: INTL_RETIREMENT_PARAM_ALIASES,
+      rowFor: (kind, center, entry) => optRowFor(kind, center, entry, window) })];
   list = groupWithAliasSuccessor(list, schema, INTL_RETIREMENT_PARAM_ALIASES);
   // Build-time filter (design 58): when the caller supplies the scenario's accounts,
   // drop the Lever-B weight axes for roles no account backs. Those dimensions are
@@ -812,7 +818,9 @@ export function buildGridAxes(params, accounts = null, { cfg = null } = {}) {
     ...IntlRetirementScenario.buildFullParamSchema(),
     ...(cfg ? ScenarioParamGenerator.generate(cfg) : []),
   ];
+  const window = planWindow(cfg);
   const uncertain = harvestSweepVariables(list, schema, params,
-    { flag: 'mc', aliases: INTL_RETIREMENT_PARAM_ALIASES, rowFor: optRowFor });
+    { flag: 'mc', aliases: INTL_RETIREMENT_PARAM_ALIASES,
+      rowFor: (kind, center, entry) => optRowFor(kind, center, entry, window) });
   return [...list, ...resolveSweepVariables(uncertain, schemaByKey(), params)];
 }

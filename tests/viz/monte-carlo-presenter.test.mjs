@@ -82,35 +82,41 @@ describe('MonteCarloPresenter — variable centers follow the live scenario', ()
     const bySource = new Map(presenter._resolveVariables().map(v => [v.paramKey, v.centerSource]));
     expect(bySource.get('usEquityGrowthRate')).toBe('scenario');
     expect(bySource.get('equityReturnVol')).toBe('schema');
-    // A balance lever's value lives on the ACCOUNT, and this cfg has none — so its
-    // center really is a framework default and says so.
-    expect(bySource.get('stockBalance')).toBe('default');
-    // A wage lever's value lives on the PERSON record, which is in neither param
-    // store nor the schema — so these read `default` even for a complete plan.
-    expect(bySource.get('primaryMonthlyWage')).toBe('default');
+    // A balance row exists only for an account the plan HAS: this cfg has none, so there
+    // is no balance row at all — never one centred on a framework default.
+    expect([...bySource.keys()].some(k => /^acct\..*\.balance(Target)?$/.test(k))).toBe(false);
+    expect(bySource.has('stockBalance')).toBe(false);
+    // Same for wages: a wage row is the person's own key, and this cfg has no people —
+    // so no wage row, where the retired `primaryMonthlyWage` row centred on a default.
+    expect(bySource.has('primaryMonthlyWage')).toBe(false);
+    expect([...bySource.keys()].some(k => k.startsWith('person.'))).toBe(false);
 
     presenter.destroy();
   });
 
-  test('wiring the account moves its balance lever from default to scenario', () => {
-    setActiveCfg({ params: [], accounts: [{ stateKey: 'usStockAccount', balance: 750_000 }] });
+  // An account under a stateKey the reference plan does not use — the case the retired
+  // legacy rows (`stockBalance` → `usStockAccount` only) could not reach.
+  const MY_BROKERAGE = { stateKey: 'myBrokerage', name: 'My Brokerage', type: 'brokerage',
+    country: 'US', balance: 750_000, holdings: [{ marketValue: 750_000 }] };
+
+  test('each account on the plan gets its own balance row, centred on the account', () => {
+    setActiveCfg({ params: [], accounts: [MY_BROKERAGE] });
     const presenter = makePresenter({ params: {} });
 
-    const v = presenter._resolveVariables().find(x => x.paramKey === 'stockBalance');
+    const v = presenter._resolveVariables().find(x => x.paramKey === 'acct.myBrokerage.balanceTarget');
+    expect(v).toBeDefined();
     expect(v.centerSource).toBe('scenario');
     expect(v.defaultValue).toBe(750_000);
+    expect(v.label).toBe('My Brokerage — Balance');
 
     presenter.destroy();
   });
 
-  test('an account balance beats the params bag (a holdings-bearing balance is derived)', () => {
-    setActiveCfg({
-      params:   [{ name: 'stockBalance', value: 111_111 }],
-      accounts: [{ stateKey: 'usStockAccount', balance: 750_000 }],
-    });
+  test('an account balance beats a stale legacy balance in the params bag', () => {
+    setActiveCfg({ params: [{ name: 'stockBalance', value: 111_111 }], accounts: [MY_BROKERAGE] });
     const presenter = makePresenter({ params: {} });
 
-    expect(presenter._scenarioCenters().get('stockBalance')).toBe(750_000);
+    expect(presenter._scenarioCenters().get('acct.myBrokerage.balanceTarget')).toBe(750_000);
 
     presenter.destroy();
   });

@@ -165,11 +165,11 @@ test('IntlRetirementMcRunner: enabled params differ across runs', async () => {
 
 test('IntlRetirementMcRunner: disabled params are constant across runs', async () => {
   const { runs } = await makeRunner().run();
-  // rothBalance is disabled (ConstantDistribution) — should be unchanged
+  // The Roth account's balance row (harvested, disabled) holds the plan's balance.
   const expected = INTL_RETIREMENT_DEFAULTS.rothBalance;
   for (const r of runs) {
-    assert.strictEqual(r.params.rothBalance, expected,
-      `disabled param rothBalance should equal default ${expected}, got ${r.params.rothBalance}`);
+    assert.strictEqual(r.params['acct.rothAccount.balance'], expected,
+      `disabled Roth balance should equal ${expected}, got ${r.params['acct.rothAccount.balance']}`);
   }
 });
 
@@ -221,9 +221,9 @@ test('IntlRetirementMcRunner: all-disabled mcConfig produces n identical runs', 
 });
 
 test('IntlRetirementMcRunner: a disabled balance lever does not reset a customized balance (design 55 §13)', async () => {
-  // A holdings-bearing account's balance MC lever aliases to the compile-only
-  // `balanceTarget`. A disabled lever must center on the template's live balance — not the
-  // hardcoded template default — so it doesn't rescale the account's holdings on every run.
+  // A holdings-bearing account's balance MC lever is the compile-only `balanceTarget`. A
+  // disabled lever must center on the template's live balance — not a hardcoded default —
+  // so it doesn't rescale the account's holdings on every run.
   const cfgTemplate = IntlRetirementScenario.buildDefaultConfig(
     { stockBalance: 600_000 }, SIM_START, SIM_END);
   const allDisabled = DEFAULT_MC_VARIABLE_CONFIGS.map(c => ({ ...c, enabled: false }));
@@ -231,9 +231,10 @@ test('IntlRetirementMcRunner: a disabled balance lever does not reset a customiz
   const runner = makeRunner({ mcConfig, cfgTemplate });
   const { runs } = await runner.run();
 
+  const key = 'acct.usStockAccount.balanceTarget';
   for (const r of runs) {
-    assert.strictEqual(r.params.stockBalance, 600_000,
-      `disabled balance lever must keep the customized balance, got ${r.params.stockBalance}`);
+    assert.strictEqual(r.params[key], 600_000,
+      `disabled balance lever must keep the customized balance, got ${r.params[key]}`);
   }
 });
 
@@ -330,7 +331,7 @@ test('summarizeProvenance: an untouched panel row keeps its declared source, so 
   // UI, and the results badge under-counts exactly the case it exists to catch.
   const cfgTemplate = customizedTemplate({ usEquityGrowthRate: 0.10 });
   const mcConfig = new IntlRetirementMcConfig();
-  mcConfig.applyOverride('primaryMonthlyWage', {
+  mcConfig.applyOverride('monthlyExpenses', {
     enabled: true, mean: 8000, stdDev: 500, centerDirty: false, centerSource: 'default',
   });
   mcConfig.applyOverride('usEquityGrowthRate', {
@@ -340,7 +341,7 @@ test('summarizeProvenance: an untouched panel row keeps its declared source, so 
   const { summary } = await makeRunner({ mcConfig, cfgTemplate }).run();
   const p = summary.provenance;
 
-  assert.deepStrictEqual(p.syntheticCenters, ['primaryMonthlyWage']);
+  assert.deepStrictEqual(p.syntheticCenters, ['monthlyExpenses']);
   assert.ok(p.centersBySource.scenario.includes('usEquityGrowthRate'),
     'a copied-in scenario center is not a user override');
   assert.strictEqual(p.fromScenario, false);
@@ -466,4 +467,14 @@ test('IntlRetirementMcRunner: usEquityDividendYield perturbation reaches the sim
   const worths  = runs.map(r => r.finalNetWorthUsd);
   const allSame = worths.every(w => w === worths[0]);
   assert.ok(!allSame, 'usEquityDividendYield must now affect finalNetWorth across runs');
+});
+
+test('IntlRetirementMcRunner: an enabled UNSET row with no mean is refused, naming it', async () => {
+  // The reference plan leaves the US house unsold, so its sale year is an unset row.
+  const cfgTemplate = IntlRetirementScenario.buildDefaultConfig(
+    { fxProcessModel: 'NONE', usHouseSaleYear: null }, SIM_START, SIM_END);
+  const mcConfig = new IntlRetirementMcConfig();
+  mcConfig.applyOverride('prop.usHouseProperty.plannedSaleYear', { enabled: true });
+  await assert.rejects(() => makeRunner({ mcConfig, cfgTemplate }).run(),
+    /no center: .*Planned Sale Year/);
 });

@@ -28,22 +28,27 @@ import { ServiceRegistry }        from '../../src/services/service-registry.js';
 import { BaseScenario }           from '../../src/scenarios/base-scenario.js';
 import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
 import { ScenarioLoader }         from '../../src/scenarios/scenario-loader.js';
+import { resolveRecordCenters }   from '../../src/scenarios/scenario-param-apply.js';
 
-const YEAR_ROWS = ['stateMoveYear', 'usHouseSaleYear', 'auHouseSaleYear'];
+const YEAR_ROWS = ['stateMoveYear', 'prop.usHouseProperty.plannedSaleYear',
+  'prop.auHouseProperty.plannedSaleYear'];
 
-function yearRow(params, paramKey, override) {
+function yearRow(params, paramKey, override, opts) {
   const config = new IntlRetirementMcConfig();
   if (override) config.applyOverride(paramKey, override);
-  return config.buildVariables(params).find(v => v.paramKey === paramKey);
+  return config.buildVariables(params, opts).find(v => v.paramKey === paramKey);
 }
 
 /** The calendar year a consumer actually runs for a sampled value. */
 const effectiveYear = (v) => new Date(Date.UTC(v, 0, 1)).getUTCFullYear();
 
 test('W0b-1: the state-move and house-sale-year rows declare integer: true', () => {
-  const params = { stateMoveYear: 2031, usHouseSaleYear: 2035, auHouseSaleYear: 2040 };
+  // The sale years are harvested per property (the legacy usHouseSaleYear rows are retired),
+  // so they need the cfg whose records carry them, and the record centers.
+  const cfg = IntlRetirementScenario.buildDefaultConfig({ usHouseSaleYear: 2035, auHouseSaleYear: 2040 });
+  const params = { stateMoveYear: 2031, ...resolveRecordCenters(cfg) };
   for (const key of YEAR_ROWS) {
-    const row = yearRow(params, key);
+    const row = yearRow(params, key, null, { cfg });
     assert.ok(row, `${key} row should be emitted`);
     assert.equal(row.integer, true, `${key} must carry integer: true`);
     assert.equal(row.enabled, false, `${key} ships disabled — no default run moves`);

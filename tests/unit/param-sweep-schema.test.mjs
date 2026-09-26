@@ -40,12 +40,12 @@ import { DEFAULT_OPTIMIZATION_CONFIGS, buildOptVariables }
   from '../../src/finance/optimization/intl-retirement-opt-config.js';
 
 // Every curated MC/Opt variable now keys on a real toolset or generated per-record param.
-// The *Balance MC levers alias to the hidden, compile-only `acct.<stateKey>.balanceTarget`
-// (design 55 §13), which the generator emits for every holdings-bearing account — so once
-// the eligibility index is built from the COMPILED config (below), there are no orphans.
+// Account balances are not curated: each account's row is harvested from its own generated
+// key (the hidden `acct.<stateKey>.balanceTarget` for a holdings-bearing account, design 55
+// §13). Once the eligibility index is built from the COMPILED config (below), no orphans.
 const KNOWN_ORPHANS = new Set([]);
 
-// Design 55: per-record params (rothBalance→balanceTarget, usHouseSaleYear, primaryMonthlyWage…)
+// Design 55: per-record params (acct.*.balanceTarget, usHouseSaleYear, primaryMonthlyWage…)
 // are generated from records rather than living in the static schema, and the generator keys
 // the swap off whether an account carries holdings. That is only true post-COMPILE (every
 // account bootstraps a holding), so build the eligibility index from a compiled config —
