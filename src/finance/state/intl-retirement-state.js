@@ -153,6 +153,11 @@ export class InternationalRetirementFinancialState extends SimulationState {
     // to leave the passive §904 basket with it. Both reset at the US settle.
     this.usPassiveActivityIncomeYTD        = 0;
     this.usForeignPassiveActivityIncomeYTD = 0;
+    // The US-SOURCE slice of the two above: rent from a US property that Art. 27(1)(c)
+    // re-sources into the foreign passive basket for an AU resident. Tracked apart for
+    // the same reason `usSource*UsdYTD` is — `withoutUsSourceIncome` has to un-merge it,
+    // and a merged accumulator cannot be un-merged there.
+    this.usSourcePassiveActivityUsdYTD     = 0;
     // Suspended passive losses carried forward under §469(b). NOT a YTD field:
     // deliberately outside the settle reset, because surviving the year boundary is
     // the point. Released against later passive income.

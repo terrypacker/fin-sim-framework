@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-228 parameters · 33 panels · 11 node types (164 fields) · 173 action types · 86 tools · 274 state field types · 72 topics · 120 design docs
+228 parameters · 33 panels · 11 node types (164 fields) · 173 action types · 86 tools · 275 state field types · 72 topics · 120 design docs
 
 ---
 
@@ -1761,7 +1761,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 
 ---
 
-## State field types (274)
+## State field types (275)
 
 The scenario-INDEPENDENT half of `StateSchemaRegistry`: the globs and exact paths it
 installs in its own constructor, with the value type that decides how each formats.
@@ -2027,6 +2027,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `usSourceInterestUsdYTD` | currency(USD) |
 | `usSourceOrdinaryAudYTD` | currency(AUD) |
 | `usSourceOrdinaryUsdYTD` | currency(USD) |
+| `usSourcePassiveActivityUsdYTD` | currency(USD) |
 | `usSourcePassiveCapGainsUsdYTD` | currency(USD) |
 | `usSourcePassiveUsdYTD` | currency(USD) |
 | `usSourceRealCapGainsAudYTD` | currency(AUD) |

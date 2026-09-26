@@ -641,6 +641,21 @@ export class UsTaxModule2026 extends BaseTaxModule {
             ...next,
             usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
             usSourcePassiveUsdYTD: (state.usSourcePassiveUsdYTD ?? 0) + amount,
+            // The §469 companion accumulator tracks passive income that sits in a
+            // foreign §904 BASKET, not passive income from foreign PROPERTY — the
+            // line above has just put this US rent in the passive basket by Art.
+            // 27(1)(c) re-sourcing. Without this, a suspension or release moves
+            // usOrdinaryIncomeYTD while `foreignAdjustment` stays 0 and nothing
+            // leaves the basket, so the accumulators stop partitioning gross income
+            // and the §904 assertion fires mid-run. Same G5b failure the AU rental
+            // classifier records; a US rental held by an AU resident is the case
+            // that reaches it through the treaty rather than through the situs.
+            usForeignPassiveActivityIncomeYTD:
+              (state.usForeignPassiveActivityIncomeYTD ?? 0) + amount,
+            // …and the US-source slice of both, so the Art. 22(2) counterfactual can
+            // take this rent back out of the §469 pass as well as out of the basket.
+            usSourcePassiveActivityUsdYTD:
+              (state.usSourcePassiveActivityUsdYTD ?? 0) + amount,
           };
           // Design 76 Gap B — attributed to the property's owners (stamped inline), rather than
           // halved across the household by computeAuTaxPerPerson at settle.

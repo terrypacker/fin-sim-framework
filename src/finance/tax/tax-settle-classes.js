@@ -44,6 +44,7 @@ const YTD_FIELDS = {
        // design 86 G5 — the SIGNED per-year passive results. The suspended-loss POOL
        // (usPassiveLossCarryforward) is deliberately NOT here: it must survive.
        'usPassiveActivityIncomeYTD', 'usForeignPassiveActivityIncomeYTD',
+       'usSourcePassiveActivityUsdYTD',
        // design 86 G3 error 1 — the year's §163(d) investment interest. Its POOL
        // (usInvestmentInterestCarryforward) is deliberately not here either: §163(d)(2)
        // carries the disallowed excess forward indefinitely.
@@ -171,6 +172,18 @@ export function withoutUsSourceIncome(state, { keepTreatyCapped = false } = {}) 
     // contains — the same shape of error G8 records for the buckets themselves.
     usSourceGeneralCapGainsUsdYTD: 0,
     usSourcePassiveCapGainsUsdYTD: 0,
+    // The §469 pass goes with the income too. A US rental re-sourced by Art. 27(1)(c)
+    // is removed from the basket by the line above, so leaving it in the passive-activity
+    // accumulators lets the counterfactual suspend or RELEASE the §469 pool against rent
+    // the return no longer contains: `usOrdinaryIncomeYTD` moves by the whole adjustment
+    // while the basket it belonged to has already gone, and the partition breaks. The
+    // treaty-capped slices are dividends and interest, never rental, so `capped` has no
+    // passive-activity component to keep.
+    usPassiveActivityIncomeYTD:
+      (state.usPassiveActivityIncomeYTD ?? 0) - (state.usSourcePassiveActivityUsdYTD ?? 0),
+    usForeignPassiveActivityIncomeYTD:
+      (state.usForeignPassiveActivityIncomeYTD ?? 0) - (state.usSourcePassiveActivityUsdYTD ?? 0),
+    usSourcePassiveActivityUsdYTD: 0,
     usSourceDividendsUsdYTD: keepTreatyCapped ? (state.usSourceDividendsUsdYTD ?? 0) : 0,
     usSourceInterestUsdYTD:  keepTreatyCapped ? (state.usSourceInterestUsdYTD  ?? 0) : 0,
     // Pre-G3 saved states only; `_computeFtc` folds these into general, so the

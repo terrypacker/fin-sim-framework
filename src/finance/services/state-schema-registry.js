@@ -447,6 +447,7 @@ export class StateSchemaRegistry {
     // signed net rental results; the carryforward survives the settle reset.
     this.register('usPassiveActivityIncomeYTD',        ParameterValueType.currency('USD'));
     this.register('usForeignPassiveActivityIncomeYTD', ParameterValueType.currency('USD'));
+    this.register('usSourcePassiveActivityUsdYTD',      ParameterValueType.currency('USD'));
     this.register('usPassiveLossCarryforward',         ParameterValueType.currency('USD'));
     // design 90 §4 — §1211/§1212 capital losses, USD. The YTD short-term bucket resets
     // at the US settle; the two carryforward pools do not (see YTD_FIELDS.US).
