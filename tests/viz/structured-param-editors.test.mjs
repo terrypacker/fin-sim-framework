@@ -33,6 +33,7 @@ import {
   buildRateKeyMapEditor, buildDrawdownSequenceEditor, buildLiquidityGraphEditor,
   buildLiquidityShapesEditor, buildLiquidityGraphScheduleEditor, buildLiquidityTargetScheduleEditor,
 } from '../../src/visualization/scenario/structured-param-editors.js';
+import { BASE_SHAPE_ID }     from '../../src/finance/pools/pool-shape-expansion.js';
 import { ALLOCATION_VALUES } from '../../src/finance/holdings/allocation.js';
 import { assertTotalMix }    from '../../src/finance/holdings/allocation.js';
 
@@ -1697,65 +1698,175 @@ test('LiquidityShapes: a shape holds the SAME three-table editor the base graph 
   assert.deepStrictEqual(cells(host, 'id').map(c => c.value), ['cash', 'bonds']);
 });
 
-test('LiquidityShapes: + Duplicate copies the pool IDS verbatim — that is the point', () => {
-  // §4 Q1's cost is that a one-number change means a whole second graph; §9 makes the pool id
-  // the handle for identity across a switch. Re-typing is how an id drifts, and a drifted id
-  // retires a pool and starts another whose trailing high is zero.
-  const param = { name: 'liquidityShapes', value: { bridge: SHAPE_A } };
-  const host = mount(buildLiquidityShapesEditor(param, ACCOUNTS));
+// ─── design 114 §7.2 / §7.3 — tabs, inheritance, conversion ─────────────────────────
 
-  button(host, 'Duplicate').click();
+/** The base graph the D114 tests inherit from: SHAPE_A plus a flow. */
+const D114_BASE = { pools: [
+  { id: 'cash',  spendOrder: 10, target: { mode: 'YEARS_OF_SPEND', value: 1 },
+    claims: [{ key: 'usSavingsAccount' }] },
+  { id: 'bonds', spendOrder: 20, target: { mode: 'YEARS_OF_SPEND', value: 2 },
+    claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }] },
+], flows: [{ id: 'b2c', from: 'bonds', to: 'cash', trigger: { belowTargetFraction: 0.5 } }] };
+const d114 = (value, { base = D114_BASE, schedule = [] } = {}) => {
+  const param = { name: 'liquidityShapes', value: copy(value) };
+  const host = mount(buildLiquidityShapesEditor(param, ACCOUNTS, () => ({}),
+    { baseGraph: () => base, schedule: () => schedule }));
+  return { param, host };
+};
+const choose = (host, id, v) => pick(cell(host, id), v);
+
+test('LiquidityShapes D114: one tab per shape, naming the years the schedule selects it', () => {
+  const { host } = d114({ bridge: SHAPE_A, late: SHAPE_B },
+    { schedule: [{ year: 2035, shape: 'bridge' }, { year: 2045, shape: 'bridge' }] });
+  assert.match(cell(host, 'shape-tab-0').textContent, /bridge.*from 2035, 2045/);
+  assert.match(cell(host, 'shape-tab-1').textContent, /late.*unscheduled/);
+  // Only the active shape's tables are drawn.
+  assert.strictEqual(cells(host, 'shape-id').length, 1);
+  assert.strictEqual(cell(host, 'shape-id').value, 'bridge');
+  cell(host, 'shape-tab-1').click();
+  assert.strictEqual(cell(host, 'shape-id').value, 'late');
+});
+
+test('LiquidityShapes D114: + New shape — Copy of X is a deep copy with the pool IDS verbatim', () => {
+  // Design 109 §9 makes the pool id the identity across a switch; re-typing is how an id drifts.
+  const { param, host } = d114({ bridge: SHAPE_A });
+  choose(host, 'new-shape', 'copy:bridge');
   assert.deepStrictEqual(Object.keys(param.value), ['bridge', 'bridge-copy']);
-  assert.deepStrictEqual(
-    param.value['bridge-copy'].pools.map(p => p.id),
-    param.value.bridge.pools.map(p => p.id));
-});
-
-test('LiquidityShapes: the duplicate is a deep copy — editing one does not move the other', () => {
-  const param = { name: 'liquidityShapes', value: { bridge: SHAPE_A } };
-  const host = mount(buildLiquidityShapesEditor(param, ACCOUNTS));
-  button(host, 'Duplicate').click();
-
+  assert.deepStrictEqual(param.value['bridge-copy'].pools.map(p => p.id), ['cash', 'bonds']);
   param.value['bridge-copy'].pools[0].spendOrder = 99;
-  assert.strictEqual(param.value.bridge.pools[0].spendOrder, 10);
+  assert.strictEqual(param.value.bridge.pools[0].spendOrder, 10, 'a deep copy');
+  assert.strictEqual(cell(host, 'shape-id').value, 'bridge-copy', 'the new shape is selected');
 });
 
-test('LiquidityShapes: the diff line names pools carried, added and retired', () => {
-  // §9's rule made visible while authoring — a RENAMED pool shows up as one retired and one
-  // added, which is exactly the mistake the line exists to catch.
-  const param = { name: 'liquidityShapes', value: { first: SHAPE_A, second: SHAPE_B } };
-  const host = mount(buildLiquidityShapesEditor(param, ACCOUNTS));
-
-  assert.match(cell(host, 'shape-diff-0').textContent, /2 pool\(s\)/);
-  const d = cell(host, 'shape-diff-1').textContent;
-  assert.match(d, /vs first/);
-  assert.match(d, /1 carried/);
-  assert.match(d, /added growth/);
-  assert.match(d, /retired bonds/);
+test('LiquidityShapes D114: + New shape — Inherit from base writes a delta that owns nothing yet', () => {
+  const { param, host } = d114(null);
+  choose(host, 'new-shape', `inherit:${BASE_SHAPE_ID}`);
+  assert.deepStrictEqual(param.value, { 'new-shape': { extends: 'base' } });
+  assert.match(cell(host, 'shape-diff').textContent, /vs base — pools: 2 inherited — flows: 1 inherited/);
+  // Its tables are empty: every pool is under Inherited.
+  assert.strictEqual(cells(host, 'id').length, 0);
+  assert.ok(cell(host, 'inherited-pool-bonds'));
 });
 
-test('LiquidityShapes: renaming a shape keeps its graph, and clearing every shape writes null', () => {
-  const param = { name: 'liquidityShapes', value: { bridge: SHAPE_A } };
-  const host = mount(buildLiquidityShapesEditor(param, ACCOUNTS));
+test('LiquidityShapes D114: a standalone copy says how much of it matches base', () => {
+  const copyWithOneChange = copy(D114_BASE);
+  copyWithOneChange.pools[1].spendOrder = 25;
+  const { host } = d114({ bridge: copyWithOneChange });
+  const d = cell(host, 'shape-diff').textContent;
+  assert.match(d, /A full copy/);
+  assert.match(d, /pools: 1 same as base · 1 differ \(bonds: spendOrder\)/);
+  assert.match(d, /Inherits from: Base graph/);
+});
 
+test('LiquidityShapes D114: choosing a parent CONVERTS a copy to its differences — same graph', () => {
+  const copyWithOneChange = copy(D114_BASE);
+  copyWithOneChange.pools[1].spendOrder = 25;
+  const { param, host } = d114({ bridge: copyWithOneChange });
+  choose(host, 'shape-extends', 'base');
+  assert.deepStrictEqual(param.value.bridge,
+    { extends: 'base', pools: [copyWithOneChange.pools[1]] });
+  assert.match(cell(host, 'shape-diff').textContent, /pools: 1 inherited · 1 overridden \(bonds: spendOrder\)/);
+  assert.deepStrictEqual(cells(host, 'id').map(c => c.value), ['bonds'], 'only its own rows');
+  assert.deepStrictEqual(cells(host, 'vsParent').map(c => c.textContent), ['override']);
+});
+
+test('LiquidityShapes D114: a conversion that would REORDER the graph is refused, and says so', () => {
+  const reordered = { pools: [D114_BASE.pools[1], D114_BASE.pools[0]], flows: D114_BASE.flows };
+  const { param, host } = d114({ bridge: reordered });
+  choose(host, 'shape-extends', 'base');
+  assert.deepStrictEqual(param.value.bridge, reordered, 'unchanged');
+  assert.match(cell(host, 'shape-status').textContent, /different order/);
+  assert.strictEqual(cell(host, 'shape-extends').value, '');
+});
+
+test('LiquidityShapes D114: choosing "none" DETACHES a delta into the whole graph it means', () => {
+  const { param, host } = d114({ bridge: { extends: 'base', remove: { flows: ['b2c'] } } });
+  choose(host, 'shape-extends', '');
+  assert.deepStrictEqual(param.value.bridge, { pools: D114_BASE.pools }, 'an empty flows list is dropped: the same graph');
+});
+
+test('LiquidityShapes D114: Override, edit, Revert — and Remove takes the inherited flows with the pool', () => {
+  const { param, host } = d114({ bridge: { extends: 'base' } });
+  cell(host, 'override-pool-bonds').click();
+  assert.deepStrictEqual(param.value.bridge.pools, [D114_BASE.pools[1]]);
+  type(cells(host, 'spendOrder')[0], '25', 'change');
+  assert.strictEqual(param.value.bridge.pools[0].spendOrder, 25);
+  assert.match(cell(host, 'shape-diff').textContent, /1 overridden \(bonds: spendOrder\)/);
+
+  cell(host, 'revert-pool-bonds').click();
+  assert.deepStrictEqual(param.value.bridge, { extends: 'base' });
+
+  cell(host, 'remove-pool-bonds').click();
+  assert.deepStrictEqual(param.value.bridge.remove, { pools: ['bonds'], flows: ['b2c'] });
+  assert.match(cell(host, 'shape-status').textContent, /inherited flow\(s\) that use it: b2c/);
+  cell(host, 'restore-pool-bonds').click();
+  cell(host, 'restore-flow-b2c').click();
+  assert.deepStrictEqual(param.value.bridge, { extends: 'base' });
+});
+
+test('LiquidityShapes D114: a delta\'s flows may point at INHERITED pools; its claims may not', () => {
+  const { host } = d114({ bridge: { extends: 'base', pools: [
+    { id: 'reserve', spendOrder: 15, claims: [{ key: 'auOffsetAccount' }] }] } });
+  const fromOpts = () => [...host.querySelectorAll('[data-id="addRow"]')];
+  // Add a flow and read the From options.
+  fromOpts().find(b => /Add Flow/.test(b.textContent)).click();
+  const from = cells(host, 'from')[0];
+  assert.deepStrictEqual([...from.options].map(o => o.value), ['reserve', 'cash', 'bonds']);
+  const claimPool = cells(host, 'pool')[0];
+  assert.deepStrictEqual([...claimPool.options].map(o => o.value).filter(Boolean), ['reserve']);
+});
+
+test('LiquidityShapes D114: the readouts render the EXPANDED graph — the one the run uses', () => {
+  const { host } = d114({ bridge: { extends: 'base', pools: [
+    { ...D114_BASE.pools[1], spendOrder: 5 }] } });
+  const order = cell(host, 'compiled-order').textContent;
+  assert.match(order, /1\. usStockAccount \(BOND\).*2\. usSavingsAccount/, 'the override reorders inherited cash');
+});
+
+test('LiquidityShapes D114: a flow-only delta survives an edit (no local pools is not "no graph")', () => {
+  const flow = { ...D114_BASE.flows[0], priority: 3 };
+  const { param, host } = d114({ bridge: { extends: 'base', flows: [flow] } });
+  type(cells(host, 'priority')[0], '4', 'change');
+  assert.deepStrictEqual(param.value.bridge, { extends: 'base', flows: [{ ...flow, priority: 4 }] });
+});
+
+test('LiquidityShapes D114: renaming a parent re-points its children; a parent with children cannot be removed', () => {
+  const { param, host } = d114({ bridge: copy(D114_BASE), late: { extends: 'bridge' } });
+  type(cell(host, 'shape-id'), 'mid', 'change');
+  assert.deepStrictEqual(Object.keys(param.value), ['mid', 'late']);
+  assert.strictEqual(param.value.late.extends, 'mid');
+  const rm = host.querySelector('.pool-shape-head .age-band-remove');
+  assert.ok(rm.disabled);
+  assert.match(rm.title, /late inherit from this shape/);
+});
+
+test('LiquidityShapes D114: base is reserved, a duplicate id is refused, and a shape cannot inherit from its own child', () => {
+  const { param, host } = d114({ bridge: copy(D114_BASE), late: { extends: 'bridge' } });
+  type(cell(host, 'shape-id'), 'base', 'change');
+  assert.match(cell(host, 'shape-status').textContent, /reserved/);
+  type(cell(host, 'shape-id'), 'late', 'change');
+  assert.match(cell(host, 'shape-status').textContent, /already exists/);
+  assert.deepStrictEqual(Object.keys(param.value), ['bridge', 'late']);
+  const offered = [...cell(host, 'shape-extends').options].map(o => o.value);
+  assert.deepStrictEqual(offered, ['', 'base'], 'not itself, not late (its child)');
+});
+
+test('LiquidityShapes: renaming a shape keeps its graph, and removing every shape writes null', () => {
+  const { param, host } = d114({ bridge: SHAPE_A });
   type(cell(host, 'shape-id'), 'theBridge', 'change');
   assert.deepStrictEqual(Object.keys(param.value), ['theBridge']);
   assert.deepStrictEqual(param.value.theBridge.pools.map(p => p.id), ['cash', 'bonds']);
-
-  host.querySelector('.age-band-remove').click();
+  host.querySelector('.pool-shape-head .age-band-remove').click();
   assert.strictEqual(param.value, null, 'absent, not an empty object');
 });
 
-test('LiquidityShapes: the shape head carries four controls on its own column template', () => {
-  // On `.mix-block-head`'s three columns the Duplicate button was squeezed into the 26px
-  // remove slot and the ✕ wrapped to a second row, overflowing to the right. jsdom computes
-  // no layout, so this asserts the CONTRACT: four children, and the class that gives them
-  // four columns.
-  const param = { name: 'liquidityShapes', value: { bridge: SHAPE_A } };
-  const host = mount(buildLiquidityShapesEditor(param, ACCOUNTS));
+test('LiquidityShapes: the shape head carries its five controls on its own column template', () => {
+  // jsdom computes no layout, so this asserts the CONTRACT: the class that gives the head its
+  // own columns, and the controls it lays out.
+  const { host } = d114({ bridge: SHAPE_A });
   const head = host.querySelector('.mix-block-head');
   assert.ok(head.classList.contains('pool-shape-head'));
-  assert.strictEqual(head.children.length, 4, 'label, input, Duplicate, Remove');
+  assert.strictEqual(head.children.length, 5, 'id label, id, Inherits-from label, select, Remove');
 });
 
 test('LiquidityGraph CTRL-4: an advisory renders in the editor and refuses nothing', () => {

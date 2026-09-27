@@ -1,6 +1,6 @@
 # 114 — Pool shapes that inherit, and a pool editor that fits its panel
 
-**Status:** PHASE 1 BUILT, 26 Sep 2026 (§11); phases 2–6 proposed. Picks up design 112 §7 (shapes that reference pools) and
+**Status:** PHASES 1–2 BUILT, 26 Sep 2026 (§11, §12); phases 3–6 proposed. Picks up design 112 §7 (shapes that reference pools) and
 reworks the pool authoring surface built across design 97 §17.1/§21/§22.5, design 109 §11 and
 design 110 Leg A. Decisions D1–D5 (§3) and the scope of Part II (S1–S6) were taken with the
 author before drafting. The MC and Opt panels are deliberately last (§9, phase 6). Open
@@ -339,3 +339,42 @@ taken as proposed. What the build decided that the text above did not:
 Measured on the author's plan: its one shape converts cleanly to a single pool override, about a
 tenth of the authored size. Tests: `pool-shape-expansion.test.mjs` (29, including two whole-run
 byte-identity checks) and `pool-shape-expansion-hygiene.test.mjs` (2).
+
+## 12. As built — phase 2 (26 Sep 2026)
+
+`buildLiquidityShapesEditor` is now the tab strip of §7.2, and `buildLiquidityGraphEditor` takes
+an optional `inherit` context for a delta (§7.3). The Base tab of §7.2 waits for phase 4's
+composite editor: `liquidityGraph` is still its own row in the parameter list, so the strip
+holds the named shapes, and the base is reachable as a parent and as a source for New shape.
+What the build decided that the text above did not:
+
+1. **One control for inheritance, and it never changes what a shape means.** The head carries a
+   single **Inherits from** select rather than a separate Convert button. Every change to it
+   preserves the expanded graph: choosing a parent for a copy converts it (proven, and refused
+   with the reason when inheriting would reorder the graph); choosing "none" detaches a delta
+   into the whole graph it expands to; moving a delta to another parent re-derives its delta
+   against that parent. The select never offers the shape itself or any of its descendants.
+2. **`+ Duplicate` is gone.** `+ New shape` offers Blank, Inherit from X and Copy of X for the
+   base graph and every shape, and a new shape gets a unique id at once (`new-shape`,
+   `bridge-copy`) rather than sitting unsaved until named.
+3. **A standalone shape's diff line is against the base graph**, not the previous shape in the
+   list: "N same as base · M differ (id: fields)", plus the hint to inherit when anything
+   matches. On the author's plan this is the line that says the shape is a copy with one change.
+4. **Removing an inherited pool removes the inherited flows that touch it**, and the status line
+   names them; a flow the shape owns is left for the author. Restore brings each back.
+5. **Rename re-points children; Remove is disabled while children exist.** `base` and existing
+   ids are refused as new names.
+6. **Row markers are a narrow `vs parent` note column** (`override` / `added` / `= parent`) on
+   the pools and flows tables, delta mode only. It truncates at the panel's width until phase 3
+   gives the tables their core/advanced split.
+7. **The readouts discard the normalizer's advisories.** They were re-printed to the console on
+   every render (26 copies each after a few tab switches in the running app); the editor already
+   draws them from `flags.problems`.
+8. **UI state** (selected tab, inherited panel open) is kept in a `WeakMap` keyed by the param
+   object, so it survives a re-render of the parameter list without leaking between editors.
+
+Checked in the running app on the author's plan: converting its one shape dropped the editor
+from about 2,500px to about 1,170px, the diff line reads "8 inherited · 1 overridden
+(wrappers: spendOrder)", and the converted plan validates clean and resolves to a byte-identical
+schedule. Tests: ten new cases in `tests/viz/structured-param-editors.test.mjs`; the four that
+covered Duplicate and the previous-shape diff were rewritten.

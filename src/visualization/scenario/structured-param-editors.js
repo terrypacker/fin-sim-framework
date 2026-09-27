@@ -61,7 +61,10 @@ import { claimValueNative } from '../../finance/pools/pool-metrics.js';
 import { describeRunSource } from '../../finance/mpc/run-schedule.js';
 import { describeScaledTarget } from '../../finance/pools/pool-target-scale.js';
 import { collapseTargetRuns }   from '../../finance/pools/pool-target-schedule.js';
-import { poolGraphEntries }     from '../../finance/pools/pool-shape-expansion.js';
+import {
+  poolGraphEntries, expandLiquidityShapes, shapeDeltaAgainst, shapeLineage,
+  isDeltaShape, sameGraphValue, BASE_SHAPE_ID,
+} from '../../finance/pools/pool-shape-expansion.js';
 
 // ─── small DOM helpers (shared shape with the band editors in scenario-tab-view) ──
 
@@ -1146,26 +1149,31 @@ export function buildLiquidityTargetScheduleEditor(param, graphsProvider = () =>
 const BASE_SHAPE_OPTION = '\u0000base';
 
 /**
- * `LiquidityShapes` — the named alternative graphs (design 109 §11).
+ * `LiquidityShapes` — the named alternative graphs (design 109 §11), as TABS (design 114 §7.2).
  *
- * `{ <shapeId>: { pools, flows } }` rendered as a list of named blocks, each holding the
- * EXISTING three-table graph editor over that shape's value. One editor, not two: a shape is
- * the same vocabulary as the base graph (§4), so a second authoring surface for it would be a
- * second place for the two to drift.
+ * One shape is shown at a time. A shape is either STANDALONE (a whole graph, every shape authored
+ * before design 114) or a DELTA over a parent (`extends`), in which case its tables hold only its
+ * own rows and everything else is listed under "Inherited from …" with Override / Remove /
+ * Revert / Restore (§7.3).
  *
- * **`+ Duplicate` is not a convenience.** §4 Q1 chose whole-graph shapes, whose cost is that
- * changing one pool's target in 2040 means authoring a second complete graph. Re-typing four
- * tables is how a pool id drifts, and §9 makes the id the handle for identity across a switch
- * — a renamed pool silently retires one pool and starts another whose trailing high is zero.
- * Duplication is the mechanism that keeps ids stable, so it sits beside Add rather than in a
- * menu.
+ * **Changing "Inherits from" never changes what a shape means.** Choosing a parent for a copy
+ * CONVERTS it (the delta is proven by `shapeDeltaAgainst`, and refused when inheriting would
+ * reorder the graph); choosing "none" DETACHES a delta into the whole graph it expands to; and
+ * moving a delta to a different parent re-derives its delta against that parent. The run sees
+ * the same graph before and after every one of them — only what is stored, and what follows the
+ * parent from then on, changes.
  *
  * @param {object} param
  * @param {Array}  accounts
+ * @param {object|function} [flags]
+ * @param {object} [ctx]  live sibling params, read at render time:
+ *        `baseGraph()` the `liquidityGraph` value; `schedule()` the `liquidityGraphSchedule` rows.
  */
-export function buildLiquidityShapesEditor(param, accounts = [], flags = null) {
+export function buildLiquidityShapesEditor(param, accounts = [], flags = null, ctx = {}) {
   const value  = isPlainObject(param.value) ? param.value : {};
   const shapes = Object.entries(value).map(([id, graph]) => ({ id, graph: graph ?? {} }));
+  const baseGraph = () => (typeof ctx.baseGraph === 'function' ? ctx.baseGraph() : null) ?? null;
+  const schedule  = () => (typeof ctx.schedule === 'function' ? ctx.schedule() : null) ?? [];
 
   const sync = () => {
     const kept = shapes.filter(s => s.id);
@@ -1175,93 +1183,407 @@ export function buildLiquidityShapesEditor(param, accounts = [], flags = null) {
   };
   sync();
 
+  // The selected tab and the inherited panel's open state survive a re-render of the whole
+  // parameter list, which rebuilds this editor from scratch.
+  const ui = SHAPES_UI.get(param) ?? { active: null, open: false };
+  SHAPES_UI.set(param, ui);
+  if (!shapes.some(s => s.id === ui.active)) ui.active = shapes[0]?.id ?? null;
+
+  let status = null;   // one line of feedback from the last action (a refusal, what a remove took)
+
   const container = el('div', 'age-band-list-editor liquidity-shapes-editor');
 
-  /**
-   * Pools added / retired / carried, against the shape before this one.
-   *
-   * §9's rule made visible at the moment of authoring, and the single highest-value thing on
-   * this screen: a RENAMED pool shows up here as one retired and one added, which is exactly
-   * the mistake the line exists to catch.
-   */
-  const diffLine = (idx) => {
-    const prev = idx === 0 ? null : shapes[idx - 1];
-    const ids  = (s) => new Set((s?.graph?.pools ?? []).map(p => p?.id).filter(Boolean));
-    const now  = ids(shapes[idx]);
-    if (!prev) return `${now.size} pool(s).`;
-    const was     = ids(prev);
-    const added   = [...now].filter(id => !was.has(id));
-    const retired = [...was].filter(id => !now.has(id));
-    const kept    = [...now].filter(id => was.has(id));
-    const parts = [`${kept.length} carried`];
-    if (added.length)   parts.push(`added ${added.join(', ')}`);
-    if (retired.length) parts.push(`retired ${retired.join(', ')}`);
-    return `vs ${prev.id}: ${parts.join(' · ')}`;
+  /** Every shape as the whole graph it means, lenient — the editor must draw a broken plan. */
+  const expandedAll = () => {
+    sync();
+    const out = expandLiquidityShapes(baseGraph(), param.value ?? {}, { lenient: true });
+    return isPlainObject(out) ? out : {};
   };
+  const wholeOf = (id) => (id === BASE_SHAPE_ID ? baseGraph() : expandedAll()[id]) ?? null;
+  const isWhole = (g) => isPlainObject(g) && !isDeltaShape(g);
+  const deepCopy = (v) => JSON.parse(JSON.stringify(v));
+
+  /** Shapes that inherit (directly or not) from `id` — they cannot be its parent. */
+  const descendantsOf = (id) => shapes.filter(s => s.id && s.id !== id
+    && shapeLineage(param.value ?? {}, s.id).includes(id)).map(s => s.id);
+
+  /** The schedule years that select a shape, for its tab. */
+  const yearsOf = (id) => (Array.isArray(schedule()) ? schedule() : [])
+    .filter(r => r?.shape === id && Number.isFinite(Number(r?.year))).map(r => Number(r.year))
+    .sort((a, b) => a - b);
+
+  // ── the diff line ────────────────────────────────────────────────────────────────
+
+  /** Which top-level fields of `mine` differ from `theirs`, for "(wrappers: spendOrder)". */
+  const fieldsDiffering = (mine, theirs) => [...new Set([...Object.keys(mine ?? {}), ...Object.keys(theirs ?? {})])]
+    .filter(k => !sameGraphValue(mine?.[k], theirs?.[k]));
+
+  /**
+   * One kind (pools or flows) of a shape against a whole reference graph: same / changed /
+   * added / gone. `changed` names the differing fields — the point of the line (§7.3).
+   */
+  const compareKind = (mineList, refList) => {
+    const ref = new Map((refList ?? []).filter(x => typeof x?.id === 'string').map(x => [x.id, x]));
+    const mine = (mineList ?? []).filter(x => typeof x?.id === 'string');
+    const seen = new Set(mine.map(x => x.id));
+    return {
+      same:    mine.filter(x => ref.has(x.id) && sameGraphValue(x, ref.get(x.id))).map(x => x.id),
+      changed: mine.filter(x => ref.has(x.id) && !sameGraphValue(x, ref.get(x.id)))
+                   .map(x => `${x.id}: ${fieldsDiffering(x, ref.get(x.id)).join(', ')}`),
+      added:   mine.filter(x => !ref.has(x.id)).map(x => x.id),
+      gone:    [...ref.keys()].filter(id => !seen.has(id)),
+    };
+  };
+
+  const diffText = (shape) => {
+    const g = shape.graph ?? {};
+    if (isDeltaShape(g)) {
+      const parent = wholeOf(g.extends);
+      if (!isPlainObject(parent)) return `inherits from ${g.extends}, which cannot be expanded — see the refusal at Rebuild.`;
+      const parts = [];
+      for (const kind of ['pools', 'flows']) {
+        const theirs = parent[kind] ?? [];
+        const own = compareKind(g[kind], theirs);
+        const removed = (g.remove?.[kind] ?? []);
+        const overridden = new Set((g[kind] ?? []).map(x => x?.id));
+        const inherited = theirs.filter(x => !overridden.has(x?.id) && !removed.includes(x?.id)).length;
+        const bits = [`${inherited} inherited`];
+        if (own.changed.length) bits.push(`${own.changed.length} overridden (${own.changed.join('; ')})`);
+        if (own.same.length)    bits.push(`${own.same.length} override(s) identical to the parent (${own.same.join(', ')})`);
+        if (own.added.length)   bits.push(`added ${own.added.join(', ')}`);
+        if (removed.length)     bits.push(`removed ${removed.join(', ')}`);
+        if (theirs.length || (g[kind] ?? []).length || removed.length) parts.push(`${kind}: ${bits.join(' · ')}`);
+      }
+      return `vs ${g.extends} — ${parts.join(' — ') || 'identical'}`;
+    }
+    // A standalone shape against the base graph: the line that says whether it is really a
+    // copy with one change — and so whether inheriting would shrink it to that change.
+    const base = baseGraph();
+    if (!isPlainObject(base)) return `${(g.pools ?? []).length} pool(s).`;
+    const parts = [];
+    let same = 0;
+    for (const kind of ['pools', 'flows']) {
+      const d = compareKind(g[kind], base[kind]);
+      same += d.same.length;
+      const bits = [`${d.same.length} same as base`];
+      if (d.changed.length) bits.push(`${d.changed.length} differ (${d.changed.join('; ')})`);
+      if (d.added.length)   bits.push(`added ${d.added.join(', ')}`);
+      if (d.gone.length)    bits.push(`retired ${d.gone.join(', ')}`);
+      if ((g[kind] ?? []).length || (base[kind] ?? []).length) parts.push(`${kind}: ${bits.join(' · ')}`);
+    }
+    return `A full copy. vs base — ${parts.join(' — ')}`
+      + (same ? '  ·  Choose "Inherits from: Base graph" to store only the differences.' : '');
+  };
+
+  // ── actions ──────────────────────────────────────────────────────────────────────
+
+  const shapeById = (id) => shapes.find(s => s.id === id);
+
+  /**
+   * Re-point `shape` at `parentId` ('' = standalone) WITHOUT changing the graph it means.
+   * Returns a refusal sentence, or null.
+   */
+  const setParent = (shape, parentId) => {
+    const whole = isDeltaShape(shape.graph) ? wholeOf(shape.id) : shape.graph;
+    if (!isWhole(whole)) return `'${shape.id}' cannot be expanded, so it cannot be re-pointed — fix the refusal first.`;
+    if (!parentId) { shape.graph = deepCopy(whole); return null; }
+    const parent = wholeOf(parentId);
+    if (!isWhole(parent)) return `${parentId} cannot be expanded, so nothing can inherit from it yet.`;
+    const res = shapeDeltaAgainst(parent, deepCopy(whole), parentId);
+    if (!res.ok) return `Cannot inherit from ${parentId}: ${res.reason}`;
+    shape.graph = res.delta;
+    return null;
+  };
+
+  const renameShape = (shape, next) => {
+    if (next === shape.id) return null;
+    if (next === BASE_SHAPE_ID) return `'${BASE_SHAPE_ID}' is reserved for the base graph.`;
+    if (next && shapes.some(s => s !== shape && s.id === next)) return `A shape called '${next}' already exists.`;
+    const was = shape.id;
+    shape.id = next || null;
+    // Children follow a rename: their `extends` is this shape's id, and a stale one would
+    // refuse the whole plan at load.
+    for (const s of shapes) if (was && isDeltaShape(s.graph) && s.graph.extends === was) s.graph = { ...s.graph, extends: next };
+    if (ui.active === was) ui.active = shape.id;
+    return null;
+  };
+
+  const uniqueId = (stem) => {
+    let id = stem;
+    for (let n = 2; shapes.some(s => s.id === id) || id === BASE_SHAPE_ID; n++) id = `${stem}-${n}`;
+    return id;
+  };
+
+  /** `+ New shape` — Blank, Inherit from X, or Copy of X (D5). */
+  const createShape = (choice) => {
+    const [how, from] = choice.split(':');
+    const id = uniqueId(how === 'copy' ? `${from}-copy` : 'new-shape');
+    let graph = {};
+    if (how === 'inherit') graph = { extends: from };
+    if (how === 'copy') {
+      const whole = wholeOf(from);
+      if (!isWhole(whole)) { status = `${from} cannot be expanded, so it cannot be copied yet.`; return; }
+      graph = deepCopy(whole);
+    }
+    shapes.push({ id, graph });
+    ui.active = id;
+    status = null;
+  };
+
+  // ── rendering ────────────────────────────────────────────────────────────────────
 
   const render = () => {
     container.innerHTML = '';
+    sync();
+    const base = baseGraph();
 
-    if (!shapes.length) {
-      container.appendChild(el('div', 'row-list-empty',
-        'No named shapes — the base graph governs the whole run.'));
-    }
-
+    // The tab strip, and `+ New shape` at its end.
+    const strip = el('div', 'pool-shape-tabs');
     shapes.forEach((shape, idx) => {
-      const block = el('div', 'mix-block');
-      block.dataset.id = `shape-${idx}`;
-
-      // FOUR controls, so it needs its own column template — see `.pool-shape-head`.
-      const head = el('div', 'mix-block-head pool-shape-head');
-      head.appendChild(el('span', 'age-band-col-label', 'Shape id'));
-      const idInput = textInput({ value: shape.id, placeholder: 'bridge', id: 'shape-id' });
-      idInput.addEventListener('change', () => {
-        shape.id = idInput.value.trim() || null;
-        sync();
-        render();
-      });
-      head.appendChild(idInput);
-      head.appendChild(addButton('+ Duplicate', () => {
-        // The ids INSIDE are copied verbatim — that is the point (see the docstring).
-        shapes.splice(idx + 1, 0, {
-          id: `${shape.id ?? 'shape'}-copy`,
-          graph: JSON.parse(JSON.stringify(shape.graph ?? {})),
-        });
-        sync();
-        render();
-      }));
-      head.appendChild(removeButton('Remove shape', () => { shapes.splice(idx, 1); sync(); render(); }));
-      block.appendChild(head);
-
-      const diff = el('div', 'pool-shape-diff', diffLine(idx));
-      diff.dataset.id = `shape-diff-${idx}`;
-      block.appendChild(diff);
-
-      // The SAME editor the base graph uses, over this shape's value.
-      block.appendChild(buildLiquidityGraphEditor({
-        name:  `${param.name}.${shape.id}`,
-        get value() { return shape.graph; },
-        set value(v) { shape.graph = v ?? {}; sync(); },
-      }, accounts, () => ({ ...(typeof flags === 'function' ? flags() : flags),
-                            // Read at call time, not captured: an id retyped in the head
-                            // above must move this line with it, or the readouts below name
-                            // the shape the author just stopped editing.
-                            shapeId: shape.id ?? '(unnamed)' })));
-
-      container.appendChild(block);
+      const years = shape.id ? yearsOf(shape.id) : [];
+      const meta = years.length ? `from ${years.join(', ')}` : 'unscheduled';
+      const tab = el('button', `btn btn-sm pool-shape-tab${shape.id === ui.active ? ' is-active' : ''}`);
+      tab.type = 'button';
+      tab.dataset.id = `shape-tab-${idx}`;
+      tab.appendChild(el('span', 'pool-shape-tab-id', shape.id ?? '(unnamed)'));
+      tab.appendChild(el('span', `pool-shape-tab-meta${years.length ? '' : ' is-unscheduled'}`, meta));
+      tab.title = [
+        years.length ? `Governs from ${years.join(', ')} (Liquidity Pool Schedule)`
+          : 'No schedule row selects this shape, so it governs no part of the run',
+        isDeltaShape(shape.graph) ? `inherits from ${shape.graph.extends}` : 'a full copy',
+      ].join(' · ');
+      tab.addEventListener('click', () => { ui.active = shape.id; status = null; render(); });
+      strip.appendChild(tab);
     });
-
-    container.appendChild(addButton('+ Add Shape', () => {
-      shapes.push({ id: null, graph: {} });
+    const ids = shapes.map(s => s.id).filter(Boolean);
+    const sources = [...(isPlainObject(base) ? [[BASE_SHAPE_ID, 'base graph']] : []), ...ids.map(id => [id, id])];
+    const make = el('select', 'age-band-input pool-shape-new');
+    make.dataset.id = 'new-shape';
+    const opt = (v, label) => { const o = el('option', null, label); o.value = v; return o; };
+    make.appendChild(opt('', '+ New shape…'));
+    make.appendChild(opt('blank', 'Blank'));
+    for (const [v, label] of sources) make.appendChild(opt(`inherit:${v}`, `Inherit from ${label}`));
+    for (const [v, label] of sources) make.appendChild(opt(`copy:${v}`, `Copy of ${label}`));
+    make.addEventListener('change', () => {
+      if (!make.value) return;
+      createShape(make.value);
       sync();
       render();
-    }));
+    });
+    strip.appendChild(make);
+    container.appendChild(strip);
+
+    const shape = shapes.find(s => s.id === ui.active) ?? shapes.find(s => !s.id);
+    if (!shape) {
+      container.appendChild(el('div', 'row-list-empty',
+        'No named shapes — the base graph governs the whole run.'));
+      return;
+    }
+    const idx = shapes.indexOf(shape);
+    const delta = isDeltaShape(shape.graph);
+
+    const block = el('div', 'mix-block');
+    block.dataset.id = `shape-${idx}`;
+
+    // Head: id, Inherits from, Remove.
+    const head = el('div', 'mix-block-head pool-shape-head');
+    head.appendChild(el('span', 'age-band-col-label', 'Shape id'));
+    const idInput = textInput({ value: shape.id, placeholder: 'bridge', id: 'shape-id' });
+    idInput.addEventListener('change', () => {
+      status = renameShape(shape, idInput.value.trim());
+      sync();
+      render();
+    });
+    head.appendChild(idInput);
+    head.appendChild(el('span', 'age-band-col-label', 'Inherits from'));
+    const parentSel = el('select', 'age-band-input');
+    parentSel.dataset.id = 'shape-extends';
+    const blocked = new Set([shape.id, ...(shape.id ? descendantsOf(shape.id) : [])]);
+    parentSel.appendChild(opt('', '— none (a full copy) —'));
+    for (const [v, label] of sources) if (!blocked.has(v)) parentSel.appendChild(opt(v, label === 'base graph' ? 'Base graph' : label));
+    const current = delta ? shape.graph.extends : '';
+    if (current && ![...parentSel.options].some(o => o.value === current)) {
+      parentSel.appendChild(opt(current, `${current} — not found`));
+    }
+    parentSel.value = current;
+    parentSel.addEventListener('change', () => {
+      status = setParent(shape, parentSel.value);
+      sync();
+      render();
+    });
+    head.appendChild(parentSel);
+    const children = shape.id ? shapes.filter(s => isDeltaShape(s.graph) && s.graph.extends === shape.id).map(s => s.id) : [];
+    const rm = removeButton(children.length
+      ? `${children.join(', ')} inherit from this shape — change their Inherits from first`
+      : 'Remove shape', () => {
+      if (children.length) return;
+      shapes.splice(idx, 1);
+      ui.active = shapes[Math.min(idx, shapes.length - 1)]?.id ?? null;
+      status = null;
+      sync();
+      render();
+    });
+    rm.disabled = children.length > 0;
+    head.appendChild(rm);
+    block.appendChild(head);
+
+    if (status) {
+      const line = el('div', 'pool-shape-status', status);
+      line.dataset.id = 'shape-status';
+      block.appendChild(line);
+    }
+
+    const diff = el('div', 'pool-shape-diff', diffText(shape));
+    diff.dataset.id = 'shape-diff';
+    block.appendChild(diff);
+
+    // A delta's inherited items, then its own rows in the same three-table editor.
+    let inheritedPanel = null;
+    if (delta) {
+      inheritedPanel = buildInheritedPanel(shape);
+      block.appendChild(inheritedPanel);
+    }
+
+    const graphParam = delta
+      ? {
+          name: `${param.name}.${shape.id}`,
+          // The tables see only the delta's own rows; `extends` and `remove` are kept here.
+          get value() {
+            const g = shape.graph;
+            return { ...(g.pools ? { pools: g.pools } : {}), ...(g.flows ? { flows: g.flows } : {}) };
+          },
+          set value(v) {
+            const { pools: _p, flows: _f, ...rest } = shape.graph;
+            shape.graph = { ...rest, ...(v?.pools ? { pools: v.pools } : {}), ...(v?.flows ? { flows: v.flows } : {}) };
+            sync();
+            diff.textContent = diffText(shape);
+            inheritedPanel?.refresh();
+          },
+        }
+      : {
+          name: `${param.name}.${shape.id}`,
+          get value() { return shape.graph; },
+          set value(v) { shape.graph = v ?? {}; sync(); diff.textContent = diffText(shape); },
+        };
+    const inherit = delta ? {
+      parentId: shape.graph.extends,
+      parent:   () => wholeOf(shape.graph.extends),
+      removed:  () => ({ pools: shape.graph.remove?.pools ?? [], flows: shape.graph.remove?.flows ?? [] }),
+      expanded: () => wholeOf(shape.id),
+    } : null;
+    block.appendChild(buildLiquidityGraphEditor(graphParam, accounts,
+      () => ({ ...(typeof flags === 'function' ? flags() : flags),
+               // Read at call time, not captured: an id retyped in the head above must move
+               // this line with it, or the readouts below name the shape the author just
+               // stopped editing.
+               shapeId: shape.id ?? '(unnamed)' }), inherit));
+
+    container.appendChild(block);
+  };
+
+  /**
+   * Design 114 §7.3 — the parent's pools and flows, each inherited / overridden / removed, with
+   * the one action that moves it to another state. Collapsed by default: a delta's own rows are
+   * what the author is here to edit.
+   */
+  const buildInheritedPanel = (shape) => {
+    const panel = el('details', 'pool-shape-inherited');
+    panel.dataset.id = 'shape-inherited';
+    panel.open = ui.open;
+    panel.addEventListener('toggle', () => { ui.open = panel.open; });
+
+    const act = (fn) => () => { fn(); sync(); render(); };
+    const g = () => shape.graph;
+    const setList = (kind, list) => {
+      const { [kind]: _drop, ...rest } = g();
+      shape.graph = list.length ? { ...rest, [kind]: list } : rest;
+    };
+    const setRemoved = (kind, ids) => {
+      const remove = { ...(g().remove ?? {}) };
+      if (ids.length) remove[kind] = ids; else delete remove[kind];
+      const { remove: _r, ...rest } = g();
+      shape.graph = Object.keys(remove).length ? { ...rest, remove } : rest;
+    };
+
+    const fill = () => {
+      panel.innerHTML = '';
+      const parent = wholeOf(g().extends);
+      const pools = parent?.pools ?? [];
+      const flows = parent?.flows ?? [];
+      const summary = el('summary', 'age-band-col-label',
+        `Inherited from ${g().extends} — ${pools.length} pool(s), ${flows.length} flow(s)`);
+      panel.appendChild(summary);
+      if (!isPlainObject(parent)) {
+        panel.appendChild(el('div', 'row-list-empty', `${g().extends} cannot be expanded.`));
+        return;
+      }
+      const section = (kind, items, describe) => {
+        if (!items.length) return;
+        panel.appendChild(el('div', 'age-band-col-label', kind === 'pools' ? 'Pools' : 'Flows'));
+        const noun = kind === 'pools' ? 'pool' : 'flow';
+        for (const item of items) {
+          const id = item?.id;
+          if (typeof id !== 'string') continue;
+          const own = (g()[kind] ?? []).find(x => x?.id === id);
+          const removed = (g().remove?.[kind] ?? []).includes(id);
+          const row = el('div', 'pool-shape-inherited-row');
+          row.dataset.id = `inherited-${noun}-${id}`;
+          const text = el('span', 'pool-shape-inherited-text', `${id} — ${describe(item)}`);
+          const state = el('span', 'pool-shape-inherited-state',
+            removed ? 'removed here' : own ? (sameGraphValue(own, item) ? 'override = parent' : `overridden (${fieldsDiffering(own, item).join(', ')})`)
+            : 'inherited');
+          row.appendChild(text);
+          row.appendChild(state);
+          const buttons = el('span', 'pool-shape-inherited-actions');
+          if (removed) {
+            buttons.appendChild(addButton('Restore', act(() => setRemoved(kind, (g().remove?.[kind] ?? []).filter(x => x !== id))), `restore-${noun}-${id}`));
+          } else if (own) {
+            buttons.appendChild(addButton('Revert', act(() => setList(kind, (g()[kind] ?? []).filter(x => x?.id !== id))), `revert-${noun}-${id}`));
+          } else {
+            buttons.appendChild(addButton('Override', act(() => setList(kind, [...(g()[kind] ?? []), deepCopy(item)])), `override-${noun}-${id}`));
+            buttons.appendChild(addButton('Remove', act(() => {
+              setRemoved(kind, [...(g().remove?.[kind] ?? []), id]);
+              status = null;
+              if (kind !== 'pools') return;
+              // §5.2 — an inherited flow into or out of a removed pool would dangle and refuse
+              // the plan. It goes with the pool, and the status line says so; Restore brings
+              // each back. A flow the shape OWNS is left for the author: it is their row.
+              const ownFlows = new Set((g().flows ?? []).map(f => f?.id));
+              const gone = new Set(g().remove?.flows ?? []);
+              const dangling = flows.filter(f => typeof f?.id === 'string' && (f.from === id || f.to === id)
+                && !ownFlows.has(f.id) && !gone.has(f.id)).map(f => f.id);
+              if (dangling.length) {
+                setRemoved('flows', [...(g().remove?.flows ?? []), ...dangling]);
+                status = `Removed pool ${id} and the inherited flow(s) that use it: ${dangling.join(', ')}. `
+                  + 'Restore brings each back.';
+              }
+            }), `remove-${noun}-${id}`));
+          }
+          row.appendChild(buttons);
+          panel.appendChild(row);
+        }
+      };
+      section('pools', pools, (p) => [
+        p.label, p.spendOrder != null ? `spend #${p.spendOrder}` : 'never spent',
+        p.target ? `${p.target.mode ?? 'YEARS_OF_SPEND'} ${p.target.value ?? ''}`.trim() : null,
+        `${(p.claims ?? []).length} claim(s)`,
+      ].filter(Boolean).join(' · '));
+      section('flows', flows, (f) => `${f.from} → ${f.to}${f.gate ? ' · gated' : ''}`);
+    };
+    fill();
+    panel.refresh = fill;
+    return panel;
   };
 
   render();
   return container;
 }
 
+/**
+ * Per-param UI state for the shapes editor: the selected tab, the inherited panel's state. Keyed
+ * by the param OBJECT, which the scenario keeps across a re-render of the parameter list.
+ */
+const SHAPES_UI = new WeakMap();
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Design 110 §4.2 — the four things the pool tables cannot say
@@ -1479,7 +1801,10 @@ function buildGraphReadouts(param, accounts, flags) {
     let normalized = null;
     let compileError = null;
     try {
-      normalized = normalizeLiquidityGraph(value, accounts);
+      // A DISCARDED advisory sink: the advisories are drawn above from `flags.problems` (one
+      // authority, `collectAuthoredGraphProblems`), and without a sink this call re-printed
+      // them to the console on every render — 26 copies each after a few tab switches.
+      normalized = normalizeLiquidityGraph(value, accounts, { advisories: [] });
     } catch (e) {
       compileError = e;
     }
@@ -1558,8 +1883,28 @@ function buildGraphReadouts(param, accounts, flags) {
   return container;
 }
 
-export function buildLiquidityGraphEditor(param, accounts = [], flags = null) {
+/**
+ * @param {object} param
+ * @param {Array}  accounts
+ * @param {object|function} [flags]
+ * @param {object} [inherit]  design 114 §7.3 — present when the value is a shape's DELTA. The
+ *        tables then hold only the shape's own rows, and:
+ *          · `parentId`        what the shape extends, for the row markers;
+ *          · `parent()`        the parent's WHOLE graph (or null when it cannot be expanded);
+ *          · `expanded()`      this shape's whole graph, for the readouts (the graph the run uses).
+ *        A flow may point at an inherited pool and a remainder may sit behind one, so those two
+ *        option lists offer inherited ids. A claim may not — claims live INSIDE a pool, and a
+ *        claim on a pool the shape does not own would have nowhere to be saved.
+ */
+export function buildLiquidityGraphEditor(param, accounts = [], flags = null, inherit = null) {
   const value = isPlainObject(param.value) ? param.value : {};
+  /** The parent's pools/flows this delta does not own — what the option lists add. */
+  const inheritedPools = () => {
+    if (!inherit) return [];
+    const local = new Set(pools.map(p => p.id).filter(Boolean));
+    return (inherit.parent()?.pools ?? []).filter(p => typeof p?.id === 'string' && !local.has(p.id)
+      && !(inherit.removed?.().pools ?? []).includes(p.id));
+  };
 
   // Pools, minus their claims — the claims live in their own table (see the header note).
   const pools = (Array.isArray(value.pools) ? value.pools : []).map(p => ({
@@ -1636,12 +1981,39 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null) {
     .flatMap(f => gateToRows(f?.id ?? null, f?.gate ?? null) ?? []);
 
   const poolIdOptions = () => pools.filter(p => p.id).map(p => [p.id, p.label || p.id]);
+  // Design 114 — a flow's endpoints may be inherited pools. Claims keep `poolIdOptions`.
+  const flowPoolOptions = () => [...poolIdOptions(),
+    ...inheritedPools().map(p => [p.id, `${p.label || p.id} (inherited)`])];
+  /** The saved item with this id, and the parent's — for the "vs parent" marker. */
+  const vsParent = (kind, id) => {
+    if (!inherit || !id) return '';
+    const parentItem = (inherit.parent()?.[kind] ?? []).find(x => x?.id === id);
+    if (!parentItem) return 'added';
+    const mine = (param.value?.[kind] ?? []).find(x => x?.id === id);
+    return mine && sameGraphValue(mine, parentItem) ? '= parent' : 'override';
+  };
+  const vsParentColumn = (kind) => ({
+    field: 'vsParent', label: 'vs parent', type: 'note', width: '0.8fr',
+    text: (row) => vsParent(kind, row?.id),
+    title: (row) => {
+      const v = vsParent(kind, row?.id);
+      return v === 'override' ? `Replaces ${inherit.parentId}'s ${row.id} in this shape (Revert it under Inherited)`
+        : v === 'added' ? `Not in ${inherit.parentId} — this shape adds it`
+        : v === '= parent' ? `Identical to ${inherit.parentId}'s ${row.id} — this override no longer changes anything`
+        : '';
+    },
+  });
 
   const sync = () => {
     const kept = pools.filter(p => p.id);
-    if (!kept.length) { param.value = null; return; }
+    // A delta may own no pools at all (it overrides only a flow, or only removes), so only the
+    // base-graph form reads "no pools" as "no graph".
+    if (!kept.length && !inherit) { param.value = null; return; }
+    const liveIds = new Set([...kept.map(q => q.id), ...inheritedPools().map(q => q.id)]);
+    const keptFlows = flows.filter(f => f.id && f.from && f.to);
+    if (!kept.length && !keptFlows.length) { param.value = null; return; }
     param.value = {
-      pools: kept.map(p => ({
+      ...(kept.length || !inherit ? { pools: kept.map(p => ({
         id: p.id,
         ...(p.label ? { label: p.label } : {}),
         ...(p.spendOrder != null ? { spendOrder: p.spendOrder } : {}),
@@ -1654,7 +2026,7 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null) {
                         // see instead.
                         ...(TARGET_NEEDS_AFTER.includes(p.targetMode)
                           ? { after: (p.targetAfter ?? []).filter(
-                                id => id !== p.id && kept.some(q => q.id === id)) }
+                                id => id !== p.id && liveIds.has(id)) }
                           : {}),
                         ...(p.targetWhenResident ? { whenResident: p.targetWhenResident } : {}),
                         ...(p.targetExtra ?? {}) } }
@@ -1674,10 +2046,9 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null) {
         ...(p.ui ? { ui: p.ui } : {}),
         claims: claims.filter(c => c.pool === p.id && c.key)
           .map(c => ({ key: c.key, ...(c.sleeves?.length ? { sleeves: [...c.sleeves] } : {}) })),
-      })),
-      ...(flows.some(f => f.id && f.from && f.to)
-        ? { flows: flows.filter(f => f.id && f.from && f.to)
-              .map(f => buildFlow(f, gateClauses.filter(c => c.flow === f.id))) }
+      })) } : {}),
+      ...(keptFlows.length
+        ? { flows: keptFlows.map(f => buildFlow(f, gateClauses.filter(c => c.flow === f.id))) }
         : {}),
     };
   };
@@ -1722,16 +2093,18 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null) {
     rows: flows,
     columns: [
       { field: 'id',           label: 'Id',       type: 'text',   placeholder: 'g2r', width: '0.9fr' },
-      { field: 'from',         label: 'From',     type: 'select', options: poolIdOptions, width: '1fr' },
-      { field: 'to',           label: 'To',       type: 'select', options: poolIdOptions, width: '1fr' },
+      { field: 'from',         label: 'From',     type: 'select', options: flowPoolOptions, width: '1fr' },
+      { field: 'to',           label: 'To',       type: 'select', options: flowPoolOptions, width: '1fr' },
       { field: 'priority',     label: 'Pri',      type: 'number', step: '1', width: '0.5fr' },
       { field: 'triggerKind',  label: 'Trigger',  type: 'select', options: TRIGGER_OPTIONS, width: '1.2fr' },
       { field: 'triggerValue', label: 'at',       type: 'number', step: '0.01', width: '0.6fr' },
       { field: 'cadence',      label: 'Cadence',  type: 'select', options: CADENCE_OPTIONS, width: '1fr' },
       { field: 'amountKind',   label: 'Amount',   type: 'select', options: AMOUNT_OPTIONS, width: '1.1fr' },
       { field: 'amountValue',  label: 'f',        type: 'number', step: '0.05', min: '0', max: '1', width: '0.6fr' },
+      ...(inherit ? [vsParentColumn('flows')] : []),
     ],
-    newRow:    () => ({ id: null, from: pools[0]?.id ?? null, to: pools[1]?.id ?? null, priority: 0,
+    newRow:    () => ({ id: null, from: flowPoolOptions()[0]?.[0] ?? null,
+                        to: flowPoolOptions()[1]?.[0] ?? null, priority: 0,
                         cadence: 'PERIOD', triggerKind: '', triggerValue: null, rawGate: null,
                         amountKind: 'toTarget', amountValue: null,
                         amountExtra: null, triggerExtra: null, ui: null }),
@@ -1897,11 +2270,14 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null) {
       { field: 'targetAfter', label: 'Remainder of', type: 'checkset', width: '1.6fr',
         emptyText: '—',
         options: (row) => (TARGET_NEEDS_AFTER.includes(row?.targetMode)
-          ? pools.filter(q => q.id && q.id !== row?.id
+          ? [...pools.filter(q => q.id && q.id !== row?.id
               // A remainder naming another remainder throws (the resolution ORDER would decide
               // the answer), so it is not offered — the same rule the compiler enforces, kept
               // off the screen rather than explained after the fact.
-              && !TARGET_NEEDS_AFTER.includes(q.targetMode)).map(q => [q.id, q.label || q.id])
+              && !TARGET_NEEDS_AFTER.includes(q.targetMode)).map(q => [q.id, q.label || q.id]),
+             // Design 114 — a remainder may sit behind a pool the shape inherits.
+             ...inheritedPools().filter(q => q.id !== row?.id
+               && !TARGET_NEEDS_AFTER.includes(q.target?.mode)).map(q => [q.id, `${q.label || q.id} (inherited)`])]
           : []) },
       // §24.5 — beside Spend # rather than at the end: both answer "when may this pool be
       // spent", and an early-access policy read in isolation from the spend order is the
@@ -1914,6 +2290,7 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null) {
       { field: 'capacityValue', label: 'Cap size', type: 'number',
         step: sizeAttr('capacity', 'step'), min: sizeAttr('capacity', 'min'),
         max:  sizeAttr('capacity', 'max'),  title: sizeAttr('capacity', 'title'), width: '0.7fr' },
+      ...(inherit ? [vsParentColumn('pools')] : []),
     ],
     // §22.5 trap 1 — `spendOrder` starts BLANK ("never"), not `(pools.length + 1) * 10`.
     // Defaulting it put every new pool BEHIND `growth`, which on most plans is the residual
@@ -1948,7 +2325,10 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null) {
   // §4.2 items 3 and 4, behind §10.5's provenance line. Built AFTER the tables so its first
   // render sees the value `sync()` below writes — and referenced by every table's `onChange`
   // above, which is a closure and therefore reaches it whatever the declaration order.
-  const readouts = buildGraphReadouts(param, accounts, flags);
+  // Design 114 — a delta's readouts describe the WHOLE graph it expands to, which is the graph
+  // the run uses; the delta alone would compile to an order missing every inherited pool.
+  const readouts = buildGraphReadouts(inherit ? { get value() { return inherit.expanded(); } } : param,
+    accounts, flags);
   container.appendChild(readouts);
 
   sync();

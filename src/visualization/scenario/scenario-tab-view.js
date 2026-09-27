@@ -658,7 +658,12 @@ export class ScenarioTabView {
         });
         valueInput = param.type === 'LiquidityGraph'
           ? buildLiquidityGraphEditor(param, this._accounts(), graphFlags)
-          : buildLiquidityShapesEditor(param, this._accounts(), graphFlags);
+          : buildLiquidityShapesEditor(param, this._accounts(), graphFlags, {
+              // Design 114 — a shape can inherit from the base graph, and each tab names the
+              // years the schedule selects it. Both are sibling params, read live.
+              baseGraph: () => scenario.params.find(x => x.name === 'liquidityGraph')?.value,
+              schedule:  () => scenario.params.find(x => x.name === 'liquidityGraphSchedule')?.value,
+            });
       } else if (param.type === 'LiquidityGraphSchedule') {
         // The shape ids are read LIVE off the sibling param rather than captured, so a shape
         // added or renamed without a full re-render still offers the right options here.
