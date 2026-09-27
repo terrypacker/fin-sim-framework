@@ -268,11 +268,18 @@ Changes:
   anchored post-IO and post-fixed payments.
 - **Q4 — Rate levers.** Whether the fixed rate, the revert rate or `fixedRateUntilYear`
   should be Monte Carlo or optimizer axes (design 98).
-- **Q5 — The extra-repayment cap's month count on AU loans.** Found while writing §6.1 and
-  not fixed. `capFixedExtraRepayment` counts months to maturity as the tax-period year (which
-  starts in July for AU) minus the payment's calendar month. For an AU loan its schedule is
-  therefore six months too long or too short, depending on the half of the year, so the
-  amount counted as extra is slightly off. §6.1 counts from the calendar date instead.
+- **Q5 — The extra-repayment cap's month count on AU loans.** CLOSED 26 Sep 2026. Every
+  loan year boundary compares the tax period's year, and the AU period starts on 1 July. The
+  cap's schedule and the break cost both counted months to 1 January, so an AU count was six
+  months too long for a payment in January to June and six months too short for one in July
+  to December. Both now count to the boundary the engine enforces (`monthsUntilPeriodYear`).
+  US loans are unchanged. Test FRL-15.
+- **Q6 — AU year boundaries fall on 1 July.** Found while closing Q5, and not changed. §4
+  says a fixed period ends on 1 January of `fixedRateUntilYear`, like the IO window. For an
+  AU loan, the fixed window, the IO window and maturity all end on 1 July of the stated year,
+  because they compare the financial year. Q5 made the month counts agree with that. Whether
+  the boundaries should move to 1 January for AU is a behaviour change to every AU loan with a
+  term, so it is left for a decision.
 
 ## 10. As built
 

@@ -402,14 +402,16 @@ function amortisingPayment(principal, rate, months) {
 }
 
 /**
- * The months left from `date` to 1 January of `endYear`, at least 0. The date is the
- * event's; when it is missing the year's start is assumed, which is the IO window's
- * convention too.
+ * The monthly payments left from `date` until the loan's tax-period year reaches
+ * `endYear`, at least 0 — that is, until the engine's own year boundary (a fixed window
+ * ending, maturity) actually fires. Every such boundary compares the tax period's year,
+ * and the AU period starts on 1 July, so an AU boundary falls on 1 July of `endYear`, not
+ * 1 January (design 113 Q5). Counting from the payment's calendar month keeps the two
+ * halves of the year consistent; without a date the period's start is assumed.
  */
-function monthsUntilYear(date, year, endYear) {
-  const d = date != null ? new Date(date) : null;
-  const month = d && !Number.isNaN(d.getTime()) ? d.getUTCMonth() : 0;
-  return Math.max(0, (endYear - year) * 12 - month);
+function monthsUntilPeriodYear(state, loan, date, year, endYear) {
+  return Math.max(0, endYear * 12 + periodStartMonth(state, loan)
+                     - paymentMonth(state, loan, date, year));
 }
 
 /**
@@ -419,19 +421,21 @@ function monthsUntilYear(date, year, endYear) {
  * the amortising payment that would retire the balance by `maturityYear` at the fixed
  * rate. AU fixed loans limit that to a yearly amount. The excess over the cap stays in the
  * cash pool. Without a maturity year the authored payment IS the schedule and there is
- * nothing extra to cap; an IO or discharge payment is never capped.
+ * nothing extra to cap; an IO or discharge payment is never capped. `state` supplies the
+ * tax period, so the schedule runs to the boundary where maturity actually fires (Q5).
  *
  * @returns {{ payment: number, extra: number }} the payment to make, and the extra it
  *          still contains (counted toward the year's cap by the reducer)
  */
-export function capFixedExtraRepayment(loan, payment, balance, rate, year, date) {
+export function capFixedExtraRepayment(loan, payment, balance, rate, year, date, state = null) {
   const cap = loan?.fixedExtraRepaymentCap;
   const maturity = loan?.maturityYear ?? null;
   if (cap == null || year == null || maturity == null || year >= maturity
       || !inFixedWindow(loan, year) || loan.interestOnly) {
     return { payment, extra: 0 };
   }
-  const scheduled = amortisingPayment(balance, rate, monthsUntilYear(date, year, maturity));
+  const scheduled = amortisingPayment(balance, rate,
+                                      monthsUntilPeriodYear(state, loan, date, year, maturity));
   const extra = payment - scheduled;
   if (!(extra > 0)) return { payment, extra: 0 };
   const usedYtd = loan.fixedExtraYear === year ? (loan.fixedExtraYtd ?? 0) : 0;
@@ -457,7 +461,7 @@ export function loanBreakCost(state, loan, date) {
   const year = loanYear(state, loan);
   const end  = fixedWindowEndYear(loan);
   if (year == null || end == null || !inFixedWindow(loan, year)) return none;
-  const months = monthsUntilYear(date, year, end);
+  const months = monthsUntilPeriodYear(state, loan, date, year, end);
   const primeNow = primeFor(state, loan);
   const primeAtFix = loan.fixedAtPrimeRate ?? primeNow;
   if (!(months > 0) || primeNow == null || primeAtFix == null) return none;
@@ -729,7 +733,7 @@ export function resolvePaymentSchedule(state, loan, balance, rate, year, date) {
   }
   // PLAIN — the authored payment is kept; what it pays above or below the schedule that
   // retires today's balance by maturity is carried as `extra` through every reset.
-  const months = Math.max(1, maturityYear * 12 + periodStartMonth(state, loan) - now);
+  const months = Math.max(1, monthsUntilPeriodYear(state, loan, date, year, maturityYear));
   const payment = loan.monthlyPayment;
   return { phase, principal: balance, fromMonth: now, months, rate, payment,
            extra: payment - amortisingPayment(balance, rate, months) };
@@ -1043,7 +1047,7 @@ export class LoanPaymentHandler extends HandlerEntry {
       const scheduled = scheduledLoanPayment(loan, balance, interest, rate, year, schedule);
       // Design 113 §7.2 — an extra repayment inside a fixed window is capped per year.
       const { payment, extra: fixedExtra } =
-        capFixedExtraRepayment(loan, scheduled, balance, rate, year, date);
+        capFixedExtraRepayment(loan, scheduled, balance, rate, year, date, state);
       if (payment <= 0) continue;
       // Design 113 stamps, all written by the reducer and all absent unless the loan has an
       // explicit rate type, so a legacy loan's action is byte-identical.

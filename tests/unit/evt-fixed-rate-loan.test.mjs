@@ -31,6 +31,9 @@
  *           so a rate cut no longer leaves a balloon at maturity.
  *   FRL-14: §6.1 — an offset still shortens the loan across a reset: the schedule does
  *           not follow the actual balance.
+ *   FRL-15: Q5 — on an AU loan (tax period from 1 July) the extra-repayment cap and the
+ *           break cost count months to the 1 July boundary the engine enforces, in
+ *           both halves of the year; a US loan is unchanged.
  *
  * Run with: node --test tests/unit/evt-fixed-rate-loan.test.mjs
  */
@@ -45,7 +48,7 @@ import { AccountService } from '../../src/finance/services/account-service.js';
 import { USD, AUD, LoanAccount } from '../../src/finance/assets/account.js';
 import {
   LoanPaymentHandler, LoanPaymentApplyReducer, LOAN_RATE_TYPE,
-  resolveLoanRate, effectivePrincipal, loanBreakCost, synthesizeLoanForProperty,
+  resolveLoanRate, effectivePrincipal, loanBreakCost, synthesizeLoanForProperty, capFixedExtraRepayment,
   findLoansForProperty, resolvePaymentSchedule, PAYMENT_SCHEDULE_PHASE,
 } from '../../src/finance/account-rules/loan-classes.js';
 import { AuHouseSaleHandler, AuHouseSaleApplyReducer } from '../../src/finance/account-rules/au/au-real-property-classes.js';
@@ -447,4 +450,33 @@ test('FRL-14: an offset still shortens the loan across a reset', () => {
   for (const p of reset.slice(0, -1)) assert.equal(p.payment, level);
   assert.equal(state.hLoan.balance, 0);
   assert.ok(payments.at(-1).year < 2050, `retired in ${payments.at(-1).year}`);
+});
+
+test('FRL-15: AU month counts run to the 1 July boundary the tax period enforces', () => {
+  // The AU financial year that started 1 July 2029; the US year is the calendar one.
+  const clock = (auStartYear, usYear, prime) => ({
+    currentPeriods: { AU: { startMs: Date.UTC(auStartYear, 6, 1) }, US: { startMs: yearMs(usYear) } },
+    effectiveInterestRates: { PRIME_US: prime, PRIME_AU: prime },
+  });
+  const jan = new Date(Date.UTC(2030, 0, 15));        // AU period year 2029
+  const aug = new Date(Date.UTC(2029, 7, 15));        // AU period year 2029
+
+  // Break cost: the window ends when the period year reaches 2033, i.e. 1 July 2033.
+  const l = loan({ rateType: FIXED_PERIOD, interestRate: 0.06, fixedRateUntilYear: 2033,
+                   breakCostOnPayoff: true, fixedAtPrimeRate: 0.05 });
+  const s = clock(2029, 2030, 0.03);
+  assert.equal(loanBreakCost(s, l, jan).months, 42, 'Jan 2030 → Jul 2033');
+  assert.equal(loanBreakCost(s, l, aug).months, 47, 'Aug 2029 → Jul 2033');
+  // A US loan's window still ends on 1 January.
+  const us = { ...l, country: 'US', currency: USD };
+  assert.equal(loanBreakCost(s, us, jan).months, 36);
+
+  // Extra cap: the schedule it measures "extra" against runs to 1 July of the maturity year.
+  const capped = loan({ rateType: FIXED_PERIOD, fixedRateUntilYear: 2035, maturityYear: 2055,
+                        fixedExtraRepaymentCap: 1e9 });
+  const { extra } = capFixedExtraRepayment(capped, 5_000, 500_000, 0.06, 2029, jan, s);
+  assert.ok(Math.abs(extra - (5_000 - pmt(500_000, 0.06, 2055 * 12 + 6 - (2030 * 12)))) < 1e-9);
+  // Without a state the period is unknown and the calendar-year convention applies.
+  const bare = capFixedExtraRepayment(capped, 5_000, 500_000, 0.06, 2030, jan).extra;
+  assert.ok(Math.abs(bare - (5_000 - pmt(500_000, 0.06, 300))) < 1e-9);
 });
