@@ -27,6 +27,8 @@
  *   IO-LOAN-4: `interestOnly` round-trips through the serializer, on both an authored
  *              LoanAccount and a mortgage synthesized from a property.
  *   IO-LOAN-5: absent the flag, the P&I path is untouched (regression guard).
+ *   TERM-10:   an AU standalone IO loan keeps its post-IO anchor when the AU toolset
+ *              seeds its state (it used to be dropped, so the post-IO payment drifted).
  *
  * Run with: node --test tests/unit/evt-interest-only-loan.test.mjs
  */
@@ -418,3 +420,50 @@ test('TERM-9: postIoPrincipal defaults from the balance and round-trips', () => 
   const legacy = { ...wire }; delete legacy.postIoPrincipal;
   assert.equal(ScenarioSerializer._makeAccount(legacy).postIoPrincipal, BALANCE);
 });
+
+// ── TERM-10 ──────────────────────────────────────────────────────────────────
+
+import { ServiceRegistry }           from '../../src/services/service-registry.js';
+import { BaseScenario }              from '../../src/scenarios/base-scenario.js';
+import { ScenarioLoader }            from '../../src/scenarios/scenario-loader.js';
+import { AuSingleHomeownerScenario } from '../../src/scenarios/au-single-homeowner-scenario.js';
+import { AUD }                       from '../../src/finance/assets/account.js';
+
+test('TERM-10: an AU-seeded standalone IO loan keeps its anchor, so its post-IO payment is level', () => {
+  // AU-only plan ⇒ the AU retirement toolset is the one that seeds every account's state.
+  // Its projection used to omit postIoPrincipal (the US copy did not), which silently put
+  // the loan on the legacy live-balance schedule: a payment that shrinks every month.
+  const START = new Date(Date.UTC(2026, 0, 1));
+  const END   = new Date(Date.UTC(2032, 0, 1));
+  ServiceRegistry.resetAll();
+  const services = ServiceRegistry.getInstance();
+  const cfg = AuSingleHomeownerScenario.buildDefaultConfig({}, START, END);
+  const loan = new LoanAccount(400_000, {
+    interestOnly: true, interestOnlyUntilYear: 2030, maturityYear: 2050,
+    country: 'AU', currency: AUD, interestRate: 0.06,
+  });
+  Object.assign(loan, { id: 'auIoLoan', name: 'AU IO Loan', stateKey: 'auIoLoan', role: 'au-loan' });
+  cfg.accounts.push(ScenarioSerializer._serializeAccount(loan));
+
+  const scenario = new BaseScenario({ context: services.simulationContext, simStart: START, simEnd: END });
+  scenario.buildSim({ telemetry: 'journal' });
+  new ScenarioLoader().load(cfg, services);
+  assert.equal(scenario.sim.state.auIoLoan.postIoPrincipal, 400_000);
+
+  const { log, warn } = console;
+  console.log = () => {}; console.warn = () => {};
+  try { scenario.sim.stepTo(END); } finally { console.log = log; console.warn = warn; }
+
+  // One entry per reducer run: filter on the reducer so a multi-reducer action is not
+  // double-counted, then keep the post-IO payments of this loan.
+  const postIo = scenario.sim.journal.getActions('LOAN_PAYMENT_APPLY')
+    .filter(e => e.reducer?.name === 'Loan Payment Apply')
+    .map(e => e.action.data)
+    .filter(a => a.loanKey === 'auIoLoan' && a.payment > 400_000 * 0.06 / 12 + 1);
+  assert.ok(postIo.length >= 12, `expected post-IO P&I payments, got ${postIo.length}`);
+  // Anchored: 400k amortised over 20 years at the live rate — one level payment while
+  // the rate holds. The legacy path re-amortised the live balance and fell every month.
+  const first = postIo[0].payment;
+  for (const a of postIo.slice(0, 12)) assert.ok(Math.abs(a.payment - first) < 0.01, `${a.payment} vs ${first}`);
+});
+

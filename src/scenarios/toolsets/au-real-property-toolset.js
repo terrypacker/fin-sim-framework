@@ -82,7 +82,9 @@ export const AU_REAL_PROPERTY = {
       { type: 'AU_HOUSE_SALE_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'AU',
         fields: { salePrice: ValueType.currency('AUD'), costBasis: ValueType.currency('AUD'), stateKey: ValueType.text(),
                   mortgageBalance: ValueType.currency('AUD'), residency: ValueType.text(),
-                  ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any() } },
+                  ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any(),
+                  // Design 113 — every loan discharged (a split) and any fixed-rate break cost.
+                  loanKeys: ValueType.any(), breakCost: ValueType.currency('AUD'), loanPayoffs: ValueType.any() } },
       // ITAA97 s292-102 downsizer contribution — a CASH movement into super, not a tax.
       { type: 'SUPER_DOWNSIZER_CONTRIBUTION_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'AU',
         fields: { personKey: ValueType.text(), amount: ValueType.number(), reason: ValueType.text(),
@@ -116,7 +118,9 @@ export const AU_REAL_PROPERTY = {
         fields: { loanKey: ValueType.text(), payment: ValueType.number(), interest: ValueType.number(),
                   cashDue: ValueType.number(),
                   // Design 87 G3 — the §988 character declaration, for journal visibility.
-                  section988: ValueType.any() } },
+                  section988: ValueType.any(),
+                  // Design 113 — fixed-rate stamps (Prime at fix, post-fixed anchor, capped extra).
+                  fixedStamps: ValueType.any() } },
       // §988 exchange gain/loss on foreign-currency debt (design 86 G7 / P8). Declared
       // by both real-property toolsets alongside LOAN_PAYMENT_APPLY, which emits it;
       // registerActionType is idempotent. cc: null — it is realized on a loan in any

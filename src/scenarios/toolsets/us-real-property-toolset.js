@@ -74,7 +74,9 @@ export const US_REAL_PROPERTY = {
       // money fields are deliberately native and unconverted.
       { type: 'US_HOUSE_SALE_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'US',
         fields: { salePrice: ValueType.currency('USD'), costBasis: ValueType.currency('USD'), stateKey: ValueType.text(),
-                  mortgageBalance: ValueType.currency('USD'), residency: ValueType.text() } },
+                  mortgageBalance: ValueType.currency('USD'), residency: ValueType.text(),
+                  // Design 113 — every loan discharged (a split) and any fixed-rate break cost.
+                  loanKeys: ValueType.any(), breakCost: ValueType.currency('USD'), loanPayoffs: ValueType.any() } },
       // depreciationGain is the unrecaptured §1250 slice, taxed at its own ceiling
       // and deliberately kept OUT of `gain`; auGain/auDiscountableGain are the AU
       // resident's assessment of the same sale, measured from the s855-45 basis after
@@ -92,7 +94,9 @@ export const US_REAL_PROPERTY = {
         fields: { loanKey: ValueType.text(), payment: ValueType.number(), interest: ValueType.number(),
                   cashDue: ValueType.number(),
                   // Design 87 G3 — the §988 character declaration, for journal visibility.
-                  section988: ValueType.any() } },
+                  section988: ValueType.any(),
+                  // Design 113 — fixed-rate stamps (Prime at fix, post-fixed anchor, capped extra).
+                  fixedStamps: ValueType.any() } },
       // §988 exchange gain/loss on foreign-currency debt (design 86 G7 / P8). Declared
       // by both real-property toolsets alongside LOAN_PAYMENT_APPLY, which emits it;
       // registerActionType is idempotent. cc: null — it is realized on a loan in any

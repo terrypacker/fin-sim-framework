@@ -221,7 +221,8 @@ import {
   UsMortgagePaymentHandler, UsMortgagePaymentApplyReducer,
   AuMortgagePaymentHandler, AuMortgagePaymentApplyReducer,
 } from '../finance/account-rules/mortgage-payment-classes.js';
-import { LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer } from '../finance/account-rules/loan-classes.js';
+import { LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer,
+         LOAN_RATE_TERM_FIELDS, loanRateTerms } from '../finance/account-rules/loan-classes.js';
 
 // ─── Holdings substrate (design 25) ─────────────────────────────────────────
 import {
@@ -429,6 +430,14 @@ function _retiredTypeError(kind, typeName) {
 function _isAlreadySerialized(node) {
   return node && typeof node === 'object' && typeof node.__type === 'string'
       && Object.getPrototypeOf(node) === Object.prototype;
+}
+
+
+/** The named fields of `obj` that are set (non-null), for deviation-only allowlists. */
+function pickSetFields(obj, fields) {
+  const out = {};
+  for (const f of fields) if (obj?.[f] != null) out[f] = obj[f];
+  return out;
 }
 
 export class ScenarioSerializer {
@@ -791,6 +800,9 @@ export class ScenarioSerializer {
       // revert to "stamped at the first payment" on the next load, which understates
       // §988 rather than erroring.
       d.bookingFxRate         = account.bookingFxRate         ?? null;
+      // Design 113 — rate type, fixed period and its rules. Written only when set, so a
+      // loan saved before them round-trips byte-for-byte.
+      Object.assign(d, loanRateTerms(account));
     }
     // OffsetAccount (cash-like, linked) field (design 53 §3 / 54 P3).
     if (account.type === 'offset') {
@@ -896,6 +908,8 @@ export class ScenarioSerializer {
       mortgageMaturityYear:          p.mortgageMaturityYear          ?? null,
       mortgageBookingFxRate:         p.mortgageBookingFxRate         ?? null,
       mortgagePaymentSourceKey:      p.mortgagePaymentSourceKey      ?? null,
+      // Design 113 — the mortgage's rate type and fixed-period terms, only when set.
+      ...pickSetFields(p, Object.values(LOAN_RATE_TERM_FIELDS)),
       landValueRatio:             p.landValueRatio             ?? 0.2,
       annualDepreciationOverride: p.annualDepreciationOverride ?? null,
       accumulatedDepreciation:    p.accumulatedDepreciation    ?? 0,
@@ -971,6 +985,8 @@ export class ScenarioSerializer {
       mortgageMaturityYear:          d.mortgageMaturityYear          ?? null,
       mortgageBookingFxRate:         d.mortgageBookingFxRate         ?? null,
       mortgagePaymentSourceKey:      d.mortgagePaymentSourceKey      ?? null,
+      // Design 113 — the mortgage's rate type and fixed-period terms, only when set.
+      ...pickSetFields(d, Object.values(LOAN_RATE_TERM_FIELDS)),
       landValueRatio:             d.landValueRatio             ?? 0.2,
       annualDepreciationOverride: d.annualDepreciationOverride ?? null,
       accumulatedDepreciation:    d.accumulatedDepreciation    ?? 0,
@@ -1342,6 +1358,8 @@ export class ScenarioSerializer {
       opts.postIoPrincipal       = d.postIoPrincipal       ?? null;
       // design 86 G7 — absent ⇒ null ⇒ stamped at the first payment, as before.
       opts.bookingFxRate         = d.bookingFxRate         ?? null;
+      // design 113 — absent ⇒ unset ⇒ the loan resolves its rate exactly as before.
+      Object.assign(opts, loanRateTerms(d));
     }
     // OffsetAccount (cash-like, linked) opts (design 53 §3 / 54 P3).
     if (d.__type === 'OffsetAccount') {

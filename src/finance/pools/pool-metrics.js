@@ -11,6 +11,7 @@
 import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
 import { POOL_TARGET_MODE, POOL_CAPACITY_MODE, POOL_SPEND_BASIS } from './liquidity-graph.js';
 import { ACCOUNT_TYPE }           from '../assets/account.js';
+import { findLoansForProperty, offsetApplies, loanYear } from '../account-rules/loan-classes.js';
 import { getResidency, primaryPersonKey, getBirthDate } from '../residency-utils.js';
 import { hasAgeGate, isAgeEligible, penaltyFreeSliceOf, penaltyBearingSliceOf,
   decimalAgeAt, unlocksAt as gateOpensAt } from '../account-rules/penalty-free-availability.js';
@@ -209,6 +210,21 @@ export function loanForOffset(state, offset) {
 }
 
 /**
+ * Every loan a given offset account can reduce RIGHT NOW (design 113 §5, §8): the loans on
+ * its property, same currency, less any inside a fixed window that allows no offset. A
+ * split has two; a fixed part that does not take offset would otherwise count as headroom
+ * that earns nothing.
+ */
+export function loansForOffset(state, offset) {
+  const propKey = offset?.offsetsPropertyKey;
+  if (!propKey || !state) return [];
+  const ccy = offset?.currency?.code ?? offset?.currency ?? null;
+  return findLoansForProperty(state, propKey).filter(l =>
+    (ccy == null || (l.currency?.code ?? l.currency) === ccy)
+    && offsetApplies(l, loanYear(state, l)));
+}
+
+/**
  * The household's annual spend in base currency — the same reading `RebalanceToTargetReducer`
  * takes, deliberately: a years-of-spend TARGET and a years-of-spend COVER figure that read
  * different spend lines would silently disagree about what "4 years" means.
@@ -362,8 +378,9 @@ export function poolMetrics(state, pool, ctx) {
       //
       // `min(balance, loan)` is still the right number for "how much of this pool is doing
       // work"; it is reported as `utilised`, which is what the cover reporting wants.
-      const loan = loanForOffset(state, account);
-      offsetCap += fx(Math.max(0, loan?.balance ?? 0));
+      for (const loan of loansForOffset(state, account)) {
+        offsetCap += fx(Math.max(0, loan.balance ?? 0));
+      }
     }
   }
 

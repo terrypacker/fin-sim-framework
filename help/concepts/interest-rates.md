@@ -43,6 +43,14 @@ because it closes a loop: inflation rises, policy responds, mortgage costs rise,
 the plan feels the second effect as well as the first. A fixed rate silently assumes
 a central bank that ignores the inflation you just modelled.
 
+Not every loan follows it. Each loan has a **rate type**: a variable loan pays prime
+plus its margin and moves with every policy step; a loan fixed for its whole term —
+the usual US 15- or 30-year mortgage — ignores policy entirely; and a fixed period —
+the usual Australian three-to-five-year fix, or a US adjustable-rate mortgage — holds
+its rate until a stated year and then reverts to a variable margin over prime. So
+in a plan where inflation drives policy, a fixed-rate borrower is protected and a
+variable one is not, which is the real difference between the two products.
+
 The response is a long-run relationship with smoothing, not an instant one: a
 sustained move in inflation eventually moves policy by a multiple of it, arriving
 gradually. A floor exists because policy rates stop near zero rather than going

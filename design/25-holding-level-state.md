@@ -546,7 +546,7 @@ All 10 migration steps from §10 landed in a single working session. Test suite:
 - **AU CGT 12-month discount via `purchaseDate`** — substrate is ready; the AU CGT module needs to consult `purchaseDate` rather than the existing flag. Roughly a half-day of tax-module work.
 - **`replenishSavings` FIFO migration** — only meaningful once toolsets declare multi-sleeve drawdown sources.
 - **`MonthlyExpenses`, `MonthlyWages`, `MonthlySocialSecurity` handlers** — these go through `transaction()` so the invariant holds, but they don't emit explicit `HOLDING_TRANSACT`. Migrating them yields better journal granularity (visible per-sleeve impact for behavioral handlers in design 29) but isn't required for §4.4.
-- **DRY `_accountToStatePlain` across `us-retirement-toolset.js` / `au-retirement-toolset.js`** — small refactor; move to `src/finance/state/account-to-state-plain.js`.
+- **DRY `_accountToStatePlain` across `us-retirement-toolset.js` / `au-retirement-toolset.js`** — small refactor; move to `src/finance/state/account-to-state-plain.js`. **DONE 26 Sep 2026:** one `accountToStatePlain` in `src/scenarios/toolsets/account-state-projection.js`, after the copies had drifted twice (design 106 §2, design 113 §10).
 - **Per-holding `marketValue` in `account.earningsBasis` reconciliation** — `StockWithdrawalApplyReducer` still derives `contributionBasis = balance - earningsBasis` and updates `earningsBasis` from realized gain. With state-derived holdings basis, the per-account `earningsBasis` field becomes redundant for brokerage accounts; consolidating is a follow-up but not blocking.
 - **Holdings editing UI** — read-only this design (§9). Editing flows ship with design 28 once appreciation schedules give the user something meaningful to edit.
 

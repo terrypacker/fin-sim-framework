@@ -24,7 +24,7 @@ import { isCurrencyLotPool, createCurrencyLotObserver } from './finance/account-
 import { LEDGER_METHOD, POOLING, LONG_TERM_DAYS, PERSONAL_DE_MINIMIS_USD, PERSONAL_CHARACTER, CurrencyLotPool, allocateGain } from './finance/account-rules/currency-lots.js';
 import { InheritHandler, InheritApplyReducer, InheritanceNeTaxApplyReducer, InheritedRaDistributionHandler, InheritedRaDistributionApplyReducer } from './finance/account-rules/inheritance-classes.js';
 import { INHERITED_RA_WINDOW, INHERITED_RA_DISTRIBUTION_STRATEGY, inheritedRaStrategy } from './finance/account-rules/inherited-ra-distribution-strategy.js';
-import { loanKeyForProperty, findLoanForProperty, synthesizeLoanForProperty, propertyNeedsLoanPayment, accountNeedsLoanPayment, offsetBalanceForLoan, effectivePrincipal, resolveLoanRate, scheduledLoanPayment, SECTION_988_PERSONAL_DE_MINIMIS_USD, section988BusinessFraction, computeSection988Gain, blendSection988BookingRate, investmentInterestAction, LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer, section988Residence } from './finance/account-rules/loan-classes.js';
+import { loanKeyForProperty, findLoanForProperty, findLoansForProperty, LOAN_RATE_TYPE, LOAN_RATE_TERM_FIELDS, loanRateTerms, mortgageRateTerms, inFixedWindow, fixedWindowEndYear, offsetApplies, loanYear, capFixedExtraRepayment, loanBreakCost, propertyLoanPayoffs, postFixedReamortises, synthesizeLoanForProperty, propertyNeedsLoanPayment, accountNeedsLoanPayment, offsetBalanceForLoan, effectivePrincipal, resolveLoanRate, scheduledLoanPayment, SECTION_988_PERSONAL_DE_MINIMIS_USD, section988BusinessFraction, computeSection988Gain, blendSection988BookingRate, investmentInterestAction, LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer, section988Residence } from './finance/account-rules/loan-classes.js';
 import { US_PRIMARY_HOME_EXCLUSION_MFJ, US_PRIMARY_HOME_EXCLUSION_SINGLE, toMs, isMainResidenceThroughout, mainResidenceWindow, auMainResidenceExemption, us121Exclusion, unrecaptured1250Gain, cgtDiscountFraction } from './finance/account-rules/main-residence.js';
 import { UsMortgagePaymentHandler, UsMortgagePaymentApplyReducer, AuMortgagePaymentHandler, AuMortgagePaymentApplyReducer } from './finance/account-rules/mortgage-payment-classes.js';
 import { PROPERTY_PURCHASE_ORDER, resolvePurchasePrice, propertyNeedsPurchase, PropertyPurchaseHandler, UsPropertyPurchaseHandler, AuPropertyPurchaseHandler, PropertyPurchaseApplyReducer } from './finance/account-rules/property-purchase.js';
@@ -253,7 +253,7 @@ import { gateAxisKey, parseGateAxisKey, gateOverridesFrom, applyGateOverridesToG
 import { PoolFlowApplyReducer } from './finance/pools/pool-flow-apply-reducer.js';
 import { PoolFlowReducer } from './finance/pools/pool-flow-reducer.js';
 import { POOL_CUBE_FIELDS, POOL_EVENT_KIND, buildPoolHistory, poolHistoryRows, poolSeries, reserveSeries, tiePoolHistory, latestPools } from './finance/pools/pool-history.js';
-import { poolMarketReturn, loanForOffset, annualSpendBase, poolMetrics, allPoolMetrics, poolContext, RESERVE_CLASSES, householdReserve } from './finance/pools/pool-metrics.js';
+import { poolMarketReturn, loanForOffset, loansForOffset, annualSpendBase, poolMetrics, allPoolMetrics, poolContext, RESERVE_CLASSES, householdReserve } from './finance/pools/pool-metrics.js';
 import { AccountRetitleApplyReducer } from './finance/reducers/account-retitle-apply-reducer.js';
 import { AccumulateConsumptionReducer } from './finance/reducers/accumulate-consumption-reducer.js';
 import { AccumulateConsumptionUtilityReducer } from './finance/reducers/accumulate-consumption-utility-reducer.js';
@@ -703,6 +703,19 @@ export const Finance = {
   inheritedRaStrategy,
   loanKeyForProperty,
   findLoanForProperty,
+  findLoansForProperty,
+  LOAN_RATE_TYPE,
+  LOAN_RATE_TERM_FIELDS,
+  loanRateTerms,
+  mortgageRateTerms,
+  inFixedWindow,
+  fixedWindowEndYear,
+  offsetApplies,
+  loanYear,
+  capFixedExtraRepayment,
+  loanBreakCost,
+  propertyLoanPayoffs,
+  postFixedReamortises,
   synthesizeLoanForProperty,
   propertyNeedsLoanPayment,
   accountNeedsLoanPayment,
@@ -1515,6 +1528,7 @@ export const Finance = {
   latestPools,
   poolMarketReturn,
   loanForOffset,
+  loansForOffset,
   annualSpendBase,
   poolMetrics,
   allPoolMetrics,

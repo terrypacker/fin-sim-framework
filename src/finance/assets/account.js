@@ -266,6 +266,21 @@ export class LoanAccount extends Account {
     // treated as incurred then. That understates §988 for a loan already outstanding
     // at t0 rather than inventing a history; state the real rate to model it properly.
     this.bookingFxRate      = opts.bookingFxRate      ?? null;
+    // Rate type and fixed period (design 113). `rateType` null resolves exactly as before
+    // it existed: a `primeSpread` makes the loan variable, none makes it fixed. FIXED is
+    // `interestRate` for life (a US 30-year); FIXED_PERIOD is `interestRate` until
+    // `fixedRateUntilYear`, then Prime + `primeSpread` — the REVERT spread — or the
+    // absolute `revertInterestRate` when no Prime is configured.
+    this.rateType               = opts.rateType               ?? null;
+    this.fixedRateUntilYear     = opts.fixedRateUntilYear     ?? null;
+    this.revertInterestRate     = opts.revertInterestRate     ?? null;
+    // Inside the fixed window: does a linked offset still reduce interest (most AU lenders:
+    // no), does a sale pay a break cost, and how much extra may be repaid per year.
+    this.offsetWhileFixed       = opts.offsetWhileFixed       ?? null;
+    this.breakCostOnPayoff      = opts.breakCostOnPayoff      ?? null;
+    this.fixedExtraRepaymentCap = opts.fixedExtraRepaymentCap ?? null;
+    // Prime when the rate was fixed, for the break cost. null ⇒ stamped at the first payment.
+    this.fixedAtPrimeRate       = opts.fixedAtPrimeRate       ?? null;
     this.drawdownPriority   = null; // a liability is never a source of drawdown cash
   }
 }

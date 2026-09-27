@@ -22,10 +22,9 @@
  *     exactly like the cash rate and the property's mortgage rate (design 56);
  *   · a blank term field is `null`, not 0.
  *
- * The property picker also excludes properties that already carry a mortgage of their
- * own: those synthesize a `<propertyKey>Loan` at build time, and a second authored loan
- * against the same house is a double-count whose authored half is invisible (
- * `findLoanForProperty` prefers the synthesized slot).
+ * The property picker offers every property: a loan linked to a mortgaged house is the
+ * other part of a split (design 113 §8). The rate-type controls (design 113) are pinned
+ * at the bottom.
  */
 
 import { loadHtml, makeMockContainer } from '../../helpers/viz-utils.js';
@@ -150,12 +149,14 @@ describe('account editor — loan (liability) type', () => {
     expect(data.primeSpread).toBeNull();
   });
 
-  test('the property picker excludes a property that already synthesizes its own loan', () => {
+  test('the property picker offers a mortgaged property too — linking to it makes a split', () => {
+    // Design 113 §8: every property path now reads every loan on the property, so a
+    // second loan on a mortgaged house is the other half of a split, not a double-count.
     const el = render(loanNode())._rootEl;
     const values = [...el.querySelectorAll('[data-id="linkedPropertyKey"] option')].map(o => o.value);
-    expect(values).toContain('shackProperty');       // unmortgaged → linkable
-    expect(values).not.toContain('auHouseProperty'); // mortgaged → would double-count
-    expect(values.filter(Boolean)).toHaveLength(1);  // the stateKey-less property is inert
+    expect(values).toContain('shackProperty');
+    expect(values).toContain('auHouseProperty');
+    expect(values.filter(Boolean)).toHaveLength(2);  // the stateKey-less property is inert
   });
 
   test('…but a loan already linked to a mortgaged property keeps its own option', () => {
@@ -193,5 +194,79 @@ describe('account editor — loan (liability) type', () => {
     for (const f of ['monthlyPayment', 'interestOnly', 'maturityYear', 'linkedPropertyKey', 'bookingFxRate']) {
       expect(f in data).toBe(false);
     }
+  });
+});
+
+describe('account editor — loan rate type (design 113)', () => {
+  beforeEach(() => loadHtml('../../index.html'));
+
+  const q = (el, id) => el.querySelector(`[data-id="${id}"]`);
+
+  test('a loan with a Prime spread shows as variable and saves as one', () => {
+    const editor = render(loanNode({ primeSpread: 0.02 }));
+    expect(q(editor._rootEl, 'rateType').value).toBe('VARIABLE');
+    const data = editor._readForm(editor._rootEl);
+    expect(data.rateType).toBe('VARIABLE');
+    expect(data.primeSpread).toBeCloseTo(0.02, 9);
+  });
+
+  test('a fixed loan keeps its absolute rate and never becomes a Prime spread', () => {
+    const editor = render(loanNode({ country: 'US', rateType: 'FIXED', interestRate: 0.065 }));
+    const el = editor._rootEl;
+    expect(Number(q(el, 'loanRate').value)).toBeCloseTo(0.065, 9);
+    const data = editor._readForm(el);
+    expect(data.primeSpread).toBeNull();
+    expect(data.interestRate).toBeCloseTo(0.065, 9);
+    expect(q(el, 'loanRateHint').textContent).toMatch(/Fixed for the life of the loan/);
+  });
+
+  test('a legacy spread-less loan shows as fixed with its offset preserved', () => {
+    const el = render(loanNode({ interestRate: 0.06 }))._rootEl;
+    expect(q(el, 'rateType').value).toBe('FIXED');
+    expect(q(el, 'offsetWhileFixed').checked).toBe(true);
+    expect(q(el, 'breakCostOnPayoff').checked).toBe(false);
+  });
+
+  test('fixed period: the fixed rate is absolute, the revert rate is stored against Prime', () => {
+    const editor = render(loanNode());
+    const el = editor._rootEl;
+    q(el, 'rateType').value = 'FIXED_PERIOD';
+    q(el, 'loanRate').value = '0.059';
+    q(el, 'fixedRateUntilYear').value = '2029';
+    q(el, 'revertRate').value = '0.0735';
+    q(el, 'fixedExtraRepaymentCap').value = '';
+    const data = editor._readForm(el);
+    expect(data.rateType).toBe('FIXED_PERIOD');
+    expect(data.interestRate).toBeCloseTo(0.059, 9);
+    expect(data.fixedRateUntilYear).toBe(2029);
+    expect(data.primeSpread).toBeCloseTo(0.0735 - PRIME.AU, 9);
+    expect(data.fixedExtraRepaymentCap).toBeNull();
+  });
+
+  test('fixed-only rows show only for a fixed rate type', () => {
+    const editor = render(loanNode({ primeSpread: 0.02 }));
+    const el = editor._rootEl;
+    const row = q(el, 'offsetWhileFixed').closest('.node-field');
+    const periodRow = q(el, 'revertRate').closest('.node-field');
+    expect(row.style.display).toBe('none');
+    q(el, 'rateType').value = 'FIXED_PERIOD';
+    editor._loanRateTerms.refresh();
+    expect(row.style.display).toBe('');
+    expect(periodRow.style.display).toBe('');
+    q(el, 'rateType').value = 'FIXED';
+    editor._loanRateTerms.refresh();
+    expect(periodRow.style.display).toBe('none');
+  });
+
+  test('a new loan defaults to the market norm: fixed in the US, variable in AU', () => {
+    const el = render(null)._rootEl;
+    q(el, 'country').value = 'US';
+    q(el, 'country').dispatchEvent(new Event('change'));
+    expect(q(el, 'rateType').value).toBe('FIXED');
+    expect(q(el, 'breakCostOnPayoff').checked).toBe(false);
+    q(el, 'country').value = 'AU';
+    q(el, 'country').dispatchEvent(new Event('change'));
+    expect(q(el, 'rateType').value).toBe('VARIABLE');
+    expect(q(el, 'breakCostOnPayoff').checked).toBe(true);
   });
 });

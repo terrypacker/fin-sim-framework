@@ -56,23 +56,29 @@ describe('design 56 §10 — Prime-relative mortgage rate field', () => {
       .toBe('= Prime (4.35%) + 2.00%');
   });
 
-  test('a fixed (spread-less) mortgage shows its absolute rate', () => {
+  test('a fixed (spread-less) mortgage shows its absolute rate and STAYS fixed on save', () => {
+    // Design 113 §2: this used to convert to a spread on re-save, which silently turned
+    // every fixed mortgage variable. A spread-less mortgage now shows as FIXED.
     const editor = editorFor({ id: 'p3', name: 'Fixed House', country: 'US', mortgageInterestRate: 0.055 });
     const root = editor._rootEl;
     expect(Number(root.querySelector('[data-id="mortgageInterestRate"]').value)).toBeCloseTo(0.055, 9);
-    // Entered absolute converts to a spread on save (opt-in on re-edit).
+    expect(root.querySelector('[data-id="mortgageRateType"]').value).toBe('FIXED');
     const data = editor._readForm(root);
-    expect(data.mortgagePrimeSpread).toBeCloseTo(0.055 - 0.045, 9);
+    expect(data.mortgageRateType).toBe('FIXED');
+    expect(data.mortgagePrimeSpread).toBeNull();
+    expect(data.mortgageInterestRate).toBeCloseTo(0.055, 9);
   });
 
-  test('no Prime configured → stores the entered value as a fixed absolute', () => {
-    const editor = editorFor({ id: 'p1', name: 'US House', country: 'US', mortgageInterestRate: 0.06 }, {});
+  test('no Prime configured → a variable rate is stored as an absolute', () => {
+    const editor = editorFor({ id: 'p1', name: 'US House', country: 'US', mortgageInterestRate: 0.06,
+                               mortgageRateType: 'VARIABLE' }, {});
     const root = editor._rootEl;
     expect(Number(root.querySelector('[data-id="mortgageInterestRate"]').value)).toBeCloseTo(0.06, 9);
     root.querySelector('[data-id="mortgageInterestRate"]').value = 0.05;
     const data = editor._readForm(root);
     expect(data.mortgageInterestRate).toBeCloseTo(0.05, 9);
     expect(data.mortgagePrimeSpread).toBeNull();
+    editor._mortgageRateTerms.refresh();
     expect(root.querySelector('[data-id="mortgageRateHint"]').textContent)
       .toBe('Prime not configured — stored as an absolute rate');
   });

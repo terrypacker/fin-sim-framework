@@ -11,7 +11,7 @@
 import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
-import { findLoanForProperty } from '../loan-classes.js';
+import { findLoanForProperty, findLoansForProperty, propertyLoanPayoffs } from '../loan-classes.js';
 import { resolveDestinationCashKey, resolveSaleDestinationKey, creditSaleProceeds } from '../cash-routing.js';
 import { us121Exclusion, unrecaptured1250Gain, toMs } from '../main-residence.js';
 import { singleAssetTermFields, auIndexedCostBase, auCpiLevel, auCpiRate } from '../../holdings/holding-period.js';
@@ -87,7 +87,8 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
     // action dispatched without a date.
     const eventMs = toMs(date);
     const mortgage    = mortgageBalance ?? 0;
-    const netProceeds = Math.max(0, salePrice - mortgage);
+    // Design 113 §7.1 — a fixed-rate break fee is paid out of the proceeds with the loan.
+    const netProceeds = Math.max(0, salePrice - mortgage - (action.breakCost ?? 0));
     // Depreciation taken during the hold reduces the tax basis, so the gain is
     // larger (design 48 §4.5). accumulatedDepreciation is 0 for non-rental
     // properties, so this is a no-op there.
@@ -186,8 +187,12 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
     }
     // Design 54 P2: the debt lives on the linked Loan — the sale pays it off, so
     // close the loan (balance 0) alongside zeroing the property value.
-    const loan = stateKey ? findLoanForProperty(state, stateKey) : null;
-    if (loan) {
+    // Every loan on the property (design 113 §8): the handler names them when there is
+    // more than one; a replayed legacy action falls back to the single-loan lookup.
+    const loans = action.loanKeys
+      ? action.loanKeys.map(k => state[k]).filter(Boolean)
+      : [stateKey ? findLoanForProperty(state, stateKey) : null].filter(Boolean);
+    for (const loan of loans) {
       updates[loan.stateKey] = { ...loan, balance: 0 };
     }
     return this.newState(
@@ -241,12 +246,23 @@ export class UsHouseSaleHandler extends HandlerEntry {
     this.generatedActionTypes = ['US_HOUSE_SALE_APPLY', 'RECORD_BALANCE'];
   }
 
-  call({ data, state }) {
+  call({ data, state, date }) {
     const propState       = data.stateKey ? state[data.stateKey] : null;
-    // Design 54 P2: the payoff amount is the linked Loan's balance, not the
-    // retired property scalar (now always 0).
-    const loan            = data.stateKey ? findLoanForProperty(state, data.stateKey) : null;
-    const mortgageBalance = loan?.balance ?? propState?.mortgageBalance ?? 0;
+    // Design 54 P2: the payoff amount is the linked loans' balance, not the retired
+    // property scalar (now always 0). Every loan secured on the property is discharged —
+    // a split has two (design 113 §8) — and each inside a fixed window may cost a break
+    // fee (§7.1), which comes out of the proceeds with the balance.
+    const loans           = data.stateKey ? findLoansForProperty(state, data.stateKey) : [];
+    const mortgageBalance = loans.length
+      ? loans.reduce((s, l) => s + (l.balance ?? 0), 0)
+      : (propState?.mortgageBalance ?? 0);
+    const payoffs         = data.stateKey ? propertyLoanPayoffs(state, data.stateKey, date) : [];
+    const breakCost       = +payoffs.reduce((s, p) => s + p.breakCost, 0).toFixed(2);
+    // Stated only when they add something, so a single-loan sale's action is unchanged.
+    const loanTerms       = {
+      ...(loans.length > 1 ? { loanKeys: loans.map(l => l.stateKey) } : {}),
+      ...(breakCost > 0 ? { breakCost, loanPayoffs: payoffs.filter(p => p.breakCost > 0) } : {}),
+    };
     const destinationKey  = resolveDestinationKey(state, data.saleDestinationAccount);
     const actions = [
       {
@@ -256,6 +272,7 @@ export class UsHouseSaleHandler extends HandlerEntry {
         // accumulator is 0 by default ⇒ inert; a positive value lifts basis and cuts CGT.
         costBasis:       data.costBasis + (propState?.capitalizedImprovements ?? 0),
         mortgageBalance,
+        ...loanTerms,
         residency:       state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null,
         stateKey:        data.stateKey ?? null,
         destinationKey,
@@ -267,7 +284,7 @@ export class UsHouseSaleHandler extends HandlerEntry {
     // zero-balance loan, so its chart would freeze at the pre-sale balance.
     // Snapshot the loan here (after US_HOUSE_SALE_APPLY zeroes it) so the payoff
     // shows on the chart.
-    if (loan) actions.push(new RecordBalanceAction(`${loan.stateKey}.balance`, loan.stateKey));
+    for (const loan of loans) actions.push(new RecordBalanceAction(`${loan.stateKey}.balance`, loan.stateKey));
     return actions;
   }
 }

@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-228 parameters · 33 panels · 11 node types (164 fields) · 173 action types · 86 tools · 275 state field types · 72 topics · 120 design docs
+228 parameters · 33 panels · 11 node types (178 fields) · 173 action types · 86 tools · 275 state field types · 72 topics · 121 design docs
 
 ---
 
@@ -589,7 +589,7 @@ true statement about the registry, not a gap in this file.
 
 ---
 
-## Node types (11 kinds · 164 fields)
+## Node types (11 kinds · 178 fields)
 
 Every kind of record the Nodes panel can open, and every control its edit form offers.
 The inventory is read from the FORM — the `<template>` in `index.html` the editor
@@ -656,7 +656,7 @@ Explained in [`help/nodes`](nodes/person.md). 10 field(s) described by a record 
 - **`superNonConcessionalContribution`** — Non-Concessional · `MONEY` · topic
   An annual after-tax contribution with no deduction and no 15% fund tax. It buys a tax-sheltered location rather than a deduction, and is bound by the non-concessional cap and its bring-forward rule.
 
-### Accounts — `account` (26 fields)
+### Accounts — `account` (33 fields)
 
 Explained in [`help/nodes`](nodes/account.md). 5 field(s) described by a record parameter.
 
@@ -694,8 +694,14 @@ Explained in [`help/nodes`](nodes/account.md). 5 field(s) described by a record 
   The earnings half of a retirement account's balance, computed as the balance less the contribution basis. Read-only: it is derived, and the two halves matter because a withdrawal takes basis out tax-free and earnings out taxable.
 - **`offsetsPropertyKey`** — Offsets Property · `select` · topic
   The property whose mortgage this offset account reduces. An offset does not earn interest; it lowers the interest-bearing principal of the linked loan instead, dollar for dollar, which is why draining one costs more than the cash it releases.
+- **`rateType`** — Rate Type · `select` · topic
+  How the loan's rate is set. Variable pays Prime plus a margin and moves with every Prime step. Fixed for the whole term holds one rate for the life of the loan, the usual US 15- or 30-year mortgage. Fixed period, then variable holds the rate until the Fixed Until Year and then reverts, the usual Australian three-to-five-year fix or a US adjustable-rate mortgage. A new US loan starts on fixed and a new Australian loan on variable.
 - **`loanRate`** — Interest Rate · `number` · topic
-  The annual rate the lender quotes, as an absolute decimal (0.06 = 6%). Where Prime is configured it is stored as a spread over it, so a Prime move re-rates this loan with every other.
+  The annual rate the lender quotes, as an absolute decimal (0.06 = 6%). On a variable loan it is stored as a margin over Prime where Prime is configured, so a Prime move re-rates it. On a fixed loan, or during a fixed period, it is the fixed rate itself and no Prime move reaches it.
+- **`fixedRateUntilYear`** — Fixed Until Year · `number` · topic
+  The calendar year a fixed period ends: from 1 January of that year the loan pays the revert rate. On a principal-and-interest loan with a maturity year the payment is also recalculated then, from the balance at that point over the years left to maturity. Blank keeps the rate fixed for the life of the loan.
+- **`revertRate`** — Revert Rate · `number` · topic
+  The variable rate the loan moves to when its fixed period ends, typed as today's absolute rate. It is stored as a margin over Prime, so it keeps following Prime after the switch. Lenders' revert rates usually sit above what a new borrower is offered, and that step-up is part of the cost of fixing. Blank keeps the fixed rate after the period ends.
 - **`monthlyPayment`** — Monthly Payment · `number` · topic
   The fixed monthly principal-and-interest payment. Inert while interest-only is on, and inert again after the interest-only period expires when a maturity year is set, because the loan then re-amortises over the remaining term. A fixed payment below the accrued interest does not error — the balance simply grows.
 - **`interestOnly`** — Interest Only · `checkbox` · topic
@@ -704,16 +710,24 @@ Explained in [`help/nodes`](nodes/account.md). 5 field(s) described by a record 
   The calendar year the interest-only period ends. From then the loan reverts to principal-and-interest over the remaining term, which needs a maturity year to amortise against. Blank means interest-only forever — and that payment step-up is exactly the exposure a "hold the leverage" plan is running.
 - **`maturityYear`** — Maturity Year · `number` · topic
   The calendar year the loan must be discharged: the whole remaining balance plus interest is paid in that year, and a shortfall runs the ordinary replenish path. Blank means no term at all.
+- **`offsetWhileFixed`** — Offset While Fixed · `checkbox` · topic
+  Whether a linked offset still reduces this loan's interest while the rate is fixed. Most Australian lenders give no offset on a fixed loan and some give the full offset, so check the loan contract. Off, the offset cash stays spendable but earns nothing against this loan until the fixed period ends. A variable loan is always offset.
+- **`breakCostOnPayoff`** — Break Cost on Sale · `checkbox` · topic
+  Whether selling the linked property during the fixed period costs a break fee, paid from the sale proceeds. The fee is what the lender loses re-lending the balance at today's lower rate for the rest of the fixed term, so it is zero if rates have risen since the fix. On by default for Australian loans; off for US ones, which rarely carry a prepayment penalty. Design 113 §7.1 has the formula.
+- **`fixedAtPrimeRate`** — Prime at Fix · `number` · topic
+  The Prime rate on the day the loan's rate was fixed, the break fee's reference point: the fee grows as Prime falls below it. Blank takes Prime at the loan's first payment in the run, which is right for a loan fixed now and understates the fee for one fixed years ago when rates were higher.
+- **`fixedExtraRepaymentCap`** — Extra Repay Cap /yr · `number` · topic
+  The most extra principal the lender accepts per calendar year while the rate is fixed. Extra here means the part of the monthly payment above the payment that would retire the loan by its maturity year at the fixed rate, so the cap needs a maturity year. Anything over the cap stays in the paying account. Blank means no cap.
 - **`deductibleFraction`** — Deductible Frac. · `number` · topic
   The income-producing share of the borrowed money's use, 0 to 1 — the use test, not the security. Blank keeps the default rule: fully deductible while a linked property is renting, nil otherwise. It also sets the §988 business share, so it moves the exchange gain or loss treatment too. On a standalone loan a stated fraction deducts the interest in full against Australian assessable income, and on the US return only up to net investment income.
 - **`linkedPropertyKey`** — Linked Property · `select` · topic
-  The property this loan finances. Only properties carrying no mortgage balance of their own are offered, because one that does synthesizes its own loan and a second against it would double-count the debt. The link is also what joins an offset account to this loan.
+  The property this loan finances. The link joins an offset account to this loan, and a sale of the property pays it off. Linking to a property with its own mortgage makes a split: the mortgage is one part and this loan the other, each with its own rate type, so reduce the property's mortgage balance to its part. An offset is spread across the parts it may reduce, never counted twice.
 - **`paymentSourceKey`** — Payment Source · `select` · topic
   The account the monthly payment is debited from. Blank resolves in order: a same-currency offset linked to this loan's property, then the country's flagged transaction account, then its savings pool. Paying from the offset is what a real offset facility direct-debits, and it is not cosmetic — draining it raises the interest-bearing principal.
 - **`bookingFxRate`** — §988 Booking FX · `number` · topic
   Foreign units per USD on the date the debt was incurred. A non-USD loan held by a US person realises ordinary gain or loss on each principal repayment, measured against this rate. Blank stamps it at the first payment, which treats the loan as incurred then and so understates the exposure on a loan already outstanding at the start of the run.
 
-### Real Property — `real-property` (45 fields)
+### Real Property — `real-property` (52 fields)
 
 Explained in [`help/nodes`](nodes/real-property.md). 3 field(s) described by a record parameter.
 
@@ -759,14 +773,28 @@ Explained in [`help/nodes`](nodes/real-property.md). 3 field(s) described by a r
   Outstanding principal, in the property's currency. Above zero this synthesizes a linked loan liability, and the property itself then contributes equity only. Set it to zero and author a separate loan account instead when the debt needs its own payment source or a second lender.
 - **`monthlyMortgage`** — Monthly Mtg. · `number` · topic
   The fixed monthly principal-and-interest payment. Inert while interest-only is on, because the payment is then derived from the accrued interest, and inert again after the interest-only expiry when a maturity year re-amortises the loan over its remaining term.
+- **`mortgageRateType`** — Rate Type · `select` · topic
+  Variable, fixed for the whole term, or a fixed period that then reverts to variable. Only a variable mortgage, or one past its fixed period, follows Prime. The usual US mortgage is fixed for 15 or 30 years; the usual Australian one is variable or fixed for three to five years. A split mortgage, part fixed and part variable, is authored as this mortgage plus a loan account linked to this property.
 - **`mortgageInterestRate`** — Mtg. Int. Rate · `number` · topic
-  The annual rate the bank quotes, as an absolute decimal. Where Prime is configured it is stored as a spread over it, so a Prime move re-rates this loan along with every other.
+  The annual rate the bank quotes, as an absolute decimal. A variable mortgage stores it as a margin over Prime where Prime is configured. A fixed mortgage, or one inside its fixed period, keeps it as the fixed rate, untouched by Prime.
+- **`mortgageFixedRateUntilYear`** — Fixed Until Year · `number` · topic
+  The year the fixed period ends; the revert rate applies from 1 January. A principal-and-interest mortgage with a maturity year has its payment recalculated then over the remaining years. Blank means fixed for life.
+- **`mortgageRevertRate`** — Revert Rate · `number` · topic
+  The rate the mortgage moves to after its fixed period, typed as today's rate and stored as a margin over Prime so it follows Prime from then on. A lender's revert rate is usually higher than its new-customer rate. Blank carries the fixed rate on.
 - **`mortgageInterestOnly`** — Interest Only · `checkbox` · topic
   Pay exactly the interest accrued on the effective, offset-reduced principal each month. The balance is flat by construction and a variable rate is tracked automatically. This is the safe way to express interest-only — a fixed payment below the accrued interest negatively amortises instead, silently.
 - **`mortgageInterestOnlyUntilYear`** — IO Until Year · `number` · topic
   The calendar year the interest-only period ends. From then the loan reverts to principal-and-interest over the remaining term, which needs a maturity year. Blank means interest-only forever, and the step-up at that expiry is the exposure a leveraged plan is actually carrying.
 - **`mortgageMaturityYear`** — Maturity Year · `number` · topic
   The calendar year the loan must be discharged: the whole remaining balance plus interest is paid that year, and a shortfall runs the ordinary replenish path. Blank means no term.
+- **`mortgageOffsetWhileFixed`** — Offset While Fixed · `checkbox` · topic
+  Whether an offset account linked to this property reduces the mortgage's interest during the fixed period. Many Australian lenders offer no offset on a fixed loan. Off, the cash in the offset earns nothing against this mortgage until the fixed period ends; a variable mortgage is always offset.
+- **`mortgageBreakCostOnPayoff`** — Break Cost on Sale · `checkbox` · topic
+  Whether selling during the fixed period costs a break fee, paid from the proceeds. The fee is the lender's loss from re-lending at today's lower rate for the rest of the fixed term, and nothing if rates have gone up. Defaults on for Australia and off for the US. It is an estimate from Prime moves with a flat balance, so expect it a little above a bank's figure.
+- **`mortgageFixedAtPrimeRate`** — Prime at Fix · `number` · topic
+  Prime when the rate was fixed, which the break fee is measured from. Blank uses Prime at the first payment of the run, which understates the fee on a rate fixed while Prime was higher.
+- **`mortgageFixedExtraRepaymentCap`** — Extra Repay Cap /yr · `number` · topic
+  The yearly limit on extra principal during the fixed period: payment above what would clear the mortgage by its maturity year at the fixed rate. It needs a maturity year to measure against. Any excess stays in the paying account. Blank is uncapped.
 - **`mortgageDeductibleFraction`** — Deductible Frac. · `number` · topic
   The income-producing share of the borrowed money's use, 0 to 1 — the use test, not what secures the loan. Blank keeps the default rule: fully deductible while the property is renting, nil otherwise. It also decides the §988 business share, so it moves the exchange gain or loss treatment with it.
 - **`mortgagePaymentSourceKey`** — Payment From · `select` · topic
@@ -1602,7 +1630,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `AU_DIVIDEND_UNFRANKED_RESIDENT_TAX` | amount: currency(AUD), stateKey: text | AU_BROKERAGE |
 | `AU_FIXED_INCOME_EARNINGS_APPLY` | amount: currency(AUD), residency: text, stateKey: text | AU_BANKING |
 | `AU_FIXED_INCOME_EARNINGS_TAX` | amount: currency(AUD), residency: text, stateKey: text | AU_BANKING |
-| `AU_HOUSE_SALE_APPLY` | salePrice: currency(AUD), costBasis: currency(AUD), stateKey: text, mortgageBalance: currency(AUD), residency: text, ownershipType: text, ownerId: text, owners: any | AU_REAL_PROPERTY |
+| `AU_HOUSE_SALE_APPLY` | salePrice: currency(AUD), costBasis: currency(AUD), stateKey: text, mortgageBalance: currency(AUD), residency: text, ownershipType: text, ownerId: text, owners: any, loanKeys: any, breakCost: currency(AUD), loanPayoffs: any | AU_REAL_PROPERTY |
 | `AU_HOUSE_SALE_TAX` | usShortTermGain: currency(AUD), usLongTermGain: currency(AUD), auShortTermGain: currency(AUD), auLongTermGain: currency(AUD), gain: currency(AUD), auIndexedGain: currency(AUD), depreciationGain: currency(AUD), residency: text, proceeds: currency(AUD), costBasis: currency(AUD), description: text, ownershipType: text, ownerId: text, owners: any, auTaxableFraction: number, auExemptionReason: text, acquisitionMs: number, saleMs: number, mainResidenceFrom: text, mainResidenceUntil: text, isPrimaryResidence: boolean | AU_REAL_PROPERTY |
 | `AU_INVESTMENT_INTEREST_DEDUCTION` | loanKey: text, amount: number, residency: text, currency: text, ownerId: text, ownershipType: text, owners: any | AU_REAL_PROPERTY, US_REAL_PROPERTY |
 | `AU_PERIOD_ADVANCE` | period: any | AU_TAX |
@@ -1678,7 +1706,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `K401_WITHDRAWAL_APPLY` | amount: currency(USD), penaltyAmount: number | US_RETIREMENT |
 | `K401_WITHDRAWAL_TAX` | amount: currency(USD), penaltyAmount: number | US_RETIREMENT |
 | `LATE_LIFE_CARE_APPLY` | active: boolean, factor: number, personId: text | AU_RETIREMENT, US_RETIREMENT |
-| `LOAN_PAYMENT_APPLY` | loanKey: text, payment: number, interest: number, cashDue: number, section988: any | AU_REAL_PROPERTY, US_REAL_PROPERTY |
+| `LOAN_PAYMENT_APPLY` | loanKey: text, payment: number, interest: number, cashDue: number, section988: any, fixedStamps: any | AU_REAL_PROPERTY, US_REAL_PROPERTY |
 | `NE_INHERITANCE_TAX` | amount: currency(USD) | INHERITANCE |
 | `OPPORTUNISTIC_REBALANCE_APPLY` | stateKey: text, legs: any | ECONOMIC_REGIMES |
 | `OUT_OF_FUNDS` | deficit: number, currency: text | AU_RETIREMENT, US_RETIREMENT |
@@ -1742,7 +1770,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `SUPER_WITHDRAWAL_EARNINGS_APPLY` | amount: currency(AUD), blocked: boolean | AU_RETIREMENT |
 | `SUPER_WITHDRAWAL_EARNINGS_TAX` | amount: currency(AUD) | AU_RETIREMENT |
 | `TLH_NO_SUBSTITUTE` | count: number, holdingIds: any, stateKeys: any | ECONOMIC_REGIMES |
-| `US_HOUSE_SALE_APPLY` | salePrice: currency(USD), costBasis: currency(USD), stateKey: text, mortgageBalance: currency(USD), residency: text | US_REAL_PROPERTY |
+| `US_HOUSE_SALE_APPLY` | salePrice: currency(USD), costBasis: currency(USD), stateKey: text, mortgageBalance: currency(USD), residency: text, loanKeys: any, breakCost: currency(USD), loanPayoffs: any | US_REAL_PROPERTY |
 | `US_HOUSE_SALE_TAX` | gain: currency(USD), depreciationGain: currency(USD), auGain: currency(USD), auIndexedGain: currency(USD), auDiscountableGain: currency(USD), usShortTermGain: currency(USD), usLongTermGain: currency(USD), auShortTermGain: currency(USD), auLongTermGain: currency(USD), residency: text, proceeds: currency(USD), costBasis: currency(USD), description: text, ownershipType: text, ownerId: text, owners: any | US_REAL_PROPERTY |
 | `US_INVESTMENT_INTEREST_DEDUCTION` | loanKey: text, amount: number, residency: text, currency: text, ownerId: text, ownershipType: text, owners: any | AU_REAL_PROPERTY, US_REAL_PROPERTY |
 | `US_PERIOD_ADVANCE` | period: any | US_TAX |
@@ -2092,7 +2120,7 @@ what the in-app panel keys on.
 | [Holdings](panels/holdings.md) | panel | 188 | 1 panel · design 82 |
 | [Inflation](concepts/inflation.md) | concept | 261 | 2 panels · 18 params · design 103 |
 | [Edit](panels/inspector.md) | panel | 182 | 1 panel |
-| [Interest Rates and the Yield Curve](concepts/interest-rates.md) | concept | 250 | 2 panels · 23 params · design 56, 67 |
+| [Interest Rates and the Yield Curve](concepts/interest-rates.md) | concept | 350 | 2 panels · 23 params · design 56, 67 |
 | [Journal Report](panels/journal-report.md) | panel | 193 | 1 panel · design 16 |
 | [Lineage](panels/lineage.md) | panel | 196 | 1 panel · design 30 |
 | [Liquidity Pools](concepts/liquidity-pools.md) | concept | 294 | 1 panel · 6 params · design 97 |
@@ -2133,7 +2161,7 @@ what the in-app panel keys on.
 
 ---
 
-## Design documents (120)
+## Design documents (121)
 
 Tier 3 — the full argument behind each mechanic, in `design/`. The title is each
 file's own H1, read out of it; there is no summary column, because a one-line precis
@@ -2259,6 +2287,7 @@ between 10 and 11.
 | [`110-liquidity-pool-control-surface.md`](../design/110-liquidity-pool-control-surface.md) | 110 — The liquidity pool control surface (design 97 §14, effort 2) |
 | [`111-node-type-help.md`](../design/111-node-type-help.md) | 111 — Node-type help: the forms you actually author a plan in |
 | [`112-dated-pool-targets.md`](../design/112-dated-pool-targets.md) | 112 — Dated pool targets: a pool size the MPC can decide |
+| [`113-fixed-rate-loans.md`](../design/113-fixed-rate-loans.md) | 113 — Fixed-rate loans, fixed periods and split loans |
 | [`bus-unification-plan.md`](../design/bus-unification-plan.md) | Bus Unification Plan |
 | [`inconsistencies.md`](../design/inconsistencies.md) | Inconsistencies, Rework Candidates, and Open Questions |
 | [`requirements.md`](../design/requirements.md) | Requirements Tracker |

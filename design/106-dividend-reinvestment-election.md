@@ -185,7 +185,9 @@ account's state entry first wins** (`patches[stateKey] === undefined`). The fiel
 into the US copy first and the election did nothing, because on the cross-border plan the
 AU toolset seeds `usStockAccount`. Both copies now carry it. Worth knowing generally: a
 field added to one copy is present or absent depending on toolset order, and the symptom
-is "the feature does nothing", not a crash.
+is "the feature does nothing", not a crash. *(26 Sep 2026: merged into one shared `accountToStatePlain`,
+`src/scenarios/toolsets/account-state-projection.js`, after the same drift dropped
+`postIoPrincipal` from the AU copy — design 113 §10.)*
 
 **3. The control is tri-state, not a checkbox.** A checkbox cannot say "follow the
 plan-wide default" — unchecked would mean "pay cash", which writes `false` and silently

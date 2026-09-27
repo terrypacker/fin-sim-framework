@@ -170,6 +170,16 @@ export class RealProperty extends Asset {
     // come from somewhere — pointing this at a cash account funds the loan out of the
     // portfolio instead, which is a real cost, not a free preservation.
     this.mortgagePaymentSourceKey      = opts.mortgagePaymentSourceKey      ?? null;
+    // Rate type and fixed-period terms of the synthesized loan (design 113), mirroring the
+    // LoanAccount fields of the same name without the `mortgage` prefix. All null ⇒ the
+    // loan resolves its rate exactly as before: variable with a spread, fixed without.
+    this.mortgageRateType               = opts.mortgageRateType               ?? null;
+    this.mortgageFixedRateUntilYear     = opts.mortgageFixedRateUntilYear     ?? null;
+    this.mortgageRevertInterestRate     = opts.mortgageRevertInterestRate     ?? null;
+    this.mortgageOffsetWhileFixed       = opts.mortgageOffsetWhileFixed       ?? null;
+    this.mortgageBreakCostOnPayoff      = opts.mortgageBreakCostOnPayoff      ?? null;
+    this.mortgageFixedExtraRepaymentCap = opts.mortgageFixedExtraRepaymentCap ?? null;
+    this.mortgageFixedAtPrimeRate       = opts.mortgageFixedAtPrimeRate       ?? null;
     this.landValueRatio             = opts.landValueRatio             ?? 0.2;
     this.annualDepreciationOverride = opts.annualDepreciationOverride ?? null;
     this.accumulatedDepreciation    = opts.accumulatedDepreciation    ?? 0;

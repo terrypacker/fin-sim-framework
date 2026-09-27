@@ -101,6 +101,7 @@ class LoanAccountBuilder extends BaseAccountBuilder {
     this._maturityYear          = null;
     this._bookingFxRate         = null;
     this._postIoPrincipal       = null;
+    this._rateTerms             = {};
   }
 
   interestRate(v)      { this._interestRate      = v; return this; }
@@ -119,6 +120,20 @@ class LoanAccountBuilder extends BaseAccountBuilder {
   bookingFxRate(v) { this._bookingFxRate = v; return this; }
   /** Principal the post-IO P&I payment amortises from; defaults to the opening balance. */
   postIoPrincipal(v) { this._postIoPrincipal = v; return this; }
+  /** VARIABLE | FIXED | FIXED_PERIOD (design 113 §4). */
+  rateType(v) { this._rateTerms.rateType = v; return this; }
+  /** Calendar year a FIXED_PERIOD loan's fixed rate ends (design 113 §4). */
+  fixedRateUntilYear(v) { this._rateTerms.fixedRateUntilYear = v; return this; }
+  /** Absolute revert rate, used only when no Prime is configured (design 113 §4). */
+  revertInterestRate(v) { this._rateTerms.revertInterestRate = v; return this; }
+  /** Whether a linked offset works inside the fixed window (design 113 §5). */
+  offsetWhileFixed(v = true) { this._rateTerms.offsetWhileFixed = v; return this; }
+  /** Whether a sale inside the fixed window pays a break cost (design 113 §7.1). */
+  breakCostOnPayoff(v = true) { this._rateTerms.breakCostOnPayoff = v; return this; }
+  /** Yearly cap on extra repayments inside the fixed window (design 113 §7.2). */
+  fixedExtraRepaymentCap(v) { this._rateTerms.fixedExtraRepaymentCap = v; return this; }
+  /** Prime when the rate was fixed — the break cost's reference (design 113 §7.1). */
+  fixedAtPrimeRate(v) { this._rateTerms.fixedAtPrimeRate = v; return this; }
 
   build() {
     return new LoanAccount(this._balance, {
@@ -133,6 +148,7 @@ class LoanAccountBuilder extends BaseAccountBuilder {
       maturityYear:          this._maturityYear,
       bookingFxRate:         this._bookingFxRate,
       postIoPrincipal:       this._postIoPrincipal,
+      ...this._rateTerms,
     });
   }
 }

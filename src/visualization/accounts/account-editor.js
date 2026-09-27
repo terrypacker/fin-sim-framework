@@ -9,6 +9,7 @@
  */
 
 import { BaseComponent } from '../components/base-component.js';
+import { LoanRateTermsForm } from '../common/loan-rate-terms-form.js';
 import { bindParamLinkedField } from '../scenario/param-linked-field.js';
 import { defaultCurrencyForCountry } from '../../finance/country-codes.js';
 import { RATE_KEYS } from '../../finance/economic-regimes/rate-keys.js';
@@ -52,16 +53,15 @@ function _defaultCurrency(type, country) {
 }
 
 /**
- * Properties a standalone loan may be linked to: those that do NOT already carry a
- * mortgage of their own. A property with `mortgageBalance > 0` synthesizes its own
- * `<propertyKey>Loan` state entry at build time (design 54 P2), so pointing a second
- * authored loan at it would put two debts on one house — and `findLoanForProperty`
- * prefers the synthesized slot, so the authored one would be the invisible half of the
- * double-count. A property whose mortgage is authored here instead is fair game.
+ * Properties a standalone loan may be linked to: every one. A loan linked to a property
+ * that carries its own mortgage is the other part of a SPLIT (design 113 §8) — an AU
+ * fixed part beside a variable one — and the sale, offset and rental paths all read
+ * every loan on the property (`findLoansForProperty`). Before that, a second loan on a
+ * mortgaged property was the invisible half of a double-count, which is why this list
+ * used to exclude them. The author reduces the property's own Mortgage Bal. to its part.
  */
-function _linkableProperties(properties, currentKey) {
-  return (properties ?? []).filter(p =>
-    p?.stateKey && ((p.mortgageBalance ?? 0) <= 0 || p.stateKey === currentKey));
+function _linkableProperties(properties, _currentKey) {
+  return (properties ?? []).filter(p => p?.stateKey);
 }
 
 /**
@@ -337,10 +337,14 @@ export class AccountEditor extends BaseComponent {
     const n = this._node;
     // The rate field edits the ABSOLUTE the lender quotes; storage is Prime-relative
     // (design 56), exactly as on a cash account and on the property's mortgage rate.
-    const rateInput = el.querySelector('[data-id="loanRate"]');
-    rateInput.value = this._loanRateAbsolute(n, n?.country ?? 'US');
-    this.listen(rateInput, 'input', () => this._refreshLoanRateHint(el));
-    this.listen(el.querySelector('[data-id="country"]'), 'change', () => this._refreshLoanRateHint(el));
+    // The rate type (design 113) decides whether that storage applies at all: a FIXED loan
+    // stores the absolute, and a FIXED_PERIOD loan stores its REVERT rate that way.
+    this._loanRateTerms = new LoanRateTermsForm({
+      el, prefix: '', rateId: 'loanRate', rateHintId: 'loanRateHint',
+      ioId: 'interestOnly', maturityId: 'maturityYear', primeRates: this._primeRates,
+      listen: (target, evt, fn) => this.listen(target, evt, fn),
+    });
+    this._loanRateTerms.render(n, { isNew: !n || n.type !== 'loan' });
 
     el.querySelector('[data-id="monthlyPayment"]').value        = n?.monthlyPayment        ?? 0;
     el.querySelector('[data-id="interestOnly"]').checked        = n?.interestOnly          ?? false;
@@ -358,32 +362,6 @@ export class AccountEditor extends BaseComponent {
       this.listen(el.querySelector(`[data-id="${id}"]`), 'input',  refreshTerm);
     }
     refreshTerm();
-    this._refreshLoanRateHint(el);
-  }
-
-  /**
-   * The absolute loan rate this account currently implies (design 56): Prime(country) +
-   * primeSpread when Prime-linked, else the fixed absolute. Note `LoanAccount` reuses
-   * `interestRate` for the LOAN rate — a different meaning from the cash-earnings
-   * `interestRate` the savings/brokerage field above edits, which is why the loan
-   * section has its own input rather than sharing `cashRate`.
-   */
-  _loanRateAbsolute(node, country) {
-    const prime = this._primeRates?.[country];
-    if (node?.primeSpread != null && prime != null) return prime + node.primeSpread;
-    return node?.interestRate ?? 0;
-  }
-
-  /** Mirror of _refreshCashRateHint for the loan rate. */
-  _refreshLoanRateHint(el) {
-    const hint = el.querySelector('[data-id="loanRateHint"]');
-    if (!hint) return;
-    const prime = this._primeRates?.[el.querySelector('[data-id="country"]').value];
-    const raw   = el.querySelector('[data-id="loanRate"]').value;
-    if (raw === '' || raw == null) { hint.textContent = ''; return; }
-    if (prime == null) { hint.textContent = 'Prime not configured — stored as an absolute rate'; return; }
-    const spread = Number(raw) - prime;
-    hint.textContent = `= Prime (${this._fmtPct(prime)}) ${spread >= 0 ? '+' : '−'} ${this._fmtPct(Math.abs(spread))}`;
   }
 
   /**
@@ -1217,16 +1195,8 @@ export class AccountEditor extends BaseComponent {
         if (!Number.isFinite(v)) return null;
         return round ? Math.round(v) : v;
       };
-      const rateRaw = el.querySelector('[data-id="loanRate"]').value;
-      const prime   = this._primeRates?.[data.country];
-      const rateAbs = rateRaw === '' || rateRaw == null ? 0 : Number(rateRaw);
-      if (prime != null && rateRaw !== '' && rateRaw != null) {
-        data.primeSpread  = rateAbs - prime;
-        data.interestRate = 0;             // the spread wins in resolveLoanRate
-      } else {
-        data.primeSpread  = null;
-        data.interestRate = rateAbs;
-      }
+      // Rate, rate type and fixed-period terms (design 113) — see LoanRateTermsForm.
+      Object.assign(data, this._loanRateTerms.read());
       data.monthlyPayment        = Number(el.querySelector('[data-id="monthlyPayment"]').value) || 0;
       data.interestOnly          = el.querySelector('[data-id="interestOnly"]').checked;
       data.interestOnlyUntilYear = num('interestOnlyUntilYear', true);

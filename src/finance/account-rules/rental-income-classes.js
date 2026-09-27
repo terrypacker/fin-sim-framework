@@ -11,7 +11,7 @@
 import { PRIORITY, AccountServiceReducer } from '../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction, FieldValueAction } from '../../simulation-framework/actions.js';
-import { findLoanForProperty, effectivePrincipal, resolveLoanRate } from './loan-classes.js';
+import { findLoansForProperty, effectivePrincipal, resolveLoanRate } from './loan-classes.js';
 import { resolveCashKey } from './cash-routing.js';
 
 /** Resolve the US / AU cash pools (savings first, checking fallback). */
@@ -49,7 +49,9 @@ const firstResidency = (state) =>
  * @param {object} propState Live property state (reads costBasis)
  * @param {'US'|'AU'} country
  * @param {number} inflationFactor  Cumulative effective-inflation factor (default 1 = no indexing)
- * @param {object|null} loan  Linked loan state entry (findLoanForProperty), or null
+ * @param {object|object[]|null} loan  Linked loan state entry, or every loan on the
+ *                           property (findLoansForProperty) — a split has two, and each
+ *                           deducts its own interest at its own rate (design 113 §8)
  * @param {object} [state]    Full runtime state, for the Phase-3 offset hook in effectivePrincipal
  */
 export function computeRentalMonth(p, propState, country, inflationFactor = 1, loan = null, state = null) {
@@ -63,22 +65,26 @@ export function computeRentalMonth(p, propState, country, inflationFactor = 1, l
   const cashOpex      = effectiveRent * expenseRatio;
   const netCash       = effectiveRent - cashOpex;
 
-  const loanPrincipal      = loan ? effectivePrincipal(state, loan.stateKey, loan) : 0;
-  // The deductible-interest rate is the loan's EFFECTIVE rate (design 56 Phase 3): a
-  // Prime-linked mortgage's deduction tracks `Prime + spread` in lockstep with the
-  // payment accrual (LoanPaymentHandler), so the two never diverge; a fixed loan uses
-  // its absolute rate. `resolveLoanRate` falls back to `loan.interestRate` when state /
-  // Prime is absent, so a null-loan or no-Prime path is unchanged.
-  //
-  // Design 86 G3 — `deductibleFraction` scales the deduction by the income-producing
-  // share of the loan's PURPOSE. Deductibility follows the use the borrowed funds
-  // were put to, not the security taken over them (s8-1; Munro; TR 95/33), so a
-  // mortgage secured on a rental but partly drawn down for private use is only
-  // partly deductible. `null` (the default, and every pre-86 loan) means 1 — fully
-  // deductible while the property rents — so this is inert unless stated.
-  const accruedInterest    = Math.max(0, loanPrincipal * (loan ? resolveLoanRate(state, loan) : 0) / 12);
-  const deductibleShare    = loan?.deductibleFraction ?? 1;
-  const deductibleInterest = accruedInterest * Math.min(1, Math.max(0, deductibleShare));
+  const loans = Array.isArray(loan) ? loan : (loan ? [loan] : []);
+  let deductibleInterest = 0;
+  for (const l of loans) {
+    const loanPrincipal = effectivePrincipal(state, l.stateKey, l);
+    // The deductible-interest rate is the loan's EFFECTIVE rate (design 56 Phase 3): a
+    // Prime-linked mortgage's deduction tracks `Prime + spread` in lockstep with the
+    // payment accrual (LoanPaymentHandler), so the two never diverge; a fixed loan uses
+    // its absolute rate. `resolveLoanRate` falls back to `loan.interestRate` when state /
+    // Prime is absent, so a null-loan or no-Prime path is unchanged.
+    //
+    // Design 86 G3 — `deductibleFraction` scales the deduction by the income-producing
+    // share of the loan's PURPOSE. Deductibility follows the use the borrowed funds
+    // were put to, not the security taken over them (s8-1; Munro; TR 95/33), so a
+    // mortgage secured on a rental but partly drawn down for private use is only
+    // partly deductible. `null` (the default, and every pre-86 loan) means 1 — fully
+    // deductible while the property rents — so this is inert unless stated.
+    const accruedInterest = Math.max(0, loanPrincipal * resolveLoanRate(state, l) / 12);
+    const deductibleShare = l.deductibleFraction ?? 1;
+    deductibleInterest += accruedInterest * Math.min(1, Math.max(0, deductibleShare));
+  }
 
   const buildingBasis = Math.max(0, (propState.costBasis ?? 0) * (1 - landRatio));
   const annualDep     = override != null
@@ -131,7 +137,7 @@ export class UsRentalIncomeHandler extends HandlerEntry {
       const propState = state[p.stateKey];
       // Skip when there is no rent, or the property has been sold (value zeroed).
       if (!propState || (propState.value ?? 0) <= 0 || (p.monthlyRent ?? 0) <= 0) continue;
-      const loan = findLoanForProperty(state, p.stateKey);
+      const loan = findLoansForProperty(state, p.stateKey);
       const m = computeRentalMonth(p, propState, 'US', inflationFactor, loan, state);
       anyRent += m.netCash;
       actions.push({
@@ -224,7 +230,7 @@ export class AuRentalIncomeHandler extends HandlerEntry {
       const propState = state[p.stateKey];
       // Skip when there is no rent, or the property has been sold (value zeroed).
       if (!propState || (propState.value ?? 0) <= 0 || (p.monthlyRent ?? 0) <= 0) continue;
-      const loan = findLoanForProperty(state, p.stateKey);
+      const loan = findLoansForProperty(state, p.stateKey);
       const m = computeRentalMonth(p, propState, 'AU', inflationFactor, loan, state);
       anyRent += m.netCash;
       actions.push({

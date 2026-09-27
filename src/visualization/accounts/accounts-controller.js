@@ -26,6 +26,10 @@ const VARIABLE_COUNTRY = new Set(['checking', 'savings', 'brokerage', 'offset', 
 const LOAN_NUM_FIELDS      = ['monthlyPayment'];
 const LOAN_NULLABLE_FIELDS = ['interestOnlyUntilYear', 'maturityYear', 'deductibleFraction', 'bookingFxRate'];
 const LOAN_KEY_FIELDS      = ['linkedPropertyKey', 'paymentSourceKey'];
+// Design 113 rate terms. Numbers stay null when blank; the two flags are tri-state (null =
+// not set, which a legacy loan relies on), so they are not coerced with `!!`.
+const LOAN_RATE_NULLABLE_FIELDS = ['fixedRateUntilYear', 'revertInterestRate', 'fixedExtraRepaymentCap', 'fixedAtPrimeRate'];
+const LOAN_RATE_FLAG_FIELDS     = ['offsetWhileFixed', 'breakCostOnPayoff'];
 
 /**
  * Derive the semantic {@link ACCOUNT_ROLES} role for a UI-created account from its
@@ -75,6 +79,11 @@ function _nullableNum(v) {
   if (v == null || v === '') return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
+}
+
+/** A tri-state flag: null/blank stays null ("not set"), anything else is a boolean. */
+function _nullableFlag(v) {
+  return v == null || v === '' ? null : !!v;
 }
 
 /** Map a currency code string to its descriptor ({code, symbol}); null when unknown. */
@@ -156,7 +165,14 @@ export class AccountsController {
         .deductibleFraction(_nullableNum(data.deductibleFraction))
         .interestOnlyUntilYear(_nullableNum(data.interestOnlyUntilYear))
         .maturityYear(_nullableNum(data.maturityYear))
-        .bookingFxRate(_nullableNum(data.bookingFxRate));
+        .bookingFxRate(_nullableNum(data.bookingFxRate))
+        .rateType(data.rateType || null)
+        .fixedRateUntilYear(_nullableNum(data.fixedRateUntilYear))
+        .revertInterestRate(_nullableNum(data.revertInterestRate))
+        .offsetWhileFixed(_nullableFlag(data.offsetWhileFixed))
+        .breakCostOnPayoff(_nullableFlag(data.breakCostOnPayoff))
+        .fixedExtraRepaymentCap(_nullableNum(data.fixedExtraRepaymentCap))
+        .fixedAtPrimeRate(_nullableNum(data.fixedAtPrimeRate));
     }
 
     const account = builder.build();
@@ -266,6 +282,9 @@ export class AccountsController {
     for (const f of LOAN_NULLABLE_FIELDS) if (f in n) n[f] = _nullableNum(n[f]);
     for (const f of LOAN_KEY_FIELDS)      if (f in n) n[f] = n[f] || null;
     if ('interestOnly' in n) n.interestOnly = !!n.interestOnly;
+    if ('rateType' in n) n.rateType = n.rateType || null;
+    for (const f of LOAN_RATE_NULLABLE_FIELDS) if (f in n) n[f] = _nullableNum(n[f]);
+    for (const f of LOAN_RATE_FLAG_FIELDS)     if (f in n) n[f] = _nullableFlag(n[f]);
     // Currency arrives from the editor as a code string; the account stores a
     // {code, symbol} descriptor. Map it, dropping an unknown/empty value.
     if ('currency' in n) {
