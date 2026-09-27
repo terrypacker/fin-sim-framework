@@ -2,7 +2,7 @@
 id: real-vs-nominal
 kind: concept
 title: Real vs Nominal Dollars
-panels: [state-panel, holdings, securities, watchlist, chart, journal-report, allocation, pools, paycheque, spending]
+panels: [state-panel, holdings, securities, watchlist, chart, journal-report, allocation, pools, paycheque, spending, mc-results, opt-results]
 params: []
 actions: []
 tools: []
@@ -19,6 +19,8 @@ stamps:
   panel:pools: b2d1aa
   panel:paycheque: f8d503
   panel:spending: f9f5c7
+  panel:mc-results: 315796
+  panel:opt-results: 36a150
   src/visualization/app-display-settings.js: ec6c02
   src/finance/services/state-schema-registry.js: 278bb8
 ---
@@ -52,8 +54,8 @@ nominal.
 
 **Always nominal.** Tax documents, super contributions and cap tables are measured
 against statutory amounts, so they stay nominal and are labelled that way. A CSV
-export is always nominal. Monte Carlo and optimizer figures stay nominal for now:
-each run has its own inflation path. Figures that are real by construction keep their
-own basis: Monte Carlo's Real Cost and the terminal wealth target. The spending panel
+export is always nominal. Monte Carlo restates each path by its own inflation and
+exchange rate *before* ranking it, and the optimizer each candidate's end balances;
+other Monte Carlo money stays nominal unless named Real, like Real Cost. The spending panel
 follows this switch, while its own buttons can override it until you next flip the
 switch.

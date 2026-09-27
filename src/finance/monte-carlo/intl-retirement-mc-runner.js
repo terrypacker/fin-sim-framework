@@ -374,6 +374,7 @@ export class IntlRetirementMcRunner {
       cumulativeDeficit: r.result.cumulativeDeficit,
       deficitMonths:     r.result.deficitMonths,
       timeSeries:        r.result.timeSeries,
+      terminalRates:     r.result.terminalRates ?? null,   // design 79 §9
       pathShape:         computePathShape(r.result.timeSeries),
       lifetimeRepairSpend: r.result.lifetimeRepairSpend ?? 0,
       // Design 89 phase 6. `runs` is an explicit projection, not a spread of `evaluate`'s

@@ -28,6 +28,7 @@ import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES, objectiveIsWindowable,
 import { valuesForConfig }     from './opt-values.js';
 import { DateUtils }           from '../../simulation-framework/date-utils.js';
 import { rolloutProfiler }     from './rollout-profiler.js';
+import { realRatesOf }         from '../fx/real-basis.js';
 
 /** Deep-ish equality good enough for ENUM value matching (primitives + arrays of primitives). */
 function _eq(a, b) {
@@ -508,6 +509,10 @@ export class OptimizationProblem {
       // trade-off is inflation-neutral and late-life spending isn't starved to defend
       // a fixed nominal target. 1.0 ⇒ no deflation (sim start / no accumulator).
       terminalPriceLevel: state.inflationAccumulator?.US ?? 1,
+      // Both countries' terminal levels and the terminal FX rate (design 79 §9), for a
+      // DISPLAY in real money of either currency. `terminalPriceLevel` above is the
+      // objective's own deflator and stays US by definition.
+      terminalRates:     realRatesOf(state),
       scenarioFailed:    state.scenarioFailed    ?? false,
       cumulativeDeficit: state.cumulativeDeficit ?? 0,
       deficitMonths:     state.deficitMonths     ?? 0,

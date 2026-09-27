@@ -14,6 +14,7 @@ import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
 import { buildAllocationCube }        from '../allocation-reporting/allocation-cube.js';
 import { mixPoint, MIX_CLASSES }      from '../allocation-reporting/mix-distribution.js';
 import { residencePriceLevel }        from '../spending/expense-price-level.js';
+import { realRatesOf }                from '../fx/real-basis.js';
 
 /**
  * What an MC path RECORDS, separated from what runs it.
@@ -90,6 +91,11 @@ export function createMcSampler({ mix = false, baseCurrency = 'USD' } = {}) {
       // by (the RESIDENCE country's), so real net liquidity is denominated in the same
       // basket as the spend line it has to cover. 1.0 at simStart => base-year dollars.
       priceLevel:    residencePriceLevel(state),
+      // Both countries' levels and the FX rate at this point (design 79 §9), so a display
+      // in either currency can restate this path's net worth in real money of THAT
+      // currency. `priceLevel` above stays: it is the residence basket the trough metric
+      // is defined in, a different question.
+      rates:         realRatesOf(state),
     };
     if (!mix) return point;
 
@@ -131,6 +137,7 @@ export function extractYearlyTimeSeries(sim) {
       netLiquidity:  sample.netLiquidity,
       houseValueUsd: sample.houseValueUsd,
       priceLevel:    sample.priceLevel,
+      rates:         sample.rates,
       ...(sample.mix ? { grossAssetsUsd: sample.grossAssetsUsd, mix: sample.mix } : {}),
     }));
 }

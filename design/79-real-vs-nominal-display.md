@@ -11,7 +11,7 @@
 > written and 79 is this one. Those citations mean *"a future Schedule-type design"*,
 > not this doc. They should get a fresh number when that design is written.
 
-**Status**: **P1–P3 BUILT 2026-09-27** (P4 open) — drafted 2026-07-13, **revised
+**Status**: **COMPLETE 2026-09-27** (P1–P4 built) — drafted 2026-07-13, **revised
 2026-09-27** against the code at `fd6ec9cc`. See §14 for what P1 shipped and where it
 departed from the plan. Scope: an app-wide **value basis**
 toggle, `Nominal` (the default, and what the app does today) vs. `Real (base-year \$)`,
@@ -337,7 +337,7 @@ panels stay nominal with a tag.
 | **P1** ✅ | `valueBasis` setting; `presentForDisplay` opt-in hop and `priceLevelSource`; top-bar select and label; point-in-time panels (§4); `run-scenario --real` | — |
 | **P2** ✅ | Chart: per-point level track, live and backfill (§5) | P1 |
 | **P3** ✅ | Journal R1 (§6); allocation, pool history and paycheque panels by row date (§4); tax-document badge; export stamps the basis; spending panel follows the global toggle (§8.1) | P1 |
-| **P4** | MC/Opt real aggregates computed per path (§9) | P1 |
+| **P4** ✅ | MC/Opt real aggregates computed per path (§9) | P1 |
 | ~~old P4~~ | ~~per-native-currency deflator~~: **retired** (R3) | — |
 
 P2, P3 and P4 are independent of one another once P1 lands.
@@ -574,13 +574,63 @@ the panel has always drawn.
   pools, spending, paycheque, journal plugin, state-panel statistics.
 - Two cases in `tests/viz/timeline/tax-document-modal.test.mjs`.
 
-### P4 — MC/Opt
-- `mc-analysis.js`: add parallel `*Real` percentiles (terminal net worth, the fan
-  series), each path deflated by its own `priceLevel` before the percentile is taken.
-- `mc-results-panel.js` and `mc-runs-panel.js`: choose the field set by basis, and tag
-  figures that exist only as nominal.
-- `opt-results-panel.js` and `opt-runs-panel.js`: deflate terminal wealth by each
-  result's own `terminalPriceLevel`.
+### P4 — MC/Opt  (BUILT 2026-09-27)
+
+The plan said "deflate each path by its own `priceLevel`". That field is the
+**residence** level (design 97 §18), while §7 needs the level of the **display
+currency's country**, and in an AUD view each path's own FX rate as well. Neither was
+recorded, so P4 records them:
+
+- **`src/finance/fx/real-basis.js`** holds two functions:
+  - `realRatesOf(state)` returns `{ priceLevels: { US, AU }, usdAud }`.
+  - `realFromUsd(amountUsd, rates, displayCurrency)` returns `amount × fx / level`,
+    or **null** when the rates cannot say, never ÷ 1.
+- **Recorded with the figure:**
+  - every MC sample and yearly point gets `rates` (the sampler test's exact-keys
+    guard was updated deliberately: two levels and one rate per point);
+  - every MC path gets `terminalRates` (worker `evaluate`, projected by the runner);
+  - every optimizer result gets `terminalRates`. `terminalPriceLevel` stays: it is
+    the objective's own US deflator.
+- **MC results panel.** It restates at display time, not in `mc-analysis.js`, because
+  the country and FX depend on the display currency, which can change after the run.
+  - `_realBasis(runs)` is all or nothing: every path's terminal and every yearly point
+    must restate, or the whole panel stays nominal. A band that mixes real and
+    nominal paths is not a meaningful percentile.
+  - Under real, the fan (each point by its path's own rates), the histogram, and
+    the P10/P50/P90 badges are computed from **restated paths, then ranked**.
+  - A banner states the basis. Where the runs predate this change it reads
+    "Nominal: these runs did not record the rates… re-run".
+- **Opt panels.** They use `fmtTerminalWhole` / `fmtTerminalCompact` /
+  `presentTerminalUsd` in `money-format.js`. Best net worth, best Roth, net worth
+  including speculative stakes, and the table and runs-list columns are restated by
+  **that candidate's own** `terminalRates` and labelled `(real)`. The score is the
+  objective's unit and is left alone.
+
+**Deliberately still nominal** (unlabelled today; they sit beside labelled real figures):
+- **After-tax NW and paired Δs.** A paired Δ needs each arm's own rates per seed.
+- **Lifetime taxes paid and lifetime repair spend.** These are sums over years, and a
+  per-year series is not recorded.
+- **Grid cells** (reduced rows, no rates).
+- **`cumulativeDeficit`**, a mixed-currency sum (design 89 §5.2).
+
+The figures that are real by construction keep their own basis: Real Cost, and the
+real trough and drawdown (residence basket). These are candidates for a follow-up,
+not defects in P4.
+
+**Verified in the browser** on the default scenario, an 8-path MC:
+- The paths' terminal US levels ranged from 1.01 to 2.60.
+- The Real P50 badge equals an independent median of per-path `nw ÷ own level`.
+  Nominal median ÷ median level would have overstated it by about 9%.
+- The terminal rates equal each path's last yearly point.
+- No console errors.
+
+**Tests:**
+- `tests/unit/real-basis.test.mjs`: the rate capture; USD vs AUD restatement; null
+  rather than ÷ 1; the median of real paths differs from nominal median ÷ median level;
+  `presentTerminalUsd` follows the basis.
+- `tests/viz/mc-results-real-basis.test.mjs`: P50 from restated paths; fan per point;
+  an AUD view at each path's own FX ÷ AU; one legacy path forces nominal with the
+  banner; nominal is unchanged.
 
 ### Cross-cutting
 - **One deflator constant, one hop.** Design 89 §9.b counted four inline copies of

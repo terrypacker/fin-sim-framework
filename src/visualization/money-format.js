@@ -9,6 +9,7 @@
  */
 
 import { ServiceRegistry } from '../services/service-registry.js';
+import { realFromUsd }     from '../finance/fx/real-basis.js';
 
 /**
  * Display-currency money formatting for panels that need custom (compact /
@@ -43,4 +44,37 @@ export function fmtWhole(value, nativeCode = 'USD', opts = {}) {
   if (value == null || !Number.isFinite(value)) return '—';
   const { value: v, symbol } = _conv(value, nativeCode, opts);
   return (v < 0 ? '-' + symbol : symbol) + Math.abs(v).toLocaleString('en-US', { maximumFractionDigits: 0 });
+}
+
+/**
+ * A terminal USD figure from an optimizer or MC result, in the app's value basis
+ * (design 79 §9). Real restates it by the rates recorded WITH it — that result's own
+ * terminal inflation and FX — never by the live sim's, which describe a different world.
+ * A result without recorded rates (from before design 79) stays nominal, and says so
+ * through `basis`.
+ *
+ * @param {number} amountUsd
+ * @param {{ priceLevels?: object, usdAud?: number|null }} [rates]  `result.terminalRates`
+ * @returns {{ value: number, code: string, basis: 'real'|'nominal' }}
+ */
+export function presentTerminalUsd(amountUsd, rates) {
+  const reg = ServiceRegistry.getInstance?.()?.schemaRegistry;
+  if (reg?.valueBasis?.() === 'real') {
+    const code  = reg.displayCurrencyCode?.() ?? 'USD';
+    const value = realFromUsd(amountUsd, rates, code);
+    if (value != null) return { value, code, basis: 'real' };
+  }
+  return { value: amountUsd, code: 'USD', basis: 'nominal' };
+}
+
+/** Whole-dollar terminal figure in the app's basis — see {@link presentTerminalUsd}. */
+export function fmtTerminalWhole(amountUsd, rates) {
+  const { value, code } = presentTerminalUsd(amountUsd, rates);
+  return fmtWhole(value, code);
+}
+
+/** Compact terminal figure in the app's basis — see {@link presentTerminalUsd}. */
+export function fmtTerminalCompact(amountUsd, rates) {
+  const { value, code } = presentTerminalUsd(amountUsd, rates);
+  return fmtCompact(value, code);
 }

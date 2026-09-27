@@ -25,6 +25,7 @@ import { createMcSampler, extractYearlyTimeSeries, MC_SAMPLER_CADENCE, computeNe
 import { get, set }              from '../mc-param-paths.js';
 import { computePathShape }      from '../mc-sampling.js';
 import { runsToRows }            from '../mc-analysis.js';
+import { realRatesOf }           from '../../fx/real-basis.js';
 
 /**
  * The per-iteration Monte Carlo world, in one place, so the SERIAL loop and a WORKER
@@ -286,6 +287,9 @@ export function buildIterationRunner(ctx) {
       cumulativeDeficit: sim.state.cumulativeDeficit ?? 0,
       deficitMonths:     sim.state.deficitMonths     ?? 0,
       timeSeries:        extractYearlyTimeSeries(sim),
+      // The rates the terminal figures above were measured at (design 79 §9): a real
+      // display restates THIS path's terminal wealth by THIS path's inflation and FX.
+      terminalRates:     realRatesOf(sim.state),
       // Lifetime stochastic house-repair spend (design 75 §6.4 C), native property currency
       // summed across properties. Already accumulated in state by HouseRepairApplyReducer.
       lifetimeRepairSpend: sim.state.houseRepairSpendingTotal ?? 0,

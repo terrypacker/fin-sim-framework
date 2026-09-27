@@ -10,7 +10,7 @@
 
 import { BaseComponent }        from '../components/base-component.js';
 import { OPTIMIZATION_OBJECTIVES } from '../../finance/optimization/optimization-objectives.js';
-import { fmtWhole }             from '../money-format.js';
+import { fmtWhole, fmtTerminalWhole } from '../money-format.js';
 
 const TOP_N = 5;
 
@@ -89,8 +89,10 @@ export class OptRunsPanel extends BaseComponent {
     const failed  = c.result.scenarioFailed;
     const params  = fmtCandidateLong(c.candidate);
     const score   = fmtDollar(objFn(c.result));
-    const nw      = fmtDollar(c.result.finalNetWorthUsd);
-    const roth    = fmtDollar(c.result.rothFinalBalance);
+    // Terminal balances in the app's value basis, by this candidate's own terminal rates
+    // (design 79 §9).
+    const nw      = fmtTerminalWhole(c.result.finalNetWorthUsd, c.result.terminalRates);
+    const roth    = fmtTerminalWhole(c.result.rothFinalBalance, c.result.terminalRates);
 
     const row = document.createElement('div');
     row.className = isBest ? 'opt-run-row opt-run-row--best' : 'opt-run-row';

@@ -13,6 +13,8 @@ import { BaseComponent } from '../components/base-component.js';
 import { readThemeColor } from '../theme.js';
 import { initEChartWhenReady } from '../components/echarts-init.js';
 import { fmtCompact, fmtWhole } from '../money-format.js';
+import { realFromUsd } from '../../finance/fx/real-basis.js';
+import { ServiceRegistry } from '../../services/service-registry.js';
 import { formatAxisValue } from './mc-grid-format.js';
 import {
   runsToRows, failureByBand, failureDrivers, RETURN_BAND_EDGES,
@@ -309,6 +311,7 @@ export class McResultsPanel extends BaseComponent {
   _renderResults(summary, runs) {
     this._runs    = runs;
     this._summary = summary;
+    this._real    = this._realBasis(runs);
 
     this._fanDataByMetric  = {
       netWorthUsd:  this._buildFanData(runs, 'netWorthUsd'),
@@ -330,6 +333,7 @@ export class McResultsPanel extends BaseComponent {
     const header = document.createElement('div');
     header.className = 'mc-results-header';
     header.textContent = `Results — ${runs.length} runs`;
+    const basisNote = this._buildBasisNote();
 
     const toggle = this._buildToggle();
     const badge  = this._buildProvenanceBadge(summary?.provenance);
@@ -341,6 +345,7 @@ export class McResultsPanel extends BaseComponent {
 
     const provenance = this._buildProvenanceBanner(summary?.provenance);
     if (provenance) wrapper.appendChild(provenance);
+    if (basisNote) wrapper.appendChild(basisNote);
 
     // ── Badge grid ─────────────────────────────────────────────────────────────
     const badgeGrid = document.createElement('div');
@@ -1627,7 +1632,14 @@ export class McResultsPanel extends BaseComponent {
     const runs    = this._runs;
 
     let p10, p50, p90;
-    if (metric === 'netLiquidity') {
+    if (this._real) {
+      // Each path restated by its OWN inflation and FX first, then ranked (design 79 §9):
+      // the P50 of real paths, not the nominal P50 divided by some level.
+      const vals = this._terminalValues(runs, metric).sort((a, b) => a - b);
+      p10 = quantile(vals, 0.10);
+      p50 = quantile(vals, 0.50);
+      p90 = quantile(vals, 0.90);
+    } else if (metric === 'netLiquidity') {
       const vals = (runs ?? [])
         .map(r => r.finalNetLiquidity)
         .filter(v => v != null && isFinite(v))
@@ -1646,9 +1658,9 @@ export class McResultsPanel extends BaseComponent {
       { label: 'Success Rate',              value: fmtPct(summary?.successRate),           cls: 'mc-badge-value--success' },
       { label: 'Failures',                  value: String(summary?.failureCount ?? 0),     cls: 'mc-badge-value--failure' },
       { label: 'Median Failure',            value: fmtDate(summary?.medianOutOfFundsDate), cls: 'mc-badge-value--warning' },
-      { label: `P90 ${metricLabel}`,        value: fmtDollar(p90),                         cls: 'mc-badge-value--muted'   },
-      { label: `P50 ${metricLabel}`,        value: fmtDollar(p50),                         cls: 'mc-badge-value--muted'   },
-      { label: `P10 ${metricLabel}`,        value: fmtDollar(p10),                         cls: 'mc-badge-value--muted'   },
+      { label: `P90 ${metricLabel}`,        value: this._moneyWhole(p90),                  cls: 'mc-badge-value--muted'   },
+      { label: `P50 ${metricLabel}`,        value: this._moneyWhole(p50),                  cls: 'mc-badge-value--muted'   },
+      { label: `P10 ${metricLabel}`,        value: this._moneyWhole(p10),                  cls: 'mc-badge-value--muted'   },
     ];
 
     grid.innerHTML = '';
@@ -1678,12 +1690,66 @@ export class McResultsPanel extends BaseComponent {
     this._histChart = this._createHistChart(this._histDiv, data);
   }
 
+  // ─── Real value basis (design 79 §9) ─────────────────────────────────────
+
+  /**
+   * `{ currency }` when these paths should be shown in real money, else null. Every path
+   * is its own world — its own inflation path, and under stochastic FX its own rate — so
+   * each is restated by the rates it recorded before anything is ranked. ALL OR
+   * NOTHING: one path, or one yearly point, without recorded rates (a run from before
+   * design 79) and the whole panel stays nominal, because a band mixing real and nominal
+   * paths is a percentile of nothing.
+   */
+  _realBasis(runs) {
+    const reg = ServiceRegistry.getInstance?.()?.schemaRegistry;
+    this._realRequested = reg?.valueBasis?.() === 'real';
+    if (!this._realRequested || !runs?.length) return null;
+    const currency = reg.displayCurrencyCode?.() ?? 'USD';
+    const ok = runs.every(r =>
+      realFromUsd(r.finalNetWorthUsd ?? 0, r.terminalRates, currency) != null
+      && (r.timeSeries ?? []).every(pt => realFromUsd(pt.netWorthUsd ?? 0, pt.rates, currency) != null));
+    return ok ? { currency } : null;
+  }
+
+  /** Each run's terminal value of `metric`, restated per path under a real basis. */
+  _terminalValues(runs, metric) {
+    const field = metric === 'netLiquidity' ? 'finalNetLiquidity' : 'finalNetWorthUsd';
+    return (runs ?? [])
+      .map(r => (this._real ? realFromUsd(r[field], r.terminalRates, this._real.currency) : r[field]))
+      .filter(v => v != null && isFinite(v));
+  }
+
+  /** Compact money for the fan, histogram and badges: already in the display currency when real. */
+  _moneyK(v) {
+    return this._real ? fmtCompact(v, this._real.currency) : fmtK(v);
+  }
+
+  _moneyWhole(v) {
+    return this._real ? fmtWhole(v, this._real.currency) : fmtDollar(v);
+  }
+
+  /**
+   * One line saying which basis the headline figures are in, shown only while the app
+   * is set to real — the only time the answer is not obvious.
+   */
+  _buildBasisNote() {
+    if (!this._realRequested) return null;
+    const el = document.createElement('div');
+    el.className = 'mc-provenance-banner';
+    el.dataset.basisNote = this._real ? 'real' : 'nominal';
+    el.textContent = this._real
+      ? 'Real: the bands, the distribution and P10–P90 restate each path by its own inflation and '
+        + 'exchange rate before ranking. Other money figures are nominal unless named Real.'
+      : 'Nominal: these runs did not record the rates needed to restate them. Re-run to see them in real terms.';
+    return el;
+  }
+
   _buildFanData(runs, metric) {
     const dateMap = new Map();
     for (const run of runs) {
       if (!run.timeSeries?.length) continue;
       for (const pt of run.timeSeries) {
-        const val = pt[metric];
+        const val = this._real ? realFromUsd(pt[metric], pt.rates, this._real.currency) : pt[metric];
         if (val == null) continue;
         const ts = pt.date.getTime();
         if (!dateMap.has(ts)) dateMap.set(ts, []);
@@ -1707,10 +1773,7 @@ export class McResultsPanel extends BaseComponent {
   }
 
   _buildHistData(runs, metric) {
-    const field = metric === 'netLiquidity' ? 'finalNetLiquidity' : 'finalNetWorthUsd';
-    const values = runs
-      .map(r => r[field])
-      .filter(v => v != null && isFinite(v));
+    const values = this._terminalValues(runs, metric);
     if (!values.length) return { labels: [], data: [], min: 0, bucketSize: 0 };
 
     const min = Math.min(...values);
@@ -1725,7 +1788,7 @@ export class McResultsPanel extends BaseComponent {
       counts[idx]++;
     }
 
-    return { labels: bucketMins.map(v => fmtK(v)), data: counts, bucketMins };
+    return { labels: bucketMins.map(v => this._moneyK(v)), data: counts, bucketMins };
   }
 
   _createFanChart(container, { p10, p25, p50, p75, p90 }) {
@@ -1766,7 +1829,7 @@ export class McResultsPanel extends BaseComponent {
       },
       yAxis: {
         type: 'value',
-        axisLabel: { color: textDim, fontSize: 10, fontFamily: 'monospace', formatter: v => fmtK(v) },
+        axisLabel: { color: textDim, fontSize: 10, fontFamily: 'monospace', formatter: v => this._moneyK(v) },
         splitLine: { lineStyle: { color: border } },
         axisLine: { show: false },
         axisTick: { show: false },
@@ -1786,9 +1849,9 @@ export class McResultsPanel extends BaseComponent {
           const d  = new Date(p50param.value[0]);
           const ds = d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0');
           return `<span style="font-size:10px;color:${textMuted}">${ds}</span><br/>` +
-            `P90: <b>${fmtK(pt.p90)}</b><br/>P75: <b>${fmtK(pt.p75)}</b><br/>` +
-            `P50: <b>${fmtK(pt.p50)}</b><br/>P25: <b>${fmtK(pt.p25)}</b><br/>` +
-            `P10: <b>${fmtK(pt.p10)}</b>`;
+            `P90: <b>${this._moneyK(pt.p90)}</b><br/>P75: <b>${this._moneyK(pt.p75)}</b><br/>` +
+            `P50: <b>${this._moneyK(pt.p50)}</b><br/>P25: <b>${this._moneyK(pt.p25)}</b><br/>` +
+            `P10: <b>${this._moneyK(pt.p10)}</b>`;
         },
       },
       series: [

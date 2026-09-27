@@ -13,7 +13,7 @@ import { BaseComponent }        from '../components/base-component.js';
 import { OPTIMIZATION_OBJECTIVES } from '../../finance/optimization/optimization-objectives.js';
 import { readThemeColor }       from '../theme.js';
 import { initEChartWhenReady }  from '../components/echarts-init.js';
-import { fmtCompact, fmtWhole } from '../money-format.js';
+import { fmtCompact, fmtWhole, fmtTerminalWhole, fmtTerminalCompact, presentTerminalUsd } from '../money-format.js';
 
 const MAX_CHART_BARS = 30;
 
@@ -135,13 +135,17 @@ export class OptResultsPanel extends BaseComponent {
     const worst   = candidates[candidates.length - 1];
     const failures = candidates.filter(c => c.result.scenarioFailed).length;
 
+    const realTag = presentTerminalUsd(1, best?.result?.terminalRates).basis === 'real' ? ' (real)' : '';
     const badges = [
       { label: 'Best Score',     value: best  ? fmtDollar(objFn(best.result))  : '—', cls: 'opt-badge-value--best-score' },
       { label: 'Worst Score',    value: worst ? fmtDollar(objFn(worst.result)) : '—', cls: 'opt-badge-value--worst-score' },
       { label: 'Candidates',     value: String(totalRuns),                              cls: 'opt-badge-value--candidates' },
       { label: 'Failures',       value: String(failures),                               cls: failures ? 'opt-badge-value--failures' : 'opt-badge-value--failures-ok' },
-      { label: 'Best Net Worth', value: best  ? fmtDollar(best.result.finalNetWorthUsd) : '—', cls: 'opt-badge-value--nw' },
-      { label: 'Best Roth Bal',  value: best  ? fmtDollar(best.result.rothFinalBalance)  : '—', cls: 'opt-badge-value--roth' },
+      // Terminal balances, in the app's value basis: real restates each by ITS OWN
+      // terminal inflation and FX (design 79 §9). The score is the objective's own unit
+      // and is left alone.
+      { label: `Best Net Worth${realTag}`, value: best ? fmtTerminalWhole(best.result.finalNetWorthUsd, best.result.terminalRates) : '—', cls: 'opt-badge-value--nw' },
+      { label: `Best Roth Bal${realTag}`,  value: best ? fmtTerminalWhole(best.result.rothFinalBalance, best.result.terminalRates) : '—', cls: 'opt-badge-value--roth' },
     ];
 
     // Design 88 D7: disclose the "and if the speculative stakes pay off?" figure —
@@ -150,7 +154,7 @@ export class OptResultsPanel extends BaseComponent {
     // badge on every run would read as an alternative objective.
     const incl = best?.result?.finalNetWorthInclSpeculative;
     if (incl != null && incl !== best?.result?.finalNetWorthUsd) {
-      badges.push({ label: 'Best NW (incl. spec.)', value: fmtDollar(incl),
+      badges.push({ label: `Best NW (incl. spec.)${realTag}`, value: fmtTerminalWhole(incl, best.result.terminalRates),
                     cls: 'opt-badge-value--nw' });
     }
 
@@ -232,6 +236,7 @@ export class OptResultsPanel extends BaseComponent {
   }
 
   _buildTable(candidates, objFn) {
+    const realTag = presentTerminalUsd(1, candidates[0]?.result?.terminalRates).basis === 'real' ? ' (real)' : '';
     const table = document.createElement('table');
     table.className = 'opt-table-wrap';
 
@@ -241,8 +246,8 @@ export class OptResultsPanel extends BaseComponent {
         <th class="opt-table-th opt-table-th--center" style="width:32px">#</th>
         <th class="opt-table-th opt-table-th--left">Parameters</th>
         <th class="opt-table-th opt-table-th--right">Score</th>
-        <th class="opt-table-th opt-table-th--right">Net Worth</th>
-        <th class="opt-table-th opt-table-th--right">Roth</th>
+        <th class="opt-table-th opt-table-th--right">Net Worth${realTag}</th>
+        <th class="opt-table-th opt-table-th--right">Roth${realTag}</th>
         <th class="opt-table-th opt-table-th--center">OK?</th>
       </tr>`;
     table.appendChild(thead);
@@ -262,8 +267,8 @@ export class OptResultsPanel extends BaseComponent {
         <td class="opt-table-td ${isBest ? 'opt-table-td--rank-best' : 'opt-table-td--rank'}">${isBest ? '🥇' : String(rank)}</td>
         <td class="opt-table-td opt-table-td--params" title="${fmtCandidate(c.candidate)}">${fmtCandidate(c.candidate)}</td>
         <td class="opt-table-td ${isBest ? 'opt-table-td--score-best' : 'opt-table-td--score'}">${fmtDollar(objFn(c.result))}</td>
-        <td class="opt-table-td opt-table-td--nw">${fmtK(c.result.finalNetWorthUsd)}</td>
-        <td class="opt-table-td opt-table-td--roth">${fmtK(c.result.rothFinalBalance)}</td>
+        <td class="opt-table-td opt-table-td--nw">${fmtTerminalCompact(c.result.finalNetWorthUsd, c.result.terminalRates)}</td>
+        <td class="opt-table-td opt-table-td--roth">${fmtTerminalCompact(c.result.rothFinalBalance, c.result.terminalRates)}</td>
         <td class="opt-table-td ${failed ? 'opt-table-td--fail' : 'opt-table-td--ok'}">${failed ? 'FAIL' : 'OK'}</td>`;
 
       tbody.appendChild(tr);
