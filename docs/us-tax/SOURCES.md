@@ -57,3 +57,17 @@ returns a 302. §6048 is `subtitleF-chap61-subchapA-partIII-subpartB`, not `subp
 **Not on disk yet:** §954(c) (whether commodity gains are FPHC income — needed before
 claiming an AU gold ETF is a PFIC), Reg. §301.7701-3 (default classification of a foreign
 unit trust), and Reg. §1.1291/§1.1297. Design 115 flags the PFIC question as open for that reason.
+
+## Added 27 Sep 2026 for design 115 §9 Q2 (PFIC exposure of AU-domiciled funds)
+
+| file | source | why it is here |
+|---|---|---|
+| `USCODE-2024-title26-subtitleA-chap1-subchapN-partIII-subpartF-sec954.txt` | **§954** *Foreign base company income* | `(c)(1)(C)` commodities gains are FPHC income, so passive under §1297(b)(1). Exceptions: hedging, active business, §988. |
+| `USCODE-2024-…-subchapP-partVI-subpartB-sec1293.txt`, `-sec1294`, `-sec1295` | **§§1293–1295** QEF | `1293(a)(1)` ordinary earnings as ordinary income, net capital gain as LTCG; §1295 is the election. |
+| `CFR-26-301.7701-2-Business-Entities-Definitions.txt` | **Reg. §301.7701-2** | `(b)(8)(i)` per-se corporations; lists "Australia, Public Limited Company". |
+| `CFR-26-301.7701-3-Classification-Of-Certain-Business-Entities.txt` | **Reg. §301.7701-3** | `(b)(2)(i)(B)` a foreign eligible entity is an association (a corporation) if all members have limited liability. |
+| `CFR-26-301.7701-4-Trusts.txt` | **Reg. §301.7701-4** | `(c)(1)` an investment trust with a power to vary the investment is NOT a trust; a single-class trust with none is. |
+| `IRS-Form-8621-Instructions-2025.txt` | Form 8621 instructions (Rev. December 2025) | Annual PFIC reporting. |
+
+eCFR route for part 301: same renderer as part 1, with `subchapter=F&part=301`.
+Form 8621: `https://www.irs.gov/pub/irs-pdf/i8621.pdf` → `pdftotext -layout`.

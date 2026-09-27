@@ -98,7 +98,7 @@ the author can answer for their plan.
   beneficiaries, and a foreign pooled fund meeting §1297(a)'s income or asset test is a PFIC
   taxed under §1291 unless a §1296 election applies. **Not concluded here:** whether an
   AU-domiciled gold ETF is a PFIC turns on §954(c) (commodity gains as FPHC income) and the
-  entity-classification regs, neither of which is on disk (§9 Q2).
+  entity-classification regs (now on disk; answered in §13).
 
 ### 3.3 Aside: the US side of design 61's reversal is stronger than it said
 
@@ -234,9 +234,9 @@ Fix the stale text in the same change:
 - **Q1** — Should an explicit empty list be the only way to silence the warning, or should an
   account-level flag ("this fund offers gold") exist? This depends on whether per-account
   restrictions are ever built (D2).
-- **Q2** — PFIC exposure of **AU-domiciled gold ETFs held in AU brokerage** by a US citizen. This
-  is outside super, and possibly a bigger modelling gap than this one. It needs §954(c) and
-  Reg. §301.7701-3 on disk before anything is claimed.
+- **Q2** — PFIC exposure of **AU-domiciled gold ETFs held in AU brokerage** by a US citizen.
+  **Researched 27 Sep 2026 — see §13.** Not a gap in any authored plan today; the model's
+  look-through assumption is recorded; deferring PFIC modelling is recommended (§13.3).
 - **Q3** — The model treats super as tax-deferred for US purposes (design 83 §7a.5). §3.2 is more
   evidence that this is wrong for an SMSF. We do not model SMSFs, so nothing changes here, but an
   SMSF account type would need the grantor treatment, not a restriction.
@@ -444,3 +444,64 @@ lever (contribution routing) was never built.
   strategy and runs byte-for-byte like one that does not.
 
 **Suites:** 7,289 unit / 1,699 viz, help gate clean. Design 29 §3.4 carries a retirement note.
+
+## 13. Q2 answered — PFIC exposure of AU-domiciled funds (27 Sep 2026)
+
+Every citation below is on disk (`docs/us-tax/SOURCES.md`, "design 115 §9 Q2").
+
+### 13.1 The chain
+
+A US citizen's AU-listed gold (or equity) fund is taxed under the PFIC regime only if all three
+links hold.
+
+1. **The fund is a foreign corporation for US purposes.**
+   - Reg. §301.7701-4(c)(1): an investment trust "will not be classified as a trust if there is a
+     power under the trust agreement to vary the investment". A single-class trust with no such
+     power *is* a trust, so the holder is treated as owning the gold directly.
+   - A trust with such a power is a business entity. Under Reg. §301.7701-3(b)(2)(i)(B), a
+     foreign business entity whose members all have limited liability is an **association**,
+     i.e. a corporation.
+   - Reg. §301.7701-2(b)(8)(i) lists "Australia, Public Limited Company" as a per-se corporation.
+   - **Not on disk:** whether a given Australian unit trust's unitholders have limited liability
+     under Australian law and its constitution, and each product's structure (a unit trust, a
+     depositary security, a debt-like "metal security"). This link is **product-specific** and
+     unverified here.
+2. **It is a PFIC.** §1297(a): 75% or more of gross income is passive, or 50% or more of assets
+   produce it. Under §1297(b)(1) passive income is §954(c) income, and §954(c)(1)(C) covers
+   "gains over losses from transactions … in any commodities", with hedging, active-business and
+   §988 exceptions that do not fit a bullion fund. A gold fund that is a corporation is therefore
+   almost certainly a PFIC. The same holds for a pooled equity fund (dividends and gains).
+3. **The consequences**, by the regime the holder chooses:
+   - **No election (§1291):** a gain on sale is spread over the holding period. The current year's
+     share is ordinary income; each prior year's share is taxed at "the highest rate of tax in
+     effect for such taxable year" (§1291(c)), plus interest.
+   - **Mark to market (§1296):** annual inclusion, "treated as ordinary income" (§1296(c)).
+   - **QEF (§1293):** ordinary earnings as ordinary income, net capital gain as LTCG, but only if
+     the fund provides the annual statements §1295 needs.
+   - Every route files **Form 8621**.
+   - Stock owned through a trust is attributed to the beneficiaries (§1298(a)(3)), which is how a
+     PFIC inside a grantor-trust SMSF (§3.2) reaches the member.
+
+**Not a PFIC by construction:** a US-domiciled fund, because §1297(a) requires a *foreign*
+corporation, and physical bullion. A US grantor-trust gold ETF held by a US citizen is taxed as
+the metal: a collectible.
+
+### 13.2 What the model assumes
+
+`_sellTax` (`rebalance-to-target-apply-reducer.js`) sends every GOLD sale to
+`COLLECTIBLE_SALE_TAX`: the US 28% collectibles rate, and indexed AU CGT via `isGold`. That is
+**look-through treatment**: correct for bullion and US grantor-trust ETFs, wrong for an
+AU-domiciled fund classified as a corporation. For that fund, the US side should be ordinary
+income (§1296/§1291), with an interest charge under §1291. EQUITY in `au-stock` is taxed as
+ordinary CGT, which is the same assumption for pooled AU equity funds. Securities (design 94)
+record no vehicle type or domicile, so the model cannot tell the cases apart.
+
+### 13.3 Recommendation (awaiting the author)
+
+No authored plan the author uses holds an AU-domiciled fund. **Recommended: defer modelling PFIC**
+until one does. The look-through assumption is now stated here. When a plan needs it, the hook is a
+per-security US tax vehicle (look-through / PFIC with MTM, QEF or excess-distribution), read by
+`_sellTax`, with an annual §1296 inclusion for MTM.
+
+The placement concern already has a tool: a US citizen who would hold gold only through AU funds
+can bar the class from that role, e.g. `{"GOLD":["super","au-stock"]}` (§5.1).
