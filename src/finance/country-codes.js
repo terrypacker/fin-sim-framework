@@ -49,6 +49,18 @@ export function defaultCurrencyForCountry(cc) {
   return currencyForCountry(cc) ?? 'USD';
 }
 
+/**
+ * Country whose currency a code is, or `null` for a currency no country here issues.
+ * The inverse of {@link currencyForCountry}. Design 79 uses it to pick the price level
+ * a real display deflates by: the country of the currency ON SCREEN.
+ * @param {string} code - ISO-4217 currency code
+ * @returns {string|null}
+ */
+export function countryForCurrency(code) {
+  for (const [cc, ccy] of Object.entries(_CURRENCY_BY_COUNTRY)) if (ccy === code) return cc;
+  return null;
+}
+
 const _NORMALIZE = Object.freeze({ AUS: AU, USA: US });
 
 /**

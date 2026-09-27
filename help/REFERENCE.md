@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-228 parameters · 33 panels · 11 node types (179 fields) · 172 action types · 86 tools · 281 state field types · 73 topics · 123 design docs
+228 parameters · 33 panels · 11 node types (179 fields) · 172 action types · 86 tools · 281 state field types · 74 topics · 123 design docs
 
 ---
 
@@ -1527,6 +1527,7 @@ docblock, not re-authored here. Arguments come from each script's declarative
     - `--verbose` (flag) — show the simulation's own console output (e.g. OUT_OF_FUNDS)
     - `--json` (flag) — emit machine-readable JSON instead of tables
     - `--fast` (flag) — drop journal/snapshot/bus telemetry (~12x); disables sim.journal readers
+    - `--real` (flag) — show money in real sim-start dollars: each value ÷ the end state's inflationAccumulator for its own currency's country (design 79)
 - **`scripts/scenario/save-run.mjs`** — `npm run run:save`
   write a recorded MPC run into a scenario's `mpcRuns` bag (design 81 §10, 4c)
     - `--decisions` (string, default `scenarios/fin-sim-decisions.json`) — decision record export
@@ -2086,7 +2087,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 
 ---
 
-## Topics (73)
+## Topics (74)
 
 Tier 2 — the hand-written prose under `help/`, listed by what it CITES rather than
 summarised. A topic may not restate a param description (design 108 §3), so there is
@@ -2152,6 +2153,7 @@ what the in-app panel keys on.
 | [Liquidity Pools](panels/pools.md) | panel | 236 | 1 panel · design 97 |
 | [Randomness and Seeds](concepts/randomness-and-seeds.md) | concept | 251 | 2 panels · 2 params · design 74 |
 | [Real Property](nodes/real-property.md) | node | 221 | 2 panels · design 75, 83, 86, 48, 113 |
+| [Real vs Nominal Dollars](concepts/real-vs-nominal.md) | concept | 399 | 4 panels · design 79, 89 |
 | [Recorded MPC Runs](concepts/recorded-mpc-runs.md) | concept | 400 | 1 panel · 3 params · design 81, 80 |
 | [Reducer](nodes/reducer.md) | node | 195 | 3 panels · design 2, 16 |
 | [Return Assumptions](concepts/return-assumptions.md) | concept | 266 | 2 panels · 13 params · design 99, 106 |

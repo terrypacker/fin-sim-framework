@@ -66,6 +66,7 @@ import { WatchlistController }        from '../visualization/watchlist/watchlist
 import { SimulationAnimator }         from '../visualization/simulation/simulation-animator.js';
 import { ScenarioTabView }            from '../visualization/scenario/scenario-tab-view.js';
 import { JournalReportingService }    from '../finance/journal-reporting-service.js';
+import { liveJournalPriceLevels }     from '../finance/journal-reporting/journal-price-levels.js';
 import { TaxDocumentModal }           from '../visualization/timeline/tax-document-modal.js';
 import { ScenarioTabController }      from '../visualization/scenario/scenario-tab-controller.js';
 import { MonteCarloView }             from '../visualization/monte-carlo/monte-carlo-view.js';
@@ -816,6 +817,13 @@ export class WorkbenchApp extends BaseComponent {
     // freshly built sim; the registry itself persists across rebuilds.
     registry.schemaRegistry.displaySettings   = this.displaySettings;
     registry.schemaRegistry.rateStateProvider = () => this.scenario?.sim?.state ?? null;
+    // Real value basis (design 79 §3): a value formatted `{ at: <date> }` deflates by the
+    // run's own price level at that date, recovered from the journal's accumulator diffs.
+    registry.schemaRegistry.priceLevelSource = liveJournalPriceLevels(
+      () => this.scenario?.sim?.journal ?? null,
+      { fallbackLevel: cc => this.scenario?.sim?.state?.inflationAccumulator?.[cc] ?? null },
+    );
+    this._labelValueBasis(this.scenario.simStart);
 
     //TODO this should be wired to a bus event (AND removed from constructor of tab presenter)
     this.scenarioTabPresenter._refresh();
@@ -1151,6 +1159,15 @@ export class WorkbenchApp extends BaseComponent {
 
   // ── Simulation controls ────────────────────────────────────────────────────
 
+  /**
+   * Name the base year on the Real option itself (design 79 §8): real means sim-start
+   * purchasing power, which is "today's" only when the plan starts this year.
+   */
+  _labelValueBasis(simStart) {
+    const opt = $('valueBasis')?.querySelector('option[value="real"]');
+    if (opt && simStart) opt.textContent = `Real (${new Date(simStart).getUTCFullYear()} $)`;
+  }
+
   _wireSimControls() {
     $('displayCurrency')?.addEventListener('change', () => {
       this.displaySettings.setCurrency($('displayCurrency').value);
@@ -1164,11 +1181,16 @@ export class WorkbenchApp extends BaseComponent {
       this.displaySettings.setTheme($('themeSelect').value);
     });
 
+    $('valueBasis')?.addEventListener('change', () => {
+      this.displaySettings.setValueBasis($('valueBasis').value);
+    });
+
     // Initialize selects from persisted state so they reflect the loaded settings.
     const ds = this.displaySettings;
     if ($('tzSelect'))        $('tzSelect').value        = ds.timezone;
     if ($('displayCurrency')) $('displayCurrency').value = ds.displayCurrency;
     if ($('themeSelect'))     $('themeSelect').value     = ds.theme;
+    if ($('valueBasis'))      $('valueBasis').value      = ds.valueBasis;
 
     $('playPause')?.addEventListener('click', () => {
       if (this._animator?.playing) this._animator.stopPlaying();

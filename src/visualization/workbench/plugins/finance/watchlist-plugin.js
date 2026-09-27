@@ -342,9 +342,11 @@ export class WatchlistPlugin extends WorkbenchComponent {
         spark.replaceChildren();
         continue;
       }
-      value.textContent = fmt?.format(path, v, { compact: true })
+      // The value and its price level are read off the same state (design 79 §4).
+      const priceLevel = state.inflationAccumulator;
+      value.textContent = fmt?.format(path, v, { compact: true, priceLevel })
         ?? (typeof v === 'object' ? JSON.stringify(v).slice(0, 40) : String(v));
-      value.title = fmt?.valueTitle(path, v) ?? '';
+      value.title = fmt?.valueTitle(path, v, { priceLevel }) ?? '';
       if (typeof v === 'number' && fmt && !fmt.isTyped(path)) value.classList.add('is-untyped');
       const svg = renderSparkline((wl?.series(path) ?? []).map(p => p.value));
       spark.replaceChildren(...(svg ? [svg] : []));

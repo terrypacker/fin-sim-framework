@@ -156,6 +156,45 @@ test('AppDisplaySettings: rehydrates from localStorage on construction', () => {
   assert.strictEqual(settings.theme, 'light');
 });
 
+// ─── valueBasis (design 79) ──────────────────────────────────────────────────
+
+test('AppDisplaySettings: valueBasis defaults to nominal', () => {
+  assert.strictEqual(makeSettings().valueBasis, 'nominal');
+});
+
+test('AppDisplaySettings.setValueBasis: publishes, persists, and snapshots the basis', () => {
+  const bus      = new EventBus();
+  const settings = makeSettings(bus);
+  const events   = [];
+  bus.subscribe(APP_EVENTS.DISPLAY_SETTINGS_CHANGED, e => events.push(e));
+
+  settings.setValueBasis('real');
+  settings.setValueBasis('real');   // unchanged → no second publish
+  settings.setCurrency('AUD');      // every other setting's event carries the basis too
+
+  assert.strictEqual(events.length, 2);
+  assert.strictEqual(events[0].valueBasis, 'real');
+  assert.strictEqual(events[1].valueBasis, 'real');
+  assert.strictEqual(JSON.parse(localStorage.getItem(STORAGE_KEY)).valueBasis, 'real');
+});
+
+test('AppDisplaySettings.setValueBasis: rejects an unknown basis without changing state', () => {
+  const settings = makeSettings();
+  assert.throws(() => settings.setValueBasis('constant'), /Unknown value basis/);
+  assert.strictEqual(settings.valueBasis, 'nominal');
+});
+
+test('AppDisplaySettings: rehydrates valueBasis; a pre-design-79 blob stays nominal', () => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ timezone: 'utc', currency: 'USD', theme: 'dark', valueBasis: 'real' }));
+  assert.strictEqual(makeSettings().valueBasis, 'real');
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ timezone: 'utc', currency: 'USD', theme: 'dark' }));
+  assert.strictEqual(makeSettings().valueBasis, 'nominal');
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ valueBasis: 'bogus' }));
+  assert.strictEqual(makeSettings().valueBasis, 'nominal');
+});
+
 // ─── APP_EVENTS constant ──────────────────────────────────────────────────────
 
 test('APP_EVENTS.DISPLAY_SETTINGS_CHANGED is a non-empty string', () => {

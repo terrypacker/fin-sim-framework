@@ -17,7 +17,15 @@ export const APP_EVENTS = {
 };
 
 /**
- * AppDisplaySettings — single source of truth for timezone, display currency, and theme.
+ * The money bases a surface can be shown in (design 79). `real` is base-year (sim
+ * start) purchasing power in the currency on screen; `nominal` is the money the sim
+ * actually booked, which is what every surface showed before design 79.
+ */
+export const VALUE_BASES = Object.freeze(['nominal', 'real']);
+
+/**
+ * AppDisplaySettings — single source of truth for timezone, display currency, value
+ * basis (nominal vs real, design 79) and theme.
  *
  * Publishes APP_EVENTS.DISPLAY_SETTINGS_CHANGED to the appBus whenever any value
  * changes. Theme is applied by setting document.documentElement.dataset.theme so
@@ -27,7 +35,7 @@ export const APP_EVENTS = {
  * @param {import('../simulation-framework/event-bus.js').EventBus} appBus
  */
 export class AppDisplaySettings {
-  #state = { timezone: 'utc', currency: 'USD', theme: 'dark' };
+  #state = { timezone: 'utc', currency: 'USD', theme: 'dark', valueBasis: 'nominal' };
 
   constructor(appBus) {
     this._appBus = appBus;
@@ -38,6 +46,7 @@ export class AppDisplaySettings {
   get timezone()        { return this.#state.timezone; }
   get displayCurrency() { return this.#state.currency; }
   get theme()           { return this.#state.theme; }
+  get valueBasis()      { return this.#state.valueBasis; }
 
   get formatDate() {
     return this.#state.timezone === 'utc' ? fmtUTC : fmtLocal;
@@ -46,6 +55,10 @@ export class AppDisplaySettings {
   setTimezone(tz)   { this._set('timezone', tz); }
   setCurrency(code) { this._set('currency', code); }
   setTheme(theme)   { if (this._set('theme', theme)) this._applyThemeToDom(); }
+  setValueBasis(basis) {
+    if (!VALUE_BASES.includes(basis)) throw new Error(`Unknown value basis '${basis}'`);
+    this._set('valueBasis', basis);
+  }
 
   _set(key, value) {
     if (this.#state[key] === value) return false;
@@ -76,10 +89,12 @@ export class AppDisplaySettings {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
-      const { timezone, currency, theme } = JSON.parse(raw);
+      const { timezone, currency, theme, valueBasis } = JSON.parse(raw);
       if (timezone) this.#state.timezone = timezone;
       if (currency) this.#state.currency = currency;
       if (theme)    this.#state.theme    = theme;
+      // Additive field: a blob written before design 79 has none and stays nominal.
+      if (VALUE_BASES.includes(valueBasis)) this.#state.valueBasis = valueBasis;
     } catch { /* ignore — fall back to defaults */ }
   }
 
@@ -89,6 +104,7 @@ export class AppDisplaySettings {
         timezone: this.#state.timezone,
         currency: this.#state.currency,
         theme:    this.#state.theme,
+        valueBasis: this.#state.valueBasis,
       }));
     } catch { /* ignore quota / privacy-mode errors */ }
   }
@@ -99,6 +115,7 @@ export class AppDisplaySettings {
       timezone:   this.#state.timezone,
       currency:   this.#state.currency,
       theme:      this.#state.theme,
+      valueBasis: this.#state.valueBasis,
       formatDate: this.formatDate,
     });
   }

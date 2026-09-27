@@ -153,3 +153,31 @@ function _buildPoints(journal, path) {
 function _tsOf(date) {
   return date instanceof Date ? date.getTime() : new Date(date).getTime();
 }
+
+/**
+ * A `{ levelAt(ts, cc) }` source over a journal that is still GROWING — the shape the
+ * schema registry's `priceLevelSource` takes (design 79 §3). A `JournalPriceLevels` is
+ * built from a finished journal; during a live run, or after a rewind, the journal it
+ * saw is no longer the journal. So this rebuilds whenever the entry count moves, and
+ * only when asked: nothing is scanned on a step unless a dated value is formatted.
+ *
+ * @param {() => import('../../simulation-framework/journal.js').Journal|null} getJournal
+ * @param {{ fallbackLevel?: (cc: string) => number|null }} [opts]  as for JournalPriceLevels
+ * @returns {{ levelAt: (ts: number, cc?: string) => number|null }}
+ */
+export function liveJournalPriceLevels(getJournal, opts = {}) {
+  let built = null, builtFor = null, builtLength = -1;
+  return {
+    levelAt(ts, cc = 'US') {
+      const journal = getJournal();
+      if (!journal) return null;
+      const length = journal.journal?.length ?? 0;
+      if (journal !== builtFor || length !== builtLength) {
+        built = new JournalPriceLevels(journal, opts);
+        builtFor = journal;
+        builtLength = length;
+      }
+      return built.levelAt(ts, cc);
+    },
+  };
+}

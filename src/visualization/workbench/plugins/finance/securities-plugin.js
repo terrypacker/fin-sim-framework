@@ -225,7 +225,10 @@ export class SecuritiesPlugin extends WorkbenchComponent {
     // converts to the reader's display currency, so a header hard-coded to the cube's
     // base would label an AUD column "USD" the moment the reader switched — a mixed-
     // currency sum under the wrong symbol, which is how the guardrail FX defect read.
-    const code = this._displayCode();
+    // …and the basis they are in: a real display deflates this panel (design 79 §4),
+    // and a header that said only "USD" would call a base-year number a current one.
+    const basis = this._services()?.schemaRegistry?.presentForDisplay?.(1, BASE_CURRENCY, { at: 'live' })?.basis;
+    const code  = this._displayCode() + (basis === 'real' ? ' real' : '');
     for (const k of ['cur-a', 'cur-b', 'cur-c']) {
       const el = this._q(k);
       if (el) el.textContent = code;
@@ -372,7 +375,7 @@ export class SecuritiesPlugin extends WorkbenchComponent {
   _money(n, decimals = 0) {
     if (n == null) return '—';
     const reg = this._services()?.schemaRegistry;
-    const formatted = reg?.formatAmount?.(n, BASE_CURRENCY, { maximumFractionDigits: decimals });
+    const formatted = reg?.formatAmount?.(n, BASE_CURRENCY, { maximumFractionDigits: decimals, at: 'live' });
     if (formatted != null) return formatted;
     return `$${n.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
   }

@@ -29,12 +29,12 @@ test('convertForDisplay: converts USD → AUD with symbol', () => {
   reg.currencyConverter = new CurrencyConverter();
   reg.displaySettings   = { displayCurrency: 'AUD' };
   reg.rateStateProvider = () => ({ effectiveExchangeRates: { USD_AUD: 1.5 } });
-  assert.deepEqual(reg.convertForDisplay(1000, 'USD'), { value: 1500, code: 'AUD', symbol: 'A$' });
+  assert.deepEqual(reg.convertForDisplay(1000, 'USD'), { value: 1500, code: 'AUD', symbol: 'A$', basis: 'nominal' });
 });
 
 test('convertForDisplay: native when no display wired', () => {
   const reg = new StateSchemaRegistry();
-  assert.deepEqual(reg.convertForDisplay(1000, 'USD'), { value: 1000, code: 'USD', symbol: '$' });
+  assert.deepEqual(reg.convertForDisplay(1000, 'USD'), { value: 1000, code: 'USD', symbol: '$', basis: 'nominal' });
 });
 
 // ── fmtCompact / fmtWhole (via singleton) ───────────────────────────────────

@@ -289,7 +289,9 @@ export class HoldingsPlugin extends WorkbenchComponent {
     // list on each call, which is too costly to do once per formatted cell.
     const code = this._activeCurrency ?? this._currency();
     const reg  = this._services()?.schemaRegistry;
-    return reg?.formatAmount?.(n, code) ?? _fallbackFmt.format(n);
+    // Every cell is read off the current sim state, so the live price level is its
+    // own instant's (design 79 §4).
+    return reg?.formatAmount?.(n, code, { at: 'live' }) ?? _fallbackFmt.format(n);
   }
 
   _fmtSigned(n) {
@@ -656,7 +658,7 @@ export class HoldingsPlugin extends WorkbenchComponent {
   _compact(n) {
     if (n == null || !Number.isFinite(n)) return '—';
     const code = this._activeCurrency ?? this._currency();
-    const conv = this._services()?.schemaRegistry?.convertForDisplay?.(n, code);
+    const conv = this._services()?.schemaRegistry?.convertForDisplay?.(n, code, { at: 'live' });
     const v    = conv?.value ?? n;
     const sym  = conv?.symbol ?? '$';
     const abs  = Math.abs(v);

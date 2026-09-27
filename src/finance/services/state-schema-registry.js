@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-import {currencyForCountry} from "../country-codes.js";
+import {countryForCurrency, currencyForCountry} from "../country-codes.js";
 
 /**
  * Descriptor for how a state field value should be interpreted and displayed.
@@ -190,6 +190,7 @@ export class StateSchemaRegistry {
     this._displaySettings    = null; // { get displayCurrency }
     this._currencyConverter  = null; // CurrencyConverter
     this._rateStateProvider  = null; // () => state snapshot carrying effectiveExchangeRates
+    this._priceLevelSource   = null; // { levelAt(ts, cc) } — dated price levels (design 79)
     this._warnedCodeless     = new Set(); // paths already warned about (dev)
 
     // Display-name resolution (design 70). Records are captured verbatim as they
@@ -944,6 +945,14 @@ export class StateSchemaRegistry {
   set rateStateProvider(fn) { this._rateStateProvider = fn ?? null; }
 
   /**
+   * Inject the dated price-level history a real display deflates by when a caller
+   * passes `{ at: <timestamp> }` (design 79 §3). Duck-typed `{ levelAt(ts, cc) }` —
+   * a `JournalPriceLevels` in the app. `{ at: 'live' }` needs no source: it reads the
+   * same state the FX conversion does.
+   */
+  set priceLevelSource(src) { this._priceLevelSource = src ?? null; }
+
+  /**
    * Format a value using its registered ValueType.
    * For unknown or non-numeric types that need richer formatting
    * (dates, objects, arrays), returns null so the caller can fall back
@@ -955,9 +964,12 @@ export class StateSchemaRegistry {
    * snapshot relevant to that value), else the injected rate-state provider. If
    * no rate is available the value renders in its native currency unchanged.
    *
+   * A real value basis (design 79) applies only when the caller says which instant
+   * the value belongs to — see {@link presentForDisplay} for `at` / `priceLevel`.
+   *
    * @param {string} fieldPath
    * @param {*}      value
-   * @param {{ state?: object }} [opts]  state snapshot for the conversion rate
+   * @param {{ state?: object, at?: 'live'|number|Date, priceLevel?: object }} [opts]
    * @returns {string|null}  formatted string, or null for unknown/non-scalar
    */
   format(fieldPath, value, opts = {}) {
@@ -971,7 +983,12 @@ export class StateSchemaRegistry {
     }
     if (vt.kind === 'currency' && typeof value === 'number') {
       const display = this._toDisplayCurrency(vt, fieldPath, value, opts.state);
-      if (display) return _fmt(display.vt, display.value);
+      const shown   = display ?? { vt, value };
+      // Deflate AFTER conversion, by the country of the currency now shown (design
+      // 79 §7). Not inside _toDisplayCurrency: that returns null for a value already
+      // in the display currency, and those need deflating too.
+      const level = this._realPriceLevel(shown.vt.currencyCode, opts);
+      return _fmt(shown.vt, level == null ? shown.value : shown.value / level);
     }
     return _fmt(vt, value);
   }
@@ -1014,23 +1031,54 @@ export class StateSchemaRegistry {
   }
 
   /**
-   * Convert a raw amount from its native code to the active display currency,
-   * returning the pieces for callers that do their own (e.g. compact "$1.5M")
-   * formatting rather than full Intl currency output.
+   * The one money hop for display (design 10 §Phase 4, design 79 §3): convert a raw
+   * amount from its native code to the active display currency, then — only when the
+   * value basis is real AND the caller named the instant the value belongs to —
+   * deflate it by that instant's price level for the country of the currency shown.
+   *
+   * Deflation is opt-in on purpose. The same hop formats MC ensemble aggregates (no
+   * single state), journal rows (each its own date) and tax documents (statutory,
+   * always nominal). A blanket deflator would read the live sim state for all three:
+   * two wrong answers and one misrepresented filing. So a caller that passes neither
+   * `at` nor `priceLevel` gets nominal, exactly as before design 79.
    *
    * @param {number} value
    * @param {string} nativeCode  e.g. 'USD'
-   * @returns {{ value: number, code: string, symbol: string }}
+   * @param {object} [opts]
+   * @param {object} [opts.state]  the snapshot to convert against (default: the injected rate state)
+   * @param {'live'|number|Date} [opts.at]  the instant the value belongs to: 'live' reads the
+   *   price level off `opts.state` / the rate state; a timestamp reads the injected price-level source
+   * @param {object} [opts.priceLevel]  an explicit `{ US, AU }` level map, e.g. a state's
+   *   `inflationAccumulator`
+   * @returns {{ value: number, code: string, symbol: string, basis: 'real'|'nominal' }}
+   *   `basis` is what was APPLIED: 'nominal' whenever no level was found, so a caller
+   *   never labels an undeflated number real.
    */
-  convertForDisplay(value, nativeCode) {
+  presentForDisplay(value, nativeCode, opts = {}) {
     let code = nativeCode, amount = value;
     const display = this._displaySettings?.displayCurrency;
     if (display && this._currencyConverter && display !== nativeCode) {
-      const state = this._rateStateProvider?.() ?? null;
+      const state = opts.state ?? this._rateStateProvider?.() ?? null;
       const conv  = this._currencyConverter.convert(value, nativeCode, display, state);
       if (conv != null) { code = display; amount = conv; }
     }
-    return { value: amount, code, symbol: _currencySymbol(code) };
+    const level = this._realPriceLevel(code, opts);
+    if (level != null) amount /= level;
+    return { value: amount, code, symbol: _currencySymbol(code), basis: level == null ? 'nominal' : 'real' };
+  }
+
+  /**
+   * Convert a raw amount to the active display currency, returning the pieces for
+   * callers that do their own (e.g. compact "$1.5M") formatting. Same hop as
+   * {@link presentForDisplay}; kept for its existing callers.
+   *
+   * @param {number} value
+   * @param {string} nativeCode  e.g. 'USD'
+   * @param {object} [opts]  see presentForDisplay
+   * @returns {{ value: number, code: string, symbol: string, basis: 'real'|'nominal' }}
+   */
+  convertForDisplay(value, nativeCode, opts = {}) {
+    return this.presentForDisplay(value, nativeCode, opts);
   }
 
   /**
@@ -1042,22 +1090,37 @@ export class StateSchemaRegistry {
    *
    * @param {number} value
    * @param {string} nativeCode  e.g. 'USD'
+   * @param {{ maximumFractionDigits?: number, state?: object, at?: 'live'|number|Date, priceLevel?: object }} [opts]
    * @returns {string|null}
    */
   formatAmount(value, nativeCode, opts = {}) {
     if (typeof value !== 'number' || !nativeCode) return null;
-    let code = nativeCode, amount = value;
-    const display = this._displaySettings?.displayCurrency;
-    if (display && this._currencyConverter && display !== nativeCode) {
-      const state = this._rateStateProvider?.() ?? null;
-      const conv  = this._currencyConverter.convert(value, nativeCode, display, state);
-      if (conv != null) { code = display; amount = conv; }
-    }
+    const { value: amount, code } = this.presentForDisplay(value, nativeCode, opts);
     const max = opts.maximumFractionDigits ?? 2;
     return new Intl.NumberFormat('en-US', {
       style: 'currency', currency: code,
       minimumFractionDigits: Math.min(2, max), maximumFractionDigits: max,
     }).format(amount);
+  }
+
+  /** The active value basis ('nominal' | 'real'); nominal when no settings are wired. */
+  valueBasis() { return this._displaySettings?.valueBasis === 'real' ? 'real' : 'nominal'; }
+
+  /**
+   * The price level a real display divides by, or null when the value stays nominal:
+   * the basis is nominal, the caller named no instant, the currency has no country,
+   * or no positive level is recorded. Never an assumed 1.0 — a nominal number under a
+   * real label is the defect design 79 exists to remove (`JournalPriceLevels.toReal`).
+   */
+  _realPriceLevel(shownCode, { at, priceLevel, state } = {}) {
+    if (this.valueBasis() !== 'real') return null;
+    const cc = countryForCurrency(shownCode);
+    if (!cc) return null;
+    let level = null;
+    if (priceLevel != null)  level = priceLevel[cc];
+    else if (at === 'live')  level = (state ?? this._rateStateProvider?.() ?? null)?.inflationAccumulator?.[cc];
+    else if (at != null)     level = this._priceLevelSource?.levelAt?.(at instanceof Date ? at.getTime() : at, cc);
+    return typeof level === 'number' && level > 0 ? level : null;
   }
 
   /** Warn once per path when a currency value cannot be converted (no code). */

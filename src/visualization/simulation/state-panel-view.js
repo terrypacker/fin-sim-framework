@@ -372,7 +372,7 @@ export class StatePanelView extends BaseComponent {
         // Text, flags, dates and years: static rows, shown per _leafVisible.
         if (!this._leafVisible(topPath, v)) continue;
         container.appendChild(this._buildStaticRow(name ?? this.toLabel(k),
-          typeof v === 'object' ? this.renderObj(v) : this._fmtChange(topPath, v), topPath));
+          typeof v === 'object' ? this.renderObj(v) : this._fmtLive(topPath, v), topPath));
       }
     }
     return paths;
@@ -516,8 +516,8 @@ export class StatePanelView extends BaseComponent {
     return buildFieldRow({
       path,
       label:      label ?? this._formatter?.label(path) ?? this.toLabel(path.split('.').pop().replace(/\[.*?\]/g, '')),
-      valueText:  this._fmtChange(path, value),
-      valueTitle: this._formatter?.valueTitle(path, value) ?? null,
+      valueText:  history ? this._fmtChange(path, value) : this._fmtLive(path, value),
+      valueTitle: this._formatter?.valueTitle(path, value, history ? {} : this._liveBasisOpts()) ?? null,
       untyped:    this._formatter ? !this._formatter.isTyped(path) : false,
       history:    series ? series.map(e => e.value) : null,
       toggle:     this._buildChartToggle(path),
@@ -1638,6 +1638,22 @@ export class StatePanelView extends BaseComponent {
    */
   _fmtChange(field, value, objAsCode = false) {
     return this._formatter?.format(field, value) ?? this.fmtVal(value, objAsCode);
+  }
+
+  /**
+   * Format a value read off the RENDERED state tree — the one place in this panel a
+   * value and its price level share an instant, so the one place a real value basis
+   * deflates (design 79 §4). Diffs, deltas and history stats span many instants and
+   * go through `_fmtChange`, which stays nominal.
+   */
+  _fmtLive(field, value) {
+    return this._formatter?.format(field, value, this._liveBasisOpts()) ?? this.fmtVal(value);
+  }
+
+  /** The rendered state's own price levels — not the live sim's, which may be ahead. */
+  _liveBasisOpts() {
+    const priceLevel = this._pendingState?.inflationAccumulator;
+    return priceLevel ? { priceLevel } : {};
   }
 
   fmtVal(v, objAsCode = false) {

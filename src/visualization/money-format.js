@@ -16,18 +16,22 @@ import { ServiceRegistry } from '../services/service-registry.js';
  * results/runs panels (design 10 §Phase 4). Values are USD-base aggregates by
  * default; conversion + symbol come from the active display currency via the
  * shared StateSchemaRegistry, falling back to native USD when unwired.
+ *
+ * `opts` ({ at, priceLevel, state }) is forwarded to `presentForDisplay`: a real value
+ * basis (design 79) deflates only a value whose caller names the instant it belongs to.
+ * An MC or OPT aggregate has no such instant, so these panels pass none and stay nominal.
  */
-function _conv(value, nativeCode) {
+function _conv(value, nativeCode, opts) {
   const reg = ServiceRegistry.getInstance?.()?.schemaRegistry;
   return reg?.convertForDisplay
-    ? reg.convertForDisplay(value, nativeCode)
+    ? reg.convertForDisplay(value, nativeCode, opts)
     : { value, code: nativeCode, symbol: '$' };
 }
 
 /** Compact money, e.g. `$1.5M` / `$500k`, in the active display currency. */
-export function fmtCompact(value, nativeCode = 'USD') {
+export function fmtCompact(value, nativeCode = 'USD', opts = {}) {
   if (value == null || !Number.isFinite(value)) return '—';
-  const { value: v, symbol } = _conv(value, nativeCode);
+  const { value: v, symbol } = _conv(value, nativeCode, opts);
   const abs  = Math.abs(v);
   const sign = v < 0 ? '-' : '';
   if (abs >= 1_000_000) return sign + symbol + (abs / 1_000_000).toFixed(1) + 'M';
@@ -35,8 +39,8 @@ export function fmtCompact(value, nativeCode = 'USD') {
 }
 
 /** Whole-dollar money, e.g. `$1,234,568`, in the active display currency. */
-export function fmtWhole(value, nativeCode = 'USD') {
+export function fmtWhole(value, nativeCode = 'USD', opts = {}) {
   if (value == null || !Number.isFinite(value)) return '—';
-  const { value: v, symbol } = _conv(value, nativeCode);
+  const { value: v, symbol } = _conv(value, nativeCode, opts);
   return (v < 0 ? '-' + symbol : symbol) + Math.abs(v).toLocaleString('en-US', { maximumFractionDigits: 0 });
 }

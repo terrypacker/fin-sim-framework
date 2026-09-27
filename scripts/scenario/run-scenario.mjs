@@ -25,6 +25,7 @@
  *   node scripts/run-scenario.mjs a.json --to 2040-01-01    # stop early
  *   node scripts/run-scenario.mjs a.json --verbose          # show run-time logs
  *   node scripts/run-scenario.mjs a.json b.json --json      # machine-readable
+ *   node scripts/run-scenario.mjs a.json --real             # money in base-year dollars (design 79)
  *
  * A file may hold multiple scenarios; all are run unless --first is given.
  *
@@ -39,6 +40,7 @@ import { parseFlags }   from '../lib/cli.mjs';
 import { ServiceRegistry } from '../../src/services/service-registry.js';
 import { BaseScenario }    from '../../src/scenarios/base-scenario.js';
 import { ScenarioLoader }  from '../../src/scenarios/scenario-loader.js';
+import { countryForCurrency, currencyForCountry } from '../../src/finance/country-codes.js';
 
 // ─── CLI parsing ──────────────────────────────────────────────────────────────
 
@@ -53,6 +55,7 @@ const opts = parseFlags(process.argv.slice(2), {
   verbose: { type: 'flag',   help: "show the simulation's own console output (e.g. OUT_OF_FUNDS)" },
   json:    { type: 'flag',   help: 'emit machine-readable JSON instead of tables' },
   fast:    { type: 'flag',   help: 'drop journal/snapshot/bus telemetry (~12x); disables sim.journal readers' },
+  real:    { type: 'flag',   help: "show money in real sim-start dollars: each value ÷ the end state's inflationAccumulator for its own currency's country (design 79)" },
 });
 
 // ─── Running ────────────────────────────────────────────────────────────────
@@ -62,7 +65,7 @@ const opts = parseFlags(process.argv.slice(2), {
  * and a flattened net-wealth breakdown. Suppresses the simulation's own console
  * output unless `verbose`, so the comparison tables aren't drowned in run logs.
  */
-function runScenario(cfg, endDate, { verbose, fast }) {
+function runScenario(cfg, endDate, { verbose, fast, real }) {
   ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
   const scenario = new BaseScenario({
@@ -83,7 +86,48 @@ function runScenario(cfg, endDate, { verbose, fast }) {
   } finally {
     restore?.();
   }
-  return summarize(sim.state, sim.currentDate);
+  const result = summarize(sim.state, sim.currentDate);
+  return real ? deflate(result, sim.state, services) : result;
+}
+
+/**
+ * Restate a summary in real sim-start dollars (design 79). Every value is shown in its
+ * own currency here, so each divides by THAT currency's country's price level — the
+ * app's rule of "the country of the currency on screen", applied per column. Net worth
+ * is the sim's USD-base total. `cumulativeDeficit` stays nominal: it is a raw
+ * mixed-currency sum (design 89 §5.2), and no single level restates it.
+ */
+function deflate(result, state, services) {
+  const levels = state.inflationAccumulator ?? {};
+  const real = (value, code) => {
+    const level = levels[countryForCurrency(code)];
+    return typeof value === 'number' && level > 0 ? value / level : value;
+  };
+  const currencyByKey = new Map((services.accountService?.getAll?.() ?? [])
+    .map(a => [a.stateKey, a.currency?.code ?? a.currency]));
+  // Records the account service does not list (loans, properties, collectibles) carry
+  // their own currency or country. Unknown ⇒ null ⇒ the value stays nominal, never a
+  // guessed USD.
+  const recordCurrency = (k) => state[k]?.currency?.code ?? state[k]?.currency
+    ?? currencyForCountry(state[k]?.country);
+
+  const accounts = {};
+  for (const [k, v] of Object.entries(result.accounts)) {
+    const code = currencyByKey.get(k) ?? recordCurrency(k);
+    accounts[k] = code ? real(v, code) : v;
+  }
+  const assets = {};
+  for (const [k, v] of Object.entries(result.assets)) {
+    const code = recordCurrency(k);
+    assets[k] = code ? real(v, code) : v;
+  }
+  return {
+    ...result,
+    basis:   'real',
+    summary: { ...result.summary, netWorth: real(result.summary.netWorth, 'USD') },
+    accounts,
+    assets,
+  };
 }
 
 /** Temporarily swallow console.log/.warn; returns a restore fn. */
@@ -148,8 +192,12 @@ function printTable(title, labels, rows) {
   }
 }
 
-function printReport(scenarios, { params }) {
+function printReport(scenarios, { params, real }) {
   const labels = scenarios.map(s => s.label);
+  if (real) {
+    console.log('\nMoney is REAL: sim-start dollars, each value ÷ its currency country\'s end-state');
+    console.log('inflationAccumulator. Cumulative deficit stays nominal (a mixed-currency sum).');
+  }
 
   printTable('Run summary', labels, SUMMARY_ROWS.map(([key, label]) => ({
     label, values: scenarios.map(s => s.result.summary[key]),

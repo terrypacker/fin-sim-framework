@@ -148,11 +148,16 @@ export class FieldFormatter {
    *
    * @param {string} path
    * @param {*}      value
-   * @param {{ state?: object, compact?: boolean }} [opts]
+   * @param {{ state?: object, compact?: boolean, at?: 'live'|number|Date, priceLevel?: object }} [opts]
    *   `compact` renders money as "$1.23M". It converts with the injected rate state
    *   rather than `state`, which only matters once rates vary over time.
+   *   `at` names the instant the value belongs to, which is what lets a real value
+   *   basis deflate it (design 79 §3). Omitted, money stays nominal: a chart tooltip
+   *   or a history stat has no single instant, and must not borrow the live one.
+   *   `priceLevel` (a `{ US, AU }` map, e.g. the rendered state's `inflationAccumulator`)
+   *   does the same job for a caller that already holds the level.
    */
-  format(path, value, { state, compact = false } = {}) {
+  format(path, value, { state, compact = false, at, priceLevel } = {}) {
     const reg = this._registry;
     if (!reg) return null;
     // A glob can match a whole subtree (`auSuperCapsByPerson.**`); an object under it
@@ -162,30 +167,47 @@ export class FieldFormatter {
       const vt = reg.resolve(path);
       if (vt.kind === 'currency') {
         const { value: v, symbol } = vt.currencyCode
-          ? reg.convertForDisplay(value, vt.currencyCode)
+          ? reg.convertForDisplay(value, vt.currencyCode, { at, priceLevel })
           : { value, symbol: '' };
         return compactMoney(v, symbol);
       }
     }
-    return reg.format(path, value, { state });
+    return reg.format(path, value, { state, at, priceLevel });
   }
 
   /**
    * Hover text for a value cell, or null when there is nothing to add:
    *   - an untyped number says so, because its "1,234.56" is only a guess;
    *   - a converted amount shows the native amount and the rate used, e.g.
-   *     "A$1,234.00 native @ 0.6500 AUD→USD", since the conversion is otherwise invisible.
+   *     "A$1,234.00 native @ 0.6500 AUD→USD", since the conversion is otherwise invisible;
+   *   - a deflated amount (design 79) shows the nominal amount and the price level it
+   *     was divided by, for the same reason.
+   *
+   * @param {string} path
+   * @param {*}      value
+   * @param {{ state?: object, at?: 'live'|number|Date, priceLevel?: object }} [opts]  as for {@link format}
    */
-  valueTitle(path, value) {
+  valueTitle(path, value, { state, at, priceLevel } = {}) {
     const reg = this._registry;
     if (!reg || typeof value !== 'number' || !Number.isFinite(value)) return null;
     const vt = reg.resolve(path);
     if (vt.kind === 'unknown') return 'No schema entry: shown as a plain number, which may not be what it is';
     if (vt.kind !== 'currency' || !vt.currencyCode) return null;
-    const unit = reg.convertForDisplay(1, vt.currencyCode);
-    if (unit.code === vt.currencyCode) return null;
-    const native = new Intl.NumberFormat('en-US', { style: 'currency', currency: vt.currencyCode }).format(value);
-    return `${native} native @ ${unit.value.toFixed(4)} ${vt.currencyCode}→${unit.code}`;
+    const notes = [];
+    const unit  = reg.convertForDisplay(1, vt.currencyCode, { state });
+    if (unit.code !== vt.currencyCode) {
+      const native = new Intl.NumberFormat('en-US', { style: 'currency', currency: vt.currencyCode }).format(value);
+      notes.push(`${native} native @ ${unit.value.toFixed(4)} ${vt.currencyCode}→${unit.code}`);
+    }
+    if (at != null || priceLevel != null) {
+      const shown = reg.convertForDisplay(value, vt.currencyCode, { state });
+      const real  = reg.convertForDisplay(value, vt.currencyCode, { state, at, priceLevel });
+      if (real.basis === 'real' && real.value !== 0) {
+        const nominal = new Intl.NumberFormat('en-US', { style: 'currency', currency: shown.code }).format(shown.value);
+        notes.push(`${nominal} nominal ÷ ${(shown.value / real.value).toFixed(4)} price level`);
+      }
+    }
+    return notes.length ? notes.join(' · ') : null;
   }
 
   /** A holding (or other id-addressed element): its label, security symbol/name, else its id. */
