@@ -10,7 +10,6 @@
 
 import { ALLOCATION }    from '../holdings/allocation.js';
 import { ACCOUNT_ROLES } from '../state/account-roles.js';
-import { roleCanHoldGold } from './rebalance-to-target-reducer.js';
 
 /**
  * Lever D — jurisdiction-aware asset location (design 61 §4-D / Phase 4).
@@ -18,18 +17,18 @@ import { roleCanHoldGold } from './rebalance-to-target-reducer.js';
  * The Lever-A target is a WHOLE-PORTFOLIO ratio. This planner maps it onto the
  * individual accounts so the aggregate book hits the target mix while each class
  * sits in its tax-favored account: bonds → tax-deferred (interest sheltered),
- * equity → Roth/taxable (tax-free growth / LTCG + step-up), gold → a shelter that
- * may legally hold it. The rebalance then drives each account toward the composition
+ * equity → Roth/taxable (tax-free growth / LTCG + step-up), gold → wherever its
+ * residency-aware preference sends it (GOLD_PREFERENCE_BY_RESIDENCY). The rebalance then drives each account toward the composition
  * this planner assigns it — no inter-account transfer is needed, because the
  * assignment fills every account to exactly its own total, so each account's legs
  * still sum to zero and value is conserved per account (Phase-2 invariant).
  *
- * Gold eligibility: **every account may hold gold** (design 61 §12 OQ4a, reversed
- * 2026-07-29 — a gold ETF is holdable in a US IRA/401k/Roth and carries the same
- * collectibles rate). `roleCanHoldGold` is therefore total and the gold capacity cap
- * below is unreachable; both are retained as the seam for a future eligibility rule.
- * What decides gold's home now is purely the tax arithmetic, via
- * GOLD_PREFERENCE_BY_RESIDENCY (§12.2 Q4).
+ * Class restrictions: **by default every account may hold every class** (design 61 §12
+ * OQ4a, reversed 2026-07-29 — a gold ETF is holdable in a US IRA/401k/Roth). The author
+ * may opt in to HARD per-role bans through `restrictions` (design 115 — e.g.
+ * `{ GOLD: ['super'] }` for a US citizen, whose super could only hold gold as a
+ * self-managed fund). Unlike the soft preference lists, a restriction is never relaxed:
+ * a class weight the permitted accounts cannot hold is capped and redistributed.
  *
  * Lazy post-move relocation (§OQ4b): the planner is re-run every period from the
  * CURRENT residency + accounts, so a US→AU move simply re-targets the new optimum and
@@ -39,14 +38,27 @@ import { roleCanHoldGold } from './rebalance-to-target-reducer.js';
 
 /** Processing order: most-eligibility-constrained first (GOLD), then by tax-sensitivity. */
 const LOCATION_FILL_ORDER = [ALLOCATION.GOLD, ALLOCATION.BOND, ALLOCATION.EQUITY, ALLOCATION.CASH];
-/** The non-gold classes the redistributed gold excess spreads across. */
-const NON_GOLD_CLASSES = [ALLOCATION.EQUITY, ALLOCATION.BOND, ALLOCATION.CASH];
+/** Where a capped class's excess goes when no uncapped class has a target to spread it by. */
+const EXCESS_FALLBACK_ORDER = [ALLOCATION.EQUITY, ALLOCATION.BOND, ALLOCATION.CASH, ALLOCATION.GOLD];
+
+/**
+ * True when an account of `role` may hold `allocation` under `restrictions` (design 115).
+ *
+ * `restrictions` is the `allocationClassRestrictions` map, class → roles that class may
+ * NEVER occupy. Null, a class the map does not name, or a non-array entry ⇒ permitted, so
+ * a plan without restrictions behaves exactly as before. An empty array is the author
+ * saying "considered, allowed everywhere" — also permitted.
+ */
+export function roleCanHold(allocation, role, restrictions = null) {
+  const forbidden = restrictions?.[allocation];
+  return !(Array.isArray(forbidden) && forbidden.includes(role));
+}
 
 /**
  * Default location policy — per class, the account roles that should hold it, in
  * preference order (earlier = better). Preference is SOFT (spills to any remaining
- * capacity when the preferred accounts are full); gold eligibility is HARD (enforced
- * separately by `roleCanHoldGold`). Restricted to the rebalanceable role set
+ * capacity when the preferred accounts are full); class restrictions are HARD (enforced
+ * separately by `roleCanHold`). Restricted to the rebalanceable role set
  * (tax-advantaged ∪ taxable brokerage).
  */
 export const DEFAULT_LOCATION_POLICY = Object.freeze({
@@ -188,8 +200,64 @@ function _orderedForClass(accounts, remaining, preferred) {
 }
 
 /**
+ * Design 115 — close the gaps the greedy passes leave when several classes are restricted.
+ *
+ * A breadth-first search over accounts from one with unfilled capacity G: an edge A → B
+ * via class X means "B holds X, and A may hold X", so X can move from B into A. Reaching an
+ * account that may hold a still-unplaced class Y completes a path; shifting X along it and
+ * placing Y at the end fills G without breaking any restriction or changing any class
+ * total. Each augment exhausts a gap, a class's unplaced dollars or an edge's holding, so
+ * the loop is bounded; the iteration cap only guards against float dust.
+ *
+ * Mutates `out`, `remaining` and `classTargets` in place.
+ */
+function _repairRestrictedGaps(active, out, remaining, classTargets, mayHold) {
+  const EPS = 1e-6;
+  const classes = LOCATION_FILL_ORDER;
+  for (let iter = 0; iter < 64 * (active.length + 1); iter++) {
+    const gap = active.find(a => remaining[a.stateKey] > EPS);
+    const pending = classes.filter(c => classTargets[c] > EPS);
+    if (!gap || pending.length === 0) return;
+
+    // BFS: parent.get(B) = { from: A, cls: X } ⇒ X moves B → A.
+    const parent = new Map([[gap.stateKey, null]]);
+    const queue = [gap];
+    let end = null; let endCls = null;
+    while (queue.length && !end) {
+      const a = queue.shift();
+      for (const x of classes) {
+        if (!mayHold(x, a)) continue;
+        for (const b of active) {
+          if (parent.has(b.stateKey) || (out.get(b.stateKey)[x] ?? 0) <= EPS) continue;
+          parent.set(b.stateKey, { from: a, cls: x });
+          const y = pending.find(c => mayHold(c, b));
+          if (y) { end = b; endCls = y; break; }
+          queue.push(b);
+        }
+        if (end) break;
+      }
+    }
+    if (!end) return;   // no path from this gap: genuinely infeasible for it
+
+    let amt = Math.min(remaining[gap.stateKey], classTargets[endCls]);
+    for (let b = end; parent.get(b.stateKey); b = parent.get(b.stateKey).from) {
+      amt = Math.min(amt, out.get(b.stateKey)[parent.get(b.stateKey).cls]);
+    }
+    if (amt <= EPS) return;
+    for (let b = end; parent.get(b.stateKey); b = parent.get(b.stateKey).from) {
+      const { from, cls } = parent.get(b.stateKey);
+      out.get(b.stateKey)[cls] -= amt;
+      out.get(from.stateKey)[cls] = (out.get(from.stateKey)[cls] ?? 0) + amt;
+    }
+    out.get(end.stateKey)[endCls] = (out.get(end.stateKey)[endCls] ?? 0) + amt;
+    remaining[gap.stateKey] -= amt;
+    classTargets[endCls]    -= amt;
+  }
+}
+
+/**
  * Plan the per-account target composition that realizes `portfolioTarget` across
- * `accounts`, honoring the location policy and the gold eligibility guard.
+ * `accounts`, honoring the location policy and the class restrictions.
  *
  * @param {object}   opts
  * @param {object[]} opts.accounts        - [{ stateKey, role, total }] (total = Σ marketValue)
@@ -200,17 +268,29 @@ function _orderedForClass(accounts, remaining, preferred) {
  * @param {?Map}     [opts.eligibility]   - design 97 §23 measurement seam: stateKey → Set<ALLOCATION>
  *                                        of the classes that account may hold. Null (the default)
  *                                        and unnamed accounts are unconstrained. See `_canHold`.
+ * @param {?object}  [opts.restrictions]  - design 115: class → account roles that class may NEVER
+ *                                        occupy (`allocationClassRestrictions`). HARD — never relaxed.
+ *                                        Null (the default) restricts nothing. See `roleCanHold`.
  * @param {?object}  [opts.stats]         - optional out-param; `stats.relaxed` accumulates the
  *                                        dollars placed in violation of `eligibility` to keep each
- *                                        account's composition summing to its total.
+ *                                        account's composition summing to its total;
+ *                                        `stats.restricted` the class-target dollars `restrictions`
+ *                                        left no account to hold (redistributed to other classes);
+ *                                        `stats.overPlaced` the dollars placed beyond a class's
+ *                                        target to fill an account no remaining class may enter.
  * @returns {Map<string, object>} stateKey → { <ALLOCATION>: dollars } summing to that account's total
  */
 export function planLocatedTargets({ accounts = [], portfolioTarget = {}, policy = null, residency = 'US',
-                                     eligibility = null, stats = null } = {}) {
+                                     eligibility = null, restrictions = null, stats = null } = {}) {
   // Gold's preferred home depends on residency (§12.2 Q4); everything else does not.
   // A caller-supplied `policy` is merged over the residency default, per class.
   policy = resolveLocationPolicy(residency, policy);
   const active = accounts.filter(a => (a?.total ?? 0) > 0);
+  // A role barred from EVERY class cannot hold its own money, so the restriction is
+  // unsatisfiable for it. The loader refuses that shape; defensively, such an account is
+  // planned as if unrestricted rather than breaking value conservation.
+  const canHold = (cls, role) => roleCanHold(cls, role, restrictions)
+    || LOCATION_FILL_ORDER.every(c => !roleCanHold(c, role, restrictions));
   const totalPortfolio = active.reduce((s, a) => s + a.total, 0);
   const out = new Map(active.map(a => [a.stateKey, {}]));
   if (totalPortfolio <= 0) return out;
@@ -219,20 +299,27 @@ export function planLocatedTargets({ accounts = [], portfolioTarget = {}, policy
   const classTargets = {};
   for (const cls of LOCATION_FILL_ORDER) classTargets[cls] = Math.max(0, (portfolioTarget[cls] ?? 0)) * totalPortfolio;
 
-  // Gold eligibility cap: gold cannot exceed the capacity of gold-eligible accounts.
-  const goldCap = active.filter(a => roleCanHoldGold(a.role)).reduce((s, a) => s + a.total, 0);
-  if (classTargets[ALLOCATION.GOLD] > goldCap) {
-    let excess = classTargets[ALLOCATION.GOLD] - goldCap;
-    classTargets[ALLOCATION.GOLD] = goldCap;
-    // Redistribute the un-placeable gold weight across the other classes, pro-rata to
-    // their current targets (fallback: all to EQUITY) so Σ class$ still equals the book.
-    const base = NON_GOLD_CLASSES.reduce((s, c) => s + classTargets[c], 0);
+  // Restriction cap (design 115): no class may exceed the capacity of the accounts allowed
+  // to hold it. The excess is redistributed across the classes still under their own caps,
+  // pro-rata to their targets, and the loop repeats because the redistribution can push
+  // another class over. Unrestricted ⇒ every cap is the whole book and nothing moves.
+  const caps = Object.fromEntries(LOCATION_FILL_ORDER.map(cls =>
+    [cls, active.filter(a => canHold(cls, a.role)).reduce((s, a) => s + a.total, 0)]));
+  const capped = new Set();
+  for (let pass = 0; pass < LOCATION_FILL_ORDER.length; pass++) {
+    const over = LOCATION_FILL_ORDER.filter(c => !capped.has(c) && classTargets[c] > caps[c] + 1e-6);
+    if (over.length === 0) break;
+    let excess = 0;
+    for (const c of over) { excess += classTargets[c] - caps[c]; classTargets[c] = caps[c]; capped.add(c); }
+    if (stats) stats.restricted = (stats.restricted ?? 0) + excess;
+    const open = LOCATION_FILL_ORDER.filter(c => !capped.has(c));
+    const base = open.reduce((s, c) => s + classTargets[c], 0);
     if (base > 0) {
-      for (const c of NON_GOLD_CLASSES) classTargets[c] += excess * (classTargets[c] / base);
+      for (const c of open) classTargets[c] += excess * (classTargets[c] / base);
     } else {
-      classTargets[ALLOCATION.EQUITY] += excess;
+      const sink = EXCESS_FALLBACK_ORDER.find(c => !capped.has(c) && caps[c] > 0);
+      if (sink) classTargets[sink] += excess;
     }
-    excess = 0;
   }
 
   const remaining = Object.fromEntries(active.map(a => [a.stateKey, a.total]));
@@ -246,8 +333,7 @@ export function planLocatedTargets({ accounts = [], portfolioTarget = {}, policy
   for (const cls of LOCATION_FILL_ORDER) {
     let need = classTargets[cls];
     if (need <= 0) continue;
-    const eligible = active.filter(a => (cls !== ALLOCATION.GOLD || roleCanHoldGold(a.role))
-                                     && _canHold(eligibility, a.stateKey, cls));
+    const eligible = active.filter(a => canHold(cls, a.role) && _canHold(eligibility, a.stateKey, cls));
     for (const a of _orderedForClass(eligible, remaining, policy[cls])) {
       if (need <= 1e-6) break;
       const amt = Math.min(need, remaining[a.stateKey]);
@@ -255,19 +341,20 @@ export function planLocatedTargets({ accounts = [], portfolioTarget = {}, policy
       assign(a.stateKey, cls, amt);
       need -= amt;
     }
-    classTargets[cls] = need;   // any un-placeable remainder (only possible for GOLD post-cap ≈ 0)
+    classTargets[cls] = need;   // any un-placeable remainder (≈ 0 once capped)
   }
 
   // Reconcile: fill any account still carrying capacity with the leftover class dollars
-  // (respecting gold eligibility). With Σ class$ == Σ capacity and gold capped feasible,
-  // this drives every `remaining` to ~0 so each account's composition sums to its total.
+  // (respecting the restrictions). With Σ class$ == Σ capacity and each class capped to what
+  // its permitted accounts can hold, this drives every `remaining` to ~0 so each account's
+  // composition sums to its total — exactly when at most one class is restricted.
   const RECONCILE_ORDER = [ALLOCATION.EQUITY, ALLOCATION.BOND, ALLOCATION.CASH, ALLOCATION.GOLD];
   for (const cls of RECONCILE_ORDER) {
     let need = classTargets[cls];
     if (need <= 1e-6) continue;
     for (const a of active) {
       if (need <= 1e-6) break;
-      if (cls === ALLOCATION.GOLD && !roleCanHoldGold(a.role)) continue;
+      if (!canHold(cls, a.role)) continue;
       if (!_canHold(eligibility, a.stateKey, cls)) continue;
       const amt = Math.min(need, remaining[a.stateKey]);
       if (amt <= 1e-6) continue;
@@ -279,7 +366,7 @@ export function planLocatedTargets({ accounts = [], portfolioTarget = {}, policy
 
   // Design 97 §23 rule 3 — value conservation outranks eligibility. Whatever the constrained
   // passes could not place goes back into the accounts that have room, ignoring `eligibility`
-  // but never the GOLD guard (which is a claim about what an account may legally hold, not a
+  // but never the class restrictions (a claim about what an account may hold, not a
   // preference). Reached only when the author's placement is infeasible against this book;
   // `stats.relaxed` is how much of it the book could not honour.
   if (eligibility) {
@@ -288,7 +375,7 @@ export function planLocatedTargets({ accounts = [], portfolioTarget = {}, policy
       if (need <= 1e-6) continue;
       for (const a of active) {
         if (need <= 1e-6) break;
-        if (cls === ALLOCATION.GOLD && !roleCanHoldGold(a.role)) continue;
+        if (!canHold(cls, a.role)) continue;
         const amt = Math.min(need, remaining[a.stateKey]);
         if (amt <= 1e-6) continue;
         assign(a.stateKey, cls, amt);
@@ -300,6 +387,31 @@ export function planLocatedTargets({ accounts = [], portfolioTarget = {}, policy
         if (stats && !_canHold(eligibility, a.stateKey, cls)) stats.relaxed = (stats.relaxed ?? 0) + amt;
       }
       classTargets[cls] = need;
+    }
+  }
+
+  // Design 115 — with SEVERAL classes restricted, the greedy passes can box themselves in:
+  // an account is left with capacity that only classes already spent elsewhere may enter,
+  // while some class's dollars have no permitted room left. Often a valid placement exists
+  // and is one or more MOVES away (put X from account B into the gap, then the stranded Y
+  // into B). `_repairRestrictedGaps` finds those moves; whatever it cannot fix is genuinely
+  // infeasible and falls to the over-place fill below.
+  if (restrictions) {
+    _repairRestrictedGaps(active, out, remaining, classTargets,
+      (cls, a) => canHold(cls, a.role) && _canHold(eligibility, a.stateKey, cls));
+  }
+
+  // Value conservation still wins, but never over a restriction: a gap nothing can fix is
+  // filled with a class the account IS allowed to hold, beyond that class's target, and
+  // counted into `stats.overPlaced`. Unreachable with zero or one restricted class.
+  if (restrictions) {
+    for (const a of active) {
+      const gap = remaining[a.stateKey];
+      if (gap <= 1e-6) continue;
+      const cls = EXCESS_FALLBACK_ORDER.find(c => canHold(c, a.role));
+      if (!cls) continue;
+      assign(a.stateKey, cls, gap);
+      if (stats) stats.overPlaced = (stats.overPlaced ?? 0) + gap;
     }
   }
 
@@ -315,7 +427,10 @@ export function planLocatedTargets({ accounts = [], portfolioTarget = {}, policy
     }
     const drift = R2(a.total - sum);
     if (drift !== 0 && largest !== null) comp[largest] = R2(comp[largest] + drift);
-    else if (drift !== 0) comp[ALLOCATION.EQUITY] = R2((comp[ALLOCATION.EQUITY] ?? 0) + drift);
+    else if (drift !== 0) {
+      const cls = EXCESS_FALLBACK_ORDER.find(c => canHold(c, a.role)) ?? ALLOCATION.EQUITY;
+      comp[cls] = R2((comp[cls] ?? 0) + drift);
+    }
   }
 
   return out;

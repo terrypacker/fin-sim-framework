@@ -13,8 +13,8 @@
  * aware location).
  *
  * The whole-portfolio target is PLACED across accounts so each class sits in its
- * tax-favored home (bonds → tax-deferred, equity → Roth/taxable, gold → super and
- * never a US IRA/401k/Roth) while the AGGREGATE book still hits the target. Covers
+ * tax-favored home (bonds → tax-deferred, equity → Roth/taxable, gold → its residency-
+ * aware home) while the AGGREGATE book still hits the target. Covers
  * the pure planner and its integration into RebalanceToTargetReducer (LOCATED default).
  */
 
@@ -128,10 +128,10 @@ test('LOC-4: gold MAY land in a US IRA/401k/Roth (bullion ban reversed)', () => 
 
 test('LOC-5: the gold capacity cap is now INERT — every account is gold-eligible', () => {
   // Was: "gold above the eligible shelter capacity is capped + redistributed". With the
-  // bullion guard reversed, `goldCap` equals the whole book, so a normalized target can
-  // never exceed it and the redistribution branch in allocation-location.js is
-  // unreachable. It is retained as the seam for a future eligibility rule (see
-  // roleCanHoldGold); this test pins that it currently does nothing.
+  // bullion guard reversed and NO restrictions authored, every cap equals the whole book,
+  // so a normalized target never exceeds it. The cap is live again only when the author
+  // opts in to `allocationClassRestrictions` (design 115 — see
+  // evt-allocation-class-restrictions.test.mjs); this test pins that it is inert without.
   const accts = [
     { stateKey: 'iraAccount',   role: ACCOUNT_ROLES.IRA,   total: 100000 },
     { stateKey: 'superAccount', role: ACCOUNT_ROLES.SUPER, total: 100000 },

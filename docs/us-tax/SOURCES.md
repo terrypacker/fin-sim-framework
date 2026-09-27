@@ -35,3 +35,25 @@ cannot be answered from any one of them alone:
 Note the govinfo path segments for §6654 are `subtitleF-chap68-subchapA-partI` — Subtitle F,
 not A. The existing table row's warning applies: guessing the wrong segment returns a 302,
 not a 404.
+
+## Added 27 Sep 2026 for design 115 (asset-class restrictions — gold in super)
+
+Can a US citizen's AU super hold gold, and what does US law make of the super fund that does?
+Eight sections, 2024 edition, same govinfo route. PFIC is Subchapter P Part VI and its
+subparts are **A** (§1291), **C** (§1296), **D** (§1297–1298) — guessing `subpartD` for §1291
+returns a 302. §6048 is `subtitleF-chap61-subchapA-partIII-subpartB`, not `subpartA`.
+
+| file | section | why it is here |
+|---|---|---|
+| `USCODE-2024-title26-subtitleA-chap1-subchapD-partI-subpartA-sec408.txt` | **§408** *Individual retirement accounts* | `(m)(1)` a collectible acquired by an IRA is a deemed distribution; `(m)(2)(C)` "any metal" is a collectible; **`(m)(3)(B)` excepts gold bullion of futures-contract fineness "in the physical possession of a trustee"**. Backs design 61 §12 OQ4a's reversal on stronger ground than the ETF argument alone. |
+| `USCODE-2024-title26-subtitleA-chap1-subchapJ-partI-subpartE-sec671.txt` | **§671** *Trust income … attributable to grantors and others as substantial owners* | The grantor-trust rule: where subpart E treats a person as owner, the trust's items are that person's. |
+| `USCODE-2024-title26-subtitleA-chap1-subchapJ-partI-subpartE-sec679.txt` | **§679** *Foreign trusts having one or more United States beneficiaries* | `(a)(1)` a US person who transfers property to a foreign trust with a US beneficiary is its owner for that portion, **"other than a trust described in section 6048(a)(3)(B)(ii)"**. |
+| `USCODE-2024-title26-subtitleF-chap61-subchapA-partIII-subpartB-sec6048.txt` | **§6048** *Information with respect to certain foreign trusts* | `(a)(3)(B)(ii)` — the carve-out §679 borrows: trusts "described in section 402(b), 404(a)(4), or 404A". Whether super is one of those is the whole question. |
+| `USCODE-2024-title26-subtitleA-chap1-subchapP-partVI-subpartA-sec1291.txt` | **§1291** *Interest on tax deferral* | The PFIC excess-distribution regime (ordinary rate + interest charge). |
+| `USCODE-2024-title26-subtitleA-chap1-subchapP-partVI-subpartC-sec1296.txt` | **§1296** *Election of mark to market for marketable stock* | The usual escape from §1291. |
+| `USCODE-2024-title26-subtitleA-chap1-subchapP-partVI-subpartD-sec1297.txt` | **§1297** *Passive foreign investment company* | `(a)` the 75% income / 50% asset tests; `(b)(1)` passive income = §954(c) FPHC income. |
+| `USCODE-2024-title26-subtitleA-chap1-subchapP-partVI-subpartD-sec1298.txt` | **§1298** *Special rules* | `(a)(3)` stock owned by a trust is owned proportionately by its beneficiaries — how a PFIC inside a super fund reaches the member. |
+
+**Not on disk yet:** §954(c) (whether commodity gains are FPHC income — needed before
+claiming an AU gold ETF is a PFIC), Reg. §301.7701-3 (default classification of a foreign
+unit trust), and Reg. §1.1291/§1.1297. Design 115 flags the PFIC question as open for that reason.

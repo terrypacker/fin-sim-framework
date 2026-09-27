@@ -12,7 +12,7 @@ import { Reducer, PRIORITY }   from '../../simulation-framework/reducers.js';
 import { REGIME_TAG }          from '../economic-regimes/regime-tag.js';
 import { ALLOCATION, totalizeMix, assertTotalMix } from '../holdings/allocation.js';
 import { ACCOUNT_ROLES }       from '../state/account-roles.js';
-import { planLocatedTargets } from './allocation-location.js';
+import { planLocatedTargets, roleCanHold } from './allocation-location.js';
 import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
 
 const ACTION_KEY = 'rebalance_to_target';
@@ -69,26 +69,25 @@ export function countryForRole(role) {
 }
 
 /**
- * True when a role's account may hold a GOLD sleeve.
+ * True when a role's account may hold a GOLD sleeve under `restrictions`.
  *
- * **Every role may (design 61 §12 OQ4a, reversed 2026-07-29).** This used to exclude
- * US tax-advantaged roles on the strength of the §408(m) bullion restriction. That was
- * modelling the wrong instrument: §408(m) restricts holding *physical* bullion directly
- * in an IRA, and says nothing about a **gold ETF** (GLD/IAU), which is how a retirement
- * portfolio actually takes a gold position and is available in every IRA/401k/Roth. The
- * `GOLD` sleeve here is an abstract *exposure*, not a claim about custody, and the ETF
- * carries the same US collectibles rate, so one sleeve models both.
+ * **No role is barred by default (design 61 §12 OQ4a, reversed 2026-07-29).** This used
+ * to exclude US tax-advantaged roles on the strength of the §408(m) bullion restriction.
+ * That was modelling the wrong instrument: a gold ETF is holdable in every IRA/401k/Roth,
+ * and §408(m)(3)(B) excepts qualifying bullion held by the trustee anyway. The `GOLD`
+ * sleeve here is an abstract *exposure*, not a claim about custody.
  *
- * Kept as a named predicate rather than deleted because the location code reads better
- * for it and a future eligibility rule (an AU-super in-house-asset test, say) would land
- * here. It is currently total.
+ * Whether gold may sit in a given role is now the AUTHOR's statement, through the opt-in
+ * `allocationClassRestrictions` map (design 115) — e.g. a US citizen's super, where holding
+ * gold means a self-managed fund. This is the GOLD case of `roleCanHold`, kept by name for
+ * its callers.
  *
- * Consequence worth knowing: the 28% collectibles rate now makes *sheltering* gold in a
- * US tax-advantaged account the tax-efficient placement for a US resident — the
- * placement the old guard forbade — so located plans will migrate gold there.
+ * Consequence worth knowing: the 28% collectibles rate makes *sheltering* gold in a US
+ * tax-advantaged account the tax-efficient placement for a US resident — the placement the
+ * old guard forbade — so located plans migrate gold there.
  */
-export function roleCanHoldGold(_role) {
-  return true;
+export function roleCanHoldGold(role, restrictions = null) {
+  return roleCanHold(ALLOCATION.GOLD, role, restrictions);
 }
 
 // ─── Lever B — time variation (design 61 §4-B / Phase 3) ──────────────────────

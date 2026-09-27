@@ -74,6 +74,22 @@ It is not. There is a working scripted route, in two steps:
 guidance, rates) still 403s every automated fetch and still arrives by hand. The Federal
 Register of Legislation (Acts and Regulations) is scriptable by the route above.
 
+## `SISA-1993/` and `SISR-1994/` — added 27 Sep 2026 (design 115)
+
+| directory | instrument | compilation |
+|---|---|---|
+| `SISA-1993/C2026C00361VOL0{1,2}.txt` | *Superannuation Industry (Supervision) Act 1993*, titleId `C2004A04633` | No. 131, compilation date 10 Aug 2026 |
+| `SISR-1994/F2026C00541VOL0{1,2}.txt` | *Superannuation Industry (Supervision) Regulations 1994*, titleId `F1996B00580` | No. 159, compilation date 1 Jul 2026, **rectification version 1** |
+
+Both by the scripted route above. The Regulations' current version has
+`rectificationVersionNumber: 1`, so its `<rect>` segment is `1`, not `original`:
+`https://www.legislation.gov.au/F1996B00580/2026-07-01/2026-07-01/text/1/pdf/<vol>`.
+
+Cited by design 115: SIS Act **s17A** (an SMSF's members are its trustees or its corporate
+trustee's directors), **s62A** (the collectables head of power), SIS Regs **reg 13.18AA**
+(the collectables list — coins are on it, bullion is not), and ITAA 1997 **s295-95(2)–(4)**
+(already on disk: central management and control ordinarily in Australia, 2-year absence).
+
 ## `ato-rates/` additions, 16 Sep 2026 (design 107)
 
 | File | Source | Route |
