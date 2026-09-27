@@ -156,7 +156,7 @@
   "spouse": 0
  },
  "auPersonOrdinaryIncomeYTD": {
-  "primary": 110119.409362,
+  "primary": 110114.509362,
   "spouse": 44452.4954309
  },
  "auPersonRealCapitalGainsYTD": {
@@ -176,7 +176,7 @@
   "spouse": 0
  },
  "auPersonUsSourceOrdinaryAudYTD": {
-  "primary": 104949.365362,
+  "primary": 104944.465362,
   "spouse": 44418.7454309
  },
  "auPersonUsSourceRealCapGainsAudYTD": {
@@ -749,10 +749,10 @@
  "ftcCurrentPassive": 0,
  "ftcCurrentResourced": 0,
  "ftcPoolGeneral": {
-  "2032": 10029.0555513
+  "2032": 10030.2506243
  },
  "ftcPoolPassive": {
-  "2032": 1416.28725529
+  "2032": 1416.17018224
  },
  "ftcPoolResourced": {},
  "fxAnchorRates": {
@@ -1039,8 +1039,8 @@
  },
  "marketIndexAsOfMs": 1988064000000,
  "metrics": {
-  "netLiquidity": 2190566.47,
-  "netWorth": 5732641.8,
+  "netLiquidity": 2190561.57,
+  "netWorth": 5732636.9,
   "offsetAppliedCapacity": 0,
   "offsetIdleCapacity": 0
  },
@@ -1661,7 +1661,7 @@
    }
   },
   "US": {
-   "agi": 196225.12,
+   "agi": 196220.22,
    "tax": 13153.68,
    "year": 2032
   }
@@ -1741,7 +1741,7 @@
  "usPersonHousehold": true,
  "usSavingsAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 454361.01114,
+  "balance": 454356.11114,
   "country": "US",
   "currency": {
    "code": "USD",
@@ -1755,7 +1755,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 454361.01114,
+    "costBasis": 454356.11114,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -1766,7 +1766,7 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 454361.01114,
+    "marketValue": 454356.11114,
     "maturityDate": null,
     "purchaseDate": null,
     "rateKey": "SAVINGS_US",
@@ -2398,7 +2398,7 @@
   "stateKey": "usStockAccount",
   "type": "brokerage"
  },
- "usTaxPaidOnUsSourceAud": 34227.9731959,
+ "usTaxPaidOnUsSourceAud": 34226.3022959,
  "usWithheldYTD": 0,
  "withinTierDraw": "SEQUENTIAL",
  "yieldCurve": {

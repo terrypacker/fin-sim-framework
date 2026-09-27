@@ -10,7 +10,6 @@
 
 import { Reducer, PRIORITY }  from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }        from '../../../simulation-framework/handlers.js';
-import { InsufficientFundsError } from '../../assets/account.js';
 import { ACCOUNT_ROLES }       from '../../state/account-roles.js';
 import { StateTaxSettleService } from './state-tax-settle-service.js';
 import { STATE_YTD_FIELDS }    from './state-income-classification.js';
@@ -122,24 +121,17 @@ export class StateTaxPaymentDebitReducer extends Reducer {
     // top-up: the cross-border sweep already ran and already reported any
     // still-uncoverable gap, so this pass only debits what landed.
     const escalated   = action.escalated === true;
-    const shortfall   = action.amount - Math.max(0, cashAccount.balance);
-
     let crossBorderTransfers = [];
     // Liquidating to raise the state-tax cash is itself taxable; forward the draw's
     // accruals so they reach next year's YTD buckets. Same reasoning (and the same
     // settle-then-debit ordering that makes the deferral non-circular) as the
-    // federal debit reducer — see TaxPaymentDebitReducerBase.
+    // federal debit reducer — see TaxPaymentDebitReducerBase. The top-up is sized so
+    // the bill leaves the account at its cash floor (cash-floor.js rule 2); any
+    // cross-currency leg of it is journaled (design 44 Gap A).
     let pendingTaxActions = [];
-    if (shortfall > 0 && !escalated) {
-      try {
-        // Journal any cross-currency leg of the top-up (design 44 Gap A).
-        ({ crossBorderTransfers = [], pendingTaxActions = [] } =
-          this.accountService.replenishSavings(state, accountKey, shortfall, date));
-      } catch (e) {
-        if (!(e instanceof InsufficientFundsError)) throw e;
-        // Keep what the exhausted draw already realized, then escalate below.
-        ({ crossBorderTransfers = [], pendingTaxActions = [] } = e.partial);
-      }
+    if (!escalated) {
+      ({ crossBorderTransfers, pendingTaxActions } =
+        this.accountService.topUpForDebit(state, accountKey, action.amount, date));
     }
 
     const debit = Math.min(action.amount, Math.max(0, cashAccount.balance));

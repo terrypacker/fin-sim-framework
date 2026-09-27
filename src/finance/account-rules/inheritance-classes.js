@@ -11,6 +11,7 @@
 import { Reducer, PRIORITY, AccountServiceReducer } from '../../simulation-framework/reducers.js';
 import { HandlerEntry }      from '../../simulation-framework/handlers.js';
 import { resolvePresentCash } from './cash-routing.js';
+import { restoreFloorActions } from './cash-floor.js';
 import { convertExpenseToAccount } from '../fx/expense-fx.js';
 import { inheritedRaStrategy, INHERITED_RA_WINDOW } from './inherited-ra-distribution-strategy.js';
 import { promoteToUnitised }  from '../holdings/holding-utils.js';
@@ -195,7 +196,7 @@ export class InheritanceNeTaxApplyReducer extends AccountServiceReducer {
     this.accountService = accountService;
     this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['NE_INHERITANCE_TAX'];
-    this.generatedActionTypes = [];
+    this.generatedActionTypes = ['REPLENISH_SAVINGS'];
   }
 
   reduce(state, action) {
@@ -204,11 +205,11 @@ export class InheritanceNeTaxApplyReducer extends AccountServiceReducer {
     // account exists anywhere, so the tax simply goes unpaid (unchanged terminal
     // behavior); neInheritanceTaxYTD still records the liability via the classifier.
     const cash = resolvePresentCash(this.stateRegistry, 'US', state);
-    if (cash != null) {
-      const debit = convertExpenseToAccount(action.amount ?? 0, 'USD', cash.account, state);
-      this.accountService.transaction(cash.account, -debit, null);
-    }
-    return this.newState(state, {}, []);
+    if (cash == null) return this.newState(state, {}, []);
+    const debit = convertExpenseToAccount(action.amount ?? 0, 'USD', cash.account, state);
+    this.accountService.transaction(cash.account, -debit, null);
+    // Restore the paying account's floor from the drawdown chain (cash-floor.js rule 2).
+    return this.newState(state, {}, restoreFloorActions(cash.account, cash.key));
   }
 }
 

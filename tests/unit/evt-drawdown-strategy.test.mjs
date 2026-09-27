@@ -42,7 +42,7 @@ import { ScenarioLoader } from '../../src/scenarios/scenario-loader.js';
 import { US_RETIREMENT }  from '../../src/scenarios/toolsets/us-retirement-toolset.js';
 import { ACCOUNT_ROLES }  from '../../src/finance/state/account-roles.js';
 import { AccountService } from '../../src/finance/services/account-service.js';
-import { CheckingAccount, USD, AUD } from '../../src/finance/assets/account.js';
+import { CheckingAccount, SavingsAccount, USD, AUD } from '../../src/finance/assets/account.js';
 import { BrokerageAccount }     from '../../src/finance/assets/investment-account.js';
 import { EventBus }       from '../../src/simulation-framework/event-bus.js';
 import { Graph }          from '../../src/graph/graph.js';
@@ -351,8 +351,13 @@ test('EVT-DRAWDOWN: PROPORTIONAL splits the deficit pro-rata across equal bucket
 function tierFixture(withinTierDraw, { balA = 10_000, balB = 10_000, minA = 0, minB = 0 } = {}) {
   const svc     = new AccountService(new Graph(), new GraphQueryApi(new Graph()), new EventBus());
   const savings = new CheckingAccount(0, { country: 'US', currency: USD });
-  const a = new BrokerageAccount(balA, { country: 'US', currency: USD, drawdownPriority: 1, minimumBalance: minA });
-  const b = new BrokerageAccount(balB, { country: 'US', currency: USD, drawdownPriority: 1, minimumBalance: minB });
+  // A floored member is a SAVINGS account: `minimumBalance` is a cash floor and is ignored
+  // on a brokerage (cash-floor.js), so a brokerage cannot be "capped" this way.
+  const member = (bal, min) => min > 0
+    ? new SavingsAccount(bal, { country: 'US', currency: USD, drawdownPriority: 1, minimumBalance: min })
+    : new BrokerageAccount(bal, { country: 'US', currency: USD, drawdownPriority: 1 });
+  const a = member(balA, minA);
+  const b = member(balB, minB);
   const state = {
     savingsAccount: savings, accountA: a, accountB: b,
     personBirthDate: new Date(1970, 0, 1),   // age ~56: eligible for taxable brokerage

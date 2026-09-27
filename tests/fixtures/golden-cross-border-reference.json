@@ -156,7 +156,7 @@
   "spouse": 0
  },
  "auPersonOrdinaryIncomeYTD": {
-  "primary": 49916.059,
+  "primary": 49914.629,
   "spouse": 33.75
  },
  "auPersonRealCapitalGainsYTD": {
@@ -176,7 +176,7 @@
   "spouse": 0
  },
  "auPersonUsSourceOrdinaryAudYTD": {
-  "primary": 35542.899,
+  "primary": 35541.469,
   "spouse": 0
  },
  "auPersonUsSourceRealCapGainsAudYTD": {
@@ -714,7 +714,7 @@
  "cumulativeConsumptionUtility": 568.520046229,
  "cumulativeConsumptionUtilityCount": 288,
  "cumulativeDeficit": 0,
- "cumulativeTaxesPaid": 680241.257604,
+ "cumulativeTaxesPaid": 680228.496302,
  "currentPeriods": {
   "AU": {
    "endMs": 2540246400000,
@@ -835,7 +835,7 @@
  "ftcCurrentPassive": 0,
  "ftcCurrentResourced": 0,
  "ftcPoolGeneral": {
-  "2039": 58.8172977426
+  "2039": 59.4146802821
  },
  "ftcPoolPassive": {},
  "ftcPoolResourced": {},
@@ -1250,8 +1250,8 @@
  },
  "marketIndexAsOfMs": 2524521600000,
  "metrics": {
-  "netLiquidity": 7726565.29,
-  "netWorth": 12146893.47,
+  "netLiquidity": 7726470.49,
+  "netWorth": 12146798.67,
   "offsetAppliedCapacity": 0,
   "offsetIdleCapacity": 0
  },
@@ -1870,7 +1870,7 @@
  "taxBasis": {
   "AU": {
    "primary": {
-    "instalmentBase": 77876.7,
+    "instalmentBase": 77873.93,
     "year": 2048
    },
    "spouse": {
@@ -1879,8 +1879,8 @@
    }
   },
   "US": {
-   "agi": 102757.53,
-   "tax": 3920.8,
+   "agi": 102754.71,
+   "tax": 3920.52,
    "year": 2049
   }
  },
@@ -1959,7 +1959,7 @@
  "usPersonHousehold": true,
  "usSavingsAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 1341985.85906,
+  "balance": 1341891.06036,
   "country": "US",
   "currency": {
    "code": "USD",
@@ -1973,7 +1973,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 1341985.85906,
+    "costBasis": 1341891.06036,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -1984,7 +1984,7 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 1341985.85906,
+    "marketValue": 1341891.06036,
     "maturityDate": null,
     "purchaseDate": null,
     "rateKey": "SAVINGS_US",
@@ -2197,7 +2197,7 @@
   "stateKey": "usStockAccount",
   "type": "brokerage"
  },
- "usTaxPaidOnUsSourceAud": 6077.24692115,
+ "usTaxPaidOnUsSourceAud": 6076.80982115,
  "usWithheldYTD": 0,
  "withinTierDraw": "SEQUENTIAL",
  "yieldCurve": {

@@ -15,6 +15,7 @@ import { blendExpensePriceLevel } from '../spending/expense-price-level.js';
 import { SPEND_CATEGORY } from '../spending/spend-category.js';
 import { propertyExpenseBusinessFraction, blendExpenseBusinessFraction }
   from '../account-rules/currency-basis.js';
+import { cashFloorOf } from '../account-rules/cash-floor.js';
 
 const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
 
@@ -155,7 +156,7 @@ export class HouseRunningCostHandler extends HandlerEntry {
 
     const actions      = [];
     const postDebitBal = account.balance - totalDebit;
-    const deficit      = (account.minimumBalance ?? 0) - postDebitBal;
+    const deficit      = cashFloorOf(account) - postDebitBal;
     if (deficit > 0) {
       actions.push({ type: 'REPLENISH_SAVINGS', deficit, targetKey });
     }

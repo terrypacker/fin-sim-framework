@@ -11,7 +11,6 @@
 import { Reducer, PRIORITY }  from '../../simulation-framework/reducers.js';
 import { HandlerEntry }        from '../../simulation-framework/handlers.js';
 import { TaxSettleService }    from '../tax-settle-service.js';
-import { InsufficientFundsError } from '../assets/account.js';
 import { ACCOUNT_ROLES } from '../state/account-roles.js';
 import { toUSD, toAUD, taxFxRate } from './tax-fx.js';
 import { rollUnusedConcessionalCap, concessionalCapWithCarryForward, nonConcessionalCap }
@@ -1168,8 +1167,6 @@ class TaxPaymentDebitReducerBase extends Reducer {
     // would double-count and could re-escalate without bound).
     const escalated = action.escalated === true;
 
-    const shortfall   = action.amount - Math.max(0, cashAccount.balance);
-
     let crossBorderTransfers = [];
     // Tax the FUNDING of the tax. Selling brokerage lots or distributing from an
     // IRA/401k/super to raise the cash is an ordinary taxable event — the draw
@@ -1183,21 +1180,15 @@ class TaxPaymentDebitReducerBase extends Reducer {
     // do, made a locally-funded tax bill tax-free while the same bill funded across
     // the border (IntlTransferApplyReducer, which forwards them) was not.
     let pendingTaxActions = [];
-    if (shortfall > 0 && !escalated) {
-      try {
-        // A cross-currency cash sweep here (e.g. AU cash topping up US savings to
-        // pay US tax) is journaled via INTL_TRANSFER_RECORD (design 44 Gap A).
-        // replenishSavings tops the account up as far as the sources allow before
-        // throwing InsufficientFundsError with the uncoverable residual.
-        ({ crossBorderTransfers = [], pendingTaxActions = [] } =
-          this.accountService.replenishSavings(state, accountKey, shortfall, date));
-      } catch (e) {
-        if (!(e instanceof InsufficientFundsError)) throw e;
-        // The failed draw still emptied every eligible account, realizing gains on
-        // the way down. Keep those accruals (e.partial), then proceed to the
-        // cross-border escalation below for the uncoverable part.
-        ({ crossBorderTransfers = [], pendingTaxActions = [] } = e.partial);
-      }
+    if (!escalated) {
+      // Top up far enough that the bill leaves the account at its cash floor, not at
+      // zero (cash-floor.js rule 2) — sized against the whole balance, a tax bill used
+      // to spend the buffer. A cross-currency cash sweep here (e.g. AU cash topping up
+      // US savings to pay US tax) is journaled via INTL_TRANSFER_RECORD (design 44 Gap
+      // A). An exhausted draw still realized gains on the way down; those come back
+      // too, and the uncoverable part escalates cross-border below.
+      ({ crossBorderTransfers, pendingTaxActions } =
+        this.accountService.topUpForDebit(state, accountKey, action.amount, date));
     }
 
     const debit = Math.min(action.amount, Math.max(0, cashAccount.balance));

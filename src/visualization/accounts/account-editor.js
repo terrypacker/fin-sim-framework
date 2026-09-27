@@ -18,6 +18,7 @@ import { DIVIDEND_ELECTION_ROLES } from '../../finance/state/account-roles.js';
 import { SYNTHETIC_SECURITY_PREFIX } from '../../finance/holdings/security.js';
 import { rateKeyOptionsHtml } from './rate-key-options.js';
 import { effectiveEquityReturn } from '../../finance/holdings/effective-return.js';
+import { hasCashFloor } from '../../finance/account-rules/cash-floor.js';
 
 const FIXED_COUNTRY    = new Set(['401k', 'roth', 'ira', 'super']);
 // Liability types: `balance` is debt owed (positive), net worth subtracts it, and
@@ -1426,15 +1427,16 @@ export class AccountEditor extends BaseComponent {
     // §985(b)(1)). Re-evaluated on currency change, not only on type change.
     this._applyFxBasisVisibility(el, type);
 
-    // Loan (liability): show its terms, and hide the two rows that mean nothing on a
-    // liability — the ctor forces drawdownPriority null (a loan is never a source of
-    // drawdown cash, design 54 §8) and nothing reads a loan's minimumBalance.
+    // Loan (liability): show its terms, and hide the drawdown row — the ctor forces
+    // drawdownPriority null (a loan is never a source of drawdown cash, design 54 §8).
     const loanFields = el.querySelector('[data-id="loanFields"]');
     if (loanFields) loanFields.style.display = LIABILITY_TYPES.has(type) ? '' : 'none';
-    for (const rowId of ['drawdownRow', 'minimumBalanceRow']) {
-      const row = el.querySelector(`[data-id="${rowId}"]`);
-      if (row) row.style.display = LIABILITY_TYPES.has(type) ? 'none' : '';
-    }
+    const drawdownRow = el.querySelector('[data-id="drawdownRow"]');
+    if (drawdownRow) drawdownRow.style.display = LIABILITY_TYPES.has(type) ? 'none' : '';
+    // The cash floor is read on cash accounts only (cash-floor.js): on an investment or
+    // retirement account it would protect total value, not cash, and a loan has none.
+    const minimumBalanceRow = el.querySelector('[data-id="minimumBalanceRow"]');
+    if (minimumBalanceRow) minimumBalanceRow.style.display = hasCashFloor(type) ? '' : 'none';
     const balanceLabel = el.querySelector('[data-id="balance"]')?.closest('.node-field')?.querySelector('label');
     if (balanceLabel) balanceLabel.textContent = LIABILITY_TYPES.has(type) ? 'Principal Owed' : 'Balance';
 

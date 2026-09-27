@@ -48,6 +48,7 @@ import { resolveDestinationCashKey } from './cash-routing.js';
 import { fxRate } from '../fx/fx-conversion.js';
 import { auCpiLevel } from '../holdings/holding-period.js';
 import { propertyExpenseBusinessFraction } from './currency-basis.js';
+import { cashFloorOf } from './cash-floor.js';
 
 /**
  * `order` for a purchase event. The sale events are authored at the default 0, so any
@@ -152,7 +153,7 @@ export class PropertyPurchaseHandler extends HandlerEntry {
     // likely to breach a cash floor. Raising the shortfall through the normal drawdown
     // queue — rather than letting the balance go negative — is what makes the purchase
     // interact with the portfolio at all, which is the entire point of modelling it.
-    const deficit = (cash?.minimumBalance ?? 0) - ((cash?.balance ?? 0) - cashDue);
+    const deficit = cashFloorOf(cash) - ((cash?.balance ?? 0) - cashDue);
     if (deficit > 0) actions.push({ type: 'REPLENISH_SAVINGS', deficit, targetKey: cashKey });
 
     actions.push({

@@ -9,7 +9,6 @@
  */
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
-import { InsufficientFundsError } from '../assets/account.js';
 import { getUsEarlyWithdrawalRules } from '../account-rules/us/us-early-withdrawal-rules.js';
 import { convertNetOfFee, grossUpForTarget } from '../fx/fx-conversion.js';
 
@@ -107,24 +106,17 @@ export class IntlTransferApplyReducer extends Reducer {
 
     if (direction === 'AU_TO_US') {
       const audNeeded = grossUpForTarget(targetDeficit, 'AUD', 'USD', rate, fee);
-      const shortfall = audNeeded - auAcc.balance;
-      if (shortfall > 0) {
-        try {
-          // Never raise the AUD source from USD: that is the destination's own currency,
-          // and the round trip would report this deficit covered (design 100 §9).
-          const result = this.accountService.replenishSavings(state, auKey, shortfall, date, {
-            earlyWithdrawalRulesFn: this.earlyWithdrawalRulesFn,
-            excludeCurrency: usAcc?.currency?.code ?? 'USD',
-          });
-          pendingTaxActions.push(...result.pendingTaxActions, ...(result.crossBorderTransfers ?? []));
-        } catch (e) {
-          if (!(e instanceof InsufficientFundsError)) throw e;
-          // The draw ran the funding country dry, but everything it sold on the way
-          // down is still taxable — keep those accruals rather than losing them with
-          // the error (see InsufficientFundsError.partial).
-          pendingTaxActions.push(...e.partial.pendingTaxActions, ...e.partial.crossBorderTransfers);
-        }
-      }
+      // Top the AUD source up far enough that the wire leaves it at its cash floor
+      // (cash-floor.js rule 2) — sized against the whole balance, a cross-border
+      // top-up used to spend the sending account's buffer. Never raise the AUD source
+      // from USD: that is the destination's own currency, and the round trip would
+      // report this deficit covered (design 100 §9). An exhausted draw still returns
+      // what it sold on the way down, which is taxable either way.
+      const r = this.accountService.topUpForDebit(state, auKey, audNeeded, date, {
+        earlyWithdrawalRulesFn: this.earlyWithdrawalRulesFn,
+        excludeCurrency: usAcc?.currency?.code ?? 'USD',
+      });
+      pendingTaxActions.push(...r.pendingTaxActions, ...r.crossBorderTransfers);
       const audActual   = Math.min(audNeeded, auAcc.balance);
       const usdReceived = Math.max(0, convertNetOfFee(audActual, 'AUD', 'USD', rate, fee));
       // Design 87 G1 — converting AUD to USD is the paradigm §988 disposition of
@@ -165,23 +157,12 @@ export class IntlTransferApplyReducer extends Reducer {
 
     } else {
       const usdNeeded = grossUpForTarget(targetDeficit, 'USD', 'AUD', rate, fee);
-      const shortfall = usdNeeded - usAcc.balance;
-      if (shortfall > 0) {
-        try {
-          // Mirror of the AU_TO_US leg: never raise the USD source from AUD.
-          const result = this.accountService.replenishSavings(state, usKey, shortfall, date, {
-            earlyWithdrawalRulesFn: this.earlyWithdrawalRulesFn,
-            excludeCurrency: auAcc?.currency?.code ?? 'AUD',
-          });
-          pendingTaxActions.push(...result.pendingTaxActions, ...(result.crossBorderTransfers ?? []));
-        } catch (e) {
-          if (!(e instanceof InsufficientFundsError)) throw e;
-          // The draw ran the funding country dry, but everything it sold on the way
-          // down is still taxable — keep those accruals rather than losing them with
-          // the error (see InsufficientFundsError.partial).
-          pendingTaxActions.push(...e.partial.pendingTaxActions, ...e.partial.crossBorderTransfers);
-        }
-      }
+      // Mirror of the AU_TO_US leg: keep the floor, never raise the USD source from AUD.
+      const r = this.accountService.topUpForDebit(state, usKey, usdNeeded, date, {
+        earlyWithdrawalRulesFn: this.earlyWithdrawalRulesFn,
+        excludeCurrency: auAcc?.currency?.code ?? 'AUD',
+      });
+      pendingTaxActions.push(...r.pendingTaxActions, ...r.crossBorderTransfers);
       const usdActual   = Math.min(usdNeeded, usAcc.balance);
       const audReceived = Math.max(0, convertNetOfFee(usdActual, 'USD', 'AUD', rate, fee));
       // Design 87 G1, mirror direction — acquiring AUD establishes basis and realizes

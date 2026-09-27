@@ -10,7 +10,6 @@
 
 import { HandlerEntry }                            from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction }                     from '../../simulation-framework/actions.js';
-import { InsufficientFundsError }                  from '../assets/account.js';
 
 /**
  * Direction-agnostic FX transfer handler.
@@ -56,24 +55,13 @@ export class FxTransferToHandler extends HandlerEntry {
     const fee    = pair.fee(state, amount, dir);
     const srcKey = this.fxService.settlement(from);
     const dstKey = this.fxService.settlement(to);
-    const srcBal = state[srcKey]?.balance ?? 0;
 
-    const pendingTax = [];
-    const transferRecords = [];
-    if (amount > srcBal) {
-      try {
-        const r = this.accountService.replenishSavings(state, srcKey, amount - srcBal, date);
-        pendingTax.push(...r.pendingTaxActions);
-        // A cross-currency leg of the source top-up is journaled too (design 44 Gap A).
-        transferRecords.push(...(r.crossBorderTransfers ?? []));
-      } catch (e) {
-        if (!(e instanceof InsufficientFundsError)) throw e;
-        // Keep what the exhausted draw already realized (see
-        // InsufficientFundsError.partial) — those sales are taxable regardless.
-        pendingTax.push(...e.partial.pendingTaxActions);
-        transferRecords.push(...e.partial.crossBorderTransfers);
-      }
-    }
+    // Top the source up so the transfer leaves it at its cash floor (cash-floor.js rule
+    // 2), not at zero. An exhausted draw still returns what it realized — those sales are
+    // taxable regardless — and a cross-currency leg of the top-up is journaled too
+    // (design 44 Gap A).
+    const { pendingTaxActions: pendingTax, crossBorderTransfers: transferRecords } =
+      this.accountService.topUpForDebit(state, srcKey, amount, date);
 
     const fromActual = Math.min(amount, state[srcKey]?.balance ?? 0);
     const toCredit   = Math.max(0, (fromActual - fee) * rate);

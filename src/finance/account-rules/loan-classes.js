@@ -16,6 +16,7 @@ import { fxRate }         from '../fx/fx-conversion.js';
 import { PRIME_KEY_BY_COUNTRY } from '../economic-regimes/rate-keys.js';
 // The ONE §988(e) splitter. `currency-lots.js` imports nothing, so this is cycle-free.
 import { allocateGain, PERSONAL_CHARACTER, PERSONAL_DE_MINIMIS_USD } from './currency-lots.js';
+import { cashFloorOf } from './cash-floor.js';
 // Design 87 phase 3 removed this module's import of `realizeCurrencyDisposition`: the
 // cash leg of a loan payment is now realized by the currency lot observer, off the
 // `section988` declaration stamped on LOAN_PAYMENT_APPLY. The cycle is now one-way —
@@ -1064,7 +1065,7 @@ export class LoanPaymentHandler extends HandlerEntry {
         : 1;
       const cashDue = payment * fx; // what leaves the cash pool, in cash currency
 
-      const deficit   = (cash?.minimumBalance ?? 0) - ((cash?.balance ?? 0) - cashDue);
+      const deficit   = cashFloorOf(cash) - ((cash?.balance ?? 0) - cashDue);
       if (deficit > 0) actions.push({ type: 'REPLENISH_SAVINGS', deficit, targetKey: cashKey });
 
       // Negative amortization: a payment below the accrued interest grows the balance.

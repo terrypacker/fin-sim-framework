@@ -13,6 +13,7 @@ import { RecordBalanceAction } from '../../simulation-framework/actions.js';
 import { convertExpenseToAccount } from '../fx/expense-fx.js';
 import { residencePriceLevel } from '../spending/expense-price-level.js';
 import { SPEND_CATEGORY } from '../spending/spend-category.js';
+import { cashFloorOf } from '../account-rules/cash-floor.js';
 
 /**
  * Re-base an amount between USD and AUD at the scenario's ANCHOR rate.
@@ -197,7 +198,7 @@ export class MonthlyExpensesHandler extends HandlerEntry {
     const actions = [];
 
     const postDebitBal = account.balance - debitAmount;
-    const deficit      = (account.minimumBalance ?? 0) - postDebitBal;
+    const deficit      = cashFloorOf(account) - postDebitBal;
     if (deficit > 0) {
       actions.push({ type: 'REPLENISH_SAVINGS', deficit, targetKey });
     }

@@ -85,10 +85,13 @@ export const BALANCE_TARGET = {
 // account (§7.4) instead of being pinned to the canonical savings account by the
 // old global usSavingsMinBalance / auSavingsMinBalance params. Plain Number: the
 // floor is always in the account's native currency (no cross-currency display
-// conversion), so the currency is inferred from the account, not the param.
+// conversion), so the currency is inferred from the account, not the param. Cash
+// accounts only — `account-rules/cash-floor.js` is the authority for what reads it.
 const MINIMUM_BALANCE = { field: 'minimumBalance', label: 'Minimum Balance', type: 'Number', mc: false, opt: true,
-  description: 'Cash floor for this account. When the balance drops below it, the model ' +
-    'replenishes from other liquid accounts.' };
+  description: 'Cash floor for this account (checking, savings or offset only). Any payment out of it — ' +
+    'spending, a tax bill, a contribution, a transfer — first sells from the drawdown chain so the ' +
+    'account is left at this floor, and a draw to fund another account never takes it below. When ' +
+    'nothing is left to sell, the payment still goes out of the floor rather than failing.' };
 
 // Per-account growth and dividend rates (design 55 §8) are RETIRED by design 99 P2: an
 // equity account earns what its holdings' markets earn (Market Rates). No template

@@ -13,6 +13,7 @@ import { HandlerEntry }       from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../simulation-framework/actions.js';
 import { resolveCashKey } from './cash-routing.js';
 import { propertyExpenseBusinessFraction } from './currency-basis.js';
+import { cashFloorOf } from './cash-floor.js';
 
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
 const auCash = (state) => state.auSavingsAccount ?? state.checkingAccount;
@@ -63,7 +64,7 @@ export class UsMortgagePaymentHandler extends HandlerEntry {
 
       const payment      = Math.min(monthlyMortgage, propState.mortgageBalance);
       const postDebitBal = account.balance - payment;
-      const deficit      = (account.minimumBalance ?? 0) - postDebitBal;
+      const deficit      = cashFloorOf(account) - postDebitBal;
       if (deficit > 0) {
         actions.push({ type: 'REPLENISH_SAVINGS', deficit, targetKey: cashKey });
       }
@@ -164,7 +165,7 @@ export class AuMortgagePaymentHandler extends HandlerEntry {
 
       const payment      = Math.min(monthlyMortgage, propState.mortgageBalance);
       const postDebitBal = account.balance - payment;
-      const deficit      = (account.minimumBalance ?? 0) - postDebitBal;
+      const deficit      = cashFloorOf(account) - postDebitBal;
       if (deficit > 0) {
         actions.push({ type: 'REPLENISH_SAVINGS', deficit, targetKey: cashKey });
       }

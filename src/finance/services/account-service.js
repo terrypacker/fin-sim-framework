@@ -13,6 +13,7 @@ import { EventBus } from '../../simulation-framework/event-bus.js';
 import { InsufficientFundsError, ACCOUNT_TYPE } from '../assets/account.js';
 import { getUsEarlyWithdrawalRules } from '../account-rules/us/us-early-withdrawal-rules.js';
 import { isAgeEligible, penaltyFreeAvailableFor, drawableBalance } from '../account-rules/penalty-free-availability.js';
+import { cashFloorOf, floorTopUp } from '../account-rules/cash-floor.js';
 import { computeConversionRecapture } from '../account-rules/us/roth-conversion-lots.js';
 import { getBirthDate, getResidency } from '../residency-utils.js';
 import { Holding } from '../holdings/holding.js';
@@ -699,7 +700,7 @@ export class AccountService extends AssetService {
    * @returns {boolean}
    */
   canDebit(account, amount) {
-    return account.balance - amount >= (account.minimumBalance ?? 0);
+    return account.balance - amount >= cashFloorOf(account);
   }
 
   /**
@@ -802,6 +803,37 @@ export class AccountService extends AssetService {
    */
   isWithdrawalEligible(account, person, asOfDate) {
     return isAgeEligible(account, person?.birthDate, asOfDate);
+  }
+
+  /**
+   * Raise cash into `targetKey` ahead of a debit of `amount`, far enough that the debit
+   * leaves the account at its cash floor (`cash-floor.js` rule 2). The caller still makes
+   * the debit itself — and may take it below the floor when the chain came up short, which
+   * is what the floor being SOFT for a payer means.
+   *
+   * Never throws `InsufficientFundsError`: an exhausted chain returns the partial draw's
+   * accruals the same way a successful one does, because a caller paying a bill has to
+   * forward them either way (see `replenishSavings`) and then decide for itself what to do
+   * about the part it cannot pay.
+   *
+   * @param {object} state
+   * @param {string} targetKey - the paying account
+   * @param {number} amount    - the debit about to be made, in that account's currency
+   * @param {Date}   date
+   * @param {Function|object} [opts] - forwarded to `replenishSavings`
+   * @returns {{ pendingTaxActions: object[], crossBorderTransfers: object[] }}
+   */
+  topUpForDebit(state, targetKey, amount, date, opts = {}) {
+    const need = floorTopUp(state[targetKey], amount);
+    if (!(need > 0)) return { pendingTaxActions: [], crossBorderTransfers: [] };
+    let r;
+    try {
+      r = this.replenishSavings(state, targetKey, need, date, opts);
+    } catch (e) {
+      if (!(e instanceof InsufficientFundsError)) throw e;
+      r = e.partial;
+    }
+    return { pendingTaxActions: r.pendingTaxActions ?? [], crossBorderTransfers: r.crossBorderTransfers ?? [] };
   }
 
   /**

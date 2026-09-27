@@ -15,6 +15,7 @@ import { convertExpenseToAccount }                 from '../../fx/expense-fx.js'
 import { propertyExpenseBusinessFraction }         from '../../account-rules/currency-basis.js';
 import { residencePriceLevel }                    from '../expense-price-level.js';
 import { SPEND_CATEGORY, blendCapitalFraction }   from '../spend-category.js';
+import { cashFloorOf } from '../../account-rules/cash-floor.js';
 
 const EPSILON = 1e-9;
 
@@ -183,7 +184,7 @@ export class ExpenseEventHandler extends HandlerEntry {
     const fundAcct = fundKey ? state?.[fundKey] : null;
     if (fundAcct) {
       const want      = convertExpenseToAccount(remaining, currency, fundAcct, state);
-      const available = Math.max(0, (fundAcct.balance ?? 0) - (fundAcct.minimumBalance ?? 0));
+      const available = Math.max(0, (fundAcct.balance ?? 0) - cashFloorOf(fundAcct));
       const take      = Math.min(want, available);
       if (take > EPSILON) {
         // Spread, never shared: `ExpenseDebitReducer` stamps `accountKey` onto the
@@ -202,7 +203,7 @@ export class ExpenseEventHandler extends HandlerEntry {
     if (defaultAcct) {
       const debitAmount  = convertExpenseToAccount(remaining, currency, defaultAcct, state);
       const postDebitBal = defaultAcct.balance - debitAmount;
-      const deficit      = (defaultAcct.minimumBalance ?? 0) - postDebitBal;
+      const deficit      = cashFloorOf(defaultAcct) - postDebitBal;
       // Prepended before its own debit, same contract as MonthlyExpensesHandler.
       if (deficit > 0) actions.push({ type: 'REPLENISH_SAVINGS', deficit, targetKey: defaultKey });
       actions.push({ type: 'EXPENSE_DEBIT', amount: debitAmount, targetKey: defaultKey,

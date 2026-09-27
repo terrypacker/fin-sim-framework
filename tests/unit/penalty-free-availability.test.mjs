@@ -171,16 +171,18 @@ test('PFA-4b: the Roth basis is capped by the drawable balance, never above it',
   assert.equal(penaltyFreeAvailable(roth, { birthDate: BIRTH, asOf: at }), 10_000);
 });
 
-test('PFA-4c: the minimumBalance floor is honoured on both branches', () => {
+test('PFA-4c: the minimumBalance floor is honoured on cash and ignored on a wrapper', () => {
   const savings = new SavingsAccount(10_000, { ownerId: 'primary', minimumBalance: 2_000 });
   assert.equal(drawableBalance(savings), 8_000);
   // No gate ⇒ eligible ⇒ the drawable balance, not the balance.
   assert.equal(penaltyFreeAvailable(savings, { birthDate: BIRTH, asOf: new Date('2030-01-01Z') }), 8_000);
 
-  // And on the ineligible-Roth branch: the basis is capped by DRAWABLE, not by balance.
+  // A floor is a CASH floor (cash-floor.js): on a Roth it is ignored, so the ineligible
+  // branch gives up the whole contribution basis rather than basis less a floor.
   const roth = Object.assign(new RothAccount(10_000, { ownerId: 'primary', minimumBalance: 4_000 }),
     { contributionBasis: 9_000 });
-  assert.equal(penaltyFreeAvailable(roth, { birthDate: BIRTH, asOf: new Date('2030-01-01Z') }), 6_000);
+  assert.equal(drawableBalance(roth), 10_000);
+  assert.equal(penaltyFreeAvailable(roth, { birthDate: BIRTH, asOf: new Date('2030-01-01Z') }), 9_000);
 });
 
 test('PFA-4d: a balance below its floor yields 0, never a negative', () => {

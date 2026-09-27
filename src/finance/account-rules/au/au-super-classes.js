@@ -13,6 +13,7 @@ import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { getBirthDate } from '../../residency-utils.js';
 import { resolveCashKey } from '../cash-routing.js';
+import { restoreFloorActions } from '../cash-floor.js';
 import { debitLedgerForLoss } from '../../assets/investment-account.js';
 import { SUPER_TAX_RATE, superEarningsTaxRate } from '../../tax/au/super-tax-rate.js';
 import { scaleHoldings, lotVintage } from '../../holdings/holding-utils.js';
@@ -59,7 +60,7 @@ export class SuperContributionApplyReducer extends AccountServiceReducer {
     // §9.1). Declared so the graph carries the deduction leg — the payload-schema
     // scan only checks that CLAIMED types are registered, so an omission here is
     // invisible to it and shows up as a missing link in the visualization.
-    this.generatedActionTypes = ['SUPER_CONTRIBUTION_TAX', 'SUPER_PERSONAL_DEDUCTION'];
+    this.generatedActionTypes = ['SUPER_CONTRIBUTION_TAX', 'SUPER_PERSONAL_DEDUCTION', 'REPLENISH_SAVINGS'];
   }
 
   reduce(state, action) {
@@ -132,7 +133,10 @@ export class SuperContributionApplyReducer extends AccountServiceReducer {
        ...(deductible
          ? [{ type: 'SUPER_PERSONAL_DEDUCTION', amount: action.amount,
               stateKey: key, personKey: action.personKey ?? null }]
-         : [])]
+         : []),
+       // A member contribution that took AU cash under its floor restores it from the
+       // drawdown chain, as spending does (cash-floor.js rule 2).
+       ...(employerFunded ? [] : restoreFloorActions(state[auCashKey], auCashKey))]
     );
   }
 }
@@ -212,7 +216,8 @@ export class SuperNonConcessionalApplyReducer extends AccountServiceReducer {
     super('Super Non-Concessional Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
     this.stateRegistry  = stateRegistry;
-    this.reducedActionTypes = ['SUPER_NON_CONCESSIONAL_APPLY'];
+    this.reducedActionTypes   = ['SUPER_NON_CONCESSIONAL_APPLY'];
+    this.generatedActionTypes = ['REPLENISH_SAVINGS'];
   }
 
   reduce(state, action) {
@@ -232,6 +237,8 @@ export class SuperNonConcessionalApplyReducer extends AccountServiceReducer {
     return this.newState(
       state,
       { [key]: { ...sa, contributionBasis: sa.contributionBasis + action.amount } },
+      // Restore AU cash's floor if the contribution took it under (cash-floor.js rule 2).
+      restoreFloorActions(state[auCashKey], auCashKey),
     );
   }
 }

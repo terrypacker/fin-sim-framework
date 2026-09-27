@@ -327,7 +327,9 @@ test('EVT-63: no bequests configured ⇒ INHERITANCE toolset contributes no stat
 const AFTER_INHERIT = new Date(Date.UTC(2030, 5, 20));
 
 test('EVT-63: INHERIT event funds inherited records at the inheritance date', () => {
-  const { sim } = loadToolsetScenario(inheritanceConfig());
+  // SD situs ⇒ no heir-paid NE tax, whose same-day floor restore would sell part of the
+  // inherited brokerage to pay it (see "NE tax … never leaves US cash negative").
+  const { sim } = loadToolsetScenario(inheritanceConfig({ decedentState: 'SD' }));
   assert.strictEqual(sim.state.inheritBrokerage.balance, 0, 'zero before the date');
 
   sim.stepTo(AFTER_INHERIT);
@@ -336,6 +338,18 @@ test('EVT-63: INHERIT event funds inherited records at the inheritance date', ()
   assert.strictEqual(s.inheritIra.balance, 300_000);
   assert.strictEqual(s.inheritHome.value, 600_000);
   assert.strictEqual(s.inheritArt.value, 80_000);
+});
+
+test('EVT-63: an NE tax bigger than US cash never leaves US cash negative', () => {
+  // NE situs, $5k of US cash and a floor of 0: the (1.38M − 100k) × 1% = $12.8k bill is
+  // more than the cash. The reducer used to debit it anyway and leave the account
+  // overdrawn until the next month-end expense replenished it. It now restores the floor
+  // in the same event (cash-floor.js rule 2), selling from the drawdown chain.
+  const { sim } = loadToolsetScenario(inheritanceConfig());
+  sim.stepTo(AFTER_INHERIT);
+  assert.ok(sim.journal.getActions('NE_INHERITANCE_TAX').length > 0, 'NE tax fired');
+  assert.ok(sim.state.usSavingsAccount.balance >= -1e-6,
+    `US cash ${sim.state.usSavingsAccount.balance} should not be overdrawn`);
 });
 
 test('EVT-63: funded inheritance jumps net worth at the date (US step-up basis)', () => {
@@ -352,7 +366,8 @@ test('EVT-63: funded inheritance jumps net worth at the date (US step-up basis)'
 });
 
 test('EVT-63: US step-up — inherited brokerage seeds a single lot at FMV cost basis (≈0 next-day gain)', () => {
-  const { sim } = loadToolsetScenario(inheritanceConfig()); // US heir (citizen US, residency US)
+  // US heir (citizen US, residency US); SD situs so no NE tax sale touches the lot.
+  const { sim } = loadToolsetScenario(inheritanceConfig({ decedentState: 'SD' }));
   sim.stepTo(AFTER_INHERIT);
   const holdings = sim.state.inheritBrokerage.holdings;
   assert.strictEqual(holdings.length, 1);

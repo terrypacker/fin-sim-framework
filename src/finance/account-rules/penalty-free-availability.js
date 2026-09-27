@@ -9,6 +9,7 @@
  */
 
 import { ACCOUNT_TYPE } from '../assets/account.js';
+import { cashFloorOf } from './cash-floor.js';
 import { getUsEarlyWithdrawalRules, supportsEarlyWithdrawal } from './us/us-early-withdrawal-rules.js';
 
 /**
@@ -114,15 +115,15 @@ export function isAgeEligible(account, birthDate, asOfDate) {
 }
 
 /**
- * Balance a source may give up: everything above its `minimumBalance` floor.
+ * Balance a source may give up: everything above its cash floor (`cash-floor.js`).
  *
- * Cash/savings keep their buffer; investments have a floor of 0, so this is a no-op for them.
+ * Cash/savings keep their buffer; investments have no floor, so this is the whole balance.
  *
  * @param {object} account
  * @returns {number} in the account's OWN currency
  */
 export function drawableBalance(account) {
-  return Math.max(0, (account?.balance ?? 0) - (account?.minimumBalance ?? 0));
+  return Math.max(0, (account?.balance ?? 0) - cashFloorOf(account));
 }
 
 /**

@@ -16,6 +16,7 @@ import { SPEND_CATEGORY, blendCapitalFraction } from '../spending/spend-category
 import { gaussianFrom }                    from '../fx/fx-process-models.js';
 import { propertyExpenseBusinessFraction, blendExpenseBusinessFraction }
   from '../account-rules/currency-basis.js';
+import { cashFloorOf } from '../account-rules/cash-floor.js';
 
 /**
  * Lognormal severity with a given median: median · exp(σ·z), z ~ N(0,1). One normal draw.
@@ -206,7 +207,7 @@ export class RealPropertyRepairTickHandler extends HandlerEntry {
 
     const actions = [];
     if (totalDebit > 0) {
-      const deficit = (account.minimumBalance ?? 0) - (account.balance - totalDebit);
+      const deficit = cashFloorOf(account) - (account.balance - totalDebit);
       if (deficit > 0) actions.push({ type: 'REPLENISH_SAVINGS', deficit, targetKey });
       actions.push(
         // Design 87 §14.4 item 2 — see HouseRunningCostHandler. Repairs on an

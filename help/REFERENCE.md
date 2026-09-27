@@ -678,7 +678,7 @@ Explained in [`help/nodes`](nodes/account.md). 5 field(s) described by a record 
 - **`ownerId`** — Owner · `select` · topic
   The person who owns it when ownership is sole. Their age gates the retirement wrappers and their rate taxes the earnings, so this is an engine input rather than a label.
 - **`minimumBalance`** — Min Bal. · `number` · param
-  Cash floor for this account. When the balance drops below it, the model replenishes from other liquid accounts.
+  Cash floor for this account (checking, savings or offset only). Any payment out of it — spending, a tax bill, a contribution, a transfer — first sells from the drawdown chain so the account is left at this floor, and a draw to fund another account never takes it below. When nothing is left to sell, the payment still goes out of the floor rather than failing.
 - **`cashRate`** — Interest Rate · `number` · topic
   The interest rate the bank quotes, as an absolute decimal (0.03 = 3%). It is stored as a spread over the central-bank Prime rate, so a Prime move fans out to every linked account at once instead of being re-authored here.
 - **`isTransactionAccount`** — Transaction Account · `checkbox` · param
