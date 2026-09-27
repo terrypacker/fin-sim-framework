@@ -120,7 +120,7 @@ export const COVERED = [
 
   // E — behavioral (reducer-postconditions-behavioral.test.mjs)
   'PanicSellReducer', 'BehavioralPanicSellApplyReducer', 'OpportunisticRebalanceReducer',
-  'OpportunisticRebalanceApplyReducer', 'StrategicAssetLocationReducer', 'AssetLocationRebalanceApplyReducer',
+  'OpportunisticRebalanceApplyReducer',
   'DownturnRothConversionReducer', 'CashBucketDrawdownReducer', 'ContributionSuspensionToggleReducer',
   'StockHarvestApplyReducer',
   // Design 61 Lever C — taxable-aware target-allocation rebalance (reducer-postconditions-behavioral.test.mjs)

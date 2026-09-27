@@ -431,8 +431,8 @@ const ROLE_OPTIONS = Object.freeze(Object.values(ACCOUNT_ROLES).map(r => [r, r])
 /**
  * `LocationPolicy` — allocation → ordered preferred account roles.
  *
- * Serves both `allocationLocationPolicy` (design 61 Lever D) and `assetLocationPolicy`
- * (STRATEGIC_ASSET_LOCATION), which are the same `{ ALLOCATION: [role, ...] }` shape.
+ * Serves `allocationLocationPolicy` (design 61 Lever D), a `{ ALLOCATION: [role, ...] }` map.
+ * (It also served `assetLocationPolicy` until STRATEGIC_ASSET_LOCATION was retired, design 115 §12.)
  * The array is a PREFERENCE ORDER (first choice first, spilling when full), so the
  * editor is a flat ordered `{ allocation, role }` row list with a move-up button
  * rather than a map of unordered checkboxes — the order is the datum.

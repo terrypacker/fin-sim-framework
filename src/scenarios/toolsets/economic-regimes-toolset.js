@@ -588,16 +588,6 @@ export const ECONOMIC_REGIMES = {
           year:       ValueType.number(),
         },
       },
-      {
-        type: 'ASSET_LOCATION_REBALANCE_APPLY',
-        fields: {
-          fromStateKey:  ValueType.text(),
-          fromHoldingId: ValueType.text(),
-          toStateKey:    ValueType.text(),
-          toHoldingId:   ValueType.text(),
-          swapAmount:    ValueType.number(),
-        },
-      },
     ],
   },
 

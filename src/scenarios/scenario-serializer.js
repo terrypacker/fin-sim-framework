@@ -10,6 +10,7 @@
 
 
 
+import { RETIRED_REDUCER_TYPES } from './retired-strategies.js';
 import {
   ActionDefinition,
   Action, FieldAction, FieldValueAction, AmountAction, ScriptedAction,
@@ -689,6 +690,12 @@ export class ScenarioSerializer {
 
     // 4. Reducers — resolve references before registering.
     for (const d of (config.reducers ?? [])) {
+      // A reducer class a retired strategy compiled (retired-strategies.js) no longer exists;
+      // `_makeReducer` would throw and refuse the whole graph over a reducer nothing needs.
+      if (RETIRED_REDUCER_TYPES.has(d.__type)) {
+        console.warn(`Skipping reducer '${d.__type}': it belonged to a retired behavioral strategy.`);
+        continue;
+      }
       const reducer = ScenarioSerializer._makeReducer(d, services);
       reducer.id = d.id;
       reducer.reducedActionTypes   = [...(d.reducedActionTypes ?? [])];

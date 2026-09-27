@@ -313,7 +313,7 @@ test('LocationPolicy: emptying the list normalises to null (⇒ jurisdiction def
 });
 
 test('LocationPolicy: a null value renders the empty note and authors nothing', () => {
-  const param = { name: 'assetLocationPolicy', value: null };
+  const param = { name: 'allocationLocationPolicy', value: null };
   const host = mount(buildLocationPolicyEditor(param));
   assert.match(host.textContent, /jurisdiction-aware default/i);
   assert.strictEqual(param.value, null);

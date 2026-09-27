@@ -3,7 +3,7 @@ id: allocation-and-rebalancing
 kind: concept
 title: Allocation and Rebalancing
 panels: [allocation, holdings]
-params: [allocationStrategy, allocationSchedule, allocationGlidepath, allocationRegimeTargets, allocationLocation, allocationLocationPolicy, allocWeight::EQUITY, allocWeight::BOND, allocWeight::CASH, rebalanceTargetAllocation, rebalanceDriftBand, rebalanceDriftBandTaxable, rebalanceDriftBandSheltered, assetLocationPolicy, allocationClassRestrictions]
+params: [allocationStrategy, allocationSchedule, allocationGlidepath, allocationRegimeTargets, allocationLocation, allocationLocationPolicy, allocWeight::EQUITY, allocWeight::BOND, allocWeight::CASH, rebalanceTargetAllocation, rebalanceDriftBand, rebalanceDriftBandTaxable, rebalanceDriftBandSheltered, allocationClassRestrictions]
 design: [61-holding-allocation-lever.md, 82-allocation-over-time-reporting.md, 115-asset-class-restrictions.md]
 stamps:
   param:allocationStrategy: 277063
@@ -19,8 +19,7 @@ stamps:
   param:rebalanceDriftBand: f8d8e6
   param:rebalanceDriftBandTaxable: 102a66
   param:rebalanceDriftBandSheltered: 960cb2
-  param:assetLocationPolicy: f474e9
-  param:allocationClassRestrictions: 346c65
+  param:allocationClassRestrictions: 4c97ef
   panel:allocation: fc1993
   panel:holdings: 359688
 ---

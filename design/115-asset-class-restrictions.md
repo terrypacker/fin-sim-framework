@@ -1,6 +1,6 @@
 # 115 — Asset-class restrictions: keeping gold out of a US citizen's super
 
-**Status:** COMPLETE — all four phases BUILT 27 Sep 2026 (§11–§11.4). Research done (§3, every citation
+**Status:** COMPLETE — all four phases BUILT 27 Sep 2026 (§11–§11.4); the §12 defect's strategy RETIRED the same day (§12.1). Research done (§3, every citation
 on disk); decisions D1–D4 (§4) taken with the author. Open questions remain in §9. A pre-existing defect found on the way is in §12. Picks up design 61 §4-D / §12 (Lever D,
 LOCATED placement) and design 77 §4.1 (super's US character).
 
@@ -380,10 +380,10 @@ goldens unchanged. The reducer does not pass `restrictions` yet, so no run can r
 - **Tests:** seven `ClassRestrictions` editor tests, plus the panel-dispatch case in
   `scenario-tab-view.test.mjs`. `npm test`: 7,295 unit / 1,699 viz pass, help gate clean.
 
-## 12. Pre-existing defect: the asset-location "swap" is a one-way transfer
+## 12. Pre-existing defect: the asset-location "swap" is a one-way transfer — RETIRED (§12.1)
 
-Found while guarding §5.4. It is **not fixed here**: it is out of this design's scope, and no
-authored plan enables the strategy (it appears only as an option in the schema).
+Found while guarding §5.4. No authored plan enables the strategy (it appears only as an option in
+the schema).
 
 Design 29 §5 specifies `ASSET_LOCATION_REBALANCE_APPLY` as mirrored `HOLDING_TRANSACT` *pairs*.
 `AssetLocationRebalanceApplyReducer` instead **shrinks the source holding in the source account
@@ -396,3 +396,51 @@ target holding") rather than catching it.
 Fixing it means a real two-legged swap: each account keeps its balance, and the classes trade
 places. That needs its own change and a decision on whether the strategy should keep existing,
 since design 61's LOCATED placement now does its job properly.
+
+### 12.1 Measured, decided, retired (27 Sep 2026)
+
+**Measured** on International Retirement with only STRATEGIC_ASSET_LOCATION enabled, stepped to
+Feb 2027. Twelve moves inside the first year, driven by the default policy ("EQUITY → Roth", so
+every non-Roth equity holding is "mislocated", and each move adds to the Roth):
+
+| account | off | on |
+|---|---|---|
+| primary Roth | \$85,600 | **\$999,942** |
+| primary IRA | \$214,000 | \$0 |
+| primary super | \$268,353 | \$161,724 |
+| spouse IRA + 401(k) + super | \$402,677 | \$0 |
+
+That is money moving between people, from AU super into a US Roth, and from pre-tax into Roth,
+none of it taxed. The reducer also ran every period, although its comment said annually. The
+optimizer's `behavioralStrategies` choices never included it, so only a hand-ticked plan could
+reach it; none of 373 saved scenario files had it on.
+
+**Options put to the author:** fix it as a real swap (two per-account rebalances through
+`RebalanceToTargetApplyReducer`); make it inert; or retire it. **Decision: retire.** A repaired
+strategy would be a second placement authority fighting design 61's LOCATED planner every period,
+and in super each round trip realises CGT (design 105). LOCATED already does the job, across
+taxable accounts too, with the tax realised, and it honours §5 restrictions. Design 29's other
+lever (contribution routing) was never built.
+
+**Removed:**
+- the registry entry and its `assetLocationPolicy` param;
+- `StrategicAssetLocationReducer` and `AssetLocationRebalanceApplyReducer`, with their `index.js`
+  exports and the `ASSET_LOCATION_REBALANCE_APPLY` journal declaration;
+- their tests: `behavioral-strategic-asset-location.test.mjs`, the four postcondition cases, the
+  coverage-manifest entries and R-15. **The postcondition "cross-account swap conserves value"
+  asserted the bug itself**: IRA 1,000 → 500 and Roth 1,000 → 1,500, counted as conserved.
+
+`allocationClassRestrictions` is now read by TARGET_ALLOCATION alone.
+
+**Added:**
+- **`src/scenarios/retired-strategies.js`** — `retireBehavioralStrategies(cfg)` runs beside
+  `retireRateParams` in the loader. It strips the key from both param stores and drops
+  `assetLocationPolicy`. It warns when the plan had the strategy enabled; a leftover param with
+  the strategy off was already inert, so it is dropped silently. Without this, an unhandled key
+  compiles to no reducers at all.
+- **`RETIRED_REDUCER_TYPES`** — `ScenarioSerializer.deserializeGraph` skips these with a warning
+  instead of throwing `Unknown reducer type` on a graph saved with them.
+- **Tests:** `retired-strategies.test.mjs` RS-1–RS-5, including a real load that names the
+  strategy and runs byte-for-byte like one that does not.
+
+**Suites:** 7,289 unit / 1,699 viz, help gate clean. Design 29 §3.4 carries a retirement note.

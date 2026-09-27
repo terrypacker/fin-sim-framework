@@ -64,7 +64,6 @@ import { INHERITANCE_META_FIELDS, applyInheritanceMeta, serializeInheritanceMeta
 import { reconcileLedgerToBalance, debitLedgerForLoss, creditDerivedIncome, drawDerivedProRata, realiseDerivedGain, revalueLedger, deriveEarningsBasis, InvestmentAccount, BrokerageAccount, RetirementAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from './finance/assets/investment-account.js';
 import { RealProperty } from './finance/assets/real-property.js';
 import { DEFAULT_LOCATION_POLICY, GOLD_PREFERENCE_BY_RESIDENCY, resolveLocationPolicy, planLocatedTargets } from './finance/behavioral/allocation-location.js';
-import { AssetLocationRebalanceApplyReducer } from './finance/behavioral/asset-location-rebalance-apply-reducer.js';
 import { BehavioralPanicSellApplyReducer } from './finance/behavioral/behavioral-panic-sell-apply-reducer.js';
 import { BEHAVIORAL_STRATEGY_REGISTRY } from './finance/behavioral/behavioral-strategy-registry.js';
 import { BondLadderReducer, materializeLadder, ladderCarryover, absorbAsTailRung, _compactLadderLots } from './finance/behavioral/bond-ladder-reducer.js';
@@ -77,7 +76,6 @@ import { PanicSellReducer } from './finance/behavioral/panic-sell-reducer.js';
 import { RebalanceToTargetApplyReducer, _sweepDust, _compactSeasonedLots } from './finance/behavioral/rebalance-to-target-apply-reducer.js';
 import { ALLOCATION_LOCATION, TAX_ADVANTAGED_ROLES, TAXABLE_ROLES, US_TAX_ADVANTAGED_ROLES, countryForRole, roleCanHoldGold, ALLOCATION_SCHEDULE, REGIME_TARGET_PRIORITY, assertAuthoredMixes, collectAuthoredMixProblems, ageAsOf, interpolateGlidepath, resolveRegimeTarget, RebalanceToTargetReducer } from './finance/behavioral/rebalance-to-target-reducer.js';
 import { StockHarvestApplyReducer } from './finance/behavioral/stock-harvest-apply-reducer.js';
-import { StrategicAssetLocationReducer } from './finance/behavioral/strategic-asset-location-reducer.js';
 import { resolveSubstitute, resolveSubstituteSecurity } from './finance/behavioral/substitute-holding.js';
 import { TaxGainHarvestHandler } from './finance/behavioral/tax-gain-harvest-handler.js';
 import { tlhNoSubstituteRecordReducer, TaxLossHarvestHandler } from './finance/behavioral/tax-loss-harvest-handler.js';
@@ -941,7 +939,6 @@ export const Finance = {
   GOLD_PREFERENCE_BY_RESIDENCY,
   resolveLocationPolicy,
   planLocatedTargets,
-  AssetLocationRebalanceApplyReducer,
   BehavioralPanicSellApplyReducer,
   BEHAVIORAL_STRATEGY_REGISTRY,
   BondLadderReducer,
@@ -973,7 +970,6 @@ export const Finance = {
   resolveRegimeTarget,
   RebalanceToTargetReducer,
   StockHarvestApplyReducer,
-  StrategicAssetLocationReducer,
   resolveSubstitute,
   resolveSubstituteSecurity,
   TaxGainHarvestHandler,

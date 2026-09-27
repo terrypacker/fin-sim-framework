@@ -14,14 +14,14 @@
  * Two behavioral classes, all I1-PURE (immutable holdings math / action emission —
  * none are service-backed, so the default runReducer no-mutation check applies):
  *
- *  - TRIGGER reducers (PanicSell, OpportunisticRebalance, StrategicAssetLocation,
+ *  - TRIGGER reducers (PanicSell, OpportunisticRebalance,
  *    DownturnRothConversion, CashBucketDrawdown, ContributionSuspensionToggle)
  *    read regimes/holdings and EMIT actions or toggle a flag. Asserted I1 + I2
  *    (determinism) + I7 (no-op) + I10 (idempotent per-shock latch) as tagged.
  *  - *Apply reducers (BehavioralPanicSellApply, OpportunisticRebalanceApply,
- *    AssetLocationRebalanceApply, StockHarvestApply) MOVE holdings within/between
- *    accounts. Asserted I3 (§4.4 re-sync) + I4 + I6 (pro-rata basis) + I5 for the
- *    cross-account swap, plus I7 missing-target safety.
+ *    StockHarvestApply) MOVE holdings within accounts. Asserted I3 (§4.4 re-sync)
+ *    + I4 + I6 (pro-rata basis), plus I7 missing-target safety. (The cross-account
+ *    AssetLocationRebalanceApply was retired with STRATEGIC_ASSET_LOCATION, design 115 §12.)
  */
 
 import { test } from 'node:test';
@@ -40,8 +40,6 @@ import { PanicSellReducer } from '../../src/finance/behavioral/panic-sell-reduce
 import { BehavioralPanicSellApplyReducer } from '../../src/finance/behavioral/behavioral-panic-sell-apply-reducer.js';
 import { OpportunisticRebalanceReducer } from '../../src/finance/behavioral/opportunistic-rebalance-reducer.js';
 import { OpportunisticRebalanceApplyReducer } from '../../src/finance/behavioral/opportunistic-rebalance-apply-reducer.js';
-import { StrategicAssetLocationReducer } from '../../src/finance/behavioral/strategic-asset-location-reducer.js';
-import { AssetLocationRebalanceApplyReducer } from '../../src/finance/behavioral/asset-location-rebalance-apply-reducer.js';
 import { DownturnRothConversionReducer } from '../../src/finance/behavioral/downturn-roth-conversion-reducer.js';
 import { CashBucketDrawdownReducer } from '../../src/finance/behavioral/cash-bucket-drawdown-reducer.js';
 import { ContributionSuspensionToggleReducer } from '../../src/finance/behavioral/contribution-suspension-toggle-reducer.js';
@@ -103,37 +101,6 @@ test('OpportunisticRebalanceApplyReducer: missing account is a no-op (I7)', () =
   const r = new OpportunisticRebalanceApplyReducer();
   const prev = { iraAccount: makeAccount({ stateKey: 'iraAccount', holdings: [{ id: 'e1', allocation: ALLOCATION.EQUITY, marketValue: 700, costBasis: 700 }] }) };
   const next = runReducer(r, structuredClone(prev), makeAction('OPPORTUNISTIC_REBALANCE_APPLY', { stateKey: 'nope', legs: [{ allocation: ALLOCATION.EQUITY, delta: -100 }] }), DATE);
-  assertStateUnchanged(prev, next);
-});
-
-// ─── AssetLocationRebalanceApplyReducer (apply; cross-account I3/I5/I6/I7) ──────
-
-test('AssetLocationRebalanceApplyReducer: cross-account swap conserves value (I3/I5)', () => {
-  const r = new AssetLocationRebalanceApplyReducer();
-  const state = {
-    iraAccount:  makeAccount({ stateKey: 'iraAccount',  holdings: [{ id: 'b1', allocation: ALLOCATION.BOND,   marketValue: 1000, costBasis: 1000 }] }),
-    rothAccount: makeAccount({ stateKey: 'rothAccount', holdings: [{ id: 'e1', allocation: ALLOCATION.EQUITY, marketValue: 1000, costBasis: 1000 }] }),
-  };
-  const prev = structuredClone(state);
-  const next = runReducer(r, state, makeAction('ASSET_LOCATION_REBALANCE_APPLY', {
-    fromStateKey: 'iraAccount', fromHoldingId: 'b1', toStateKey: 'rothAccount', toHoldingId: 'e1', swapAmount: 500,
-  }), DATE, { balance: true, nonNegative: true });
-  assert.equal(next.iraAccount.balance, 500);
-  assert.equal(next.rothAccount.balance, 1500);
-  assert.equal(sumHoldings(next.iraAccount), 500);   // I3
-  assert.equal(sumHoldings(next.rothAccount), 1500); // I3
-  assertConserved(prev, next, 'iraAccount', 'rothAccount'); // I5 (no cash pool, no tax)
-});
-
-test('AssetLocationRebalanceApplyReducer: missing holding is a no-op (I7)', () => {
-  const r = new AssetLocationRebalanceApplyReducer();
-  const prev = {
-    iraAccount:  makeAccount({ stateKey: 'iraAccount',  holdings: [{ id: 'b1', allocation: ALLOCATION.BOND,   marketValue: 1000, costBasis: 1000 }] }),
-    rothAccount: makeAccount({ stateKey: 'rothAccount', holdings: [{ id: 'e1', allocation: ALLOCATION.EQUITY, marketValue: 1000, costBasis: 1000 }] }),
-  };
-  const next = runReducer(r, structuredClone(prev), makeAction('ASSET_LOCATION_REBALANCE_APPLY', {
-    fromStateKey: 'iraAccount', fromHoldingId: 'zz', toStateKey: 'rothAccount', toHoldingId: 'e1', swapAmount: 500,
-  }), DATE);
   assertStateUnchanged(prev, next);
 });
 
@@ -327,42 +294,6 @@ test('OpportunisticRebalanceReducer: balanced account within band is a no-op (I7
   assert.equal(next.next.length, 0);
   const a = r.reduce(structuredClone(balanced), makeAction('US_PERIOD_ADVANCE'), DATE);
   const b = r.reduce(structuredClone(balanced), makeAction('US_PERIOD_ADVANCE'), DATE);
-  assert.deepEqual(a, b);
-});
-
-// ─── StrategicAssetLocationReducer (trigger; I1/I2/I7) ─────────────────────────
-
-test('StrategicAssetLocationReducer: proposes a tax-advantaged swap for mislocated holdings (I1)', () => {
-  const r = new StrategicAssetLocationReducer({ taxAdvantaged: [
-    { stateKey: 'iraAccount', role: ACCOUNT_ROLES.IRA },
-    { stateKey: 'rothAccount', role: ACCOUNT_ROLES.ROTH },
-  ] });
-  const state = {
-    // Default policy: BOND → IRA/K401, EQUITY → ROTH. Both holdings are mislocated.
-    iraAccount:  makeAccount({ stateKey: 'iraAccount',  holdings: [{ id: 'e1', allocation: ALLOCATION.EQUITY, marketValue: 500, costBasis: 500 }] }),
-    rothAccount: makeAccount({ stateKey: 'rothAccount', holdings: [{ id: 'b1', allocation: ALLOCATION.BOND,   marketValue: 500, costBasis: 500 }] }),
-  };
-  const next = runReducer(r, state, makeAction('US_PERIOD_ADVANCE'), DATE);
-  const move = next.next.find(a => a.type === 'ASSET_LOCATION_REBALANCE_APPLY');
-  assert.ok(move);
-  assert.equal(move.fromStateKey, 'iraAccount');
-  assert.equal(move.toStateKey, 'rothAccount');
-  assert.equal(move.swapAmount, 500);
-});
-
-test('StrategicAssetLocationReducer: well-located holdings produce no moves (I7); deterministic (I2)', () => {
-  const r = new StrategicAssetLocationReducer({ taxAdvantaged: [
-    { stateKey: 'iraAccount', role: ACCOUNT_ROLES.IRA },
-    { stateKey: 'rothAccount', role: ACCOUNT_ROLES.ROTH },
-  ] });
-  const state = {
-    iraAccount:  makeAccount({ stateKey: 'iraAccount',  holdings: [{ id: 'b1', allocation: ALLOCATION.BOND,   marketValue: 500, costBasis: 500 }] }),
-    rothAccount: makeAccount({ stateKey: 'rothAccount', holdings: [{ id: 'e1', allocation: ALLOCATION.EQUITY, marketValue: 500, costBasis: 500 }] }),
-  };
-  const next = runReducer(r, state, makeAction('US_PERIOD_ADVANCE'), DATE);
-  assert.equal(next.next.length, 0);
-  const a = r.reduce(structuredClone(state), makeAction('US_PERIOD_ADVANCE'), DATE);
-  const b = r.reduce(structuredClone(state), makeAction('US_PERIOD_ADVANCE'), DATE);
   assert.deepEqual(a, b);
 });
 

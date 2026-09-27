@@ -12,8 +12,6 @@ import { TaxLossHarvestHandler, tlhNoSubstituteRecordReducer } from './tax-loss-
 import { TaxGainHarvestHandler }               from './tax-gain-harvest-handler.js';
 import { StockHarvestApplyReducer }            from './stock-harvest-apply-reducer.js';
 import { DownturnRothConversionReducer }       from './downturn-roth-conversion-reducer.js';
-import { StrategicAssetLocationReducer }       from './strategic-asset-location-reducer.js';
-import { AssetLocationRebalanceApplyReducer }  from './asset-location-rebalance-apply-reducer.js';
 import { OpportunisticRebalanceReducer }       from './opportunistic-rebalance-reducer.js';
 import { OpportunisticRebalanceApplyReducer }  from './opportunistic-rebalance-apply-reducer.js';
 import { PanicSellReducer }                    from './panic-sell-reducer.js';
@@ -47,28 +45,23 @@ const SEVERITY_THRESHOLD_DESCRIPTION =
   + 'shock carrying no severity (a custom or curve shock) always qualifies — an absent number '
   + 'is missing information, not evidence of mildness. Set 0 to react to every tagged shock.';
 
-/** The strategies that place holdings, and so read `allocationClassRestrictions` (design 115). */
-const CLASS_RESTRICTION_READERS = ['TARGET_ALLOCATION', 'STRATEGIC_ASSET_LOCATION'];
 /** Messages already printed — a compile runs per MC iteration and per optimizer rollout. */
 const _warnedClassRestrictionProblems = new Set();
 
 /**
  * Design 115 — `allocationClassRestrictions` as reducer config, plus its advisories.
  *
- * Both placement strategies read the one param; only the first ENABLED one warns, so a plan
- * with both does not print everything twice. Nothing here throws: every problem describes
- * what the compiled run does anyway (see `collectClassRestrictionProblems`).
+ * TARGET_ALLOCATION is the one placement strategy (STRATEGIC_ASSET_LOCATION, the other
+ * reader, was retired — design 115 §12). Nothing here throws: every problem describes what
+ * the compiled run does anyway (see `collectClassRestrictionProblems`).
  */
-function _classRestrictionsFor(context, strategyKey) {
+function _classRestrictionsFor(context) {
   const p = context.parameters ?? {};
-  const enabled = p.behavioralStrategies ?? [];
-  if (CLASS_RESTRICTION_READERS.find(k => enabled.includes(k)) === strategyKey) {
-    for (const { message } of collectClassRestrictionProblems(
-      p.allocationClassRestrictions, context.accounts ?? [], context.people ?? [])) {
-      if (_warnedClassRestrictionProblems.has(message)) continue;
-      _warnedClassRestrictionProblems.add(message);
-      console.warn(`[design 115] ${message}`);
-    }
+  for (const { message } of collectClassRestrictionProblems(
+    p.allocationClassRestrictions, context.accounts ?? [], context.people ?? [])) {
+    if (_warnedClassRestrictionProblems.has(message)) continue;
+    _warnedClassRestrictionProblems.add(message);
+    console.warn(`[design 115] ${message}`);
   }
   return normalizeClassRestrictions(p.allocationClassRestrictions);
 }
@@ -170,34 +163,6 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
     ],
   },
 
-  STRATEGIC_ASSET_LOCATION: {
-    handlers: (_context) => [],
-    reducers: (context) => {
-      const p = context.parameters;
-      const TAX_ADV_ROLES = new Set([
-        ACCOUNT_ROLES.K401, ACCOUNT_ROLES.IRA, ACCOUNT_ROLES.ROTH, ACCOUNT_ROLES.SUPER,
-      ]);
-      const taxAdvantaged = (context.accounts ?? [])
-        .filter(a => TAX_ADV_ROLES.has(a.role))
-        .map(a => ({ stateKey: a.stateKey, role: a.role }));
-      const policy = p.assetLocationPolicy ?? undefined;
-      return [
-        new StrategicAssetLocationReducer({ taxAdvantaged, ...(policy ? { assetLocationPolicy: policy } : {}),
-          classRestrictions: _classRestrictionsFor(context, 'STRATEGIC_ASSET_LOCATION') }),
-        new AssetLocationRebalanceApplyReducer(),
-      ];
-    },
-    paramSchema: () => [
-      {
-        key: 'assetLocationPolicy', label: 'Asset Location Policy',
-        type: 'LocationPolicy', group: 'Behavioral', mc: false, opt: false,
-        defaultValue: null,
-        description: 'Map of allocation → preferred account roles for tax-advantaged placement. E.g. {"BOND":["ira","k401"],"EQUITY":["roth-ira"]}. Null = use defaults.',
-        visibleWhen: { param: 'behavioralStrategies', includes: 'STRATEGIC_ASSET_LOCATION' },
-      },
-    ],
-  },
-
   OPPORTUNISTIC_REBALANCE: {
     handlers: (_context) => [],
     reducers: (context) => {
@@ -277,7 +242,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
           locationMode:   p.allocationLocation ?? ALLOCATION_LOCATION.LOCATED,
           locationPolicy: p.allocationLocationPolicy ?? null,
           // Design 115 — HARD per-role class bans, in both location modes. Null ⇒ inert.
-          classRestrictions: _classRestrictionsFor(context, 'TARGET_ALLOCATION'),
+          classRestrictions: _classRestrictionsFor(context),
           // Design 97 §9 — YEARS_OF_SPEND pools. Absent ⇒ null ⇒ the mode falls back to the
           // authored target, so selecting the mode without sizing a pool is inert rather
           // than a zero-reserve plan.
@@ -419,7 +384,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
           { param: 'allocationLocation',   equals:   ALLOCATION_LOCATION.LOCATED },
         ],
       },
-      // Design 115 — read by BOTH placement strategies, so it is visible under either.
+      // Design 115.
       {
         key: 'allocationClassRestrictions', label: 'Allocation Class Restrictions',
         type: 'ClassRestrictions', group: 'Allocation', mc: false, opt: false,
@@ -428,13 +393,10 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
           + `roles, e.g. {"GOLD":["super"]}. Classes: ${RESTRICTABLE_CLASSES.join(', ')}. Unlike the `
           + 'location policy this is hard: a class weight no permitted account can hold is spread over '
           + 'the other classes, and a barred holding is sold at the next rebalance even inside the drift '
-          + 'band. Applies to TARGET_ALLOCATION in both location modes and to STRATEGIC_ASSET_LOCATION. '
+          + 'band. Applies to TARGET_ALLOCATION in both location modes. '
           + 'An empty list ({"GOLD":[]}) restricts nothing but records that the placement was '
           + 'considered, which silences the US-citizen super warning. Null ⇒ no restrictions.',
-        visibleWhen: { anyOf: [
-          { param: 'behavioralStrategies', includes: 'TARGET_ALLOCATION' },
-          { param: 'behavioralStrategies', includes: 'STRATEGIC_ASSET_LOCATION' },
-        ] },
+        visibleWhen: { param: 'behavioralStrategies', includes: 'TARGET_ALLOCATION' },
       },
       ...buildAllocWeightSchema(),
     ],

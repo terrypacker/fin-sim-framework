@@ -81,6 +81,14 @@ The highest-value strategy in this design: it *creates* value rather than destro
 
 ### 3.4 `StrategicAssetLocationHandler`
 
+> **RETIRED 27 Sep 2026 (design 115 §12).** As built, the apply was never the mirrored pair
+> specified below. It shrank a holding in one tax-advantaged account and grew a holding in
+> another, moving money one way between accounts, between people and across countries,
+> with no tax. The strategy, both reducers and `assetLocationPolicy` are removed. A saved
+> plan that names it loads without it and warns (`src/scenarios/retired-strategies.js`).
+> Design 61's LOCATED placement (TARGET_ALLOCATION) does this job, across taxable accounts
+> too, with the tax realised. The text below is kept as the original intent.
+
 Asset *location* (which account holds which allocation) is distinct from asset *allocation* (the household-wide equity/bond mix). Tax-inefficient assets (bonds, high-yield) belong in tax-deferred accounts; tax-efficient assets (broad equity index) belong in taxable. Getting location right is worth tens of basis points/year with **zero** change to the household allocation.
 
 **Mechanism — never force a taxable sale.** Relocating an asset *out* of a taxable account would realize a gain, defeating the purpose. So this handler honors a location policy `assetLocationPolicy: { [allocation]: preferredAccountRole[] }` through two free levers only:

@@ -18,7 +18,8 @@
  * account's composition still sums to its own total.
  *
  * Phase 2 (R-10…): the same restrictions through `RebalanceToTargetReducer` in both location
- * modes, the barred-holding rebalance trigger, and `StrategicAssetLocationReducer`.
+ * modes and the barred-holding rebalance trigger. (R-15, the StrategicAssetLocation guard, went
+ * with that strategy's retirement — design 115 §12.)
  *
  * Phase 3 (R-16…): the `allocationClassRestrictions` param — normalization, the advisory
  * problems (incl. the US-citizen super warning), the registry wiring into both strategies,
@@ -36,7 +37,6 @@ import { loadScenarioSim } from '../helpers/scenario-harness.js';
 import { roleCanHoldGold, RebalanceToTargetReducer, ALLOCATION_LOCATION }
   from '../../src/finance/behavioral/rebalance-to-target-reducer.js';
 import { RebalanceToTargetApplyReducer } from '../../src/finance/behavioral/rebalance-to-target-apply-reducer.js';
-import { StrategicAssetLocationReducer } from '../../src/finance/behavioral/strategic-asset-location-reducer.js';
 import { ACCOUNT_ROLES } from '../../src/finance/state/account-roles.js';
 import { ALLOCATION }    from '../../src/finance/holdings/allocation.js';
 
@@ -314,26 +314,6 @@ test('R-14: a barred class held INSIDE the drift band still forces the rebalance
   assert.ok(near(held('iraAccount', GOLD), 1000, 1), 'the unrestricted IRA is untouched');
 });
 
-test('R-15: StrategicAssetLocation never grows a barred class in the receiving account', () => {
-  // IRA equity is mislocated (policy wants EQUITY in super); super's only holding is gold,
-  // so the "best available" fallback picks it and the apply would GROW super's gold.
-  const state = {
-    iraAccount:   { balance: 50000, holdings: [{ id: 'i0', allocation: EQUITY, marketValue: 50000, costBasis: 50000 }] },
-    superAccount: { balance: 30000, holdings: [{ id: 's0', allocation: GOLD,   marketValue: 30000, costBasis: 30000 }] },
-  };
-  const taxAdvantaged = [{ stateKey: 'iraAccount', role: ACCOUNT_ROLES.IRA },
-                         { stateKey: 'superAccount', role: ACCOUNT_ROLES.SUPER }];
-  const assetLocationPolicy = { EQUITY: [ACCOUNT_ROLES.SUPER] };
-
-  const free = new StrategicAssetLocationReducer({ taxAdvantaged, assetLocationPolicy })._computeMoves(state);
-  assert.equal(free.length, 1, 'precondition: unrestricted, the move grows super\'s gold');
-  assert.equal(free[0].toHoldingId, 's0');
-
-  const moves = new StrategicAssetLocationReducer({ taxAdvantaged, assetLocationPolicy,
-    classRestrictions: NO_GOLD_IN_SUPER })._computeMoves(state);
-  assert.equal(moves.length, 0);
-});
-
 // ── Phase 3 — the param ──────────────────────────────────────────────────────
 
 test('R-16: normalizeClassRestrictions — keeps known classes/roles; null when nothing is barred', () => {
@@ -382,32 +362,31 @@ test('R-19: the US-citizen super warning — owner-aware, and silenced by ANY GO
   assert.equal(fired(null, [{ name: 'J', role: ACCOUNT_ROLES.SUPER, ownershipType: 'joint', ownerId: 'spouse' }]).length, 1);
 });
 
-test('R-20: schema — the param is visible under EITHER placement strategy, and only then', () => {
+test('R-20: schema — the param is visible under TARGET_ALLOCATION, and only then', () => {
   const meta = BEHAVIORAL_STRATEGY_REGISTRY.TARGET_ALLOCATION.paramSchema()
     .find(m => m.key === 'allocationClassRestrictions');
   assert.ok(meta, 'declared');
   assert.equal(meta.defaultValue, null);
   const visible = (strategies) => isParamVisible(meta, k => (k === 'behavioralStrategies' ? strategies : undefined));
   assert.equal(visible(['TARGET_ALLOCATION']), true);
-  assert.equal(visible(['STRATEGIC_ASSET_LOCATION']), true);
   assert.equal(visible(['PANIC_SELL']), false);
 });
 
-test('R-21: registry — both strategies compile the normalized map into their reducers; one warning each', () => {
+test('R-21: registry — TARGET_ALLOCATION compiles the normalized map; each warning prints once per process', () => {
   const accounts = [{ name: 'R21 Super', stateKey: 'superAccount', role: ACCOUNT_ROLES.SUPER, ownerId: 'primary' },
                     { name: 'R21 IRA',   stateKey: 'iraAccount',   role: ACCOUNT_ROLES.IRA,   ownerId: 'primary' }];
   const ctx = (restrictions) => ({ accounts, people: PEOPLE, parameters: {
-    behavioralStrategies: ['TARGET_ALLOCATION', 'STRATEGIC_ASSET_LOCATION'],
+    behavioralStrategies: ['TARGET_ALLOCATION'],
     rebalanceTargetAllocation: { EQUITY: 0.9, BOND: 0, CASH: 0, GOLD: 0.1 },
     allocationClassRestrictions: restrictions } });
 
   const warns = []; const orig = console.warn; console.warn = (m) => warns.push(String(m));
   try {
     const [reb] = BEHAVIORAL_STRATEGY_REGISTRY.TARGET_ALLOCATION.reducers(ctx({ GOLD: ['super', 'bogus'] }));
-    const [sal] = BEHAVIORAL_STRATEGY_REGISTRY.STRATEGIC_ASSET_LOCATION.reducers(ctx({ GOLD: ['super', 'bogus'] }));
+    // A second compile (an MC iteration, say) must not print it again.
+    BEHAVIORAL_STRATEGY_REGISTRY.TARGET_ALLOCATION.reducers(ctx({ GOLD: ['super', 'bogus'] }));
     assert.deepEqual(reb.classRestrictions, { GOLD: ['super'] });
-    assert.deepEqual(sal.classRestrictions, { GOLD: ['super'] });
-    assert.equal(warns.filter(w => w.includes('"bogus"')).length, 1, 'printed once, by the first enabled reader');
+    assert.equal(warns.filter(w => w.includes('"bogus"')).length, 1, 'printed once');
 
     const [free] = BEHAVIORAL_STRATEGY_REGISTRY.TARGET_ALLOCATION.reducers(ctx(null));
     assert.equal(free.classRestrictions, null);
