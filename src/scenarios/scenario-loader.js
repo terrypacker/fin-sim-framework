@@ -43,6 +43,7 @@ import { ECONOMIC_REGIMES }  from './toolsets/economic-regimes-toolset.js';
 import { seedIndexLevels }   from '../finance/economic-regimes/market-index.js';
 import { normalizeCountryCode, currencyForCountry } from '../finance/country-codes.js';
 import { loanKeyForProperty } from '../finance/account-rules/loan-classes.js';
+import { LOAN_MONEY_STAMPS } from '../finance/services/state-schema-registry.js';
 import { inheritedAssetMeta } from '../finance/services/bequest-service.js';
 import { deriveEarningsBasis } from '../finance/assets/investment-account.js';
 import { rescaleHoldingsToBalance } from '../finance/holdings/holding-utils.js';
@@ -339,7 +340,7 @@ export class ScenarioLoader {
       if ((p.mortgageBalance ?? 0) > 0) {
         const code = p.currency?.code ?? currencyForCountry(p.country ?? 'US');
         const loanKey = loanKeyForProperty(p.stateKey);
-        reg.registerCurrencyPaths(['balance', 'minimumBalance', 'monthlyPayment', 'postIoPrincipal']
+        reg.registerCurrencyPaths(['balance', 'minimumBalance', 'monthlyPayment', ...LOAN_MONEY_STAMPS]
           .map(f => `${loanKey}.${f}`), code);
         // Kind 'loan', NOT 'account': accountBalanceKeys() scopes the shipped reports,
         // and keeping these loans out of it is what stops the mortgage double-count

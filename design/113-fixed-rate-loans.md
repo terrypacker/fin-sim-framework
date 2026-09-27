@@ -114,6 +114,65 @@ fixed period ends. Its IO-expiry re-amortisation (design 86 G6) is unchanged.
 Without a `maturityYear` there is nothing to amortise against, so the authored payment
 continues. The form hint says so.
 
+### 6.1 Payment reset when the rate moves (Q3, added 26 Sep 2026)
+
+**The finding.** Two faults, one cause: no P&I payment responded properly to a Prime move.
+
+- A plain variable P&I loan paid its authored `monthlyPayment` for life. A rate rise
+  lengthened the loan instead of raising the payment, and with a `maturityYear` the maturity
+  branch then collected the shortfall as one lump. AU lenders recalculate the payment, and so
+  does a US ARM at each reset.
+- The two anchored branches, post-IO (design 86 G6) and post-fixed (§6), did follow Prime,
+  but wrongly. They amortised the anchor principal over the full term from the anchor at
+  *today's* rate, which is right only while the rate never changes. After a move, the formula
+  behaves as if the new rate had applied since the anchor, although the balance actually paid
+  down at the old one. On an illustrative \$500k, 25-year loan at 6% that moves at year 10,
+  a rise to 8% overpays by \$211 a month and retires the loan 17 months early. A cut to 4%
+  underpays by \$185 a month and leaves about \$45k for the maturity lump.
+
+**The decision.** Every P&I loan whose rate follows Prime pays a **payment schedule** that is
+re-amortised when the rate moves:
+
+```
+schedule = { phase, principal, fromMonth, months, rate, payment, extra }
+
+rate unchanged:  pay schedule.payment
+rate changed:    k         = now − fromMonth
+                 principal = the balance the OLD schedule reaches after k payments
+                 months    = months − k
+                 payment   = amortise(principal, newRate, months) + extra
+```
+
+The schedule moves along its own path, not the actual balance. That keeps what design 86 G6
+anchored for: an offset or an extra repayment cannot cut the next payment, so paying ahead
+still shortens the loan. The old anchored formula is simply this schedule when the rate never
+moves.
+
+- **Phases.** `POST_IO` starts from `postIoPrincipal` over the post-IO term. `POST_FIXED`
+  starts from the §6 anchor. `PLAIN` is a variable P&I loan with an authored payment and a
+  `maturityYear`. It starts from the balance at its first payment, over the months to
+  maturity. The phase is `null` inside an IO or fixed window, at or past maturity, without a
+  maturity, or for a legacy IO loan with no `postIoPrincipal` (which keeps its live-balance
+  path).
+- **The authored payment.** For `PLAIN`, the authored payment is kept exactly until the first
+  rate change. Its difference from the schedule that retires the balance by maturity is kept
+  as `extra` through every reset. That difference is positive for a borrower who overpays and
+  negative when the authored payment falls short. So a reset changes the payment only by the
+  effect of the rate. This matches how §7.2 already reads a payment above the schedule.
+- **Who gets one.** A loan whose rate follows Prime (the same cases as `resolveLoanRate`):
+  a spread over a configured Prime, outside any fixed window. A fixed rate cannot move, so a
+  `FIXED` loan, a spread-less legacy loan and a loan inside its fixed window carry no schedule
+  and are untouched.
+- **On by default.** The behaviour applies to every such loan and there is no per-loan switch.
+  Every variable P&I product recalculates its payment, so holding the payment was the fault,
+  not a choice worth keeping.
+- **When it resets.** At the first monthly payment on the new rate. A lender applies the
+  change at the next repayment after notice, and a month is well within that. An annual
+  review cycle is not modelled.
+- **Months are counted from the payment's calendar date**, not the tax period's year, because
+  the AU period starts in July. The `PLAIN` term ends where the maturity branch fires: 1 July
+  of `maturityYear` for an AU loan, 1 January for a US loan.
+
 ## 7. Break cost and the extra-repayment cap
 
 ### 7.1 Break cost on early payoff
@@ -205,11 +264,15 @@ Changes:
   or as an MPC decision (design 81).
 - **Q2 — Tax treatment of a break cost.** Not modelled. Before modelling it, the relevant
   provisions (AU and US) have to be fetched into `docs/` and cited, not quoted from memory.
-- **Q3 — Variable P&I payment reset.** Outside this design but found while writing it: a
-  variable P&I loan keeps its authored payment when Prime moves, so a rate rise lengthens the
-  loan instead of raising the payment. AU lenders usually recalculate the payment.
+- **Q3 — Variable P&I payment reset.** CLOSED 26 Sep 2026 by §6.1, which also corrects the
+  anchored post-IO and post-fixed payments.
 - **Q4 — Rate levers.** Whether the fixed rate, the revert rate or `fixedRateUntilYear`
   should be Monte Carlo or optimizer axes (design 98).
+- **Q5 — The extra-repayment cap's month count on AU loans.** Found while writing §6.1 and
+  not fixed. `capFixedExtraRepayment` counts months to maturity as the tax-period year (which
+  starts in July for AU) minus the payment's calendar month. For an AU loan its schedule is
+  therefore six months too long or too short, depending on the half of the year, so the
+  amount counted as extra is slightly off. §6.1 counts from the calendar date instead.
 
 ## 10. As built
 
@@ -244,3 +307,13 @@ Changes:
   TERM-10 in `evt-interest-only-loan.test.mjs`. The two copies have since been merged into one
   `accountToStatePlain` (`src/scenarios/toolsets/account-state-projection.js`), so they
   cannot drift again.
+- **Payment schedule (§6.1).** `resolvePaymentSchedule` (`loan-classes.js`) decides this
+  month's schedule, and the handler hands it to `scheduledLoanPayment`. It rides on
+  `LOAN_PAYMENT_APPLY` only when it is new or has been reset, and the reducer writes it to the
+  loan as `paymentSchedule`. At a constant rate the payment is bit-identical to the old
+  branches. The two AU goldens with a variable P&I mortgage changed only by gaining the stamp:
+  no balance, payment or cash figure moved. Tests FRL-11 to FRL-14.
+- **Found and fixed in passing:** none of the design-113 loan stamps had a display type in
+  `StateSchemaRegistry`. No golden carried one, so the schema-coverage check never saw it.
+  The rates, years and month counters are now patterns, and the money is stamped per loan in
+  its currency (`LOAN_MONEY_STAMPS`), for both standalone and property-synthesized loans.

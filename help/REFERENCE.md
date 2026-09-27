@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-228 parameters · 33 panels · 11 node types (179 fields) · 173 action types · 86 tools · 275 state field types · 73 topics · 122 design docs
+228 parameters · 33 panels · 11 node types (179 fields) · 173 action types · 86 tools · 281 state field types · 73 topics · 122 design docs
 
 ---
 
@@ -706,7 +706,7 @@ Explained in [`help/nodes`](nodes/account.md). 5 field(s) described by a record 
 - **`revertRate`** — Revert Rate · `number` · topic
   The variable rate the loan moves to when its fixed period ends, typed as today's absolute rate. It is stored as a margin over Prime, so it keeps following Prime after the switch. Lenders' revert rates usually sit above what a new borrower is offered, and that step-up is part of the cost of fixing. Blank keeps the fixed rate after the period ends.
 - **`monthlyPayment`** — Monthly Payment · `number` · topic
-  The fixed monthly principal-and-interest payment. Inert while interest-only is on, and inert again after the interest-only period expires when a maturity year is set, because the loan then re-amortises over the remaining term. A fixed payment below the accrued interest does not error — the balance simply grows.
+  The monthly principal-and-interest payment. Inert while interest-only is on, and inert again after the interest-only period expires when a maturity year is set, because the loan then re-amortises over the remaining term. On a variable loan with a maturity year it is recalculated when Prime moves, keeping whatever you pay above the schedule; without one it is held, so a rate rise lengthens the loan. A payment below the accrued interest simply grows the balance.
 - **`interestOnly`** — Interest Only · `checkbox` · topic
   Pay exactly the interest accrued on the effective, offset-reduced principal each month. The balance is then flat by construction and a variable rate is tracked automatically. This is the safe way to express interest-only: a fixed payment set below the accrued interest negatively amortises instead, silently.
 - **`interestOnlyUntilYear`** — IO Until Year · `number` · topic
@@ -775,7 +775,7 @@ Explained in [`help/nodes`](nodes/real-property.md). 3 field(s) described by a r
 - **`mortgageBalance`** — Mortgage Bal. · `number` · topic
   Outstanding principal, in the property's currency. Above zero this synthesizes a linked loan liability, and the property itself then contributes equity only. Set it to zero and author a separate loan account instead when the debt needs its own payment source or a second lender.
 - **`monthlyMortgage`** — Monthly Mtg. · `number` · topic
-  The fixed monthly principal-and-interest payment. Inert while interest-only is on, because the payment is then derived from the accrued interest, and inert again after the interest-only expiry when a maturity year re-amortises the loan over its remaining term.
+  The monthly principal-and-interest payment. Inert while interest-only is on, because the payment is then derived from the accrued interest, and inert again after the interest-only expiry when a maturity year re-amortises the loan over its remaining term. On a variable mortgage with a maturity year it is recalculated whenever Prime moves, keeping whatever you pay above the schedule; without one it is held as entered.
 - **`mortgageRateType`** — Rate Type · `select` · topic
   Variable, fixed for the whole term, or a fixed period that then reverts to variable. Only a variable mortgage, or one past its fixed period, follows Prime. The usual US mortgage is fixed for 15 or 30 years; the usual Australian one is variable or fixed for three to five years. A split mortgage, part fixed and part variable, is authored as this mortgage plus a loan account linked to this property.
 - **`mortgageInterestRate`** — Mtg. Int. Rate · `number` · topic
@@ -1794,7 +1794,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 
 ---
 
-## State field types (275)
+## State field types (281)
 
 The scenario-INDEPENDENT half of `StateSchemaRegistry`: the globs and exact paths it
 installs in its own constructor, with the value type that decides how each formats.
@@ -1822,6 +1822,8 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `*.derivedIncomeBasis` | currency |
 | `*.drawdownPriority` | integer |
 | `*.earningsBasis` | currency |
+| `*.fixedAtPrimeRate` | rate |
+| `*.fixedExtraYear` | year |
 | `*.fxBasisRate` | fxRate |
 | `*.fxBasisUsd` | currency(USD) |
 | `*.holdings.*.acquisitionDateByCountry.*` | date |
@@ -1849,7 +1851,11 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `*.maturityYear` | year |
 | `*.minimumAge` | decimal |
 | `*.minimumBalance` | currency |
+| `*.paymentSchedule.fromMonth` | integer |
+| `*.paymentSchedule.months` | integer |
+| `*.paymentSchedule.rate` | rate |
 | `*.plannedSaleYear` | year |
+| `*.postFixedFromYear` | year |
 | `*.primeSpread` | rate |
 | `*.repairLambda` | decimal |
 | `*.repairProb` | percentage |
@@ -2091,7 +2097,7 @@ what the in-app panel keys on.
 
 | topic | kind | words | cites |
 |---|---|---|---|
-| [Account](nodes/account.md) | node | 210 | 4 panels · design 54, 56, 86, 87 |
+| [Account](nodes/account.md) | node | 210 | 4 panels · design 54, 56, 86, 87, 113 |
 | [Action](nodes/action.md) | node | 200 | 3 panels · design 2, 91 |
 | [Action Detail](panels/action-detail.md) | panel | 172 | 1 panel · design 91 |
 | [Allocation](panels/allocation.md) | panel | 185 | 1 panel · design 82 |
@@ -2146,7 +2152,7 @@ what the in-app panel keys on.
 | [Pool Shapes Over Time](concepts/pool-shapes-over-time.md) | concept | 395 | 3 params · design 109, 114, 112, 97 |
 | [Liquidity Pools](panels/pools.md) | panel | 236 | 1 panel · design 97 |
 | [Randomness and Seeds](concepts/randomness-and-seeds.md) | concept | 251 | 2 panels · 2 params · design 74 |
-| [Real Property](nodes/real-property.md) | node | 221 | 2 panels · design 75, 83, 86, 48 |
+| [Real Property](nodes/real-property.md) | node | 221 | 2 panels · design 75, 83, 86, 48, 113 |
 | [Recorded MPC Runs](concepts/recorded-mpc-runs.md) | concept | 400 | 1 panel · 3 params · design 81, 80 |
 | [Reducer](nodes/reducer.md) | node | 195 | 3 panels · design 2, 16 |
 | [Return Assumptions](concepts/return-assumptions.md) | concept | 266 | 2 panels · 13 params · design 99, 106 |

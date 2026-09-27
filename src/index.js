@@ -24,7 +24,7 @@ import { isCurrencyLotPool, createCurrencyLotObserver } from './finance/account-
 import { LEDGER_METHOD, POOLING, LONG_TERM_DAYS, PERSONAL_DE_MINIMIS_USD, PERSONAL_CHARACTER, CurrencyLotPool, allocateGain } from './finance/account-rules/currency-lots.js';
 import { InheritHandler, InheritApplyReducer, InheritanceNeTaxApplyReducer, InheritedRaDistributionHandler, InheritedRaDistributionApplyReducer } from './finance/account-rules/inheritance-classes.js';
 import { INHERITED_RA_WINDOW, INHERITED_RA_DISTRIBUTION_STRATEGY, inheritedRaStrategy } from './finance/account-rules/inherited-ra-distribution-strategy.js';
-import { loanKeyForProperty, findLoanForProperty, findLoansForProperty, LOAN_RATE_TYPE, inFixedWindow, fixedWindowEndYear, offsetApplies, loanYear, LOAN_RATE_TERM_FIELDS, loanRateTerms, mortgageRateTerms, synthesizeLoanForProperty, propertyNeedsLoanPayment, accountNeedsLoanPayment, offsetBalanceForLoan, effectivePrincipal, resolveLoanRate, capFixedExtraRepayment, loanBreakCost, propertyLoanPayoffs, scheduledLoanPayment, postFixedReamortises, SECTION_988_PERSONAL_DE_MINIMIS_USD, section988BusinessFraction, computeSection988Gain, blendSection988BookingRate, investmentInterestAction, LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer, section988Residence } from './finance/account-rules/loan-classes.js';
+import { loanKeyForProperty, findLoanForProperty, findLoansForProperty, LOAN_RATE_TYPE, inFixedWindow, fixedWindowEndYear, offsetApplies, loanYear, LOAN_RATE_TERM_FIELDS, loanRateTerms, mortgageRateTerms, synthesizeLoanForProperty, propertyNeedsLoanPayment, accountNeedsLoanPayment, offsetBalanceForLoan, effectivePrincipal, resolveLoanRate, capFixedExtraRepayment, loanBreakCost, propertyLoanPayoffs, scheduledLoanPayment, postFixedReamortises, PAYMENT_SCHEDULE_PHASE, paymentSchedulePhase, resolvePaymentSchedule, SECTION_988_PERSONAL_DE_MINIMIS_USD, section988BusinessFraction, computeSection988Gain, blendSection988BookingRate, investmentInterestAction, LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer, section988Residence } from './finance/account-rules/loan-classes.js';
 import { US_PRIMARY_HOME_EXCLUSION_MFJ, US_PRIMARY_HOME_EXCLUSION_SINGLE, toMs, isMainResidenceThroughout, mainResidenceWindow, auMainResidenceExemption, us121Exclusion, unrecaptured1250Gain, cgtDiscountFraction } from './finance/account-rules/main-residence.js';
 import { UsMortgagePaymentHandler, UsMortgagePaymentApplyReducer, AuMortgagePaymentHandler, AuMortgagePaymentApplyReducer } from './finance/account-rules/mortgage-payment-classes.js';
 import { decimalAgeAt, hasAgeGate, isAgeEligible, drawableBalance, penaltyFreeSliceOf, penaltyFreeAvailableFor, penaltyBearingSliceOf, penaltyFreeAvailable, unlocksAt } from './finance/account-rules/penalty-free-availability.js';
@@ -734,6 +734,9 @@ export const Finance = {
   propertyLoanPayoffs,
   scheduledLoanPayment,
   postFixedReamortises,
+  PAYMENT_SCHEDULE_PHASE,
+  paymentSchedulePhase,
+  resolvePaymentSchedule,
   SECTION_988_PERSONAL_DE_MINIMIS_USD,
   section988BusinessFraction,
   computeSection988Gain,

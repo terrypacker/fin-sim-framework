@@ -528,6 +528,11 @@ export function propertyLoanPayoffs(state, propStateKey, date) {
  * was still forcing liquidations during the plan's largest tax years, and the answer
  * moved by ~7% of terminal wealth.
  *
+ * (Design 113 §6.1 corrects the rate-tracking half: amortising the anchor over the full
+ * term at TODAY's rate is only right while the rate never moves. A Prime-following loan
+ * now pays a schedule re-amortised from its scheduled balance at each move — see
+ * resolvePaymentSchedule. At a constant rate the two are the same payment.)
+ *
  * Anchoring on the principal at IO expiry fixes it without giving up rate-tracking:
  * that principal is a constant (a loan in its IO window does not amortise by
  * construction), so the payment is constant at a constant rate, moves when Prime moves,
@@ -547,8 +552,10 @@ export function propertyLoanPayoffs(state, propStateKey, date) {
  * @param {number} interest  interest accrued this month on the EFFECTIVE principal
  * @param {number} rate      the loan's live annual rate
  * @param {?number} year     current calendar year, or null when unknown
+ * @param {?object} [schedule] this month's payment schedule from
+ *                  {@link resolvePaymentSchedule}; null keeps the branches below
  */
-export function scheduledLoanPayment(loan, balance, interest, rate, year) {
+export function scheduledLoanPayment(loan, balance, interest, rate, year, schedule = null) {
   const { interestOnlyUntilYear = null, maturityYear = null } = loan ?? {};
 
   if (year != null && maturityYear != null && year >= maturityYear) {
@@ -558,6 +565,13 @@ export function scheduledLoanPayment(loan, balance, interest, rate, year) {
   const inIoWindow = loan?.interestOnly
     && (interestOnlyUntilYear == null || year == null || year < interestOnlyUntilYear);
   if (inIoWindow) return interest;
+
+  // Design 113 §6.1 — a loan whose rate follows Prime pays its payment schedule, which is
+  // re-amortised when the rate moves. At a constant rate it is the payment the branches
+  // below compute, so this changes nothing until Prime moves.
+  if (schedule && schedule.phase === paymentSchedulePhase(loan, year)) {
+    return Math.min(schedule.payment, balance + interest);
+  }
 
   // Reverted from IO to P&I.
   if (loan?.interestOnly && maturityYear != null && year != null) {
@@ -599,6 +613,126 @@ export function postFixedReamortises(loan, year) {
     && loan.fixedRateUntilYear != null && loan.maturityYear != null
     && year != null && year >= loan.fixedRateUntilYear && year < loan.maturityYear
     && !loan.interestOnly;
+}
+
+// ─── Payment reset when the rate moves (design 113 §6.1) ─────────────────────
+
+/** The amortising phases a payment schedule can belong to. */
+export const PAYMENT_SCHEDULE_PHASE = Object.freeze({
+  POST_IO:    'POST_IO',     // P&I after the IO window, anchored on postIoPrincipal (design 86 G6)
+  POST_FIXED: 'POST_FIXED',  // P&I after a fixed period (design 113 §6)
+  PLAIN:      'PLAIN',       // a variable P&I loan with an authored payment and a maturity
+});
+
+/**
+ * Which amortising phase the loan is in at `year`, or null when its payment is not an
+ * amortising schedule (in the IO window, inside a fixed window, at or past maturity, no
+ * maturity, or a legacy IO loan with no `postIoPrincipal`, which keeps its live-balance
+ * path). Mirrors the precedence of {@link scheduledLoanPayment}.
+ */
+export function paymentSchedulePhase(loan, year) {
+  if (year == null || loan?.maturityYear == null || year >= loan.maturityYear) return null;
+  if (loan.interestOnly) {
+    if (loan.interestOnlyUntilYear == null || year < loan.interestOnlyUntilYear) return null;
+    return loan.postIoPrincipal != null ? PAYMENT_SCHEDULE_PHASE.POST_IO : null;
+  }
+  if (postFixedReamortises(loan, year)) return PAYMENT_SCHEDULE_PHASE.POST_FIXED;
+  if (inFixedWindow(loan, year)) return null;
+  return (loan.monthlyPayment ?? 0) > 0 ? PAYMENT_SCHEDULE_PHASE.PLAIN : null;
+}
+
+/**
+ * Does the loan's rate follow Prime at `year`? The same cases as {@link resolveLoanRate}:
+ * a spread over a Prime the state carries, outside any fixed window.
+ */
+function rateFollowsPrime(state, loan, year) {
+  if (loan?.rateType === LOAN_RATE_TYPE.FIXED) return false;
+  if (loan?.rateType === LOAN_RATE_TYPE.FIXED_PERIOD && inFixedWindow(loan, year)) return false;
+  return loan?.primeSpread != null && primeFor(state, loan) != null;
+}
+
+/**
+ * A month counter (year × 12 + month) for the payment on `date`. The event's calendar
+ * month, not the tax period's: the AU period starts in July, so its year is six months
+ * behind a January payment. Without a date the period's start is assumed.
+ */
+function paymentMonth(state, loan, date, year) {
+  const d = date != null ? new Date(date) : null;
+  if (d && !Number.isNaN(d.getTime())) return d.getUTCFullYear() * 12 + d.getUTCMonth();
+  return year * 12 + periodStartMonth(state, loan);
+}
+
+/** The calendar month (0–11) the loan country's tax period starts in; 0 when unknown. */
+function periodStartMonth(state, loan) {
+  const ms = state?.currentPeriods?.[loan?.country === 'AU' ? 'AU' : 'US']?.startMs;
+  return ms != null ? new Date(ms).getUTCMonth() : 0;
+}
+
+/** The balance a level payment leaves after `k` months of amortising `principal` at `rate`. */
+function scheduledBalanceAfter(principal, rate, payment, k) {
+  if (k <= 0) return principal;
+  const i = rate / 12;
+  if (i === 0) return Math.max(0, principal - payment * k);
+  const g = Math.pow(1 + i, k);
+  return Math.max(0, principal * g - payment * (g - 1) / i);
+}
+
+/**
+ * The payment schedule this month's payment follows (design 113 §6.1), or null when the
+ * loan has none: its rate does not follow Prime, or it is not in an amortising phase.
+ *
+ * A schedule is `{ phase, principal, fromMonth, months, rate, payment, extra }`: a level
+ * payment amortising `principal` over `months` from `fromMonth` at `rate`, plus `extra`,
+ * the part of an authored payment above that schedule (PLAIN only; zero otherwise, and
+ * negative when the authored payment is below it). The first payment of a phase stamps
+ * it with the payment the phase has always paid, so a constant rate changes nothing.
+ * When the rate differs from the schedule's, it is re-amortised: the principal becomes
+ * the balance the OLD schedule reaches by now, and the remaining months are the old
+ * term less the months elapsed.
+ *
+ * It follows the schedule rather than the actual balance for the reason design 86 G6
+ * anchored the post-IO payment: re-amortising the live balance lets an offset or an extra
+ * repayment cut the payment and stretch the loan to maturity. The schedule is immune to
+ * both, so paying ahead still shortens the loan.
+ *
+ * @returns {?object} the schedule, the loan's own `paymentSchedule` object when unchanged
+ */
+export function resolvePaymentSchedule(state, loan, balance, rate, year, date) {
+  const phase = paymentSchedulePhase(loan, year);
+  if (!phase || !rateFollowsPrime(state, loan, year)) return null;
+  const now = paymentMonth(state, loan, date, year);
+  const prior = loan.paymentSchedule;
+
+  if (prior?.phase === phase) {
+    if (prior.rate === rate) return prior;
+    const elapsed = Math.max(0, now - prior.fromMonth);
+    const principal = scheduledBalanceAfter(prior.principal, prior.rate,
+                                            prior.payment - prior.extra, elapsed);
+    const months = Math.max(1, prior.months - elapsed);
+    const payment = Math.max(0, amortisingPayment(principal, rate, months) + prior.extra);
+    return { phase, principal, fromMonth: now, months, rate, payment, extra: prior.extra };
+  }
+
+  const { maturityYear } = loan;
+  if (phase === PAYMENT_SCHEDULE_PHASE.POST_IO) {
+    const months = Math.max(1, (maturityYear - loan.interestOnlyUntilYear) * 12);
+    const principal = loan.postIoPrincipal;
+    return { phase, principal, fromMonth: now, months, rate,
+             payment: amortisingPayment(principal, rate, months), extra: 0 };
+  }
+  if (phase === PAYMENT_SCHEDULE_PHASE.POST_FIXED) {
+    const anchored = loan.postFixedPrincipal != null && loan.postFixedFromYear != null;
+    const principal = anchored ? loan.postFixedPrincipal : balance;
+    const months = Math.max(1, (maturityYear - (anchored ? loan.postFixedFromYear : year)) * 12);
+    return { phase, principal, fromMonth: now, months, rate,
+             payment: amortisingPayment(principal, rate, months), extra: 0 };
+  }
+  // PLAIN — the authored payment is kept; what it pays above or below the schedule that
+  // retires today's balance by maturity is carried as `extra` through every reset.
+  const months = Math.max(1, maturityYear * 12 + periodStartMonth(state, loan) - now);
+  const payment = loan.monthlyPayment;
+  return { phase, principal: balance, fromMonth: now, months, rate, payment,
+           extra: payment - amortisingPayment(balance, rate, months) };
 }
 
 // ─── §988 exchange gain/loss on foreign-currency debt (design 86 G7 / P8) ──────
@@ -902,7 +1036,11 @@ export class LoanPaymentHandler extends HandlerEntry {
       // loan. A FULLY offset IO loan accrues nothing and therefore costs nothing —
       // payment 0 falls through the guard below, which is the correct cash flow, not
       // a skipped payment. All loan-side figures are in the LOAN's currency.
-      const scheduled = scheduledLoanPayment(loan, balance, interest, rate, year);
+      // Design 113 §6.1 — a Prime-following loan's schedule, re-amortised when the rate
+      // moved. Stamped by the reducer only when it changed, so a loan with no schedule (a
+      // fixed rate, no maturity, the IO window) carries nothing new.
+      const schedule  = resolvePaymentSchedule(state, loan, balance, rate, year, date);
+      const scheduled = scheduledLoanPayment(loan, balance, interest, rate, year, schedule);
       // Design 113 §7.2 — an extra repayment inside a fixed window is capped per year.
       const { payment, extra: fixedExtra } =
         capFixedExtraRepayment(loan, scheduled, balance, rate, year, date);
@@ -946,7 +1084,8 @@ export class LoanPaymentHandler extends HandlerEntry {
       // largely cancel, which is the finding rather than a bug (design 87 §3).
       actions.push({ type: 'LOAN_PAYMENT_APPLY', loanKey, cashKey, payment, interest, cashDue, fx,
         section988: { kind: 'DISPOSE', accountKey: cashKey },
-        ...(fixedStamps ? { fixedStamps } : {}) });
+        ...(fixedStamps ? { fixedStamps } : {}),
+        ...(schedule && schedule !== loan.paymentSchedule ? { paymentSchedule: schedule } : {}) });
       const deduction = investmentInterestAction(loan, loanKey, interest, payment,
                                                  firstResidency(state));
       if (deduction) actions.push(deduction);
@@ -1071,9 +1210,12 @@ export class LoanPaymentApplyReducer extends Reducer {
       _section988ForPayment(state, loanKey, loan, oldBalance, principalPart);
 
     const fixedPatch = applyFixedStamps(loan, action.fixedStamps, payment, deliveredLoanCcy);
+    // Design 113 §6.1 — the payment schedule, when this payment started or reset it.
+    const schedulePatch = action.paymentSchedule ? { paymentSchedule: action.paymentSchedule } : {};
 
     return this.newState(state, {
-      [loanKey]: { ...loan, ...s988Patch, ...fixedPatch, balance: +newBalance.toFixed(2) },
+      [loanKey]: { ...loan, ...s988Patch, ...fixedPatch, ...schedulePatch,
+                   balance: +newBalance.toFixed(2) },
     }, s988Actions);
   }
 }

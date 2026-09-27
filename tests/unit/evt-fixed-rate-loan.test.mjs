@@ -23,6 +23,14 @@
  *   FRL-9: the rate terms round-trip through the serializer, and onto a synthesized loan.
  *   FRL-10: end to end — an authored fixed-period mortgage reaches the running sim and
  *           pays its fixed rate, then the revert rate.
+ *   FRL-11: §6.1 — at a constant Prime a variable P&I loan pays its authored payment,
+ *           exactly, and a loan whose rate does not follow Prime gets no schedule.
+ *   FRL-12: §6.1 — a variable P&I loan re-amortises when Prime moves and still retires
+ *           at maturity, up or down; without a maturity the authored payment is held.
+ *   FRL-13: §6.1 — the anchored post-IO payment re-amortises from the SCHEDULED balance,
+ *           so a rate cut no longer leaves a balloon at maturity.
+ *   FRL-14: §6.1 — an offset still shortens the loan across a reset: the schedule does
+ *           not follow the actual balance.
  *
  * Run with: node --test tests/unit/evt-fixed-rate-loan.test.mjs
  */
@@ -38,7 +46,7 @@ import { USD, AUD, LoanAccount } from '../../src/finance/assets/account.js';
 import {
   LoanPaymentHandler, LoanPaymentApplyReducer, LOAN_RATE_TYPE,
   resolveLoanRate, effectivePrincipal, loanBreakCost, synthesizeLoanForProperty,
-  findLoansForProperty,
+  findLoansForProperty, resolvePaymentSchedule, PAYMENT_SCHEDULE_PHASE,
 } from '../../src/finance/account-rules/loan-classes.js';
 import { AuHouseSaleHandler, AuHouseSaleApplyReducer } from '../../src/finance/account-rules/au/au-real-property-classes.js';
 import { loansForOffset } from '../../src/finance/pools/pool-metrics.js';
@@ -358,4 +366,85 @@ test('FRL-10: a fixed-period mortgage authored on a property reaches the running
   const prime = sim.state.effectiveInterestRates.PRIME_AU;
   assert.ok(Math.abs(resolveLoanRate(sim.state, l) - (prime + 0.03)) < 1e-12, 'after it: Prime + revert');
   assert.equal(l.postFixedFromYear, 2028, 'the post-fixed anchor was taken in the expiry year');
+});
+
+// ── FRL-11 … FRL-14: payment reset when the rate moves (§6.1) ─────────────────
+
+/** Level monthly payment, the textbook formula. */
+const pmt = (p, r, n) => { const i = r / 12; return p * i / (1 - Math.pow(1 + i, -n)); };
+
+/** A variable P&I loan at Prime 4% + 2% = 6%, paying exactly the 25-year schedule to 2055. */
+const variablePI = (overrides = {}) => loan({
+  rateType: VARIABLE, interestRate: 0, primeSpread: 0.02, maturityYear: 2055,
+  monthlyPayment: pmt(500_000, 0.06, 300), ...overrides,
+});
+
+test('FRL-11: at a constant Prime the authored payment is paid exactly; a fixed loan has no schedule', () => {
+  const l = variablePI({ monthlyPayment: 3_500 });
+  const { state, payments } = runMonths({ hLoan: l, cash: cash() }, 2030, 60);
+  for (const p of payments) assert.equal(p.payment, 3_500);
+  const s = state.hLoan.paymentSchedule;
+  assert.equal(s.phase, PAYMENT_SCHEDULE_PHASE.PLAIN);
+  assert.equal(s.fromMonth, 2030 * 12, 'stamped once, by the first payment');
+  assert.equal(s.months, 300);
+  assert.ok(Math.abs(s.extra - (3_500 - pmt(500_000, 0.06, 300))) < 1e-9);
+
+  // Not following Prime ⇒ nothing stamped: FIXED, a spread-less legacy loan, inside a
+  // fixed window, and a variable loan with no maturity.
+  const s0 = withClock({}, 2030, 0.04);
+  for (const other of [
+    loan({ rateType: FIXED, maturityYear: 2055 }),
+    loan({ maturityYear: 2055 }),
+    loan({ rateType: FIXED_PERIOD, fixedRateUntilYear: 2033, primeSpread: 0.02, maturityYear: 2055 }),
+    variablePI({ maturityYear: null }),
+  ]) {
+    assert.equal(resolvePaymentSchedule(s0, other, 500_000, 0.06, 2030, new Date(Date.UTC(2030, 0, 15))), null);
+  }
+});
+
+test('FRL-12: a variable P&I loan re-amortises when Prime moves and still retires at maturity', () => {
+  for (const [label, after] of [['rise', 0.06], ['cut', 0.02]]) {
+    const primeAt = (y) => (y < 2040 ? 0.04 : after);
+    const { state, payments } = runMonths({ hLoan: variablePI(), cash: cash() }, 2030, 25 * 12, { primeAt });
+    const before = payments.filter(p => p.year < 2040);
+    const reset  = payments.filter(p => p.year >= 2040);
+    for (const p of before) assert.ok(Math.abs(p.payment - pmt(500_000, 0.06, 300)) < 1e-9);
+    // The new level: the 10-year scheduled balance over the 15 years left, at the new rate.
+    const b10 = 500_000 * Math.pow(1.005, 120) - pmt(500_000, 0.06, 300) * (Math.pow(1.005, 120) - 1) / 0.005;
+    const expected = pmt(b10, after + 0.02, 180);
+    for (const p of reset.slice(0, -1)) assert.ok(Math.abs(p.payment - expected) < 1e-6, `${label}: ${p.payment} vs ${expected}`);
+    // Retired by maturity: at most cents left entering 2055 (the reducer rounds to cents).
+    assert.ok(state.hLoan.balance < 5, `${label}: ${state.hLoan.balance} left at maturity`);
+  }
+
+  // No maturity: nothing to amortise against, the authored payment is held.
+  const primeAt = (y) => (y < 2032 ? 0.04 : 0.07);
+  const { payments } = runMonths({ hLoan: variablePI({ maturityYear: null, monthlyPayment: 3_300 }),
+    cash: cash() }, 2030, 48, { primeAt });
+  for (const p of payments) assert.equal(p.payment, 3_300);
+});
+
+test('FRL-13: the post-IO payment re-amortises from the scheduled balance — no balloon after a cut', () => {
+  const io = loan({ rateType: VARIABLE, interestRate: 0, primeSpread: 0.02, interestOnly: true,
+                    interestOnlyUntilYear: 2030, postIoPrincipal: 500_000, maturityYear: 2055,
+                    monthlyPayment: 0 });
+  const primeAt = (y) => (y < 2040 ? 0.04 : 0.02);
+  const { state, payments } = runMonths({ hLoan: io, cash: cash() }, 2030, 25 * 12, { primeAt });
+  // The pre-§6.1 formula paid pmt(500k, 4%, 300) from 2040 and left ~$45k for the balloon.
+  const old = pmt(500_000, 0.04, 300);
+  assert.ok(payments.find(p => p.year === 2040).payment > old + 100);
+  assert.ok(state.hLoan.balance < 5, `${state.hLoan.balance} left at maturity`);
+});
+
+test('FRL-14: an offset still shortens the loan across a reset', () => {
+  const primeAt = (y) => (y < 2035 ? 0.04 : 0.06);
+  const withOffset = { hLoan: variablePI(), cash: cash(), off: offset(250_000) };
+  const { state, payments } = runMonths(withOffset, 2030, 25 * 12, { primeAt });
+  // The payment tracks the schedule, not the (offset-accelerated) balance: level between
+  // resets, and the loan is gone years before 2055.
+  const reset = payments.filter(p => p.year >= 2035);
+  const level = reset[0].payment;
+  for (const p of reset.slice(0, -1)) assert.equal(p.payment, level);
+  assert.equal(state.hLoan.balance, 0);
+  assert.ok(payments.at(-1).year < 2050, `retired in ${payments.at(-1).year}`);
 });

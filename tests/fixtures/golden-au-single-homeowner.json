@@ -76,6 +76,15 @@
   "minimumBalance": 0,
   "monthlyPayment": 2360.44,
   "name": "Home Loan",
+  "paymentSchedule": {
+   "extra": 31.2633057407,
+   "fromMonth": 24312,
+   "months": 246,
+   "payment": 2360.44,
+   "phase": "PLAIN",
+   "principal": 320000,
+   "rate": 0.0635
+  },
   "paymentSourceKey": null,
   "postIoPrincipal": null,
   "primeSpread": 0.02,

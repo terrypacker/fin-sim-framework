@@ -4,7 +4,7 @@ kind: node
 title: Real Property
 node: real-property
 panels: [config-list, config-graph]
-design: [75-house-costs-and-property-return-path.md, 83-us-au-tax-treaty-intricacies.md, 86-leveraged-property-fidelity.md, 48-rental-income.md]
+design: [75-house-costs-and-property-return-path.md, 83-us-au-tax-treaty-intricacies.md, 86-leveraged-property-fidelity.md, 48-rental-income.md, 113-fixed-rate-loans.md]
 stamps:
   panel:config-list: 786f94
   panel:config-graph: bbebb1
@@ -52,7 +52,7 @@ after the sale.
 - `mainResidenceUntil` — When it stopped being the main residence. Everything after this date is a rental period — which the US rules forgive, unlike the years before you moved in.
 - `claimDownsizerContribution` — Claim the Australian downsizer superannuation contribution on this dwelling's sale: up to A\$300,000 per owner aged 55 or over, outside the contribution caps, for an Australian dwelling held ten years or more. It requires the main-residence exemption to be at least partly available, so a dwelling never lived in funds nothing.
 - `mortgageBalance` — Outstanding principal, in the property's currency. Above zero this synthesizes a linked loan liability, and the property itself then contributes equity only. Set it to zero and author a separate loan account instead when the debt needs its own payment source or a second lender.
-- `monthlyMortgage` — The fixed monthly principal-and-interest payment. Inert while interest-only is on, because the payment is then derived from the accrued interest, and inert again after the interest-only expiry when a maturity year re-amortises the loan over its remaining term.
+- `monthlyMortgage` — The monthly principal-and-interest payment. Inert while interest-only is on, because the payment is then derived from the accrued interest, and inert again after the interest-only expiry when a maturity year re-amortises the loan over its remaining term. On a variable mortgage with a maturity year it is recalculated whenever Prime moves, keeping whatever you pay above the schedule; without one it is held as entered.
 - `mortgageRateType` — Variable, fixed for the whole term, or a fixed period that then reverts to variable. Only a variable mortgage, or one past its fixed period, follows Prime. The usual US mortgage is fixed for 15 or 30 years; the usual Australian one is variable or fixed for three to five years. A split mortgage, part fixed and part variable, is authored as this mortgage plus a loan account linked to this property.
 - `mortgageInterestRate` — The annual rate the bank quotes, as an absolute decimal. A variable mortgage stores it as a margin over Prime where Prime is configured. A fixed mortgage, or one inside its fixed period, keeps it as the fixed rate, untouched by Prime.
 - `mortgageFixedRateUntilYear` — The year the fixed period ends; the revert rate applies from 1 January. A principal-and-interest mortgage with a maturity year has its payment recalculated then over the remaining years. Blank means fixed for life.

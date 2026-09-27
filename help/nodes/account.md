@@ -4,7 +4,7 @@ kind: node
 title: Account
 node: account
 panels: [config-list, config-graph, holdings, pools]
-design: [54-loan-liability-accounts.md, 56-prime-relative-rates.md, 86-leveraged-property-fidelity.md, 87-foreign-currency-basis-pools.md]
+design: [54-loan-liability-accounts.md, 56-prime-relative-rates.md, 86-leveraged-property-fidelity.md, 87-foreign-currency-basis-pools.md, 113-fixed-rate-loans.md]
 stamps:
   panel:config-list: 786f94
   panel:config-graph: bbebb1
@@ -51,7 +51,7 @@ ordinary gain or loss. See [Liquidity Pools](../concepts/liquidity-pools.md) and
 - `loanRate` — The annual rate the lender quotes, as an absolute decimal (0.06 = 6%). On a variable loan it is stored as a margin over Prime where Prime is configured, so a Prime move re-rates it. On a fixed loan, or during a fixed period, it is the fixed rate itself and no Prime move reaches it.
 - `fixedRateUntilYear` — The calendar year a fixed period ends: from 1 January of that year the loan pays the revert rate. On a principal-and-interest loan with a maturity year the payment is also recalculated then, from the balance at that point over the years left to maturity. Blank keeps the rate fixed for the life of the loan.
 - `revertRate` — The variable rate the loan moves to when its fixed period ends, typed as today's absolute rate. It is stored as a margin over Prime, so it keeps following Prime after the switch. Lenders' revert rates usually sit above what a new borrower is offered, and that step-up is part of the cost of fixing. Blank keeps the fixed rate after the period ends.
-- `monthlyPayment` — The fixed monthly principal-and-interest payment. Inert while interest-only is on, and inert again after the interest-only period expires when a maturity year is set, because the loan then re-amortises over the remaining term. A fixed payment below the accrued interest does not error — the balance simply grows.
+- `monthlyPayment` — The monthly principal-and-interest payment. Inert while interest-only is on, and inert again after the interest-only period expires when a maturity year is set, because the loan then re-amortises over the remaining term. On a variable loan with a maturity year it is recalculated when Prime moves, keeping whatever you pay above the schedule; without one it is held, so a rate rise lengthens the loan. A payment below the accrued interest simply grows the balance.
 - `interestOnly` — Pay exactly the interest accrued on the effective, offset-reduced principal each month. The balance is then flat by construction and a variable rate is tracked automatically. This is the safe way to express interest-only: a fixed payment set below the accrued interest negatively amortises instead, silently.
 - `interestOnlyUntilYear` — The calendar year the interest-only period ends. From then the loan reverts to principal-and-interest over the remaining term, which needs a maturity year to amortise against. Blank means interest-only forever — and that payment step-up is exactly the exposure a "hold the leverage" plan is running.
 - `maturityYear` — The calendar year the loan must be discharged: the whole remaining balance plus interest is paid in that year, and a shortfall runs the ordinary replenish path. Blank means no term at all.

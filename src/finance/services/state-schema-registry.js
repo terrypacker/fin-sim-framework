@@ -56,6 +56,15 @@ export class ParameterValueType {
 }
 
 /** Kinds whose numbers are positions or labels, not quantities: a line over time means nothing. */
+/**
+ * Money a loan payment stamps on the loan's state entry (design 113), in the loan's
+ * currency. Exported for the property-synthesized loan, which is never an Account.
+ */
+export const LOAN_MONEY_STAMPS = Object.freeze([
+  'postIoPrincipal', 'postFixedPrincipal', 'fixedExtraYtd',
+  'paymentSchedule.principal', 'paymentSchedule.payment', 'paymentSchedule.extra',
+]);
+
 const NON_CHARTABLE_KINDS = new Set(['date', 'year']);
 
 /**
@@ -530,6 +539,13 @@ export class StateSchemaRegistry {
     this.registerPattern('*.interestRate',          ParameterValueType.rate());
     this.registerPattern('*.primeSpread',           ParameterValueType.rate());
     this.registerPattern('*.maturityYear',          ParameterValueType.year());
+    // Design 113 loan stamps. Their money is stamped per loan, in the loan's currency.
+    this.registerPattern('*.fixedAtPrimeRate',      ParameterValueType.rate());
+    this.registerPattern('*.postFixedFromYear',     ParameterValueType.year());
+    this.registerPattern('*.fixedExtraYear',        ParameterValueType.year());
+    this.registerPattern('*.paymentSchedule.rate',      ParameterValueType.rate());
+    this.registerPattern('*.paymentSchedule.fromMonth', ParameterValueType.integer()); // year × 12 + month
+    this.registerPattern('*.paymentSchedule.months',    ParameterValueType.integer());
     this.registerPattern('*.plannedSaleYear',       ParameterValueType.year());
     this.registerPattern('*.acquisitionPriceLevel', ParameterValueType.decimal(4));
     this.registerPattern('*.appreciationRate',      ParameterValueType.rate());
@@ -681,6 +697,9 @@ export class StateSchemaRegistry {
     if ('derivedIncomeBasis' in account) this.register(`${stateKey}.derivedIncomeBasis`, vt);
     // Loan (liability) interest rate (design 54).
     if ('interestRate' in account)      this.register(`${stateKey}.interestRate`, ParameterValueType.rate());
+    if (account?.type === 'loan') {
+      for (const f of LOAN_MONEY_STAMPS) this.register(`${stateKey}.${f}`, vt);
+    }
     this.register(`${stateKey}.minimumBalance`,   vt);
     this.register(`${stateKey}.loanBalance`,      vt);
     // Holdings per-account stamp with the account's currency (design 25 §5.6).
