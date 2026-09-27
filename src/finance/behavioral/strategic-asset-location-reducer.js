@@ -11,6 +11,7 @@
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { ACCOUNT_ROLES }    from '../state/account-roles.js';
 import { ALLOCATION }       from '../holdings/allocation.js';
+import { roleCanHold }      from './allocation-location.js';
 
 /**
  * Tax-advantaged account roles (never taxable).
@@ -54,13 +55,17 @@ export class StrategicAssetLocationReducer extends Reducer {
    * @param {object}     opts
    * @param {object[]}   opts.taxAdvantaged      - [{stateKey, role}] of tax-advantaged accounts
    * @param {object}     [opts.assetLocationPolicy] - allocation → preferredRoles[] map
+   * @param {object}     [opts.classRestrictions] - design 115: class → roles it may NEVER occupy.
+   *                                               No swap moves a holding into a barred role.
    */
-  constructor({ taxAdvantaged = [], assetLocationPolicy = DEFAULT_ASSET_LOCATION_POLICY } = {}) {
+  constructor({ taxAdvantaged = [], assetLocationPolicy = DEFAULT_ASSET_LOCATION_POLICY,
+                classRestrictions = null } = {}) {
     super('Strategic Asset Location', PRIORITY.PRE_PROCESS + 5);
     this.reducedActionTypes   = ['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE'];
     this.generatedActionTypes = ['ASSET_LOCATION_REBALANCE_APPLY'];
     this.taxAdvantaged        = taxAdvantaged;
     this.assetLocationPolicy  = assetLocationPolicy;
+    this.classRestrictions    = classRestrictions;
   }
 
   reduce(state, _action) {
@@ -112,6 +117,13 @@ export class StrategicAssetLocationReducer extends Reducer {
         // Swap amounts: min of the two holding values
         const srcHolding    = mis;
         const targetHolding = targetMislocated ?? target.holdings[0]; // best available
+
+        // Design 115: guard what the apply ACTUALLY does. `AssetLocationRebalanceApplyReducer`
+        // is not a two-legged swap — it shrinks `srcHolding` in src and GROWS `targetHolding`
+        // in target (value crosses accounts one way; design 115 §12). So the class that gains
+        // is `targetHolding.allocation`, in `target.role` — e.g. growing a gold sleeve that
+        // already sits in super. A barred class there is never grown.
+        if (!roleCanHold(targetHolding.allocation, target.role, this.classRestrictions)) continue;
         const swapAmount    = +Math.min(srcHolding.marketValue, targetHolding.marketValue).toFixed(2);
 
         if (swapAmount <= 0) continue;

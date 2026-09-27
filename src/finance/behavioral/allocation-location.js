@@ -153,6 +153,44 @@ export function resolveLocationPolicy(residency = 'US', override = null) {
   return { ...DEFAULT_LOCATION_POLICY, [ALLOCATION.GOLD]: gold, ...(override ?? {}) };
 }
 
+/**
+ * Design 115 §5.3 — the PER_ACCOUNT mix for one account under `restrictions`.
+ *
+ * PER_ACCOUNT drives every account to the same portfolio mix, so a restriction there means
+ * dropping the barred classes from that account's copy and rescaling the rest to sum to 1.
+ * The aggregate book then under-hits the barred class by the restricted accounts' share —
+ * the honest cost of the restriction, reported through `stats.restricted` in dollars when
+ * `total` is given.
+ *
+ * Returns `mix` itself (same reference) when nothing is barred, so an unrestricted run is
+ * untouched. A mix whose whole weight is barred falls to the first permitted class; a role
+ * barred from every class keeps the mix unchanged, matching `planLocatedTargets`.
+ *
+ * @param {object}      mix          - { <ALLOCATION>: fraction } summing to ~1
+ * @param {string}      role         - the account's role
+ * @param {object|null} restrictions - class → barred roles
+ * @param {number}      [total=0]    - the account's value, for `stats`
+ * @param {?object}     [stats]      - out-param; `stats.restricted` accumulates barred dollars
+ */
+export function restrictMixForRole(mix, role, restrictions, total = 0, stats = null) {
+  if (!restrictions || !mix) return mix;
+  const entries = Object.entries(mix);
+  const barred  = entries.filter(([c, w]) => w > 0 && !roleCanHold(c, role, restrictions));
+  if (barred.length === 0) return mix;
+  if (LOCATION_FILL_ORDER.every(c => !roleCanHold(c, role, restrictions))) return mix;
+
+  const barredWeight = barred.reduce((s, [, w]) => s + w, 0);
+  if (stats) stats.restricted = (stats.restricted ?? 0) + barredWeight * total;
+  const kept = entries.filter(([c]) => roleCanHold(c, role, restrictions));
+  const base = kept.reduce((s, [, w]) => s + Math.max(0, w), 0);
+  // Barred classes stay in the mix as explicit zeros so the drift check sees them (the same
+  // totalizing `_fractionsOf` does for a located composition).
+  const zeros = Object.fromEntries(barred.map(([c]) => [c, 0]));
+  if (base > 0) return { ...Object.fromEntries(kept.map(([c, w]) => [c, Math.max(0, w) / base])), ...zeros };
+  const sink = EXCESS_FALLBACK_ORDER.find(c => roleCanHold(c, role, restrictions));
+  return { ...zeros, [sink]: 1 };
+}
+
 const R2 = (x) => +(+x).toFixed(2);
 
 /**

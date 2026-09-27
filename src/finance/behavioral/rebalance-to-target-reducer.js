@@ -12,7 +12,7 @@ import { Reducer, PRIORITY }   from '../../simulation-framework/reducers.js';
 import { REGIME_TAG }          from '../economic-regimes/regime-tag.js';
 import { ALLOCATION, totalizeMix, assertTotalMix } from '../holdings/allocation.js';
 import { ACCOUNT_ROLES }       from '../state/account-roles.js';
-import { planLocatedTargets, roleCanHold } from './allocation-location.js';
+import { planLocatedTargets, roleCanHold, restrictMixForRole } from './allocation-location.js';
 import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
 
 const ACTION_KEY = 'rebalance_to_target';
@@ -290,13 +290,15 @@ export class RebalanceToTargetReducer extends Reducer {
    * @param {object}   [opts.regimeTargets]        - REGIME_CONDITIONED map { <REGIME_TAG>|NORMAL: weights }
    * @param {string}   [opts.locationMode]         - ALLOCATION_LOCATION mode (design 61 Lever D)
    * @param {object}   [opts.locationPolicy]       - class → preferred-roles map (Lever D placement)
+   * @param {object}   [opts.classRestrictions]    - design 115: class → roles it may NEVER occupy
+   *                                                 (`allocationClassRestrictions`); HARD, both modes
    */
   constructor({ accounts = [], targetAllocation = { EQUITY: 0.60, BOND: 0.40 },
                 driftBandTaxable = 0.10, driftBandSheltered = 0.02,
                 scheduleMode = ALLOCATION_SCHEDULE.STATIC, glidepath = null, regimeTargets = null,
                 poolYears = null, expensesCurrency = 'RESIDENCE', baseCurrency = 'USD',
                 locationMode = ALLOCATION_LOCATION.LOCATED, locationPolicy = null,
-                poolGraph = null, locationEligibility = null } = {}) {
+                poolGraph = null, locationEligibility = null, classRestrictions = null } = {}) {
     super('Rebalance To Target', PRIORITY.PRE_PROCESS + 4);
     this.reducedActionTypes   = ['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE'];
     this.generatedActionTypes = ['REBALANCE_TO_TARGET_APPLY'];
@@ -329,6 +331,15 @@ export class RebalanceToTargetReducer extends Reducer {
     this._eligibilityRelaxed  = 0;
     this._eligibilityCalls    = 0;
     this._eligibilityBook     = 0;
+    // Design 115 — the author's HARD class → barred-roles map. Null ⇒ inert. Unlike
+    // `locationEligibility` it is never relaxed, in either location mode. The two counters
+    // are the run's measure of what it cost: `_restrictedDollars` is class-target value no
+    // permitted account could hold (redistributed to other classes, summed per period), and
+    // `_overPlacedDollars` is value placed beyond a class's target because the restrictions
+    // together admitted no exact placement (only reachable with several classes restricted).
+    this.classRestrictions    = classRestrictions;
+    this._restrictedDollars   = 0;
+    this._overPlacedDollars   = 0;
   }
 
   /**
@@ -754,7 +765,7 @@ export class RebalanceToTargetReducer extends Reducer {
     // account's rebalance still conserves value; the AGGREGATE book hits the target.
     // Recomputed every period from the current residency ⇒ a residency move re-targets
     // lazily and the drift cadence walks holdings there (§OQ4b).
-    const locationStats = this.locationEligibility ? {} : null;
+    const locationStats = (this.locationEligibility || this.classRestrictions) ? {} : null;
     const locatedPlan = (this.locationMode === ALLOCATION_LOCATION.LOCATED)
       ? planLocatedTargets({
           accounts: present, portfolioTarget: scheduledTarget,
@@ -765,10 +776,11 @@ export class RebalanceToTargetReducer extends Reducer {
           policy: this.locationPolicy ?? null,
           residency: _primaryResidency(state),
           eligibility: this.locationEligibility,
+          restrictions: this.classRestrictions,
           stats: locationStats,
         })
       : null;
-    if (locationStats) {
+    if (locationStats && this.locationEligibility) {
       this._eligibilityRelaxed += locationStats.relaxed ?? 0;
       this._eligibilityBook    += bookBase;
       this._eligibilityCalls   += 1;
@@ -788,13 +800,13 @@ export class RebalanceToTargetReducer extends Reducer {
       const taxable = TAXABLE_ROLES.has(role);
       const band    = taxable ? this.driftBandTaxable : this.driftBandSheltered;
       // LOCATED ⇒ this account's assigned composition (as fractions of its total);
-      // PER_ACCOUNT drives every account to the uniform portfolio mix. There is no
-      // longer any role-based restriction to apply here — `targetForRole` existed only
-      // to strip GOLD from US tax-advantaged accounts and was removed with that guard
-      // (design 61 §12 OQ4a, reversed 2026-07-29).
+      // PER_ACCOUNT drives every account to the uniform portfolio mix, less any class the
+      // author barred from this role (design 115 §5.3) — the data-driven successor to the
+      // hard-coded `targetForRole` that design 61 §12 OQ4a removed. Gold already held in a
+      // barred account becomes a held-but-not-targeted class below, and is sold.
       const target = locatedPlan
         ? _fractionsOf(locatedPlan.get(stateKey), total)
-        : scheduledTarget;
+        : restrictMixForRole(scheduledTarget, role, this.classRestrictions, total, locationStats);
       // `targetBand` rides along for design 82 §7's target overlay: it is the band THIS
       // reducer just drift-checked against, so a report can mark a breach exactly rather
       // than re-deriving it from params + a role classification that could drift out of
@@ -809,10 +821,13 @@ export class RebalanceToTargetReducer extends Reducer {
         actual[h.allocation] = (actual[h.allocation] ?? 0) + (h?.marketValue ?? 0);
       }
 
+      // Design 115 — a barred class HELD here forces the rebalance whatever the band says: the
+      // band is a drift tolerance around a target, and a restriction is not a target. Without
+      // this, gold under the band (say 1% of a super account) would sit there indefinitely.
       const needsRebalance = Object.entries(target).some(([alloc, tgt]) => {
         const actualFrac = (actual[alloc] ?? 0) / total;
         return Math.abs(actualFrac - tgt) > band;
-      });
+      }) || _holdsBarredClass(actual, role, this.classRestrictions);
       if (!needsRebalance && qualifyingRegimes.length === 0) continue;
 
       // Legs: signed delta per allocation. Include a negative leg for any
@@ -830,6 +845,11 @@ export class RebalanceToTargetReducer extends Reducer {
         type: 'REBALANCE_TO_TARGET_APPLY',
         stateKey, role, taxable, country: countryForRole(role), legs,
       });
+    }
+
+    if (locationStats && this.classRestrictions) {
+      this._restrictedDollars += locationStats.restricted ?? 0;
+      this._overPlacedDollars += locationStats.overPlaced ?? 0;
     }
 
     for (const r of qualifyingRegimes) newFiredShocks.push(r.shockId);
@@ -874,6 +894,18 @@ export class RebalanceToTargetReducer extends Reducer {
 
     return this.newState(state, patch, rebalanceActions);
   }
+}
+
+/**
+ * Design 115 — true when `actual` (class → dollars held) includes a class barred from `role`.
+ * A role barred from every class is planned unrestricted (see `planLocatedTargets`), so it
+ * never counts as holding a barred class.
+ */
+function _holdsBarredClass(actual, role, restrictions) {
+  if (!restrictions) return false;
+  const classes = [ALLOCATION.GOLD, ALLOCATION.BOND, ALLOCATION.EQUITY, ALLOCATION.CASH];
+  if (classes.every(c => !roleCanHold(c, role, restrictions))) return false;
+  return Object.entries(actual).some(([c, v]) => v > 0.01 && !roleCanHold(c, role, restrictions));
 }
 
 /** Convert a located `{ class: dollars }` composition to fractions of `total`. */

@@ -16,13 +16,19 @@
  * the §23 relaxation or the conservation fill — may put a restricted class in a barred role.
  * A class weight the permitted accounts cannot hold is capped and redistributed, and every
  * account's composition still sums to its own total.
+ *
+ * Phase 2 (R-10…): the same restrictions through `RebalanceToTargetReducer` in both location
+ * modes, the barred-holding rebalance trigger, and `StrategicAssetLocationReducer`.
  */
 
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { planLocatedTargets, roleCanHold } from '../../src/finance/behavioral/allocation-location.js';
-import { roleCanHoldGold } from '../../src/finance/behavioral/rebalance-to-target-reducer.js';
+import { planLocatedTargets, roleCanHold, restrictMixForRole } from '../../src/finance/behavioral/allocation-location.js';
+import { roleCanHoldGold, RebalanceToTargetReducer, ALLOCATION_LOCATION }
+  from '../../src/finance/behavioral/rebalance-to-target-reducer.js';
+import { RebalanceToTargetApplyReducer } from '../../src/finance/behavioral/rebalance-to-target-apply-reducer.js';
+import { StrategicAssetLocationReducer } from '../../src/finance/behavioral/strategic-asset-location-reducer.js';
 import { ACCOUNT_ROLES } from '../../src/finance/state/account-roles.js';
 import { ALLOCATION }    from '../../src/finance/holdings/allocation.js';
 
@@ -210,4 +216,112 @@ test('R-9: property — random books, mixes and restriction sets never violate a
       assert.ok(near(sumComp(comp), a.total, 0.02), `case ${i}: ${a.stateKey} Σ ${sumComp(comp)} != ${a.total}`);
     }
   }
+});
+
+// ── Phase 2 — the reducers ───────────────────────────────────────────────────
+
+const REB_ACCOUNTS = [{ stateKey: 'iraAccount', role: ACCOUNT_ROLES.IRA },
+                      { stateKey: 'superAccount', role: ACCOUNT_ROLES.SUPER }];
+
+/** IRA all equity; super holding `superGold` of gold and the rest equity. AU resident. */
+function rebState(superGold = 20000) {
+  return {
+    activeRegimes: [], regimeActions: {},
+    people: { p1: { residency: 'AU' } },
+    currentPeriods: { US: { startMs: Date.UTC(2032, 0, 1) }, AU: { startMs: Date.UTC(2032, 0, 1) } },
+    iraAccount:   { balance: 100000, role: ACCOUNT_ROLES.IRA, holdings: [
+      { id: 'i0', allocation: EQUITY, marketValue: 100000, costBasis: 80000 }] },
+    superAccount: { balance: 100000, role: ACCOUNT_ROLES.SUPER, holdings: [
+      { id: 's0', allocation: EQUITY, marketValue: 100000 - superGold, costBasis: 70000 },
+      ...(superGold > 0 ? [{ id: 's1', allocation: GOLD, marketValue: superGold, costBasis: superGold }] : [])] },
+  };
+}
+
+function runReb(opts, state = rebState()) {
+  const reducer = new RebalanceToTargetReducer({ accounts: REB_ACCOUNTS,
+    driftBandSheltered: 0.02, driftBandTaxable: 0.02, ...opts });
+  const res = reducer.reduce(state, { type: 'AU_PERIOD_ADVANCE' });
+  const apply = new RebalanceToTargetApplyReducer();
+  let next = res; for (const a of (res.next ?? [])) next = apply.reduce(next, a);
+  const held = (k, cls) => next[k].holdings.filter(h => h.allocation === cls).reduce((s, h) => s + h.marketValue, 0);
+  return { reducer, res, next, held };
+}
+
+test('R-10: restrictMixForRole — same reference when nothing barred; barred classes zeroed, rest rescaled', () => {
+  const mix = { EQUITY: 0.6, BOND: 0.3, GOLD: 0.1 };
+  assert.equal(restrictMixForRole(mix, ACCOUNT_ROLES.SUPER, null), mix);
+  assert.equal(restrictMixForRole(mix, ACCOUNT_ROLES.IRA, NO_GOLD_IN_SUPER), mix);
+  const stats = {};
+  const out = restrictMixForRole(mix, ACCOUNT_ROLES.SUPER, NO_GOLD_IN_SUPER, 50000, stats);
+  assert.equal(out.GOLD, 0, 'explicit zero so the drift check sees it');
+  assert.ok(near(out.EQUITY, 0.6 / 0.9, 1e-9) && near(out.BOND, 0.3 / 0.9, 1e-9));
+  assert.ok(near(stats.restricted, 5000));
+  // All the weight barred ⇒ the first permitted class takes it.
+  assert.deepEqual(restrictMixForRole({ GOLD: 1 }, ACCOUNT_ROLES.SUPER, NO_GOLD_IN_SUPER), { GOLD: 0, EQUITY: 1 });
+});
+
+test('R-11: reducer with restrictions null ⇒ identical output to a reducer without the option', () => {
+  for (const locationMode of [ALLOCATION_LOCATION.LOCATED, ALLOCATION_LOCATION.PER_ACCOUNT]) {
+    const opts = { targetAllocation: { EQUITY: 0.7, BOND: 0.2, GOLD: 0.1 }, locationMode };
+    const a = runReb(opts).res;
+    const b = runReb({ ...opts, classRestrictions: null }).res;
+    assert.deepEqual(b, a, locationMode);
+  }
+});
+
+test('R-12: LOCATED, AU resident — gold held in super is sold and relocated; the book keeps its gold', () => {
+  const target = { EQUITY: 0.7, BOND: 0.2, GOLD: 0.1 };
+  const free = runReb({ targetAllocation: target });
+  assert.ok(free.held('superAccount', GOLD) > 0, 'precondition: unrestricted AU plan keeps gold in super');
+
+  const { held, reducer } = runReb({ targetAllocation: target, classRestrictions: NO_GOLD_IN_SUPER });
+  assert.equal(held('superAccount', GOLD), 0);
+  assert.ok(near(held('iraAccount', GOLD), 20000, 1), `IRA gold ${held('iraAccount', GOLD)}`);
+  assert.equal(reducer._restrictedDollars, 0, 'the IRA had room — nothing redistributed');
+});
+
+test('R-13: PER_ACCOUNT — super drops gold and rescales; the IRA keeps the full mix', () => {
+  const { held, reducer, res } = runReb({ targetAllocation: { EQUITY: 0.7, BOND: 0.2, GOLD: 0.1 },
+    locationMode: ALLOCATION_LOCATION.PER_ACCOUNT, classRestrictions: NO_GOLD_IN_SUPER });
+  assert.equal(held('superAccount', GOLD), 0);
+  assert.ok(near(held('iraAccount', GOLD), 10000, 1));
+  assert.equal(res.superAccount.targetComposition.GOLD, 0);
+  assert.ok(near(reducer._restrictedDollars, 10000), `restricted ${reducer._restrictedDollars}`);
+});
+
+test('R-14: a barred class held INSIDE the drift band still forces the rebalance', () => {
+  // Super holds 1% gold against a 1% gold target: within the 2% band, so unrestricted it
+  // is left alone. Restricted, the gold must go.
+  const opts = { targetAllocation: { EQUITY: 0.99, GOLD: 0.01 }, locationMode: ALLOCATION_LOCATION.PER_ACCOUNT };
+  const state = () => {
+    const s = rebState(1000);
+    s.iraAccount.holdings = [{ id: 'i0', allocation: EQUITY, marketValue: 99000, costBasis: 80000 },
+                             { id: 'i1', allocation: GOLD,   marketValue: 1000,  costBasis: 1000 }];
+    return s;
+  };
+  const free = runReb(opts, state());
+  assert.equal((free.res.next ?? []).length, 0, 'precondition: inside the band, no rebalance');
+  const { held } = runReb({ ...opts, classRestrictions: NO_GOLD_IN_SUPER }, state());
+  assert.equal(held('superAccount', GOLD), 0);
+  assert.ok(near(held('iraAccount', GOLD), 1000, 1), 'the unrestricted IRA is untouched');
+});
+
+test('R-15: StrategicAssetLocation never grows a barred class in the receiving account', () => {
+  // IRA equity is mislocated (policy wants EQUITY in super); super's only holding is gold,
+  // so the "best available" fallback picks it and the apply would GROW super's gold.
+  const state = {
+    iraAccount:   { balance: 50000, holdings: [{ id: 'i0', allocation: EQUITY, marketValue: 50000, costBasis: 50000 }] },
+    superAccount: { balance: 30000, holdings: [{ id: 's0', allocation: GOLD,   marketValue: 30000, costBasis: 30000 }] },
+  };
+  const taxAdvantaged = [{ stateKey: 'iraAccount', role: ACCOUNT_ROLES.IRA },
+                         { stateKey: 'superAccount', role: ACCOUNT_ROLES.SUPER }];
+  const assetLocationPolicy = { EQUITY: [ACCOUNT_ROLES.SUPER] };
+
+  const free = new StrategicAssetLocationReducer({ taxAdvantaged, assetLocationPolicy })._computeMoves(state);
+  assert.equal(free.length, 1, 'precondition: unrestricted, the move grows super\'s gold');
+  assert.equal(free[0].toHoldingId, 's0');
+
+  const moves = new StrategicAssetLocationReducer({ taxAdvantaged, assetLocationPolicy,
+    classRestrictions: NO_GOLD_IN_SUPER })._computeMoves(state);
+  assert.equal(moves.length, 0);
 });

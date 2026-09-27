@@ -1,7 +1,7 @@
 # 115 — Asset-class restrictions: keeping gold out of a US citizen's super
 
-**Status:** IN PROGRESS — phase 1 BUILT 27 Sep 2026 (§11). Research done (§3, every citation
-on disk); decisions D1–D4 (§4) taken with the author. Phases 2–4 open. Picks up design 61 §4-D / §12 (Lever D,
+**Status:** IN PROGRESS — phases 1–2 BUILT 27 Sep 2026 (§11, §11.2). Research done (§3, every citation
+on disk); decisions D1–D4 (§4) taken with the author. Phases 3–4 open. A pre-existing defect found on the way is in §12. Picks up design 61 §4-D / §12 (Lever D,
 LOCATED placement) and design 77 §4.1 (super's US character).
 
 ---
@@ -178,8 +178,9 @@ share; that is the honest consequence of the restriction, and it goes into the p
 
 ### 5.4 Enforcement — STRATEGIC_ASSET_LOCATION
 
-In `_computeMoves`, skip a swap that would move a forbidden class into the receiving account's
-role. That covers both legs, including the `target.holdings[0]` fallback.
+Guard what the apply step **actually** does, which is not a swap (§12). Value lands in the
+receiving account as `targetHolding.allocation`, so a move is skipped when that class is barred
+from the receiving role. That includes the `target.holdings[0]` fallback.
 
 ### 5.5 Visibility
 
@@ -286,3 +287,45 @@ Fix the stale text in the same change:
 
 The existing LOC tests' stale "never a US IRA" comments are fixed. Full unit suite: 7,282 pass,
 goldens unchanged. The reducer does not pass `restrictions` yet, so no run can reach the new code.
+
+### 11.2 As built — phase 2 (27 Sep 2026)
+
+- **`RebalanceToTargetReducer`** takes `classRestrictions` (constructor option; phase 3 wires the
+  param). LOCATED passes it to the planner. PER_ACCOUNT runs each account's mix through the new
+  `restrictMixForRole` (`allocation-location.js`): barred classes become **explicit zeros**, the
+  rest is rescaled, and the barred weight is counted.
+- **Finding: the drift band let a barred holding stay.** `needsRebalance` only asked whether a
+  class had drifted beyond the band, so 1% gold in super against a 2% band was never sold.
+  `_holdsBarredClass` now forces the rebalance whenever a barred class is held, whatever the
+  band says (R-14). This applies in both modes, and only when restrictions are set.
+- **Counters** `_restrictedDollars` / `_overPlacedDollars` sit on the instance, beside
+  `_eligibilityRelaxed`. The per-account effect is already visible in the stamped
+  `targetComposition` (design 82's overlay), which now shows `GOLD: 0` for a barred super.
+- **`StrategicAssetLocationReducer`** takes `classRestrictions` and skips a move that would grow a
+  barred class in the receiving account (§5.4).
+- **Tests:** R-10–R-15 in `evt-allocation-class-restrictions.test.mjs`:
+  - the helper;
+  - null restrictions give byte-identical reducer output in both modes;
+  - LOCATED relocation out of super for an AU resident;
+  - PER_ACCOUNT rescaling;
+  - the in-band trigger;
+  - the swap guard.
+
+  Full unit suite: 7,288 pass, goldens unchanged.
+
+## 12. Pre-existing defect: the asset-location "swap" is a one-way transfer
+
+Found while guarding §5.4. It is **not fixed here**: it is out of this design's scope, and no
+authored plan enables the strategy (it appears only as an option in the schema).
+
+Design 29 §5 specifies `ASSET_LOCATION_REBALANCE_APPLY` as mirrored `HOLDING_TRANSACT` *pairs*.
+`AssetLocationRebalanceApplyReducer` instead **shrinks the source holding in the source account
+and grows a different holding in the target account**. Value leaves one tax-advantaged account
+and arrives in another with no tax event and nothing coming back. With the default policy that
+can move money IRA → Roth tax-free; with super in the tax-advantaged set it can move it across
+countries (IRA ↔ super). SAL-1/SAL-2 pin that behaviour ("moves value from source holding to
+target holding") rather than catching it.
+
+Fixing it means a real two-legged swap: each account keeps its balance, and the classes trade
+places. That needs its own change and a decision on whether the strategy should keep existing,
+since design 61's LOCATED placement now does its job properly.
