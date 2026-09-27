@@ -153,6 +153,111 @@ export function resolveLocationPolicy(residency = 'US', override = null) {
   return { ...DEFAULT_LOCATION_POLICY, [ALLOCATION.GOLD]: gold, ...(override ?? {}) };
 }
 
+/** The classes a restriction may name — the ones the planner places. */
+export const RESTRICTABLE_CLASSES = Object.freeze([...LOCATION_FILL_ORDER]);
+const KNOWN_ROLES = new Set(Object.values(ACCOUNT_ROLES));
+
+/**
+ * Design 115 §5.1 — the `allocationClassRestrictions` param as the reducers take it.
+ *
+ * Drops what cannot mean anything (a non-object, an unknown class, a non-array entry, an
+ * unknown role) — `collectClassRestrictionProblems` reports each of those, so nothing is
+ * dropped silently. Returns **null** when no class names a role, so an absent map, `{}`
+ * and the explicit acknowledgement `{ GOLD: [] }` all compile to exactly the unrestricted
+ * reducers.
+ *
+ * @param {*} raw - the authored param value
+ * @returns {object|null} class → barred roles, or null
+ */
+export function normalizeClassRestrictions(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const out = {};
+  for (const [cls, roles] of Object.entries(raw)) {
+    if (!RESTRICTABLE_CLASSES.includes(cls) || !Array.isArray(roles)) continue;
+    const known = [...new Set(roles.filter(r => KNOWN_ROLES.has(r)))];
+    if (known.length) out[cls] = known;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/** The person ids that own `account` — named owners, the sole owner, or everyone. */
+function _ownerIds(account, people) {
+  if (Array.isArray(account?.owners) && account.owners.length) return account.owners.map(o => o?.personId);
+  if (account?.ownerId != null && account?.ownershipType !== 'joint') return [account.ownerId];
+  return people.map(p => p?.id);
+}
+
+/**
+ * Design 115 §5.1 / §6 — everything worth telling the author about their restrictions.
+ *
+ * All problems are ADVISORY (`severity: 'warn'`): none stops a load. Each describes what
+ * the compiled run does anyway — a malformed entry is ignored, a fully barred role is
+ * planned unrestricted, a class barred everywhere is zeroed — so refusing the scenario
+ * would only strand the author. One pure function feeds both the load-time `console.warn`
+ * and the editor's inline notes, so the two cannot disagree.
+ *
+ * The US-citizen check (§6) fires when a person holding US citizenship owns a `super`
+ * account and the map has no GOLD key at all. An explicit `{ GOLD: [] }` answers it: the
+ * author has decided their fund may hold gold (e.g. an APRA fund offering a gold ETF).
+ *
+ * @param {*}        raw              - the authored `allocationClassRestrictions` value
+ * @param {object[]} [accounts=[]]    - account records: { name?, stateKey?, role, ownerId?, owners?, ownershipType? }
+ * @param {object[]} [people=[]]      - person records: { id, name?, citizen?: string[] }
+ * @returns {Array<{severity:'warn', code:string, message:string}>}
+ */
+export function collectClassRestrictionProblems(raw, accounts = [], people = []) {
+  const problems = [];
+  const warn = (code, message) => problems.push({ severity: 'warn', code, message });
+
+  if (raw != null && (typeof raw !== 'object' || Array.isArray(raw))) {
+    warn('shape', `allocationClassRestrictions: expected a { class: [roles] } map, got ${Array.isArray(raw) ? 'an array' : typeof raw}; ignored.`);
+    raw = null;
+  }
+  for (const [cls, roles] of Object.entries(raw ?? {})) {
+    if (!RESTRICTABLE_CLASSES.includes(cls)) {
+      warn('unknown-class', `allocationClassRestrictions: "${cls}" is not a restrictable class (${RESTRICTABLE_CLASSES.join(', ')}); ignored.`);
+      continue;
+    }
+    if (!Array.isArray(roles)) {
+      warn('shape', `allocationClassRestrictions.${cls}: expected a list of account roles, got ${JSON.stringify(roles)}; ignored.`);
+      continue;
+    }
+    for (const r of roles) {
+      if (!KNOWN_ROLES.has(r)) warn('unknown-role', `allocationClassRestrictions.${cls}: "${r}" is not an account role; ignored.`);
+    }
+  }
+
+  const restrictions = normalizeClassRestrictions(raw);
+  const presentRoles = [...new Set(accounts.map(a => a?.role).filter(r => KNOWN_ROLES.has(r)))];
+  if (restrictions) {
+    for (const role of presentRoles) {
+      if (RESTRICTABLE_CLASSES.every(c => !roleCanHold(c, role, restrictions))) {
+        warn('role-barred-everywhere', `allocationClassRestrictions bars every class from "${role}", which cannot then hold its own balance; those accounts are planned unrestricted.`);
+      }
+    }
+    for (const cls of Object.keys(restrictions)) {
+      if (presentRoles.length && presentRoles.every(r => !roleCanHold(cls, r, restrictions))) {
+        warn('class-barred-everywhere', `allocationClassRestrictions bars ${cls} from every account in this plan, so none is held; its target weight is spread over the other classes.`);
+      }
+    }
+  }
+
+  const hasGoldKey = raw && typeof raw === 'object' && Object.hasOwn(raw, ALLOCATION.GOLD);
+  if (!hasGoldKey) {
+    const usCitizens = new Set(people.filter(p => (p?.citizen ?? []).includes('US')).map(p => p.id));
+    for (const a of accounts) {
+      if (a?.role !== ACCOUNT_ROLES.SUPER) continue;
+      if (!_ownerIds(a, people).some(id => usCitizens.has(id))) continue;
+      const label = a.name ?? a.stateKey ?? 'a super account';
+      warn('us-citizen-super-gold', `${label} is owned by a US citizen and GOLD is not restricted from super. `
+        + 'For a US citizen, holding gold in super usually means a self-managed fund, which the US is likely to tax '
+        + 'as a foreign grantor trust (design 115 §3). Add GOLD: ["super"] to allocationClassRestrictions, or '
+        + 'GOLD: [] if your fund offers gold exposure.');
+    }
+  }
+  return problems;
+}
+
 /**
  * Design 115 §5.3 — the PER_ACCOUNT mix for one account under `restrictions`.
  *

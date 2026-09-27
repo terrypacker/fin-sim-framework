@@ -19,12 +19,20 @@
  *
  * Phase 2 (R-10…): the same restrictions through `RebalanceToTargetReducer` in both location
  * modes, the barred-holding rebalance trigger, and `StrategicAssetLocationReducer`.
+ *
+ * Phase 3 (R-16…): the `allocationClassRestrictions` param — normalization, the advisory
+ * problems (incl. the US-citizen super warning), the registry wiring into both strategies,
+ * and the EFFECT on a real loaded scenario.
  */
 
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { planLocatedTargets, roleCanHold, restrictMixForRole } from '../../src/finance/behavioral/allocation-location.js';
+import { planLocatedTargets, roleCanHold, restrictMixForRole, normalizeClassRestrictions,
+         collectClassRestrictionProblems } from '../../src/finance/behavioral/allocation-location.js';
+import { BEHAVIORAL_STRATEGY_REGISTRY } from '../../src/finance/behavioral/behavioral-strategy-registry.js';
+import { isParamVisible } from '../../src/finance/param-schema-utils.js';
+import { loadScenarioSim } from '../helpers/scenario-harness.js';
 import { roleCanHoldGold, RebalanceToTargetReducer, ALLOCATION_LOCATION }
   from '../../src/finance/behavioral/rebalance-to-target-reducer.js';
 import { RebalanceToTargetApplyReducer } from '../../src/finance/behavioral/rebalance-to-target-apply-reducer.js';
@@ -324,4 +332,111 @@ test('R-15: StrategicAssetLocation never grows a barred class in the receiving a
   const moves = new StrategicAssetLocationReducer({ taxAdvantaged, assetLocationPolicy,
     classRestrictions: NO_GOLD_IN_SUPER })._computeMoves(state);
   assert.equal(moves.length, 0);
+});
+
+// ── Phase 3 — the param ──────────────────────────────────────────────────────
+
+test('R-16: normalizeClassRestrictions — keeps known classes/roles; null when nothing is barred', () => {
+  assert.equal(normalizeClassRestrictions(null), null);
+  assert.equal(normalizeClassRestrictions({}), null);
+  assert.equal(normalizeClassRestrictions({ GOLD: [] }), null, 'an acknowledgement compiles to unrestricted');
+  assert.equal(normalizeClassRestrictions(['GOLD']), null);
+  assert.deepEqual(normalizeClassRestrictions({ GOLD: ['super', 'super', 'sprr'], OTHER: ['ira'], BOND: 'ira' }),
+    { GOLD: ['super'] });
+});
+
+const PEOPLE = [{ id: 'primary', name: 'P', citizen: ['US'] }, { id: 'spouse', name: 'S', citizen: ['AU'] }];
+const codes = (probs) => probs.map(p => p.code).sort();
+
+test('R-17: problems — malformed entries are reported, never thrown, and all are advisory', () => {
+  const accounts = [{ name: 'IRA', role: ACCOUNT_ROLES.IRA, ownerId: 'primary' }];
+  const probs = collectClassRestrictionProblems({ OTHER: ['ira'], GOLD: 'super', BOND: ['nope'] }, accounts, PEOPLE);
+  assert.deepEqual(codes(probs), ['shape', 'unknown-class', 'unknown-role']);
+  assert.ok(probs.every(p => p.severity === 'warn'));
+  assert.deepEqual(codes(collectClassRestrictionProblems('GOLD', accounts, PEOPLE)), ['shape']);
+});
+
+test('R-18: problems — a role barred from everything, and a class barred from every account', () => {
+  const accounts = [{ name: 'IRA', role: ACCOUNT_ROLES.IRA }, { name: 'Super', role: ACCOUNT_ROLES.SUPER }];
+  const all = [ACCOUNT_ROLES.SUPER];
+  assert.ok(codes(collectClassRestrictionProblems({ GOLD: all, BOND: all, EQUITY: all, CASH: all }, accounts, []))
+    .includes('role-barred-everywhere'));
+  assert.ok(codes(collectClassRestrictionProblems({ GOLD: [ACCOUNT_ROLES.IRA, ACCOUNT_ROLES.SUPER] }, accounts, []))
+    .includes('class-barred-everywhere'));
+});
+
+test('R-19: the US-citizen super warning — owner-aware, and silenced by ANY GOLD key', () => {
+  const primarySuper = { name: 'Super (P)', role: ACCOUNT_ROLES.SUPER, ownerId: 'primary' };
+  const spouseSuper  = { name: 'Super (S)', role: ACCOUNT_ROLES.SUPER, ownerId: 'spouse' };
+  const fired = (raw, accounts) => collectClassRestrictionProblems(raw, accounts, PEOPLE)
+    .filter(p => p.code === 'us-citizen-super-gold').map(p => p.message);
+
+  assert.equal(fired(null, [primarySuper]).length, 1);
+  assert.match(fired(null, [primarySuper])[0], /Super \(P\)/);
+  assert.equal(fired(null, [spouseSuper]).length, 0, 'an AU-citizen owner is not warned');
+  assert.equal(fired({ GOLD: ['super'] }, [primarySuper]).length, 0, 'restricted');
+  assert.equal(fired({ GOLD: [] }, [primarySuper]).length, 0, 'explicitly allowed');
+  assert.equal(fired({ BOND: ['super'] }, [primarySuper]).length, 1, 'another class does not answer it');
+  // Named owners and a joint account (everyone owns it) both count.
+  assert.equal(fired(null, [{ ...spouseSuper, owners: [{ personId: 'primary', ownershipPct: 100 }] }]).length, 1);
+  assert.equal(fired(null, [{ name: 'J', role: ACCOUNT_ROLES.SUPER, ownershipType: 'joint', ownerId: 'spouse' }]).length, 1);
+});
+
+test('R-20: schema — the param is visible under EITHER placement strategy, and only then', () => {
+  const meta = BEHAVIORAL_STRATEGY_REGISTRY.TARGET_ALLOCATION.paramSchema()
+    .find(m => m.key === 'allocationClassRestrictions');
+  assert.ok(meta, 'declared');
+  assert.equal(meta.defaultValue, null);
+  const visible = (strategies) => isParamVisible(meta, k => (k === 'behavioralStrategies' ? strategies : undefined));
+  assert.equal(visible(['TARGET_ALLOCATION']), true);
+  assert.equal(visible(['STRATEGIC_ASSET_LOCATION']), true);
+  assert.equal(visible(['PANIC_SELL']), false);
+});
+
+test('R-21: registry — both strategies compile the normalized map into their reducers; one warning each', () => {
+  const accounts = [{ name: 'R21 Super', stateKey: 'superAccount', role: ACCOUNT_ROLES.SUPER, ownerId: 'primary' },
+                    { name: 'R21 IRA',   stateKey: 'iraAccount',   role: ACCOUNT_ROLES.IRA,   ownerId: 'primary' }];
+  const ctx = (restrictions) => ({ accounts, people: PEOPLE, parameters: {
+    behavioralStrategies: ['TARGET_ALLOCATION', 'STRATEGIC_ASSET_LOCATION'],
+    rebalanceTargetAllocation: { EQUITY: 0.9, BOND: 0, CASH: 0, GOLD: 0.1 },
+    allocationClassRestrictions: restrictions } });
+
+  const warns = []; const orig = console.warn; console.warn = (m) => warns.push(String(m));
+  try {
+    const [reb] = BEHAVIORAL_STRATEGY_REGISTRY.TARGET_ALLOCATION.reducers(ctx({ GOLD: ['super', 'bogus'] }));
+    const [sal] = BEHAVIORAL_STRATEGY_REGISTRY.STRATEGIC_ASSET_LOCATION.reducers(ctx({ GOLD: ['super', 'bogus'] }));
+    assert.deepEqual(reb.classRestrictions, { GOLD: ['super'] });
+    assert.deepEqual(sal.classRestrictions, { GOLD: ['super'] });
+    assert.equal(warns.filter(w => w.includes('"bogus"')).length, 1, 'printed once, by the first enabled reader');
+
+    const [free] = BEHAVIORAL_STRATEGY_REGISTRY.TARGET_ALLOCATION.reducers(ctx(null));
+    assert.equal(free.classRestrictions, null);
+    assert.equal(warns.filter(w => w.includes('R21 Super is owned by a US citizen')).length, 1);
+  } finally { console.warn = orig; }
+});
+
+test('R-22: EFFECT on the loaded International Retirement plan — no gold in super once AU-resident', () => {
+  // The reference plan moves to AU in 2031, after which super is gold's FIRST choice. The
+  // param must reach the compiled reducer through a real load, not just sit in the bag.
+  const goldBy = (params) => {
+    const { sim } = loadScenarioSim({ params: { behavioralStrategies: ['TARGET_ALLOCATION'],
+      rebalanceTargetAllocation: { EQUITY: 0.6, BOND: 0.3, CASH: 0, GOLD: 0.1 }, ...params },
+      stepTo: '2035-01-15', telemetry: 'off' });
+    const out = {};
+    for (const [k, v] of Object.entries(sim.state)) {
+      if (!v?.role || !Array.isArray(v.holdings)) continue;
+      out[v.role] = (out[v.role] ?? 0) + v.holdings.filter(h => h.allocation === GOLD)
+        .reduce((s, h) => s + h.marketValue, 0);
+    }
+    return out;
+  };
+  const orig = console.warn; console.warn = () => {};
+  try {
+    const free = goldBy({});
+    assert.ok((free.super ?? 0) > 1000, `precondition: unrestricted, super holds gold (${free.super})`);
+    const barred = goldBy({ allocationClassRestrictions: { GOLD: ['super'] } });
+    assert.equal(barred.super ?? 0, 0);
+    const book = (g) => Object.values(g).reduce((s, v) => s + v, 0);
+    assert.ok(book(barred) > 0.5 * book(free), 'the gold moved elsewhere rather than vanishing');
+  } finally { console.warn = orig; }
 });

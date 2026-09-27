@@ -3,8 +3,8 @@ id: allocation-and-rebalancing
 kind: concept
 title: Allocation and Rebalancing
 panels: [allocation, holdings]
-params: [allocationStrategy, allocationSchedule, allocationGlidepath, allocationRegimeTargets, allocationLocation, allocationLocationPolicy, allocWeight::EQUITY, allocWeight::BOND, allocWeight::CASH, rebalanceTargetAllocation, rebalanceDriftBand, rebalanceDriftBandTaxable, rebalanceDriftBandSheltered, assetLocationPolicy]
-design: [61-holding-allocation-lever.md, 82-allocation-over-time-reporting.md]
+params: [allocationStrategy, allocationSchedule, allocationGlidepath, allocationRegimeTargets, allocationLocation, allocationLocationPolicy, allocWeight::EQUITY, allocWeight::BOND, allocWeight::CASH, rebalanceTargetAllocation, rebalanceDriftBand, rebalanceDriftBandTaxable, rebalanceDriftBandSheltered, assetLocationPolicy, allocationClassRestrictions]
+design: [61-holding-allocation-lever.md, 82-allocation-over-time-reporting.md, 115-asset-class-restrictions.md]
 stamps:
   param:allocationStrategy: 277063
   param:allocationSchedule: 0cbc83
@@ -20,6 +20,7 @@ stamps:
   param:rebalanceDriftBandTaxable: 102a66
   param:rebalanceDriftBandSheltered: 960cb2
   param:assetLocationPolicy: f474e9
+  param:allocationClassRestrictions: 346c65
   panel:allocation: fc1993
   panel:holdings: 359688
 ---
@@ -41,6 +42,15 @@ tax-inefficient class in the sheltered account and letting equity compound where
 gains are never taxed. The placement preference is soft: it spills when an account
 is full rather than refusing, because an unfillable preference that silently fails
 is worse than one that does its best.
+
+Some placements are not preferences at all but things you cannot do. Gold in
+Australian super is the motivating case: for a US citizen it usually means running a
+self-managed fund, which the US is likely to treat as a foreign grantor trust. The
+class restrictions exist for that. They are the one part of placement that never
+bends, so when every permitted account is full the model holds less of that class
+rather than break the rule, and the shortfall shows up in the realised mix. Nothing
+is restricted unless you say so; a plan where a US citizen owns super gets a warning
+until you decide either way.
 
 **Rebalancing** is separate again, and the band is the lever. The taxable band
 deliberately defaults *wider* than the sheltered one, because a rebalance in a

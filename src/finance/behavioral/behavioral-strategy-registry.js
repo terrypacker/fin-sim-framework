@@ -22,6 +22,7 @@ import { ContributionSuspensionToggleReducer } from './contribution-suspension-t
 import { CashBucketDrawdownReducer }           from './cash-bucket-drawdown-reducer.js';
 import { RebalanceToTargetReducer, TAX_ADVANTAGED_ROLES, TAXABLE_ROLES, ALLOCATION_SCHEDULE, ALLOCATION_LOCATION, countryForRole, assertAuthoredMixes } from './rebalance-to-target-reducer.js';
 import { RebalanceToTargetApplyReducer }       from './rebalance-to-target-apply-reducer.js';
+import { normalizeClassRestrictions, collectClassRestrictionProblems, RESTRICTABLE_CLASSES } from './allocation-location.js';
 import { BondLadderReducer }                   from './bond-ladder-reducer.js';
 import { ACCOUNT_ROLES }                       from '../state/account-roles.js';
 import { PoolFlowReducer }                     from '../pools/pool-flow-reducer.js';
@@ -45,6 +46,32 @@ const SEVERITY_THRESHOLD_DESCRIPTION =
   + 'untouched, while a GFC (0.51), a lost decade (0.51) or a dot-com bust (0.35) trips it. A '
   + 'shock carrying no severity (a custom or curve shock) always qualifies — an absent number '
   + 'is missing information, not evidence of mildness. Set 0 to react to every tagged shock.';
+
+/** The strategies that place holdings, and so read `allocationClassRestrictions` (design 115). */
+const CLASS_RESTRICTION_READERS = ['TARGET_ALLOCATION', 'STRATEGIC_ASSET_LOCATION'];
+/** Messages already printed — a compile runs per MC iteration and per optimizer rollout. */
+const _warnedClassRestrictionProblems = new Set();
+
+/**
+ * Design 115 — `allocationClassRestrictions` as reducer config, plus its advisories.
+ *
+ * Both placement strategies read the one param; only the first ENABLED one warns, so a plan
+ * with both does not print everything twice. Nothing here throws: every problem describes
+ * what the compiled run does anyway (see `collectClassRestrictionProblems`).
+ */
+function _classRestrictionsFor(context, strategyKey) {
+  const p = context.parameters ?? {};
+  const enabled = p.behavioralStrategies ?? [];
+  if (CLASS_RESTRICTION_READERS.find(k => enabled.includes(k)) === strategyKey) {
+    for (const { message } of collectClassRestrictionProblems(
+      p.allocationClassRestrictions, context.accounts ?? [], context.people ?? [])) {
+      if (_warnedClassRestrictionProblems.has(message)) continue;
+      _warnedClassRestrictionProblems.add(message);
+      console.warn(`[design 115] ${message}`);
+    }
+  }
+  return normalizeClassRestrictions(p.allocationClassRestrictions);
+}
 
 /**
  * Registry of pluggable behavioral strategies (design/29).
@@ -155,7 +182,8 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
         .map(a => ({ stateKey: a.stateKey, role: a.role }));
       const policy = p.assetLocationPolicy ?? undefined;
       return [
-        new StrategicAssetLocationReducer({ taxAdvantaged, ...(policy ? { assetLocationPolicy: policy } : {}) }),
+        new StrategicAssetLocationReducer({ taxAdvantaged, ...(policy ? { assetLocationPolicy: policy } : {}),
+          classRestrictions: _classRestrictionsFor(context, 'STRATEGIC_ASSET_LOCATION') }),
         new AssetLocationRebalanceApplyReducer(),
       ];
     },
@@ -247,6 +275,8 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
           // its tax-favored account; PER_ACCOUNT drives every account to the uniform mix.
           locationMode:   p.allocationLocation ?? ALLOCATION_LOCATION.LOCATED,
           locationPolicy: p.allocationLocationPolicy ?? null,
+          // Design 115 — HARD per-role class bans, in both location modes. Null ⇒ inert.
+          classRestrictions: _classRestrictionsFor(context, 'TARGET_ALLOCATION'),
           // Design 97 §9 — YEARS_OF_SPEND pools. Absent ⇒ null ⇒ the mode falls back to the
           // authored target, so selecting the mode without sizing a pool is inert rather
           // than a zero-reserve plan.
@@ -386,6 +416,23 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
           { param: 'behavioralStrategies', includes: 'TARGET_ALLOCATION' },
           { param: 'allocationLocation',   equals:   ALLOCATION_LOCATION.LOCATED },
         ],
+      },
+      // Design 115 — read by BOTH placement strategies, so it is visible under either.
+      {
+        key: 'allocationClassRestrictions', label: 'Allocation Class Restrictions',
+        type: 'ClassRestrictions', group: 'Allocation', mc: false, opt: false,
+        defaultValue: null,
+        description: 'Account roles an allocation class may NEVER be placed in, as a map of class → '
+          + `roles, e.g. {"GOLD":["super"]}. Classes: ${RESTRICTABLE_CLASSES.join(', ')}. Unlike the `
+          + 'location policy this is hard: a class weight no permitted account can hold is spread over '
+          + 'the other classes, and a barred holding is sold at the next rebalance even inside the drift '
+          + 'band. Applies to TARGET_ALLOCATION in both location modes and to STRATEGIC_ASSET_LOCATION. '
+          + 'An empty list ({"GOLD":[]}) restricts nothing but records that the placement was '
+          + 'considered, which silences the US-citizen super warning. Null ⇒ no restrictions.',
+        visibleWhen: { anyOf: [
+          { param: 'behavioralStrategies', includes: 'TARGET_ALLOCATION' },
+          { param: 'behavioralStrategies', includes: 'STRATEGIC_ASSET_LOCATION' },
+        ] },
       },
       ...buildAllocWeightSchema(),
     ],

@@ -1,7 +1,7 @@
 # 115 — Asset-class restrictions: keeping gold out of a US citizen's super
 
-**Status:** IN PROGRESS — phases 1–2 BUILT 27 Sep 2026 (§11, §11.2). Research done (§3, every citation
-on disk); decisions D1–D4 (§4) taken with the author. Phases 3–4 open. A pre-existing defect found on the way is in §12. Picks up design 61 §4-D / §12 (Lever D,
+**Status:** IN PROGRESS — phases 1–3 BUILT 27 Sep 2026 (§11, §11.2, §11.3). Research done (§3, every citation
+on disk); decisions D1–D4 (§4) taken with the author. Phase 4 (editor, stale text, REFERENCE) open. A pre-existing defect found on the way is in §12. Picks up design 61 §4-D / §12 (Lever D,
 LOCATED placement) and design 77 §4.1 (super's US character).
 
 ---
@@ -208,6 +208,8 @@ Fix the stale text in the same change:
 
 - `allocationLocation` description: drop "never a US IRA/401k/Roth"; describe gold's residency-aware
   home and point to the new param.
+- `allocationLocationPolicy` description: drop "the US-IRA/401k/Roth gold ban is always enforced"
+  (found in phase 3; same reversal).
 - `allocation-location.js` header and `roleCanHoldGold` JSDoc: describe the data-driven restriction.
 - `help/REFERENCE.md` regenerated; `help/concepts/allocation-and-rebalancing.md` gains the
   restriction and is restamped; the node topic for the editor if the form changes.
@@ -312,6 +314,38 @@ goldens unchanged. The reducer does not pass `restrictions` yet, so no run can r
   - the swap guard.
 
   Full unit suite: 7,288 pass, goldens unchanged.
+
+### 11.3 As built — phase 3 (27 Sep 2026)
+
+- **Param** `allocationClassRestrictions` is declared in TARGET_ALLOCATION's schema (every strategy
+  schema is always merged), with type `ClassRestrictions`, default `null`, and
+  `visibleWhen: { anyOf: [TARGET_ALLOCATION, STRATEGIC_ASSET_LOCATION] }`. Until phase 4 adds the
+  editor, it renders with the JSON-textarea fallback.
+- **`normalizeClassRestrictions`** (`allocation-location.js`) drops unknown classes, unknown roles
+  and non-array entries. It returns **null** when no class names a role, so `{}` and
+  `{ GOLD: [] }` compile to exactly the unrestricted reducers.
+- **`collectClassRestrictionProblems(raw, accounts, people)`** is one pure function producing the
+  codes `shape`, `unknown-class`, `unknown-role`, `role-barred-everywhere`,
+  `class-barred-everywhere` and `us-citizen-super-gold`. The last resolves owners the way
+  `ownershipFractions` does (named owners → sole `ownerId` → everyone, for a joint account). Any
+  `GOLD` key, including `[]`, answers it.
+- **Registry:** both factories pass the normalized map, and only the first *enabled* reader warns
+  (`console.warn`, prefixed `[design 115]`, deduped per process because a compile runs per MC
+  iteration).
+- **Deviation from §5.1 — nothing refuses.** §5.1 said the loader would refuse a role barred from
+  every class. Every problem is advisory instead. A compile-time throw would stop the page from
+  loading unless the load-error overlay could repair it, as it does for mixes and pools, and
+  every problem already has a safe compiled meaning (ignored / planned unrestricted / zeroed).
+- **Deviation from §10 — help moved forward.** `help:gate` enforces zero uncited params, so the
+  concept topic `allocation-and-rebalancing` gained a paragraph, the param and this design, and was
+  restamped now rather than in phase 4.
+- **Effect verified through a real load** (R-22). International Retirement with TARGET_ALLOCATION
+  and 10% gold, stepped to Jan 2035 (AU-resident): unrestricted, the primary's super holds
+  \$232,771 of gold; with `{"GOLD":["super"]}`, super holds none and the gold sits in the IRA.
+  The warning fired once per US-citizen super, and only on the unrestricted run.
+- **Tests:** R-16–R-22. Suite: 7,295 unit / 1,691 viz pass.
+- **CLI caveat (known, unchanged):** `run-scenario`/`mc-run` silence `console.warn` during load, so
+  the warning will not print there. Phase 4's editor shows the same list inline.
 
 ## 12. Pre-existing defect: the asset-location "swap" is a one-way transfer
 
