@@ -689,8 +689,14 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
           + 'validates in 2030 and 2040 be invalid in 2035. Every shape is compiled and validated at '
           + 'LOAD, beside the base graph, so a shape that takes effect in twenty years fails now '
           + 'rather than mid-run. Selected by Liquidity Pool Schedule; a shape no row selects warns '
-          + 'and governs nothing. Blank (the default) = one graph for the whole run, byte-identical '
-          + 'to before.',
+          + 'and governs nothing. A shape may instead INHERIT (design 114): { extends: \'base\' | '
+          + '\'<shapeId>\', pools, flows, remove: { pools: [ids], flows: [ids] } } stores only what '
+          + 'differs — a pool or flow whose id the parent has REPLACES that item whole, a new id is '
+          + 'added, and remove drops the parent\'s. Parents may chain; a cycle is refused. Every '
+          + 'inheriting shape is expanded into the whole graph it means before anything validates, '
+          + 'scales or searches it, so the whole-graph rule still holds and an edit to the parent '
+          + 'reaches every shape that did not override it. \'base\' is reserved as a shape id. '
+          + 'Blank (the default) = one graph for the whole run, byte-identical to before.',
         visibleWhen: { anyOf: [
           { param: 'behavioralStrategies', includes: 'LIQUIDITY_POOLS' },
           { param: 'liquidityGraph', exists: true },

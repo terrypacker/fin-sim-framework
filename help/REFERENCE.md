@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-228 parameters · 33 panels · 11 node types (179 fields) · 173 action types · 86 tools · 275 state field types · 72 topics · 122 design docs
+228 parameters · 33 panels · 11 node types (179 fields) · 173 action types · 86 tools · 275 state field types · 73 topics · 122 design docs
 
 ---
 
@@ -306,7 +306,7 @@ scenario's own schema), which is where to go to change it.
 - **`liquidityGraphSchedule`** — Liquidity Pool Schedule · `LiquidityGraphSchedule` · default — · conditional · via ECONOMIC_REGIMES
   When each pool shape takes over: [{ year, shape }], the shape naming a key of Liquidity Pool Shapes (design 109), or null for the base Liquidity Pools (graph) — how a plan returns to it, and how the MPC Pool Shape lever saves a decision to stay on it. A step function — the row with the greatest year not after the current one governs, and BEFORE the first row the base Liquidity Pools (graph) governs, so adding a schedule never requires copying the existing graph into a shape. One row per year (two rows for one year is refused; only one shape can be active at a time). A row takes effect at the first period advance on or after 1 January of its year, which on a semi-annual cadence can be up to six months later — shapes govern DECISIONS, and decisions are taken at advances. A change moves no money by itself: the new shape's targets are honoured by the rebalancer and the flows at their own cadence, through their own gates. Pool identity across a change is the pool `id` — the same id continues and keeps its trailing high, a new id starts cold, a dropped id is retired. Blank (the default) = one graph for the whole run.
 - **`liquidityShapes`** — Liquidity Pool Shapes · `LiquidityShapes` · default — · conditional · via ECONOMIC_REGIMES
-  Named alternative pool GRAPHS, as { <shapeId>: { pools, flows } } — each one exactly the value Liquidity Pools (graph) takes, so a shape is not a new vocabulary, it is the existing one given a name (design 109). A shape is the WHOLE graph, not one pool's settings: flows name pools, remainder targets name pools and cycle detection is a property of the whole edge set, so a per-pool timeline would let a composition that validates in 2030 and 2040 be invalid in 2035. Every shape is compiled and validated at LOAD, beside the base graph, so a shape that takes effect in twenty years fails now rather than mid-run. Selected by Liquidity Pool Schedule; a shape no row selects warns and governs nothing. Blank (the default) = one graph for the whole run, byte-identical to before.
+  Named alternative pool GRAPHS, as { <shapeId>: { pools, flows } } — each one exactly the value Liquidity Pools (graph) takes, so a shape is not a new vocabulary, it is the existing one given a name (design 109). A shape is the WHOLE graph, not one pool's settings: flows name pools, remainder targets name pools and cycle detection is a property of the whole edge set, so a per-pool timeline would let a composition that validates in 2030 and 2040 be invalid in 2035. Every shape is compiled and validated at LOAD, beside the base graph, so a shape that takes effect in twenty years fails now rather than mid-run. Selected by Liquidity Pool Schedule; a shape no row selects warns and governs nothing. A shape may instead INHERIT (design 114): { extends: 'base' | '<shapeId>', pools, flows, remove: { pools: [ids], flows: [ids] } } stores only what differs — a pool or flow whose id the parent has REPLACES that item whole, a new id is added, and remove drops the parent's. Parents may chain; a cycle is refused. Every inheriting shape is expanded into the whole graph it means before anything validates, scales or searches it, so the whole-graph rule still holds and an edit to the parent reaches every shape that did not override it. 'base' is reserved as a shape id. Blank (the default) = one graph for the whole run, byte-identical to before.
 - **`liquidityTargetSchedule`** — Liquidity Pool Target Schedule · `LiquidityTargetSchedule` · default — · conditional · via ECONOMIC_REGIMES
   Dated changes to a pool's SIZE: [{ year, pool, scale }]. From 1 January of `year` the pool holds `scale` × the target its graph authors, until the next row for that pool. The factor is always relative to the authored target, never to an earlier row: 1.5 then 1.2 means 1.2 × authored. It is a factor rather than a figure so it works for every target mode and keeps the difference between shapes: a pool authored at 2 years in one shape and 4 in another holds 3 and 6 at 1.5. A row is about the POOL, not a shape, so it carries across a later shape switch; while the shape in force has no pool of that id the row does nothing, and it applies again if a later shape brings the id back. A factor that takes a PERCENT target past 1.0 is refused when the plan loads, naming the row. Rows the MPC cockpit writes carry `by` (the session), which changes nothing about the run. Multiplies with the searchable pool.<id>.targetScale axis. Blank (the default) = the authored targets for the whole run.
 - **`poolFlowsEnabled`** — Pool Refill Flows Enabled · `Boolean` · default `true` · conditional · via ECONOMIC_REGIMES
@@ -2081,7 +2081,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 
 ---
 
-## Topics (72)
+## Topics (73)
 
 Tier 2 — the hand-written prose under `help/`, listed by what it CITES rather than
 summarised. A topic may not restate a param description (design 108 §3), so there is
@@ -2115,6 +2115,7 @@ what the in-app panel keys on.
 | [Drawdown Order](concepts/drawdown-order.md) | concept | 316 | 2 panels · 22 params · design 44, 65, 97 |
 | [Early Withdrawal](concepts/early-withdrawal.md) | concept | 228 | 1 panel · 8 params |
 | [Economic Shocks](concepts/economic-shocks.md) | concept | 242 | 2 panels · 3 params |
+| [Editing Liquidity Pools](workflows/editing-liquidity-pools.md) | workflow | 523 | 1 panel · 3 params · design 114, 110, 109 |
 | [Event](nodes/event.md) | node | 220 | 2 panels · design 2 |
 | [Event Sourcing](concepts/event-sourcing.md) | concept | 381 | 3 panels · design 2, 16, 91 |
 | [Node History](panels/exec-history.md) | panel | 191 | 1 panel |
@@ -2142,7 +2143,7 @@ what the in-app panel keys on.
 | [Paycheque](panels/paycheque.md) | panel | 197 | 1 panel · design 95, 107 |
 | [Performance](panels/perf.md) | panel | 201 | 1 panel · design 78 |
 | [Person](nodes/person.md) | node | 221 | 3 panels · design 34, 95, 83 |
-| [Pool Shapes Over Time](concepts/pool-shapes-over-time.md) | concept | 400 | 3 params · design 109, 112, 97 |
+| [Pool Shapes Over Time](concepts/pool-shapes-over-time.md) | concept | 395 | 3 params · design 109, 114, 112, 97 |
 | [Liquidity Pools](panels/pools.md) | panel | 236 | 1 panel · design 97 |
 | [Randomness and Seeds](concepts/randomness-and-seeds.md) | concept | 251 | 2 panels · 2 params · design 74 |
 | [Real Property](nodes/real-property.md) | node | 221 | 2 panels · design 75, 83, 86, 48 |
@@ -2152,7 +2153,7 @@ what the in-app panel keys on.
 | [Roth Conversions](concepts/roth-conversions.md) | concept | 272 | 2 panels · 13 params · design 29 |
 | [Scenario](panels/scenario.md) | panel | 201 | 1 panel |
 | [Scenario Compare](panels/scenario-compare.md) | panel | 205 | 1 panel |
-| [Searching Pool Levers](concepts/searching-pool-levers.md) | concept | 396 | design 110, 97 |
+| [Searching Pool Levers](concepts/searching-pool-levers.md) | concept | 399 | design 110, 97 |
 | [Securities](panels/securities.md) | panel | 188 | 1 panel · design 94 |
 | [Security](nodes/security.md) | node | 209 | 3 panels · design 94, 66, 93 |
 | [Spending](panels/spending.md) | panel | 209 | 1 panel · design 89 |

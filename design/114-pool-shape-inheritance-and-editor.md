@@ -1,6 +1,6 @@
 # 114 — Pool shapes that inherit, and a pool editor that fits its panel
 
-**Status:** PHASES 1–4 BUILT, 26 Sep 2026 (§11–§14); phases 5–6 proposed. Picks up design 112 §7 (shapes that reference pools) and
+**Status:** PHASES 1–5 BUILT, 26 Sep 2026 (§11–§15); phase 6 proposed. Picks up design 112 §7 (shapes that reference pools) and
 reworks the pool authoring surface built across design 97 §17.1/§21/§22.5, design 109 §11 and
 design 110 Leg A. Decisions D1–D5 (§3) and the scope of Part II (S1–S6) were taken with the
 author before drafting. The MC and Opt panels are deliberately last (§9, phase 6). Open
@@ -442,3 +442,22 @@ Measured on the author's plan: the target schedule went from about 1,000px to 96
 `buffer` narrowed the claims, flows and gates from 17 / 7 / 2 rows to 4 / 4 / 1. The expansion
 gate caught the view's new read of the shapes param on its first run; it is marked
 `raw-ok (the param the editor writes)`.
+
+## 15. As built — phase 5 (26 Sep 2026)
+
+1. **`liquidityShapes`' description** now states the inheriting form (`extends`, whole-item
+   override by id, `remove`, chains, the reserved `base` id) and that inheriting shapes are
+   expanded before anything validates them. The regrouped params needed no description change:
+   none of them named their group.
+2. **`pool-shapes-over-time`** gained a third rule beside "whole structure" and "names are
+   identity": an alternative can be written as only what changes, and is filled back out before
+   anything checks or runs it. The topic was already at its 400-word budget, so the rest of it was
+   tightened to make room rather than the budget raised.
+3. **`searching-pool-levers`** says where a gate clause's name goes (Search id, behind More
+   columns).
+4. **A new workflow topic, `help/workflows/editing-liquidity-pools.md`** — the first `workflow`
+   topic in the tree. It covers the group, the Structure tabs, inheriting and converting, core
+   columns and badges, focusing one bucket and the folded target schedule, and it cites
+   `liquidityGraph`, `liquidityShapes`, `liquidityTargetSchedule` and the Parameters panel, so
+   the `?` on the Structure row lists it. It stamps no `src/` file: the editor file changes too
+   often for a stamp on it to mean anything.

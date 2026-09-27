@@ -13,9 +13,8 @@ stamps:
   src/finance/pools/pool-axis-hygiene.js: 35c978
 ---
 
-A pool's size, how patient a refill rule is, and when the plan re-plumbs itself can all be
-handed to the optimizer, or scanned one against another on a grid, rather than guessed once
-and left. Two constraints shape what you can ask for.
+A pool's size, how patient a refill rule is, and when the plan re-plumbs itself can be
+handed to the optimizer or scanned on a grid rather than guessed once. Two constraints shape what you can ask for.
 
 **A size is swept as a factor, and a switch year as a shift** — never as an absolute. A pool
 that appears in several [shapes](pool-shapes-over-time.md) usually holds a different amount in
@@ -28,7 +27,8 @@ factor lifts a target off zero.
 **A gate clause has to be named before it can be searched.** The clause table's OR column is a
 position, and positions shift when a row is inserted above them; an axis pinned to one would
 quietly begin steering a different clause. Naming one changes nothing about the run, and a
-clause left unnamed simply cannot be swept.
+clause left unnamed cannot be swept. Names go in the Search id column, behind **More
+columns**.
 
 The harder problem is not the search — it is that a comparison can look sound and not be.
 Anything the sweep would spoil is reported next to the lever, labelled by which of three
