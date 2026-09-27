@@ -12,6 +12,14 @@ import { BaseComponent }            from '../components/base-component.js';
 import { groupFor, typeForPath }    from '../state/state-paths.js';
 import { get }                      from '../../finance/monte-carlo/mc-param-paths.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../simulation-framework/bus-messages.js';
+import { PRICE_LEVEL_PATHS }        from '../../finance/journal-reporting/journal-price-levels.js';
+import { UsdAudPair }               from '../../finance/fx/usd-aud-pair.js';
+
+/** The state paths a real chart restates each point with (design 79 §5). */
+const RATE_TRACK_PATHS = Object.freeze([
+  ...Object.values(PRICE_LEVEL_PATHS),
+  `effectiveExchangeRates.${UsdAudPair.id}`,
+]);
 
 /**
  * Wires ChartController and ChartView together; owns the chart's **active set**.
@@ -123,7 +131,12 @@ export class ChartPresenter extends BaseComponent {
   _doRender() {
     for (const msg of this._drainExecEndMsgs()) {
       const snap = msg.stateSnapshot;
-      if (!snap || this._activePaths.size === 0) continue;
+      if (!snap) continue;
+      // Every snapshot, charted paths or not: a series activated later is restated
+      // against this track, and it cannot be rebuilt at the event's resolution after
+      // the fact (design 79 §5).
+      this._view.addRateSample?.(msg.date, snap);
+      if (this._activePaths.size === 0) continue;
 
       // Allow-list: read ONLY the active set from the snapshot (the hang fix).
       const data = {};
@@ -231,6 +244,26 @@ export class ChartPresenter extends BaseComponent {
     return label;
   }
 
+  /**
+   * Rebuild the view's FX/price-level track from the store's snapshot history, for a
+   * chart that was not listening while the run happened (design 79 §5). Coarse — one
+   * sample per snapshot — which is exact for the accumulators (they move twice a year)
+   * and the same resolution the backfilled series itself has.
+   */
+  _backfillRateTrack(store) {
+    const byDate = new Map();
+    for (const path of RATE_TRACK_PATHS) {
+      const [group, leaf] = path.split('.');
+      for (const { date, value } of store.backfill(path)) {
+        const t = new Date(date).getTime();
+        const sample = byDate.get(t) ?? { effectiveExchangeRates: {}, inflationAccumulator: {} };
+        sample[group][leaf] = value;
+        byDate.set(t, sample);
+      }
+    }
+    for (const [t, sample] of [...byDate].sort(([a], [b]) => a - b)) this._view.addRateSample?.(t, sample);
+  }
+
   /** Mark/unmark a series as backfilled (coarse) so the view can dash it (R10.1). */
   _setBackfilled(path, on) {
     const had = this._backfilledPaths.has(path);
@@ -249,6 +282,7 @@ export class ChartPresenter extends BaseComponent {
     this._activate(path);
     const store = fieldStore ?? this._fieldStore;
     if (store) {
+      if (this._view.hasRateTrack === false) this._backfillRateTrack(store);
       const { series, backfilled } = store.getOrBackfill(path);
       for (const { date, value } of series) {
         this._view.addSnapshot(date, { [path]: value });

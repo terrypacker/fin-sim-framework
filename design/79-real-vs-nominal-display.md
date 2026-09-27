@@ -11,7 +11,7 @@
 > written and 79 is this one. Those citations mean *"a future Schedule-type design"*,
 > not this doc. They should get a fresh number when that design is written.
 
-**Status**: **P1 BUILT 2026-09-27** (P2–P4 open) — drafted 2026-07-13, **revised
+**Status**: **P1 + P2 BUILT 2026-09-27** (P3–P4 open) — drafted 2026-07-13, **revised
 2026-09-27** against the code at `fd6ec9cc`. See §14 for what P1 shipped and where it
 departed from the plan. Scope: an app-wide **value basis**
 toggle, `Nominal` (the default, and what the app does today) vs. `Real (base-year \$)`,
@@ -335,7 +335,7 @@ panels stay nominal with a tag.
 | Phase | Scope | Depends on |
 |---|---|---|
 | **P1** ✅ | `valueBasis` setting; `presentForDisplay` opt-in hop and `priceLevelSource`; top-bar select and label; point-in-time panels (§4); `run-scenario --real` | — |
-| **P2** | Chart: per-point level track, live and backfill (§5) | P1 |
+| **P2** ✅ | Chart: per-point level track, live and backfill (§5) | P1 |
 | **P3** | Journal R1 (§6); allocation, pool history and paycheque panels by row date (§4); tax-document badge; export stamps the basis; spending panel follows the global toggle (§8.1) | P1 |
 | **P4** | MC/Opt real aggregates computed per path (§9) | P1 |
 | ~~old P4~~ | ~~per-native-currency deflator~~: **retired** (R3) | — |
@@ -473,13 +473,39 @@ stay nominal.
 - **Not done in P1:** a `nominal` tag on surfaces that ignore the toggle. It lands with
   each surface's own phase.
 
-### P2 — chart
-- `chart-presenter.js:_doRender`: read the level path from each snapshot and call
-  `view.setPriceLevel(t, level)`. In `activatePath`, backfill the level track from
-  `FieldSeriesStore.getOrBackfill` whenever it is empty.
-- `chart-view.js:_displaySeriesData`: deflate each point (§5). `resetHistory` clears
-  the track. The left axis's currency label gets a `real` suffix.
-- Tooltip (`_fmtSeriesValue`): shows the value in the basis actually plotted.
+### P2 — chart  (BUILT 2026-09-27)
+- **`ChartView`** keeps a `_rateTrack`: `[{ t, state: { effectiveExchangeRates,
+  inflationAccumulator } }]`, sorted ascending.
+  - `addRateSample(date, sample)` collapses consecutive identical samples, because
+    both inputs are step functions. It inserts an out-of-order sample (a backfill) in
+    sorted position.
+  - `resetHistory` clears the track.
+  - `_rateStateAt(t)` returns the latest sample at or before `t`, or the first sample
+    for an earlier `t`.
+- **`_displaySeriesData`**: when the basis is `real`, `_realSeriesData` passes each
+  point through `registry.presentForDisplay(v, native, { state: rateStateAt(t),
+  priceLevel: … })`. That converts at fx(t) and divides by that date's level for the
+  shown currency's country. It is **all or nothing**: if any point stays nominal, or
+  lands in a different currency, the whole series falls back to the nominal path and
+  is not labelled real. Nominal mode is unchanged, still one current FX factor
+  (design 10 Phase 6).
+- **`_plotted`** records the code and basis each series was actually drawn in. It
+  drives the tooltip (`$1,000.00 real`), `_plottedCurrency`, and the left axis's
+  `real` name, which is shown only when every left-axis money series is real.
+- **`ChartPresenter._doRender`** sends **every** snapshot to `addRateSample` before
+  the check for charted paths, so a series charted later can still be restated.
+  `activatePath` backfills an empty track from `FieldSeriesStore.backfill` on
+  `RATE_TRACK_PATHS`: `PRICE_LEVEL_PATHS` plus `effectiveExchangeRates.USD_AUD`.
+- **Perf:** `_currencySymbol` is now memoized. The hop runs once per point per frame,
+  and building an `Intl` formatter each time dominated the cost. With the memo, 50k
+  points take about 20 ms.
+- **Verified in the browser** on the default scenario to 2040. Each plotted point
+  equals nominal ÷ `inflationAccumulator.US` at its own date. The terminal point
+  matches the P1 state-panel figure, and the axis reads `real`.
+- **Tests:** six in `tests/viz/chart/chart-view.test.mjs` (per-point levels, AUD at
+  fx(t) ÷ AU(t) rather than the live rate, a point before the first sample, no track
+  meaning nominal and unlabelled, nominal unchanged, the track's collapse/sort/reset)
+  and two in `chart-presenter.test.mjs` (capture with nothing charted; backfill).
 
 ### P3 — journal, tax documents, export, spending panel
 - `journal-report-plugin.js:105`: `formatAmount(abs, code, { at: row.date })`.

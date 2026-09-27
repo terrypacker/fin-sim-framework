@@ -109,13 +109,23 @@ function _baseLabel(rec, stateKey) {
   return `${country}${name}`.trim();
 }
 
-/** Currency symbol for a code, e.g. 'USD' → '$', 'AUD' → 'A$'. */
+/**
+ * Currency symbol for a code, e.g. 'USD' → '$', 'AUD' → 'A$'. Memoized: a real chart
+ * calls the display hop once per plotted point per frame (design 79 §5), and building
+ * an Intl formatter each time dominated that loop.
+ */
+const _SYMBOLS = new Map();
 function _currencySymbol(code) {
   if (!code) return '$';
-  try {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: code })
-      .formatToParts(0).find(p => p.type === 'currency')?.value ?? '$';
-  } catch { return '$'; }
+  let symbol = _SYMBOLS.get(code);
+  if (symbol === undefined) {
+    try {
+      symbol = new Intl.NumberFormat('en-US', { style: 'currency', currency: code })
+        .formatToParts(0).find(p => p.type === 'currency')?.value ?? '$';
+    } catch { symbol = '$'; }
+    _SYMBOLS.set(code, symbol);
+  }
+  return symbol;
 }
 
 function _fmt(vt, value) {

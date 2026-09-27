@@ -2153,7 +2153,7 @@ what the in-app panel keys on.
 | [Liquidity Pools](panels/pools.md) | panel | 236 | 1 panel · design 97 |
 | [Randomness and Seeds](concepts/randomness-and-seeds.md) | concept | 251 | 2 panels · 2 params · design 74 |
 | [Real Property](nodes/real-property.md) | node | 221 | 2 panels · design 75, 83, 86, 48, 113 |
-| [Real vs Nominal Dollars](concepts/real-vs-nominal.md) | concept | 399 | 4 panels · design 79, 89 |
+| [Real vs Nominal Dollars](concepts/real-vs-nominal.md) | concept | 400 | 5 panels · design 79, 89 |
 | [Recorded MPC Runs](concepts/recorded-mpc-runs.md) | concept | 400 | 1 panel · 3 params · design 81, 80 |
 | [Reducer](nodes/reducer.md) | node | 195 | 3 panels · design 2, 16 |
 | [Return Assumptions](concepts/return-assumptions.md) | concept | 266 | 2 panels · 13 params · design 99, 106 |

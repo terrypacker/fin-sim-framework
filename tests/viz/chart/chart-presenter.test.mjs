@@ -455,3 +455,42 @@ test('R8.5: only active paths reach the view, regardless of state size', () => {
   assert.deepStrictEqual(keys, ['metrics.netWorth'],
     'ingestion is O(active set), not O(state paths) — the hang guard');
 });
+
+// ─── Real value basis: the rate/level track (design 79 §5) ─────────────────────
+
+test('_doRender: feeds every snapshot to the rate track, even with nothing charted', () => {
+  const view = makeMockView();
+  view.rateSamples = [];
+  view.addRateSample = (date, snap) => view.rateSamples.push({ date, lvl: snap.inflationAccumulator?.US });
+  const { presenter } = makePresenter(view);
+  const bus = makeSimBus();
+  presenter.wireSimBus(bus);
+  bus.publish(makeExecEndMsg(D1, {}, { inflationAccumulator: { US: 1 } }));
+  bus.publish(makeExecEndMsg(D2, {}, { inflationAccumulator: { US: 1.03 } }));
+  presenter._doRender();
+  assert.deepStrictEqual(view.rateSamples.map(s => s.lvl), [1, 1.03]);
+  assert.strictEqual(view.calls.addSnapshot.length, 0);
+});
+
+test('activatePath: an empty rate track is backfilled from the store\'s snapshots', () => {
+  const view = makeMockView();
+  view.hasRateTrack = false;
+  view.rateSamples = [];
+  view.addRateSample = (t, sample) => view.rateSamples.push({ t, sample });
+  const { presenter } = makePresenter(view);
+  const at = (y) => new Date(Date.UTC(y, 0, 1));
+  const history = {
+    'inflationAccumulator.US':        [{ date: at(2026), value: 1 },   { date: at(2027), value: 1.03 }],
+    'inflationAccumulator.AU':        [{ date: at(2026), value: 1 },   { date: at(2027), value: 1.04 }],
+    'effectiveExchangeRates.USD_AUD': [{ date: at(2026), value: 1.5 }, { date: at(2027), value: 1.45 }],
+  };
+  const store = {
+    backfill:      (path) => history[path] ?? [],
+    getOrBackfill: () => ({ series: [], backfilled: false }),
+  };
+  presenter.activatePath('metrics.netWorth', store);
+  assert.deepStrictEqual(view.rateSamples.map(s => s.sample), [
+    { effectiveExchangeRates: { USD_AUD: 1.5 },  inflationAccumulator: { US: 1,    AU: 1 } },
+    { effectiveExchangeRates: { USD_AUD: 1.45 }, inflationAccumulator: { US: 1.03, AU: 1.04 } },
+  ]);
+});

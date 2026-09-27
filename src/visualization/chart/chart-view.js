@@ -77,6 +77,15 @@ export class ChartView extends BaseComponent {
     this._currencyConverter = currencyConverter ?? null;
     this._displaySettings   = displaySettings   ?? null;
     this._rateStateProvider = rateStateProvider ?? null;
+
+    // Real value basis (design 79 §5): a chart spans the whole plan, so each point is
+    // converted at ITS OWN date's FX rate and divided by ITS OWN date's price level.
+    // `_rateTrack` is that history — [{ t, state: { effectiveExchangeRates,
+    // inflationAccumulator } }] ascending, one entry per change — fed by the presenter
+    // from the same snapshots the series come from. `_plotted` records what each
+    // currency series was actually drawn in, for the axis, tooltip and legend.
+    this._rateTrack = [];
+    this._plotted   = new Map(); // key → { code, basis: 'real'|'nominal' }
     if (appBus?.subscribe) {
       const unsub = appBus.subscribe(APP_EVENTS.DISPLAY_SETTINGS_CHANGED, () => {
         if (this._chart) this.scheduleRender(() => this._doChartUpdate());
@@ -217,6 +226,34 @@ export class ChartView extends BaseComponent {
     }
   }
 
+  /**
+   * Record the FX rates and price levels in force from `date` on (design 79 §5).
+   * Consecutive identical samples collapse: both are step functions, so the track only
+   * needs the instants they move.
+   * @param {Date|number|string} date
+   * @param {{ effectiveExchangeRates?: object, inflationAccumulator?: object }} sample
+   */
+  addRateSample(date, sample) {
+    const t = new Date(date).getTime();
+    if (!Number.isFinite(t) || !sample) return;
+    const state = {
+      effectiveExchangeRates: { ...(sample.effectiveExchangeRates ?? {}) },
+      inflationAccumulator:   { ...(sample.inflationAccumulator ?? {}) },
+    };
+    const last = this._rateTrack.at(-1);
+    if (last && last.t > t) {                 // out of order (a backfill): insert sorted
+      this._rateTrack.push({ t, state });
+      this._rateTrack.sort((a, b) => a.t - b.t);
+      return;
+    }
+    if (last && _sameRates(last.state, state)) return;
+    if (last && last.t === t) last.state = state;
+    else this._rateTrack.push({ t, state });
+  }
+
+  /** Whether any rate sample has been recorded (a backfill is needed when not). */
+  get hasRateTrack() { return this._rateTrack.length > 0; }
+
   addAnnotation(id, { label, date, color = readThemeColor('--amber'), position = 'start' }) {
     this._annotations[id] = { label, date: new Date(date), color, position };
     if (this._chart) {
@@ -237,6 +274,8 @@ export class ChartView extends BaseComponent {
     this._seriesLabels.clear();
     this._seriesAxes.clear();
     this._backfilledSeries.clear();
+    this._rateTrack   = [];
+    this._plotted.clear();
     this._colorIdx    = 0;
     this._annotations = {};
     this._hiddenSeries.clear();
@@ -335,14 +374,24 @@ export class ChartView extends BaseComponent {
 
   /**
    * Convert a native currency series to the active display currency (design 10
-   * §Phase 4). Returns `dataArr` unchanged for non-currency series, when display
-   * already equals native, or when no rate is available. A single current rate
-   * is applied across the series; per-point historical rates land with Phase 6
-   * (time-varying rates), at which point this reads the rate series instead.
+   * §Phase 4), and under a real value basis restate it in base-year money (design 79
+   * §5). Returns `dataArr` unchanged for non-currency series, when display already
+   * equals native, or when no rate is available.
+   *
+   * Nominal applies a single current FX rate across the series; per-point historical
+   * rates for nominal land with design 10's Phase 6. Real cannot take that shortcut —
+   * the price level runs from 1.0 to several times that across a plan, and dividing a
+   * point by one date's level while converting it at another date's rate is
+   * internally inconsistent — so real reads BOTH off `_rateTrack` at each point.
    */
   _displaySeriesData(key, dataArr) {
+    this._plotted.delete(key);
     const conv = this._currencyConverter, ds = this._displaySettings, reg = this._schemaRegistry;
     if (!conv || !ds || !reg) return dataArr;
+    if (ds.valueBasis === 'real' && reg.resolve(key)?.kind === 'currency') {
+      const real = this._realSeriesData(key, dataArr);
+      if (real) return real;
+    }
     // Determine currency-ness and native code from the injected (stamped) registry,
     // NOT _seriesKinds — that comes from state-paths' module registry, which lacks
     // per-account stamps (e.g. metrics.<stateKey> balance series resolve to 'metric'
@@ -356,6 +405,55 @@ export class ChartView extends BaseComponent {
     const factor = conv.convert(1, native, display, state);
     if (factor == null) return dataArr; // no recorded rate → plot native
     return dataArr.map(([t, v]) => [t, v * factor]);
+  }
+
+  /**
+   * The real (base-year) series, each point at its own date's FX rate and price level
+   * — the country of the currency it lands in (design 79 §7). Null, meaning "plot
+   * nominal and say so", when any point cannot be restated: no track, a point that
+   * would stay native while its neighbours convert, or no recorded level. A series
+   * that is partly real is worse than one that is plainly nominal.
+   */
+  _realSeriesData(key, dataArr) {
+    if (this._rateTrack.length === 0 || dataArr.length === 0) return null;
+    const reg = this._schemaRegistry;
+    const native = reg.resolve(key)?.currencyCode;
+    if (!native) return null;
+    const out = new Array(dataArr.length);
+    let code = null;
+    for (let i = 0; i < dataArr.length; i++) {
+      const [t, v] = dataArr[i];
+      const state = this._rateStateAt(t);
+      const p = reg.presentForDisplay(v, native, { state, priceLevel: state.inflationAccumulator });
+      if (p.basis !== 'real' || (code != null && p.code !== code)) return null;
+      code = p.code;
+      out[i] = [t, p.value];
+    }
+    this._plotted.set(key, { code, basis: 'real' });
+    return out;
+  }
+
+  /** The rate/level state in force at `t`: the latest sample at or before it, else the first. */
+  _rateStateAt(t) {
+    const track = this._rateTrack;
+    if (t <= track[0].t) return track[0].state;
+    let lo = 0, hi = track.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (track[mid].t <= t) lo = mid; else hi = mid - 1;
+    }
+    return track[lo].state;
+  }
+
+  /** Whether every currency series on the left axis is plotted real. */
+  _leftAxisIsReal() {
+    let any = false;
+    for (const key of this._seriesMap.keys()) {
+      if (this._axisIndexFor(key) !== 0 || !this._isCurrencySeries(key)) continue;
+      if (this._plotted.get(key)?.basis !== 'real') return false;
+      any = true;
+    }
+    return any;
   }
 
   /** Whether a series key is a currency series per the injected (stamped) registry. */
@@ -434,6 +532,10 @@ export class ChartView extends BaseComponent {
     const leftAxis = {
       type:      'value',
       position:  'left',
+      // The one place a real chart says it is real (design 79 §5): the axis is read
+      // before any tooltip is, and a base-year number under a bare "$" reads as current.
+      name:          this._leftAxisIsReal() ? 'real' : '',
+      nameTextStyle: { color: readThemeColor('--text-dim'), fontSize: 11, fontFamily: 'monospace' },
       axisLabel: {
         color:      readThemeColor('--text-dim'),
         fontSize:   11,
@@ -697,7 +799,10 @@ export class ChartView extends BaseComponent {
    */
   _fmtSeriesValue(key, value) {
     const code = this._plottedCurrency(key);
-    if (code) return new Intl.NumberFormat('en-US', { style: 'currency', currency: code }).format(value);
+    if (code) {
+      const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: code }).format(value);
+      return this._plotted.get(key)?.basis === 'real' ? `${money} real` : money;
+    }
     if (!this._isCurrencySeries(key)) {
       const formatted = this._formatter?.format(key, value);
       if (formatted != null) return formatted;
@@ -714,6 +819,8 @@ export class ChartView extends BaseComponent {
    * code-less series.
    */
   _plottedCurrency(key) {
+    const plotted = this._plotted.get(key);
+    if (plotted) return plotted.code;
     const vt = this._schemaRegistry?.resolve(key);
     if (vt?.kind !== 'currency' || !vt.currencyCode) return null;
     const native  = vt.currencyCode;
@@ -722,4 +829,15 @@ export class ChartView extends BaseComponent {
     const factor = this._currencyConverter.convert(1, native, display, this._rateStateProvider?.() ?? null);
     return factor == null ? native : display;
   }
+}
+
+/** Whether two rate/level samples carry identical numbers (both maps are flat). */
+function _sameRates(a, b) {
+  for (const k of ['effectiveExchangeRates', 'inflationAccumulator']) {
+    const x = a[k], y = b[k];
+    const keys = Object.keys(x);
+    if (keys.length !== Object.keys(y).length) return false;
+    for (const key of keys) if (x[key] !== y[key]) return false;
+  }
+  return true;
 }
