@@ -272,11 +272,16 @@ export class PaychequePlugin extends WorkbenchComponent {
     });
     if (!p) { this._q('asof').textContent = '—'; return null; }
 
-    this._q('asof').textContent = `${p.name} · ${p.monthKey}`;
+    // One month, so one instant (design 79 §4): mid-month, clear of the 1 January /
+    // 1 July advances that step the price level at a month boundary.
+    const [year, month] = p.monthKey.split('-').map(Number);
+    const at    = Date.UTC(year, month - 1, 15);
+    const basis = this._services()?.schemaRegistry?.presentForDisplay?.(1, p.currency, { at })?.basis;
+    this._q('asof').textContent = `${p.name} · ${p.monthKey}${basis === 'real' ? ' · real' : ''}`;
     const btn = this._q('follow');
     if (btn) btn.classList.toggle('on', this._follow);
 
-    const m = (n) => this._money(n, p.currency);
+    const m = (n) => this._money(n, p.currency, { at });
 
     // Each stage is a reduction from the one above, which is the only presentation
     // in which §5's four-way asymmetry is visible: sacrifice comes off the package,
@@ -386,7 +391,7 @@ export class PaychequePlugin extends WorkbenchComponent {
       <table class="pay-table">
         <thead><tr>
           <th title="Each stream's own year: calendar for the US, Australian financial year for super. Every cap in the Clamped by column is annual on that basis.">Year</th><th>Person</th><th>Stream</th><th>Funded by</th>
-          <th class="pay-num">Amount</th><th class="pay-num">Months</th>
+          <th class="pay-num"${this._nominalTitle()}>Amount${this._nominalTag()}</th><th class="pay-num">Months</th>
           <th>Clamped by</th><th class="pay-num">Carry-forward</th>
         </tr></thead>
         <tbody>${body}</tbody>
@@ -410,7 +415,7 @@ export class PaychequePlugin extends WorkbenchComponent {
       const ring = r.unusedByFy.length === 0
         ? '<div class="pay-note">No unused concessional cap has accrued yet.</div>'
         : `<table class="pay-table pay-table-tight">
-             <thead><tr><th>Financial year</th><th class="pay-num">Unused cap</th></tr></thead>
+             <thead><tr><th>Financial year</th><th class="pay-num"${this._nominalTitle()}>Unused cap${this._nominalTag()}</th></tr></thead>
              <tbody>${r.unusedByFy.map(u =>
                `<tr><td>${u.fy}–${String(u.fy + 1).slice(2)}</td><td class="pay-num">${m(u.amount)}</td></tr>`).join('')}
              </tbody>
@@ -476,10 +481,25 @@ export class PaychequePlugin extends WorkbenchComponent {
     return reg?.displayNameFor?.(stateKey) ?? this._sim?.state?.[stateKey]?.name ?? stateKey;
   }
 
-  _money(n, code = 'USD') {
+  /**
+   * Contributions and super caps stay NOMINAL under a real value basis (design 79 §6),
+   * like tax documents: every figure in them is measured against a statutory cap
+   * published in nominal dollars, so a clamp is only legible beside the nominal amount
+   * it clamped. The header says so rather than leaving the toggle to imply otherwise.
+   */
+  _nominalTag() {
+    return this._services()?.schemaRegistry?.valueBasis?.() === 'real' ? ' <span class="pay-note">(nominal)</span>' : '';
+  }
+
+  _nominalTitle() {
+    return this._services()?.schemaRegistry?.valueBasis?.() === 'real'
+      ? ' title="Nominal: measured against statutory caps, which are published in nominal dollars"' : '';
+  }
+
+  _money(n, code = 'USD', opts = {}) {
     if (n == null) return '—';
     const reg = this._services()?.schemaRegistry;
-    const formatted = reg?.formatAmount?.(n, code);
+    const formatted = reg?.formatAmount?.(n, code, opts);
     if (formatted != null) return formatted;
     return `${code === 'AUD' ? 'A$' : '$'}${Math.round(n).toLocaleString()}`;
   }

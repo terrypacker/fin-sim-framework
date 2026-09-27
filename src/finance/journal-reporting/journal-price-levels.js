@@ -33,6 +33,8 @@
  * rather than divide by 1.
  */
 
+import { JournalFxRates, USD_AUD_PATH } from './report-currency.js';
+
 /** The state paths this reads. One per country the sim inflates. */
 export const PRICE_LEVEL_PATHS = Object.freeze({
   US: 'inflationAccumulator.US',
@@ -155,29 +157,41 @@ function _tsOf(date) {
 }
 
 /**
- * A `{ levelAt(ts, cc) }` source over a journal that is still GROWING — the shape the
- * schema registry's `priceLevelSource` takes (design 79 §3). A `JournalPriceLevels` is
- * built from a finished journal; during a live run, or after a rewind, the journal it
- * saw is no longer the journal. So this rebuilds whenever the entry count moves, and
- * only when asked: nothing is scanned on a step unless a dated value is formatted.
+ * A dated source over a journal that is still GROWING — the shape the schema
+ * registry's `priceLevelSource` takes (design 79 §3): the price level at a date, and
+ * the FX rates at that date, which a real display converts at (§7). A
+ * `JournalPriceLevels` is built from a finished journal; during a live run, or after a
+ * rewind, the journal it saw is no longer the journal. So this rebuilds whenever the
+ * entry count moves, and only when asked: nothing is scanned on a step unless a dated
+ * value is formatted.
  *
  * @param {() => import('../../simulation-framework/journal.js').Journal|null} getJournal
- * @param {{ fallbackLevel?: (cc: string) => number|null }} [opts]  as for JournalPriceLevels
- * @returns {{ levelAt: (ts: number, cc?: string) => number|null }}
+ * @param {{ fallbackLevel?: (cc: string) => number|null, fallbackRate?: () => number|null }} [opts]
+ * @returns {{ levelAt: (ts: number, cc?: string) => number|null,
+ *             stateAt: (ts: number) => { effectiveExchangeRates: object }|null }}
  */
-export function liveJournalPriceLevels(getJournal, opts = {}) {
-  let built = null, builtFor = null, builtLength = -1;
+export function liveJournalPriceLevels(getJournal, { fallbackLevel = null, fallbackRate = null } = {}) {
+  let levels = null, fx = null, builtFor = null, builtLength = -1;
+  const current = () => {
+    const journal = getJournal();
+    if (!journal) return false;
+    const length = journal.journal?.length ?? 0;
+    if (journal !== builtFor || length !== builtLength) {
+      levels = new JournalPriceLevels(journal, { fallbackLevel });
+      fx     = new JournalFxRates(journal, { fallbackRate });
+      builtFor = journal;
+      builtLength = length;
+    }
+    return true;
+  };
   return {
     levelAt(ts, cc = 'US') {
-      const journal = getJournal();
-      if (!journal) return null;
-      const length = journal.journal?.length ?? 0;
-      if (journal !== builtFor || length !== builtLength) {
-        built = new JournalPriceLevels(journal, opts);
-        builtFor = journal;
-        builtLength = length;
-      }
-      return built.levelAt(ts, cc);
+      return current() ? levels.levelAt(ts, cc) : null;
+    },
+    stateAt(ts) {
+      if (!current()) return null;
+      const rate = fx.rateAt(ts);
+      return rate > 0 ? { effectiveExchangeRates: { [USD_AUD_PATH.split('.')[1]]: rate } } : null;
     },
   };
 }

@@ -11,7 +11,7 @@
 > written and 79 is this one. Those citations mean *"a future Schedule-type design"*,
 > not this doc. They should get a fresh number when that design is written.
 
-**Status**: **P1 + P2 BUILT 2026-09-27** (P3–P4 open) — drafted 2026-07-13, **revised
+**Status**: **P1–P3 BUILT 2026-09-27** (P4 open) — drafted 2026-07-13, **revised
 2026-09-27** against the code at `fd6ec9cc`. See §14 for what P1 shipped and where it
 departed from the plan. Scope: an app-wide **value basis**
 toggle, `Nominal` (the default, and what the app does today) vs. `Real (base-year \$)`,
@@ -336,7 +336,7 @@ panels stay nominal with a tag.
 |---|---|---|
 | **P1** ✅ | `valueBasis` setting; `presentForDisplay` opt-in hop and `priceLevelSource`; top-bar select and label; point-in-time panels (§4); `run-scenario --real` | — |
 | **P2** ✅ | Chart: per-point level track, live and backfill (§5) | P1 |
-| **P3** | Journal R1 (§6); allocation, pool history and paycheque panels by row date (§4); tax-document badge; export stamps the basis; spending panel follows the global toggle (§8.1) | P1 |
+| **P3** ✅ | Journal R1 (§6); allocation, pool history and paycheque panels by row date (§4); tax-document badge; export stamps the basis; spending panel follows the global toggle (§8.1) | P1 |
 | **P4** | MC/Opt real aggregates computed per path (§9) | P1 |
 | ~~old P4~~ | ~~per-native-currency deflator~~: **retired** (R3) | — |
 
@@ -507,12 +507,72 @@ stay nominal.
   meaning nominal and unlabelled, nominal unchanged, the track's collapse/sort/reset)
   and two in `chart-presenter.test.mjs` (capture with nothing charted; backfill).
 
-### P3 — journal, tax documents, export, spending panel
-- `journal-report-plugin.js:105`: `formatAmount(abs, code, { at: row.date })`.
-- `tax-document-modal.js`: add the `nominal` badge while `valueBasis === 'real'`. The
-  values themselves stay unchanged.
-- Export: add a basis column or header.
-- `spending-plugin.js`: subscribe to `valueBasis`, as described in §8.1.
+### P3 — journal, dated panels, tax documents, export, spending panel  (BUILT 2026-09-27)
+
+**The registry, for dated values.** A real value formatted `{ at: <date> }` now also
+**converts at that date's FX rate** (`_datedRateState`, fed by the source's new
+`stateAt(ts)`, which `liveJournalPriceLevels` builds from `JournalFxRates`). Nominal
+still converts at the live rate, so nominal output is unchanged. `format()` takes the
+same dated rate. `restateSeries(values, dates, code)` is the all-or-nothing series
+form every dated panel uses.
+
+**Journal report (R1).** A multi-year total cannot be deflated after it is summed, so
+deflation happens **inside the fold**:
+- `runReport(def, params, apis, { real: { currency, defaultCurrency } })` passes
+  `real` to `JournalQueryApi._prepareAggregation`.
+- `_prepareAggregation` runs `normalizeAggregateCurrency` into the **display**
+  currency, then the new `deflateAggregateFields`. That divides each row's
+  `${f}In${cur}` by `priceLevels().levelAt(row.ts, cc)` into `realFieldName(f, cur)`
+  and repoints the aggregate.
+- A row with no level is dropped and warned about, the same contract as a row with no
+  FX rate.
+- `defaultCurrency` gives the unit of an undeclared payload field: the report's own,
+  else the `cc` facet's. A per-diff row on a path registered as non-money never gets
+  one, so counts are never deflated.
+- `priceLevels()` is memoised on journal length, so a mid-run re-run sees new years.
+
+The plugin:
+- re-runs when the basis flips, or when the currency changes while real, because
+  that changes what is folded;
+- shows drill-down rows from the same real field their total summed;
+- labels the total `Grand Total (real)`;
+- **exports nominal**: in real mode the CSV re-runs the report nominally and stamps
+  every row `valueBasis: nominal`.
+
+**Dated panels**, each restated at its own date and all or nothing:
+
+| Panel | What changed |
+|---|---|
+| Allocation | `_forDisplay(built)` restates every band and total at its sample date. In share mode, only the money totals. Both the stack and the target chart use it. The drift bar compares shares, so it is unchanged. |
+| Liquidity pools | `_shownHistory()` restates the money cube fields (`POOL_MONEY_FIELDS`, i.e. everything except cover and returns), the reserve, and event amounts at each period's date. The CSV reads the nominal `_history()`. |
+| Paycheque | The payslip is restated at mid-month. **Contributions and super caps stay nominal**, with a `(nominal)` header: they are measured against statutory caps, the same reasoning as tax documents. |
+| State panel | Action-detail diffs and history rows use `_fmtAt(field, v, date)`. History statistics (min, max, net Δ) and the history sparkline are computed from **restated** points (`_restated`), because a real statistic of nominal points is not the statistic of real points. `cumulativeDeficit` stays nominal (a mixed-currency sum). |
+
+**Tax documents.** They show a `Nominal: the Real toggle does not apply` note when the
+basis is real. The values were already nominal by construction.
+
+**Spending panel (§8.1, Q-B).** `_followValueBasis` moves real and nominal on a
+**change** of the app basis. `share` is left alone, and the first-load default stays
+real. A real view in a non-USD currency builds its own cube in that currency, using
+`priceLevelCc = countryForCurrency(display)` (§7). Every other case keeps the USD cube
+the panel has always drawn.
+
+**Verified in the browser** on the default scenario to 2040:
+- The tax-paid-by-year real total equals an independent per-row sum of
+  converted ÷ level(ts). It differs from nominal ÷ the final level, which is the
+  shortcut this avoids.
+- The panel relabels its total and re-runs on the toggle.
+- The spending panel follows the toggle both ways.
+- The allocation `$` stack in real ends at the real net worth.
+- No console errors.
+
+**Tests:**
+- `tests/unit/report-currency.test.mjs`, six cases: per-row real before the fold, AUD
+  ÷ AU, drill-down twin, single-currency default unit, dropped-and-announced,
+  nominal unchanged.
+- `tests/viz/value-basis-panels.test.mjs`, eleven cases: `restateSeries`, allocation,
+  pools, spending, paycheque, journal plugin, state-panel statistics.
+- Two cases in `tests/viz/timeline/tax-document-modal.test.mjs`.
 
 ### P4 — MC/Opt
 - `mc-analysis.js`: add parallel `*Real` percentiles (terminal net worth, the fan

@@ -19,6 +19,7 @@ import { WB_EVENTS }                   from '../../workbench-runtime.js';
 import { ReportDefinitionRegistry }    from '../../../../finance/journal-reporting/report-definition-registry.js';
 import { createReportApis, runReport } from '../../../../finance/journal-reporting/run-report.js';
 import { generateReportCsv }           from '../../../../finance/journal-reporting/report-csv.js';
+import { realFieldName }               from '../../../../finance/journal-reporting/report-currency.js';
 import { ServiceRegistry }             from '../../../../services/service-registry.js';
 import { withBom }                     from '../../../../utils/csv.js';
 
@@ -65,6 +66,9 @@ export class JournalReportPlugin extends WorkbenchComponent {
     // Currency the active report's money aggregates are stated in (design:
     // report-currency.js). Null until a report has run.
     this._currency       = null;
+    // 'real' when the groups were folded in base-year money (design 79 §6).
+    this._basis          = 'nominal';
+    this._foldedFor      = null;   // { basis, currency } the current groups were run for
     this._expandedKeys   = new Set();
     this._sortState      = null;   // { field: string, dir: 'asc'|'desc' } | null
     // Cache of period option descriptors built per render. Indexed by `value`,
@@ -142,7 +146,7 @@ export class JournalReportPlugin extends WorkbenchComponent {
         </div>
       </div>
       <div class="jr-footer" data-jr="footer" style="display:none">
-        <span class="jr-grand-total-label">Grand Total</span>
+        <span class="jr-grand-total-label" data-jr="grand-total-label">Grand Total</span>
         <span class="jr-grand-total-value" data-jr="grand-total">—</span>
         <button class="jr-csv-btn" data-jr="csv-btn" title="Download CSV">&#11015; CSV</button>
       </div>
@@ -160,7 +164,18 @@ export class JournalReportPlugin extends WorkbenchComponent {
     });
 
     // Reformat report amounts when the display currency changes (design 10 §Phase 4).
-    this._runtime.bus.subscribe(WB_EVENTS.DISPLAY_SETTINGS_CHANGED, () => this._renderResults());
+    // A basis flip, or a currency change while real, changes what was FOLDED — the real
+    // fold states every row in the display currency at its own date — so it re-runs
+    // the report. Anything else only re-formats.
+    this._runtime.bus.subscribe(WB_EVENTS.DISPLAY_SETTINGS_CHANGED, () => {
+      const want = this._realFold();
+      const had  = this._foldedFor;
+      if (had && (had.basis !== (want ? 'real' : 'nominal') || (want && had.currency !== want.currency))) {
+        this._runQuery();
+      } else {
+        this._renderResults();
+      }
+    });
   }
 
   onMount() {
@@ -278,16 +293,50 @@ export class JournalReportPlugin extends WorkbenchComponent {
     const def = this._registry.get(this._activeReportId);
     if (!def) return;
 
-    const result = await runReport(def, this._facetValues, this._apis);
+    const real   = this._realFold();
+    const result = await runReport(def, this._facetValues, this._apis, { real });
 
     this._groups     = result.groups;
     this._grandTotal = result.grandTotal;
+    this._basis      = result.basis ?? 'nominal';
+    this._foldedFor  = { basis: this._basis, currency: real?.currency ?? null };
     // The unit the aggregation actually folded — the definition's declared
     // report currency. Keeps the money formatter from guessing (design: a blank
     // `cc` used to be labelled USD while the total mixed AUD and USD).
     this._currency   = result.currency ?? null;
 
     if (this._mounted) this._renderResults();
+  }
+
+  /**
+   * The real fold to request, or null for nominal (design 79 §6): the display
+   * currency, plus the unit of an undeclared payload field — the `cc` facet's, the
+   * same fallback `_fmtMoney` already labels such a report with.
+   */
+  _realFold() {
+    const reg = this._services()?.schemaRegistry;
+    if (reg?.valueBasis?.() !== 'real') return null;
+    return {
+      currency:        reg.displayCurrencyCode?.() ?? 'USD',
+      defaultCurrency: JR_CC_TO_CUR[this._facetValues?.cc] ?? null,
+    };
+  }
+
+  /**
+   * A drill-down row's amount: under a real fold, the same real figure its group total
+   * summed (the row's own date's FX and price level); otherwise the native amount the
+   * journal recorded.
+   */
+  _itemAmount(item) {
+    const fields = ['stateDelta', 'personTaxAmount', 'amount', 'gain', 'proceeds'];
+    if (this._basis === 'real') {
+      for (const f of fields) {
+        const real = item[realFieldName(f, this._currency)];
+        if (typeof real === 'number') return real;
+      }
+    }
+    for (const f of fields) if (item[f] != null) return item[f];
+    return null;
   }
 
   _renderFacets() {
@@ -643,7 +692,7 @@ export class JournalReportPlugin extends WorkbenchComponent {
                   <span class="jr-child-date">${this._fmtDate(item.date)}</span>
                   <span class="jr-child-type">${item.actionType ?? '—'}</span>
                   <span class="jr-child-desc">${_esc(item.description ?? '')}</span>
-                  <span class="jr-child-amount ${_signCls(item.stateDelta ?? item.personTaxAmount ?? item.amount ?? item.gain ?? item.proceeds)}">${this._fmtMoney(item.stateDelta ?? item.personTaxAmount ?? item.amount ?? item.gain ?? item.proceeds ?? null)}</span>
+                  <span class="jr-child-amount ${_signCls(this._itemAmount(item))}">${this._fmtMoney(this._itemAmount(item))}</span>
                 </div>
               </td>
             </tr>`);
@@ -653,6 +702,8 @@ export class JournalReportPlugin extends WorkbenchComponent {
     tbody.innerHTML = rows.join('');
 
     // Grand total
+    const gtLabel = this._q('grand-total-label');
+    if (gtLabel) gtLabel.textContent = this._basis === 'real' ? 'Grand Total (real)' : 'Grand Total';
     const gtEl = this._q('grand-total');
     if (gtEl) {
       gtEl.textContent = this._fmtMoney(this._grandTotal);
@@ -672,20 +723,33 @@ export class JournalReportPlugin extends WorkbenchComponent {
     this._renderResults();
   }
 
-  _sortedGroups() {
-    if (!this._sortState || !this._groups.length) return this._groups;
+  _sortedGroups(groups = this._groups) {
+    if (!this._sortState || !groups.length) return groups;
     const { field, dir } = this._sortState;
     const sign = dir === 'asc' ? 1 : -1;
-    return [...this._groups].sort((a, b) => {
+    return [...groups].sort((a, b) => {
       const av = _sortValue(a, field);
       const bv = _sortValue(b, field);
       return av < bv ? -sign : av > bv ? sign : 0;
     });
   }
 
-  _downloadCsv() {
+  /**
+   * Export the report. Always NOMINAL (design 79 §6): a file is read without the
+   * toggle beside it, and nominal is what the journal recorded. When the screen shows
+   * real, the export re-runs the report nominally and stamps every row
+   * `valueBasis: nominal`, so the file cannot be mistaken for what was on screen.
+   */
+  async _downloadCsv() {
     const def = this._activeReportId ? this._registry.get(this._activeReportId) : null;
-    const csv = generateReportCsv(this._sortedGroups(), def, { detail: 'entries', currency: this._currency });
+    let groups = this._groups, currency = this._currency, lead = null;
+    if (this._basis === 'real' && def) {
+      const nominal = await runReport(def, this._facetValues, this._apis);
+      groups   = nominal.groups;
+      currency = nominal.currency ?? null;
+      lead     = { valueBasis: 'nominal' };
+    }
+    const csv = generateReportCsv(this._sortedGroups(groups), def, { detail: 'entries', currency, lead });
     if (!csv) return;
 
     const reportTitle = def?.title ?? 'journal-report';

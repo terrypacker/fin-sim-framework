@@ -992,7 +992,7 @@ export class StateSchemaRegistry {
       return fmtDate(value instanceof Date ? value : new Date(value));
     }
     if (vt.kind === 'currency' && typeof value === 'number') {
-      const display = this._toDisplayCurrency(vt, fieldPath, value, opts.state);
+      const display = this._toDisplayCurrency(vt, fieldPath, value, opts.state ?? this._datedRateState(opts.at));
       const shown   = display ?? { vt, value };
       // Deflate AFTER conversion, by the country of the currency now shown (design
       // 79 §7). Not inside _toDisplayCurrency: that returns null for a value already
@@ -1068,7 +1068,7 @@ export class StateSchemaRegistry {
     let code = nativeCode, amount = value;
     const display = this._displaySettings?.displayCurrency;
     if (display && this._currencyConverter && display !== nativeCode) {
-      const state = opts.state ?? this._rateStateProvider?.() ?? null;
+      const state = opts.state ?? this._datedRateState(opts.at) ?? this._rateStateProvider?.() ?? null;
       const conv  = this._currencyConverter.convert(value, nativeCode, display, state);
       if (conv != null) { code = display; amount = conv; }
     }
@@ -1111,6 +1111,48 @@ export class StateSchemaRegistry {
       style: 'currency', currency: code,
       minimumFractionDigits: Math.min(2, max), maximumFractionDigits: max,
     }).format(amount);
+  }
+
+  /**
+   * The FX rates in force at a dated value's own date, for a REAL display only (design
+   * 79 §7): deflating by one date's price level while converting at another date's rate
+   * is internally inconsistent. Nominal keeps converting at the live rate (design 10's
+   * single-rate behaviour, unchanged), so this returns null unless the basis is real
+   * and `at` is a date.
+   */
+  _datedRateState(at) {
+    if (at == null || at === 'live' || this.valueBasis() !== 'real') return null;
+    return this._priceLevelSource?.stateAt?.(at instanceof Date ? at.getTime() : at) ?? null;
+  }
+
+  /**
+   * Restate a dated series for display (design 79 §5/§6), ALL OR NOTHING: every point
+   * converted at its own date's rate and, under a real basis, divided by its own date's
+   * price level. If any point cannot be restated the way its neighbours were, the whole
+   * series comes back nominal — a series that is partly real is worse than one that is
+   * plainly nominal, because nothing on the axis can say which points are which.
+   *
+   * @param {Array<number|null>} values
+   * @param {Array<Date|number>} dates   same length as `values`
+   * @param {string} nativeCode
+   * @returns {{ values: Array<number|null>, code: string, basis: 'real'|'nominal' }}
+   *   `basis` 'real' only when every point was deflated; nominal otherwise, with the
+   *   values exactly as given and `code` the native code.
+   */
+  restateSeries(values, dates, nativeCode) {
+    const nominal = { values, code: nativeCode, basis: 'nominal' };
+    if (this.valueBasis() !== 'real' || !values?.length) return nominal;
+    const out = new Array(values.length);
+    let code = null;
+    for (let i = 0; i < values.length; i++) {
+      const v = values[i];
+      if (v == null) { out[i] = v; continue; }
+      const p = this.presentForDisplay(v, nativeCode, { at: dates[i] });
+      if (p.basis !== 'real' || (code != null && p.code !== code)) return nominal;
+      code = p.code;
+      out[i] = p.value;
+    }
+    return code == null ? nominal : { values: out, code, basis: 'real' };
   }
 
   /** The active value basis ('nominal' | 'real'); nominal when no settings are wired. */

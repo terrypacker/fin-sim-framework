@@ -15,9 +15,17 @@ import { ServiceRegistry }    from '../../../../services/service-registry.js';
 import { withBom }            from '../../../../utils/csv.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../../../simulation-framework/bus-messages.js';
 import { buildPoolHistory, poolHistoryRows, poolSeries, reserveSeries, tiePoolHistory,
-         poolShapeSpans, poolTargetScaleSteps, poolTopology, POOL_EVENT_KIND }
+         poolShapeSpans, poolTargetScaleSteps, poolTopology, POOL_EVENT_KIND, POOL_CUBE_FIELDS }
   from '../../../../finance/pools/pool-history.js';
 import { colorForSeriesKey } from '../../../../finance/allocation-reporting/allocation-palette.js';
+
+/**
+ * The cube fields that are money (design 79 §6) — everything in `POOL_CUBE_FIELDS` except
+ * the ratios: years of cover and the two market returns, which a price level must not touch.
+ */
+const POOL_MONEY_FIELDS = POOL_CUBE_FIELDS.filter(f => !/^yearsOfCover|Return$/.test(f));
+/** The household reserve's money fields; `yearsOfCover` is a ratio. */
+const RESERVE_MONEY_FIELDS = ['accessible', 'locked'];
 
 /** The CSV's columns, in order. The fact table's contract — see `poolHistoryRows`. */
 export const POOL_CSV_COLUMNS = Object.freeze([
@@ -310,6 +318,54 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
     return this._histCache;
   }
 
+  /**
+   * The history as the panel draws it (design 79 §6). Under a real value basis every
+   * money figure is restated at ITS OWN period's date — that date's FX rate and price
+   * level — all or nothing: if any figure cannot be restated the whole history stays
+   * nominal, because the pools share one axis and a table row carries several columns.
+   * Cover (years) and returns are ratios and pass through. The CSV keeps reading
+   * `_history()` — an export is always nominal.
+   */
+  _shownHistory() {
+    const hist = this._history();
+    const reg  = this._services()?.schemaRegistry;
+    this._displayCode = null;
+    if (!hist || reg?.valueBasis?.() !== 'real') return hist;
+    const key = `${this._dataSig}|${reg.displayCurrencyCode?.() ?? ''}`;
+    if (this._shownKey === key && this._shownCache) {
+      this._displayCode = this._shownCache.displayCode;
+      return this._shownCache;
+    }
+
+    let code = null, failed = false;
+    const real = (v, at) => {
+      if (failed || typeof v !== 'number') return v;
+      const p = reg.presentForDisplay(v, 'USD', { at });
+      if (p.basis !== 'real' || (code != null && p.code !== code)) { failed = true; return v; }
+      code = p.code;
+      return p.value;
+    };
+    const restateRecord = (rec, at, fields) => {
+      if (!rec) return rec;
+      const out = { ...rec };
+      for (const f of fields) if (f in out) out[f] = real(out[f], at);
+      return out;
+    };
+    const periods = hist.periods.map(p => ({
+      ...p,
+      pools:   Object.fromEntries(Object.entries(p.pools ?? {})
+        .map(([id, m]) => [id, restateRecord(m, p.at, POOL_MONEY_FIELDS)])),
+      reserve: restateRecord(p.reserve, p.at, RESERVE_MONEY_FIELDS),
+    }));
+    const events = hist.events.map(e => restateRecord(e, e.at, ['amount', 'wanted']));
+    if (failed || code == null) return hist;
+
+    this._shownCache  = { ...hist, periods, events, displayCode: code };
+    this._shownKey    = key;
+    this._displayCode = code;
+    return this._shownCache;
+  }
+
   // ─── Render ──────────────────────────────────────────────────────────────
 
   _syncControls() {
@@ -328,7 +384,7 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
   _render() {
     if (!this._mounted) return;
 
-    const hist = this._history();
+    const hist = this._shownHistory();
     const asof = this._q('asof');
     if (asof) {
       const n = hist?.periods?.length ?? 0;
@@ -1313,6 +1369,9 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
   _money(n) {
     if (n == null) return '—';
     const reg = this._services()?.schemaRegistry;
+    // A restated history is already in the display currency (see `_shownHistory`):
+    // formatted in it, never converted again at today's rate.
+    if (this._displayCode) return `${reg.formatAmount(n, this._displayCode)} real`;
     return reg?.formatAmount?.(n, 'USD') ?? `$${Math.round(n).toLocaleString()}`;
   }
 

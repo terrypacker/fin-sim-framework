@@ -610,11 +610,20 @@ export class AllocationPlugin extends WorkbenchComponent {
     this._q('placeholder').style.display = 'none';
     this._q('chart').style.display = '';
 
-    this._drawTargetChart(realized, target);
+    // Restated for the chart only: the drift bar compares SHARES, which a common
+    // per-date divisor leaves unchanged, so it keeps the pivot as built.
+    const shownRealized = this._forDisplay(realized);
+    const shownTarget   = this._forDisplay(target);
+    const bothReal      = shownRealized.basis === shownTarget.basis;
+    this._drawTargetChart(
+      bothReal ? shownRealized.built : realized,
+      bothReal ? shownTarget.built   : target,
+      bothReal ? shownRealized.money : (n) => this._money(n),
+    );
     this._renderDriftBar(realized, target, scopedTargetRows, targeted);
   }
 
-  _drawTargetChart(realized, target) {
+  _drawTargetChart(realized, target, money = (n) => this._money(n)) {
     const host = this._q('chart');
     if (!host || !this._canvasAvailable()) return;
     if (!this._chart) {
@@ -632,7 +641,6 @@ export class AllocationPlugin extends WorkbenchComponent {
     const line   = dark ? '#334155' : '#e1e0d9';
     const dates  = realized.dates;
     const tgt    = this._alignTo(dates, target);
-    const money  = (n) => this._money(n);
     const fmt    = (v) => (v == null ? '—' : share ? `${(v * 100).toFixed(1)}%` : money(v));
     // Union of both sides' keys: a class held but never targeted (and one targeted but
     // not held) is precisely what the reader is looking for, so neither list alone will do.
@@ -1029,7 +1037,10 @@ export class AllocationPlugin extends WorkbenchComponent {
     // leave the previous view's series behind as ghost bands. It is also what lets the
     // panel swap between a doughnut and a stacked area without the two option shapes
     // bleeding into each other.
-    const option = built.dates.length === 1 ? this._donutOption(built) : this._option(built);
+    const shown  = this._forDisplay(built);
+    const option = built.dates.length === 1
+      ? this._donutOption(shown.built, shown.money)
+      : this._option(shown.built, shown.money);
     this._chart.setOption(option, true);
   }
 
@@ -1047,11 +1058,10 @@ export class AllocationPlugin extends WorkbenchComponent {
    * way to get here with one is the total view's `with debt` decomposition. The count is
    * stated in the centre rather than silently omitted.
    */
-  _donutOption(built) {
+  _donutOption(built, money = (n) => this._money(n)) {
     const share = this._mode === 'pct';
     const dark  = this._dark();
     const ink   = dark ? '#94a3b8' : '#52514e';
-    const money = (n) => this._money(n);
 
     // In share mode the pivot has already normalised the column, so the slice values are
     // shares; the gross is carried separately for the centre readout either way.
@@ -1107,7 +1117,7 @@ export class AllocationPlugin extends WorkbenchComponent {
    * area, 100%-stacked in share mode, with the zero series dropped from the tooltip: a
    * 12-line tooltip where 5 rows read 0.0% is how a reader stops opening tooltips.
    */
-  _option(built) {
+  _option(built, money = (n) => this._money(n)) {
     const share = this._mode === 'pct';
     const dark  = this._dark();
     // Two dates draw as a hairline nobody can read a value off. Show the marks while the
@@ -1116,7 +1126,6 @@ export class AllocationPlugin extends WorkbenchComponent {
     const sparse = built.dates.length <= 2;
     const ink   = dark ? '#94a3b8' : '#52514e';
     const line  = dark ? '#334155' : '#e1e0d9';
-    const money = (n) => this._money(n);
     const totals = built.totals;
 
     return {
@@ -1198,6 +1207,46 @@ export class AllocationPlugin extends WorkbenchComponent {
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
+
+  /**
+   * The pivot as the chart should draw it, and the formatter for its values (design 79
+   * §6). Under a real value basis in the money view, every point is restated at ITS
+   * OWN sample date — that date's FX rate, that date's price level — through the
+   * registry's all-or-nothing `restateSeries`; one series that cannot be restated sends
+   * the whole chart back to nominal, since the stack's bands must share a unit. In the
+   * share view only the totals are money (the "of $X" readout); the shares themselves
+   * are unitless and are left alone.
+   *
+   * @returns {{ built: object, money: (n: number) => string, basis: 'real'|'nominal' }}
+   */
+  _forDisplay(built) {
+    const reg = this._services()?.schemaRegistry;
+    const nominal = { built, money: (n) => this._money(n), basis: 'nominal' };
+    if (reg?.valueBasis?.() !== 'real' || !built?.dates?.length) return nominal;
+    const share = this._mode === 'pct';
+
+    let code = null;
+    const restate = (values) => {
+      const r = reg.restateSeries(values, built.dates, 'USD');
+      if (r.basis === 'real' && (code == null || r.code === code)) { code = r.code; return r.values; }
+      return values.every(v => v == null) ? values : null;   // an empty series has no unit to disagree
+    };
+    const series = share ? built.series : {};
+    if (!share) {
+      for (const key of built.keys) {
+        series[key] = restate(built.series[key]);
+        if (series[key] == null) return nominal;
+      }
+    }
+    const totals = built.totals ? restate(built.totals) : built.totals;
+    if (totals == null || code == null) return nominal;
+    return {
+      built: { ...built, series, totals },
+      // Already in the display currency: formatted, never converted again at today's rate.
+      money: (n) => (n == null ? '—' : `${reg.formatAmount(n, code)} real`),
+      basis: 'real',
+    };
+  }
 
   _money(n) {
     if (n == null) return '—';

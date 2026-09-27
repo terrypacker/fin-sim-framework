@@ -14,6 +14,7 @@ import { WB_EVENTS }          from '../../workbench-runtime.js';
 import { ServiceRegistry }    from '../../../../services/service-registry.js';
 import { withBom }            from '../../../../utils/csv.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../../../simulation-framework/bus-messages.js';
+import { countryForCurrency }         from '../../../../finance/country-codes.js';
 import { buildSpendingCube, checkClassificationTotal, spendingSummary }
   from '../../../../finance/spending-reporting/spending-cube.js';
 import { buildSpendingSeries, bySpendingTier, intentVsRealized }
@@ -70,6 +71,9 @@ export class SpendingPlugin extends WorkbenchComponent {
 
     this._view = 'spending';   // spending | moved | tie
     this._mode = 'real';       // real | nominal | share
+    // The app's value basis as last seen (design 79 §8.1): a CHANGE to it moves this
+    // panel's real/nominal choice; the panel's own buttons override until the next one.
+    this._lastBasis = null;
 
     this._chart        = null;
     this._unsubSimBus  = null;
@@ -122,7 +126,11 @@ export class SpendingPlugin extends WorkbenchComponent {
     this._runtime.bus.subscribe(WB_EVENTS.SCENARIO_READY, ({ scenario }) => {
       this._bindSim(scenario?.sim ?? null);
     });
-    this._runtime.bus.subscribe(WB_EVENTS.DISPLAY_SETTINGS_CHANGED, () => this._render());
+    this._runtime.bus.subscribe(WB_EVENTS.DISPLAY_SETTINGS_CHANGED, () => {
+      this._followValueBasis();
+      this._render();
+    });
+    this._lastBasis = this._services()?.schemaRegistry?.valueBasis?.() ?? null;
     this._onResize = () => this._chart?.resize();
     window.addEventListener('resize', this._onResize);
   }
@@ -228,24 +236,53 @@ export class SpendingPlugin extends WorkbenchComponent {
 
   /** The classified cube, rebuilt only when the run has actually moved. */
   _cube() {
-    const sig = this._signature();
-    if (sig === this._dataSig && this._cubeCache) return this._cubeCache;
+    const sig      = this._signature();
+    const currency = this._cubeCurrency();
+    if (sig === this._dataSig && this._cubeCache && this._cubeCache.currency === currency) return this._cubeCache;
     if (sig === 'empty') { this._cubeCache = null; this._tieCache = null; this._dataSig = sig; return null; }
 
     this._cubeCache = buildSpendingCube({
       journal:  this._sim.journal,
       state:    this._sim.state,
       services: this._services(),
-      currency: 'USD',
+      currency,
+      priceLevelCc: countryForCurrency(currency),
     });
-    this._tieCache = checkFlowInvariant({
-      samples: this._sim.samples, journal: this._sim.journal,
-    });
+    if (sig !== this._dataSig || !this._tieCache) {
+      this._tieCache = checkFlowInvariant({
+        samples: this._sim.samples, journal: this._sim.journal,
+      });
+    }
     this._dataSig = sig;
     return this._cubeCache;
   }
 
   _flowTie() { this._cube(); return this._tieCache; }
+
+  /**
+   * Follow the top-bar Nominal/Real toggle (design 79 §8.1, Q-B). Only a CHANGE moves
+   * the panel: the first-load default stays real whatever the app basis, because
+   * design 89 §9b made real this chart's default, and `share` is local — it has no basis.
+   */
+  _followValueBasis() {
+    const basis = this._services()?.schemaRegistry?.valueBasis?.() ?? null;
+    if (basis == null || basis === this._lastBasis) return;
+    this._lastBasis = basis;
+    if (this._mode === 'share') return;
+    this._mode = basis;
+    this._q('mode')?.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.mode === basis));
+  }
+
+  /**
+   * The currency the cube is folded in. Real money in an AUD view is AUD at each
+   * debit's date divided by the AU price level (design 79 §7), which a USD cube shown
+   * through today's rate is not — so real + a non-USD display gets its own cube.
+   * Everything else keeps the USD cube this panel has always drawn.
+   */
+  _cubeCurrency() {
+    const display = this._services()?.schemaRegistry?.displayCurrencyCode?.() ?? 'USD';
+    return this._mode === 'real' && display !== 'USD' ? display : 'USD';
+  }
 
   // ─── Render ──────────────────────────────────────────────────────────────
 
@@ -559,8 +596,11 @@ export class SpendingPlugin extends WorkbenchComponent {
 
   _money(n) {
     if (n == null) return '—';
+    // The cube's own currency: a display-currency cube is already in the display
+    // currency and must not be converted again at today's rate.
+    const code = this._cubeCache?.currency ?? 'USD';
     const reg = this._services()?.schemaRegistry;
-    return reg?.formatAmount?.(n, 'USD') ?? `$${Math.round(n).toLocaleString()}`;
+    return reg?.formatAmount?.(n, code) ?? `$${Math.round(n).toLocaleString()}`;
   }
 
   _bindOnce(name, event, handler, rawHandler = null) {

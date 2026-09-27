@@ -248,3 +248,20 @@ test('resolving names does not mutate the caller\'s document', () => {
   assert.deepEqual(doc.table.rows[0][0], { stateKey: 'usStockAccount', text: 'usStockAccount' },
     'the document handed in must be unchanged — it may be shared or re-rendered');
 });
+
+// ─── Real value basis (design 79 §6) ──────────────────────────────────────────
+
+test('real basis: a tax document stays nominal and says so', () => {
+  const reg = wiredRegistry('USD');
+  reg.displaySettings   = { displayCurrency: 'USD', valueBasis: 'real' };
+  reg.rateStateProvider = () => ({ effectiveExchangeRates: { USD_AUD: 1.5 }, inflationAccumulator: { US: 2, AU: 2 } });
+  const m = new TaxDocumentModal(); m.schemaRegistry = reg;
+  const html = openHtml(m, usDoc());
+  assert.ok(html.includes('$100,000.00'), 'wages are the filed amount, not ÷ 2');
+  assert.ok(html.includes('data-basis-note'), 'the nominal note is shown');
+});
+
+test('nominal basis: no basis note', () => {
+  const m = new TaxDocumentModal(); m.schemaRegistry = wiredRegistry('USD');
+  assert.ok(!openHtml(m, usDoc()).includes('data-basis-note'));
+});

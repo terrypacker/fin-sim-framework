@@ -73,12 +73,17 @@ export function apiFor(apis, def) {
  * @param {import('./report-definition-registry.js').ReportDefinition} def
  * @param {object} params - resolved facet values (cc, period, personKeys, …)
  * @param {{entry: JournalQueryApi, diff: JournalQueryApi, person: JournalQueryApi}} apis
- * @returns {Promise<{groups: Array<object>, grandTotal: number|null, currency: string|null}>}
+ * @param {object} [opts]
+ * @param {{ currency: string, defaultCurrency?: string }} [opts.real]  fold real base-year
+ *   money in `currency` (design 79 §6): each row converted and deflated at its own date.
+ *   `defaultCurrency` is the unit of a payload field nothing declares — the report's own.
+ * @returns {Promise<{groups: Array<object>, grandTotal: number|null, currency: string|null,
+ *   basis: 'real'|'nominal'}>}
  *   `currency` is the code the money aggregates are expressed in (null when the
  *   definition declares none), so callers label totals with the unit that was
  *   actually folded rather than guessing from the facets.
  */
-export async function runReport(def, params, apis) {
+export async function runReport(def, params, apis, { real = null } = {}) {
   const api        = apiFor(apis, def);
   const ast        = def.buildQuery(params, api);
   const periodType = def.periodTypeFor?.(params) ?? null;
@@ -86,7 +91,13 @@ export async function runReport(def, params, apis) {
   // currency-typed fields are converted before they are folded (a report whose
   // rows span both countries would otherwise add AUD onto USD); null for the
   // single-currency reports, which then fold exactly as projected.
-  const currency   = def.reportCurrency?.(params) ?? null;
+  const declared   = def.reportCurrency?.(params) ?? null;
+  // A real fold states everything in the display currency — the one whose price level
+  // it divides by (design 79 §7) — whatever unit the report would fold nominally.
+  const currency   = real?.currency ?? declared;
+  const realOpt    = real?.currency
+    ? { currency: real.currency, defaultCurrency: declared ?? real.defaultCurrency ?? null }
+    : null;
 
   const result = periodType && api._periodService
     ? await api.aggregateByYear({
@@ -94,6 +105,7 @@ export async function runReport(def, params, apis) {
         periodType,
         aggregates: def.defaultAggregates,
         currency,
+        real:       realOpt,
       })
     : await api.aggregate({
         query:      ast,
@@ -101,11 +113,13 @@ export async function runReport(def, params, apis) {
         aggregates: def.defaultAggregates,
         dedupeBy:   def.dedupeBy,
         currency,
+        real:       realOpt,
       });
 
   return {
     groups:     def.decorate(result.groups, api),
     grandTotal: result.grandTotal,
     currency,
+    basis:      realOpt ? 'real' : 'nominal',
   };
 }

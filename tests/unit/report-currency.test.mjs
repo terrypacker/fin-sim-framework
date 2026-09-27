@@ -474,3 +474,99 @@ test('e2e: a cross-border run reconciles with state.cumulativeTaxesPaid', async 
   assert.ok(Math.abs(grandTotal - target) < 0.01,
     `blank-cc total ${grandTotal} vs cumulativeTaxesPaid−fundTax ${target}`);
 });
+
+// ─── Real value basis: per-row deflation before the fold (design 79 §6) ───────
+
+import { realFieldName } from '../../src/finance/journal-reporting/report-currency.js';
+
+/** A price-level step, as InflationAdjustReducer diffs it into the journal. */
+const levelStep = (date, cc, before, after) => entry({
+  date, actionType: 'INFLATION_ADJUST',
+  stateDiff: [{ field: `inflationAccumulator.${cc}`, before, after, delta: after - before }],
+});
+
+test('real: every row is converted AND deflated at its own date before the fold', async () => {
+  const def  = new ReportDefinitionRegistry().get('tax-paid-by-year');
+  const apis = apisFor([
+    auSettle(new Date(Date.UTC(2026, 5, 30)), 1.5),
+    levelStep(new Date(Date.UTC(2028, 0, 1)), 'US', 1, 2),
+    entry({ date: new Date(Date.UTC(2027, 5, 30)), actionType: 'US_TAX_PAYMENT_DEBIT', data: { amount: 100 } }),
+    entry({ date: new Date(Date.UTC(2029, 5, 30)), actionType: 'US_TAX_PAYMENT_DEBIT', data: { amount: 100 } }),
+    entry({ date: new Date(Date.UTC(2029, 5, 30)), actionType: 'AU_TAX_PAYMENT_DEBIT', data: { amount: 300 } }),
+  ]);
+
+  const result = await runReport(def, { cc: '', period: WHOLE_SIM }, apis, { real: { currency: 'USD' } });
+  const byYear = Object.fromEntries(result.groups.map(g => [g.key.year, g.total]));
+
+  assert.strictEqual(result.basis, 'real');
+  assert.strictEqual(result.currency, 'USD');
+  assert.strictEqual(byYear[2027], 100, 'before the step: ÷ 1');
+  assert.strictEqual(byYear[2029], 50 + 100, '$100 ÷ 2, plus A$300 → $200 ÷ 2');
+  // A multi-year total is the sum of real rows — not the nominal sum ÷ one level.
+  assert.strictEqual(result.grandTotal, 250);
+});
+
+test('real: an AUD view converts into AUD and divides by the AU level', async () => {
+  const def  = new ReportDefinitionRegistry().get('tax-paid-by-year');
+  const apis = apisFor([
+    auSettle(new Date(Date.UTC(2026, 5, 30)), 1.5),
+    levelStep(new Date(Date.UTC(2027, 0, 1)), 'US', 1, 2),
+    levelStep(new Date(Date.UTC(2027, 0, 1)), 'AU', 1, 3),
+    entry({ date: new Date(Date.UTC(2027, 5, 30)), actionType: 'US_TAX_PAYMENT_DEBIT', data: { amount: 100 } }),
+  ]);
+  const { grandTotal, currency } = await runReport(def, { cc: '', period: WHOLE_SIM }, apis,
+    { real: { currency: 'AUD' } });
+  assert.strictEqual(currency, 'AUD');
+  assert.ok(Math.abs(grandTotal - 150 / 3) < 1e-9, `$100 → A$150 ÷ AU 3, got ${grandTotal}`);
+});
+
+test('real: a drill-down row carries the same real figure its group summed', async () => {
+  const def  = new ReportDefinitionRegistry().get('tax-paid-by-year');
+  const apis = apisFor([
+    levelStep(new Date(Date.UTC(2027, 0, 1)), 'US', 1, 4),
+    entry({ date: new Date(Date.UTC(2027, 5, 30)), actionType: 'US_TAX_PAYMENT_DEBIT', data: { amount: 100 } }),
+  ]);
+  const { groups } = await runReport(def, { cc: 'US', period: WHOLE_SIM }, apis, { real: { currency: 'USD' } });
+  const item = groups.flatMap(g => g.items).find(i => i.actionType === 'US_TAX_PAYMENT_DEBIT');
+  assert.strictEqual(item[realFieldName('amount', 'USD')], 25);
+  assert.strictEqual(item.amount, 100, 'the native figure is untouched');
+});
+
+test('real: a single-currency report converts from ITS unit, not an assumed target', async () => {
+  const def = new ReportDefinitionRegistry().get('ordinary-income-by-source');
+  const schemaRegistry = new StateSchemaRegistry();   // auOrdinaryIncomeYTD is AUD there
+  const apis = apisFor([
+    auSettle(new Date(Date.UTC(2026, 0, 1)), 2),
+    levelStep(new Date(Date.UTC(2026, 0, 1)), 'US', 1, 1.25),
+    entry({
+      date: new Date(Date.UTC(2026, 2, 1)), actionType: 'AU_SAVINGS_INTEREST',
+      stateDiff: [{ field: 'auOrdinaryIncomeYTD', before: 0, after: 500, delta: 500 }],
+    }),
+  ], { schemaRegistry });
+  const { grandTotal } = await runReport(def, { cc: 'AU', period: WHOLE_SIM }, apis,
+    { real: { currency: 'USD', defaultCurrency: 'AUD' } });
+  assert.strictEqual(grandTotal, 500 / 2 / 1.25);
+});
+
+test('real: a row with no recorded price level is dropped and announced, never ÷ 1', async () => {
+  const def  = new ReportDefinitionRegistry().get('tax-paid-by-year');
+  const apis = apisFor([
+    entry({ date: new Date(Date.UTC(2027, 5, 30)), actionType: 'US_TAX_PAYMENT_DEBIT', data: { amount: 100 } }),
+  ]);
+  const { result, warnings } = await withoutWarnings(
+    () => runReport(def, { cc: 'US', period: WHOLE_SIM }, apis, { real: { currency: 'USD' } }),
+  );
+  assert.strictEqual(result.grandTotal, 0);
+  assert.ok(warnings.some(w => w.includes('no price level')), 'the exclusion is announced');
+});
+
+test('nominal: no real option folds exactly as before design 79', async () => {
+  const def  = new ReportDefinitionRegistry().get('tax-paid-by-year');
+  const apis = apisFor([
+    levelStep(new Date(Date.UTC(2027, 0, 1)), 'US', 1, 4),
+    entry({ date: new Date(Date.UTC(2027, 5, 30)), actionType: 'US_TAX_PAYMENT_DEBIT', data: { amount: 100 } }),
+  ]);
+  const result = await runReport(def, { cc: 'US', period: WHOLE_SIM }, apis);
+  assert.strictEqual(result.grandTotal, 100);
+  assert.strictEqual(result.basis, 'nominal');
+});

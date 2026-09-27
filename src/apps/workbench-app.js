@@ -821,7 +821,10 @@ export class WorkbenchApp extends BaseComponent {
     // run's own price level at that date, recovered from the journal's accumulator diffs.
     registry.schemaRegistry.priceLevelSource = liveJournalPriceLevels(
       () => this.scenario?.sim?.journal ?? null,
-      { fallbackLevel: cc => this.scenario?.sim?.state?.inflationAccumulator?.[cc] ?? null },
+      {
+        fallbackLevel: cc => this.scenario?.sim?.state?.inflationAccumulator?.[cc] ?? null,
+        fallbackRate:  () => this.scenario?.sim?.state?.effectiveExchangeRates?.USD_AUD ?? null,
+      },
     );
     this._labelValueBasis(this.scenario.simStart);
 

@@ -61,6 +61,20 @@ export class TaxDocumentModal {
     return amount < 0 ? `(${str})` : str;
   }
 
+  /**
+   * Under a real value basis, say that this document is not restated (design 79 §6).
+   * A tax return is statutory: its lines are the nominal amounts filed, and deflating
+   * them would misrepresent the filing. `_fmtAmt` never names an instant, so the hop
+   * keeps it nominal by construction; this note keeps the reader from assuming the
+   * app-wide toggle applies here too.
+   */
+  _renderBasisNote() {
+    if (this._schemaRegistry?.valueBasis?.() !== 'real') return '';
+    return '<div class="tax-doc-fx-note" data-basis-note '
+      + 'title="Tax documents show the amounts filed; they are never restated in real dollars">'
+      + 'Nominal: the Real toggle does not apply to tax documents</div>';
+  }
+
   /** @param {TaxDocument|TaxDocument[]} docOrDocs */
   open(docOrDocs) {
     const docs = (Array.isArray(docOrDocs) ? docOrDocs : [docOrDocs]).map(d => this._withNames(d));
@@ -121,6 +135,7 @@ export class TaxDocumentModal {
           <div class="tax-doc-title">${doc.title}</div>
           <div class="tax-doc-subtitle">${doc.filingStatus}</div>
           ${_renderFxNote(doc)}
+          ${this._renderBasisNote()}
         </div>
       </div>
       <div class="tax-doc-body">

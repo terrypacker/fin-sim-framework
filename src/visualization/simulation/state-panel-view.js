@@ -695,7 +695,7 @@ export class StatePanelView extends BaseComponent {
 
         const stateChangeBeforeRow = document.importNode(stateChangesGrid.querySelector('[data-state-change-before-row]'), true);
         stateChangeBeforeRow.style = '';
-        stateChangeBeforeRow.querySelector('[data-id="before"]').innerHTML = this._fmtChange(change.field, change.before, true);
+        stateChangeBeforeRow.querySelector('[data-id="before"]').innerHTML = this._fmtAt(change.field, change.before, entry?.date, true);
         stateChangesGrid.appendChild(stateChangeBeforeRow);
 
         const stateChangeAfterRow = document.importNode(stateChangesGrid.querySelector('[data-state-change-after-row]'), true);
@@ -705,15 +705,15 @@ export class StatePanelView extends BaseComponent {
           const delta = document.createElement('span');
           if (change.delta > 0) {
             delta.classList.add('diff-pos');
-            delta.innerText = '+' + this._fmtChange(change.field, change.delta);
+            delta.innerText = '+' + this._fmtAt(change.field, change.delta, entry?.date);
           } else {
             delta.classList.add('diff-neg');
-            delta.innerText = this._fmtChange(change.field, change.delta);
+            delta.innerText = this._fmtAt(change.field, change.delta, entry?.date);
           }
-          after.innerHTML = this._fmtChange(change.field, change.after, true);
+          after.innerHTML = this._fmtAt(change.field, change.after, entry?.date, true);
           after.appendChild(delta);
         } else {
-          stateChangeAfterRow.querySelector('[data-id="after"]').innerHTML = this._fmtChange(change.field, change.after, true);
+          stateChangeAfterRow.querySelector('[data-id="after"]').innerHTML = this._fmtAt(change.field, change.after, entry?.date, true);
         }
         stateChangesGrid.appendChild(stateChangeAfterRow);
       }
@@ -885,19 +885,19 @@ export class StatePanelView extends BaseComponent {
         empty.textContent = 'No data in selected range.';
         chartEl.appendChild(empty);
       } else {
-        const values = filtered.map(e => e.value);
+        const { values, fmt } = this._restated(path, filtered.map(e => e.value), filtered.map(e => e.date));
         const min    = Math.min(...values);
         const max    = Math.max(...values);
         const latest = values[values.length - 1];
         const net    = latest - values[0];
         statsEl.append(
           mkStat('Points',  String(filtered.length), ''),
-          mkStat('Current', this._fmtChange(path, latest), ''),
-          mkStat('Min',     this._fmtChange(path, min), '#f87171'),
-          mkStat('Max',     this._fmtChange(path, max), '#34d399'),
-          mkStat('Net Δ',   (net >= 0 ? '+' : '') + this._fmtChange(path, net), net > 0 ? '#34d399' : net < 0 ? '#f87171' : ''),
+          mkStat('Current', fmt(latest), ''),
+          mkStat('Min',     fmt(min), '#f87171'),
+          mkStat('Max',     fmt(max), '#34d399'),
+          mkStat('Net Δ',   (net >= 0 ? '+' : '') + fmt(net), net > 0 ? '#34d399' : net < 0 ? '#f87171' : ''),
         );
-        chartEl.appendChild(this._renderMetricChartSvg(filtered, path));
+        chartEl.appendChild(this._renderMetricChartSvg(filtered.map((e, i) => ({ ...e, value: values[i] })), path));
       }
 
       if (activeTab === 'exec') this._renderExecGraphPane(execPane, filtered, path);
@@ -1246,9 +1246,11 @@ export class StatePanelView extends BaseComponent {
           if (to   && d > to)   return false;
           return true;
         });
-        const net = filtered.reduce((s, e) => s + (typeof e.delta === 'number' ? e.delta : 0), 0);
+        const { values: deltas, fmt } = this._restated(field,
+          filtered.map(e => (typeof e.delta === 'number' ? e.delta : 0)), filtered.map(e => e.date));
+        const net = deltas.reduce((s, d) => s + d, 0);
         netSpan.style.color = net > 0 ? '#34d399' : net < 0 ? '#f87171' : 'var(--text-muted)';
-        netSpan.textContent = `Net Δ: ${net >= 0 ? '+' : ''}${this._fmtChange(field, net)}  (${filtered.length}/${entries.length})`;
+        netSpan.textContent = `Net Δ: ${net >= 0 ? '+' : ''}${fmt(net)}  (${filtered.length}/${entries.length})`;
       };
 
       fromInput.addEventListener('change', updateNet);
@@ -1277,7 +1279,7 @@ export class StatePanelView extends BaseComponent {
         tr.style.cssText = 'border-bottom:1px solid var(--border-subtle,var(--border));';
         const dateStr  = e.date instanceof Date ? this._formatDate(e.date) : String(e.date);
         const deltaStr = e.delta != null
-          ? (e.delta > 0 ? '+' : '') + this._fmtChange(field, e.delta)
+          ? (e.delta > 0 ? '+' : '') + this._fmtAt(field, e.delta, e.date)
           : '—';
         const deltaColor = e.delta > 0
           ? 'var(--accent-green,#4a8)'
@@ -1286,8 +1288,8 @@ export class StatePanelView extends BaseComponent {
           { text: dateStr,                          style: '' },
           { text: e.eventType  ?? '—',              style: 'color:var(--text-muted);' },
           { text: e.actionType ?? '—',              style: 'color:var(--text-muted);' },
-          { text: this._fmtChange(field, e.before), style: 'font-family:var(--font-mono);' },
-          { text: this._fmtChange(field, e.after),  style: 'font-family:var(--font-mono);' },
+          { text: this._fmtAt(field, e.before, e.date), style: 'font-family:var(--font-mono);' },
+          { text: this._fmtAt(field, e.after, e.date),  style: 'font-family:var(--font-mono);' },
           { text: deltaStr, style: `font-family:var(--font-mono);${deltaColor ? 'color:' + deltaColor + ';' : ''}` },
         ];
         for (const { text, style } of cells) {
@@ -1529,14 +1531,16 @@ export class StatePanelView extends BaseComponent {
         return;
       }
 
-      const totalDelta = rows.reduce((s, { diff }) => s + (typeof diff.delta === 'number' ? diff.delta : 0), 0);
+      const { values: realDeltas, fmt: fmtTotal } = this._restated(field,
+        rows.map(({ diff }) => (typeof diff.delta === 'number' ? diff.delta : 0)), rows.map(({ e }) => e.date));
+      const totalDelta = realDeltas.reduce((s, d) => s + d, 0);
       const summary = document.createElement('div');
       summary.style.cssText = 'font-size:10px;color:var(--text-muted);padding:4px 0;border-bottom:1px solid var(--border);margin-bottom:6px;display:flex;gap:12px;';
       const cntSpan = document.createElement('span');
       cntSpan.textContent = `${rows.length} occurrence${rows.length !== 1 ? 's' : ''}`;
       const netSpan = document.createElement('span');
       netSpan.style.color = totalDelta >= 0 ? '#34d399' : '#f87171';
-      netSpan.textContent = `Net Δ: ${totalDelta >= 0 ? '+' : ''}${this._fmtChange(field, totalDelta)}`;
+      netSpan.textContent = `Net Δ: ${totalDelta >= 0 ? '+' : ''}${fmtTotal(totalDelta)}`;
       summary.append(cntSpan, netSpan);
       results.appendChild(summary);
 
@@ -1557,13 +1561,13 @@ export class StatePanelView extends BaseComponent {
         tr.style.cssText = 'border-bottom:1px solid var(--border-subtle,var(--border));cursor:pointer;';
         tr.title = 'Click to view action detail';
         tr.addEventListener('click', () => { overlay.remove(); this.showNodeDetail(e); });
-        const dStr = diff.delta != null ? (diff.delta > 0 ? '+' : '') + this._fmtChange(field, diff.delta) : '—';
+        const dStr = diff.delta != null ? (diff.delta > 0 ? '+' : '') + this._fmtAt(field, diff.delta, e.date) : '—';
         const dCol = diff.delta > 0 ? '#34d399' : diff.delta < 0 ? '#f87171' : '';
         const cells = [
           { text: this.fmtVal(e.date),                  style: '' },
           { text: e.event?.name ?? e.event?.type ?? '—', style: 'color:var(--text-muted);' },
-          { text: this._fmtChange(field, diff.before),   style: 'font-family:var(--font-mono);' },
-          { text: this._fmtChange(field, diff.after),    style: 'font-family:var(--font-mono);' },
+          { text: this._fmtAt(field, diff.before, e.date), style: 'font-family:var(--font-mono);' },
+          { text: this._fmtAt(field, diff.after, e.date),  style: 'font-family:var(--font-mono);' },
           { text: dStr, style: `font-family:var(--font-mono);${dCol ? 'color:' + dCol + ';' : ''}` },
         ];
         for (const { text, style } of cells) {
@@ -1648,6 +1652,36 @@ export class StatePanelView extends BaseComponent {
    */
   _fmtLive(field, value) {
     return this._formatter?.format(field, value, this._liveBasisOpts()) ?? this.fmtVal(value);
+  }
+
+  /**
+   * Format a value that belongs to `date` — a diff's before/after/delta, a history row
+   * (design 79 §6). Under a real basis it is restated at that date's FX rate and price
+   * level; otherwise exactly `_fmtChange`.
+   */
+  _fmtAt(field, value, date, objAsCode = false) {
+    const at = date == null ? NaN : new Date(date).getTime();
+    if (!Number.isFinite(at)) return this._fmtChange(field, value, objAsCode);
+    return this._formatter?.format(field, value, { at }) ?? this.fmtVal(value, objAsCode);
+  }
+
+  /**
+   * One field's values across many dates, restated for ARITHMETIC across them — a min,
+   * a max, a net change (design 79 §6). Each point is restated at its own date first; a
+   * real statistic of nominal points is not the statistic of real points. All or
+   * nothing (the registry's `restateSeries`): if any point cannot be restated, the
+   * values come back nominal with the nominal formatter.
+   *
+   * @returns {{ values: number[], fmt: (v: number) => string }}
+   */
+  _restated(field, values, dates) {
+    const reg = this._schemaRegistry;
+    const nominal = { values, fmt: (v) => this._fmtChange(field, v) };
+    const vt = reg?.resolve?.(field);
+    if (vt?.kind !== 'currency' || !vt.currencyCode || !reg.restateSeries) return nominal;
+    const r = reg.restateSeries(values, dates, vt.currencyCode);
+    if (r.basis !== 'real') return nominal;
+    return { values: r.values, fmt: (v) => reg.formatAmount(v, r.code) ?? String(v) };
   }
 
   /** The rendered state's own price levels — not the live sim's, which may be ahead. */

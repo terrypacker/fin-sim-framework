@@ -16,7 +16,8 @@
 
 import { QueryApi }      from '../query/query-api.js';
 import { taxYearLabel }  from './tax/tax-year-label.js';
-import { JournalFxRates, normalizeAggregateCurrency, USD_AUD_PATH } from './journal-reporting/report-currency.js';
+import { JournalFxRates, normalizeAggregateCurrency, deflateAggregateFields, USD_AUD_PATH } from './journal-reporting/report-currency.js';
+import { JournalPriceLevels, PRICE_LEVEL_PATHS } from './journal-reporting/journal-price-levels.js';
 
 /**
  * JournalQueryApi — extends QueryApi with domain-aware helpers for journal queries.
@@ -398,9 +399,27 @@ export class JournalQueryApi extends QueryApi {
    * adding AUD onto USD (see report-currency.js). Inert unless the caller asks
    * for a currency — `runReport` passes the one the ReportDefinition declares.
    *
+   * `opts.real = { currency, defaultCurrency }` (design 79 §6) instead folds real
+   * base-year money: every row converted into `currency` at its own date, then
+   * divided by that date's price level, BEFORE the fold — so a multi-year total is a
+   * sum of real rows rather than a nominal sum deflated by one date.
+   *
    * @override
    */
   _prepareAggregation(rows, aggregates, opts) {
+    if (opts?.real?.currency) {
+      const target = opts.real.currency;
+      const normalized = normalizeAggregateCurrency({
+        rows,
+        aggregates,
+        targetCurrency:  target,
+        defaultCurrency: opts.real.defaultCurrency ?? null,
+        typeRegistry:    this._typeRegistry,
+        schemaRegistry:  this._schemaRegistry,
+        fx:              this.fxRates(),
+      });
+      return deflateAggregateFields({ ...normalized, currency: target, levels: this.priceLevels() });
+    }
     if (!opts?.currency) return { rows, aggregates };
     return normalizeAggregateCurrency({
       rows,
@@ -410,6 +429,27 @@ export class JournalQueryApi extends QueryApi {
       schemaRegistry: this._schemaRegistry,
       fx:             this.fxRates(),
     });
+  }
+
+  /**
+   * The run's price-level history, recovered from the journal (design 79 §6). Rebuilt
+   * when the journal has grown, so a report re-run mid-run sees the new years. Falls
+   * back to the live state's level when the journal records no movement (inflation
+   * off, where the accumulator sits at 1.0 and never diffs).
+   *
+   * @returns {JournalPriceLevels}
+   */
+  priceLevels() {
+    const journal = this._dataSource._journal;
+    const length  = journal?.journal?.length ?? 0;
+    if (!this._priceLevels || this._priceLevelsLength !== length) {
+      const reg = this._schemaRegistry;
+      this._priceLevels = new JournalPriceLevels(journal, {
+        fallbackLevel: cc => reg?.currentStateValue?.(PRICE_LEVEL_PATHS[cc]) ?? null,
+      });
+      this._priceLevelsLength = length;
+    }
+    return this._priceLevels;
   }
 
   /**

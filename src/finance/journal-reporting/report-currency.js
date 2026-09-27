@@ -47,6 +47,7 @@
  */
 
 import { fxRate } from '../fx/fx-conversion.js';
+import { countryForCurrency } from '../country-codes.js';
 
 /** The state path carrying the run's live USD→AUD rate (AUD per USD). */
 export const USD_AUD_PATH = 'effectiveExchangeRates.USD_AUD';
@@ -145,11 +146,16 @@ export class JournalFxRates {
  * @param {import('../../simulation-framework/type-registry.js').TypeRegistry}   [opts.typeRegistry]
  * @param {import('../services/state-schema-registry.js').StateSchemaRegistry}   [opts.schemaRegistry]
  * @param {JournalFxRates} opts.fx
+ * @param {string|null} [opts.defaultCurrency]  the unit of a payload field nothing
+ *   declares — the report's own natural unit. Only a real value basis passes it
+ *   (design 79 §6): a nominal report treats such rows as already in the target, but a
+ *   real one converts them INTO the display currency, and has to know from what.
  * @param {(msg: string) => void} [opts.warn]
  * @returns {{rows: object[], aggregates: Record<string,{fn:string,field?:string}>}}
  */
 export function normalizeAggregateCurrency({
-  rows, aggregates, targetCurrency, typeRegistry = null, schemaRegistry = null, fx, warn = _warnOnce,
+  rows, aggregates, targetCurrency, typeRegistry = null, schemaRegistry = null, fx,
+  defaultCurrency = null, warn = _warnOnce,
 }) {
   if (!targetCurrency || !rows?.length || !aggregates) return { rows, aggregates };
 
@@ -172,7 +178,8 @@ export function normalizeAggregateCurrency({
     const codes = new Map();
     let anyCurrency = false;
     for (const row of rows) {
-      const code = _rowCurrency(row, field, typeRegistry, schemaRegistry);
+      const code = _rowCurrency(row, field, typeRegistry, schemaRegistry)
+        ?? _defaultRowCurrency(row, field, defaultCurrency, schemaRegistry);
       if (code) anyCurrency = true;
       codes.set(row, code);
     }
@@ -229,6 +236,68 @@ export function normalizeAggregateCurrency({
   return { rows: outRows, aggregates: outAggregates };
 }
 
+/**
+ * The derived field a real value basis folds (design 79 §6): the target-currency
+ * twin (`amountInUSD`) restated in base-year money. Exported so a drill-down row can
+ * show the same figure its group total summed.
+ */
+export const realFieldName = (field, currency) => `${field}In${currency}Real`;
+
+/**
+ * Restate every currency-normalised aggregate field in base-year (sim-start) money,
+ * per row, at the row's own date — design 79 §6, policy R1. Runs AFTER
+ * {@link normalizeAggregateCurrency} has put every row in `currency`, so one country's
+ * price level applies to the whole fold: the country of the currency on screen
+ * (design 79 §7). Totals are then sums of real rows, which is the only way a total
+ * spanning years can be real — deflating a finished sum by one date's level is not.
+ *
+ * Writes `realFieldName(field, currency)` and repoints the aggregate at it. A row with
+ * no known price level is dropped from the fold and counted in a warning, the same
+ * contract as a row with no FX rate: never divided by an assumed 1.
+ *
+ * @param {object}   opts
+ * @param {object[]} opts.rows        rows already carrying `${field}In${currency}`
+ * @param {Record<string,{fn:string,field?:string}>} opts.aggregates  repointed at those
+ * @param {string}   opts.currency    the currency the rows were normalised to
+ * @param {{ levelAt(ts: number, cc: string): number|null }} opts.levels
+ * @param {(msg: string) => void} [opts.warn]
+ * @returns {{rows: object[], aggregates: Record<string,{fn:string,field?:string}>}}
+ */
+export function deflateAggregateFields({ rows, aggregates, currency, levels, warn = _warnOnce }) {
+  const cc = countryForCurrency(currency);
+  const suffix = `In${currency}`;
+  const fields = [...new Set(Object.values(aggregates ?? {})
+    .map(a => a?.field)
+    .filter(f => f && f.endsWith(suffix)))];
+  if (!cc || !rows?.length || fields.length === 0) return { rows, aggregates };
+
+  const realName = f => `${f}Real`;   // amountInUSD → amountInUSDReal === realFieldName(amount, USD)
+  let dropped = 0;
+  const outRows = rows.map((row) => {
+    const copy = { ...row };
+    for (const field of fields) {
+      const value = row[field];
+      if (typeof value !== 'number') { copy[realName(field)] = null; continue; }
+      const level = levels?.levelAt(row.ts, cc);
+      if (!(level > 0)) { dropped++; copy[realName(field)] = null; continue; }
+      copy[realName(field)] = value / level;
+    }
+    return copy;
+  });
+
+  const outAggregates = {};
+  for (const [name, spec] of Object.entries(aggregates)) {
+    outAggregates[name] = spec?.field && fields.includes(spec.field)
+      ? { ...spec, field: realName(spec.field) }
+      : spec;
+  }
+  if (dropped) {
+    warn(`[report-currency] ${dropped} row value(s) excluded from the real ${currency} total: `
+       + 'no price level recorded in the journal at their date.');
+  }
+  return { rows: outRows, aggregates: outAggregates };
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
@@ -245,6 +314,18 @@ function _rowCurrency(row, field, typeRegistry, schemaRegistry) {
   }
   if (!row.actionType) return null;
   return typeRegistry?.fieldCurrency?.(row.actionType, field) ?? null;
+}
+
+/**
+ * The report's own unit for a row nothing declares, or null. A per-diff row whose
+ * state path is registered as something OTHER than money (a count, a rate) gets none:
+ * converting and deflating a count would put it in the money total.
+ */
+function _defaultRowCurrency(row, field, defaultCurrency, schemaRegistry) {
+  if (!defaultCurrency) return null;
+  if (!STATE_VALUED_FIELDS.has(field)) return defaultCurrency;
+  const kind = row.stateKey ? schemaRegistry?.resolve?.(row.stateKey)?.kind : null;
+  return !kind || kind === 'unknown' || kind === 'currency' ? defaultCurrency : null;
 }
 
 /** Build the sorted [{ts, rate}] history — see JournalFxRates for the sources. */
