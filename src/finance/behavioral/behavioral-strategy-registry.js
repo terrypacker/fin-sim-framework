@@ -634,7 +634,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
         // all three are flat and a multi-account pool is as easy to author as a
         // single-account one; see `buildLiquidityGraphEditor`.
         key: 'liquidityGraph', label: 'Liquidity Pools (graph)',
-        type: 'LiquidityGraph', group: 'Spending', mc: false, opt: false,
+        type: 'LiquidityGraph', group: 'Liquidity Pools', mc: false, opt: false,
         defaultValue: null,
         description: 'The pool GRAPH: { pools: [...], flows: [...] } (design 97 Part II). A pool is '
           + 'a named node with `claims` of (account, sleeves), an optional `spendOrder` (its position '
@@ -679,7 +679,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
       {
         // ── design 109 — named shapes ────────────────────────────────────────────────
         key: 'liquidityShapes', label: 'Liquidity Pool Shapes',
-        type: 'LiquidityShapes', group: 'Spending', mc: false, opt: false,
+        type: 'LiquidityShapes', group: 'Liquidity Pools', mc: false, opt: false,
         defaultValue: null,
         description: 'Named alternative pool GRAPHS, as { <shapeId>: { pools, flows } } — each one '
           + 'exactly the value Liquidity Pools (graph) takes, so a shape is not a new vocabulary, it '
@@ -698,7 +698,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
       },
       {
         key: 'liquidityGraphSchedule', label: 'Liquidity Pool Schedule',
-        type: 'LiquidityGraphSchedule', group: 'Spending', mc: false, opt: false,
+        type: 'LiquidityGraphSchedule', group: 'Liquidity Pools', mc: false, opt: false,
         defaultValue: null,
         description: 'When each pool shape takes over: [{ year, shape }], the shape naming a key of '
           + 'Liquidity Pool Shapes (design 109), or null for the base Liquidity Pools (graph) — how a '
@@ -728,7 +728,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
       {
         // ── design 112 — dated pool targets ──────────────────────────────────────────
         key: 'liquidityTargetSchedule', label: 'Liquidity Pool Target Schedule',
-        type: 'LiquidityTargetSchedule', group: 'Spending', mc: false, opt: false,
+        type: 'LiquidityTargetSchedule', group: 'Liquidity Pools', mc: false, opt: false,
         defaultValue: null,
         description: 'Dated changes to a pool\'s SIZE: [{ year, pool, scale }]. From 1 January of '
           + '`year` the pool holds `scale` × the target its graph authors, until the next row for '
@@ -754,7 +754,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
         // the exact trap it exists to close — you would deselect the strategy, lose the
         // switch from the panel, and the pools would still be driving the run.
         key: 'liquidityGraphEnabled', label: 'Liquidity Pools Enabled',
-        type: 'Boolean', group: 'Spending', mc: false, opt: false,
+        type: 'Boolean', group: 'Liquidity Pools', mc: false, opt: false,
         defaultValue: true,
         description: 'The whole-graph OFF switch. Deselecting the LIQUIDITY_POOLS strategy stops '
           + 'only the refill flows — the graph still compiles to the drawdown sequence and still '
@@ -807,7 +807,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
       },
       {
         key: 'poolFlowsEnabled', label: 'Pool Refill Flows Enabled',
-        type: 'Boolean', group: 'Spending', mc: false, opt: false,
+        type: 'Boolean', group: 'Liquidity Pools', mc: false, opt: false,
         defaultValue: true,
         description: 'Authors the graph\'s TOPOLOGY without its BEHAVIOUR: pools, targets, capacity '
           + 'and the spend order stay live, refill flows do not fire. This is the arm-vs-control switch '

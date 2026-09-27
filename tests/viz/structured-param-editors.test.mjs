@@ -45,6 +45,8 @@ import { assertTotalMix }    from '../../src/finance/holdings/allocation.js';
 const MORE_COLUMNS_KEY = 'finsim.poolEditor.moreColumns.v1';
 beforeEach(() => { localStorage.setItem(MORE_COLUMNS_KEY, '1'); });
 const withCoreColumns = () => localStorage.setItem(MORE_COLUMNS_KEY, '0');
+/** S6 — the target schedule opens on its runs; the tests that edit rows open them first. */
+const showTargetRows = (host) => { host.querySelector('[data-id="target-show-rows"]')?.click(); return host; };
 /** S2 — open every collapsed "Remainder of" summary, so its check boxes are in the DOM. */
 const openRemainders = (host) => {
   for (;;) {
@@ -2029,7 +2031,7 @@ const TGT_GRAPHS = () => ({
 
 test('LiquidityTargetSchedule: the pool cell is a SELECT over every graph\'s pool ids', () => {
   const param = { name: 'liquidityTargetSchedule', value: [{ year: 2030, pool: 'bonds', scale: 1.5 }] };
-  const host = mount(buildLiquidityTargetScheduleEditor(param, TGT_GRAPHS));
+  const host = showTargetRows(mount(buildLiquidityTargetScheduleEditor(param, TGT_GRAPHS)));
   const sel = cell(host, 'pool');
   assert.equal(sel.tagName, 'SELECT');
   assert.deepStrictEqual([...sel.options].map(o => o.textContent), ['cash', 'bonds']);
@@ -2037,14 +2039,14 @@ test('LiquidityTargetSchedule: the pool cell is a SELECT over every graph\'s poo
 
 test('LiquidityTargetSchedule: the size column shows the resolved size first, per graph (§2.3)', () => {
   const param = { name: 'liquidityTargetSchedule', value: [{ year: 2030, pool: 'bonds', scale: 1.5 }] };
-  const host = mount(buildLiquidityTargetScheduleEditor(param, TGT_GRAPHS));
+  const host = showTargetRows(mount(buildLiquidityTargetScheduleEditor(param, TGT_GRAPHS)));
   assert.equal(cell(host, 'size').textContent, 'bonds base 4.5y / bridge 7.5y (×1.5)');
 });
 
 test('LiquidityTargetSchedule: an MPC row keeps its `by` mark through an edit (R12)', () => {
   const param = { name: 'liquidityTargetSchedule',
     value: [{ year: 2030, pool: 'bonds', scale: 1.5, by: 'mpc-1' }, { year: 2031, pool: 'cash', scale: 2 }] };
-  const host = mount(buildLiquidityTargetScheduleEditor(param, TGT_GRAPHS));
+  const host = showTargetRows(mount(buildLiquidityTargetScheduleEditor(param, TGT_GRAPHS)));
   assert.deepStrictEqual(cells(host, 'by').map(c => c.textContent), ['mpc-1', '']);
   type(cells(host, 'scale')[0], '1.25', 'change');
   assert.deepStrictEqual(param.value, [
@@ -2056,7 +2058,7 @@ test('LiquidityTargetSchedule: an MPC row keeps its `by` mark through an edit (R
 test('LiquidityTargetSchedule: equal consecutive rows collapse in DISPLAY only (R13)', () => {
   const value = [2031, 2032, 2033].map(year => ({ year, pool: 'cash', scale: 1.5, by: 'mpc-1' }));
   const param = { name: 'liquidityTargetSchedule', value: value.map(r => ({ ...r })) };
-  const host = mount(buildLiquidityTargetScheduleEditor(param, TGT_GRAPHS));
+  const host = showTargetRows(mount(buildLiquidityTargetScheduleEditor(param, TGT_GRAPHS)));
   const runs = cell(host, 'target-runs');
   assert.equal(runs.children.length, 1);
   assert.equal(runs.textContent, 'cash 3y (×1.5), 2031–2033, 3 rows · by mpc-1');
@@ -2066,14 +2068,14 @@ test('LiquidityTargetSchedule: equal consecutive rows collapse in DISPLAY only (
 
 test('LiquidityTargetSchedule: a row naming a pool no graph has is kept and marked', () => {
   const param = { name: 'liquidityTargetSchedule', value: [{ year: 2030, pool: 'gone', scale: 2 }] };
-  const host = mount(buildLiquidityTargetScheduleEditor(param, TGT_GRAPHS));
+  const host = showTargetRows(mount(buildLiquidityTargetScheduleEditor(param, TGT_GRAPHS)));
   assert.strictEqual(cell(host, 'pool').value, 'gone');
   assert.match([...cell(host, 'pool').options].map(o => o.textContent).join(' '), /not found/);
 });
 
 test('LiquidityTargetSchedule: empty is null, and an added row defaults to factor 1', () => {
   const param = { name: 'liquidityTargetSchedule', value: null };
-  const host = mount(buildLiquidityTargetScheduleEditor(param, TGT_GRAPHS));
+  const host = showTargetRows(mount(buildLiquidityTargetScheduleEditor(param, TGT_GRAPHS)));
   assert.equal(param.value, null);
   button(host, 'Add Row').click();
   assert.equal(param.value.length, 1);
@@ -2165,4 +2167,64 @@ test('LiquidityGraph D114 S2: Remainder of is ONE line — a sentence that opens
   cashBox.checked = false; cashBox.dispatchEvent(new Event('change'));
   assert.deepStrictEqual(param.value.pools[2].target.after, ['offset']);
   assert.match(cell(host, 'targetAfter-summary').textContent, /after offset/, 'the sentence follows');
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Design 114 phase 4 — focus a pool (S3), the Base tab (S4), the target schedule (S6)
+// ═════════════════════════════════════════════════════════════════════════════
+
+test('LiquidityGraph D114 S3: focusing a pool filters claims, flows and gates — and drops nothing', () => {
+  const param = { name: 'liquidityGraph', value: BADGED() };
+  const host  = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  const before = JSON.stringify(param.value);
+  pick(cell(host, 'pool-focus'), 'offset');
+  assert.deepStrictEqual(cells(host, 'pool').map(s => s.value), ['offset'], 'claims: offset only');
+  assert.strictEqual(cells(host, 'from').length, 0, 'no flow touches offset');
+  assert.match(cell(host, 'filtered-empty').textContent, /No flow into or out of this pool/);
+  assert.strictEqual(cells(host, 'gateKind').length, 0);
+
+  pick(cell(host, 'pool-focus'), 'float');
+  assert.deepStrictEqual(cells(host, 'from').map(s => s.value), ['growth'], 'the flow INTO float');
+  assert.strictEqual(cells(host, 'gateKind').length, 1, 'and its gate');
+  assert.strictEqual(JSON.stringify(param.value), before, 'a view filter changes nothing saved');
+});
+
+test('LiquidityGraph D114 S3: a claim added while focused belongs to the focused pool', () => {
+  const param = { name: 'liquidityGraph', value: BADGED() };
+  const host  = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  pick(cell(host, 'pool-focus'), 'offset');
+  button(host, 'Add Claim').click();
+  assert.deepStrictEqual(cells(host, 'pool').map(s => s.value), ['offset', 'offset']);
+});
+
+test('LiquidityShapes D114 S4: with the base param, Base is the first tab and edits that param', () => {
+  const baseParam = { name: 'liquidityGraph', value: copy(D114_BASE) };
+  const param = { name: 'liquidityShapes', value: { later: { extends: 'base' } } };
+  const host = mount(buildLiquidityShapesEditor(param, ACCOUNTS, () => ({}), { baseParam }));
+  assert.ok(cell(host, 'shape-tab-base').classList.contains('is-active'), 'Base opens first');
+  type(cells(host, 'spendOrder')[0], '11', 'change');
+  assert.strictEqual(baseParam.value.pools[0].spendOrder, 11, 'the base param itself is edited');
+
+  cell(host, 'shape-tab-0').click();
+  assert.match(cell(host, 'shape-diff').textContent, /vs base — pools: 2 inherited/,
+    'the delta inherits the edit just made');
+  host.querySelector('.pool-shape-head .age-band-remove').click();
+  assert.strictEqual(param.value, null);
+  assert.ok(cell(host, 'shape-tab-base').classList.contains('is-active'), 'back to Base, not an empty panel');
+});
+
+test('LiquidityTargetSchedule D114 S6: it opens on the runs, with the rows behind a toggle', () => {
+  const param = { name: 'liquidityTargetSchedule', value: [
+    { year: 2030, pool: 'cash', scale: 1.5 }, { year: 2031, pool: 'cash', scale: 1.5 }] };
+  const host = mount(buildLiquidityTargetScheduleEditor(param, () => ({
+    liquidityGraph: { pools: [{ id: 'cash', target: { mode: 'YEARS_OF_SPEND', value: 2 } }] } })));
+  assert.ok(cell(host, 'target-runs'), 'the runs summary');
+  assert.strictEqual(cells(host, 'year').length, 0, 'no rows until asked');
+  assert.match(cell(host, 'target-show-rows').textContent, /Show 2 rows/);
+
+  cell(host, 'target-add-row').click();
+  assert.strictEqual(cells(host, 'year').length, 3, 'adding a row opens the table on it');
+  assert.strictEqual(param.value.length, 3);
+  cell(host, 'target-hide-rows').click();
+  assert.strictEqual(cells(host, 'year').length, 0);
 });

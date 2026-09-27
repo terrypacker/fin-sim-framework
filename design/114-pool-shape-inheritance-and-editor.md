@@ -1,6 +1,6 @@
 # 114 — Pool shapes that inherit, and a pool editor that fits its panel
 
-**Status:** PHASES 1–3 BUILT, 26 Sep 2026 (§11–§13); phases 4–6 proposed. Picks up design 112 §7 (shapes that reference pools) and
+**Status:** PHASES 1–4 BUILT, 26 Sep 2026 (§11–§14); phases 5–6 proposed. Picks up design 112 §7 (shapes that reference pools) and
 reworks the pool authoring surface built across design 97 §17.1/§21/§22.5, design 109 §11 and
 design 110 Leg A. Decisions D1–D5 (§3) and the scope of Part II (S1–S6) were taken with the
 author before drafting. The MC and Opt panels are deliberately last (§9, phase 6). Open
@@ -410,3 +410,35 @@ Measured on the author's plan in the running app: the base editor went from abou
 at the ~600px panel width; Remainder of is one line ("after spendingUs, spe…") instead of nine.
 Carried to phase 5: the help on naming a gate clause for search should say the Search id column
 is behind More columns.
+
+## 14. As built — phase 4 (26 Sep 2026)
+
+S3, S4 and S6 as §7 describes, with these decisions:
+
+1. **Q2 did not arise.** All six regrouped params are `mc: false, opt: false`, and the generated
+   pool axes were already in a `Liquidity Pools` group, so moving the params changed nothing in
+   the MC or Opt panels. Phase 6 is still owed for the axes' own arrangement there.
+2. **`group` is schema-owned on load.** The loader only backfilled a missing group, so a saved
+   scenario would have kept `Spending` forever; nothing in the UI writes a param's group, so it
+   now re-syncs from the schema the way `type` and `options` already do. Checked on the author's
+   saved plan: it opened in the new group without a re-save.
+3. **The Structure editor is the `liquidityGraph` row.** `buildLiquidityShapesEditor` takes the
+   base param as `ctx.baseParam` and draws it as the first tab (open by default), editing that
+   param in place; `liquidityShapes` has no row of its own in the group. A filter matching only
+   the shapes still draws the Structure through the graph's row. The row keeps its label and help.
+4. **The switches are a two-column pair of ordinary param rows**, not a new control, so their help
+   and their `visibleWhen` behaviour are unchanged.
+5. **`drawdownSequence` while a graph is live** renders a statement; if a sequence is still
+   authored it also says the plan will be refused and offers **Clear it**. With the pools off it
+   is the ordinary editor again.
+6. **Focus is a select beside More columns** ("Rows for: all pools"), offering the graph's own and
+   inherited pools. It filters claims (by pool), flows (from or to) and gate clauses (on those
+   flows); the pools table stays whole. `row-list-editor` gained `rowFilter` and `filteredText`;
+   a filtered-out row keeps its index, so Remove acts on the row clicked.
+7. **The target schedule** opens on the per-run summary with **Show N rows** and **+ Add Row**;
+   adding opens the table. The toggle is kept per param object.
+
+Measured on the author's plan: the target schedule went from about 1,000px to 96px, and focusing
+`buffer` narrowed the claims, flows and gates from 17 / 7 / 2 rows to 4 / 4 / 1. The expansion
+gate caught the view's new read of the shapes param on its first run; it is marked
+`raw-ok (the param the editor writes)`.

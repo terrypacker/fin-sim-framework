@@ -1076,6 +1076,11 @@ export function buildLiquidityTargetScheduleEditor(param, graphsProvider = () =>
   sync();
 
   const container = el('div', 'age-band-list-editor liquidity-target-schedule-editor');
+  // Design 114 §7.6 (S6) — open on the runs, rows behind a toggle. An MPC session writes a row per
+  // pool per year, and the rows are the table's least readable form of the same facts. Kept per
+  // param object, so a re-render of the parameter list does not snap it open again.
+  const ui = TARGET_SCHEDULE_UI.get(param) ?? { showRows: false };
+  TARGET_SCHEDULE_UI.set(param, ui);
 
   const poolIds = (g) => {
     const out = new Set();
@@ -1108,6 +1113,27 @@ export function buildLiquidityTargetScheduleEditor(param, graphsProvider = () =>
         summary.appendChild(line);
       }
       container.appendChild(summary);
+    }
+
+    if (rows.length && !ui.showRows) {
+      const bar = el('div', 'pool-graph-controls');
+      const show = addButton(`Show ${rows.length} row${rows.length === 1 ? '' : 's'}`, () => {
+        ui.showRows = true; render();
+      }, 'target-show-rows');
+      // Adding a row opens the table — the new row has to be somewhere the author can fill in.
+      const add = addButton('+ Add Row', () => {
+        const last = rows[rows.length - 1];
+        rows.push({ year: (last?.year ?? new Date().getUTCFullYear()) + 1,
+                    pool: last?.pool ?? ids[0] ?? null, scale: 1, by: null });
+        ui.showRows = true; sync(); render();
+      }, 'target-add-row');
+      bar.appendChild(show);
+      bar.appendChild(add);
+      container.appendChild(bar);
+      return;
+    }
+    if (rows.length) {
+      container.appendChild(addButton('Hide rows', () => { ui.showRows = false; render(); }, 'target-hide-rows'));
     }
 
     container.appendChild(buildRowListEditor({
@@ -1167,12 +1193,16 @@ const BASE_SHAPE_OPTION = '\u0000base';
  * @param {Array}  accounts
  * @param {object|function} [flags]
  * @param {object} [ctx]  live sibling params, read at render time:
- *        `baseGraph()` the `liquidityGraph` value; `schedule()` the `liquidityGraphSchedule` rows.
+ *        `baseGraph()` the `liquidityGraph` value; `schedule()` the `liquidityGraphSchedule` rows;
+ *        `baseParam` (design 114 §7.1) the `liquidityGraph` PARAM itself — given, the editor is the
+ *        group's one Structure editor and the base graph is its first tab, edited in place.
  */
 export function buildLiquidityShapesEditor(param, accounts = [], flags = null, ctx = {}) {
   const value  = isPlainObject(param.value) ? param.value : {};
   const shapes = Object.entries(value).map(([id, graph]) => ({ id, graph: graph ?? {} }));
-  const baseGraph = () => (typeof ctx.baseGraph === 'function' ? ctx.baseGraph() : null) ?? null;
+  const baseParam = ctx.baseParam ?? null;
+  const baseGraph = () => (baseParam ? baseParam.value
+    : (typeof ctx.baseGraph === 'function' ? ctx.baseGraph() : null)) ?? null;
   const schedule  = () => (typeof ctx.schedule === 'function' ? ctx.schedule() : null) ?? [];
 
   const sync = () => {
@@ -1185,9 +1215,10 @@ export function buildLiquidityShapesEditor(param, accounts = [], flags = null, c
 
   // The selected tab and the inherited panel's open state survive a re-render of the whole
   // parameter list, which rebuilds this editor from scratch.
-  const ui = SHAPES_UI.get(param) ?? { active: null, open: false };
+  const ui = SHAPES_UI.get(param) ?? { active: baseParam ? BASE_TAB : null, open: false };
   SHAPES_UI.set(param, ui);
-  if (!shapes.some(s => s.id === ui.active)) ui.active = shapes[0]?.id ?? null;
+  const fallbackTab = () => (baseParam ? BASE_TAB : shapes[0]?.id ?? null);
+  if (!(ui.active === BASE_TAB && baseParam) && !shapes.some(s => s.id === ui.active)) ui.active = fallbackTab();
 
   let status = null;   // one line of feedback from the last action (a refusal, what a remove took)
 
@@ -1337,8 +1368,19 @@ export function buildLiquidityShapesEditor(param, accounts = [], flags = null, c
     sync();
     const base = baseGraph();
 
-    // The tab strip, and `+ New shape` at its end.
+    // The tab strip, and `+ New shape` at its end. With the base param, the base graph is the
+    // first tab: it is what governs before the first scheduled shape.
     const strip = el('div', 'pool-shape-tabs');
+    if (baseParam) {
+      const tab = el('button', `btn btn-sm pool-shape-tab${ui.active === BASE_TAB ? ' is-active' : ''}`);
+      tab.type = 'button';
+      tab.dataset.id = 'shape-tab-base';
+      tab.appendChild(el('span', 'pool-shape-tab-id', 'Base'));
+      tab.appendChild(el('span', 'pool-shape-tab-meta', 'from the start'));
+      tab.title = 'The base graph governs from the start of the run until the first scheduled shape';
+      tab.addEventListener('click', () => { ui.active = BASE_TAB; status = null; render(); });
+      strip.appendChild(tab);
+    }
     shapes.forEach((shape, idx) => {
       const years = shape.id ? yearsOf(shape.id) : [];
       const meta = years.length ? `from ${years.join(', ')}` : 'unscheduled';
@@ -1372,6 +1414,21 @@ export function buildLiquidityShapesEditor(param, accounts = [], flags = null, c
     });
     strip.appendChild(make);
     container.appendChild(strip);
+
+    if (baseParam && ui.active === BASE_TAB) {
+      const block = el('div', 'mix-block');
+      block.dataset.id = 'shape-base';
+      const note = el('div', 'pool-shape-diff', shapes.length
+        ? 'The base graph governs from the start of the run until the first scheduled shape. '
+          + 'Shapes that inherit from it pick up every edit made here.'
+        : 'The base graph governs the whole run. + New shape adds a structure for later years.');
+      note.dataset.id = 'shape-diff';
+      block.appendChild(note);
+      // The base graph's own editor, over the `liquidityGraph` param itself.
+      block.appendChild(buildLiquidityGraphEditor(baseParam, accounts, flags));
+      container.appendChild(block);
+      return;
+    }
 
     const shape = shapes.find(s => s.id === ui.active) ?? shapes.find(s => !s.id);
     if (!shape) {
@@ -1418,7 +1475,7 @@ export function buildLiquidityShapesEditor(param, accounts = [], flags = null, c
       : 'Remove shape', () => {
       if (children.length) return;
       shapes.splice(idx, 1);
-      ui.active = shapes[Math.min(idx, shapes.length - 1)]?.id ?? null;
+      ui.active = shapes[Math.min(idx, shapes.length - 1)]?.id ?? fallbackTab();
       status = null;
       sync();
       render();
@@ -1584,6 +1641,12 @@ export function buildLiquidityShapesEditor(param, accounts = [], flags = null, c
  * by the param OBJECT, which the scenario keeps across a re-render of the parameter list.
  */
 const SHAPES_UI = new WeakMap();
+
+/** The target schedule's row toggle (§7.6), keyed like `SHAPES_UI`. */
+const TARGET_SCHEDULE_UI = new WeakMap();
+
+/** The shapes editor's stand-in for "the Base tab is selected". Never saved. */
+const BASE_TAB = '\u0000base-tab';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Design 110 §4.2 — the four things the pool tables cannot say
@@ -1987,6 +2050,18 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
   // Design 114 §7.4 — core columns by default; the rest behind one toggle for all four tables.
   let moreColumns = readMoreColumnsPref();
   const showOptional = () => moreColumns;
+  // Design 114 §7.5 (S3) — a VIEW filter over the claims, flows and gate tables. Storage stays
+  // three flat tables joined by id; this only decides which of their rows are drawn.
+  let focus = null;
+  const focusOn = () => (focus && flowPoolOptions().some(([id]) => id === focus) ? focus : null);
+  const touches = (f) => f.from === focusOn() || f.to === focusOn();
+  const claimFilter = () => (focusOn() ? (c) => c.pool === focusOn() : null);
+  const flowFilter  = () => (focusOn() ? touches : null);
+  const gateFilter  = () => {
+    if (!focusOn()) return null;
+    const ids = new Set(flows.filter(touches).map(f => f.id));
+    return (c) => ids.has(c.flow);
+  };
   // Design 114 — a flow's endpoints may be inherited pools. Claims keep `poolIdOptions`.
   const flowPoolOptions = () => [...poolIdOptions(),
     ...inheritedPools().map(p => [p.id, `${p.id} (inherited)`])];
@@ -2085,8 +2160,12 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
     // §22.5 trap 2 — the LAST pool, not the first. `+ Add Pool` then `+ Add Claim` is the
     // authoring order, so defaulting to `pools[0]` silently landed the new pool's first claim
     // in bucket 1 — a claim that reads correct in the table and belongs to the wrong pool.
-    newRow:    () => ({ pool: pools[pools.length - 1]?.id ?? null,
+    // A row added while focused belongs to the focused pool (S3) — if it is one this graph owns.
+    newRow:    () => ({ pool: (pools.some(p => p.id === focusOn()) ? focusOn() : null)
+                          ?? pools[pools.length - 1]?.id ?? null,
                         key: accounts?.[0]?.stateKey ?? null, sleeves: null }),
+    rowFilter: claimFilter,
+    filteredText: 'This pool holds nothing yet — + Add Claim adds one to it.',
     addLabel:  '+ Add Claim',
     emptyText: 'No claims — a pool with no claims holds nothing.',
     // The Pools table's derived "Claims" cell reads this table, so it has to be redrawn
@@ -2115,12 +2194,14 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
       ...(inherit ? [vsParentColumn('flows')] : []),
     ],
     newRow:    () => ({ id: null, from: flowPoolOptions()[0]?.[0] ?? null,
-                        to: flowPoolOptions()[1]?.[0] ?? null, priority: 0,
+                        to: focusOn() ?? flowPoolOptions()[1]?.[0] ?? null, priority: 0,
                         cadence: 'PERIOD', triggerKind: '', triggerValue: null, rawGate: null,
                         amountKind: 'toTarget', amountValue: null,
                         amountExtra: null, triggerExtra: null, ui: null }),
     addLabel:  '+ Add Flow',
     showOptional,
+    rowFilter: flowFilter,
+    filteredText: 'No flow into or out of this pool.',
     badgeWidth: '1.1fr',
     emptyText: 'No flows — pools are spent in order but never refilled by an explicit rule.',
     // Renaming a flow changes the option list the gate table selects from — the same reason
@@ -2240,11 +2321,14 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
       { field: 'gateId',    label: 'Search id', type: 'text', placeholder: '—', width: '1fr',
         optional: true, badge: (row) => (row.gateId ? `id ${row.gateId}` : null) },
     ],
-    newRow:    () => ({ flow: gateableFlowIds()[0] ?? null, branch: 1, gateNegate: '',
+    newRow:    () => ({ flow: (focusOn() ? gateableFlowIds().find(id => touches(flows.find(f => f.id === id)))
+                               : null) ?? gateableFlowIds()[0] ?? null, branch: 1, gateNegate: '',
                         gateKind: 'sourceDrawdownUnder', gateValue: 0.05,
                         gateBasis: 'INDEX', gateYears: 1, gateScope: 'SOURCE', gateId: null }),
     addLabel:  '+ Add Gate Clause',
     showOptional,
+    rowFilter: gateFilter,
+    filteredText: 'No gate on a flow that touches this pool.',
     emptyText: 'No gate clauses — every flow fires whenever its trigger and amount allow.',
     onChange:  () => {
       // All three, never short-circuited: each is a repair the table owes the author.
@@ -2335,7 +2419,8 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
     // Renaming or adding a pool changes the option list the OTHER two tables select from,
     // so both are re-rendered. Without this a renamed pool leaves its claims pointing at a
     // dead id and the user finds out at Rebuild.
-    onChange:  () => { sync(); claimsEditor.refresh(); flowsEditor.refresh(); readouts.refresh(); },
+    onChange:  () => { sync(); fillFocus(); claimsEditor.refresh(); flowsEditor.refresh(); gateEditor.refresh();
+                       readouts.refresh(); },
   });
 
   const toggle = addButton(moreColumns ? 'Fewer columns' : 'More columns', () => {
@@ -2347,9 +2432,28 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
   toggle.title = 'Show every column. Hidden columns that are not at their default are shown as '
     + 'badges under "Other", so hiding a column never hides a decision.';
   // The toggle rides the Pools heading rather than a line of its own.
+  const focusSel = el('select', 'age-band-input pool-graph-focus');
+  focusSel.dataset.id = 'pool-focus';
+  focusSel.title = 'Show only the claims, flows and gates that involve one pool. A view filter: '
+    + 'nothing hidden is changed or dropped.';
+  const fillFocus = () => {
+    focusSel.innerHTML = '';
+    const opt = (v, label) => { const o = el('option', null, label); o.value = v; return o; };
+    focusSel.appendChild(opt('', 'Rows for: all pools'));
+    for (const [id, label] of flowPoolOptions()) focusSel.appendChild(opt(id, `Rows for: ${label}`));
+    focusSel.value = focusOn() ?? '';
+  };
+  focusSel.addEventListener('change', () => {
+    focus = focusSel.value || null;
+    claimsEditor.refresh(); flowsEditor.refresh(); gateEditor.refresh();
+  });
+  fillFocus();
   const bar = el('div', 'pool-graph-toolbar');
   bar.appendChild(el('span', 'age-band-col-label', 'Pools'));
-  bar.appendChild(toggle);
+  const controls = el('span', 'pool-graph-controls');
+  controls.appendChild(focusSel);
+  controls.appendChild(toggle);
+  bar.appendChild(controls);
   container.appendChild(bar);
   container.appendChild(poolsEditor);
   container.appendChild(el('div', 'age-band-col-label', 'Claims — which accounts and sleeves each pool holds'));

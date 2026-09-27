@@ -376,6 +376,30 @@
 .param-field { flex: 1; min-width: 0; }
 .param-type-select { flex: 0 0 72px; align-self: flex-end; }
 .param-row .btn-warn { flex: 0 0 auto; align-self: flex-end; margin-bottom: 1px; }
+/* Design 114 §7.1 — the Liquidity Pools group: its two master switches share a line, and a
+   note explains the neighbours that share the word "pool". */
+.param-row-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.param-row-pair > .param-row { min-width: 0; }
+.param-group-note {
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.45;
+  padding: 2px 0 6px;
+}
+.param-link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent, inherit);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .param-group-header {
   display: flex;
   align-items: center;
@@ -1020,6 +1044,9 @@
 /* Design 114 §7.4 — the graph editor's column toggle, and the badges that stand in for hidden
    columns whose value is not the default. */
 .pool-graph-toolbar { display: flex; justify-content: space-between; align-items: center; }
+.pool-graph-controls { display: inline-flex; gap: 4px; align-items: center; }
+.pool-graph-controls .btn { white-space: nowrap; }
+.pool-graph-focus { width: auto; max-width: 16em; }
 .row-list-badges { display: flex; flex-wrap: wrap; gap: 2px; align-items: center; min-width: 0; }
 .row-list-badge {
   font-size: 9px;

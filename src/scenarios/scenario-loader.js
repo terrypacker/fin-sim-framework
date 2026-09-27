@@ -1069,7 +1069,11 @@ export class ScenarioLoader {
         if (s.description) p.description = s.description;
       } else {
         if (p.label === undefined && s.label)                p.label       = s.label;
-        if (p.group === undefined && s.group)                p.group       = s.group;
+        // The GROUP is schema-owned for a schema param, like `type` below: it is an arrangement
+        // of the Parameters panel, nothing in the UI writes it, and a regrouping (design 114
+        // §7.1 moved the pool params out of Spending) has to reach already-saved scenarios or
+        // they keep the old arrangement forever.
+        if (s.group)                                         p.group       = s.group;
       }
       // Type is schema-owned metadata (the UI type selector is disabled for
       // schema params), so a schema type change (e.g. Array→AgeBandList,

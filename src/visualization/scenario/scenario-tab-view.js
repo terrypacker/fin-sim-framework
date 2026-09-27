@@ -32,6 +32,11 @@ const isPlainObject_ = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
  */
 const _mpcRunSelectEditors = new WeakMap();
 
+
+/** Design 114 §7.1 — the Liquidity Pools group and the order its rows are drawn in. */
+const LIQUIDITY_POOLS_GROUP = 'Liquidity Pools';
+const LIQUIDITY_GROUP_ORDER = Object.freeze(['liquidityGraph', 'liquidityGraphSchedule', 'liquidityTargetSchedule']);
+
 export class ScenarioTabView {
   constructor() {
 
@@ -360,8 +365,65 @@ export class ScenarioTabView {
       container.appendChild(this._buildGroupHeader(group, expanded, scenario));
       if (!expanded) continue;
 
+      if (group === LIQUIDITY_POOLS_GROUP) {
+        this._renderLiquidityGroup(container, entries, scenario);
+        continue;
+      }
       entries.forEach(({ param, index }) =>
         container.appendChild(this._buildParamRow(param, index, scenario)));
+    }
+  }
+
+  /**
+   * Design 114 §7.1 (S4) — the Liquidity Pools group in a FIXED order: the two switches on one
+   * line, the Structure (base graph and shapes, as one tabbed editor), the schedule, the target
+   * schedule; then a note about the two neighbours that share the word "pool" and are not these.
+   *
+   * `liquidityShapes` has no row of its own: its tabs are drawn by the `liquidityGraph` row. A
+   * filter that matches only the shapes still draws the Structure, via the graph's row.
+   */
+  _renderLiquidityGroup(container, entries, scenario) {
+    const byName = new Map(entries.map(e => [e.param.name, e]));
+    if (byName.has('liquidityShapes') && !byName.has('liquidityGraph')) {
+      const index = scenario.params.findIndex(p => p.name === 'liquidityGraph');
+      if (index >= 0) byName.set('liquidityGraph', { param: scenario.params[index], index });
+    }
+    if (byName.has('liquidityGraph')) byName.delete('liquidityShapes');
+
+    const row = (name) => {
+      const e = byName.get(name);
+      byName.delete(name);
+      return e ? this._buildParamRow(e.param, e.index, scenario) : null;
+    };
+    const switches = ['liquidityGraphEnabled', 'poolFlowsEnabled'].map(row).filter(Boolean);
+    if (switches.length) {
+      const pair = document.createElement('div');
+      pair.className = 'param-row-pair';
+      switches.forEach(r => pair.appendChild(r));
+      container.appendChild(pair);
+    }
+    for (const name of LIQUIDITY_GROUP_ORDER) {
+      const r = row(name);
+      if (r) container.appendChild(r);
+    }
+    // Anything else in the group, in list order — nothing is dropped by the arrangement.
+    for (const e of byName.values()) container.appendChild(this._buildParamRow(e.param, e.index, scenario));
+
+    // The two neighbours, explained where the confusion happens rather than moved.
+    const sizing = scenario.params.filter(p => p.name === 'poolCashYears' || p.name === 'poolBondYears');
+    if (sizing.length) {
+      const note = document.createElement('div');
+      note.className = 'param-group-note';
+      note.dataset.id = 'pool-sizing-note';
+      note.append('Cash Pool and Bond Pool (years of spend), under ' + (sizing[0].group ?? 'another group')
+        + ', size the allocation MIX — they are not these pools. ');
+      const link = document.createElement('button');
+      link.type = 'button';
+      link.className = 'param-link-btn';
+      link.textContent = 'Show them';
+      link.addEventListener('click', () => this.revealParam(sizing[0], scenario));
+      note.appendChild(link);
+      container.appendChild(note);
     }
   }
 
@@ -380,6 +442,34 @@ export class ScenarioTabView {
    * changes — so dependent rows appear/disappear live. No-op for params nothing
    * depends on, keeping ordinary edits cheap.
    */
+  /** A pool graph with pools, not switched off — the state in which it compiles the spend order. */
+  _poolGraphIsLive(scenario) {
+    const val = (n) => scenario.params.find(x => x.name === n)?.value;
+    return val('liquidityGraphEnabled') !== false && (val('liquidityGraph')?.pools?.length ?? 0) > 0;
+  }
+
+  /** `drawdownSequence` while a pool graph is live: a statement, and a Clear when it is authored. */
+  _buildSupersededSequence(param, scenario) {
+    const box = document.createElement('div');
+    box.className = 'param-group-note';
+    box.dataset.id = 'sequence-superseded';
+    box.append('Superseded — the Liquidity Pools graph compiles the spend order. ');
+    const authored = Array.isArray(param.value) && param.value.length > 0;
+    if (authored) {
+      box.append('A sequence is still authored here, and authoring both refuses the plan at load. ');
+      const clear = document.createElement('button');
+      clear.type = 'button';
+      clear.className = 'param-link-btn';
+      clear.dataset.id = 'sequence-clear';
+      clear.textContent = 'Clear it';
+      clear.addEventListener('click', () => { param.value = null; this._renderParamsList(scenario); });
+      box.appendChild(clear);
+    } else {
+      box.append('Switch Liquidity Pools Enabled off to author one by hand.');
+    }
+    return box;
+  }
+
   /** The live accounts, for the pool editors' account selects. `[]` when unavailable. */
   _accounts() {
     return (typeof this.accountsProvider === 'function' ? this.accountsProvider() : null) ?? [];
@@ -635,6 +725,10 @@ export class ScenarioTabView {
         valueInput = buildYieldCurveScheduleEditor(param);
       } else if (param.type === 'RateKeyMap') {
         valueInput = buildRateKeyMapEditor(param);
+      } else if (param.type === 'DrawdownSequence' && this._poolGraphIsLive(scenario)) {
+        // Design 114 §7.1 — with a live pool graph this is the SECOND authority on the spend
+        // order, and authoring both refuses the plan at load. Say so instead of offering an input.
+        valueInput = this._buildSupersededSequence(param, scenario);
       } else if (param.type === 'DrawdownSequence') {
         valueInput = buildDrawdownSequenceEditor(param, this._accounts());
       } else if (param.type === 'LiquidityGraph' || param.type === 'LiquidityShapes') {
@@ -656,8 +750,16 @@ export class ScenarioTabView {
           problems: typeof this.graphProblemsProvider === 'function'
             ? this.graphProblemsProvider() : [],
         });
+        // Design 114 §7.1 — the graph's row is the group's ONE Structure editor: the base graph
+        // as its first tab, the named shapes after it. The shapes param keeps its own value.
+        const shapesParam = scenario.params.find(x => x.name === 'liquidityShapes');   // shapes: raw-ok (the param the editor writes)
         valueInput = param.type === 'LiquidityGraph'
-          ? buildLiquidityGraphEditor(param, this._accounts(), graphFlags)
+          ? (shapesParam
+            ? buildLiquidityShapesEditor(shapesParam, this._accounts(), graphFlags, {
+                baseParam: param,
+                schedule:  () => scenario.params.find(x => x.name === 'liquidityGraphSchedule')?.value,
+              })
+            : buildLiquidityGraphEditor(param, this._accounts(), graphFlags))
           : buildLiquidityShapesEditor(param, this._accounts(), graphFlags, {
               // Design 114 — a shape can inherit from the base graph, and each tab names the
               // years the schedule selects it. Both are sibling params, read live.

@@ -71,6 +71,10 @@ const NO_OPTIONS = [];
  * @param {function(): boolean} [opts.showOptional] whether `optional` columns are drawn. Read
  *        on every render, so a toggle elsewhere takes effect on `refresh()`. Absent ⇒ shown.
  * @param {string} [opts.badgeWidth='1.3fr'] the track the hidden columns' badges share.
+ * @param {function(): (function(object): boolean)|null} [opts.rowFilter] a VIEW filter, read on
+ *        every render: rows it rejects are not drawn, and stay in `rows` untouched — a filter
+ *        must never be a way to lose data. Null (or no filter) draws every row.
+ * @param {string} [opts.filteredText] shown when a filter hides every row.
  * @returns {HTMLElement} the container, carrying a `.refresh()` that re-renders it.
  *        Needed when a column's options depend on ANOTHER editor's rows (the pool ids a
  *        claim or a flow names): that editor's `onChange` calls this one's `refresh`, so a
@@ -79,7 +83,8 @@ const NO_OPTIONS = [];
 export function buildRowListEditor({ rows, columns: allColumns, newRow, addLabel = '+ Add',
                                      onChange = null, emptyText = null,
                                      sortBy = null, reorderable = false,
-                                     showOptional = null, badgeWidth = '1.3fr' }) {
+                                     showOptional = null, badgeWidth = '1.3fr',
+                                     rowFilter = null, filteredText = null }) {
   const container = document.createElement('div');
   container.className = 'age-band-list-editor row-list-editor';
 
@@ -103,7 +108,9 @@ export function buildRowListEditor({ rows, columns: allColumns, newRow, addLabel
     const badgesOf = (row) => hidden
       .map(c => ({ col: c, text: typeof c.badge === 'function' ? c.badge(row) : null }))
       .filter(b => b.text);
-    const withBadges = hidden.length > 0 && rows.some(r => badgesOf(r).length > 0);
+    const keep = (typeof rowFilter === 'function' ? rowFilter() : null) ?? null;
+    const shown = keep ? rows.filter(r => keep(r)) : rows;
+    const withBadges = hidden.length > 0 && shown.some(r => badgesOf(r).length > 0);
 
     // The remove button's fixed 26px column is the shared band-editor convention.
     const grid = [...columns.map(c => c.width ?? '1fr'), ...(withBadges ? [badgeWidth] : []),
@@ -138,7 +145,18 @@ export function buildRowListEditor({ rows, columns: allColumns, newRow, addLabel
       container.appendChild(header);
     }
 
+    if (keep && rows.length > 0 && shown.length === 0) {
+      const none = document.createElement('div');
+      none.className = 'row-list-empty';
+      none.dataset.id = 'filtered-empty';
+      none.textContent = filteredText ?? 'No rows match the filter.';
+      container.appendChild(none);
+    }
+
     rows.forEach((row, idx) => {
+      // `idx` stays the row's index in the WHOLE list, so remove and move-up act on the row
+      // that was clicked however many rows the filter is hiding.
+      if (keep && !keep(row)) return;
       const rowEl = document.createElement('div');
       rowEl.className = 'age-band-row';
       rowEl.style.gridTemplateColumns = grid;
