@@ -663,7 +663,7 @@ export class ScenarioTabView {
         // The shape ids are read LIVE off the sibling param rather than captured, so a shape
         // added or renamed without a full re-render still offers the right options here.
         valueInput = buildLiquidityGraphScheduleEditor(param, () => {
-          const src = scenario.params.find(x => x.name === 'liquidityShapes')?.value;
+          const src = scenario.params.find(x => x.name === 'liquidityShapes')?.value;   // shapes: raw-ok (ids only)
           return isPlainObject_(src) ? Object.keys(src) : [];
         });
       } else if (param.type === 'LiquidityTargetSchedule') {
@@ -671,7 +671,7 @@ export class ScenarioTabView {
         // the derived size column describe the pools as they are now, not when this was built.
         valueInput = buildLiquidityTargetScheduleEditor(param, () => ({
           liquidityGraph:  scenario.params.find(x => x.name === 'liquidityGraph')?.value,
-          liquidityShapes: scenario.params.find(x => x.name === 'liquidityShapes')?.value,
+          liquidityShapes: scenario.params.find(x => x.name === 'liquidityShapes')?.value,   // shapes: raw-ok (bag; editor expands)
         }));
       } else if (param.type === 'MpcRuns') {
         // Design 81 §8 / 5b. The two params are siblings and each has to see the other: the

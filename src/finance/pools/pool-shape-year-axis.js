@@ -8,6 +8,9 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+// Design 114 — shape ids, through the one module that knows what a shape is.
+import { liquidityShapeIds } from './pool-shape-expansion.js';
+
 /**
  * The shape-switch YEAR axis — design 110 leg C, phase 9 (§6.4, design 109 Q1).
  *
@@ -146,9 +149,7 @@ export function applyShapeYearShifts(rawSchedule, shifts) {
 export function scheduledShapeAxes(params) {
   const schedule = params?.liquidityGraphSchedule;
   if (!Array.isArray(schedule)) return [];
-  const shapes = params?.liquidityShapes;
-  const known = (shapes && typeof shapes === 'object' && !Array.isArray(shapes))
-    ? new Set(Object.keys(shapes)) : new Set();
+  const known = new Set(liquidityShapeIds(params));
   const byId = new Map();
   for (const row of schedule) {
     if (!row || typeof row !== 'object') continue;

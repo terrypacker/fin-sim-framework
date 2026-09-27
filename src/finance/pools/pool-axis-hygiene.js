@@ -59,6 +59,7 @@ import { authoredParamValue, scalablePoolTargets, authoredPoolGraphs, POOL_TARGE
   from './pool-target-scale.js';
 import { gateClauseAxes } from './pool-gate-axis.js';
 import { scheduledShapeAxes, SHAPE_YEAR_SHIFT_RANGE } from './pool-shape-year-axis.js';
+import { poolGraphEntries } from './pool-shape-expansion.js';
 
 /**
  * What a hygiene row says about the grid it is warning about. Two different sentences, and
@@ -269,11 +270,8 @@ export function targetVocabularyProblems(authored, targetRows) {
   const lo = POOL_TARGET_SCALE_RANGE.min * Math.min(1, ...factors);
   const hi = POOL_TARGET_SCALE_RANGE.max * Math.max(1, ...factors);
   const scalable = new Set(scalablePoolTargets(authored).map(r => r.poolId));
-  const graphs = [[null, authored.liquidityGraph]];
-  const shapes = authored.liquidityShapes;
-  if (shapes && typeof shapes === 'object' && !Array.isArray(shapes)) {
-    for (const [id, g] of Object.entries(shapes)) graphs.push([id, g]);
-  }
+  // Design 114 — shapes EXPANDED: an inherited pool is checked in every shape that holds it.
+  const graphs = poolGraphEntries(authored);
   // One row per (kind, pool, sentence), naming every graph it holds in. A pool carried unchanged
   // into three shapes would otherwise say the same thing three times — measured on the author's
   // plan, eight rows for four facts.

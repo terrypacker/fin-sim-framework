@@ -24,9 +24,10 @@ import { isCurrencyLotPool, createCurrencyLotObserver } from './finance/account-
 import { LEDGER_METHOD, POOLING, LONG_TERM_DAYS, PERSONAL_DE_MINIMIS_USD, PERSONAL_CHARACTER, CurrencyLotPool, allocateGain } from './finance/account-rules/currency-lots.js';
 import { InheritHandler, InheritApplyReducer, InheritanceNeTaxApplyReducer, InheritedRaDistributionHandler, InheritedRaDistributionApplyReducer } from './finance/account-rules/inheritance-classes.js';
 import { INHERITED_RA_WINDOW, INHERITED_RA_DISTRIBUTION_STRATEGY, inheritedRaStrategy } from './finance/account-rules/inherited-ra-distribution-strategy.js';
-import { loanKeyForProperty, findLoanForProperty, findLoansForProperty, LOAN_RATE_TYPE, LOAN_RATE_TERM_FIELDS, loanRateTerms, mortgageRateTerms, inFixedWindow, fixedWindowEndYear, offsetApplies, loanYear, capFixedExtraRepayment, loanBreakCost, propertyLoanPayoffs, postFixedReamortises, synthesizeLoanForProperty, propertyNeedsLoanPayment, accountNeedsLoanPayment, offsetBalanceForLoan, effectivePrincipal, resolveLoanRate, scheduledLoanPayment, SECTION_988_PERSONAL_DE_MINIMIS_USD, section988BusinessFraction, computeSection988Gain, blendSection988BookingRate, investmentInterestAction, LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer, section988Residence } from './finance/account-rules/loan-classes.js';
+import { loanKeyForProperty, findLoanForProperty, findLoansForProperty, LOAN_RATE_TYPE, inFixedWindow, fixedWindowEndYear, offsetApplies, loanYear, LOAN_RATE_TERM_FIELDS, loanRateTerms, mortgageRateTerms, synthesizeLoanForProperty, propertyNeedsLoanPayment, accountNeedsLoanPayment, offsetBalanceForLoan, effectivePrincipal, resolveLoanRate, capFixedExtraRepayment, loanBreakCost, propertyLoanPayoffs, scheduledLoanPayment, postFixedReamortises, SECTION_988_PERSONAL_DE_MINIMIS_USD, section988BusinessFraction, computeSection988Gain, blendSection988BookingRate, investmentInterestAction, LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer, section988Residence } from './finance/account-rules/loan-classes.js';
 import { US_PRIMARY_HOME_EXCLUSION_MFJ, US_PRIMARY_HOME_EXCLUSION_SINGLE, toMs, isMainResidenceThroughout, mainResidenceWindow, auMainResidenceExemption, us121Exclusion, unrecaptured1250Gain, cgtDiscountFraction } from './finance/account-rules/main-residence.js';
 import { UsMortgagePaymentHandler, UsMortgagePaymentApplyReducer, AuMortgagePaymentHandler, AuMortgagePaymentApplyReducer } from './finance/account-rules/mortgage-payment-classes.js';
+import { decimalAgeAt, hasAgeGate, isAgeEligible, drawableBalance, penaltyFreeSliceOf, penaltyFreeAvailableFor, penaltyBearingSliceOf, penaltyFreeAvailable, unlocksAt } from './finance/account-rules/penalty-free-availability.js';
 import { PROPERTY_PURCHASE_ORDER, resolvePurchasePrice, propertyNeedsPurchase, PropertyPurchaseHandler, UsPropertyPurchaseHandler, AuPropertyPurchaseHandler, PropertyPurchaseApplyReducer } from './finance/account-rules/property-purchase.js';
 import { computeRentalMonth, UsRentalIncomeHandler, UsRentalIncomeApplyReducer, AuRentalIncomeHandler, AuRentalIncomeApplyReducer } from './finance/account-rules/rental-income-classes.js';
 import { ScheduledEarlyWithdrawalApplyReducer, EarlyWithdrawalPolicyHandler } from './finance/account-rules/us/early-withdrawal-classes.js';
@@ -152,12 +153,12 @@ import { IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandle
 import { HouseRunningCostHandler } from './finance/handlers/house-running-cost-handler.js';
 import { IntlTransferToUsHandler, IntlTransferToAuHandler } from './finance/handlers/intl-transfer-handlers.js';
 import { MonthlyExpensesHandler } from './finance/handlers/monthly-expenses-handler.js';
-import { SpendingRefillHandler } from './finance/handlers/spending-refill-handler.js';
 import { MonthlySocialSecurityHandler } from './finance/handlers/monthly-social-security-handler.js';
 import { MortalityHandler } from './finance/handlers/mortality-handler.js';
 import { OutOfFundsHandler } from './finance/handlers/out-of-funds-handler.js';
 import { WITHHOLDING_METHOD, PAYROLL_STAGE, hasPayrollContributions, US_CONTRIBUTION_FIELDS, AU_CONTRIBUTION_FIELDS, computePayroll, PayrollHandler } from './finance/handlers/payroll-handler.js';
 import { RealPropertyRepairTickHandler } from './finance/handlers/real-property-repair-tick-handler.js';
+import { SpendingRefillHandler } from './finance/handlers/spending-refill-handler.js';
 import { UsSavingsInterestMonthlyHandler } from './finance/handlers/us-savings-interest-handler.js';
 import { ALLOCATION, ALLOCATION_VALUES, COLLECTIBLE_ALLOCATIONS, isCollectibleAllocation, MIX_SUM_EPSILON, totalizeMix, isTotalMix, assertTotalMix } from './finance/holdings/allocation.js';
 import { resolveScheduledRate } from './finance/holdings/appreciation-schedule-utils.js';
@@ -186,7 +187,7 @@ import { USD_AUD_PATH, JournalFxRates, normalizeAggregateCurrency } from './fina
 import { ReportDefinition, ReportDefinitionRegistry } from './finance/journal-reporting/report-definition-registry.js';
 import { createReportApis, apiFor, runReport } from './finance/journal-reporting/run-report.js';
 import { JournalReportingService } from './finance/journal-reporting-service.js';
-import { DEFAULT_MC_VARIABLE_CONFIGS, CENTER_SOURCES, refineCenterSource, IntlRetirementMcConfig } from './finance/monte-carlo/intl-retirement-mc-config.js';
+import { DEFAULT_MC_VARIABLE_CONFIGS, CENTER_SOURCES, refineCenterSource, variablesMissingCenter, IntlRetirementMcConfig } from './finance/monte-carlo/intl-retirement-mc-config.js';
 import { summarizeProvenance, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
 import { CDC_2024, AU_2022, lookupLifeTable } from './finance/monte-carlo/life-tables.js';
 import { RETURN_BAND_EDGES, runsToRows, pairedRescues, pairedMetric, pairingMismatches, failureRate, failureByBand, failureDrivers } from './finance/monte-carlo/mc-analysis.js';
@@ -197,6 +198,7 @@ import { get, set } from './finance/monte-carlo/mc-param-paths.js';
 import { computeNetWorthUsd, computeHouseValueUsd, MC_SAMPLER_CADENCE, createMcSampler, extractYearlyTimeSeries, makeMcSeededRng, computePathShape } from './finance/monte-carlo/mc-sampling.js';
 import { perturbParams, mcPrimeModel, mcInflationModel, mcEquityModel, samplingSignature, buildIterationRunner, initMcContext, runMcIteration, gridCellParams, runGridTask } from './finance/monte-carlo/parallel/mc-worker-core.js';
 import { browserMcSpawn, McWorkerPool } from './finance/monte-carlo/parallel/mc-worker-pool.js';
+import { adviceSignals } from './finance/mpc/advice-signals.js';
 import { rollForwardWithControls, recordDecisionRecord, readDecisionRecords, readDecisionRuns } from './finance/mpc/apply-forward.js';
 import { COCKPIT_CONTROLS, CockpitController } from './finance/mpc/cockpit-controller.js';
 import { DecisionRecordRegistry } from './finance/mpc/decision-record-registry.js';
@@ -205,8 +207,15 @@ import { applyHarvestPlan, paramKeyOf, readParamValue, upsertParam, inferParamTy
 import { foldHarvestPlan, feasibilityOfResult, checkHarvestFeasibility, describeFeasibility } from './finance/mpc/harvest-feasibility.js';
 import { resolveStaticLevers, foldScheduleBakes, mergeResolved } from './finance/mpc/harvest-resolve.js';
 import { HARVEST_FORMS, COLLAPSE_RULES, requiresIncludes, isIncludesRequirement, requirementSatisfied, harvestDecisions, pointHarvest, collapseConsecutive, ageAt, resolveBirthDate, _internals } from './finance/mpc/harvest.js';
+import { LEVER_PROBLEM_KIND, leverHygieneProblems } from './finance/mpc/lever-hygiene.js';
+import { BAND_KEY_PREFIX, bandKey, bandKeyAge, SPENDING_SCHEDULE, DRAWDOWN_XBORDER_SCHEDULE, DRAWDOWN_WITHINTIER_SCHEDULE, DRAWDOWN_SLEEVE_SCHEDULE, presentRolesFromState, DRAWDOWN_WEIGHTS_SCHEDULE, drawdownPriorityPatch, ALLOCATION_MIX_SCHEDULE, BOND_LADDER_SCHEDULE, YEAR_KEY_PREFIX, YEAR_FIELD_SEP, yearKey, yearKeyParts, ROTH_SCHEDULE, EARLY_WITHDRAWAL_SCHEDULE, foldInForceDecisions, POOL_SHAPE_SCHEDULE, POOL_TARGET_SCHEDULE, poolTargetKeyParts, shapeIdsOf, poolGraphCompilesSpendOrder, LEVER_SCHEDULE, leverRequirement } from './finance/mpc/lever-schedule.js';
 import { runMpc, makeInitialSnapshot } from './finance/mpc/mpc-controller.js';
+import { MpcDecisionScheduleReducer } from './finance/mpc/mpc-decision-schedule-reducer.js';
 import { replayDecisions } from './finance/mpc/replay.js';
+import { RUN_AXIS_PROBLEM_KIND, pinnedParamsOf, runAxisProblems } from './finance/mpc/run-axis-hygiene.js';
+import { assertRunIsPlayable, foldQueueLeverRuns } from './finance/mpc/run-compile-fold.js';
+import { decisionsFromRecords, buildRunEntry, checkRunFeasibility, saveRunToScenario } from './finance/mpc/run-record.js';
+import { resolveActiveMpcRun, activeDecisionsAt, allDecisionsOf, truncateActiveRunAt, describeRunSource, makeRunKey, mpcRunOptions } from './finance/mpc/run-schedule.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS, buildOptVariables, buildGridAxes } from './finance/optimization/intl-retirement-opt-config.js';
 import { IntlRetirementOptimizer } from './finance/optimization/intl-retirement-optimizer.js';
 import { valuesForConfig, cartesianProduct } from './finance/optimization/opt-values.js';
@@ -234,26 +243,18 @@ import { SPLIT_MODE, DEPOSITABLE_ROLES, isDepositable, _resetSplitWarnings, spli
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
 import { Person, PAYROLL_ELECTION_FIELDS } from './finance/person.js';
-import { POOL_TARGET_MODE, POOL_SPEND_BASIS, POOL_CAPACITY_MODE, POOL_ACCESS_MODE, FLOW_CADENCE, POOL_DRAWDOWN_BASIS, POOL_GATE_SCOPE, FLOW_EXECUTOR, depositKeyFor, purchaseTargetFor, normalizeLiquidityGraph, compileToDrawdownSequence, poolsClaimingClass, resolveLiquidityGraph, collectAuthoredGraphProblems, blockingProblems, PROBLEM_SEVERITY } from './finance/pools/liquidity-graph.js';
-// Design 110 leg C — the pool size AXIS and its study hygiene.
-import { poolTargetScaleKey, parsePoolTargetScaleKey, poolTargetScalesFrom, scaleRawPoolGraph,
-  scaleRawPoolShapes, scalablePoolTargets, poolTargetScaleLabel, authoredPoolGraphs,
-  authoredParamValue, resolvePoolTargetScaleCenters, resolveLiquidityAxisCenters,
-  POOL_TARGET_SCALE_DEFAULT, POOL_TARGET_SCALE_RANGE,
-  POOL_TARGET_SCALE_FIELD } from './finance/pools/pool-target-scale.js';
-import { poolAxisProblems, POOL_AXIS_PROBLEM_KIND } from './finance/pools/pool-axis-hygiene.js';
-import { shapeYearShiftKey, parseShapeYearShiftKey, shapeYearShiftsFrom, applyShapeYearShifts,
-  scheduledShapeAxes, shapeYearShiftLabel, resolveShapeYearShiftCenters,
-  SHAPE_YEAR_SHIFT_DEFAULT, SHAPE_YEAR_SHIFT_RANGE, SHAPE_YEAR_SHIFT_FIELD }
-  from './finance/pools/pool-shape-year-axis.js';
-import { gateAxisKey, parseGateAxisKey, gateOverridesFrom, applyGateOverridesToGate,
-  applyGateOverridesToGraph, applyGateOverridesToShapes, gateClauseAxes, gateAxisLabel,
-  resolveGateAxisCenters, GATE_AXIS_FIELD, GATE_DWELL_DEFAULT, GATE_DWELL_RANGE,
-  GATE_THRESHOLD_RANGES, GATE_CLAUSE_ID_RE } from './finance/pools/pool-gate-axis.js';
+import { POOL_TARGET_MODE, POOL_SPEND_BASIS, POOL_ACCESS_MODE, POOL_CAPACITY_MODE, FLOW_CADENCE, POOL_DRAWDOWN_BASIS, POOL_GATE_SCOPE, PROBLEM_SEVERITY, blockingProblems, FLOW_EXECUTOR, depositKeyFor, purchaseTargetFor, normalizeLiquidityGraph, compileToDrawdownSequence, poolsClaimingClass, resolveLiquidityGraph, collectAuthoredGraphProblems, resolveLiquidityGraphSchedule, activeGraphAt } from './finance/pools/liquidity-graph.js';
+import { POOL_AXIS_PROBLEM_KIND, poolAxisProblems, targetVocabularyProblems } from './finance/pools/pool-axis-hygiene.js';
 import { PoolFlowApplyReducer } from './finance/pools/pool-flow-apply-reducer.js';
 import { PoolFlowReducer } from './finance/pools/pool-flow-reducer.js';
-import { POOL_CUBE_FIELDS, POOL_EVENT_KIND, buildPoolHistory, poolHistoryRows, poolSeries, reserveSeries, tiePoolHistory, latestPools } from './finance/pools/pool-history.js';
-import { poolMarketReturn, loanForOffset, loansForOffset, annualSpendBase, poolMetrics, allPoolMetrics, poolContext, RESERVE_CLASSES, householdReserve } from './finance/pools/pool-metrics.js';
+import { GATE_KEY_PREFIX, GATE_AXIS_FIELD, GATE_DWELL_DEFAULT, GATE_THRESHOLD_RANGES, GATE_DWELL_RANGE, GATE_CLAUSE_ID_RE, gateAxisKey, parseGateAxisKey, gateOverridesFrom, applyGateOverridesToGate, applyGateOverridesToGraph, applyGateOverridesToShapes, gateClauseAxes, gateAxisLabel, resolveGateAxisCenters } from './finance/pools/pool-gate-axis.js';
+import { POOL_CUBE_FIELDS, POOL_EVENT_KIND, buildPoolHistory, poolHistoryRows, poolShapeSpans, poolTargetScaleSteps, poolTopology, poolSeries, reserveSeries, tiePoolHistory, latestPools } from './finance/pools/pool-history.js';
+import { poolMarketReturn, claimValueNative, loanForOffset, loansForOffset, annualSpendBase, poolMetrics, allPoolMetrics, poolContext, RESERVE_CLASSES, householdReserve } from './finance/pools/pool-metrics.js';
+import { BASE_SHAPE_ID, ShapeExpansionError, isDeltaShape, expandLiquidityShapes, applyShapeDelta, shapeLineage, liquidityShapeIds, expandedShapesOf, poolGraphEntries, poolGraphFor, sameGraphValue, shapeDeltaAgainst } from './finance/pools/pool-shape-expansion.js';
+import { PoolShapeScheduleReducer, liquidityStateAt } from './finance/pools/pool-shape-schedule-reducer.js';
+import { SHAPE_KEY_PREFIX, SHAPE_YEAR_SHIFT_FIELD, SHAPE_YEAR_SHIFT_DEFAULT, SHAPE_YEAR_SHIFT_RANGE, shapeYearShiftKey, parseShapeYearShiftKey, shapeYearShiftsFrom, applyShapeYearShifts, scheduledShapeAxes, shapeYearShiftLabel, resolveShapeYearShiftCenters } from './finance/pools/pool-shape-year-axis.js';
+import { POOL_KEY_PREFIX, POOL_TARGET_SCALE_FIELD, POOL_TARGET_SCALE_DEFAULT, POOL_TARGET_SCALE_RANGE, poolTargetScaleKey, parsePoolTargetScaleKey, poolTargetScalesFrom, scaleRawPoolGraph, scaleRawPoolShapes, scalablePoolTargets, authoredParamValue, authoredPoolGraphs, resolvePoolTargetScaleCenters, resolveLiquidityAxisCenters, poolTargetScaleLabel, describeScaledTarget, scaledTargetDescriptor, describeScaledDescriptor } from './finance/pools/pool-target-scale.js';
+import { normalizeTargetSchedule, scalesInForceAt, appliedScales, stepKeyOf, composeScales, knownPoolIds, collapseTargetRuns } from './finance/pools/pool-target-schedule.js';
 import { AccountRetitleApplyReducer } from './finance/reducers/account-retitle-apply-reducer.js';
 import { AccumulateConsumptionReducer } from './finance/reducers/accumulate-consumption-reducer.js';
 import { AccumulateConsumptionUtilityReducer } from './finance/reducers/accumulate-consumption-utility-reducer.js';
@@ -368,6 +369,7 @@ import { indexLimit, ROUNDING } from './finance/tax/statutory-indexation.js';
 import { TaxDocumentRegistry } from './finance/tax/tax-document-registry.js';
 import { TaxEngine } from './finance/tax/tax-engine.js';
 import { toCcy, toUSD, toAUD, TAX_FX_PAIR, taxFxRate } from './finance/tax/tax-fx.js';
+import { US_DE_MINIMIS_TAX, instalmentIncrement, usRequiredAnnualPayment, auGdpAdjustedNotionalTax, TaxInstalmentHandlerBase, UsTaxInstalmentHandler, AuTaxInstalmentHandler, TaxInstalmentDebitReducerBase, UsTaxInstalmentDebitReducer, AuTaxInstalmentDebitReducer, TaxRefundCreditReducerBase, UsTaxRefundCreditReducer, AuTaxRefundCreditReducer } from './finance/tax/tax-instalment-classes.js';
 import { withoutUsSourceIncome, UsTaxSettleHandler, AuTaxSettleHandler, PENDING_RETURN_KEY, filedReturnState, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer, DRAWDOWN_TAX_ACTION_TYPES, UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer } from './finance/tax/tax-settle-classes.js';
 import { TAX_SETTLE_ACTION_TYPES, settleActionTypeFor, isTaxSettleEntry, primaryTaxSettleEntries } from './finance/tax/tax-settle-entries.js';
 import { WORKSHEET_COLUMNS, buildTaxWorksheetRows, worksheetRowsFromDocuments, verifyWorksheetRows, toCsv, cellText, tableDocumentToCsv } from './finance/tax/tax-worksheet-export.js';
@@ -386,7 +388,7 @@ import { UsTaxRates2025 } from './finance/tax/us/us-tax-rates-2025.js';
 import { UsTaxRates2026 } from './finance/tax/us/us-tax-rates-2026.js';
 import { UsTaxRatesBase, _computeInvestmentInterestLimitation, ORDINARY_CAPITAL_LOSS_CAP, _computeCapitalLossLimitation, _computeCapitalLossBasketAdjustment, _computeRateDifferentialAdjustment, _computePassiveLossLimitation, _drawDownBasket } from './finance/tax/us/us-tax-rates-base.js';
 import { resolveWashSales } from './finance/tax/us/wash-sale.js';
-import { TaxService } from './finance/tax-service.js';
+import { PERIOD_ADVANCE_ORDER, TaxService } from './finance/tax-service.js';
 import { TaxSettleService, US_BRACKET_BASE_YEAR, usRatesForYear, usBracketGrossIncomeCeiling } from './finance/tax-settle-service.js';
 import { EDGE_TYPES, createEdgeId, Edge } from './graph/edge.js';
 import { GraphQueryApi } from './graph/graph-query-api.js';
@@ -396,19 +398,21 @@ import { QueryApi } from './query/query-api.js';
 import { AU_SINGLE_HOMEOWNER_DEFAULTS, AU_SINGLE_HOMEOWNER_PARAM_SCHEMA, AuSingleHomeownerScenario } from './scenarios/au-single-homeowner-scenario.js';
 import { BaseScenario } from './scenarios/base-scenario.js';
 import { BlankScenario } from './scenarios/blank-scenario.js';
-import { DRAWDOWN_STRATEGIES, DRAWDOWN_ROLES, DRAWDOWN_WEIGHT_MODE, DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP, drawdownWeightKey, DRAWDOWN_WEIGHT_ROLES, DRAWDOWN_CASH_ROLES, DRAWDOWN_ROLE_LABELS, presentDrawdownWeightRoles, drawdownWeightsFromStrategy, DEFAULT_DRAWDOWN_WEIGHTS, buildDrawdownWeightSchema, DEFAULT_DRAWDOWN_WEIGHT_PARAMS, DEFAULT_SLEEVE_WEIGHTS, buildSleeveWeightSchema, DEFAULT_SLEEVE_WEIGHT_PARAMS, ALLOCATION_OPTIMIZED_MODE, ALLOC_WEIGHT_CLASSES, ALLOC_WEIGHT_PREFIX, ALLOC_WEIGHT_SEP, allocWeightKey, ALLOC_WEIGHT_CLASS_LABELS, ALLOCATION_PRESETS, DEFAULT_ALLOC_WEIGHTS, synthesizeTargetAllocation, allocWeightsFromMix, allocWeightsFromPreset, presentAllocations, buildAllocWeightSchema, DEFAULT_ALLOC_WEIGHT_PARAMS, INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, INTL_RETIREMENT_PARAM_ALIASES, IntlRetirementScenario, applyRealPropertySaleYearParams } from './scenarios/intl-retirement-scenario.js';
+import { buildDrawdownWeightSchema, DEFAULT_DRAWDOWN_WEIGHT_PARAMS, DEFAULT_SLEEVE_WEIGHTS, buildSleeveWeightSchema, DEFAULT_SLEEVE_WEIGHT_PARAMS, buildAllocWeightSchema, DEFAULT_ALLOC_WEIGHT_PARAMS, INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, INTL_RETIREMENT_PARAM_ALIASES, IntlRetirementScenario, applyRealPropertySaleYearParams } from './scenarios/intl-retirement-scenario.js';
 import { GENERATED_KEY_PREFIXES, isGeneratedParamKey } from './scenarios/params/generated-param-keys.js';
+import { DRAWDOWN_STRATEGIES, DRAWDOWN_ROLES, DRAWDOWN_WEIGHT_MODE, DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP, drawdownWeightKey, DRAWDOWN_WEIGHT_ROLES, DRAWDOWN_CASH_ROLES, DRAWDOWN_ROLE_LABELS, presentDrawdownWeightRoles, drawdownWeightsFromStrategy, DEFAULT_DRAWDOWN_WEIGHTS, synthesizeWeightedPriorities, ALLOCATION_OPTIMIZED_MODE, ALLOC_WEIGHT_CLASSES, ALLOC_WEIGHT_PREFIX, ALLOC_WEIGHT_SEP, allocWeightKey, ALLOC_WEIGHT_CLASS_LABELS, ALLOCATION_PRESETS, DEFAULT_ALLOC_WEIGHTS, synthesizeTargetAllocation, allocWeightsFromMix, allocWeightsFromPreset, presentAllocations, DRAWDOWN_OWNER_MODES, DRAWDOWN_OWNER_DEFAULT, resolveOwnerBanding } from './scenarios/params/lever-weights.js';
 import { WHOLE_NUMBER_RECORD_FIELDS, roundRecordField, FRACTIONAL_YEAR_DATE_FIELDS, dateToFractionalYear, fractionalYearToIsoDate, recordFieldValue, recordFieldPatch } from './scenarios/params/record-field-rounding.js';
 import { BALANCE_TARGET, ACCOUNT_PARAM_TEMPLATES, PERSON_PARAM_TEMPLATE, REAL_PROPERTY_PARAM_TEMPLATE, COLLECTIBLE_PARAM_TEMPLATE, COMPANY_EQUITY_PARAM_TEMPLATE, BEQUEST_PARAM_TEMPLATE, INHERITED_RA_PARAM_TEMPLATE } from './scenarios/params/record-param-templates.js';
 import { decodeGeneratedParamKey, ScenarioParamGenerator } from './scenarios/params/scenario-param-generator.js';
 import { RETIRED_RATE_PARAMS, INTEREST_DEFAULTS, retireRateParams } from './scenarios/retired-rate-params.js';
-import { synthesizeWeightedPriorities, ScenarioLoader } from './scenarios/scenario-loader.js';
-import { resolveAliasCenters, resolveRecordCenters, applyParamBagToConfig } from './scenarios/scenario-param-apply.js';
+import { ScenarioLoader } from './scenarios/scenario-loader.js';
+import { resolveRecordCenters, resolveAliasCenters, applyParamBagToConfig } from './scenarios/scenario-param-apply.js';
 import { ScenarioRegistry } from './scenarios/scenario-registry.js';
 import { listScenarioSecurities, upsertScenarioSecurity, deleteScenarioSecurity, scenarioSecurityUsage } from './scenarios/scenario-securities.js';
 import { ScenarioSerializer } from './scenarios/scenario-serializer.js';
 import { ScenarioStorage } from './scenarios/scenario-storage.js';
 import { toolsetParamKeys, forwardToolsetOverrides } from './scenarios/toolset-param-forwarding.js';
+import { accountToStatePlain } from './scenarios/toolsets/account-state-projection.js';
 import { AU_BANKING } from './scenarios/toolsets/au-banking-toolset.js';
 import { AU_BROKERAGE } from './scenarios/toolsets/au-brokerage-toolset.js';
 import { AU_INCOME } from './scenarios/toolsets/au-income-toolset.js';
@@ -416,6 +420,7 @@ import { AU_REAL_PROPERTY } from './scenarios/toolsets/au-real-property-toolset.
 import { AU_RETIREMENT } from './scenarios/toolsets/au-retirement-toolset.js';
 import { AU_TAX } from './scenarios/toolsets/au-tax-toolset.js';
 import { CORPORATE_ACTIONS } from './scenarios/toolsets/corporate-actions-toolset.js';
+import { collectDerivedManifest, applyDerivedStateAt, captureDerivedState, applyDerivedState, captureDerivedEvents, spliceDerivedEvents } from './scenarios/toolsets/derived-manifest.js';
 import { resolvePropertyRateKey, ECONOMIC_REGIMES } from './scenarios/toolsets/economic-regimes-toolset.js';
 import { INHERITANCE } from './scenarios/toolsets/inheritance-toolset.js';
 import { ScenarioCompiler } from './scenarios/toolsets/scenario-compiler.js';
@@ -482,14 +487,15 @@ import { AccountEditor } from './visualization/accounts/account-editor.js';
 import { AccountsController } from './visualization/accounts/accounts-controller.js';
 import { RATE_KEY_GROUPS, KNOWN_RATE_KEYS, rateKeyOptionsHtml } from './visualization/accounts/rate-key-options.js';
 import { APP_EVENTS, AppDisplaySettings } from './visualization/app-display-settings.js';
-import { BequestEditor } from './visualization/assets/bequest-editor.js';
+import { BEQUEST_FORM_FIELDS, BequestEditor } from './visualization/assets/bequest-editor.js';
 import { CollectibleEditor } from './visualization/assets/collectible-editor.js';
 import { CompanyEquityEditor } from './visualization/assets/company-equity-editor.js';
 import { _mainResidenceMode, _mainResidenceFields, RealPropertyEditor } from './visualization/assets/real-property-editor.js';
-import { UNREAD_SECURITY_FIELDS, SecurityEditor } from './visualization/assets/security-editor.js';
+import { FIELD_SPECS, SECURITY_FORM_FIELDS, UNREAD_SECURITY_FIELDS, SecurityEditor } from './visualization/assets/security-editor.js';
 import { ChartController } from './visualization/chart/chart-controller.js';
 import { ChartPresenter } from './visualization/chart/chart-presenter.js';
 import { ChartView } from './visualization/chart/chart-view.js';
+import { LoanRateTermsForm } from './visualization/common/loan-rate-terms-form.js';
 import { SweepVariableTable } from './visualization/common/sweep-variable-table.js';
 import { ActionDefinitionList } from './visualization/components/action-definition-list.js';
 import { ActionEditor } from './visualization/components/action-editor.js';
@@ -520,6 +526,7 @@ import { RenderScheduler } from './visualization/components/render-scheduler.js'
 import { buildRowListEditor, readRowList } from './visualization/components/row-list-editor.js';
 import { normalizeFilter, matchesFilter, FilteredFoldState } from './visualization/components/text-filter.js';
 import { ConfigurationListComponent } from './visualization/configuration/configuration-list.js';
+import { NODE_EDITORS, NODE_KIND_LABELS } from './visualization/configuration/node-editor-registry.js';
 import { DecisionGraphPresenter } from './visualization/decision-graph/decision-graph-presenter.js';
 import { DgConfigPanel } from './visualization/decision-graph/dg-config-panel.js';
 import { DgResultsPanel } from './visualization/decision-graph/dg-results-panel.js';
@@ -536,6 +543,9 @@ import { GraphNodeExecHistory } from './visualization/graph-builder/graph-node-e
 import { GraphNodeInspectorPanel } from './visualization/graph-builder/graph-node-inspector-panel.js';
 import { GraphNodeLineage } from './visualization/graph-builder/graph-node-lineage.js';
 import { groupMergeTargets, routeEdge, computeFanOutOffsets, computeLaneOffsets } from './visualization/graph-builder/orthogonal-edge-router.js';
+import { loadHelpIndex, peekHelpIndex, _resetHelpIndex } from './visualization/help/help-index-source.js';
+import { decorateNodeFields } from './visualization/help/node-field-help.js';
+import { sweepRowHelp, decorateSweepRows } from './visualization/help/sweep-row-help.js';
 import { fmtCompact, fmtWhole } from './visualization/money-format.js';
 import { McConfigPanel } from './visualization/monte-carlo/mc-config-panel.js';
 import { formatAxisValue, formatDuration } from './visualization/monte-carlo/mc-grid-format.js';
@@ -561,7 +571,7 @@ import { showScenarioLoadError } from './visualization/scenario/scenario-load-er
 import { ScenarioTabController } from './visualization/scenario/scenario-tab-controller.js';
 import { ScenarioTabPresenter } from './visualization/scenario/scenario-tab-presenter.js';
 import { ScenarioTabView } from './visualization/scenario/scenario-tab-view.js';
-import { buildMixListEditor, buildAllocationGlidepathEditor, buildAllocationRegimeTargetsEditor, buildLocationPolicyEditor, buildYieldCurveShapeEditor, buildYieldCurveScheduleEditor, buildRateKeyMapEditor, buildDrawdownSequenceEditor, buildLiquidityGraphEditor } from './visualization/scenario/structured-param-editors.js';
+import { buildMixListEditor, buildAllocationGlidepathEditor, buildAllocationRegimeTargetsEditor, buildLocationPolicyEditor, buildYieldCurveShapeEditor, buildYieldCurveScheduleEditor, buildRateKeyMapEditor, buildDrawdownSequenceEditor, buildLiquidityGraphScheduleEditor, buildLiquidityTargetScheduleEditor, buildLiquidityShapesEditor, buildLiquidityGraphEditor, buildMpcRunSelect, buildMpcRunsEditor } from './visualization/scenario/structured-param-editors.js';
 import { ScenarioComparePresenter } from './visualization/scenario-compare/scenario-compare-presenter.js';
 import { DashCardsComponent } from './visualization/simulation/dash-cards-component.js';
 import { PlaybackProgressComponent } from './visualization/simulation/playback-progress-component.js';
@@ -587,7 +597,7 @@ import { WorkbenchComponent } from './visualization/workbench/component.js';
 import { WorkbenchLayoutModel } from './visualization/workbench/layout-model.js';
 import { PluginRegistry } from './visualization/workbench/plugin-registry.js';
 import { PLUGIN_CATEGORIES, PLUGIN_PANES, definePlugin } from './visualization/workbench/plugin-sdk.js';
-import { ScenarioPlugin, ParametersPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, WatchlistPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin, JournalReportPlugin, ScenarioComparePlugin, DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, HoldingsPlugin, AllocationPlugin, SecuritiesPlugin, SpendingPlugin, LiquidityPoolsPlugin, PaychequePlugin, MpcCockpitPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
+import { ScenarioPlugin, ParametersPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, WatchlistPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin, JournalReportPlugin, ScenarioComparePlugin, DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, HoldingsPlugin, AllocationPlugin, SecuritiesPlugin, SpendingPlugin, LiquidityPoolsPlugin, PaychequePlugin, MpcCockpitPlugin, HelpPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
 import { SplitPane } from './visualization/workbench/split-pane.js';
 import { TabGroup } from './visualization/workbench/tab-group.js';
 import { WB_EVENTS, WorkbenchRuntime } from './visualization/workbench/workbench-runtime.js';
@@ -705,24 +715,24 @@ export const Finance = {
   findLoanForProperty,
   findLoansForProperty,
   LOAN_RATE_TYPE,
-  LOAN_RATE_TERM_FIELDS,
-  loanRateTerms,
-  mortgageRateTerms,
   inFixedWindow,
   fixedWindowEndYear,
   offsetApplies,
   loanYear,
-  capFixedExtraRepayment,
-  loanBreakCost,
-  propertyLoanPayoffs,
-  postFixedReamortises,
+  LOAN_RATE_TERM_FIELDS,
+  loanRateTerms,
+  mortgageRateTerms,
   synthesizeLoanForProperty,
   propertyNeedsLoanPayment,
   accountNeedsLoanPayment,
   offsetBalanceForLoan,
   effectivePrincipal,
   resolveLoanRate,
+  capFixedExtraRepayment,
+  loanBreakCost,
+  propertyLoanPayoffs,
   scheduledLoanPayment,
+  postFixedReamortises,
   SECTION_988_PERSONAL_DE_MINIMIS_USD,
   section988BusinessFraction,
   computeSection988Gain,
@@ -746,6 +756,15 @@ export const Finance = {
   UsMortgagePaymentApplyReducer,
   AuMortgagePaymentHandler,
   AuMortgagePaymentApplyReducer,
+  decimalAgeAt,
+  hasAgeGate,
+  isAgeEligible,
+  drawableBalance,
+  penaltyFreeSliceOf,
+  penaltyFreeAvailableFor,
+  penaltyBearingSliceOf,
+  penaltyFreeAvailable,
+  unlocksAt,
   PROPERTY_PURCHASE_ORDER,
   resolvePurchasePrice,
   propertyNeedsPurchase,
@@ -1111,7 +1130,6 @@ export const Finance = {
   IntlTransferToUsHandler,
   IntlTransferToAuHandler,
   MonthlyExpensesHandler,
-  SpendingRefillHandler,
   MonthlySocialSecurityHandler,
   MortalityHandler,
   OutOfFundsHandler,
@@ -1123,6 +1141,7 @@ export const Finance = {
   computePayroll,
   PayrollHandler,
   RealPropertyRepairTickHandler,
+  SpendingRefillHandler,
   UsSavingsInterestMonthlyHandler,
   ALLOCATION,
   ALLOCATION_VALUES,
@@ -1268,6 +1287,7 @@ export const Finance = {
   DEFAULT_MC_VARIABLE_CONFIGS,
   CENTER_SOURCES,
   refineCenterSource,
+  variablesMissingCenter,
   IntlRetirementMcConfig,
   computeNetWorthUsd,
   computeHouseValueUsd,
@@ -1328,6 +1348,7 @@ export const Finance = {
   runGridTask,
   browserMcSpawn,
   McWorkerPool,
+  adviceSignals,
   rollForwardWithControls,
   recordDecisionRecord,
   readDecisionRecords,
@@ -1360,9 +1381,54 @@ export const Finance = {
   ageAt,
   resolveBirthDate,
   _internals,
+  LEVER_PROBLEM_KIND,
+  leverHygieneProblems,
+  BAND_KEY_PREFIX,
+  bandKey,
+  bandKeyAge,
+  SPENDING_SCHEDULE,
+  DRAWDOWN_XBORDER_SCHEDULE,
+  DRAWDOWN_WITHINTIER_SCHEDULE,
+  DRAWDOWN_SLEEVE_SCHEDULE,
+  presentRolesFromState,
+  DRAWDOWN_WEIGHTS_SCHEDULE,
+  drawdownPriorityPatch,
+  ALLOCATION_MIX_SCHEDULE,
+  BOND_LADDER_SCHEDULE,
+  YEAR_KEY_PREFIX,
+  YEAR_FIELD_SEP,
+  yearKey,
+  yearKeyParts,
+  ROTH_SCHEDULE,
+  EARLY_WITHDRAWAL_SCHEDULE,
+  foldInForceDecisions,
+  POOL_SHAPE_SCHEDULE,
+  POOL_TARGET_SCHEDULE,
+  poolTargetKeyParts,
+  shapeIdsOf,
+  poolGraphCompilesSpendOrder,
+  LEVER_SCHEDULE,
+  leverRequirement,
   runMpc,
   makeInitialSnapshot,
+  MpcDecisionScheduleReducer,
   replayDecisions,
+  RUN_AXIS_PROBLEM_KIND,
+  pinnedParamsOf,
+  runAxisProblems,
+  assertRunIsPlayable,
+  foldQueueLeverRuns,
+  decisionsFromRecords,
+  buildRunEntry,
+  describeRunSource,
+  makeRunKey,
+  checkRunFeasibility,
+  saveRunToScenario,
+  resolveActiveMpcRun,
+  activeDecisionsAt,
+  allDecisionsOf,
+  truncateActiveRunAt,
+  mpcRunOptions,
   DEFAULT_OPTIMIZATION_CONFIGS,
   buildOptVariables,
   buildGridAxes,
@@ -1461,11 +1527,13 @@ export const Finance = {
   PAYROLL_ELECTION_FIELDS,
   POOL_TARGET_MODE,
   POOL_SPEND_BASIS,
-  POOL_CAPACITY_MODE,
   POOL_ACCESS_MODE,
+  POOL_CAPACITY_MODE,
   FLOW_CADENCE,
   POOL_DRAWDOWN_BASIS,
   POOL_GATE_SCOPE,
+  PROBLEM_SEVERITY,
+  blockingProblems,
   FLOW_EXECUTOR,
   depositKeyFor,
   purchaseTargetFor,
@@ -1474,34 +1542,19 @@ export const Finance = {
   poolsClaimingClass,
   resolveLiquidityGraph,
   collectAuthoredGraphProblems,
-  blockingProblems,
-  PROBLEM_SEVERITY,
-  poolTargetScaleKey,
-  parsePoolTargetScaleKey,
-  poolTargetScalesFrom,
-  scaleRawPoolGraph,
-  scaleRawPoolShapes,
-  scalablePoolTargets,
-  poolTargetScaleLabel,
-  authoredPoolGraphs,
-  authoredParamValue,
-  resolvePoolTargetScaleCenters,
-  resolveLiquidityAxisCenters,
-  POOL_TARGET_SCALE_DEFAULT,
-  POOL_TARGET_SCALE_FIELD,
-  POOL_TARGET_SCALE_RANGE,
-  shapeYearShiftKey,
-  parseShapeYearShiftKey,
-  shapeYearShiftsFrom,
-  applyShapeYearShifts,
-  scheduledShapeAxes,
-  shapeYearShiftLabel,
-  resolveShapeYearShiftCenters,
-  SHAPE_YEAR_SHIFT_DEFAULT,
-  SHAPE_YEAR_SHIFT_RANGE,
-  SHAPE_YEAR_SHIFT_FIELD,
-  poolAxisProblems,
+  resolveLiquidityGraphSchedule,
+  activeGraphAt,
   POOL_AXIS_PROBLEM_KIND,
+  poolAxisProblems,
+  targetVocabularyProblems,
+  PoolFlowApplyReducer,
+  PoolFlowReducer,
+  GATE_KEY_PREFIX,
+  GATE_AXIS_FIELD,
+  GATE_DWELL_DEFAULT,
+  GATE_THRESHOLD_RANGES,
+  GATE_DWELL_RANGE,
+  GATE_CLAUSE_ID_RE,
   gateAxisKey,
   parseGateAxisKey,
   gateOverridesFrom,
@@ -1511,22 +1564,19 @@ export const Finance = {
   gateClauseAxes,
   gateAxisLabel,
   resolveGateAxisCenters,
-  GATE_AXIS_FIELD,
-  GATE_DWELL_DEFAULT,
-  GATE_DWELL_RANGE,
-  GATE_THRESHOLD_RANGES,
-  GATE_CLAUSE_ID_RE,
-  PoolFlowApplyReducer,
-  PoolFlowReducer,
   POOL_CUBE_FIELDS,
   POOL_EVENT_KIND,
   buildPoolHistory,
   poolHistoryRows,
+  poolShapeSpans,
+  poolTargetScaleSteps,
+  poolTopology,
   poolSeries,
   reserveSeries,
   tiePoolHistory,
   latestPools,
   poolMarketReturn,
+  claimValueNative,
   loanForOffset,
   loansForOffset,
   annualSpendBase,
@@ -1535,6 +1585,56 @@ export const Finance = {
   poolContext,
   RESERVE_CLASSES,
   householdReserve,
+  BASE_SHAPE_ID,
+  ShapeExpansionError,
+  isDeltaShape,
+  expandLiquidityShapes,
+  applyShapeDelta,
+  shapeLineage,
+  liquidityShapeIds,
+  expandedShapesOf,
+  poolGraphEntries,
+  poolGraphFor,
+  sameGraphValue,
+  shapeDeltaAgainst,
+  PoolShapeScheduleReducer,
+  liquidityStateAt,
+  SHAPE_KEY_PREFIX,
+  SHAPE_YEAR_SHIFT_FIELD,
+  SHAPE_YEAR_SHIFT_DEFAULT,
+  SHAPE_YEAR_SHIFT_RANGE,
+  shapeYearShiftKey,
+  parseShapeYearShiftKey,
+  shapeYearShiftsFrom,
+  applyShapeYearShifts,
+  scheduledShapeAxes,
+  shapeYearShiftLabel,
+  resolveShapeYearShiftCenters,
+  POOL_KEY_PREFIX,
+  POOL_TARGET_SCALE_FIELD,
+  POOL_TARGET_SCALE_DEFAULT,
+  POOL_TARGET_SCALE_RANGE,
+  poolTargetScaleKey,
+  parsePoolTargetScaleKey,
+  poolTargetScalesFrom,
+  scaleRawPoolGraph,
+  scaleRawPoolShapes,
+  scalablePoolTargets,
+  authoredParamValue,
+  authoredPoolGraphs,
+  resolvePoolTargetScaleCenters,
+  resolveLiquidityAxisCenters,
+  poolTargetScaleLabel,
+  describeScaledTarget,
+  scaledTargetDescriptor,
+  describeScaledDescriptor,
+  normalizeTargetSchedule,
+  scalesInForceAt,
+  appliedScales,
+  stepKeyOf,
+  composeScales,
+  knownPoolIds,
+  collapseTargetRuns,
   AccountRetitleApplyReducer,
   AccumulateConsumptionReducer,
   AccumulateConsumptionUtilityReducer,
@@ -1756,6 +1856,19 @@ export const Finance = {
   toAUD,
   TAX_FX_PAIR,
   taxFxRate,
+  US_DE_MINIMIS_TAX,
+  instalmentIncrement,
+  usRequiredAnnualPayment,
+  auGdpAdjustedNotionalTax,
+  TaxInstalmentHandlerBase,
+  UsTaxInstalmentHandler,
+  AuTaxInstalmentHandler,
+  TaxInstalmentDebitReducerBase,
+  UsTaxInstalmentDebitReducer,
+  AuTaxInstalmentDebitReducer,
+  TaxRefundCreditReducerBase,
+  UsTaxRefundCreditReducer,
+  AuTaxRefundCreditReducer,
   withoutUsSourceIncome,
   UsTaxSettleHandler,
   AuTaxSettleHandler,
@@ -1810,6 +1923,7 @@ export const Finance = {
   _computePassiveLossLimitation,
   _drawDownBasket,
   resolveWashSales,
+  PERIOD_ADVANCE_ORDER,
   TaxService,
   TaxSettleService,
   US_BRACKET_BASE_YEAR,
@@ -1944,11 +2058,7 @@ export const Scenarios = {
   presentDrawdownWeightRoles,
   drawdownWeightsFromStrategy,
   DEFAULT_DRAWDOWN_WEIGHTS,
-  buildDrawdownWeightSchema,
-  DEFAULT_DRAWDOWN_WEIGHT_PARAMS,
-  DEFAULT_SLEEVE_WEIGHTS,
-  buildSleeveWeightSchema,
-  DEFAULT_SLEEVE_WEIGHT_PARAMS,
+  synthesizeWeightedPriorities,
   ALLOCATION_OPTIMIZED_MODE,
   ALLOC_WEIGHT_CLASSES,
   ALLOC_WEIGHT_PREFIX,
@@ -1961,6 +2071,14 @@ export const Scenarios = {
   allocWeightsFromMix,
   allocWeightsFromPreset,
   presentAllocations,
+  DRAWDOWN_OWNER_MODES,
+  DRAWDOWN_OWNER_DEFAULT,
+  resolveOwnerBanding,
+  buildDrawdownWeightSchema,
+  DEFAULT_DRAWDOWN_WEIGHT_PARAMS,
+  DEFAULT_SLEEVE_WEIGHTS,
+  buildSleeveWeightSchema,
+  DEFAULT_SLEEVE_WEIGHT_PARAMS,
   buildAllocWeightSchema,
   DEFAULT_ALLOC_WEIGHT_PARAMS,
   INTL_RETIREMENT_DEFAULTS,
@@ -1990,10 +2108,9 @@ export const Scenarios = {
   RETIRED_RATE_PARAMS,
   INTEREST_DEFAULTS,
   retireRateParams,
-  synthesizeWeightedPriorities,
   ScenarioLoader,
-  resolveAliasCenters,
   resolveRecordCenters,
+  resolveAliasCenters,
   applyParamBagToConfig,
   ScenarioRegistry,
   listScenarioSecurities,
@@ -2004,6 +2121,7 @@ export const Scenarios = {
   ScenarioStorage,
   toolsetParamKeys,
   forwardToolsetOverrides,
+  accountToStatePlain,
   AU_BANKING,
   AU_BROKERAGE,
   AU_INCOME,
@@ -2011,6 +2129,12 @@ export const Scenarios = {
   AU_RETIREMENT,
   AU_TAX,
   CORPORATE_ACTIONS,
+  collectDerivedManifest,
+  applyDerivedStateAt,
+  captureDerivedState,
+  applyDerivedState,
+  captureDerivedEvents,
+  spliceDerivedEvents,
   resolvePropertyRateKey,
   MARKET_GROWTH_PARAMS,
   marketReturnFor,
@@ -2060,17 +2184,21 @@ export const Visualization = {
   rateKeyOptionsHtml,
   APP_EVENTS,
   AppDisplaySettings,
+  BEQUEST_FORM_FIELDS,
   BequestEditor,
   CollectibleEditor,
   CompanyEquityEditor,
   _mainResidenceMode,
   _mainResidenceFields,
   RealPropertyEditor,
+  FIELD_SPECS,
+  SECURITY_FORM_FIELDS,
   UNREAD_SECURITY_FIELDS,
   SecurityEditor,
   ChartController,
   ChartPresenter,
   ChartView,
+  LoanRateTermsForm,
   SweepVariableTable,
   ActionDefinitionList,
   ActionEditor,
@@ -2105,6 +2233,8 @@ export const Visualization = {
   matchesFilter,
   FilteredFoldState,
   ConfigurationListComponent,
+  NODE_EDITORS,
+  NODE_KIND_LABELS,
   DecisionGraphPresenter,
   DgConfigPanel,
   DgResultsPanel,
@@ -2144,6 +2274,12 @@ export const Visualization = {
   routeEdge,
   computeFanOutOffsets,
   computeLaneOffsets,
+  loadHelpIndex,
+  peekHelpIndex,
+  _resetHelpIndex,
+  decorateNodeFields,
+  sweepRowHelp,
+  decorateSweepRows,
   fmtCompact,
   fmtWhole,
   McConfigPanel,
@@ -2188,7 +2324,12 @@ export const Visualization = {
   buildYieldCurveScheduleEditor,
   buildRateKeyMapEditor,
   buildDrawdownSequenceEditor,
+  buildLiquidityGraphScheduleEditor,
+  buildLiquidityTargetScheduleEditor,
+  buildLiquidityShapesEditor,
   buildLiquidityGraphEditor,
+  buildMpcRunSelect,
+  buildMpcRunsEditor,
   ScenarioComparePresenter,
   DashCardsComponent,
   PlaybackProgressComponent,
@@ -2283,6 +2424,7 @@ export const FinancePlugins = {
   LiquidityPoolsPlugin,
   PaychequePlugin,
   MpcCockpitPlugin,
+  HelpPlugin,
   FINANCE_PLUGINS,
   FINANCE_DEFAULT_LAYOUT,
 };

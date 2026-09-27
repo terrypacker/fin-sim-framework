@@ -54,6 +54,7 @@
 // the three lever bases to merge, so a family added later cannot reach two of the three.
 import { resolveGateAxisCenters } from './pool-gate-axis.js';
 import { resolveShapeYearShiftCenters } from './pool-shape-year-axis.js';
+import { poolGraphEntries } from './pool-shape-expansion.js';
 
 /** The generated namespace this axis lives in (see `GENERATED_KEY_PREFIXES`). */
 export const POOL_KEY_PREFIX = 'pool.';
@@ -194,15 +195,8 @@ export function scaleRawPoolShapes(rawShapes, scales) {
  *                   authored: Array<{ where: string|null, mode: string|null, value: number }> }>}
  */
 export function scalablePoolTargets(params) {
-  const graphs = [];
-  const base = params?.liquidityGraph;
-  if (base && typeof base === 'object') graphs.push([null, base]);
-  const shapes = params?.liquidityShapes;
-  if (shapes && typeof shapes === 'object' && !Array.isArray(shapes)) {
-    for (const [id, shape] of Object.entries(shapes)) {
-      if (shape && typeof shape === 'object') graphs.push([id, shape]);
-    }
-  }
+  // Design 114 — shapes EXPANDED, so a pool a shape inherits is in that shape.
+  const graphs = poolGraphEntries(params);
   const byId = new Map();
   // Pools whose target is non-zero in at least ONE shape. A FACTOR cannot lift a target off
   // zero, so a pool authored at 0 everywhere has no level to scale: the axis would read as a
@@ -368,15 +362,8 @@ export function describeScaledTarget(params, poolId, factor) {
  * @returns {{label:string, parts:Array<{where:string|null, target:*, covered:number|null}>}}
  */
 export function scaledTargetDescriptor(params, poolId) {
-  const graphs = [];
-  const base = params?.liquidityGraph;
-  if (base && typeof base === 'object') graphs.push([null, base]);
-  const shapes = params?.liquidityShapes;
-  if (shapes && typeof shapes === 'object' && !Array.isArray(shapes)) {
-    for (const [id, shape] of Object.entries(shapes)) {
-      if (shape && typeof shape === 'object') graphs.push([id, shape]);
-    }
-  }
+  // Design 114 — shapes EXPANDED, so a pool a shape inherits is in that shape.
+  const graphs = poolGraphEntries(params);
   const parts = [];
   let label = poolId;
   for (const [where, graph] of graphs) {

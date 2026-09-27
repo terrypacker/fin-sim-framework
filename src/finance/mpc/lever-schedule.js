@@ -16,8 +16,10 @@ import {
   resolveOwnerBanding,
 } from '../../scenarios/params/lever-weights.js';
 import { resolveActiveMpcRun, activeDecisionsAt } from './run-schedule.js';
-// Leaves: `pool-target-scale.js` imports only two pool modules that import nothing.
+// Leaves: `pool-target-scale.js` imports only pool modules whose imports end at
+// `pool-shape-expansion.js`, which imports nothing (design 114).
 import { scalablePoolTargets } from '../pools/pool-target-scale.js';
+import { liquidityShapeIds, poolGraphEntries } from '../pools/pool-shape-expansion.js';
 import {
   DRAWDOWN_SLEEVE_CLASSES, SLEEVE_WEIGHT_MODE, SLEEVE_WEIGHT_PREFIX, SLEEVE_WEIGHT_SEP,
   sleeveWeightKey,
@@ -672,8 +674,7 @@ function _foldTargetSchedule(base, rows) {
 
 /** The named shapes a plan authors, in authored order. */
 export function shapeIdsOf(bp) {
-  const shapes = bp?.liquidityShapes;
-  return (shapes && typeof shapes === 'object' && !Array.isArray(shapes)) ? Object.keys(shapes) : [];
+  return liquidityShapeIds(bp);
 }
 
 function _isGraph(g) {
@@ -749,9 +750,8 @@ export function poolGraphCompilesSpendOrder(bp) {
   const orders = (graph) => Array.isArray(graph?.pools)
     && graph.pools.some(p => p?.spendOrder != null);
   if (orders(bp?.liquidityGraph)) return true;
-  const shapes = bp?.liquidityShapes;
-  return shapes != null && typeof shapes === 'object'
-    && Object.values(shapes).some(orders);
+  // Design 114 — shapes EXPANDED; a delta's own rows are not the whole of what it orders.
+  return poolGraphEntries(bp).some(([where, g]) => where !== null && orders(g));
 }
 
 /** The sentence every pooled-inert gate says, with the lever's own clause spliced in. */

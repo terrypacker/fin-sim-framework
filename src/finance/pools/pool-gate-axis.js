@@ -8,6 +8,9 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+// Design 114 — shapes that inherit: every content read goes through the expansion.
+import { poolGraphEntries } from './pool-shape-expansion.js';
+
 /**
  * The gate-clause AXIS — design 110 leg C, phase 8 (§2.1, §6.3 option A).
  *
@@ -283,15 +286,8 @@ export function applyGateOverridesToShapes(rawShapes, overrides) {
  *                   negated:boolean, flows:string[], shapes:Array<string|null> }>}
  */
 export function gateClauseAxes(params) {
-  const graphs = [];
-  const base = params?.liquidityGraph;
-  if (base && typeof base === 'object') graphs.push([null, base]);
-  const shapes = params?.liquidityShapes;
-  if (shapes && typeof shapes === 'object' && !Array.isArray(shapes)) {
-    for (const [id, shape] of Object.entries(shapes)) {
-      if (shape && typeof shape === 'object') graphs.push([id, shape]);
-    }
-  }
+  // Design 114 — shapes EXPANDED, so a pool a shape inherits is in that shape.
+  const graphs = poolGraphEntries(params);
   const byId = new Map();
   for (const [where, graph] of graphs) {
     for (const flow of (Array.isArray(graph.flows) ? graph.flows : [])) {

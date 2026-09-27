@@ -31,6 +31,12 @@ import { shapeYearShiftsFrom, applyShapeYearShifts } from './pool-shape-year-axi
 import {
   normalizeTargetSchedule, scalesInForceAt, appliedScales, stepKeyOf, composeScales, knownPoolIds,
 } from './pool-target-schedule.js';
+// Design 114 — shapes that inherit. Every CONTENT read of `liquidityShapes` in this file goes
+// through `_expandedShapes`; the lines that read it raw read only its KEYS or localize a
+// delta's own cells, and are marked `shapes: raw-ok` for the hygiene test.
+import {
+  expandLiquidityShapes, ShapeExpansionError, shapeLineage, BASE_SHAPE_ID,
+} from './pool-shape-expansion.js';
 
 /**
  * DESIGN 97 PART II — the LIQUIDITY GRAPH.
@@ -1396,6 +1402,7 @@ export function collectAuthoredGraphProblems(params, accounts = []) {
     return problems;
   }
 
+  let baseRefused = baseCellProblems.length > 0;
   if (!baseCellProblems.length) {
     try {
       // NOT `resolveLiquidityGraph` — see `_normalizeFromParams`. A graph switched off with
@@ -1405,6 +1412,7 @@ export function collectAuthoredGraphProblems(params, accounts = []) {
     } catch (e) {
       problems.push({ param: 'liquidityGraph', index: null, field: null, pool: null,
                       severity: PROBLEM_SEVERITY.ERROR, message: e.message });
+      baseRefused = true;
     }
   }
 
@@ -1416,9 +1424,12 @@ export function collectAuthoredGraphProblems(params, accounts = []) {
   const shapeCellProblems = _shapeCellProblems(p);
   problems.push(...shapeCellProblems);
   const dirtyShapes = new Set(shapeCellProblems.map(x => x.shape));
+  // Design 114 — a refused base graph is dirty for every shape that inherits from it: its
+  // problem is already reported under `liquidityGraph`, and a descendant would repeat it.
+  if (baseRefused) dirtyShapes.add(BASE_SHAPE_ID);
   try {
     _normalizeShapes(p, accounts, dirtyShapes, advisories);
-    _normalizeSchedule(_overlayRawSchedule(p), p.liquidityShapes);
+    _normalizeSchedule(_overlayRawSchedule(p), p.liquidityShapes);   // shapes: raw-ok (ids only)
   } catch (e) {
     const m = /^liquidityGraph: shape '([^']+)': /.exec(e.message);
     problems.push({
@@ -1436,7 +1447,7 @@ export function collectAuthoredGraphProblems(params, accounts = []) {
       const targetRows = _normalizeTargetRows(p);
       if (targetRows.length) {
         const quiet = [];
-        _datedSteps(p, accounts, _normalizeSchedule(_overlayRawSchedule(p), p.liquidityShapes),
+        _datedSteps(p, accounts, _normalizeSchedule(_overlayRawSchedule(p), p.liquidityShapes),   // shapes: raw-ok (ids only)
           targetRows, _normalizeFromParams(p, accounts, quiet), _normalizeShapes(p, accounts, null, quiet),
           quiet);
       }
@@ -1505,8 +1516,11 @@ function _sizeSpecProblems(rawPools, param, shape) {
  * @private
  */
 function _shapeCellProblems(p) {
-  const raw = (p?.liquidityShapes && typeof p.liquidityShapes === 'object'
-               && !Array.isArray(p.liquidityShapes)) ? p.liquidityShapes : {};
+  // RAW on purpose (design 114): a delta's cells are its OWN rows, and the editor shows exactly
+  // those rows, so the index a problem carries has to be into the authored list. An inherited
+  // pool's cells are reported once, in the graph that authors them.
+  const raw = (p?.liquidityShapes && typeof p.liquidityShapes === 'object'   // shapes: raw-ok (cells)
+               && !Array.isArray(p.liquidityShapes)) ? p.liquidityShapes : {};   // shapes: raw-ok (cells)
   const out = [];
   for (const [id, shape] of Object.entries(raw)) {
     if (!shape || typeof shape !== 'object') continue;   // the container's own error; _normalizeShapes says it
@@ -1524,7 +1538,7 @@ function _shapeCellProblems(p) {
  */
 function _scheduleAdvisories(p, accounts) {
   try {
-    const rows = _normalizeSchedule(_overlayRawSchedule(p), p.liquidityShapes);
+    const rows = _normalizeSchedule(_overlayRawSchedule(p), p.liquidityShapes);   // shapes: raw-ok (ids only)
     if (!rows.length) return [];
     // A DISCARDED sink, not an absent one. This pass re-normalizes the base graph and every
     // shape to build the entry list, and without a sink each of those calls would `console.warn`
@@ -1567,7 +1581,28 @@ function _shapesObject(raw) {
   if (typeof raw !== 'object' || Array.isArray(raw)) {
     err('`liquidityShapes` has to be an object of { <shapeId>: { pools, flows } }');
   }
+  // Design 114 §10 Q1 — `extends: 'base'` names the base graph, so no shape may be called that.
+  if (Object.hasOwn(raw, BASE_SHAPE_ID)) {
+    err(`\`liquidityShapes\`: '${BASE_SHAPE_ID}' is reserved for the base graph (a shape inherits `
+      + `from it with \`extends: '${BASE_SHAPE_ID}'\`) — rename that shape`);
+  }
   return raw;
+}
+
+/**
+ * Design 114 — every shape as the WHOLE graph it means, deltas expanded over their parents.
+ * The loader's one entry to shape contents: an expansion refusal is re-thrown in this module's
+ * `shape '<id>': …` form, so `collectAuthoredGraphProblems` files it under that shape.
+ * @private
+ */
+function _expandedShapes(p) {
+  const raw = _shapesObject(p.liquidityShapes);   // shapes: raw-ok (expanded here)
+  try {
+    return expandLiquidityShapes(p.liquidityGraph, raw);
+  } catch (e) {
+    if (e instanceof ShapeExpansionError) err(e.message);
+    throw e;
+  }
 }
 
 /** 1 January of `year`, UTC — what a schedule row's `year` means (design 109 §7). */
@@ -1609,7 +1644,7 @@ export function resolveLiquidityGraphSchedule(params, accounts = []) {
   // once, and the schedule is not a way to sneak a graph past it.
   if (p.liquidityGraphEnabled === false) return null;
 
-  const rows = _normalizeSchedule(_overlayRawSchedule(p), p.liquidityShapes);
+  const rows = _normalizeSchedule(_overlayRawSchedule(p), p.liquidityShapes);   // shapes: raw-ok (ids only)
   // Design 112 — dated target rows are more steps in the same function. With neither kind of
   // row the answer is still null, so a plan that uses neither is on exactly today's path.
   const targetRows = _normalizeTargetRows(p);
@@ -1659,9 +1694,10 @@ function _datedSteps(p, accounts, rows, targetRows, base, shapes, advisories = n
     .sort((a, b) => a - b);
   const scaled = new Map();                 // stepKey → normalized graph, built once
   let shapeId = null;
+  const expanded = years.length ? _expandedShapes(p) : {};
   for (const year of years) {
     if (shapeAt.has(year)) shapeId = shapeAt.get(year);
-    const rawGraph = shapeId === null ? p.liquidityGraph : p.liquidityShapes?.[shapeId];
+    const rawGraph = shapeId === null ? p.liquidityGraph : expanded[shapeId];
     const factors  = appliedScales(scalesInForceAt(targetRows, year), rawGraph);
     const stepKey  = stepKeyOf(shapeId, factors);
     // A base row (`shape: null`) re-selects the opening entry's graph.
@@ -1685,7 +1721,7 @@ function _datedSteps(p, accounts, rows, targetRows, base, shapes, advisories = n
 function _normalizeTargetRows(p) {
   if (p.liquidityTargetSchedule == null) return [];
   return normalizeTargetSchedule(p.liquidityTargetSchedule,
-    knownPoolIds(p.liquidityGraph, _shapesObject(p.liquidityShapes)));
+    knownPoolIds(p.liquidityGraph, _expandedShapes(p)));
 }
 
 /**
@@ -1774,7 +1810,8 @@ function _normalizeSchedule(rawSchedule, rawShapes) {
  * @private
  */
 function _normalizeShapes(p, accounts, skip = null, advisories = null) {
-  const raw = _shapesObject(p.liquidityShapes);
+  // Design 114 — EXPANDED: a delta shape normalizes as the whole graph it inherits into.
+  const raw = _expandedShapes(p);
   // §6.4 — the axis key is the POOL id, so one factor moves that pool in EVERY shape that
   // contains it. Scaling each shape here rather than once over the whole map keeps the
   // per-shape `err()` re-throw below pointing at the shape the author has to look at.
@@ -1786,7 +1823,12 @@ function _normalizeShapes(p, accounts, skip = null, advisories = null) {
     // typo — the base graph's cells suppress its whole-graph pass for exactly this reason,
     // and a shape is a separate document that deserves the same treatment. It is null on the
     // COMPILE path, where every shape must still throw.
-    if (skip?.has(id)) continue;
+    //
+    // Design 114: a shape INHERITS its ancestors' cells, so an ancestor's bad cell (the base
+    // graph's included, as `BASE_SHAPE_ID`) skips it too — otherwise the parent's typo would be
+    // re-reported once per descendant, unlocalized, under the wrong shape.
+    if (skip && (skip.has(id)
+                 || shapeLineage(p.liquidityShapes, id).some(a => skip.has(a)))) continue;   // shapes: raw-ok (lineage)
     try {
       // A per-shape sink, stamped with the shape id before it joins the rest: an advisory
       // about `bridge` rendered under the base graph's tables names a pool the reader is not

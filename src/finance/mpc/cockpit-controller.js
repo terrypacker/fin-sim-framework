@@ -36,6 +36,7 @@ import { LEVER_SCHEDULE, drawdownPriorityPatch, presentRolesFromState, shapeIdsO
 import { resolveLiquidityGraph, resolveLiquidityGraphSchedule } from '../pools/liquidity-graph.js';
 import { PoolShapeScheduleReducer, liquidityStateAt } from '../pools/pool-shape-schedule-reducer.js';
 import { applyShapeYearShifts, shapeYearShiftsFrom } from '../pools/pool-shape-year-axis.js';
+import { poolGraphFor, poolGraphEntries } from '../pools/pool-shape-expansion.js';
 import { POOL_TARGET_SCALE_RANGE, poolTargetScaleKey, scaledTargetDescriptor, describeScaledDescriptor }
   from '../pools/pool-target-scale.js';
 import { truncateActiveRunAt }  from './run-schedule.js';
@@ -1997,7 +1998,7 @@ function _eligibleTargetPools(bp, year) {
   for (const r of rows) if (Number(r?.year) > year) live.add(r.shape ?? null);
   const out = new Set();
   for (const shapeId of live) {
-    const g = shapeId === null ? bp?.liquidityGraph : bp?.liquidityShapes?.[shapeId];
+    const g = poolGraphFor(bp, shapeId);   // design 114: a delta shape, expanded
     for (const pool of (Array.isArray(g?.pools) ? g.pools : [])) {
       const t = pool?.target;
       const v = typeof t === 'number' ? t : (t && typeof t === 'object') ? t.value : undefined;
@@ -2042,8 +2043,8 @@ function _targetSearchList(range, eligible) {
  */
 function _percentFactorCap(bp, pool) {
   let worst = 0;
-  const graphs = [bp?.liquidityGraph, ...Object.values(
-    (bp?.liquidityShapes && typeof bp.liquidityShapes === 'object') ? bp.liquidityShapes : {})];
+  // Design 114 — shapes EXPANDED, so an inherited PERCENT pool caps the factor in that shape too.
+  const graphs = [bp?.liquidityGraph, ...poolGraphEntries(bp).filter(([w]) => w !== null).map(([, g]) => g)];
   for (const g of graphs) {
     const t = (Array.isArray(g?.pools) ? g.pools : []).find(p => p?.id === pool)?.target;
     if (t && typeof t === 'object' && t.mode === 'PERCENT' && Number.isFinite(t.value)) {

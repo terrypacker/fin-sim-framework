@@ -376,7 +376,7 @@ reference is sugar in the authored form, not a per-pool timeline, so the argumen
 not apply. Questions for that design: whether a reference may override fields
 (`{ ref: 'cash', target: … }`), whether flows can be referenced too, and how the editor shows an
 inherited pool against a local one. It would also make §5.1's levels cheap to author, if levels
-are ever wanted. This belongs in its own design doc, numbered when it is picked up.
+are ever wanted. This belongs in its own design doc, numbered when it is picked up. **Picked up by design 114** (inheritance, not a pool library — 114 §3 D1 says why).
 
 
 ## 8. As built (21 Sep 2026, phases 1–3)

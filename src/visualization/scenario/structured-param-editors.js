@@ -61,6 +61,7 @@ import { claimValueNative } from '../../finance/pools/pool-metrics.js';
 import { describeRunSource } from '../../finance/mpc/run-schedule.js';
 import { describeScaledTarget } from '../../finance/pools/pool-target-scale.js';
 import { collapseTargetRuns }   from '../../finance/pools/pool-target-schedule.js';
+import { poolGraphEntries }     from '../../finance/pools/pool-shape-expansion.js';
 
 // ─── small DOM helpers (shared shape with the band editors in scenario-tab-view) ──
 
@@ -1080,9 +1081,8 @@ export function buildLiquidityTargetScheduleEditor(param, graphsProvider = () =>
         if (p && typeof p.id === 'string' && p.id) out.add(p.id);
       }
     };
-    add(g.liquidityGraph);
-    const shapes = g.liquidityShapes;
-    if (shapes && typeof shapes === 'object' && !Array.isArray(shapes)) Object.values(shapes).forEach(add);
+    // Design 114 — shapes EXPANDED, so a pool a shape inherits is offered too.
+    for (const [, graph] of poolGraphEntries(g)) add(graph);
     return [...out];
   };
 

@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-228 parameters · 33 panels · 11 node types (179 fields) · 173 action types · 86 tools · 275 state field types · 72 topics · 121 design docs
+228 parameters · 33 panels · 11 node types (179 fields) · 173 action types · 86 tools · 275 state field types · 72 topics · 122 design docs
 
 ---
 
@@ -2163,7 +2163,7 @@ what the in-app panel keys on.
 
 ---
 
-## Design documents (121)
+## Design documents (122)
 
 Tier 3 — the full argument behind each mechanic, in `design/`. The title is each
 file's own H1, read out of it; there is no summary column, because a one-line precis
@@ -2290,6 +2290,7 @@ between 10 and 11.
 | [`111-node-type-help.md`](../design/111-node-type-help.md) | 111 — Node-type help: the forms you actually author a plan in |
 | [`112-dated-pool-targets.md`](../design/112-dated-pool-targets.md) | 112 — Dated pool targets: a pool size the MPC can decide |
 | [`113-fixed-rate-loans.md`](../design/113-fixed-rate-loans.md) | 113 — Fixed-rate loans, fixed periods and split loans |
+| [`114-pool-shape-inheritance-and-editor.md`](../design/114-pool-shape-inheritance-and-editor.md) | 114 — Pool shapes that inherit, and a pool editor that fits its panel |
 | [`bus-unification-plan.md`](../design/bus-unification-plan.md) | Bus Unification Plan |
 | [`inconsistencies.md`](../design/inconsistencies.md) | Inconsistencies, Rework Candidates, and Open Questions |
 | [`requirements.md`](../design/requirements.md) | Requirements Tracker |
