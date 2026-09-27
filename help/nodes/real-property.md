@@ -8,7 +8,7 @@ design: [75-house-costs-and-property-return-path.md, 83-us-au-tax-treaty-intrica
 stamps:
   panel:config-list: 786f94
   panel:config-graph: bbebb1
-  node:real-property: 860a64
+  node:real-property: 1a5f1a
 ---
 
 A dwelling or land parcel: the most configurable record in the app, because a house is
@@ -73,6 +73,7 @@ after the sale.
 - `rentalExpenseRatio` — Deductible cash operating expenses as a fraction of gross rent — management, letting fees, maintenance billed as expense. Separate from the fixed annual running cost below, which is charged whether or not the property is let.
 - `landValueRatio` — The non-depreciable land share of the cost basis. Only the building depreciates, so this fraction sets how much of the purchase is written off against rent — and, on a US sale, how much is later recaptured.
 - `annualDepreciationOverride` — An explicit annual depreciation amount, overriding the per-country derivation. For a property whose schedule is known rather than assumed. Blank derives it from the building's share of basis under the country's own rules.
+- `accumulatedDepreciation` — Depreciation already claimed before the run starts, in the property's currency: the total from past tax returns, not a yearly figure. Each month's deduction is added to it, and a sale takes the whole total off the cost basis, so a rental held for years before the run is taxed on its real gain. Deductions stop once it reaches the building's share of basis. Zero for a property bought during the run.
 - `annualRunningCost` — The base-year fixed cost of holding this property — rates, insurance, utilities, servicing — in its own currency. It inflates each year and is charged whether the property is let or lived in. Zero turns it off, which understates the cost of owning a house.
 - `runningCostValuePct` — An optional value-proportional running cost, as a fraction of current value per year (0.005 is 0.5% a year). Added on top of the fixed cost, and it grows as the property does, which is the part a fixed bill misses over a long run.
 - `runningCostGrowth` — Optional real growth of the running cost, on top of inflation. Zero tracks inflation exactly; above zero models costs outrunning CPI, which rates and insurance have done.

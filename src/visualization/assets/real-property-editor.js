@@ -223,6 +223,10 @@ export class RealPropertyEditor extends BaseComponent {
     el.querySelector('[data-id="landValueRatio"]').value       = this._node?.landValueRatio         ?? 0.2;
     el.querySelector('[data-id="annualDepreciationOverride"]').value =
       this._node?.annualDepreciationOverride ?? '';
+    // Depreciation already claimed before the run starts: the opening value of the
+    // running total the rental reducers accrue into, and the sale reducers take off basis.
+    el.querySelector('[data-id="accumulatedDepreciation"]').value =
+      this._node?.accumulatedDepreciation ?? 0;
 
     // Owner-occupied running cost + stochastic repairs (design 75) — a holding cost distinct
     // from the rental opex above. Defaults mirror the RealProperty class / serializer (all 0 ⇒
@@ -408,6 +412,8 @@ export class RealPropertyEditor extends BaseComponent {
         el.querySelector('[data-id="annualDepreciationOverride"]').value === ''
           ? null
           : +el.querySelector('[data-id="annualDepreciationOverride"]').value,
+      accumulatedDepreciation:
+        Math.max(0, +el.querySelector('[data-id="accumulatedDepreciation"]').value || 0),
       // Owner-occupied running cost + stochastic repairs (design 75)
       annualRunningCost:    +el.querySelector('[data-id="annualRunningCost"]').value,
       runningCostValuePct:  +el.querySelector('[data-id="runningCostValuePct"]').value,

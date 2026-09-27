@@ -46,7 +46,7 @@ const firstResidency = (state) =>
  * a 0 deduction, identical to the pre-migration zero-balance case.
  *
  * @param {object} p        Per-property rental params from the handler projection
- * @param {object} propState Live property state (reads costBasis)
+ * @param {object} propState Live property state (reads costBasis + accumulatedDepreciation)
  * @param {'US'|'AU'} country
  * @param {number} inflationFactor  Cumulative effective-inflation factor (default 1 = no indexing)
  * @param {object|object[]|null} loan  Linked loan state entry, or every loan on the
@@ -90,7 +90,12 @@ export function computeRentalMonth(p, propState, country, inflationFactor = 1, l
   const annualDep     = override != null
     ? override
     : (country === 'US' ? buildingBasis / 27.5 : buildingBasis * 0.025);
-  const monthlyDepreciation = annualDep / 12;
+  // Depreciation stops once the building is written off: the running total (which
+  // includes any history authored as the property's opening accumulatedDepreciation)
+  // can never exceed the building's basis. Without the cap a property placed in
+  // service decades before the run kept deducting past 100% of its building.
+  const remaining     = Math.max(0, buildingBasis - (propState.accumulatedDepreciation ?? 0));
+  const monthlyDepreciation = Math.min(annualDep / 12, remaining);
 
   const taxableRental = effectiveRent - cashOpex - deductibleInterest - monthlyDepreciation;
   return { effectiveRent, cashOpex, netCash, deductibleInterest, monthlyDepreciation, taxableRental };

@@ -20,6 +20,9 @@
  * EVT-RENT-7  Depreciation accrues into accumulatedDepreciation
  * EVT-RENT-8  At sale, accumulated depreciation reduces the tax basis (larger gain)
  * EVT-RENT-9  Rent is indexed to the effective inflation accumulator (design 48 §4.6)
+ * EVT-RENT-13 An opening accumulatedDepreciation seeds state and is accrued onto
+ * EVT-RENT-14 An opening accumulatedDepreciation enlarges the sale gain by exactly itself
+ * EVT-RENT-15 Depreciation stops at the building basis (override and derived)
  *
  * Run with: node --test tests/unit/evt-rental-income.test.mjs
  */
@@ -342,4 +345,51 @@ test('EVT-RENT-12: a rental LOSS stays signed into EVERY accumulator', () => {
   // it is a subset of — that equality is what keeps the baskets a partition.
   assert.strictEqual(findDiff(taxes[0], 'foreignPassiveIncomeYTD').delta, -1475);
   assert.strictEqual(findDiff(taxes[0], 'usOrdinaryIncomeYTD').delta, -1475);
+});
+
+// ─── Depreciation claimed before the run (opening balance + building-basis cap) ─────
+
+test('EVT-RENT-13: an opening accumulatedDepreciation seeds state and is accrued onto', () => {
+  const { sim } = loadToolsetScenario(usConfig({ accumulatedDepreciation: 100000 }));
+  assert.strictEqual(sim.state.usHouseProperty.accumulatedDepreciation, 100000);
+  sim.stepTo(JAN_2027);
+  assert.ok(approx(sim.state.usHouseProperty.accumulatedDepreciation, 112000, 0.5),
+    `expected ~112000, got ${sim.state.usHouseProperty.accumulatedDepreciation}`);
+
+});
+
+test('EVT-RENT-14: an opening accumulatedDepreciation enlarges the sale gain by exactly itself', () => {
+  const saleGain = (opening) => {
+    ServiceRegistry.resetAll();
+    const { sim } = loadToolsetScenario(auConfig({
+      plannedSaleYear: 2027, annualDepreciationOverride: 12000, accumulatedDepreciation: opening,
+    }));
+    sim.stepTo(MAR_2027);
+    const [sale] = sim.journal.getActions('AU_HOUSE_SALE_TAX');
+    return findDiff(sale, 'usCapitalGainsYTD').delta + findDiff(sale, 'usUnrecaptured1250GainYTD').delta;
+  };
+  const fresh = saleGain(0);
+  const held  = saleGain(150000);
+  assert.ok(approx(held - fresh, 150000, 0.5),
+    `the opening balance should add exactly 150000 to the gain, got ${held - fresh}`);
+});
+
+test('EVT-RENT-15: depreciation stops at the building basis', () => {
+  // costBasis 800000 × (1 − 0.2 land) = 640000 of building.
+  for (const annualDepreciationOverride of [12000, null]) {
+    ServiceRegistry.resetAll();
+    const { sim } = loadToolsetScenario(usConfig({ annualDepreciationOverride, accumulatedDepreciation: 635000 }));
+    sim.stepTo(JAN_2027);
+    assert.ok(approx(sim.state.usHouseProperty.accumulatedDepreciation, 640000, 1e-6),
+      `override ${annualDepreciationOverride}: capped at 640000, got ${sim.state.usHouseProperty.accumulatedDepreciation}`);
+    const applies = sim.journal.getActions('US_RENTAL_INCOME_APPLY');
+    assert.strictEqual(applies[applies.length - 1].action.data.monthlyDepreciation, 0,
+      'a fully written-off building deducts nothing');
+  }
+
+  // An opening balance already past the building basis deducts nothing at all.
+  ServiceRegistry.resetAll();
+  const { sim } = loadToolsetScenario(usConfig({ accumulatedDepreciation: 700000 }));
+  sim.stepTo(JAN_2027);
+  assert.strictEqual(sim.state.usHouseProperty.accumulatedDepreciation, 700000);
 });

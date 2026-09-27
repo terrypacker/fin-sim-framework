@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-228 parameters · 33 panels · 11 node types (178 fields) · 173 action types · 86 tools · 275 state field types · 72 topics · 121 design docs
+228 parameters · 33 panels · 11 node types (179 fields) · 173 action types · 86 tools · 275 state field types · 72 topics · 121 design docs
 
 ---
 
@@ -589,7 +589,7 @@ true statement about the registry, not a gap in this file.
 
 ---
 
-## Node types (11 kinds · 178 fields)
+## Node types (11 kinds · 179 fields)
 
 Every kind of record the Nodes panel can open, and every control its edit form offers.
 The inventory is read from the FORM — the `<template>` in `index.html` the editor
@@ -727,7 +727,7 @@ Explained in [`help/nodes`](nodes/account.md). 5 field(s) described by a record 
 - **`bookingFxRate`** — §988 Booking FX · `number` · topic
   Foreign units per USD on the date the debt was incurred. A non-USD loan held by a US person realises ordinary gain or loss on each principal repayment, measured against this rate. Blank stamps it at the first payment, which treats the loan as incurred then and so understates the exposure on a loan already outstanding at the start of the run.
 
-### Real Property — `real-property` (52 fields)
+### Real Property — `real-property` (53 fields)
 
 Explained in [`help/nodes`](nodes/real-property.md). 3 field(s) described by a record parameter.
 
@@ -813,6 +813,8 @@ Explained in [`help/nodes`](nodes/real-property.md). 3 field(s) described by a r
   The non-depreciable land share of the cost basis. Only the building depreciates, so this fraction sets how much of the purchase is written off against rent — and, on a US sale, how much is later recaptured.
 - **`annualDepreciationOverride`** — Deprec. Override · `number` · topic
   An explicit annual depreciation amount, overriding the per-country derivation. For a property whose schedule is known rather than assumed. Blank derives it from the building's share of basis under the country's own rules.
+- **`accumulatedDepreciation`** — Deprec. To Date · `number` · topic
+  Depreciation already claimed before the run starts, in the property's currency: the total from past tax returns, not a yearly figure. Each month's deduction is added to it, and a sale takes the whole total off the cost basis, so a rental held for years before the run is taxed on its real gain. Deductions stop once it reaches the building's share of basis. Zero for a property bought during the run.
 - **`annualRunningCost`** — Annual Running Cost · `number` · topic
   The base-year fixed cost of holding this property — rates, insurance, utilities, servicing — in its own currency. It inflates each year and is charged whether the property is let or lived in. Zero turns it off, which understates the cost of owning a house.
 - **`runningCostValuePct`** — Running Cost % Val. · `number` · topic
