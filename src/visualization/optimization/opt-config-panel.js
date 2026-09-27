@@ -17,6 +17,7 @@ import {
 import { valuesForConfig }              from '../../finance/optimization/opt-values.js';
 import { SOLVER_REGISTRY }              from '../../finance/optimization/solvers/solver-registry.js';
 import { SweepVariableTable }           from '../common/sweep-variable-table.js';
+import { parseGateAxisKey }             from '../../finance/pools/pool-gate-axis.js';
 
 
 
@@ -34,6 +35,19 @@ import { SweepVariableTable }           from '../common/sweep-variable-table.js'
  *   onOpenHelp(ref) — a variable row's `?`; a constructor option, because the rows are
  *                     built before a caller could assign it.
  */
+
+/**
+ * Design 114 §16 (C) — a gate threshold only becomes a lever once its clause has an id, and the
+ * column that takes the id is behind More columns. Said in the Liquidity Pools group while it has
+ * no gate axes, since that is exactly when nothing on screen would say so.
+ */
+function optGroupNote(name, configs) {
+  if (name !== 'Liquidity Pools') return null;
+  if (configs.some(c => parseGateAxisKey(c.paramKey) != null)) return null;
+  return 'Gate thresholds become levers here once a gate clause has a Search id '
+    + '(Liquidity Pools → Structure, under More columns).';
+}
+
 export class OptConfigPanel extends BaseComponent {
   constructor(containerEl, { onOpenHelp = null } = {}) {
     super();
@@ -211,6 +225,7 @@ export class OptConfigPanel extends BaseComponent {
         </div>
       </div>
       <div class="opt-status"></div>
+      <div class="opt-warning" hidden></div>
       <div class="opt-var-section">
         <div class="opt-search-space-header">Search Space</div>
       </div>
@@ -226,6 +241,7 @@ export class OptConfigPanel extends BaseComponent {
     this._solverOptsEl = shell.querySelector('.opt-solver-options');
     this._runBtn       = shell.querySelector('button');
     this._statusEl     = shell.querySelector('.opt-status');
+    this._warningEl    = shell.querySelector('.opt-warning');
     this._countEl      = shell.querySelector('.opt-count-label');
     this._section      = shell.querySelector('.opt-var-section');
 
@@ -242,7 +258,7 @@ export class OptConfigPanel extends BaseComponent {
     this._renderSolverOptions();
     // Grouping, filter and collapse are shared with the MC panel (design 98 W4).
     this._table = new SweepVariableTable(this, this._section,
-      { prefix: 'opt', buildRow: cfg => this._buildVarRow(cfg) });
+      { prefix: 'opt', buildRow: cfg => this._buildVarRow(cfg), groupNote: optGroupNote });
     this._table.render(this._variables, new Map(), this._rowMap);
     this._updateCount();
   }
@@ -308,6 +324,16 @@ export class OptConfigPanel extends BaseComponent {
     return out;
   }
 
+  /**
+   * Design 114 §16 — a warning that outlives the progress line (which every candidate
+   * overwrites). Null or '' clears it.
+   */
+  setRunWarning(text) {
+    if (!this._warningEl) return;
+    this._warningEl.textContent = text ?? '';
+    this._warningEl.hidden = !text;
+  }
+
   _buildVarRow(cfg) {
     const el = document.createElement('div');
     el.className = 'opt-var-row';
@@ -323,6 +349,18 @@ export class OptConfigPanel extends BaseComponent {
       <span class="opt-var-label" title="${cfg.label}">${cfg.label}</span>
       <span class="opt-var-count">${valCount}v</span>
     `;
+    // Design 114 §16 — the cockpit's INERT verdict, on the row it is about. Reported, never
+    // acted on: the lever stays selectable, and the tag's tooltip says why it will move nothing.
+    const inert = (cfg.problems ?? []).find(p => p.kind === 'inert');
+    if (inert) {
+      const tag = document.createElement('span');
+      tag.className = 'opt-var-inert';
+      tag.dataset.id = 'opt-var-inert';
+      tag.textContent = 'INERT';
+      tag.title = inert.message;
+      labelRow.insertBefore(tag, labelRow.querySelector('.opt-var-count'));
+      el.classList.add('opt-var-row--inert');
+    }
     el.appendChild(labelRow);
 
     // Row 2: range details (hidden when disabled)

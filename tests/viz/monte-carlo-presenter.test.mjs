@@ -197,11 +197,23 @@ describe('MonteCarloPresenter — pool axis hygiene', () => {
     expect(pool.planValue).toBe(1);
     expect(pool.problems.map(p => p.param)).toContain('allocationSchedule');
 
-    // Every other axis is silent. Attaching a plan-level warning to an inflation axis would
-    // train the author to ignore the row that matters.
+    // No other axis carries the PLAN-level pool hygiene. Attaching it to an inflation axis would
+    // train the author to ignore the row that matters. (Design 114 §16: a lever the cockpit
+    // calls INERT on this pooled plan carries its own, per-lever row — asserted below.)
     for (const v of axes.filter(x => x.paramKey !== POOL_AXIS)) {
-      expect(v.problems).toBeUndefined();
+      expect((v.problems ?? []).filter(p => p.kind !== 'inert')).toEqual([]);
     }
+    presenter.destroy();
+  });
+
+  test('design 114 §16: on a pooled plan a drawdown lever the cockpit calls INERT says so', () => {
+    setActiveCfg({ params: [{ name: 'liquidityGraph', value: GRAPH }], accounts: [] });
+    const presenter = makePresenter({ params: {} });
+    const axes = presenter._resolveGridAxes();
+    const xborder = axes.find(v => v.paramKey === 'crossBorderDrawdown');
+    expect(xborder).toBeTruthy();
+    expect(xborder.problems.map(p => p.kind)).toEqual(['inert']);
+    expect(xborder.problems[0].message).toMatch(/liquidity graph compiles the drawdown order/);
     presenter.destroy();
   });
 

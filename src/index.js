@@ -208,6 +208,7 @@ import { foldHarvestPlan, feasibilityOfResult, checkHarvestFeasibility, describe
 import { resolveStaticLevers, foldScheduleBakes, mergeResolved } from './finance/mpc/harvest-resolve.js';
 import { HARVEST_FORMS, COLLAPSE_RULES, requiresIncludes, isIncludesRequirement, requirementSatisfied, harvestDecisions, pointHarvest, collapseConsecutive, ageAt, resolveBirthDate, _internals } from './finance/mpc/harvest.js';
 import { LEVER_PROBLEM_KIND, leverHygieneProblems } from './finance/mpc/lever-hygiene.js';
+import { INERT_LEVER_KIND, leverGateForParam, inertLeverProblems } from './finance/mpc/lever-inertness.js';
 import { BAND_KEY_PREFIX, bandKey, bandKeyAge, SPENDING_SCHEDULE, DRAWDOWN_XBORDER_SCHEDULE, DRAWDOWN_WITHINTIER_SCHEDULE, DRAWDOWN_SLEEVE_SCHEDULE, presentRolesFromState, DRAWDOWN_WEIGHTS_SCHEDULE, drawdownPriorityPatch, ALLOCATION_MIX_SCHEDULE, BOND_LADDER_SCHEDULE, YEAR_KEY_PREFIX, YEAR_FIELD_SEP, yearKey, yearKeyParts, ROTH_SCHEDULE, EARLY_WITHDRAWAL_SCHEDULE, foldInForceDecisions, POOL_SHAPE_SCHEDULE, POOL_TARGET_SCHEDULE, poolTargetKeyParts, shapeIdsOf, poolGraphCompilesSpendOrder, LEVER_SCHEDULE, leverRequirement } from './finance/mpc/lever-schedule.js';
 import { runMpc, makeInitialSnapshot } from './finance/mpc/mpc-controller.js';
 import { MpcDecisionScheduleReducer } from './finance/mpc/mpc-decision-schedule-reducer.js';
@@ -1383,6 +1384,9 @@ export const Finance = {
   _internals,
   LEVER_PROBLEM_KIND,
   leverHygieneProblems,
+  INERT_LEVER_KIND,
+  leverGateForParam,
+  inertLeverProblems,
   BAND_KEY_PREFIX,
   bandKey,
   bandKeyAge,

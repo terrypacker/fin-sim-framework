@@ -19,6 +19,7 @@ import { resolveLiquidityAxisCenters, parsePoolTargetScaleKey }
 import { parseGateAxisKey }   from '../../finance/pools/pool-gate-axis.js';
 import { parseShapeYearShiftKey } from '../../finance/pools/pool-shape-year-axis.js';
 import { poolAxisProblems }   from '../../finance/pools/pool-axis-hygiene.js';
+import { inertLeverProblems } from '../../finance/mpc/lever-inertness.js';
 import { runAxisProblems }    from '../../finance/mpc/run-axis-hygiene.js';
 import { scenarioParamValues, paramSchemaDefaults } from '../../finance/param-schema-utils.js';
 import { ServiceRegistry }         from '../../services/service-registry.js';
@@ -364,6 +365,10 @@ export class MonteCarloPresenter {
     // and reported, never repaired, for the reason `poolAxisProblems` records.
     const pinned = runAxisProblems(withDefaults, axes.map(v => v.paramKey));
     const pinnedByParam = new Map(pinned.map(r => [r.param, r]));
+    // Design 114 §16 — the cockpit's INERT verdicts: an axis over one returns identical cells,
+    // which read as "this lever does not matter" rather than as "this lever cannot move".
+    const inertByParam = new Map(inertLeverProblems(axes.map(v => v.paramKey), withDefaults)
+      .map(r => [r.param, r]));
 
     return axes.map(v => {
       const problems = [
@@ -371,6 +376,7 @@ export class MonteCarloPresenter {
                               || parseGateAxisKey(v.paramKey) != null
                               || parseShapeYearShiftKey(v.paramKey) != null) ? hygiene : []),
         ...(pinnedByParam.has(v.paramKey) ? [pinnedByParam.get(v.paramKey)] : []),
+        ...(inertByParam.has(v.paramKey) ? [inertByParam.get(v.paramKey)] : []),
       ];
       return {
         ...v,

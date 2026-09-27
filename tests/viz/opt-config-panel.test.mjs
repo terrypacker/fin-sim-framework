@@ -137,3 +137,45 @@ describe('OptConfigPanel — Solver selector', () => {
     panel.destroy();
   });
 });
+
+describe('OptConfigPanel — design 114 §16: INERT levers and the Liquidity Pools note', () => {
+  const INERT = { param: 'drawdownWeight::ira', kind: 'inert', severity: 'warn',
+                  message: 'A liquidity graph compiles the drawdown order (design 97 §12), so …' };
+
+  test('a lever the cockpit calls INERT is tagged, with the gate’s sentence, and stays selectable', () => {
+    const { container, panel } = makePanel();
+    panel.setVariables([
+      { paramKey: 'drawdownWeight::ira', label: 'Drawdown Weight — IRA', group: 'Spending',
+        type: 'integer', min: 0, max: 4, step: 1, enabled: false, problems: [INERT] },
+      { paramKey: 'zzzOther', label: 'Other', group: 'Spending', type: 'integer', min: 0, max: 1, step: 1 },
+    ]);
+    const tags = container.querySelectorAll('[data-id="opt-var-inert"]');
+    expect(tags.length).toBe(1);
+    expect(tags[0].title).toBe(INERT.message);
+    expect(tags[0].closest('.opt-var-row').querySelector('input[type="checkbox"]').disabled).toBe(false);
+    panel.destroy();
+  });
+
+  test('the run warning is set, shown, and cleared', () => {
+    const { container, panel } = makePanel();
+    panel.setRunWarning('1 lever is INERT on this plan');
+    const w = container.querySelector('.opt-warning');
+    expect(w.hidden).toBe(false);
+    expect(w.textContent).toMatch(/INERT/);
+    panel.setRunWarning(null);
+    expect(w.hidden).toBe(true);
+    panel.destroy();
+  });
+
+  test('the Liquidity Pools group says where gate levers come from — until it has one', () => {
+    const { container, panel } = makePanel();
+    const pool = { paramKey: 'pool.cash.targetScale', label: "Pool 'cash' target ×", group: 'Liquidity Pools',
+                   type: 'float', min: 0.5, max: 2, step: 0.25 };
+    panel.setVariables([pool]);
+    expect(container.querySelector('[data-id="sweep-group-note"]').textContent).toMatch(/Search id/);
+    panel.setVariables([pool, { paramKey: 'gate.harvest.threshold', label: 'Gate harvest', group: 'Liquidity Pools',
+                                type: 'float', min: 0, max: 0.2, step: 0.05 }]);
+    expect(container.querySelector('[data-id="sweep-group-note"]')).toBeNull();
+    panel.destroy();
+  });
+});

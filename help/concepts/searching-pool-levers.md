@@ -9,7 +9,7 @@ tools: []
 design: [110-liquidity-pool-control-surface.md, 97-liquidity-pools-and-drawdown-sequence.md]
 sources: [src/finance/pools/pool-target-scale.js, src/finance/pools/pool-axis-hygiene.js]
 stamps:
-  src/finance/pools/pool-target-scale.js: 657a2c
+  src/finance/pools/pool-target-scale.js: b69c55
   src/finance/pools/pool-axis-hygiene.js: 35c978
 ---
 

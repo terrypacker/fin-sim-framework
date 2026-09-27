@@ -12,6 +12,7 @@ import { OptConfigPanel }     from './opt-config-panel.js';
 import { OptResultsPanel }    from './opt-results-panel.js';
 import { OptRunsPanel }       from './opt-runs-panel.js';
 import { buildOptVariables }  from '../../finance/optimization/intl-retirement-opt-config.js';
+import { inertLeverProblems } from '../../finance/mpc/lever-inertness.js';
 import { set }                from '../../finance/monte-carlo/mc-param-paths.js';
 import { scenarioParamValues } from '../../finance/param-schema-utils.js';
 import { ServiceRegistry }    from '../../services/service-registry.js';
@@ -53,7 +54,13 @@ export class OptimizationPresenter {
     // to roles an account actually backs (design 58 build-time filter).
     // The active cfg lets the harvest reach generated per-record params (design 98 W3).
     const activeCfg  = ServiceRegistry.getInstance()?.scenarioService?.getActive?.() ?? null;
-    this._configPanel.setVariables(buildOptVariables(baseParams, this._scenario?.accounts, { cfg: activeCfg }));
+    // Design 114 §16 — each lever the cockpit already knows is INERT on this plan carries that
+    // verdict to its row, keyed by param; `_onRun` warns when one is in the search.
+    const variables = buildOptVariables(baseParams, this._scenario?.accounts, { cfg: activeCfg });
+    const inert = inertLeverProblems(variables.map(v => v.paramKey), baseParams);
+    this._inertByParam = new Map(inert.map(r => [r.param, r]));
+    this._configPanel.setVariables(variables.map(v => (this._inertByParam.has(v.paramKey)
+      ? { ...v, problems: [this._inertByParam.get(v.paramKey)] } : v)));
 
     /** Set by WorkbenchApp: onApplyCandidate(mergedParams) */
     this.onApplyCandidate = null;
@@ -87,6 +94,14 @@ export class OptimizationPresenter {
 
   _onRun(config) {
     const { optimizationConfigs, objective, objectiveKey, candidateCount, solverKey, solverOptions } = config;
+    // Warned, never refused: an inert lever costs candidates, not correctness, and the author may
+    // be checking the verdict itself.
+    const inertOn = (optimizationConfigs ?? []).filter(c => c.enabled && this._inertByParam?.has(c.paramKey));
+    this._configPanel.setRunWarning?.(inertOn.length
+      ? `${inertOn.length} lever${inertOn.length === 1 ? ' is' : 's are'} INERT on this plan and will `
+        + `not move the result: ${inertOn.map(c => c.label ?? c.paramKey).join(', ')}. `
+        + 'Every candidate spent on them is wasted — the INERT tag on each row says why.'
+      : null);
     this._configPanel.showProgress(`Running 0 / ${candidateCount}…`);
 
     requestAnimationFrame(() => {

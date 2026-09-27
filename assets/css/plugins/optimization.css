@@ -338,3 +338,23 @@
 .opt-table-td--roth       { color: var(--diff-added); text-align: right; }
 .opt-table-td--ok         { color: var(--green); text-align: center; }
 .opt-table-td--fail       { color: var(--red); text-align: center; }
+
+/* Design 114 §16 — the cockpit's INERT verdict on an Opt lever. Amber, like the grid's hygiene
+   tags: the lever is not broken, it cannot move this plan's run. */
+.opt-var-inert {
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  padding: 0 4px;
+  border-radius: 2px;
+  color: var(--amber, #d97706);
+  background: var(--amber-glow, rgba(217, 119, 6, .15));
+  flex-shrink: 0;
+  cursor: help;
+}
+.opt-var-row--inert .opt-var-label { color: var(--text-muted); }
+.opt-warning {
+  font-size: 10px;
+  line-height: 1.45;
+  color: var(--amber, #d97706);
+  padding: 2px 8px 4px;
+}

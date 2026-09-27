@@ -42,9 +42,12 @@ export class SweepVariableTable {
    *        present, gets the row's help (its description as hover, and a `?` when the
    *        owner has an `onOpenHelp`).
    */
-  constructor(owner, parentEl, { prefix, buildRow }) {
+  constructor(owner, parentEl, { prefix, buildRow, groupNote = null }) {
     this._prefix   = prefix;
     this._buildRow = buildRow;
+    // Design 114 §16 — an optional sentence at the top of a group's body, for what the group
+    // CANNOT show (a lever that would exist if the plan said one more thing).
+    this._groupNote = typeof groupNote === 'function' ? groupNote : null;
     this._filter   = '';
     this._expanded = new Set();   // groups currently open
     this._userSet  = new Map();   // group → expanded, for groups the user has toggled
@@ -102,6 +105,14 @@ export class SweepVariableTable {
 
       const groupBody = document.createElement('div');
       groupBody.className = 'sweep-group-body';
+      const noteText = this._groupNote?.(name, configs);
+      if (noteText) {
+        const note = document.createElement('div');
+        note.className = 'sweep-group-note';
+        note.dataset.id = 'sweep-group-note';
+        note.textContent = noteText;
+        groupBody.appendChild(note);
+      }
 
       const rows = configs.map(cfg => {
         const prior  = savedState.get(cfg.paramKey);

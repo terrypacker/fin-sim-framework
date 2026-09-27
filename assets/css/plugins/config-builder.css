@@ -451,6 +451,15 @@
   user-select: none;
 }
 .sweep-group-header:hover { color: var(--accent); }
+/* Design 114 §16 — what a group cannot show: a lever that would exist if the plan said one more
+   thing. */
+.sweep-group-note {
+  font-size: 10px;
+  font-style: italic;
+  color: var(--text-muted);
+  line-height: 1.4;
+  padding: 2px 8px 4px;
+}
 .sweep-group-caret { font-size: 8px; color: var(--text-muted); flex-shrink: 0; }
 .sweep-group-label { flex: 1; min-width: 0; }
 .sweep-group-count {

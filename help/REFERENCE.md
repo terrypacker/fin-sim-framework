@@ -2135,7 +2135,7 @@ what the in-app panel keys on.
 | [MC Runs](panels/mc-runs.md) | panel | 196 | 1 panel · design 100 |
 | [Mortality and Survivorship](concepts/mortality.md) | concept | 253 | 2 panels · 5 params |
 | [MPC Cockpit](panels/mpc-cockpit.md) | panel | 244 | 1 panel · design 39, 80 |
-| [Optimize](panels/opt-config.md) | panel | 186 | 1 panel |
+| [Optimize](panels/opt-config.md) | panel | 228 | 1 panel |
 | [OPT Results](panels/opt-results.md) | panel | 186 | 1 panel |
 | [OPT Runs](panels/opt-runs.md) | panel | 139 | 1 panel |
 | [Objectives and After-Tax Value](concepts/optimizer-objectives.md) | concept | 258 | 3 panels · 7 params · design 40 |

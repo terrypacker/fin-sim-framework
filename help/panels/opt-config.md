@@ -15,6 +15,10 @@ with a range per row. A parameter left unchecked is held at the plan's value —
 search is over what you enable, so enabling everything is rarely what you want. The
 narrower the space, the more the candidate budget buys.
 
+A row tagged **INERT** cannot move this plan's result at any value — typically a drawdown
+weight on a plan whose pools already set the spend order. It stays selectable; the tag says
+why, and starting a run with one enabled warns you.
+
 The objective is the part worth thinking about hardest, because the optimizer will
 answer exactly the question you asked. "Maximise ending wealth" and "die with a
 target" produce genuinely different plans, and a result that looks perverse is

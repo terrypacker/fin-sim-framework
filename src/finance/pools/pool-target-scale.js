@@ -324,7 +324,10 @@ export function poolTargetScaleLabel(row) {
   const parts = row.authored.map(a =>
     `${a.where == null ? 'base' : a.where} ${describeAuthored(a)}`);
   const scope = shapes > 1 ? ` — one factor, ${shapes} shapes` : '';
-  return `Pool '${row.label}' target × (${parts.join(', ')})${scope}`;
+  // Design 114 §16 (C) — the id first, as the pool editor now shows it; the label after, when
+  // it says something the id does not.
+  const name = row.label && row.label !== row.poolId ? `${row.poolId} (${row.label})` : row.poolId;
+  return `Pool '${name}' target × (${parts.join(', ')})${scope}`;
 }
 
 /**

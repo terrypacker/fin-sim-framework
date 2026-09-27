@@ -1,6 +1,6 @@
 # 114 — Pool shapes that inherit, and a pool editor that fits its panel
 
-**Status:** PHASES 1–5 BUILT, 26 Sep 2026 (§11–§15); phase 6 proposed. Picks up design 112 §7 (shapes that reference pools) and
+**Status:** COMPLETE — all six phases BUILT, 26 Sep 2026 (§11–§16). Picks up design 112 §7 (shapes that reference pools) and
 reworks the pool authoring surface built across design 97 §17.1/§21/§22.5, design 109 §11 and
 design 110 Leg A. Decisions D1–D5 (§3) and the scope of Part II (S1–S6) were taken with the
 author before drafting. The MC and Opt panels are deliberately last (§9, phase 6). Open
@@ -461,3 +461,40 @@ gate caught the view's new read of the shapes param on its first run; it is mark
    `liquidityGraph`, `liquidityShapes`, `liquidityTargetSchedule` and the Parameters panel, so
    the `?` on the Structure row lists it. It stamps no `src/` file: the editor file changes too
    often for a stamp on it to mean anything.
+
+## 16. As built — phase 6 (26 Sep 2026)
+
+Looking at the two panels on the author's plan changed phase 6's scope. **Monte Carlo** offers no
+pool levers, by design (pool sizes and switch years are policy, not uncertainty). **Optimize**
+already had a `Liquidity Pools` group holding the pool-size factors and the shape-year shift, so the
+regrouping §9 planned was already true. What looking found instead:
+
+**A. The optimizer and the grid offered levers the cockpit knows are inert.** On a plan whose pool
+graph compiles the spend order, design 39 §14.8's gates (`DRAWDOWN_XBORDER`, `DRAWDOWN_WITHINTIER`,
+`DRAWDOWN_WEIGHTS`, `DRAWDOWN_SLEEVE` in `lever-schedule.js`) refuse to search cross-border draw,
+within-tier draw, the drawdown weights and the sleeve weights. The gates are keyed by cockpit
+control, so the Optimize panel and the MC grid (whose axes come from the same harvest) never asked:
+an optimizer run spent dimensions on them, and a grid over one returned identical cells that read
+as a finding. `src/finance/mpc/lever-inertness.js` maps each param key to the gate that decides it
+and reports the gate's own `inertWhen` and sentence. The Optimize row gets an **INERT** tag carrying
+the sentence and stays selectable; starting a run with one enabled sets a warning that outlives the
+progress line; the grid shows the same row through its existing hygiene renderer. Only the INERT
+half of a gate is used — `appliesTo`'s mode half is a statement about the cockpit's per-year
+decisions, not about whether the lever can move the run. Drawdown Strategy, Sleeve Order and Lot
+Strategy have no such gate and are left alone.
+
+Checked on the author's plan before tagging, with `diff-scenarios` over the whole run: sleeve
+weights at opposite extremes changed only `drawdownSleeveWeights`, and drawdown weights at opposite
+extremes changed only the accounts' `drawdownPriority` — no balance, tax or net-worth field moved.
+Fourteen levers are tagged on that plan.
+
+**C. Two small additions to the Optimize `Liquidity Pools` group.** A group note (a new
+`groupNote` hook on `SweepVariableTable`) says gate thresholds become levers once a clause has a
+Search id, shown only while the group has no gate axis. And `poolTargetScaleLabel` leads with the
+pool id — `Pool 'buffer (Bucket 2 — bond buffer)' target × …` — matching the editor.
+
+Tests: `tests/unit/lever-inertness.test.mjs` (5, including one that the rows agree with the
+cockpit's predicate on every bag), three Optimize panel cases, and an MC presenter case; the older
+presenter test that said "no other axis carries a problem" now says "no other axis carries the
+plan-level pool hygiene", since a pooled fixture's cross-border axis is correctly INERT. The
+Optimize help topic says what the tag means.
