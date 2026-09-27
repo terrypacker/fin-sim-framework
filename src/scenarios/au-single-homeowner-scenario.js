@@ -13,6 +13,9 @@ import { ScenarioSerializer }  from './scenario-serializer.js';
 import { ServiceRegistry }     from '../services/service-registry.js';
 import { AUD }                 from '../finance/assets/account.js';
 import { ACCOUNT_ROLES }       from '../finance/state/account-roles.js';
+import { Holding }             from '../finance/holdings/holding.js';
+import { ALLOCATION }          from '../finance/holdings/allocation.js';
+import { RATE_KEYS }           from '../finance/economic-regimes/rate-keys.js';
 import { AU_BANKING }          from './toolsets/au-banking-toolset.js';
 import { AU_TAX }              from './toolsets/au-tax-toolset.js';
 import { AU_BROKERAGE }        from './toolsets/au-brokerage-toolset.js';
@@ -83,6 +86,10 @@ export const AU_SINGLE_HOMEOWNER_DEFAULTS = {
   brokerageBasis:        110_000,
   superBalance:          320_000,
   superBasis:            320_000,
+  // How the fund is invested (design 94): two REST indexed options rather than one
+  // synthetic AU-equity lot. This share goes to REST OS Index and the rest to REST AU
+  // Index; basis splits in the same ratio.
+  superOverseasIndexWeight:   0.50,
 
   // ── Superannuation Guarantee ───────────────────────────────────────────────
   // Employer-paid, on top of the quoted salary. A scenario assumption, NOT a
@@ -131,6 +138,22 @@ export const AU_SINGLE_HOMEOWNER_DEFAULTS = {
   monthlyExpenses:         7_000,
   auInflationRate:         0.03,
 };
+
+/**
+ * The instruments the super fund holds (design 94) — two of REST's indexed investment
+ * options. Identity and the market each tracks only: beta, idiosyncratic vol and
+ * dividend yield are left SILENT, so each option does exactly what its market does and
+ * the scenario claims nothing about an option's fees, franking or tracking that it has
+ * no source for.
+ */
+export const AU_SINGLE_HOMEOWNER_SECURITIES = Object.freeze([
+  Object.freeze({ id: 'sec-rest-os-index', symbol: 'REST OS Index',
+                  name: 'REST Overseas Shares – Indexed',
+                  rateKey: RATE_KEYS.EQUITY_INTL_EX_AU }),
+  Object.freeze({ id: 'sec-rest-au-index', symbol: 'REST AU Index',
+                  name: 'REST Australian Shares – Indexed',
+                  rateKey: RATE_KEYS.EQUITY_AU }),
+]);
 
 /**
  * Scenario-level params — identity and the rates no single record owns. Balances,
@@ -311,8 +334,12 @@ export class AuSingleHomeownerScenario extends BaseScenario {
           // Preservation age: super cannot be drawn before 60.
           minimumAge: 60,
           country: 'AU', currency: AUD,
+          holdings: _superHoldings(p),
         },
       ],
+
+      // Plain copies, so no two configs this builder returns share one record.
+      securities: AU_SINGLE_HOMEOWNER_SECURITIES.map(s => ({ ...s })),
 
       realProperties: [
         {
@@ -369,4 +396,28 @@ export class AuSingleHomeownerScenario extends BaseScenario {
       ],
     };
   }
+}
+
+/**
+ * The super fund as two lots, one per REST option. The second lot takes the rounding
+ * remainder so the lots sum to `superBalance` / `superBasis` exactly — the account
+ * balance is derived from Σ marketValue, and a cent of drift would move it.
+ */
+function _superHoldings(p) {
+  const total = p.superBalance ?? 0;
+  const basis = p.superBasis   ?? 0;
+  const osMv    = +((total * p.superOverseasIndexWeight).toFixed(2));
+  const osBasis = +((basis * p.superOverseasIndexWeight).toFixed(2));
+  return [
+    new Holding({
+      id: 'h-rest-os-index', label: 'REST OS Index', allocation: ALLOCATION.EQUITY,
+      rateKey: RATE_KEYS.EQUITY_INTL_EX_AU, securityId: 'sec-rest-os-index',
+      marketValue: osMv, costBasis: osBasis,
+    }),
+    new Holding({
+      id: 'h-rest-au-index', label: 'REST AU Index', allocation: ALLOCATION.EQUITY,
+      rateKey: RATE_KEYS.EQUITY_AU, securityId: 'sec-rest-au-index',
+      marketValue: +((total - osMv).toFixed(2)), costBasis: +((basis - osBasis).toFixed(2)),
+    }),
+  ];
 }

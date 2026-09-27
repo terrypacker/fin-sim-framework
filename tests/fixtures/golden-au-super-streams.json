@@ -127,7 +127,7 @@
   "primary": 3976.58
  },
  "auPersonSuperTaxYTD": {
-  "primary": 1515.9085
+  "primary": 676.602
  },
  "auPersonTaxLossPool": {
   "primary": 0
@@ -303,7 +303,7 @@
    "qualifyingEarningsYTD": 89553.9,
    "sgYTD": 10746.48,
    "superKey": "superAccount",
-   "tsbAtFyStart": 831832.43,
+   "tsbAtFyStart": 832443.36,
    "unusedByFy": {}
   }
  },
@@ -506,7 +506,7 @@
  "cumulativeConsumptionMarginalUtility": 0.000146678634069,
  "cumulativeConsumptionUtility": 165.977067342,
  "cumulativeConsumptionUtilityCount": 84,
- "cumulativeTaxesPaid": 280257.810189,
+ "cumulativeTaxesPaid": 277038.402689,
  "currentPeriods": {
   "AU": {
    "endMs": 2003788800000,
@@ -640,7 +640,7 @@
  "marketIndexAsOfMs": 1988064000000,
  "metrics": {
   "netLiquidity": 143103.15,
-  "netWorth": 1544877.9,
+  "netWorth": 1545670.11,
   "offsetAppliedCapacity": 0,
   "offsetIdleCapacity": 0
  },
@@ -776,6 +776,18 @@
    "name": "US market index",
    "rateKey": "EQUITY_US",
    "symbol": ""
+  },
+  "sec-rest-au-index": {
+   "id": "sec-rest-au-index",
+   "name": "REST Australian Shares – Indexed",
+   "rateKey": "EQUITY_AU",
+   "symbol": "REST AU Index"
+  },
+  "sec-rest-os-index": {
+   "id": "sec-rest-os-index",
+   "name": "REST Overseas Shares – Indexed",
+   "rateKey": "EQUITY_INTL_EX_AU",
+   "symbol": "REST OS Index"
   }
  },
  "securityIndex": {
@@ -794,11 +806,19 @@
   "sec-auto-EQUITY_US": {
    "price": 149.37286838,
    "total": 160.578147648
+  },
+  "sec-rest-au-index": {
+   "price": 125.26197045,
+   "total": 157.452998613
+  },
+  "sec-rest-os-index": {
+   "price": 150.661167957,
+   "total": 165.904914006
   }
  },
  "superAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 916609.25,
+  "balance": 917401.46,
   "balanceAtResidencyChange": null,
   "contributionBasis": 614353.45,
   "costBaseStepUpByCountry": null,
@@ -809,7 +829,7 @@
   },
   "derivedIncomeBasis": 0,
   "drawdownPriority": 2,
-  "earningsBasis": 302255.8,
+  "earningsBasis": 303048.01,
   "holdings": [
    {
     "acquisitionDateByCountry": null,
@@ -817,28 +837,28 @@
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 312506.625762,
+    "costBasis": 332509.727773,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
     "duration": null,
     "faceValue": null,
     "fxBasisRate": null,
-    "id": "hld4",
+    "id": "h-rest-os-index",
     "inflationLinked": false,
     "issuingState": null,
-    "label": "",
-    "marketValue": 366120.958531,
+    "label": "REST OS Index",
+    "marketValue": 456375.357078,
     "maturityDate": null,
-    "pricePerUnit": 125.26196725,
+    "pricePerUnit": 150.66116921,
     "purchaseDate": null,
-    "rateKey": "EQUITY_AU",
+    "rateKey": "EQUITY_INTL_EX_AU",
     "rollAtMaturity": false,
     "rollTermYears": null,
-    "securityId": "sec-auto-EQUITY_AU",
+    "securityId": "sec-rest-os-index",
     "taxExemption": "none",
     "taxLossPartner": null,
-    "units": 2922.84211808,
+    "units": 3029.15052872,
     "zeroCoupon": false
    },
    {
@@ -847,28 +867,28 @@
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 401092.314238,
+    "costBasis": 393508.092227,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
     "duration": null,
     "faceValue": null,
     "fxBasisRate": null,
-    "id": "hld5",
+    "id": "h-rest-au-index",
     "inflationLinked": false,
     "issuingState": null,
-    "label": "",
-    "marketValue": 550488.291469,
+    "label": "REST AU Index",
+    "marketValue": 461026.102922,
     "maturityDate": null,
-    "pricePerUnit": 150.66117329,
+    "pricePerUnit": 125.26197302,
     "purchaseDate": null,
-    "rateKey": "EQUITY_INTL_EX_AU",
+    "rateKey": "EQUITY_AU",
     "rollAtMaturity": false,
     "rollTermYears": null,
-    "securityId": "sec-auto-EQUITY_INTL_EX_AU",
+    "securityId": "sec-rest-au-index",
     "taxExemption": "none",
     "taxLossPartner": null,
-    "units": 3653.81660247,
+    "units": 3680.49527336,
     "zeroCoupon": false
    }
   ],

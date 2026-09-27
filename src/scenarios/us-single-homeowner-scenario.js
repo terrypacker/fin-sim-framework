@@ -14,6 +14,9 @@ import { ServiceRegistry }     from '../services/service-registry.js';
 import { USD }                 from '../finance/assets/account.js';
 import { ACCOUNT_ROLES }       from '../finance/state/account-roles.js';
 import { US_STATE_CODES }      from '../finance/tax/state/us-states.js';
+import { Holding }             from '../finance/holdings/holding.js';
+import { ALLOCATION }          from '../finance/holdings/allocation.js';
+import { RATE_KEYS }           from '../finance/economic-regimes/rate-keys.js';
 import { US_BANKING }          from './toolsets/us-banking-toolset.js';
 import { US_TAX }              from './toolsets/us-tax-toolset.js';
 import { US_STATE_TAX }        from './toolsets/us-state-tax-toolset.js';
@@ -107,6 +110,12 @@ export const US_SINGLE_HOMEOWNER_DEFAULTS = {
   iraBasis:               85_000,
   rothBalance:            60_000,
   rothBasis:              45_000,   // contributions; the rest is growth
+  // How the brokerage is held (design 94): three named funds rather than one
+  // synthetic US-equity lot. VTV and GLDM take these shares and VXUS the rest (30%);
+  // each lot's basis is the same fraction of `brokerageBasis`, so the account's
+  // gain ratio is unchanged.
+  brokerageVtvWeight:      0.60,
+  brokerageGldmWeight:     0.10,
 
   // ── Payroll contributions (design: retirement-contribution-handler.js) ──────
   // 10% deferred with a 4% match is an unremarkable private-sector plan. The cap
@@ -155,6 +164,27 @@ export const US_SINGLE_HOMEOWNER_DEFAULTS = {
   monthlyExpenses:         7_000,
   usInflationRate:         0.03,
 };
+
+/**
+ * The instruments the brokerage holds (design 94). Only identity and the market each
+ * tracks are declared: beta, idiosyncratic vol and dividend yield are left SILENT, so
+ * each fund does exactly what its market does and the scenario makes no claim about a
+ * fund's own yield or tracking that it has no source for.
+ *
+ * GLDM is the one that changes tax, not just returns. Its lot is allocated GOLD, and a
+ * GOLD lot is a collectible in this model (`COLLECTIBLE_ALLOCATIONS`), so a disposal
+ * takes the same collectible-rate path as the art below. `isGold` is the
+ * instrument's own statement of what it is; it matters to an AU-resident holder
+ * (ordinary, indexed CGT asset) and is inert for this US-only plan.
+ */
+export const US_SINGLE_HOMEOWNER_SECURITIES = Object.freeze([
+  Object.freeze({ id: 'sec-vtv',  symbol: 'VTV',  name: 'Vanguard Value ETF',
+                  rateKey: RATE_KEYS.EQUITY_US }),
+  Object.freeze({ id: 'sec-gldm', symbol: 'GLDM', name: 'SPDR Gold MiniShares Trust',
+                  rateKey: RATE_KEYS.GOLD, isGold: true }),
+  Object.freeze({ id: 'sec-vxus', symbol: 'VXUS', name: 'Vanguard Total International Stock ETF',
+                  rateKey: RATE_KEYS.EQUITY_INTL_EX_US }),
+]);
 
 /**
  * Scenario-level params: the ones that are NOT generated per-record.
@@ -340,6 +370,7 @@ export class UsSingleHomeownerScenario extends BaseScenario {
           balance: p.brokerageBalance,     contributionBasis: p.brokerageBasis,
           ownerId: 'primary',              drawdownPriority: 1,
           country: 'US', currency: USD,
+          holdings: _brokerageHoldings(p),
         },
         {
           __type: 'FourOhOneKAccount',     stateKey: 'k401Account',
@@ -363,6 +394,11 @@ export class UsSingleHomeownerScenario extends BaseScenario {
           country: 'US', currency: USD,
         },
       ],
+
+      // Plain copies: the loader freezes its own registry, and an editor replaces this
+      // list rather than mutating it — but a shared frozen constant here would still be
+      // one object across every config this builder ever returns.
+      securities: US_SINGLE_HOMEOWNER_SECURITIES.map(s => ({ ...s })),
 
       realProperties: [
         {
@@ -416,4 +452,36 @@ export class UsSingleHomeownerScenario extends BaseScenario {
       ],
     };
   }
+}
+
+/**
+ * The brokerage as three lots, one per fund. The last lot takes the rounding
+ * remainder so the lots sum to `brokerageBalance` / `brokerageBasis` exactly — the
+ * account balance is derived from Σ marketValue, and a cent of drift would move it.
+ */
+function _brokerageHoldings(p) {
+  const total = p.brokerageBalance ?? 0;
+  const basis = p.brokerageBasis   ?? 0;
+  const split = (w) => [+((total * w).toFixed(2)), +((basis * w).toFixed(2))];
+  const [vtvMv,  vtvBasis]  = split(p.brokerageVtvWeight);
+  const [gldmMv, gldmBasis] = split(p.brokerageGldmWeight);
+  const vxusMv    = +((total - vtvMv  - gldmMv ).toFixed(2));
+  const vxusBasis = +((basis - vtvBasis - gldmBasis).toFixed(2));
+  return [
+    new Holding({
+      id: 'h-vtv', label: 'VTV', allocation: ALLOCATION.EQUITY,
+      rateKey: RATE_KEYS.EQUITY_US, securityId: 'sec-vtv',
+      marketValue: vtvMv, costBasis: vtvBasis,
+    }),
+    new Holding({
+      id: 'h-gldm', label: 'GLDM', allocation: ALLOCATION.GOLD,
+      rateKey: RATE_KEYS.GOLD, securityId: 'sec-gldm',
+      marketValue: gldmMv, costBasis: gldmBasis,
+    }),
+    new Holding({
+      id: 'h-vxus', label: 'VXUS', allocation: ALLOCATION.EQUITY,
+      rateKey: RATE_KEYS.EQUITY_INTL_EX_US, securityId: 'sec-vxus',
+      marketValue: vxusMv, costBasis: vxusBasis,
+    }),
+  ];
 }
