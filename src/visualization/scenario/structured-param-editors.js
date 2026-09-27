@@ -1980,10 +1980,16 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
   const gateClauses = (Array.isArray(value.flows) ? value.flows : [])
     .flatMap(f => gateToRows(f?.id ?? null, f?.gate ?? null) ?? []);
 
-  const poolIdOptions = () => pools.filter(p => p.id).map(p => [p.id, p.label || p.id]);
+  // Ids, not labels (design 114 §7.4): the pools table leads with the id and hides the label by
+  // default, so a select reading "Bucket" beside a table reading "buffer" made the author map
+  // one to the other — and three pools labelled "Bucket 1/2/3" truncate to the same word.
+  const poolIdOptions = () => pools.filter(p => p.id).map(p => [p.id, p.id]);
+  // Design 114 §7.4 — core columns by default; the rest behind one toggle for all four tables.
+  let moreColumns = readMoreColumnsPref();
+  const showOptional = () => moreColumns;
   // Design 114 — a flow's endpoints may be inherited pools. Claims keep `poolIdOptions`.
   const flowPoolOptions = () => [...poolIdOptions(),
-    ...inheritedPools().map(p => [p.id, `${p.label || p.id} (inherited)`])];
+    ...inheritedPools().map(p => [p.id, `${p.id} (inherited)`])];
   /** The saved item with this id, and the parent's — for the "vs parent" marker. */
   const vsParent = (kind, id) => {
     if (!inherit || !id) return '';
@@ -2095,12 +2101,17 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
       { field: 'id',           label: 'Id',       type: 'text',   placeholder: 'g2r', width: '0.9fr' },
       { field: 'from',         label: 'From',     type: 'select', options: flowPoolOptions, width: '1fr' },
       { field: 'to',           label: 'To',       type: 'select', options: flowPoolOptions, width: '1fr' },
-      { field: 'priority',     label: 'Pri',      type: 'number', step: '1', width: '0.5fr' },
+      { field: 'priority',     label: 'Pri',      type: 'number', step: '1', width: '0.5fr',
+        optional: true, badge: (row) => (row.priority ? `pri ${row.priority}` : null) },
       { field: 'triggerKind',  label: 'Trigger',  type: 'select', options: TRIGGER_OPTIONS, width: '1.2fr' },
-      { field: 'triggerValue', label: 'at',       type: 'number', step: '0.01', width: '0.6fr' },
-      { field: 'cadence',      label: 'Cadence',  type: 'select', options: CADENCE_OPTIONS, width: '1fr' },
+      { field: 'triggerValue', label: 'at',       type: 'number', step: '0.01', width: '0.75fr' },
+      { field: 'cadence',      label: 'Cadence',  type: 'select', options: CADENCE_OPTIONS, width: '1fr',
+        optional: true, badge: (row) => (row.cadence && row.cadence !== 'PERIOD'
+          ? (CADENCE_OPTIONS.find(([v]) => v === row.cadence)?.[1] ?? row.cadence) : null) },
       { field: 'amountKind',   label: 'Amount',   type: 'select', options: AMOUNT_OPTIONS, width: '1.1fr' },
-      { field: 'amountValue',  label: 'f',        type: 'number', step: '0.05', min: '0', max: '1', width: '0.6fr' },
+      { field: 'amountValue',  label: 'f',        type: 'number', step: '0.05', min: '0', max: '1', width: '0.6fr',
+        optional: true, badge: (row) => (row.amountKind === 'fractionOfSource'
+          ? `f ${row.amountValue ?? '?'}` : null) },
       ...(inherit ? [vsParentColumn('flows')] : []),
     ],
     newRow:    () => ({ id: null, from: flowPoolOptions()[0]?.[0] ?? null,
@@ -2109,6 +2120,8 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
                         amountKind: 'toTarget', amountValue: null,
                         amountExtra: null, triggerExtra: null, ui: null }),
     addLabel:  '+ Add Flow',
+    showOptional,
+    badgeWidth: '1.1fr',
     emptyText: 'No flows — pools are spent in order but never refilled by an explicit rule.',
     // Renaming a flow changes the option list the gate table selects from — the same reason
     // the pools table refreshes the claims and flows tables (§17.1).
@@ -2191,7 +2204,7 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
   const gateEditor = buildRowListEditor({
     rows: gateClauses,
     columns: [
-      { field: 'flow',      label: 'Flow',   type: 'select', options: flowIdOptions, width: '1fr' },
+      { field: 'flow',      label: 'Flow',   type: 'select', options: flowIdOptions, width: '1.5fr' },
       // Rows sharing a number are ANDed; each distinct number is an OR branch. A number
       // rather than a group control because the shared row component is flat by design
       // (§17.1) and because it is what makes "add one more alternative" one more row.
@@ -2206,7 +2219,7 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
       // is down more than 10%"), while a drawdown fraction is not. The normalizer enforces
       // the per-kind range; the control must not pre-empt it with the tighter one.
       { field: 'gateValue', label: 'X',      type: 'number', step: '0.01', min: '-1', max: '1', width: '0.6fr' },
-      { field: 'gateBasis', label: 'Measured against', type: 'select', options: gateBasisOptionsFor, width: '1.8fr' },
+      { field: 'gateBasis', label: 'Measured against', type: 'select', options: gateBasisOptionsFor, width: '1.5fr' },
       // The lever design 97 §20.13 measured as the one that moves the answer: the three
       // drawdown thresholds landed within $13k of each other, while the same gate family
       // differing only in how long it stays shut spread by $460k. Years, never periods —
@@ -2216,7 +2229,7 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
       // row of the same flow, so the table can never show one gate with two scopes. SOURCE is
       // the stricter reading and stays the default; see the design section before assuming
       // EDGE is simply safer.
-      { field: 'gateScope', label: 'Vetoes', type: 'select', options: GATE_SCOPE_OPTIONS, width: '1.4fr' },
+      { field: 'gateScope', label: 'Vetoes', type: 'select', options: GATE_SCOPE_OPTIONS, width: '1.2fr' },
       // Design 110 §6.3 option A — the clause's optional ADDRESS, and the only reason a
       // threshold can be an axis at all. Blank is what every graph authored so far means:
       // positional, and not searchable. Filling it in generates `gate.<id>.threshold` and
@@ -2224,12 +2237,14 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
       //
       // LAST column deliberately. It is the one cell that changes nothing about the run, so
       // putting it in front of the clause would push the gate's actual content off the read.
-      { field: 'gateId',    label: 'Search id', type: 'text', placeholder: '—', width: '1fr' },
+      { field: 'gateId',    label: 'Search id', type: 'text', placeholder: '—', width: '1fr',
+        optional: true, badge: (row) => (row.gateId ? `id ${row.gateId}` : null) },
     ],
     newRow:    () => ({ flow: gateableFlowIds()[0] ?? null, branch: 1, gateNegate: '',
                         gateKind: 'sourceDrawdownUnder', gateValue: 0.05,
                         gateBasis: 'INDEX', gateYears: 1, gateScope: 'SOURCE', gateId: null }),
     addLabel:  '+ Add Gate Clause',
+    showOptional,
     emptyText: 'No gate clauses — every flow fires whenever its trigger and amount allow.',
     onChange:  () => {
       // All three, never short-circuited: each is a repair the table owes the author.
@@ -2251,7 +2266,10 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
       // and cannot untick. `sync` prunes the reference; this is what makes the prune visible.
       { field: 'id',          label: 'Id',       type: 'text',   placeholder: 'reserve',
         rerender: true, width: '1fr' },
-      { field: 'label',       label: 'Label',    type: 'text',   placeholder: 'Bucket 2', width: '1.3fr' },
+      // Design 114 §7.4 — the five advanced pool columns are `optional`. A label is a name, not a
+      // decision, so it has no badge; the other four badge any non-default value (see `buildBadges`).
+      { field: 'label',       label: 'Label',    type: 'text',   placeholder: 'Bucket 2', width: '1.3fr',
+        optional: true },
       { field: 'spendOrder',  label: 'Spend #',  type: 'number', step: '10', placeholder: 'never', width: '0.7fr' },
       // `rerender` on both mode cells: the Size cell beside each one takes its bounds from
       // the mode, so a mode change has to redraw the row or the new mode keeps the old range.
@@ -2264,11 +2282,17 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
       // it resolves to 0 (hold nothing here), which is what drives the cross-border float
       // hand-over and the sweep. Blank = always, i.e. every plan that does not move.
       { field: 'targetWhenResident', label: 'While in', type: 'select', width: '0.9fr',
-        options: [['', 'anywhere'], ['US', 'US'], ['AU', 'AU']] },
+        options: [['', 'anywhere'], ['US', 'US'], ['AU', 'AU']],
+        optional: true, badge: (row) => (row.targetWhenResident ? `${row.targetWhenResident} only` : null) },
       // §12.2b. Blank for every other target mode — `buildCheckSet` renders `emptyText` when a
       // row has no options, which is what a non-remainder row wants anyway.
+      // S2 — one line until opened: the pools a remainder sits behind, as a sentence.
       { field: 'targetAfter', label: 'Remainder of', type: 'checkset', width: '1.6fr',
-        emptyText: '—',
+        emptyText: '—', collapsed: true,
+        summary: (row, options) => {
+          const picked = options.filter(([v]) => (row.targetAfter ?? []).includes(v)).map(([v]) => v);
+          return picked.length ? `after ${picked.join(', ')}` : 'behind nothing yet';
+        },
         options: (row) => (TARGET_NEEDS_AFTER.includes(row?.targetMode)
           ? [...pools.filter(q => q.id && q.id !== row?.id
               // A remainder naming another remainder throws (the resolution ORDER would decide
@@ -2283,13 +2307,16 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
       // spent", and an early-access policy read in isolation from the spend order is the
       // §18.6 mistake (a pool nothing reaches cannot be raided either way).
       { field: 'access',      label: 'Early access', type: 'select', options: ACCESS_MODE_OPTIONS,
-        width: '1.7fr' },
+        width: '1.7fr',
+        optional: true, badge: (row) => (row.access === 'ALLOW_PENALTY' ? 'penalty OK' : null) },
       { field: 'capacity',    label: 'Capacity', type: 'select', options: CAPACITY_MODE_OPTIONS,
-        rerender: true, width: '1.5fr' },
+        rerender: true, width: '1.5fr',
+        optional: true, badge: (row) => capacityBadge(row) },
       // Blank on BALANCE / OFFSET_CAP, whose ceiling is derived from live state.
       { field: 'capacityValue', label: 'Cap size', type: 'number',
         step: sizeAttr('capacity', 'step'), min: sizeAttr('capacity', 'min'),
-        max:  sizeAttr('capacity', 'max'),  title: sizeAttr('capacity', 'title'), width: '0.7fr' },
+        max:  sizeAttr('capacity', 'max'),  title: sizeAttr('capacity', 'title'), width: '0.7fr',
+        optional: true },      // its value is in the Capacity badge
       ...(inherit ? [vsParentColumn('pools')] : []),
     ],
     // §22.5 trap 1 — `spendOrder` starts BLANK ("never"), not `(pools.length + 1) * 10`.
@@ -2303,6 +2330,7 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
                         capacityValue: null, floor: null, targetExtra: null, targetWhenResident: '',
                         capacityExtra: null, ui: null }),
     addLabel:  '+ Add Pool',
+    showOptional,
     emptyText: 'No pools — the drawdownPriority order applies and nothing refills (the default).',
     // Renaming or adding a pool changes the option list the OTHER two tables select from,
     // so both are re-rendered. Without this a renamed pool leaves its claims pointing at a
@@ -2310,7 +2338,19 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
     onChange:  () => { sync(); claimsEditor.refresh(); flowsEditor.refresh(); readouts.refresh(); },
   });
 
-  container.appendChild(el('div', 'age-band-col-label', 'Pools'));
+  const toggle = addButton(moreColumns ? 'Fewer columns' : 'More columns', () => {
+    moreColumns = !moreColumns;
+    writeMoreColumnsPref(moreColumns);
+    toggle.textContent = moreColumns ? 'Fewer columns' : 'More columns';
+    poolsEditor.refresh(); flowsEditor.refresh(); gateEditor.refresh();
+  }, 'more-columns');
+  toggle.title = 'Show every column. Hidden columns that are not at their default are shown as '
+    + 'badges under "Other", so hiding a column never hides a decision.';
+  // The toggle rides the Pools heading rather than a line of its own.
+  const bar = el('div', 'pool-graph-toolbar');
+  bar.appendChild(el('span', 'age-band-col-label', 'Pools'));
+  bar.appendChild(toggle);
+  container.appendChild(bar);
   container.appendChild(poolsEditor);
   container.appendChild(el('div', 'age-band-col-label', 'Claims — which accounts and sleeves each pool holds'));
   container.appendChild(claimsEditor);
@@ -2334,6 +2374,26 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
   sync();
   readouts.refresh();
   return container;
+}
+
+/**
+ * The Capacity badge (design 114 §7.4): what a non-BALANCE capacity is, with its size, since the
+ * `Cap size` column hides with it.
+ */
+function capacityBadge(row) {
+  if (!row.capacity || row.capacity === 'BALANCE') return null;
+  if (row.capacity === 'OFFSET_CAP') return 'cap: offset';
+  const unit = row.capacity === 'YEARS_OF_SPEND' ? 'y' : '';
+  return `cap: ${row.capacityValue ?? '?'}${unit}`;
+}
+
+/** The "More columns" preference — a per-viewer convenience, never scenario data. */
+const MORE_COLUMNS_KEY = 'finsim.poolEditor.moreColumns.v1';
+function readMoreColumnsPref() {
+  try { return globalThis.localStorage?.getItem(MORE_COLUMNS_KEY) === '1'; } catch { return false; }
+}
+function writeMoreColumnsPref(on) {
+  try { globalThis.localStorage?.setItem(MORE_COLUMNS_KEY, on ? '1' : '0'); } catch { /* private mode */ }
 }
 
 /**

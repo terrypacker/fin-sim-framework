@@ -39,6 +39,22 @@ import { assertTotalMix }    from '../../src/finance/holdings/allocation.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+// Design 114 §7.4 — the pool tables show their core columns by default. The tests written
+// before that assert on every column, so they run with "More columns" on; the tests that are
+// ABOUT the default turn it off with `withCoreColumns`.
+const MORE_COLUMNS_KEY = 'finsim.poolEditor.moreColumns.v1';
+beforeEach(() => { localStorage.setItem(MORE_COLUMNS_KEY, '1'); });
+const withCoreColumns = () => localStorage.setItem(MORE_COLUMNS_KEY, '0');
+/** S2 — open every collapsed "Remainder of" summary, so its check boxes are in the DOM. */
+const openRemainders = (host) => {
+  for (;;) {
+    const closed = [...host.querySelectorAll('[data-id="targetAfter-summary"]')]
+      .find(b => b.textContent.startsWith('\u25b8'));
+    if (!closed) return host;
+    closed.click();
+  }
+};
+
 function mount(editor) {
   document.body.innerHTML = '<div id="host"></div>';
   document.getElementById('host').appendChild(editor);
@@ -669,7 +685,7 @@ test('LiquidityGraph: a remainder target round-trips its `after` through the che
   // authorable. Drawn now, which means it must ALSO be excluded from the carried set or the
   // sync writes it twice and the two copies drift.
   const param = { name: 'liquidityGraph', value: REM_VALUE() };
-  const host  = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  const host  = openRemainders(mount(buildLiquidityGraphEditor(param, ACCOUNTS)));
   const boxes = [...host.querySelectorAll('[data-id^="targetAfter:"]')];
   const on    = boxes.filter(b => b.checked).map(b => b.value);
   assert.deepStrictEqual(on, ['cash', 'offset'], 'both referenced pools read back ticked');
@@ -689,7 +705,7 @@ test('LiquidityGraph: only non-remainder OTHER pools are offered — the throw i
   const value = REM_VALUE();
   value.pools[0].target = { mode: 'YEARS_OF_SPEND_REMAINDER', value: 2, after: ['offset'] };
   const param = { name: 'liquidityGraph', value };
-  const host  = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  const host  = openRemainders(mount(buildLiquidityGraphEditor(param, ACCOUNTS)));
   const offered = [...host.querySelectorAll('[data-id^="targetAfter:"]')].map(b => b.value);
   // 'bond' and 'cash' are both remainders now, so neither is offered to the other; and no
   // pool is offered to itself. That leaves 'offset' twice — once per remainder row.
@@ -707,6 +723,7 @@ test('LiquidityGraph: the `after` cell is blank on every other target mode', () 
   // Selecting the mode draws it — `rerender` on the mode cell is what makes that happen, and
   // without it the row keeps a cell that cannot be filled in.
   pick(cells(host, 'targetMode')[1], 'YEARS_OF_SPEND_REMAINDER');
+  openRemainders(host);
   const offered = [...host.querySelectorAll('[data-id^="targetAfter:"]')].map(b => b.value);
   assert.deepStrictEqual(offered, ['cash'], 'the other pool, not itself');
 });
@@ -716,7 +733,7 @@ test('LiquidityGraph: renaming a pool unticks the reference rather than hiding i
   // and still throw at Rebuild — the "invisible until it throws" shape this editor exists to
   // remove. `sync` prunes it and `rerender` on the id cell makes the prune visible.
   const param = { name: 'liquidityGraph', value: REM_VALUE() };
-  const host  = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  const host  = openRemainders(mount(buildLiquidityGraphEditor(param, ACCOUNTS)));
   type(cells(host, 'id')[0], 'cash-renamed', 'change');
   const bond = param.value.pools.find(p => p.id === 'bond');
   assert.deepStrictEqual(bond.target.after, ['offset'], 'the dead reference is gone');
@@ -2062,4 +2079,90 @@ test('LiquidityTargetSchedule: empty is null, and an added row defaults to facto
   assert.equal(param.value.length, 1);
   assert.equal(param.value[0].scale, 1);
   assert.equal(param.value[0].pool, 'cash');
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Design 114 §7.4 / §7.5 — core columns, badges for hidden decisions, one-line remainders
+// ═════════════════════════════════════════════════════════════════════════════
+
+/** The header labels of the Nth row-list table under `host`. */
+const headerOf = (host, n) => [...host.querySelectorAll('.row-list-editor')[n]
+  .querySelector('.age-band-header').children].map(c => c.textContent).filter(Boolean);
+
+/** A graph with a non-default value in every hidden column that badges. */
+const BADGED = () => ({
+  pools: [
+    { id: 'float', spendOrder: 5, target: { mode: 'YEARS_OF_SPEND', value: 1, whenResident: 'US' },
+      claims: [{ key: 'usSavingsAccount' }] },
+    { id: 'offset', spendOrder: 20, capacity: { mode: 'OFFSET_CAP' }, access: { mode: 'ALLOW_PENALTY' },
+      target: { mode: 'AMOUNT', value: 1000 }, claims: [{ key: 'auOffsetAccount' }] },
+    { id: 'growth', spendOrder: 40, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+  ],
+  flows: [
+    { id: 'g2f', from: 'growth', to: 'float', priority: 3, cadence: 'ANNUAL',
+      amount: { fractionOfSource: 0.5 },
+      gate: { id: 'harvest', sourceDrawdownUnder: 0.05, drawdownBasis: 'INDEX' } },
+  ],
+});
+
+test('LiquidityGraph D114 S1: by default the tables show their CORE columns only', () => {
+  withCoreColumns();
+  const param = { name: 'liquidityGraph', value: REM_VALUE() };
+  const host  = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  // REM_VALUE's offset has an OFFSET_CAP, so the one badge track is present.
+  assert.deepStrictEqual(headerOf(host, 0), ['Id', 'Spend #', 'Target', 'Size', 'Remainder of', 'Other']);
+  assert.strictEqual(cells(host, 'label').length, 0, 'Label is behind More columns');
+});
+
+test('LiquidityGraph D114 S1: no badge track when every hidden cell is at its default', () => {
+  withCoreColumns();
+  const param = { name: 'liquidityGraph', value: { pools: [
+    { id: 'cash', spendOrder: 10, claims: [{ key: 'usSavingsAccount' }] }] } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  assert.deepStrictEqual(headerOf(host, 0), ['Id', 'Spend #', 'Target', 'Size', 'Remainder of']);
+});
+
+test('LiquidityGraph D114 S1: a hidden column never hides a decision — each shows as a badge', () => {
+  withCoreColumns();
+  const param = { name: 'liquidityGraph', value: BADGED() };
+  const host  = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  const badges = cells(host, 'badges').map(b => [...b.children].map(c => c.textContent));
+  assert.deepStrictEqual(badges, [
+    ['US only'], ['penalty OK', 'cap: offset'], [],   // pools
+    ['pri 3', 'once a year', 'f 0.5'],                // flows
+    ['id harvest'],                                    // gate clauses
+  ]);
+  assert.strictEqual(cell(host, 'badge-targetWhenResident').title, 'While in: US only',
+    'the badge names the column it stands for');
+  assert.deepStrictEqual(headerOf(host, 2), ['Id', 'From', 'To', 'Trigger', 'at', 'Amount', 'Other']);
+});
+
+test('LiquidityGraph D114 S1: toggling columns shows them, persists, and changes nothing saved', () => {
+  withCoreColumns();
+  const param = { name: 'liquidityGraph', value: BADGED() };
+  const host  = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  const before = JSON.stringify(param.value);
+  cell(host, 'more-columns').click();
+  assert.strictEqual(localStorage.getItem(MORE_COLUMNS_KEY), '1');
+  assert.ok(headerOf(host, 0).includes('Early access'));
+  assert.ok(!headerOf(host, 0).includes('Other'), 'no badges while every column is shown');
+  assert.strictEqual(cell(host, 'more-columns').textContent, 'Fewer columns');
+  cell(host, 'more-columns').click();
+  assert.strictEqual(JSON.stringify(param.value), before);
+});
+
+test('LiquidityGraph D114 S2: Remainder of is ONE line — a sentence that opens to the boxes', () => {
+  withCoreColumns();
+  const param = { name: 'liquidityGraph', value: REM_VALUE() };
+  const host  = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  const summary = cells(host, 'targetAfter-summary');
+  assert.strictEqual(summary.length, 1, 'only the remainder row has one');
+  assert.match(summary[0].textContent, /after cash, offset/);
+  assert.strictEqual(host.querySelectorAll('[data-id^="targetAfter:"]').length, 0, 'closed');
+
+  summary[0].click();
+  const cashBox = host.querySelector('[data-id="targetAfter:cash"]');
+  cashBox.checked = false; cashBox.dispatchEvent(new Event('change'));
+  assert.deepStrictEqual(param.value.pools[2].target.after, ['offset']);
+  assert.match(cell(host, 'targetAfter-summary').textContent, /after offset/, 'the sentence follows');
 });

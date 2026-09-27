@@ -53,7 +53,11 @@ const NO_OPTIONS = [];
  *                options?: Array<[value: string, label: string]>
  *                         | function(): Array<[value: string, label: string]>,
  *                placeholder?: string, blankValue?: *,
- *                width?: string}>} opts.columns
+ *                width?: string,
+ *                optional?: boolean,                  // hidden unless `showOptional()`
+ *                badge?: function(object): string|null, // what a HIDDEN optional cell says
+ *                collapsed?: boolean,                 // 'checkset' only — a one-line summary
+ *                summary?: function(object, Array): string}>} opts.columns
  * @param {function(): object} opts.newRow  factory for the row "+ Add" appends
  * @param {string} [opts.addLabel='+ Add']
  * @param {function(): void} [opts.onChange] called after every edit/add/remove
@@ -64,25 +68,46 @@ const NO_OPTIONS = [];
  *        for whatever the user types, not just for what they typed in order.
  * @param {boolean} [opts.reorderable=false] add a "move up" button per row, for lists
  *        whose ORDER is the datum (a preference ranking) rather than incidental.
+ * @param {function(): boolean} [opts.showOptional] whether `optional` columns are drawn. Read
+ *        on every render, so a toggle elsewhere takes effect on `refresh()`. Absent ⇒ shown.
+ * @param {string} [opts.badgeWidth='1.3fr'] the track the hidden columns' badges share.
  * @returns {HTMLElement} the container, carrying a `.refresh()` that re-renders it.
  *        Needed when a column's options depend on ANOTHER editor's rows (the pool ids a
  *        claim or a flow names): that editor's `onChange` calls this one's `refresh`, so a
  *        renamed pool is not silently orphaned in the sibling table.
  */
-export function buildRowListEditor({ rows, columns, newRow, addLabel = '+ Add',
+export function buildRowListEditor({ rows, columns: allColumns, newRow, addLabel = '+ Add',
                                      onChange = null, emptyText = null,
-                                     sortBy = null, reorderable = false }) {
+                                     sortBy = null, reorderable = false,
+                                     showOptional = null, badgeWidth = '1.3fr' }) {
   const container = document.createElement('div');
   container.className = 'age-band-list-editor row-list-editor';
 
-  // The remove button's fixed 26px column is the shared band-editor convention.
-  const grid = [...columns.map(c => c.width ?? '1fr'),
-                ...(reorderable ? ['26px'] : []), '26px'].join(' ');
-
   const changed = () => { if (onChange) onChange(); };
+
+  // Which cells a check set shows expanded, by row. A WeakSet so a removed row is forgotten.
+  const expanded = new WeakSet();
 
   const render = () => {
     container.innerHTML = '';
+
+    // ── optional columns (design 114 §7.4) ──────────────────────────────────────────
+    //
+    // A hidden column must never hide a DECISION: each optional column may say, per row, what
+    // its value is when it is not the default, and those sentences are drawn as badges in ONE
+    // shared track. The track is only added when some row has a badge, so a table whose
+    // hidden cells are all at their defaults pays no width for it at all.
+    const showAll = typeof showOptional === 'function' ? showOptional() !== false : true;
+    const hidden = showAll ? [] : allColumns.filter(c => c.optional);
+    const columns = showAll ? allColumns : allColumns.filter(c => !c.optional);
+    const badgesOf = (row) => hidden
+      .map(c => ({ col: c, text: typeof c.badge === 'function' ? c.badge(row) : null }))
+      .filter(b => b.text);
+    const withBadges = hidden.length > 0 && rows.some(r => badgesOf(r).length > 0);
+
+    // The remove button's fixed 26px column is the shared band-editor convention.
+    const grid = [...columns.map(c => c.width ?? '1fr'), ...(withBadges ? [badgeWidth] : []),
+                  ...(reorderable ? ['26px'] : []), '26px'].join(' ');
 
     if (rows.length === 0 && emptyText) {
       const empty = document.createElement('div');
@@ -97,6 +122,13 @@ export function buildRowListEditor({ rows, columns, newRow, addLabel = '+ Add',
         const h = document.createElement('span');
         h.className = 'age-band-col-label';
         h.textContent = label;
+        header.appendChild(h);
+      }
+      if (withBadges) {
+        const h = document.createElement('span');
+        h.className = 'age-band-col-label';
+        h.textContent = 'Other';
+        h.title = `Hidden columns whose value is not the default: ${hidden.map(c => c.label).join(', ')}`;
         header.appendChild(h);
       }
       // One spacer per trailing button track (move-up, remove) so the header
@@ -115,8 +147,9 @@ export function buildRowListEditor({ rows, columns, newRow, addLabel = '+ Add',
       // so the row the user just retyped moves to where the consumer will read it.
       const resort = sortBy ? () => { rows.sort(sortBy); render(); } : null;
       for (const col of columns) {
-        rowEl.appendChild(buildCell(col, row, changed, resort, render));
+        rowEl.appendChild(buildCell(col, row, changed, resort, render, expanded));
       }
+      if (withBadges) rowEl.appendChild(buildBadges(badgesOf(row)));
 
       if (reorderable) {
         const up = document.createElement('button');
@@ -161,8 +194,27 @@ export function buildRowListEditor({ rows, columns, newRow, addLabel = '+ Add',
   return container;
 }
 
+/**
+ * The badges for one row's hidden, non-default cells. Each names its column in the tooltip, so
+ * "US only" can be traced back to "While in" without opening the column.
+ */
+function buildBadges(badges) {
+  const wrap = document.createElement('span');
+  wrap.className  = 'row-list-badges';
+  wrap.dataset.id = 'badges';
+  for (const { col, text } of badges) {
+    const b = document.createElement('span');
+    b.className = 'row-list-badge';
+    b.textContent = text;
+    b.title = `${col.label}: ${text}`;
+    b.dataset.id = `badge-${col.field}`;
+    wrap.appendChild(b);
+  }
+  return wrap;
+}
+
 /** Dispatch a column to its cell builder. */
-function buildCell(col, row, changed, resort, rerender) {
+function buildCell(col, row, changed, resort, rerender, expanded = null) {
   // `rerender: true` re-draws the whole list after this cell changes. For columns whose
   // value decides what ANOTHER column in the same row may offer — picking a savings account
   // means that row has no sleeves to narrow — this is what keeps the impossible choice off
@@ -171,7 +223,9 @@ function buildCell(col, row, changed, resort, rerender) {
   switch (col.type) {
     case 'select':   return buildSelect(col, row, changed, after);
     case 'text':     return buildText(col, row, changed, after);
-    case 'checkset': return buildCheckSet(col, row, changed);
+    case 'checkset': return col.collapsed && expanded
+      ? buildCollapsedCheckSet(col, row, changed, rerender, expanded)
+      : buildCheckSet(col, row, changed);
     case 'note':     return buildNote(col, row);
     default:         return buildNumber(col, row, changed, after);
   }
@@ -279,6 +333,47 @@ function buildCheckSet(col, row, changed) {
     lab.appendChild(cb);
     lab.appendChild(document.createTextNode(label));
     wrap.appendChild(lab);
+  }
+  return wrap;
+}
+
+/**
+ * A check set drawn as ONE LINE until it is opened (design 114 §7.5, S2).
+ *
+ * A set with many options (the pools a remainder sits behind) otherwise stacks one line per
+ * option and makes its whole row that tall — nine lines on a real plan. The summary is the
+ * set's value as a sentence (`col.summary(row, options)`, or the ticked labels); clicking it
+ * opens the boxes under it, and clicking again closes them. Opening is per row and survives the
+ * list's own re-renders; nothing about the value changes.
+ */
+function buildCollapsedCheckSet(col, row, changed, rerender, expanded) {
+  const options = optionsOf(col, row);
+  if (options.length === 0) return buildCheckSet(col, row, changed);
+  const wrap = document.createElement('div');
+  wrap.className  = 'row-list-checkset-collapsed';
+  const selected = Array.isArray(row[col.field]) ? row[col.field] : [];
+  const labels = options.filter(([v]) => selected.includes(v)).map(([, l]) => l);
+  const text = typeof col.summary === 'function' ? col.summary(row, options)
+    : (labels.length ? labels.join(', ') : (col.emptyText ?? '—'));
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className  = 'row-list-summary';
+  toggle.dataset.id = `${col.field}-summary`;
+  toggle.textContent = `${expanded.has(row) ? '\u25be' : '\u25b8'} ${text}`;
+  toggle.title = text;
+  toggle.addEventListener('click', () => {
+    if (expanded.has(row)) expanded.delete(row); else expanded.add(row);
+    rerender();
+  });
+  wrap.appendChild(toggle);
+  if (expanded.has(row)) {
+    wrap.appendChild(buildCheckSet(col, row, () => {
+      changed();
+      // The summary above has to say what was just ticked.
+      toggle.textContent = `\u25be ${typeof col.summary === 'function' ? col.summary(row, options)
+        : (options.filter(([v]) => (row[col.field] ?? []).includes(v)).map(([, l]) => l).join(', ')
+           || (col.emptyText ?? '—'))}`;
+    }));
   }
   return wrap;
 }

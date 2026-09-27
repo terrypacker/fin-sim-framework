@@ -1,6 +1,6 @@
 # 114 — Pool shapes that inherit, and a pool editor that fits its panel
 
-**Status:** PHASES 1–2 BUILT, 26 Sep 2026 (§11, §12); phases 3–6 proposed. Picks up design 112 §7 (shapes that reference pools) and
+**Status:** PHASES 1–3 BUILT, 26 Sep 2026 (§11–§13); phases 4–6 proposed. Picks up design 112 §7 (shapes that reference pools) and
 reworks the pool authoring surface built across design 97 §17.1/§21/§22.5, design 109 §11 and
 design 110 Leg A. Decisions D1–D5 (§3) and the scope of Part II (S1–S6) were taken with the
 author before drafting. The MC and Opt panels are deliberately last (§9, phase 6). Open
@@ -378,3 +378,35 @@ from about 2,500px to about 1,170px, the diff line reads "8 inherited · 1 overr
 (wrappers: spendOrder)", and the converted plan validates clean and resolves to a byte-identical
 schedule. Tests: ten new cases in `tests/viz/structured-param-editors.test.mjs`; the four that
 covered Duplicate and the previous-shape diff were rewritten.
+
+## 13. As built — phase 3 (26 Sep 2026)
+
+`row-list-editor` gained three column options: `optional` (drawn only when the caller's
+`showOptional()` says so), `badge(row)` (what a hidden optional cell says when it is not at its
+default) and, for a checkset, `collapsed` + `summary(row, options)`. The graph editor uses them
+with §7.4's split, one **More columns** toggle for all four tables, kept per viewer in
+`localStorage` (`finsim.poolEditor.moreColumns.v1`, off by default). What the build decided that
+the text above did not:
+
+1. **The badge track is added only when some row has a badge.** A table whose hidden cells are
+   all at their defaults pays no width for it; with More columns on there are no badges at all.
+   A badge's tooltip names the column it stands for ("While in: US only").
+2. **Label has no badge.** It is a name, not a decision, and every pool on a real plan has one,
+   so a badge would be on every row and say nothing. Cap size has none either: its value is in
+   the Capacity badge (`cap: offset`, `cap: 2y`). `f` badges only when the amount is a fraction
+   of the source.
+3. **Pool selects show ids, not labels.** The From/To and claim-pool selects offered labels, which
+   read "Bucket" three times over in the running app beside a pools table that now leads with the
+   id. Inherited pools read `id (inherited)`.
+4. **Column widths were rebalanced in the app**, not in jsdom: `at` 0.6 → 0.75fr, the gate table's
+   Flow 1 → 1.5fr (from Measured against and Vetoes), flows' badge track 1.1fr.
+5. **The toggle rides the Pools heading** instead of a line of its own.
+6. **Existing tests run with More columns on** (a `beforeEach` in the viz file); the phase-3
+   tests turn it off. They assert on every column, and that is still the right thing for them
+   to test.
+
+Measured on the author's plan in the running app: the base editor went from about 2,370px to about
+2,115px tall, and the pools table's ids, spend numbers and sizes went from truncated to readable
+at the ~600px panel width; Remainder of is one line ("after spendingUs, spe…") instead of nine.
+Carried to phase 5: the help on naming a gate clause for search should say the Search id column
+is behind More columns.
