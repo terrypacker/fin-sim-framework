@@ -29,7 +29,7 @@
 import assert from 'node:assert/strict';
 import {
   buildMixListEditor, buildAllocationGlidepathEditor, buildAllocationRegimeTargetsEditor,
-  buildLocationPolicyEditor, buildYieldCurveShapeEditor, buildYieldCurveScheduleEditor,
+  buildLocationPolicyEditor, buildClassRestrictionsEditor, buildYieldCurveShapeEditor, buildYieldCurveScheduleEditor,
   buildRateKeyMapEditor, buildDrawdownSequenceEditor, buildLiquidityGraphEditor,
   buildLiquidityShapesEditor, buildLiquidityGraphScheduleEditor, buildLiquidityTargetScheduleEditor,
 } from '../../src/visualization/scenario/structured-param-editors.js';
@@ -210,6 +210,75 @@ test('RegimeTargets: removing the last regime normalises to null', () => {
   const host = mount(buildAllocationRegimeTargetsEditor(param));
   cell(host, 'removeRow').click();
   assert.strictEqual(param.value, null);
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ClassRestrictions (design 115)
+// ═════════════════════════════════════════════════════════════════════════════
+
+const US_OWNER   = () => [{ id: 'primary', name: 'P', citizen: ['US'] }];
+const HAS_SUPER  = () => [{ name: 'Super (P)', stateKey: 'superAccount', role: 'super', ownerId: 'primary' }];
+const advisory   = (host) => cell(host, 'class-restriction-us-citizen-super-gold');
+
+test('ClassRestrictions: null renders empty and authors nothing', () => {
+  const param = { name: 'allocationClassRestrictions', value: null };
+  const host = mount(buildClassRestrictionsEditor(param));
+  assert.match(host.textContent, /No restrictions/);
+  assert.strictEqual(param.value, null);
+});
+
+test('ClassRestrictions: one row per class; ticking a role bars it', () => {
+  const param = { name: 'allocationClassRestrictions', value: { GOLD: ['super'] } };
+  const host = mount(buildClassRestrictionsEditor(param));
+  assert.strictEqual(cell(host, 'roles:super').checked, true);
+  cell(host, 'roles:ira').click();
+  assert.deepStrictEqual(param.value, { GOLD: ['super', 'ira'] });
+});
+
+test('ClassRestrictions: un-ticking every role KEEPS the row as an explicit []', () => {
+  // `{ GOLD: [] }` is the author's "considered, allowed" — it answers the US-citizen warning,
+  // so clearing the boxes must not delete the statement.
+  const param = { name: 'allocationClassRestrictions', value: { GOLD: ['super'] } };
+  const host = mount(buildClassRestrictionsEditor(param));
+  cell(host, 'roles:super').click();
+  assert.deepStrictEqual(param.value, { GOLD: [] });
+  assert.match(host.textContent, /allowed everywhere/);
+  cell(host, 'removeRow').click();
+  assert.strictEqual(param.value, null, 'removing the row removes it');
+});
+
+test('ClassRestrictions: + Add seeds GOLD first, then the next unused class', () => {
+  const param = { name: 'allocationClassRestrictions', value: null };
+  const host = mount(buildClassRestrictionsEditor(param));
+  cell(host, 'addRow').click();
+  assert.deepStrictEqual(param.value, { GOLD: [] });
+  cell(host, 'addRow').click();
+  assert.deepStrictEqual(Object.keys(param.value), ['GOLD', 'BOND']);
+});
+
+test('ClassRestrictions: only the roles the rebalance places are offered', () => {
+  const param = { name: 'allocationClassRestrictions', value: { GOLD: [] } };
+  const host = mount(buildClassRestrictionsEditor(param));
+  const offered = cells(host, 'roles').flatMap(w => [...w.querySelectorAll('input')].map(i => i.value)).sort();
+  assert.deepStrictEqual(offered, ['au-stock', 'ira', 'k401', 'roth-ira', 'super', 'us-stock']);
+});
+
+test('ClassRestrictions: the US-citizen super advisory shows, and clears LIVE when answered', () => {
+  const param = { name: 'allocationClassRestrictions', value: null };
+  const host = mount(buildClassRestrictionsEditor(param, HAS_SUPER, US_OWNER));
+  assert.ok(advisory(host), 'warned while GOLD is unanswered');
+  assert.match(advisory(host).textContent, /Super \(P\)/);
+  cell(host, 'addRow').click();                    // { GOLD: [] } — considered, allowed
+  assert.strictEqual(advisory(host), null, 'an explicit GOLD row answers it');
+  cell(host, 'roles:super').click();
+  assert.strictEqual(advisory(host), null);
+});
+
+test('ClassRestrictions: an AU-only owner is not warned', () => {
+  const param = { name: 'allocationClassRestrictions', value: null };
+  const host = mount(buildClassRestrictionsEditor(param, HAS_SUPER,
+    () => [{ id: 'primary', name: 'P', citizen: ['AU'] }]));
+  assert.strictEqual(advisory(host), null);
 });
 
 // ═════════════════════════════════════════════════════════════════════════════

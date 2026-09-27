@@ -1,7 +1,7 @@
 # 115 — Asset-class restrictions: keeping gold out of a US citizen's super
 
-**Status:** IN PROGRESS — phases 1–3 BUILT 27 Sep 2026 (§11, §11.2, §11.3). Research done (§3, every citation
-on disk); decisions D1–D4 (§4) taken with the author. Phase 4 (editor, stale text, REFERENCE) open. A pre-existing defect found on the way is in §12. Picks up design 61 §4-D / §12 (Lever D,
+**Status:** COMPLETE — all four phases BUILT 27 Sep 2026 (§11–§11.4). Research done (§3, every citation
+on disk); decisions D1–D4 (§4) taken with the author. Open questions remain in §9. A pre-existing defect found on the way is in §12. Picks up design 61 §4-D / §12 (Lever D,
 LOCATED placement) and design 77 §4.1 (super's US character).
 
 ---
@@ -346,6 +346,39 @@ goldens unchanged. The reducer does not pass `restrictions` yet, so no run can r
 - **Tests:** R-16–R-22. Suite: 7,295 unit / 1,691 viz pass.
 - **CLI caveat (known, unchanged):** `run-scenario`/`mc-run` silence `console.warn` during load, so
   the warning will not print there. Phase 4's editor shows the same list inline.
+
+### 11.4 As built — phase 4 (27 Sep 2026)
+
+- **Editor** `buildClassRestrictionsEditor` (`structured-param-editors.js`), dispatched for
+  `ClassRestrictions` in `scenario-tab-view.js`.
+  - One row per class: a class select, a "Never in" check set, and a derived note.
+  - The check set offers only the roles the rebalance places (`TAX_ADVANTAGED_ROLES ∪
+    TAXABLE_ROLES`).
+  - Unticking every box **keeps the row as `[]`**, the "considered, allowed" statement; removing
+    the row removes it.
+  - `+ Add Restriction` seeds GOLD first.
+  - The list refreshes on every edit so the derived note follows the ticks.
+- **Inline advisories:** the `collectClassRestrictionProblems` list is drawn above the rows in
+  the advisory style (`pool-readout--warn`) and redrawn on each edit, so answering the US-citizen
+  warning clears it immediately. This is the surface the CLI caveat in §11.3 pointed to.
+- **Presenter projections widened:** accounts carry `ownerId` / `ownershipType` / `owners[].personId`,
+  and people carry `citizen`. These are the fields the advisory resolves ownership from; without
+  them the in-app check could not tell whose super it is.
+- **Stale text fixed:**
+  - the `allocationLocation` and `allocationLocationPolicy` descriptions (no gold ban; gold by
+    residency; a pointer to the restrictions);
+  - the TARGET_ALLOCATION registry comment.
+
+  `help/REFERENCE.md` is regenerated, and the concept topic restamped for the two changed
+  descriptions.
+- **Checked in the running app** (the author's own plan, in a separate tab, with nothing saved):
+  - both US-citizen supers are flagged by name;
+  - a throwaway editor on a dummy param showed the row layout.
+
+  One fix came out of that check: the empty-row note was cut off at its column width, and is now
+  "allowed everywhere".
+- **Tests:** seven `ClassRestrictions` editor tests, plus the panel-dispatch case in
+  `scenario-tab-view.test.mjs`. `npm test`: 7,295 unit / 1,699 viz pass, help gate clean.
 
 ## 12. Pre-existing defect: the asset-location "swap" is a one-way transfer
 

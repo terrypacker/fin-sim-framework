@@ -9,25 +9,27 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-228 parameters · 33 panels · 11 node types (179 fields) · 173 action types · 86 tools · 281 state field types · 73 topics · 122 design docs
+229 parameters · 33 panels · 11 node types (179 fields) · 173 action types · 86 tools · 281 state field types · 73 topics · 123 design docs
 
 ---
 
-## Parameters (228)
+## Parameters (229)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
 `opt` to the optimizer. `via` names the toolset that contributed it (`SCENARIO` = the
 scenario's own schema), which is where to go to change it.
 
-### Allocation (18)
+### Allocation (19)
 
+- **`allocationClassRestrictions`** — Allocation Class Restrictions · `ClassRestrictions` · default — · conditional · via ECONOMIC_REGIMES
+  Account roles an allocation class may NEVER be placed in, as a map of class → roles, e.g. {"GOLD":["super"]}. Classes: GOLD, BOND, EQUITY, CASH. Unlike the location policy this is hard: a class weight no permitted account can hold is spread over the other classes, and a barred holding is sold at the next rebalance even inside the drift band. Applies to TARGET_ALLOCATION in both location modes and to STRATEGIC_ASSET_LOCATION. An empty list ({"GOLD":[]}) restricts nothing but records that the placement was considered, which silences the US-citizen super warning. Null ⇒ no restrictions.
 - **`allocationGlidepath`** — Allocation Glidepath · `AllocationGlidepath` · default — · conditional · via ECONOMIC_REGIMES
   GLIDEPATH anchors: an array of { age, weights } where weights is a mix map, e.g. [{"age":50,"weights":{"EQUITY":0.8,"BOND":0.2}},{"age":75,"weights":{"EQUITY":0.4,"BOND":0.6}}]. The target is linearly interpolated by the primary's age. Null ⇒ falls back to the static mix.
 - **`allocationLocation`** — Allocation Location · `Enum` · default `LOCATED` · one of `LOCATED`, `PER_ACCOUNT` · conditional · via ECONOMIC_REGIMES
-  How the whole-portfolio target mix is placed across accounts. LOCATED (default) concentrates each class in its tax-favored account — bonds in tax-deferred (IRA/401k), equity in Roth/taxable, gold in a shelter (AU super; never a US IRA/401k/Roth) — so the aggregate book hits the mix while accounts specialize. PER_ACCOUNT drives every account to the same uniform mix (simpler; a manual escape hatch).
+  How the whole-portfolio target mix is placed across accounts. LOCATED (default) concentrates each class in its tax-favored account — bonds in tax-deferred (IRA/401k), equity in Roth/taxable, gold by residency (a US resident: IRA/401k, then taxable; an AU resident: super first) — so the aggregate book hits the mix while accounts specialize. PER_ACCOUNT drives every account to the same uniform mix (simpler; a manual escape hatch). Either mode honours Allocation Class Restrictions.
 - **`allocationLocationPolicy`** — Allocation Location Policy · `LocationPolicy` · default — · conditional · via ECONOMIC_REGIMES
-  LOCATED placement policy: a map of allocation → preferred account roles (in order), e.g. {"BOND":["ira","k401"],"EQUITY":["roth-ira","us-stock"]}. Preference is soft (spills when full); the US-IRA/401k/Roth gold ban is always enforced. Null ⇒ the jurisdiction-aware default.
+  LOCATED placement policy: a map of allocation → preferred account roles (in order), e.g. {"BOND":["ira","k401"],"EQUITY":["roth-ira","us-stock"]}. Preference is soft (spills when full); for a hard "never here", use Allocation Class Restrictions. Null ⇒ the jurisdiction-aware default.
 - **`allocationRegimeTargets`** — Allocation Regime Targets · `AllocationRegimeTargets` · default — · conditional · via ECONOMIC_REGIMES
   REGIME_CONDITIONED targets: a map of regime tag → mix, e.g. {"NORMAL":{"EQUITY":0.6,"BOND":0.4},"ECONOMIC_STRESS":{"EQUITY":0.3,"BOND":0.3,"CASH":0.2,"GOLD":0.2}}. The active regime's mix applies (NORMAL when no stress). Null ⇒ falls back to the static mix.
 - **`allocationSchedule`** — Allocation Schedule · `Enum` · default `STATIC` · one of `STATIC`, `GLIDEPATH`, `REGIME_CONDITIONED`, `YEARS_OF_SPEND` · conditional · via ECONOMIC_REGIMES
@@ -2101,7 +2103,7 @@ what the in-app panel keys on.
 | [Action](nodes/action.md) | node | 200 | 3 panels · design 2, 91 |
 | [Action Detail](panels/action-detail.md) | panel | 172 | 1 panel · design 91 |
 | [Allocation](panels/allocation.md) | panel | 185 | 1 panel · design 82 |
-| [Allocation and Rebalancing](concepts/allocation-and-rebalancing.md) | concept | 266 | 2 panels · 14 params · design 61, 82 |
+| [Allocation and Rebalancing](concepts/allocation-and-rebalancing.md) | concept | 376 | 2 panels · 15 params · design 61, 82, 115 |
 | [AU Tax and PAYG Instalments](concepts/au-tax.md) | concept | 236 | 2 panels · 6 params · design 107 |
 | [Behavioral Strategies](concepts/behavioral-strategies.md) | concept | 232 | 2 panels · 5 params · design 29 |
 | [Inheritance](nodes/bequest.md) | node | 233 | 2 panels · design 63 |
@@ -2173,7 +2175,7 @@ what the in-app panel keys on.
 
 ---
 
-## Design documents (122)
+## Design documents (123)
 
 Tier 3 — the full argument behind each mechanic, in `design/`. The title is each
 file's own H1, read out of it; there is no summary column, because a one-line precis
@@ -2301,6 +2303,7 @@ between 10 and 11.
 | [`112-dated-pool-targets.md`](../design/112-dated-pool-targets.md) | 112 — Dated pool targets: a pool size the MPC can decide |
 | [`113-fixed-rate-loans.md`](../design/113-fixed-rate-loans.md) | 113 — Fixed-rate loans, fixed periods and split loans |
 | [`114-pool-shape-inheritance-and-editor.md`](../design/114-pool-shape-inheritance-and-editor.md) | 114 — Pool shapes that inherit, and a pool editor that fits its panel |
+| [`115-asset-class-restrictions.md`](../design/115-asset-class-restrictions.md) | 115 — Asset-class restrictions: keeping gold out of a US citizen's super |
 | [`bus-unification-plan.md`](../design/bus-unification-plan.md) | Bus Unification Plan |
 | [`inconsistencies.md`](../design/inconsistencies.md) | Inconsistencies, Rework Candidates, and Open Questions |
 | [`requirements.md`](../design/requirements.md) | Requirements Tracker |

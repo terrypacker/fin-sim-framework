@@ -16,7 +16,7 @@ import {
   buildDrawdownSequenceEditor, buildLiquidityGraphEditor,
   buildLiquidityShapesEditor, buildLiquidityGraphScheduleEditor, buildLiquidityTargetScheduleEditor,
   buildMpcRunsEditor, buildMpcRunSelect,
-  buildLocationPolicyEditor, buildYieldCurveShapeEditor, buildYieldCurveScheduleEditor,
+  buildLocationPolicyEditor, buildClassRestrictionsEditor, buildYieldCurveShapeEditor, buildYieldCurveScheduleEditor,
   buildRateKeyMapEditor,
 } from './structured-param-editors.js';
 
@@ -719,6 +719,11 @@ export class ScenarioTabView {
         valueInput = buildAllocationRegimeTargetsEditor(param);
       } else if (param.type === 'LocationPolicy') {
         valueInput = buildLocationPolicyEditor(param);
+      } else if (param.type === 'ClassRestrictions') {
+        // Design 115. Accounts and people are read LIVE: the US-citizen advisory names who
+        // owns which super, and either can change without this editor being rebuilt.
+        valueInput = buildClassRestrictionsEditor(param, () => this._accounts(),
+          () => (typeof this.personsProvider === 'function' ? this.personsProvider() : null) ?? []);
       } else if (param.type === 'YieldCurveShape') {
         valueInput = buildYieldCurveShapeEditor(param);
       } else if (param.type === 'YieldCurveSchedule') {

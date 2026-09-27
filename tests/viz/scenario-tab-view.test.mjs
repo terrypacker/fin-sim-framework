@@ -851,6 +851,7 @@ const STRUCTURED_CASES = [
   ['AllocationGlidepath',     'allocationGlidepath',       [{ age: 50, weights: { EQUITY: 1, BOND: 0, CASH: 0, GOLD: 0 } }], '.glidepath-editor'],
   ['AllocationRegimeTargets', 'allocationRegimeTargets',   { NORMAL: { EQUITY: 1, BOND: 0, CASH: 0, GOLD: 0 } }, '.regime-targets-editor'],
   ['LocationPolicy',          'allocationLocationPolicy',  { BOND: ['ira'] }, '.row-list-editor'],
+  ['ClassRestrictions',       'allocationClassRestrictions', { GOLD: ['super'] }, '.class-restrictions-editor'],
   ['YieldCurveShape',         'usYieldCurveShape',         [{ tenor: 1, spread: -0.01 }], '.row-list-editor'],
   ['YieldCurveSchedule',      'yieldCurveSchedule',        [{ year: 2030, US: [{ tenor: 1, spread: 0.01 }] }], '.yield-schedule-editor'],
   ['RateKeyMap',              'equityReturnBeta',          { EQUITY_US: 1.1 }, '.rate-key-map-editor'],

@@ -244,7 +244,8 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
   //
   // Phase 2 (Lever C): the RebalanceToTargetReducer/ApplyReducer pair rebalances BOTH
   // tax-advantaged (free) AND taxable (CGT-realizing) accounts, establishes new sleeves
-  // (the §6 buy primitive), honors the US-IRA gold guard (§OQ4a), and uses split drift
+  // (the §6 buy primitive), honors the author's class restrictions (design 115; the old
+  // US-IRA gold guard was reversed, design 61 §OQ4a), and uses split drift
   // bands (taxable wide / sheltered tight, §OQ3).
   TARGET_ALLOCATION: {
     handlers: (_context) => [],
@@ -398,9 +399,10 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
         defaultValue: ALLOCATION_LOCATION.LOCATED,
         description: 'How the whole-portfolio target mix is placed across accounts. LOCATED (default) ' +
           'concentrates each class in its tax-favored account — bonds in tax-deferred (IRA/401k), equity ' +
-          'in Roth/taxable, gold in a shelter (AU super; never a US IRA/401k/Roth) — so the aggregate ' +
-          'book hits the mix while accounts specialize. PER_ACCOUNT drives every account to the same ' +
-          'uniform mix (simpler; a manual escape hatch).',
+          'in Roth/taxable, gold by residency (a US resident: IRA/401k, then taxable; an AU resident: ' +
+          'super first) — so the aggregate book hits the mix while accounts specialize. PER_ACCOUNT ' +
+          'drives every account to the same uniform mix (simpler; a manual escape hatch). Either mode ' +
+          'honours Allocation Class Restrictions.',
         visibleWhen: { param: 'behavioralStrategies', includes: 'TARGET_ALLOCATION' },
       },
       {
@@ -409,7 +411,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
         defaultValue: null,
         description: 'LOCATED placement policy: a map of allocation → preferred account roles (in order), ' +
           'e.g. {"BOND":["ira","k401"],"EQUITY":["roth-ira","us-stock"]}. Preference is soft (spills when ' +
-          'full); the US-IRA/401k/Roth gold ban is always enforced. Null ⇒ the jurisdiction-aware default.',
+          'full); for a hard "never here", use Allocation Class Restrictions. Null ⇒ the jurisdiction-aware default.',
         // Gate on the lever being selected AND LOCATED — without the first clause this
         // leaked into every scenario because allocationLocation defaults to LOCATED.
         visibleWhen: [

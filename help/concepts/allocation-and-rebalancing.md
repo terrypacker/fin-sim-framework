@@ -10,8 +10,8 @@ stamps:
   param:allocationSchedule: 0cbc83
   param:allocationGlidepath: e72d2f
   param:allocationRegimeTargets: b783d9
-  param:allocationLocation: 6b72ba
-  param:allocationLocationPolicy: 56c8c6
+  param:allocationLocation: c92532
+  param:allocationLocationPolicy: e9f8cf
   param:allocWeight::EQUITY: b9be8c
   param:allocWeight::BOND: 310f34
   param:allocWeight::CASH: ef39a3

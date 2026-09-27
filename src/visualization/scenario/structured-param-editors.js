@@ -51,6 +51,10 @@ import { ALLOCATION_VALUES, MIX_SUM_EPSILON } from '../../finance/holdings/alloc
 import { REGIME_TAG }          from '../../finance/economic-regimes/regime-tag.js';
 import { ACCOUNT_ROLES }       from '../../finance/state/account-roles.js';
 import { buildRowListEditor }  from '../components/row-list-editor.js';
+import { RESTRICTABLE_CLASSES, collectClassRestrictionProblems }
+  from '../../finance/behavioral/allocation-location.js';
+import { TAX_ADVANTAGED_ROLES, TAXABLE_ROLES }
+  from '../../finance/behavioral/rebalance-to-target-reducer.js';
 // Design 110 §4.2 / §17.2's rule: the readouts under the tables DERIVE by calling the
 // compiler's own functions, and never re-implement one. `normalizeLiquidityGraph` is what
 // decides what the author wrote, `compileToDrawdownSequence` is what decides the spend order
@@ -475,6 +479,92 @@ export function buildLocationPolicyEditor(param) {
     reorderable: true,
     onChange:   sync,
   });
+}
+
+/**
+ * The roles a class restriction can name: the ones the design-61 rebalance places into
+ * (tax-advantaged ∪ taxable brokerage). A role outside that set holds nothing the planner
+ * moves, so offering it would be a control that does nothing.
+ */
+const RESTRICTABLE_ROLE_OPTIONS = Object.freeze(
+  [...TAX_ADVANTAGED_ROLES, ...TAXABLE_ROLES].map(r => [r, r]));
+
+/**
+ * `ClassRestrictions` — design 115's `allocationClassRestrictions`, class → roles barred.
+ *
+ * One row per class, with a check set of the roles it may never occupy. Unlike the
+ * LocationPolicy editor there is no order to preserve, so the roles are a set, not ranked
+ * rows. **A row with nothing ticked is kept, not dropped**: `{ GOLD: [] }` is the author
+ * saying "considered, allowed everywhere", which is what answers the US-citizen super
+ * warning. Removing the row removes that statement.
+ *
+ * The advisories above the rows come from `collectClassRestrictionProblems`, the same
+ * function the compile warns from, over the live accounts and people. They are redrawn on
+ * every edit, so ticking `super` for GOLD visibly clears the warning it answers.
+ *
+ * @param {object}   param
+ * @param {function(): object[]} [accounts] - live account projection ({ name, stateKey, role, ownerId, … })
+ * @param {function(): object[]} [people]   - live people ({ id, name, citizen })
+ */
+export function buildClassRestrictionsEditor(param, accounts = () => [], people = () => []) {
+  const rows = [];
+  if (isPlainObject(param.value)) {
+    for (const [allocation, roles] of Object.entries(param.value)) {
+      rows.push({ allocation, roles: Array.isArray(roles) ? roles.map(String) : [] });
+    }
+  }
+
+  const container = document.createElement('div');
+  container.className = 'class-restrictions-editor';
+  const notes = document.createElement('div');
+  container.appendChild(notes);
+
+  const drawAdvisories = () => {
+    notes.replaceChildren();
+    for (const p of collectClassRestrictionProblems(param.value, accounts() ?? [], people() ?? [])) {
+      const note = document.createElement('div');
+      note.className   = 'pool-readout pool-readout--warn';
+      note.dataset.id  = `class-restriction-${p.code}`;
+      note.textContent = p.message;
+      notes.appendChild(note);
+    }
+  };
+
+  const sync = () => {
+    const out = {};
+    for (const { allocation, roles } of rows) {
+      if (!allocation) continue;
+      // Two rows for one class merge — a set union, since neither row can outrank the other.
+      out[allocation] = [...new Set([...(out[allocation] ?? []), ...(roles ?? [])])];
+    }
+    param.value = Object.keys(out).length ? out : null;
+    drawAdvisories();
+  };
+  sync();
+
+  const list = buildRowListEditor({
+    rows,
+    columns: [
+      { field: 'allocation', label: 'Class', type: 'select',
+        options: RESTRICTABLE_CLASSES.map(a => [a, a]) },
+      { field: 'roles', label: 'Never in', type: 'checkset', blankValue: [],
+        options: RESTRICTABLE_ROLE_OPTIONS, width: '2fr' },
+      { field: 'effect', label: '', type: 'note',
+        text: (r) => (r.roles?.length ? '' : 'allowed everywhere') },
+    ],
+    // The next class without a row — GOLD first, the case this exists for.
+    newRow: () => ({
+      allocation: RESTRICTABLE_CLASSES.find(c => !rows.some(r => r.allocation === c)) ?? RESTRICTABLE_CLASSES[0],
+      roles: [],
+    }),
+    addLabel:  '+ Add Restriction',
+    emptyText: 'No restrictions — any account may hold any class.',
+    // Redraw after every edit: the note column is derived from the ticks, and a check set
+    // edits in place without re-rendering its row.
+    onChange:  () => { sync(); list.refresh(); },
+  });
+  container.appendChild(list);
+  return container;
 }
 
 // ─── yield curves ─────────────────────────────────────────────────────────────

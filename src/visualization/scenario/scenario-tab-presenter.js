@@ -98,11 +98,13 @@ export class ScenarioTabPresenter {
       return null;
     };
 
-    // Supply persons to person-picker param editors (e.g. ExpenseEventList).
+    // Supply persons to person-picker param editors (e.g. ExpenseEventList). `citizen` rides
+    // along for design 115's advisory, which warns when a US citizen owns super.
     this._view.personsProvider = () => {
       const registry = ServiceRegistry.getInstance();
       return (registry.personService?.getAll?.() ?? [])
-        .map(p => ({ id: p.id, name: p.name ?? p.id }));
+        .map(p => ({ id: p.id, name: p.name ?? p.id,
+                     ...(Array.isArray(p.citizen) ? { citizen: p.citizen } : {}) }));
     };
 
     // Supply the account list to the design-97 pool editors (DrawdownSequence,
@@ -132,6 +134,12 @@ export class ScenarioTabPresenter {
         .map(a => ({ stateKey: a.stateKey, name: a.name ?? a.stateKey, type: a.type,
                      ...(a.offsetsPropertyKey != null ? { offsetsPropertyKey: a.offsetsPropertyKey } : {}),
                      ...(a.role != null ? { role: a.role } : {}),
+                     // Design 115 — who owns it, for the US-citizen super advisory. The same
+                     // three fields `ownershipFractions` resolves an owner from.
+                     ...(a.ownerId != null ? { ownerId: a.ownerId } : {}),
+                     ...(a.ownershipType != null ? { ownershipType: a.ownershipType } : {}),
+                     ...(Array.isArray(a.owners) && a.owners.length
+                       ? { owners: a.owners.map(o => ({ personId: o?.personId })) } : {}),
                      ...(a.currency != null ? { currency: a.currency } : {}),
                      ...(Number.isFinite(a.balance) ? { balance: a.balance } : {}),
                      ...(Array.isArray(a.holdings)
