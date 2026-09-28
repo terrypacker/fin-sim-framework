@@ -732,7 +732,7 @@ Explained in [`help/nodes`](nodes/account.md). 5 field(s) described by a record 
 
 ### Real Property — `real-property` (53 fields)
 
-Explained in [`help/nodes`](nodes/real-property.md). 3 field(s) described by a record parameter.
+Explained in [`help/nodes`](nodes/real-property.md). 5 field(s) described by a record parameter.
 
 - **`name`** — Name · `text` · topic
   What this property is called throughout the app. Free text.
@@ -806,9 +806,9 @@ Explained in [`help/nodes`](nodes/real-property.md). 3 field(s) described by a r
   Foreign units per USD on the date the debt was incurred. A non-USD mortgage held by a US person realises ordinary gain or loss on each principal repayment against this rate. Blank stamps it at the first payment, understating the exposure for a loan already outstanding at the start of the run.
 - **`rentalEnabled`** — Rental Income · `checkbox` · topic
   Turn this property into a rental. It starts earning rent, its deductible expenses and depreciation begin, and its capital-gains treatment changes in both countries. The fields below it are inert until this is on.
-- **`monthlyRent`** — Monthly Rent · `number` · topic
+- **`monthlyRent`** — Monthly Rent · `number` · param
   Gross rent at full occupancy, in the property's currency, in today's money. It inflates over the run; what is actually received is this multiplied by the occupancy rate.
-- **`occupancyRate`** — Occupancy · `number` · topic
+- **`occupancyRate`** — Occupancy · `number` · param
   The fraction of gross rent actually realised, covering vacancy, arrears and turnover. A long-term let is around 0.95; a short-term let is far lower, near 0.55, which is the honest cost of the higher headline rent.
 - **`rentalExpenseRatio`** — Expense Ratio · `number` · topic
   Deductible cash operating expenses as a fraction of gross rent — management, letting fees, maintenance billed as expense. Separate from the fixed annual running cost below, which is charged whether or not the property is let.

@@ -23,7 +23,7 @@
  * appreciation rate would zero it, silently killing the asset's growth.
  */
 export const WHOLE_NUMBER_RECORD_FIELDS = new Set([
-  'value', 'plannedSaleYear', 'costBasis', 'mortgageBalance',
+  'value', 'plannedSaleYear', 'costBasis', 'mortgageBalance', 'monthlyRent',
 ]);
 
 /**

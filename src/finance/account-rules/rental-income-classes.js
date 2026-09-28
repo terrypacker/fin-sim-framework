@@ -56,7 +56,8 @@ const firstResidency = (state) =>
  */
 export function computeRentalMonth(p, propState, country, inflationFactor = 1, loan = null, state = null) {
   const monthlyRent   = (p.monthlyRent         ?? 0) * (inflationFactor || 1);
-  const occupancy     = p.occupancyRate         ?? 0.95;
+  // Clamped: an MC/Opt sweep of the occupancy lever can draw either side of [0, 1].
+  const occupancy     = Math.min(1, Math.max(0, p.occupancyRate ?? 0.95));
   const expenseRatio  = p.rentalExpenseRatio    ?? 0.25;
   const landRatio     = p.landValueRatio        ?? 0.2;
   const override      = p.annualDepreciationOverride ?? null;

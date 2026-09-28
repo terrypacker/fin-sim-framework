@@ -249,6 +249,39 @@ describe('Param-linked editor fields', () => {
     expect('appreciationRate' in data).toBe(false);
   });
 
+  test('RealProperty monthlyRent and occupancyRate route through their params', () => {
+    const rentParam = { name: 'prop.usHouseProperty.monthlyRent', value: 3200, label: 'US House — Monthly Rent',
+                        node: { type: 'realProperty', stateKey: 'usHouseProperty', field: 'monthlyRent' } };
+    const occParam  = { name: 'prop.usHouseProperty.occupancyRate', value: 0.9, label: 'US House — Occupancy',
+                        node: { type: 'realProperty', stateKey: 'usHouseProperty', field: 'occupancyRate' } };
+    const editor = new RealPropertyEditor({
+      container: makeMockContainer(),
+      node: { id: 'r1', name: 'US House', country: 'US', stateKey: 'usHouseProperty',
+              rentalEnabled: true, monthlyRent: 3200, occupancyRate: 0.9 },
+      people: [], accounts: [],
+      links: new ParamFieldLinks([rentParam, occParam]),
+    });
+    editor.render();
+    const root = editor._rootEl;
+
+    const rentInput = root.querySelector('[data-id="monthlyRent"]');
+    expect(rentInput.value).toBe('3200');
+    expect(rentInput.closest('.node-field').querySelector('.param-link-badge')).toBeTruthy();
+    rentInput.value = '3500.4';
+    fire(rentInput, 'input');
+    expect(rentParam.value).toBe(3500);
+
+    const occInput = root.querySelector('[data-id="occupancyRate"]');
+    expect(occInput.value).toBe('0.9');
+    occInput.value = '0.55';
+    fire(occInput, 'input');
+    expect(occParam.value).toBe(0.55);
+
+    const data = editor._readForm(root);
+    expect('monthlyRent' in data).toBe(false);
+    expect('occupancyRate' in data).toBe(false);
+  });
+
   test('Bequest inheritanceYear routes through its param (read, write, badge, excluded, click-through)', () => {
     const param = { name: 'bequest.dadEstate.inheritanceYear', value: 2035, label: 'Dad Estate — Inheritance Year',
                     node: { type: 'bequest', stateKey: 'dadEstate', field: 'inheritanceYear' } };

@@ -206,6 +206,21 @@ export const REAL_PROPERTY_PARAM_TEMPLATE = [
   { field: 'plannedSaleYear',  label: 'Planned Sale Year', type: 'Number', mc: true, opt: true, nullable: true,
     sweepUnset: true,
     description: 'Calendar year this property is sold. Leave blank for no planned sale.' },
+  // Rental income (design 48). Gated on `rentalEnabled`: with the switch off neither
+  // field is read, and a lever that moves nothing is worse than no lever. Rent is an
+  // `amount` for the BALANCE reason (a $0 rent would otherwise infer as a rate); the
+  // loader rounds it to whole units and the rental month clamps occupancy to [0, 1],
+  // since a rate-kind sweep centred on 0.95 draws either side of 1.
+  { field: 'monthlyRent', label: 'Monthly Rent', type: 'Number', mc: 'amount', opt: 'amount',
+    appliesTo: (p) => p?.rentalEnabled === true,
+    description: 'Gross rent at full occupancy, in the property\'s currency, in today\'s ' +
+      'money. It inflates over the run; what is actually received is this multiplied by ' +
+      'the occupancy rate.' },
+  { field: 'occupancyRate', label: 'Occupancy', type: 'Number', mc: 'rate', opt: 'rate',
+    appliesTo: (p) => p?.rentalEnabled === true,
+    description: 'The fraction of gross rent actually realised, covering vacancy, arrears ' +
+      'and turnover. A long-term let is around 0.95; a short-term let is far lower, near ' +
+      '0.55, which is the honest cost of the higher headline rent.' },
   // The move-in date (`mainResidenceFrom`, design 83 G7) as a sweepable FRACTIONAL year,
   // filed in Cross Border beside moveYear. Sweep it against the sale year: the AU
   // s118-185 exemption is a smooth day count, but the US §121 2-of-5 use test is a cliff

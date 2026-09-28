@@ -298,7 +298,7 @@ export class RealPropertyEditor extends BaseComponent {
   /**
    * Route param-backed real-property fields through their param (design/32, design 55 §14.3).
    * All generated real-property fields (value, appreciationRate, plannedSaleYear,
-   * isPrimaryResidence) are bound so a direct edit writes the param (the source of truth)
+   * monthlyRent, occupancyRate, isPrimaryResidence) are bound so a direct edit writes the param (the source of truth)
    * rather than only the record — otherwise the param→record cascade clobbers the edit on
    * the next Rebuild.
    */
@@ -324,6 +324,9 @@ export class RealPropertyEditor extends BaseComponent {
     bindField('appreciationRate', 'appreciationRate', (raw) => Number(raw));
     bindField('plannedSaleYear',  'plannedSaleYear',
       (raw) => (raw === '' || raw == null) ? null : Math.round(Number(raw)));
+    // Generated only while the property is a rental (the template's `appliesTo`).
+    bindField('monthlyRent',      'monthlyRent',      (raw) => Math.round(Number(raw)));
+    bindField('occupancyRate',    'occupancyRate',    (raw) => Number(raw));
     // `isPrimaryResidence` has no field of its own any more: the Main Residence History
     // dropdown owns it (design 83 §7b.2c). A checkbox alongside that dropdown could be
     // set to contradict it — "not a primary residence" ticked against "main residence
