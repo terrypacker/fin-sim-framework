@@ -19,6 +19,7 @@ export class ParametersPlugin extends WorkbenchComponent {
              placeholder="Filter parameters (e.g. inflation, wage, retirement)…" />
       <div id="paramsFilterFields" class="param-filter-fields"></div>
     </div>
+    <div id="paramsRunGuard" class="param-run-guard" hidden></div>
     <div id="paramsList"></div>
     <div class="wb-scenario-param-add">
       <button class="btn btn-sm" id="addParamBtn">+ Add Parameter</button>

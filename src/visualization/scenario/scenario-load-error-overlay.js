@@ -45,12 +45,23 @@
  *      reach: the record is unreachable through the workbench UI while it will not
  *      compile, so the only way back to a saved copy is to drop it and re-upload the JSON.
  *      Behind a confirm, and it says what cannot be undone.
+ *
+ * ── every exit writes, then reloads — and the write must land first ──────────
+ * Each way out changes storage (the repaired record, the new active id, the deletion) and
+ * then reloads so boot reads it back. The app's storage is IndexedDB behind a write-behind
+ * mirror: `setItem` returns before anything is durable and the database catches up on a
+ * debounced flush. A bare `location.reload()` straight after the write tears the page down
+ * inside that window, the flush never commits, and boot reads the OLD active id — the
+ * broken scenario — so every exit on this page led back to it, Delete included. The
+ * default reload therefore awaits the flush.
  */
 
 import { ALLOCATION_VALUES }           from '../../finance/holdings/allocation.js';
 import { collectAuthoredMixProblems }  from '../../finance/behavioral/rebalance-to-target-reducer.js';
 import { collectAuthoredGraphProblems, blockingProblems, POOL_TARGET_MODE, POOL_CAPACITY_MODE }
   from '../../finance/pools/liquidity-graph.js';
+import { collectRunPlayability }     from '../../finance/mpc/run-compile-fold.js';
+import { getAppStorage }             from '../../storage/create-storage.js';
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -123,8 +134,41 @@ function cleanStoredCopy(config, scenarioRegistry) {
   // and an unscheduled shape is a loadable scenario with a note on it — treating it as
   // unloadable would strand the user on this page for something that compiles.
   const bad = [...collectAuthoredMixProblems(bag),
-               ...blockingProblems(collectAuthoredGraphProblems(bag, stored.accounts ?? []))];
+               ...blockingProblems(collectAuthoredGraphProblems(bag, stored.accounts ?? [])),
+               ...collectRunPlayability(bag).disabled];
   return bad.length ? null : stored;
+}
+
+/**
+ * Reload only once every pending storage write has committed (see the header note).
+ * A backend with no write-behind has no `flush`, and reloads at once.
+ *
+ * @param {object} [storage]    the app's storage adapter
+ * @param {() => void} [doReload]
+ */
+export async function persistThenReload(storage = getAppStorage(),
+                                        doReload = () => window.location.reload()) {
+  try {
+    await storage?.flush?.();
+  } catch (e) {
+    // A failed flush leaves the keys dirty; reloading anyway is no worse than not.
+    console.warn('[scenario-load-error] storage flush failed before reload:', e);
+  }
+  doReload();
+}
+
+/**
+ * Write a param onto the record, in both stores it may keep params in.
+ *
+ * `params` is the list the editors show and the serializer writes; some records also carry
+ * a `parameters` bag, and a value set in only one of the two looks like it did nothing.
+ */
+function setRecordParam(config, name, value, entry) {
+  const params = Array.isArray(config.params) ? config.params : (config.params = []);
+  const existing = params.find(p => p?.name === name);
+  if (existing) existing.value = value;
+  else params.push({ ...entry, name, value });
+  if (config.parameters && typeof config.parameters === 'object') config.parameters[name] = value;
 }
 
 /**
@@ -259,10 +303,10 @@ function buildSizeSpecRepair(pool, field, onEdit) {
  * @param {Error}  opts.error            - what the loader threw
  * @param {object} opts.config           - the scenario record that failed to compile
  * @param {object} opts.scenarioRegistry - used to persist a repair and to switch scenarios
- * @param {() => void} [opts.onReload]   - defaults to a full page reload
+ * @param {() => void} [opts.onReload]   - defaults to a full page reload, after storage flushes
  */
 export function showScenarioLoadError({ error, config, scenarioRegistry, onReload }) {
-  const reload = onReload ?? (() => window.location.reload());
+  const reload = onReload ?? (() => persistThenReload());
 
   // Read the params off the record itself: the compile that would have produced a
   // resolved bag is exactly what failed.
@@ -279,6 +323,10 @@ export function showScenarioLoadError({ error, config, scenarioRegistry, onReloa
   const problems      = collectAuthoredMixProblems(bag);
   const graphProblems = blockingProblems(collectAuthoredGraphProblems(bag, config?.accounts ?? []));
   const repairs       = problems.length + graphProblems.length;
+  // A recorded MPC run that decided a lever this scenario has since disabled (design 81 D11).
+  // Not one of the `repairs` above: its fix is a single switch, not a value to type, and it
+  // gets its own button rather than riding on `Save fixes`.
+  const playability   = collectRunPlayability(bag);
   const paramByName = new Map(params.map(p => [p.name, p]));
 
   const root = el('div', 'scenario-load-error');
@@ -303,7 +351,7 @@ export function showScenarioLoadError({ error, config, scenarioRegistry, onReloa
   // The raw throw, but only when the repair section below is not already showing it:
   // the loader rethrows the FIRST mix problem verbatim, so printing both makes the page
   // look like there are two failures.
-  if (!repairs) {
+  if (!repairs && !playability.disabled.length) {
     card.appendChild(el('pre', 'sle-error', String(error?.message ?? error)));
   }
 
@@ -410,6 +458,40 @@ export function showScenarioLoadError({ error, config, scenarioRegistry, onReloa
       block.appendChild(buildSizeSpecRepair(pool, problem.field, () => dirty.add('liquidityGraph')));
       card.appendChild(block);
     }
+  }
+
+  // ── 1c. a recorded run that can no longer play ──────────────────────────────
+  // The run is the plan's decision schedule; the base scenario is still intact underneath it.
+  // `mpcRunEnabled: false` is the switch built for exactly this (design 81 §8): the run stops
+  // governing the plan, and its selection and decisions stay, so turning the mechanic back on
+  // and the switch back on restores it. Clearing `mpcActiveRun` would work too, and forget
+  // which run it was.
+  if (playability.disabled.length) {
+    const { run, disabled } = playability;
+    card.appendChild(el('h2', 'sle-section', 'The recorded MPC run can no longer play'));
+    const block = el('div', 'sle-mix');
+    block.appendChild(el('div', 'sle-mix-where',
+      `Recorded run '${run.runId}' decided ${disabled.length === 1 ? 'a lever' : 'levers'} ` +
+      'whose mechanic this scenario has since disabled. Playing it would drop those ' +
+      'decisions and run a different plan, so the scenario is refused instead.'));
+    const list = el('ul', 'sle-run-levers');
+    for (const { lever, requirement } of disabled) {
+      list.appendChild(el('li', null, `${lever} — ${requirement}`));
+    }
+    block.appendChild(list);
+    block.appendChild(el('div', 'sle-mix-note',
+      'Turning the run off runs the base scenario. The run and its selection are kept: ' +
+      're-enable the mechanic, then set MPC Run Enabled back on, to play it again.'));
+    const off = el('button', 'btn btn-primary', 'Turn off the recorded run and reload');
+    off.type = 'button';
+    off.addEventListener('click', () => {
+      setRecordParam(config, 'mpcRunEnabled', false,
+        { label: 'MPC Run Enabled', type: 'Boolean', group: 'MPC Runs' });
+      scenarioRegistry.save(config, true);
+      reload();
+    });
+    block.appendChild(off);
+    card.appendChild(block);
   }
 
   if (repairs) {

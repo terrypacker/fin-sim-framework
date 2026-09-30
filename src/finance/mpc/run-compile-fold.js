@@ -69,35 +69,58 @@ function _leversOf(run) {
  * @throws {Error} naming every lever whose mechanic is DISABLED and how to satisfy its gate
  */
 export function assertRunIsPlayable(parameters) {
-  const run = resolveActiveMpcRun(parameters);
+  const { run, disabled, inert } = collectRunPlayability(parameters);
   if (!run) return;
 
-  const problems = [];
-  const inert    = [];
-  for (const lever of _leversOf(run)) {
-    const spec = LEVER_SCHEDULE[lever];
-    const gate = spec?.appliesTo;
-    if (typeof gate !== 'function' || gate(parameters)) continue;
-    const line = `  • ${lever} — ${leverRequirement(spec, parameters)
-      ?? 'the mechanic this lever drives is not enabled in this scenario.'}`;
-    (spec?.inertWhen?.(parameters) ? inert : problems).push(line);
-  }
+  const line = ({ lever, requirement }) => `  • ${lever} — ${requirement}`;
   if (inert.length > 0) {
     console.warn(
       `mpcActiveRun: recorded run '${run.runId}' decided ${inert.length} lever(s) that this `
       + 'scenario makes INERT. The decisions apply exactly as recorded and change nothing, so '
       + 'the run plays back identically to the base plan on those levers (design 39 §14.8):\n'
-      + inert.join('\n'));
+      + inert.map(line).join('\n'));
   }
-  if (problems.length === 0) return;
+  if (disabled.length === 0) return;
 
   throw new Error(
-    `mpcActiveRun: recorded run '${run.runId}' decided ${problems.length} lever(s) whose `
+    `mpcActiveRun: recorded run '${run.runId}' decided ${disabled.length} lever(s) whose `
     + 'mechanic this scenario has since disabled. Playing it would drop those decisions '
     + 'silently and run a DIFFERENT plan (design 81 D11 / §16.3):\n'
-    + problems.join('\n')
+    + disabled.map(line).join('\n')
     + '\n\nRe-enable the mechanic(s), or clear `mpcActiveRun` (or set `mpcRunEnabled: false`) '
     + 'to run the base scenario.');
+}
+
+/**
+ * The verdict `assertRunIsPlayable` acts on, without acting on it.
+ *
+ * Split out so the check can be asked BEFORE a compile: the Parameters panel warns the moment
+ * an edit disables a mechanic the active run decided (turning pools off under a POOL_TARGET
+ * run), and the load-error overlay recognises the throw and offers `mpcRunEnabled: false` as
+ * its repair. Both must agree with the compile exactly, so all three read this one function.
+ *
+ * @param {object} parameters  the scenario parameter bag
+ * @returns {{run: object|null,
+ *            disabled: Array<{lever: string, requirement: string}>,
+ *            inert:    Array<{lever: string, requirement: string}>}}
+ *          `run` null when no recorded run governs the plan (none selected, switched off,
+ *          or unresolvable) — then both lists are empty
+ */
+export function collectRunPlayability(parameters) {
+  const run = resolveActiveMpcRun(parameters);
+  const disabled = [];
+  const inert    = [];
+  if (!run) return { run: null, disabled, inert };
+
+  for (const lever of _leversOf(run)) {
+    const spec = LEVER_SCHEDULE[lever];
+    const gate = spec?.appliesTo;
+    if (typeof gate !== 'function' || gate(parameters)) continue;
+    const requirement = leverRequirement(spec, parameters)
+      ?? 'the mechanic this lever drives is not enabled in this scenario.';
+    (spec?.inertWhen?.(parameters) ? inert : disabled).push({ lever, requirement });
+  }
+  return { run, disabled, inert };
 }
 
 /**

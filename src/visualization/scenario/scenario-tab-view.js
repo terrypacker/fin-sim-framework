@@ -11,6 +11,7 @@
 import { isParamVisible, visibleWhenControllers } from '../../finance/param-schema-utils.js';
 import { scenarioSecurityRegistry } from '../../finance/holdings/security.js';
 import { normalizeFilter, matchesFilter, FilteredFoldState } from '../components/text-filter.js';
+import { collectRunPlayability } from '../../finance/mpc/run-compile-fold.js';
 import {
   buildMixListEditor, buildAllocationGlidepathEditor, buildAllocationRegimeTargetsEditor,
   buildDrawdownSequenceEditor, buildLiquidityGraphEditor,
@@ -181,6 +182,16 @@ export class ScenarioTabView {
 
     this._buildFilterFieldSelect(document.getElementById('paramsFilterFields'));
 
+    // The recorded-run guard re-checks after ANY edit in the list. Delegated from the document,
+    // not bound to #paramsList: the Parameters panel mounts on its own schedule, and the
+    // structured editors change values from inputs, selects and row buttons alike. Deferred a
+    // tick so the editor's own handler has written `param.value` before the check reads it.
+    const recheck = (e) => {
+      if (!e.target?.closest?.('#paramsList')) return;
+      setTimeout(() => { if (this._activeScenario) this._refreshRunGuard(this._activeScenario); }, 0);
+    };
+    for (const type of ['input', 'change', 'click']) document.addEventListener(type, recheck);
+
     document.getElementById('addParamBtn')?.addEventListener('click', () => {
       if(this.onAddParameter) this.onAddParameter({ name: '', type: 'Number', value: 0 });
     });
@@ -317,6 +328,7 @@ export class ScenarioTabView {
     if (!container) return;
     container.innerHTML = '';
     this._activeScenario = scenario;
+    this._refreshRunGuard(scenario);
     if (!scenario?.params?.length) return;
 
     // Sort by group in place. Array.sort mutates, so the indices captured below
@@ -442,6 +454,54 @@ export class ScenarioTabView {
    * changes — so dependent rows appear/disappear live. No-op for params nothing
    * depends on, keeping ordinary edits cheap.
    */
+  /**
+   * Design 81 D11, at edit time — the same verdict `assertRunIsPlayable` reaches at compile.
+   *
+   * A recorded run that decided a lever whose mechanic an edit then disables (a POOL_TARGET
+   * run, and Liquidity Pools Enabled switched off) REFUSES to compile: playing it would drop
+   * those decisions and run a different plan. Found only at the next Rebuild or reload, that
+   * lands on the load-error page, far from the edit that caused it. So the panel says so the
+   * moment the edit is made, names the lever, and offers the switch built for it
+   * (`mpcRunEnabled: false`, which keeps the run and its selection).
+   */
+  _refreshRunGuard(scenario) {
+    const box = document.getElementById('paramsRunGuard');
+    if (!box) return;
+    box.innerHTML = '';
+    const bag = Object.fromEntries((scenario?.params ?? []).map(p => [p.name, p.value]));
+    // Pre-checked here because the resolver WARNS on a selection naming no bag entry, and this
+    // runs on every keystroke; that case runs the base plan and has nothing to guard anyway.
+    const selected = bag.mpcRunEnabled !== false && bag.mpcRuns?.[bag.mpcActiveRun];
+    const { run, disabled } = selected ? collectRunPlayability(bag) : { run: null, disabled: [] };
+    box.hidden = !disabled.length;
+    if (!disabled.length) return;
+
+    const head = document.createElement('div');
+    head.className = 'param-run-guard-head';
+    head.textContent = `Recorded MPC run '${run.runId}' can no longer play — this scenario will `
+      + 'refuse to load until the mechanic is re-enabled or the run is turned off.';
+    const list = document.createElement('ul');
+    for (const { lever, requirement } of disabled) {
+      const li = document.createElement('li');
+      li.textContent = `${lever} — ${requirement}`;
+      list.appendChild(li);
+    }
+    const off = document.createElement('button');
+    off.type = 'button';
+    off.className = 'btn btn-sm';
+    off.dataset.id = 'run-guard-off';
+    off.textContent = 'Turn off the recorded run';
+    off.title = 'Set MPC Run Enabled to false. The run and its selection are kept.';
+    off.addEventListener('click', () => {
+      const param = scenario.params.find(p => p.name === 'mpcRunEnabled');
+      if (param) param.value = false;
+      else scenario.params.push({ name: 'mpcRunEnabled', label: 'MPC Run Enabled',
+                                  type: 'Boolean', group: 'MPC Runs', value: false });
+      this._renderParamsList(scenario);
+    });
+    box.append(head, list, off);
+  }
+
   /** A pool graph with pools, not switched off — the state in which it compiles the spend order. */
   _poolGraphIsLive(scenario) {
     const val = (n) => scenario.params.find(x => x.name === n)?.value;

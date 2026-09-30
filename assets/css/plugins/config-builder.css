@@ -390,6 +390,20 @@
   line-height: 1.45;
   padding: 2px 0 6px;
 }
+/* Design 81 D11 at edit time — a recorded run an edit has made unplayable. */
+.param-run-guard {
+  margin: 4px 4px 8px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--red);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--red-glow);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text);
+}
+.param-run-guard[hidden] { display: none; }
+.param-run-guard ul { margin: 4px 0 6px; padding-left: 16px; }
+.param-run-guard-head { font-weight: 600; }
 .param-link-btn {
   background: none;
   border: none;

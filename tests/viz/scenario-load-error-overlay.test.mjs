@@ -24,7 +24,7 @@
 
 import assert from 'node:assert/strict';
 import { jest } from '@jest/globals';
-import { showScenarioLoadError } from '../../src/visualization/scenario/scenario-load-error-overlay.js';
+import { showScenarioLoadError, persistThenReload } from '../../src/visualization/scenario/scenario-load-error-overlay.js';
 import { collectAuthoredMixProblems } from '../../src/finance/behavioral/rebalance-to-target-reducer.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -310,4 +310,95 @@ test('a failure the mix validator cannot localize still shows the error and the 
   assert.match(document.querySelector('.sle-error').textContent, /some other compile failure/);
   assert.strictEqual(inputs().length, 0, 'nothing to repair, so nothing is guessed at');
   assert.ok(button('Other'));
+});
+
+// ─── every exit's write must commit before the reload ────────────────────────
+
+test('the default reload waits for the storage flush — a reload inside the write-behind window lost Delete', async () => {
+  // The bug this pins: IndexedDB storage acknowledges `setItem` at once and commits on a
+  // debounced flush. Reloading straight after `registry.delete` tore the page down first, so
+  // boot read the old active id and every exit led back to the broken scenario.
+  const order = [];
+  let commit;
+  const storage = { flush: () => new Promise(r => { commit = r; }).then(() => order.push('flushed')) };
+  const done = persistThenReload(storage, () => order.push('reloaded'));
+  await Promise.resolve();
+  assert.deepStrictEqual(order, [], 'no reload while the write is still pending');
+  commit();
+  await done;
+  assert.deepStrictEqual(order, ['flushed', 'reloaded']);
+});
+
+test('a backend without flush, or a flush that fails, still reloads', async () => {
+  const reloads = [];
+  await persistThenReload({}, () => reloads.push(1));
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  await persistThenReload({ flush: () => Promise.reject(new Error('quota')) }, () => reloads.push(2));
+  warn.mockRestore();
+  assert.deepStrictEqual(reloads, [1, 2]);
+});
+
+// ─── a recorded MPC run that can no longer play (design 81 D11) ──────────────
+
+/** A run that decided a sleeve order, on a base whose sleeve order is no longer WEIGHTED. */
+function unplayableRunConfig({ withSwitch = true } = {}) {
+  return {
+    id: 'u:4',
+    name: 'Pools off copy',
+    params: [
+      { name: 'mpcRuns', value: { 'run:s': {
+        source: { recordedAt: '2026-09-20', levers: ['DRAWDOWN_SLEEVE'], epochs: 1 },
+        decisions: [{ date: '2030-01-01T00:00:00.000Z', lever: 'DRAWDOWN_SLEEVE',
+                      key: 'sleeveWeight::EQUITY', value: 0.4 }],
+      } } },
+      { name: 'mpcActiveRun', value: 'run:s' },
+      ...(withSwitch ? [{ name: 'mpcRunEnabled', type: 'Boolean', value: true }] : []),
+      { name: 'drawdownSleeveOrder', value: 'FIFO' },
+    ],
+    parameters: { mpcActiveRun: 'run:s', mpcRunEnabled: true },
+  };
+}
+
+function showRun(config, registry = makeRegistry([{ id: 'u:1', name: 'Other' }])) {
+  const onReload = jest.fn();
+  showScenarioLoadError({ error: new Error('mpcActiveRun: …'), config, scenarioRegistry: registry, onReload });
+  return { registry, onReload };
+}
+
+test('an unplayable run names the run and the lever, in place of the raw throw', () => {
+  showRun(unplayableRunConfig());
+  const text = document.querySelector('.scenario-load-error').textContent;
+  assert.match(text, /run:s/);
+  assert.match(text, /DRAWDOWN_SLEEVE — .*WEIGHTED/);
+  assert.ok(!document.querySelector('.sle-error'), 'the section already says it — no duplicate raw error');
+  assert.ok(!button('Save fixes'), 'nothing to type, so no Save fixes that would reload into this page');
+});
+
+test('Turn off the recorded run sets mpcRunEnabled false in both stores, saves active, and reloads', () => {
+  const config = unplayableRunConfig();
+  const { registry, onReload } = showRun(config);
+  button('Turn off the recorded run').click();
+
+  assert.strictEqual(config.params.find(p => p.name === 'mpcRunEnabled').value, false);
+  assert.strictEqual(config.parameters.mpcRunEnabled, false);
+  assert.strictEqual(config.params.find(p => p.name === 'mpcActiveRun').value, 'run:s', 'the selection is kept');
+  assert.strictEqual(registry.save.mock.calls[0][0], config);
+  assert.strictEqual(registry.save.mock.calls[0][1], true);
+  assert.strictEqual(onReload.mock.calls.length, 1);
+});
+
+test('a record with no mpcRunEnabled row gets one', () => {
+  const config = unplayableRunConfig({ withSwitch: false });
+  showRun(config);
+  button('Turn off the recorded run').click();
+  assert.strictEqual(config.params.find(p => p.name === 'mpcRunEnabled')?.value, false);
+});
+
+test('a stored copy with the same unplayable run is not offered as a way back', () => {
+  const config = unplayableRunConfig();
+  const stored = unplayableRunConfig();
+  stored.params.push({ name: 'someOtherEdit', value: 1 });   // DIFFERENT, but still unplayable
+  const registry = { ...makeRegistry([{ id: 'u:1', name: 'Other' }]), getStored: () => stored };
+  showRun(config, registry);
+  assert.ok(!button('Discard changes'));
 });
