@@ -169,11 +169,12 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   flex-shrink: 0;
 }
 #statusBar span { color: var(--text-dim); }
-/* Right-aligned status items (PWA update prompt). */
+/* Right-aligned status items (PWA update prompt, storage persistence). */
 #statusBar .status-bar-right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
 #statusBar .status-bar-right > [hidden] { display: none; }
 #appUpdateStatus { display: flex; align-items: center; gap: 8px; }
 #appUpdateStatus > span { color: var(--warning); }
+#statusBar #storageStatus.storage-at-risk { color: var(--warning); }
 #statusBar .app-update-btn { font-size: 9px; padding: 0 6px; line-height: 14px; }
 
 /* ── VIZ CANVAS ── */

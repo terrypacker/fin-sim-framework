@@ -29,9 +29,28 @@ import '../assets/css/plugins/help.css';
 
 import { SimulationWorkbench } from './apps/simulation-workbench.js';
 import { ServiceRegistry }      from './services/service-registry.js';
-import { hydrateAppStorage, getAppStorage, clearMigratedLegacyKeys }
-  from './storage/create-storage.js';
+import { hydrateAppStorage, getAppStorage, clearMigratedLegacyKeys,
+         requestPersistentStorage } from './storage/create-storage.js';
 import { registerServiceWorker } from './pwa/register-service-worker.js';
+
+const STORAGE_STATUS = {
+  'persisted':   { text: 'Storage: persistent',
+                   title: 'The browser will not clear saved scenarios to free space' },
+  'best-effort': { text: 'Storage: may be cleared',
+                   title: 'The browser may clear saved scenarios under disk pressure or after '
+                        + 'long disuse. Installing the app usually makes storage persistent; '
+                        + 'Download JSON keeps a copy either way.' },
+};
+
+/** Status-bar note on whether saved scenarios are safe from eviction. */
+function showStorageStatus(el, result) {
+  const s = STORAGE_STATUS[result];
+  if (!el || !s) return;
+  el.textContent = s.text;
+  el.title       = s.title;
+  el.classList.toggle('storage-at-risk', result === 'best-effort');
+  el.hidden = false;
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
   // MUST complete before anything constructs ServiceRegistry: the scenario,
@@ -46,6 +65,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   app.initScenario();
 
   registerServiceWorker({ statusEl: document.getElementById('appUpdateStatus') });
+  if (storage.backendName !== 'memory') {
+    requestPersistentStorage().then(r => showStorageStatus(document.getElementById('storageStatus'), r));
+  }
 
   // Expose debug handles for console benchmarking.
   window.ServiceRegistry = ServiceRegistry;

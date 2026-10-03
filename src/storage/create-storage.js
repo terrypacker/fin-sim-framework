@@ -110,6 +110,32 @@ export function clearMigratedLegacyKeys() {
   return cleared;
 }
 
+/**
+ * Ask the browser not to evict the app's storage.
+ *
+ * Without this, IndexedDB and localStorage are "best-effort": the browser may clear
+ * them under disk pressure, or (Safari) after a stretch of not being used, and the
+ * user's saved plans go with them. An installed app makes that more likely to bite,
+ * because nobody expects an app's documents to vanish.
+ *
+ * Each browser decides on its own terms: Chrome and Edge grant silently from
+ * engagement (installing the app counts), Safari by its own heuristic, Firefox asks
+ * the user. A refusal is not an error; the app runs exactly as before.
+ *
+ * @param   {StorageManager|undefined} [manager]  injectable for tests
+ * @returns {Promise<'persisted'|'best-effort'|'unsupported'>}
+ */
+export async function requestPersistentStorage(manager = globalThis.navigator?.storage) {
+  if (typeof manager?.persist !== 'function') return 'unsupported';
+  try {
+    if (typeof manager.persisted === 'function' && await manager.persisted()) return 'persisted';
+    return (await manager.persist()) ? 'persisted' : 'best-effort';
+  } catch (e) {
+    console.warn('[storage] persistent storage request failed:', e);
+    return 'best-effort';
+  }
+}
+
 /** Reset the shared adapter. Tests only. */
 export function _resetAppStorage(adapter = null) {
   _appStorage = adapter;
