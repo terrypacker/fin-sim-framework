@@ -93,7 +93,7 @@ This keeps Tier 1 (single run), Tier 2 (MC), Tier 3 (optimization), and Tier 4 (
 class DecisionPoint {
   id;           // e.g. 'ssClaimAge'
   label;        // e.g. 'Social Security claim age'
-  paramKey;     // scenario param this binds to (e.g. 'primarySsClaimAge')
+  paramKey;     // scenario param this binds to (e.g. 'person.primary.ssClaimAge'; design 118)
   options;      // [{ value, label }] — discrete alternatives
   weights;      // optional per-option probability weights (default uniform)
 }

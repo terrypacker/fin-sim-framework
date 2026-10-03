@@ -68,9 +68,8 @@ There are ~50 `TODO` markers in `src/`. The dense clusters are flagged below; se
 ### 2.4 `state-panel-view.js` is huge (Git #354)
 - Single file with at least one `//TODO Extract to shared UI class #139` at line 1341. The file likely needs to be split into smaller presenter classes.
 
-### 2.5 `monthly-social-security-handler.js` — only FRA supported (Git #292)
-- `src/finance/handlers/monthly-social-security-handler.js` line 47: `//TODO #292 Support Early or FRA, this is FRA only right now (Born 1960+ FRA is 67)`
-- **Direction**: tracked in issue #292.
+~~### 2.5 `monthly-social-security-handler.js` — only FRA supported (Git #292)~~
+- **Resolved** by design 118: claim ages 62–70 with early reduction and delayed credits, spousal and survivor benefits. #292 closed.
 
 ~~### 2.6 Scenario serializer hacks (Git #355)~~
 - **Resolved**: Account constructors renamed positional param `initialValue` → `balance`; serializer emits `balance:`; deserializer falls back to `d.balance ?? d.initialValue` for backward compat with old JSON. `AccountBuilder.initialValue()` renamed to `balance()`. Param schema entries updated from `field: 'initialValue'` to `field: 'balance'`; translation shim in `base-scenario.applyParams` removed.
@@ -191,8 +190,8 @@ Found 2026-08-07 by perturbing each param and diffing the golden's full end stat
   therefore set the growth rate for **both** people's super.
 - All four were `enabled: true` Monte Carlo axes in `intl-retirement-mc-config.js`
   with `stdDev: 0.03`.
-- Not to be confused with `primarySsClaimAge`, which is also inert but *knowingly* —
-  see the comment on `INTL_RETIREMENT_DEFAULTS.primarySsClaimAge` (TODO #292).
+- Not to be confused with `primarySsClaimAge`, which was also inert but *knowingly*
+  (TODO #292). Design 118 made it a live alias of `person.primary.ssClaimAge`.
 
 #### The count was three at one layer and four at the other
 

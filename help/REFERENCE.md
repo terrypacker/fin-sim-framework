@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-223 parameters · 33 panels · 11 node types (181 fields) · 173 action types · 86 tools · 290 state field types · 74 topics · 126 design docs
+223 parameters · 33 panels · 11 node types (181 fields) · 173 action types · 86 tools · 290 state field types · 75 topics · 126 design docs
 
 ---
 
@@ -2088,7 +2088,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 
 ---
 
-## Topics (74)
+## Topics (75)
 
 Tier 2 — the hand-written prose under `help/`, listed by what it CITES rather than
 summarised. A topic may not restate a param description (design 108 §3), so there is
@@ -2149,7 +2149,7 @@ what the in-app panel keys on.
 | [Parameters](panels/parameters.md) | panel | 188 | 1 panel · design 98 |
 | [Paycheque](panels/paycheque.md) | panel | 197 | 1 panel · design 95, 107 |
 | [Performance](panels/perf.md) | panel | 201 | 1 panel · design 78 |
-| [Person](nodes/person.md) | node | 250 | 3 panels · design 34, 95, 83 |
+| [Person](nodes/person.md) | node | 245 | 3 panels · design 34, 95, 83 |
 | [Pool Shapes Over Time](concepts/pool-shapes-over-time.md) | concept | 395 | 3 params · design 109, 114, 112, 97 |
 | [Liquidity Pools](panels/pools.md) | panel | 236 | 1 panel · design 97 |
 | [Randomness and Seeds](concepts/randomness-and-seeds.md) | concept | 251 | 2 panels · 2 params · design 74 |
@@ -2164,6 +2164,7 @@ what the in-app panel keys on.
 | [Searching Pool Levers](concepts/searching-pool-levers.md) | concept | 399 | design 110, 97 |
 | [Securities](panels/securities.md) | panel | 188 | 1 panel · design 94 |
 | [Security](nodes/security.md) | node | 209 | 3 panels · design 94, 66, 93 |
+| [Social Security](concepts/social-security.md) | concept | 391 | 2 panels · 3 actions · design 118, 30 |
 | [Spending](panels/spending.md) | panel | 209 | 1 panel · design 89 |
 | [The Spending Rule](concepts/spending-rule.md) | concept | 296 | 1 panel · 17 params · design 89 |
 | [State](panels/state-panel.md) | panel | 181 | 1 panel |

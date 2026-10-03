@@ -11,7 +11,7 @@
 /**
  * A single discrete decision with a fixed set of options.
  *
- * paramKey maps to a scenario param name (e.g. 'primarySsClaimAge').
+ * paramKey maps to a scenario param name (e.g. 'person.primary.ssClaimAge').
  * options is an array of { value, label } describing each alternative.
  * weights is optional: per-option probability weights for weighted-expectation mode.
  */

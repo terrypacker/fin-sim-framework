@@ -25,6 +25,8 @@
  *           top-up on the loaded plan, reduced for its own start month
  *   SSCA-7: phase 4 — when the primary (an early claimant) dies, the spouse is paid the
  *           survivor benefit from the death month, through the real mortality path
+ *   SSCA-8: phase 5 — design 30's example decision point (claim age 62 / 67 / 70) is live:
+ *           its leaves, run through the real Monte Carlo runner, are different plans
  */
 
 import { test } from 'node:test';
@@ -40,6 +42,9 @@ import { ScenarioLoader }         from '../../src/scenarios/scenario-loader.js';
 import { scenarioParamValues }    from '../../src/finance/param-schema-utils.js';
 import { ScenarioSerializer }     from '../../src/scenarios/scenario-serializer.js';
 import { PersonBuilder }          from '../../src/finance/builders/person-builder.js';
+import { DecisionGraphRunner }    from '../../src/finance/decision-graph/decision-graph-runner.js';
+import { DecisionPoint }          from '../../src/finance/decision-graph/decision-graph-models.js';
+import { IntlRetirementMcRunner } from '../../src/finance/monte-carlo/intl-retirement-mc-runner.js';
 
 // The primary is born 15 Apr 1978: 62 in 2040, full retirement age (67) in Apr 2045, 70 in
 // 2048. The run must reach past 70 for every claim age to have started.
@@ -186,4 +191,35 @@ test('SSCA-7: a widow(er) on the loaded plan is paid the survivor benefit from t
   const w = s.ssSurvivorPia * Math.min(1 - 0.285 * 53 / 84, 0.825);
   assert.ok(Math.abs(april.amount - w) < 1e-6, `paid ${april.amount} vs ${w}`);
   assert.ok(Math.abs(april.own + april.survivor - w) < 1e-6 && april.spousal === 0);
+});
+
+test('SSCA-8: design 30\'s claim-age decision point produces three different leaves', async () => {
+  // The example design 30 §4.1 was written around, inert until this design. Each leaf runs
+  // through the real Monte Carlo runner on the loaded plan. The runner's per-leaf seed offset
+  // would make any two leaves differ, so the factory drops it: every leaf draws the same
+  // path, and the repeated 67 shows that equal choices give equal results.
+  const { cfg } = loadPlan();
+  const dg = {
+    id: 'dg:ss', baseScenarioId: 'base', objective: 'finalBalance', mcDrawsPerLeaf: 1,
+    decisionPoints: [new DecisionPoint({
+      id: 'ssClaimAge', label: 'Social Security claim age', paramKey: KEY,
+      options: [62, 67, 70, 67].map(v => ({ value: v, label: String(v) })),
+    })],
+  };
+  const runner = new DecisionGraphRunner({
+    scenarioRegistry: { get: () => cfg },
+    mcRunnerFactory:  opts => new IntlRetirementMcRunner(opts),
+  });
+  const { log, warn } = console;
+  console.log = () => {}; console.warn = () => {};
+  let result;
+  try { result = await runner.run(dg); }
+  finally { console.log = log; console.warn = warn; }
+
+  const [at62, at67, at70, again67] = result.leaves.map(l => l.mcSummary.p50);
+  assert.ok([at62, at67, at70].every(Number.isFinite));
+  assert.equal(again67, at67, 'the same choice on the same path is the same plan');
+  assert.equal(new Set([at62, at67, at70]).size, 3, `62=${at62} 67=${at67} 70=${at70}`);
+  assert.equal(result.leaves[0].entry.params.find(p => p.name === KEY)?.value, 62,
+    'the leaf entry carries its choice for the compare view');
 });

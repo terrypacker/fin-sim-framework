@@ -30,8 +30,7 @@ runs.
 
 **Social Security is claimed once**; the first month's factor holds for life. A
 spouse with under half the other's benefit gets the difference from the later claim; a
-widow(er), the larger of their own and the survivor benefit. The earnings test is not
-modelled.
+widow(er), the larger of their own and the survivor benefit ([details](../concepts/social-security.md)).
 
 Several fields here are also scenario parameters — they carry a link badge, edits
 write the parameter rather than the record, and their full description lives with the

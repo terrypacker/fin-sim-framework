@@ -1,7 +1,7 @@
 # 118 — Social Security claiming: claim age, spousal and survivor benefits
 
 **Status:** ACCEPTED, 2 Oct 2026. D1–D3 in §3 were taken with the author; D4–D11 are
-proposals. **Phases 1–4 BUILT** 2 Oct 2026 (§12–§15); phase 5 (close-out) not started. Resolves issue #292 (`MonthlySocialSecurityHandler` is FRA-only), and
+proposals. **COMPLETE** 3 Oct 2026: phases 1–4 built 2 Oct (§12–§15), phase 5 (close-out) 3 Oct (§16). Resolves issue #292 (`MonthlySocialSecurityHandler` is FRA-only), and
 takes over design 116's D6, Social Security decoupled from work (§5.1, D4).
 Every rule below is cited to a source saved in `docs/us-social-security/` (§4).
 
@@ -501,4 +501,23 @@ to move; there are none.
 `help/concepts/mortality.md` says the survivor keeps the larger benefit.
 `real-vs-nominal` was restamped because the schema file it cites changed. Its claims
 are about currency and date types, which still hold.
+
+## 16. As built — phase 5, close-out (3 Oct 2026)
+
+- **Concept topic.** `help/concepts/social-security.md` covers the PIA-times-factor model,
+  the claim-once stamp, the spousal top-up, the survivor benefit, the lever, and what is
+  not modelled. `help/nodes/person.md` and `help/concepts/mortality.md` link to it rather
+  than restating it. The person topic dropped its earnings-test sentence to stay in budget,
+  because the concept topic says it.
+- **Design 30's example is real.** Its `DecisionPoint.paramKey` example (design doc and
+  model comment) now names `person.primary.ssClaimAge`. `ss-claim-age-liveness.test.mjs`
+  SSCA-8 runs a claim-age decision point (62, 67, 70, 67) through `DecisionGraphRunner` and
+  the real `IntlRetirementMcRunner` on the loaded reference plan. The three ages give
+  three different p50s, and the repeated 67 gives the same one. The factory leaves out the
+  runner's per-leaf seed offset, which would make any two leaves differ. Against a dead
+  `paramKey` all three leaves are equal and the test fails.
+- **TODO #292.** The handler comment was already removed in phase 2. The
+  `design/inconsistencies.md` §2.5 entry is struck as resolved, and its §4 note on
+  `primarySsClaimAge` now says the alias is live.
+- **#292** closed.
 
