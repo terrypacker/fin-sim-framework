@@ -1,6 +1,6 @@
 # 116 — Employment spells: more than one job per person
 
-**Status:** IN PROGRESS, 3 Oct 2026. Phase 1 (engine) BUILT — see §11. Decisions in §3 were
+**Status:** IN PROGRESS, 3 Oct 2026. Phases 1 (engine) and 2 (editor + help) BUILT — see §11. Decisions in §3 were
 taken with the author; Q1 and Q3 are answered (D6, D7) and Q2 is open with one constraint (§10).
 D6 (Social Security decoupled from work) moved to design 118 as its phase 1, 2 Oct 2026:
 the claim age it defers to cannot be defined while `retirementDate` also gates payment.
@@ -320,3 +320,29 @@ Recorded so a later design starts from the list:
   `wageIndex.*` is a decimal.
 - **Tests.** `tests/unit/evt-employment-spells.test.mjs` (ESP-1..11). Every golden is
   byte-identical (7445 unit tests green).
+
+### Phase 2 — editor and help (3 Oct 2026)
+
+- **Jobs table.** `JobsSection` (`src/visualization/people/jobs-section.js`) inside the
+  person form, on `row-list-editor` (which gained `date` and `checkbox` cells and a per-column
+  `dataId`). Start · End · Wage · Currency are always drawn; Real Growth, Work Country and
+  Self-employed sit behind "More columns" because the edit pane is narrow, and a hidden
+  non-default value shows as a badge. Cells carry `job_<field>` ids so they never collide
+  with the person's own fields.
+- **Conversion.** The first "+ Add Job" seeds its row from the flat fields, ending at the
+  retire date, so converting alone changes nothing. Those fields then lock and Retire Date
+  shows the derived end (blank = open-ended). Saving with jobs writes `monthlyWage: 0`,
+  `selfEmployed: false`, `workCountry: null` and leaves `retirementDate` untouched (a Person
+  always carries one; it is ignored). Removing every job unlocks the fields.
+- **Writes.** `src/scenarios/scenario-jobs.js` is the only writer of `cfg.jobs` (replace, never
+  mutate; ids `<personId>-job-<n>`, stable). The person Save validates the rows before it
+  touches the person; deleting a person deletes their jobs, since an orphan job fails the
+  next load.
+- **Nodes panel.** `NODE_EDITORS.job` (specs `JOB_FORM_FIELDS`, prefix `job_`) lists every
+  job; selecting one opens its person, and "+ Add Job" opens the first person.
+- **Levers.** A person with jobs no longer generates `person.<id>.monthlyWage` or
+  `.retirementDate` (`ScenarioParamGenerator`); the loader then prunes the saved param. Left
+  in, they would sweep a field nothing reads. Phase 4 adds the `job.` levers that replace them.
+- **Help.** `help/nodes/job.md`; `help/nodes/person.md` explains one job vs several.
+- **Tests.** `tests/viz/editors/person-jobs.test.mjs`, `tests/unit/scenario-jobs.test.mjs`;
+  verified in the browser (convert, add, save, Rebuild ⇒ `people.primary.spells` in state).

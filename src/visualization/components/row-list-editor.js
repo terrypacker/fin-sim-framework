@@ -45,7 +45,7 @@ const NO_OPTIONS = [];
  * @param {object} opts
  * @param {Array<object>} opts.rows        the list being edited, mutated IN PLACE
  * @param {Array<{field: string, label: string,
- *                type?: 'number'|'select'|'text'|'checkset'|'note',
+ *                type?: 'number'|'select'|'text'|'date'|'checkbox'|'checkset'|'note',
  *                text?: function(object): string,   // 'note' only — a DERIVED, unwritable cell
  *                step?: string|function(object): string,
  *                min?: string|function(object): string,
@@ -53,6 +53,7 @@ const NO_OPTIONS = [];
  *                options?: Array<[value: string, label: string]>
  *                         | function(): Array<[value: string, label: string]>,
  *                placeholder?: string, blankValue?: *,
+ *                dataId?: string,                    // the cell's data-id; defaults to `field`
  *                width?: string,
  *                optional?: boolean,                  // hidden unless `showOptional()`
  *                badge?: function(object): string|null, // what a HIDDEN optional cell says
@@ -241,6 +242,8 @@ function buildCell(col, row, changed, resort, rerender, expanded = null) {
   switch (col.type) {
     case 'select':   return buildSelect(col, row, changed, after);
     case 'text':     return buildText(col, row, changed, after);
+    case 'date':     return buildDate(col, row, changed, after);
+    case 'checkbox': return buildCheckbox(col, row, changed, after);
     case 'checkset': return col.collapsed && expanded
       ? buildCollapsedCheckSet(col, row, changed, rerender, expanded)
       : buildCheckSet(col, row, changed);
@@ -267,7 +270,7 @@ function buildCell(col, row, changed, resort, rerender, expanded = null) {
 function buildNote(col, row) {
   const span = document.createElement('span');
   span.className  = 'row-list-note';
-  span.dataset.id = col.field;
+  span.dataset.id = col.dataId ?? col.field;
   span.textContent = (typeof col.text === 'function' ? col.text(row) : col.text) ?? '';
   const t = typeof col.title === 'function' ? col.title(row) : col.title;
   if (t) span.title = t;
@@ -293,12 +296,47 @@ function buildText(col, row, changed, resort = null) {
   const input = document.createElement('input');
   input.type       = 'text';
   input.className  = 'age-band-input';
-  input.dataset.id = col.field;
+  input.dataset.id = col.dataId ?? col.field;
   if (col.placeholder != null) input.placeholder = col.placeholder;
   input.value = row[col.field] ?? '';
   input.addEventListener('change', () => {
     const raw = input.value.trim();
     row[col.field] = raw === '' ? (col.blankValue ?? null) : raw;
+    changed();
+    if (resort) resort();
+  });
+  return input;
+}
+
+/**
+ * A date cell, stored as 'YYYY-MM-DD' — the shape design 117's record dates take. Blank
+ * writes `col.blankValue ?? null`, which for an employment spell (design 116) means an open
+ * end: "from the start of the run" or "until death", never a date someone has to invent.
+ */
+function buildDate(col, row, changed, resort = null) {
+  const input = document.createElement('input');
+  input.type       = 'date';
+  input.className  = 'age-band-input';
+  input.dataset.id = col.dataId ?? col.field;
+  const v = row[col.field];
+  input.value = v == null ? '' : String(v instanceof Date ? v.toISOString() : v).slice(0, 10);
+  input.addEventListener('change', () => {
+    row[col.field] = input.value === '' ? (col.blankValue ?? null) : input.value;
+    changed();
+    if (resort) resort();
+  });
+  return input;
+}
+
+/** A single boolean cell. Unticked writes `false`, not null: the field is a plain flag. */
+function buildCheckbox(col, row, changed, resort = null) {
+  const input = document.createElement('input');
+  input.type       = 'checkbox';
+  input.className  = 'row-list-checkbox';
+  input.dataset.id = col.dataId ?? col.field;
+  input.checked    = !!row[col.field];
+  input.addEventListener('change', () => {
+    row[col.field] = input.checked;
     changed();
     if (resort) resort();
   });
@@ -321,7 +359,7 @@ function buildText(col, row, changed, resort = null) {
 function buildCheckSet(col, row, changed) {
   const wrap = document.createElement('div');
   wrap.className  = 'row-list-checkset';
-  wrap.dataset.id = col.field;
+  wrap.dataset.id = col.dataId ?? col.field;
 
   const options = optionsOf(col, row);
   if (options.length === 0) {
@@ -426,7 +464,7 @@ function buildNumber(col, row, changed, resort = null) {
   const input = document.createElement('input');
   input.type      = 'number';
   input.className = 'age-band-input';
-  input.dataset.id = col.field;
+  input.dataset.id = col.dataId ?? col.field;
   const step = attrOf(col, 'step', row);
   const min  = attrOf(col, 'min',  row);
   const max  = attrOf(col, 'max',  row);
@@ -460,7 +498,7 @@ function buildNumber(col, row, changed, resort = null) {
 function buildSelect(col, row, changed, resort = null) {
   const sel = document.createElement('select');
   sel.className   = 'age-band-input';
-  sel.dataset.id  = col.field;
+  sel.dataset.id  = col.dataId ?? col.field;
   for (const [value, label] of optionsOf(col, row)) {
     const opt = document.createElement('option');
     opt.value       = value;

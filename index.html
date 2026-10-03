@@ -630,6 +630,12 @@
            thirteen-field block would bury Name and Wage. The contents are built by
            PayrollSection from PAYROLL_ELECTION_META, so adding an election does not
            mean editing this template. -->
+      <!-- Employment spells (design 116 §7): one row per job, built by JobsSection. Empty
+           means the single job described by the fields above. -->
+      <details class="payroll-section" data-id="jobsSection">
+        <summary data-id="jobsSummary">Jobs</summary>
+        <div class="node-body" data-id="jobsBody"></div>
+      </details>
       <details class="payroll-section" data-id="payrollSection">
         <summary data-id="payrollSummary">Payroll Elections</summary>
         <div class="node-body" data-id="payrollBody"></div>

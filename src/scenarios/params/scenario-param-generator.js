@@ -107,6 +107,9 @@ export function decodeGeneratedParamKey(key) {
     : { type, stateKey: owner, field };
 }
 
+/** Person fields a job record supersedes (design 116 §4.5), and so not generated for one. */
+const JOB_OWNED_PERSON_FIELDS = new Set(['monthlyWage', 'retirementDate']);
+
 export class ScenarioParamGenerator {
   /**
    * Derive per-record schema entries from a cfg's domain records.
@@ -133,8 +136,17 @@ export class ScenarioParamGenerator {
     };
     for (const a of cfg.accounts ?? [])
       add(this._expand('acct', 'account', a, a.stateKey, ACCOUNT_PARAM_TEMPLATES[resolveAccountType(a)] ?? []));
-    for (const p of cfg.persons ?? [])
-      add(this._expand('person', 'person', p, p.id, PERSON_PARAM_TEMPLATE));
+    // Design 116: a person with jobs is paid from them, and the flat wage and retire date
+    // are read by nothing — so they generate no lever. Left in, `person.<id>.monthlyWage`
+    // would sweep a field the engine ignores: a dead axis that passes every flat-bag test.
+    // The loader prunes the now-ungenerated param from a saved scenario.
+    const withJobs = new Set((cfg.jobs ?? []).map(j => j?.personId));
+    for (const p of cfg.persons ?? []) {
+      const template = withJobs.has(p.id)
+        ? PERSON_PARAM_TEMPLATE.filter(t => !JOB_OWNED_PERSON_FIELDS.has(t.field))
+        : PERSON_PARAM_TEMPLATE;
+      add(this._expand('person', 'person', p, p.id, template));
+    }
     for (const r of cfg.realProperties ?? [])
       add(this._expand('prop', 'realProperty', r, r.stateKey, REAL_PROPERTY_PARAM_TEMPLATE));
     for (const c of cfg.collectibles ?? [])

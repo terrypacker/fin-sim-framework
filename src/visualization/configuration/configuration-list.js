@@ -38,6 +38,9 @@ const KIND_SUBTITLES = {
   // A Security's subtitle is the market it tracks: it is the field that decides which
   // lots may legally name it (assertAllocationMatch) and the one an author gets wrong.
   security:        (n) => [n.symbol, n.rateKey].filter(Boolean).join(' · '),
+  // A job's subtitle is its pay (design 116): the row name already says whose and when.
+  job:             (n) => [n.monthlyWage != null ? `${n.monthlyWage}/mo` : '', n.wageCurrency,
+                           n.selfEmployed ? 'SE' : ''].filter(Boolean).join(' · '),
   event:           (n) => n.eventType ?? '',
   handler:         (n) => n.handlerClass ?? '',
   action:          (n) => n.actionClass  ?? '',

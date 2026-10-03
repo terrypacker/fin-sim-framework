@@ -4,7 +4,7 @@ kind: node
 title: Person
 node: person
 panels: [config-list, config-graph, paycheque]
-design: [34-us-state-income-tax.md, 95-wage-logic-and-payroll-contributions.md, 83-us-au-tax-treaty-intricacies.md]
+design: [116-employment-spells.md, 34-us-state-income-tax.md, 95-wage-logic-and-payroll-contributions.md, 83-us-au-tax-treaty-intricacies.md]
 stamps:
   panel:config-list: 786f94
   panel:config-graph: bbebb1
@@ -13,29 +13,27 @@ stamps:
 ---
 
 A member of the household: who they are, what they earn, when they stop, and what
-their pay does on the way to the bank. Almost everything in a plan hangs off a person
-— wages, payroll contributions, Social Security, mortality, the marginal rate a
-capital gain is taxed at, and which country taxes it at all. See
+their pay does on the way to the bank. Wages, payroll contributions, Social Security,
+mortality and the marginal rate on a capital gain all hang off a person. See
 [Cross-Border Residency](../concepts/cross-border-residency.md) and
 [Contributions and Payroll](../concepts/contributions-and-payroll.md).
 
-The form is in two halves. The top is identity and income. Below it, the **payroll
-elections** — one block per country, shown for both regardless of where this person
-lives, because an election is gated on the currency the wage is paid in rather than
-on residency, and a cross-border household needs both editable in one place.
+**One job or several.** The wage, currency, work country, self-employed and retire-date
+fields describe one job for the whole plan. For a raise, a gap or a job abroad, add rows
+to the **Jobs** table ([Job](job.md)); those fields then lock.
+
+The **payroll elections** below are shown for both countries regardless of residency,
+because an election is gated on the currency the wage is paid in.
 
 **Blank is not zero in the elections.** An empty box inherits the household default,
-shown greyed behind it; a typed 0 elects nothing, and the two produce very different
-runs.
+shown greyed behind it; a typed 0 elects nothing.
 
 **Social Security is claimed once**; the first month's factor holds for life. A
 spouse with under half the other's benefit gets the difference from the later claim; a
 widow(er), the larger of their own and the survivor benefit ([details](../concepts/social-security.md)).
 
-Several fields here are also scenario parameters — they carry a link badge, edits
-write the parameter rather than the record, and their full description lives with the
-parameter. That is deliberate: a parameter is what a sweep or the optimizer can move,
-and the record would otherwise be overwritten by the cascade on the next rebuild.
+Fields with a link badge are also scenario parameters: edits write the parameter, which
+a sweep or the optimizer can move, and its description lives there.
 
 ## Fields
 

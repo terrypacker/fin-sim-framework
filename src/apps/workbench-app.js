@@ -89,6 +89,8 @@ import { scenarioParamValues, primeRatesOf, marketRatesOf } from '../finance/par
 import { scenarioSecurityRegistry } from '../finance/holdings/security.js';
 import { listScenarioSecurities, upsertScenarioSecurity, deleteScenarioSecurity, scenarioSecurityUsage }
   from '../scenarios/scenario-securities.js';
+import { listScenarioJobs, listPersonJobs, replacePersonJobs, deletePersonJobs }
+  from '../scenarios/scenario-jobs.js';
 import { ScenarioComparePresenter }  from '../visualization/scenario-compare/scenario-compare-presenter.js';
 import { DecisionGraphPresenter }    from '../visualization/decision-graph/decision-graph-presenter.js';
 import { showScenarioLoadError }     from '../visualization/scenario/scenario-load-error-overlay.js';
@@ -389,10 +391,26 @@ export class WorkbenchApp extends BaseComponent {
       itemsByKind: {
         security: () => listScenarioSecurities(registry.scenarioService?.getActive?.())
           .map(sec => ({ ...sec, kind: 'security', name: sec.name || sec.symbol || sec.id })),
+        // Design 116. A job is edited in its person's Jobs table, so a job row opens that
+        // person (see onItemClick) rather than a form of its own.
+        job: () => {
+          const people = new Map(registry.graphQueryApi.getByKind('person').map(p => [p.id, p]));
+          return listScenarioJobs(registry.scenarioService?.getActive?.()).map(j => ({
+            ...j, kind: 'job',
+            name: `${people.get(j.personId)?.name ?? j.personId} — ${j.startDate ?? 'start'} → ${j.endDate ?? 'open'}`,
+          }));
+        },
       },
     });
 
-    this.configList.onItemClick = (node) => this._openNodeInInspector(node);
+    this.configList.onItemClick = (node) => {
+      if (node?.kind === 'job') {
+        const person = registry.graphQueryApi.getByKind('person').find(p => p.id === node.personId);
+        if (person) this._openNodeInInspector(person);
+        return;
+      }
+      this._openNodeInInspector(node);
+    };
 
     this.configList.onAddClick = (kind) => {
       if (kind === 'person') {
@@ -409,6 +427,10 @@ export class WorkbenchApp extends BaseComponent {
         this._editModal.open({ kind: 'bequest', id: null, name: 'New Inheritance' });
       } else if (kind === 'security') {
         this._editModal.open({ kind: 'security', id: null, name: 'New Security' });
+      } else if (kind === 'job') {
+        // A job belongs to a person and is added in their Jobs table: open the first one.
+        const person = registry.graphQueryApi.getByKind('person')[0];
+        if (person) this._editModal.open(person);
       } else {
         const newNode = this.configPresenter.createNode(kind, null);
         this._editModal.open(newNode);
@@ -446,19 +468,44 @@ export class WorkbenchApp extends BaseComponent {
           // wrong so much as silently useless.
           householdParams: scenarioParamValues(registry.scenarioService.getActive()),
           accounts:        registry.graphQueryApi.getByKind('account'),
+          // Design 116 §7 — jobs are scenario data (`scenario-jobs.js`), not a service
+          // record, so the editor is handed this person's rows and the save writes them
+          // back to the ACTIVE SCENARIO RECORD. Like securities, they reach the run on
+          // the next Rebuild.
+          jobs:            node?.id
+            ? listPersonJobs(registry.scenarioService?.getActive?.(), node.id) : [],
           ...paramLinkProps(),
           onSave: (data) => {
-            if (data.id) {
-              const { id, ...changes } = data;
+            const { jobs = [], ...personData } = data;
+            const scenario = registry.scenarioService?.getActive?.() ?? null;
+            // Validate the jobs BEFORE touching the person, so a refused edit commits
+            // nothing. The person id is not known yet for a new person, so a placeholder
+            // stands in for the check.
+            try {
+              if (scenario && jobs.length > 0) {
+                replacePersonJobs({ jobs: [] }, personData.id ?? '__new__', jobs);
+              }
+            } catch (e) {
+              window.alert(`Jobs:\n${e.message}`);
+              return;
+            }
+            let personId = personData.id;
+            if (personId) {
+              const { id, ...changes } = personData;
               peopleController.update(id, changes);
             } else {
-              peopleController.create(data);
+              personId = peopleController.create(personData)?.id ?? null;
             }
+            if (scenario && personId) replacePersonJobs(scenario, personId, jobs);
             this._editModal.close();
+            this.configList?.render();
           },
           onDelete: (id) => {
             peopleController.delete(id);
+            // A job naming no person fails the next load (design 116 §4.6).
+            deletePersonJobs(registry.scenarioService?.getActive?.(), id);
             this._editModal.close();
+            this.configList?.render();
           },
         });
         editor.render();
@@ -712,6 +759,10 @@ export class WorkbenchApp extends BaseComponent {
       decorateNodeFields(container, node?.kind, {
         onOpenHelp: (ref) => this._openHelp(ref),
       });
+      // The person form carries the Jobs table, whose cells are documented as `job`.
+      if (node?.kind === 'person') {
+        decorateNodeFields(container, 'job', { onOpenHelp: (ref) => this._openHelp(ref) });
+      }
       return editor;
     };
 

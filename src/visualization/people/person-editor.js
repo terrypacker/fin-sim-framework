@@ -11,9 +11,13 @@
 import { BaseComponent } from '../components/base-component.js';
 import { bindParamLinkedField } from '../scenario/param-linked-field.js';
 import { PayrollSection } from './payroll-section.js';
+import { JobsSection } from './jobs-section.js';
 import { defaultCurrencyForCountry } from '../../finance/country-codes.js';
 import { usStateOptionPairs } from '../../finance/tax/state/us-states.js';
 import { SS_CLAIM_AGES, fullRetirementAge } from '../../finance/account-rules/us/us-social-security-rules.js';
+
+/** The person's flat job fields, which a person with jobs (design 116) does not use. */
+const JOB_OWNED_FIELDS = ['monthlyWage', 'selfEmployed', 'wageCurrency', 'workCountry', 'retirementDate'];
 
 /**
  * PersonEditor — renders the person edit form from tpl-person-editor into a
@@ -35,7 +39,7 @@ export class PersonEditor extends BaseComponent {
    */
   constructor({ parent, container, node, onSave, onDelete,
                 links = null, onParamChange = null, onOpenParam = null,
-                householdParams = null, accounts = null }) {
+                householdParams = null, accounts = null, jobs = null }) {
     super({ parent });
     this._container = container;
     this._node      = node;
@@ -52,6 +56,10 @@ export class PersonEditor extends BaseComponent {
     this._householdParams = householdParams ?? {};
     this._accounts        = accounts ?? [];
     this._payroll         = null;
+    // Design 116 §7 — this person's `cfg.jobs` rows. Copied by JobsSection; the host
+    // writes the edited list back to the scenario record on Save.
+    this._jobsIn          = jobs ?? [];
+    this._jobs            = null;
   }
 
   render() {
@@ -128,6 +136,26 @@ export class PersonEditor extends BaseComponent {
       wageCurrency:    () => el.querySelector('[data-id="wageCurrency"]').value,
     });
     this._payroll.render();
+
+    // ── Jobs (design 116 §7) ─────────────────────────────────────────────────
+    // The first job is seeded from the flat fields as they stand on the form NOW, so a
+    // wage typed a moment ago is what the converted row carries.
+    const flat = (id) => el.querySelector(`[data-id="${id}"]`);
+    this._jobs = new JobsSection({
+      container: el.querySelector('[data-id="jobsBody"]'),
+      jobs:      this._jobsIn,
+      readFlat:  () => ({
+        monthlyWage:    flat('monthlyWage').value,
+        wageCurrency:   flat('wageCurrency').value,
+        workCountry:    flat('workCountry').value,
+        selfEmployed:   flat('selfEmployed').checked,
+        retirementDate: flat('retirementDate').value,
+      }),
+      onChange: () => this._syncJobLock(el),
+    });
+    this._jobs.render();
+    if (this._jobsIn.length > 0) el.querySelector('[data-id="jobsSection"]').open = true;
+    this._syncJobLock(el);
     this.listen(el.querySelector('[data-id="wageCurrency"]'), 'change',
                 () => this._payroll.refreshSplitDestinations());
 
@@ -166,6 +194,38 @@ export class PersonEditor extends BaseComponent {
       sel.appendChild(opt);
     }
     sel.value = this._node?.ssClaimAge == null ? '' : String(this._node.ssClaimAge);
+  }
+
+  /**
+   * Lock the flat job fields while the person has jobs (design 116 §5.1): the engine reads
+   * the spells and ignores these, so an editable box would be a value nothing reads. The
+   * Retire Date shows the DERIVED work end — the last job's end, blank when it runs until
+   * death — so the form keeps one source of truth.
+   */
+  _syncJobLock(el) {
+    const locked = !!this._jobs?.hasJobs;
+    for (const id of JOB_OWNED_FIELDS) {
+      const input = el.querySelector(`[data-id="${id}"]`);
+      if (!input) continue;
+      input.disabled = locked;
+    }
+    const rd = el.querySelector('[data-id="retirementDate"]');
+    if (locked) {
+      if (rd.dataset.authored == null) rd.dataset.authored = rd.value;
+      const rows = this._jobs.readJobs()
+        .sort((a, b) => (a.startDate ?? '').localeCompare(b.startDate ?? ''));
+      rd.value = rows[rows.length - 1]?.endDate ?? '';
+      rd.title = rd.value ? 'The end of the last job.' : 'The last job is open-ended: works until death.';
+    } else if (rd.dataset.authored != null) {
+      rd.value = rd.dataset.authored;
+      delete rd.dataset.authored;
+      rd.title = '';
+    }
+  }
+
+  /** This person's edited job rows, for the host to write to `cfg.jobs`. */
+  readJobs() {
+    return this._jobs?.readJobs() ?? [];
   }
 
   /** Route param-backed person fields through their param (design/32). */
@@ -226,6 +286,16 @@ export class PersonEditor extends BaseComponent {
     // Design 95 §17 phase 10. Blank stays `null` here — "inherit the household
     // default" — and never becomes 0, which would opt the person out (§17.6).
     Object.assign(data, this._payroll?.readElections() ?? {});
+    // Design 116 §7: converting to jobs clears the flat job fields, so nothing reads a
+    // stale single-job wage. The retire date is kept (a Person always carries one) but is
+    // ignored while jobs exist, and the box shows the derived end, not it.
+    data.jobs = this.readJobs();
+    if (data.jobs.length > 0) {
+      data.monthlyWage  = 0;
+      data.selfEmployed = false;
+      data.workCountry  = null;
+      delete data.retirementDate;
+    }
     // Param-backed fields are owned by their scenario param (design/32). The
     // payroll section reports its own linked elections, which land in the same set
     // so one deletion loop covers both.

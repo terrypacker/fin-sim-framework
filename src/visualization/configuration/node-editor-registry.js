@@ -45,6 +45,13 @@ export const NODE_EDITORS = Object.freeze({
     specs: [{ module: 'src/finance/payroll/payroll-election-meta.js#PAYROLL_ELECTION_META',
               idPrefix: 'pe_' }],
   },
+  // Design 116 — employment spells. Scenario data (`cfg.jobs`), listed in the Nodes panel
+  // and edited in their person's Jobs table, whose columns `JOB_FORM_FIELDS` declares.
+  job: {
+    label: 'Jobs',
+    specs: [{ module: 'src/visualization/people/jobs-section.js#JOB_FORM_FIELDS',
+              idPrefix: 'job_' }],
+  },
   account: {
     label: 'Accounts',
     templates: ['tpl-account-editor'],

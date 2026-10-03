@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-223 parameters · 33 panels · 11 node types (181 fields) · 173 action types · 86 tools · 291 state field types · 75 topics · 126 design docs
+223 parameters · 33 panels · 12 node types (188 fields) · 173 action types · 86 tools · 291 state field types · 76 topics · 126 design docs
 
 ---
 
@@ -579,7 +579,7 @@ true statement about the registry, not a gap in this file.
 
 ---
 
-## Node types (11 kinds · 181 fields)
+## Node types (12 kinds · 188 fields)
 
 Every kind of record the Nodes panel can open, and every control its edit form offers.
 The inventory is read from the FORM — the `<template>` in `index.html` the editor
@@ -649,6 +649,25 @@ Explained in [`help/nodes`](nodes/person.md). 12 field(s) described by a record 
   An annual after-tax contribution claimed as a deduction on the return. Paid from cash, taxed 15% in the fund, and the deduction is capped at assessable income less other deductions — the excess is lost rather than carried forward, which makes an oversized election quietly wasteful.
 - **`superNonConcessionalContribution`** — Non-Concessional · `MONEY` · topic
   An annual after-tax contribution with no deduction and no 15% fund tax. It buys a tax-sheltered location rather than a deduction, and is bound by the non-concessional cap and its bring-forward rule.
+
+### Jobs — `job` (7 fields)
+
+Explained in [`help/nodes`](nodes/job.md). 0 field(s) described by a record parameter.
+
+- **`startDate`** — Start · `date` · topic
+  The first day of the job. Blank means it runs from the start of the plan.
+- **`endDate`** — End · `date` · topic
+  The day the job stops, not worked. Blank means it never ends, which for the last job means working until death. A job may end on the day the next one starts.
+- **`monthlyWage`** — Wage /mo · `number` · topic
+  Gross pay per month in today's money, before any deduction. Inflation is added on top each year, so do not inflate it yourself. Zero is a job that pays nothing.
+- **`realGrowth`** — Real Growth · `number` · topic
+  A yearly raise above inflation, compounding on each anniversary of this job's own start; 0.02 is 2% a year. Blank or 0 keeps the job level with inflation.
+- **`wageCurrency`** — Currency · `select` · topic
+  The currency this job pays in. It picks the payroll stream: USD pay reaches the 401(k), IRA and Roth elections; AUD pay reaches super. A split that names an account in the other currency falls back to the transaction account.
+- **`workCountry`** — Work Country · `select` · topic
+  Where this job's work is physically done, which decides which country taxes it as local income. "Residency" follows wherever the person lives at the time.
+- **`selfEmployed`** — Self-employed · `checkbox` · topic
+  This job's pay is self-employment income rather than wages: US self-employment tax applies, and in Australia there is no employer to pay the Super Guarantee or take a salary sacrifice.
 
 ### Accounts — `account` (33 fields)
 
@@ -2089,7 +2108,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 
 ---
 
-## Topics (75)
+## Topics (76)
 
 Tier 2 — the hand-written prose under `help/`, listed by what it CITES rather than
 summarised. A topic may not restate a param description (design 108 §3), so there is
@@ -2135,6 +2154,7 @@ what the in-app panel keys on.
 | [Inflation](concepts/inflation.md) | concept | 261 | 2 panels · 18 params · design 103 |
 | [Edit](panels/inspector.md) | panel | 182 | 1 panel |
 | [Interest Rates and the Yield Curve](concepts/interest-rates.md) | concept | 350 | 2 panels · 23 params · design 56, 67 |
+| [Job](nodes/job.md) | node | 205 | 2 panels · design 116, 50, 73 |
 | [Journal Report](panels/journal-report.md) | panel | 193 | 1 panel · design 16 |
 | [Lineage](panels/lineage.md) | panel | 196 | 1 panel · design 30 |
 | [Liquidity Pools](concepts/liquidity-pools.md) | concept | 294 | 1 panel · 6 params · design 97 |
@@ -2150,7 +2170,7 @@ what the in-app panel keys on.
 | [Parameters](panels/parameters.md) | panel | 188 | 1 panel · design 98 |
 | [Paycheque](panels/paycheque.md) | panel | 197 | 1 panel · design 95, 107 |
 | [Performance](panels/perf.md) | panel | 201 | 1 panel · design 78 |
-| [Person](nodes/person.md) | node | 245 | 3 panels · design 34, 95, 83 |
+| [Person](nodes/person.md) | node | 204 | 3 panels · design 116, 34, 95, 83 |
 | [Pool Shapes Over Time](concepts/pool-shapes-over-time.md) | concept | 395 | 3 params · design 109, 114, 112, 97 |
 | [Liquidity Pools](panels/pools.md) | panel | 236 | 1 panel · design 97 |
 | [Randomness and Seeds](concepts/randomness-and-seeds.md) | concept | 251 | 2 panels · 2 params · design 74 |

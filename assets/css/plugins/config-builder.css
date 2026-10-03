@@ -923,6 +923,11 @@
 
 .payroll-section > summary:hover { color: var(--text); }
 
+/* Design 116 — the Jobs table scrolls sideways rather than crushing two date inputs. */
+[data-id="jobsBody"] { overflow-x: auto; }
+.jobs-table { min-width: 420px; }
+.row-list-toggle { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+
 .payroll-group-heading {
   font-family: var(--font-mono);
   font-size: 9px;
