@@ -44,6 +44,8 @@ export class Person extends SimGraphNode {
    *                                                         the wage accrues, which is the common case and keeps
    *                                                         existing scenarios unchanged (design 73 Gap 1).
    * @param {string}      [opts.ssCurrency]                - Native currency of socialSecurityMonthly; defaults from residency
+   * @param {string|null} [opts.k401ToIraConversionDate=null] - Day this person's 401(k) rolls into their IRA,
+   *                                                         'YYYY-MM-DD'; null = on retirementDate (design 117 D9)
    */
   constructor(id = null, birthDate, opts = {}) {
     super({id: id, kind: 'person', layer: 'config', name: opts.name ?? ''});
@@ -72,6 +74,7 @@ export class Person extends SimGraphNode {
     // AU CGT reform (design 57 §6.6): recipients of means-tested income support
     // (Age Pension / JobSeeker) are exempt from the 30% CGT minimum tax.
     this.incomeSupportRecipient = opts.incomeSupportRecipient ?? false;
+    this.k401ToIraConversionDate = opts.k401ToIraConversionDate ?? null;
 
     // ── Payroll elections (design 95 §7.1, phase 1) ──────────────────────────
     //

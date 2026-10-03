@@ -155,14 +155,14 @@ test('W0-9: acct.usSavingsAccount.minimumBalance moves the optimizer rollout', (
 });
 
 test('W0-10: raAsset.<sk>.fillCeiling moves the optimizer rollout', () => {
-  // The reference plan's example bequest is inert until its year is set. Setting it through
+  // The reference plan's example bequest is inert until its date is set. Setting it through
   // baseParams (spread flat into the base, not written by set()) arms the inherited IRA.
-  const armed = { 'bequest.estateBequest.inheritanceYear': 2027 };
+  const armed = { 'bequest.estateBequest.inheritanceDate': '2027-01-15' };
   const CEIL  = 'raAsset.inheritedIraAccount.fillCeiling';
 
   // Fixture control: the bequest really is armed, or the ceiling has nothing to act on.
   assert.notDeepStrictEqual(rollout({}, armed), rollout({}),
-    'setting the inheritance year must change the run');
+    'setting the inheritance date must change the run');
 
   const low  = rollout({ [CEIL]: 40_000 },  armed);
   const high = rollout({ [CEIL]: 400_000 }, armed);

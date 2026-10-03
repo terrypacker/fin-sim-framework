@@ -18,6 +18,7 @@ import {
 import { inheritedAssetMeta } from '../../finance/services/bequest-service.js';
 import { INHERITED_RA_WINDOW } from '../../finance/account-rules/inherited-ra-distribution-strategy.js';
 import { ACCOUNT_ROLES, INHERITED_RETIREMENT_ROLES } from '../../finance/state/account-roles.js';
+import { yearOfDate } from '../year-date-migration.js';
 
 const RA_DISTRIBUTION_TYPE = 'INHERITED_RA_DISTRIBUTION';
 
@@ -46,7 +47,8 @@ function _inheritedRaAccounts(context) {
     out.push({
       stateKey:        a.stateKey,
       isRoth,
-      inheritanceYear: b.inheritanceYear,
+      // The SECURE window counts calendar years from the inheritance (design 117 §7.2).
+      inheritanceYear: yearOfDate(b.inheritanceDate),
       heirId:          b.heirId ?? null,
       strategyId:      a.distributionMode ?? DEFAULT_STRATEGY,
       fillCeilingReal: a.fillCeiling ?? DEFAULT_FILL_CEILING,
@@ -59,7 +61,7 @@ function _inheritedRaAccounts(context) {
 
   // Inline retirement assets — inert-bequest fallback, or any RA promotion did not run.
   for (const b of (context.bequests ?? [])) {
-    if (b.inheritanceYear == null) continue;
+    if (b.inheritanceDate == null) continue;
     for (const a of (b.assets ?? [])) {
       const meta = inheritedAssetMeta(a.__type);
       if (!meta?.isRetirement || meta.isSuper || !a.stateKey) continue;
@@ -73,7 +75,7 @@ function _inheritedRaAccounts(context) {
   // promotion hoists the RA out of `bequest.assets` (§15.1 Coupling 2).
   const activeByKey = new Map();
   for (const b of (context.bequests ?? [])) {
-    if (b.inheritanceYear != null) activeByKey.set(b.stateKey ?? b.id, b);
+    if (b.inheritanceDate != null) activeByKey.set(b.stateKey ?? b.id, b);
   }
   for (const a of (context.accounts ?? [])) {
     if (!a.inherited || !a.stateKey || !INHERITED_RETIREMENT_ROLES.has(a.role)) continue;
@@ -151,10 +153,10 @@ export const INHERITANCE = {
     const patches = {};
     const svc = context.bequestService;
     if (!svc) return patches;
-    // Only ACTIVE bequests (a set inheritanceYear) seed state. An inert example
-    // bequest (inheritanceYear null) contributes nothing, so the default scenario
+    // Only ACTIVE bequests (a set inheritanceDate) seed state. An inert example
+    // bequest (inheritanceDate null) contributes nothing, so the default scenario
     // stays byte-identical until the user sets a year — the design-63 §9 guard.
-    const active = (context.bequests ?? []).filter(b => b.inheritanceYear != null);
+    const active = (context.bequests ?? []).filter(b => b.inheritanceDate != null);
     for (const bequest of active) {
       Object.assign(patches, svc.expand(bequest).seeds);
     }
@@ -171,7 +173,7 @@ export const INHERITANCE = {
     if (!svc) return [];
     const events = [];
     for (const bequest of (context.bequests ?? [])) {
-      if (bequest.inheritanceYear == null) continue;
+      if (bequest.inheritanceDate == null) continue;
       const { inherited, inheritanceDateMs } = svc.expand(bequest);
       if (!inherited.length || inheritanceDateMs == null) continue;
       events.push(new OneOffEvent({
@@ -211,7 +213,7 @@ export const INHERITANCE = {
     const svc = context.bequestService;
     const handlers = [];
     const hasFunded = (context.bequests ?? []).some(b =>
-      b.inheritanceYear != null && (svc?.expand(b).inherited.length ?? 0) > 0);
+      b.inheritanceDate != null && (svc?.expand(b).inherited.length ?? 0) > 0);
     if (hasFunded) handlers.push(new InheritHandler());
 
     const accounts = _inheritedRaAccounts(context);
@@ -228,7 +230,7 @@ export const INHERITANCE = {
     const svc = context.bequestService;
     const reducers = [];
     const hasFunded = (context.bequests ?? []).some(b =>
-      b.inheritanceYear != null && (svc?.expand(b).inherited.length ?? 0) > 0);
+      b.inheritanceDate != null && (svc?.expand(b).inherited.length ?? 0) > 0);
     if (hasFunded) {
       reducers.push(new InheritApplyReducer({
         accountService: context.accountService,

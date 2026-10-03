@@ -467,12 +467,10 @@ test('toolset params: cfg.params includes toolset-only keys missing from scenari
   // From US_RETIREMENT — not in INTL_RETIREMENT_PARAM_SCHEMA.
   assert.ok(names.has('k401ToIraConversionEnabled'),
     'cfg.params should expose toolset-only key k401ToIraConversionEnabled');
-  assert.ok(names.has('k401ToIraConversionMonth'),
-    'cfg.params should expose toolset-only key k401ToIraConversionMonth');
-  assert.ok(names.has('k401ToIraConversionDay'),
-    'cfg.params should expose toolset-only key k401ToIraConversionDay');
-  assert.ok(names.has('k401ToIraConversionYear'),
-    'cfg.params should expose toolset-only key k401ToIraConversionYear');
+  // The rollover's year / month / day params are each person's date now (design 117 D9).
+  for (const retired of ['k401ToIraConversionMonth', 'k401ToIraConversionDay', 'k401ToIraConversionYear']) {
+    assert.ok(!names.has(retired), `${retired} is retired`);
+  }
 
   // sanity — services still load.
   assert.ok(services.handlerService.getAll().length > 0);

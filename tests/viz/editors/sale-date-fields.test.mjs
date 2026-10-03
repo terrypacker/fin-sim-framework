@@ -72,7 +72,7 @@ describe('sale-date fields', () => {
     const asset = { __type: 'RealProperty', name: 'Inherited Home', plannedSaleDate: '2037-01-15' };
     const editor = new BequestEditor({
       container: makeMockContainer(),
-      node: { id: 'b1', name: 'Estate', stateKey: 'estate', inheritanceYear: 2030, assets: [asset] },
+      node: { id: 'b1', name: 'Estate', stateKey: 'estate', inheritanceDate: '2030-01-15', assets: [asset] },
       people: [], links: new ParamFieldLinks([]),
     });
     editor.render();

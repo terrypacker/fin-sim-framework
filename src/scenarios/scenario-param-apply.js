@@ -160,7 +160,7 @@ export function applyParamBagToConfig(cfg, params) {
   // would not yet have the `plannedSaleDate` entries a new bag names, and a saved bag
   // (an old MC run's params) may still name a sale YEAR.
   migrateYearFieldsToDates(cfg);
-  params = migrateParamBag(params, { planOf: (key) => templateValue(cfg, key) });
+  params = migrateParamBag(params, { planOf: (key) => templateValue(cfg, key), persons: cfg.persons });
   params = reconcileAliasPairs(cfg, params);
 
   // The flat map: carries aliased, nested and untyped keys into the loader.

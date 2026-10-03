@@ -1,8 +1,8 @@
 # 117 — Year fields become Dates
 
 **Status:** ACCEPTED, 2 Oct 2026. The decisions in §3 were taken with the author, and Q1–Q3
-(§11) are answered as proposed (D8–D10). **Phases 1 and 2 BUILT** 2 Oct 2026 (§12, §13);
-phases 3–7 not started.
+(§11) are answered as proposed (D8–D10). **Phases 1–3 BUILT** 2 Oct 2026 (§12–§14);
+phases 4–7 not started.
 Scope is groups A and B of the 2 Oct inventory (§2): fields where a year stands for one
 moment, and loan-term boundaries. Annual windows and year-keyed schedules stay years (§2.3).
 Design 116 (employment spells) phase 4 waits on §5, the optimizer's Date type.
@@ -421,3 +421,32 @@ The reasoning as proposed:
   `variant-grid` with a `saleYear` lever (selling in 2030 vs never moved net liquidity by
   about 1.35M). The run also found that `variant-grid` had been broken since the design
   108 parseFlags migration: its `WORKER` constant was dropped. It is restored.
+
+## 14. As built — phase 3 (2 Oct 2026)
+
+- **Inheritance.** A bequest's `inheritanceYear` and its hidden `inheritanceMonth` (0-based)
+  and `inheritanceDay` became one `inheritanceDate`. A saved custom month and day survive:
+  year 2030, month 5, day 3 becomes `2030-06-03`. A generated `bequest.<sk>.inheritanceYear`
+  param converts with that bequest's own month and day. The SECURE 10-year window still
+  counts calendar years: its stream rows carry `inheritanceYear` as the date's year (§7.2).
+  `Bequest` throws on any of the three retired fields.
+- **The 401(k) rollover (D9).** The three scenario params became each person's
+  `k401ToIraConversionDate`, a Person field. It is serialized, generated as
+  `person.<id>.k401ToIraConversionDate` (Opt-swept, as the year was), and edited on the
+  person form. Migration fills each blank part from that person's own retirement date, which
+  is what the toolset did. So a saved year-only or month-only setting names a different day
+  per person and still does. All parts blank leaves the field blank, meaning "at
+  separation". The legal clamp to the separation date is unchanged.
+  `applyParamBagToConfig` passes the cfg's people, so an old bag carrying the params also
+  converts per person.
+- **Goldens.** No fixture carries these fields, so all 15 matched without a regold.
+- **Built-in scenarios.** `inheritanceDate` defaults. A legacy `inheritanceYear` override
+  still works, and in the homeowner scenarios an explicit `inheritanceYear: null` still
+  means no inheritance, rather than losing to the default date.
+- **Tests.** `year-date-migration.test.mjs` gained 8. They cover the per-person resolution
+  with two retirement days, idempotency, a person's own date never being overwritten, and a
+  liveness test: the generated rollover lever on a loaded plan moves the 401(k) balance. The
+  401(k) event tests now author the person's date, and keep two legacy-param tests that run
+  through the migration. A smoke run on a legacy export with year 2041 and month 3 set fired
+  the two owners' rollovers on 1 Mar and 20 Mar 2041, their own retirement days.
+- **Help.** `bequest`, `person` and the concept `roth-conversions` were updated and restamped.

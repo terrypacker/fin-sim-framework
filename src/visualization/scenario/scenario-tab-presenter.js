@@ -81,7 +81,7 @@ export class ScenarioTabPresenter {
       // Asset-backed generated params (design 55 §14.3): resolve realProperty /
       // collectible / companyEquity nodes to their live record by stateKey so the
       // panel shows the current name and offers the click-through, matching accounts.
-      // Design 63: the per-Bequest `inheritanceYear` param resolves the same way so
+      // Design 63: the per-Bequest `inheritanceDate` param resolves the same way so
       // its 🔗 opens the Inheritance editor (its live record carries kind 'bequest').
       const assetService = {
         realProperty:  registry.realPropertyService,

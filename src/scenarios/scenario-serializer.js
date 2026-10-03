@@ -234,7 +234,7 @@ import {
   HoldingTransactReducer, HoldingRevalueReducer, HoldingSetBasisReducer,
   HoldingSplitReducer, HoldingRetitleReducer,
 } from '../finance/holdings/holding-reducers.js';
-import { toSaleDate } from './year-date-migration.js';
+import { toSaleDate, yearToIsoDate } from './year-date-migration.js';
 
 /**
  * All known handler / reducer / action classes.
@@ -1183,9 +1183,7 @@ export class ScenarioSerializer {
       relationship:    b.relationship    ?? 'immediate',
       decedentState:   b.decedentState   ?? null,
       heirId:          b.heirId          ?? null,
-      inheritanceYear:  b.inheritanceYear  ?? null,
-      inheritanceMonth: b.inheritanceMonth ?? 0,
-      inheritanceDay:   b.inheritanceDay   ?? 15,
+      inheritanceDate: b.inheritanceDate ?? null,
       paidViaEstate:   b.paidViaEstate   ?? false,
       assets:          (b.assets ?? []).map(a => ({ ...a })),
     };
@@ -1199,9 +1197,8 @@ export class ScenarioSerializer {
       relationship:     d.relationship    ?? 'immediate',
       decedentState:    d.decedentState   ?? null,
       heirId:           d.heirId          ?? null,
-      inheritanceYear:  d.inheritanceYear  ?? null,
-      inheritanceMonth: d.inheritanceMonth ?? 0,
-      inheritanceDay:   d.inheritanceDay   ?? 15,
+      // A save from before design 117 carries the year with a hidden month (0-based) and day.
+      inheritanceDate:  d.inheritanceDate ?? yearToIsoDate(d.inheritanceYear, d.inheritanceMonth ?? 0, d.inheritanceDay ?? 15),
       paidViaEstate:    d.paidViaEstate   ?? false,
       assets:           (d.assets ?? []).map(a => ({ ...a })),
     });
@@ -1231,6 +1228,7 @@ export class ScenarioSerializer {
       workCountry:           person.workCountry  ?? null,
       ssCurrency:            person.ssCurrency   ?? null,
       incomeSupportRecipient: person.incomeSupportRecipient ?? false,
+      k401ToIraConversionDate: person.k401ToIraConversionDate ?? null,   // design 117 D9
       // Design 95 §7.1 phase 1 — per-person payroll elections. Written from the
       // shared field list so this half cannot drift from _makePerson's. `null` is
       // meaningful here (inherit the household default) and is NOT the same as 0
@@ -1464,6 +1462,7 @@ export class ScenarioSerializer {
       workCountry:           d.workCountry  ?? null,
       ssCurrency:            d.ssCurrency   ?? undefined,
       incomeSupportRecipient: d.incomeSupportRecipient ?? false,
+      k401ToIraConversionDate: d.k401ToIraConversionDate ?? null,
       // Design 95 §7.1 phase 1 — the other half of the election round-trip.
       ...Object.fromEntries(
         PAYROLL_ELECTION_FIELDS.map(f => [f, d[f] ?? null])),

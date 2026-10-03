@@ -104,6 +104,9 @@ export class PersonEditor extends BaseComponent {
     el.querySelector('[data-id="retirementDate"]').value =
       rd instanceof Date ? rd.toISOString().slice(0, 10)
                         : (rd ? String(rd).slice(0, 10) : '2040-01-01');
+    // Blank = roll over on the day they stop work (design 117 D9).
+    const kd = this._node?.k401ToIraConversionDate;
+    el.querySelector('[data-id="k401ToIraConversionDate"]').value = kd ? String(kd).slice(0, 10) : '';
 
     // ── Payroll elections (design 95 §17 phase 10) ──────────────────────────
     // Rendered before the param links are bound below because the section binds
@@ -153,6 +156,7 @@ export class PersonEditor extends BaseComponent {
     const candidates = [
       { dataId: 'monthlyWage',    field: 'monthlyWage',    coerce: (raw) => Number(raw) || 0 },
       { dataId: 'retirementDate', field: 'retirementDate', coerce: (raw) => raw },
+      { dataId: 'k401ToIraConversionDate', field: 'k401ToIraConversionDate', coerce: (raw) => raw || null },
       // The scenario's `residencyState` param links to the PRIMARY person only
       // (its Enum options are '' plus US_STATE_CODES, so blank stays '' rather
       // than null here). A person with no such param — the spouse — edits the
@@ -188,6 +192,7 @@ export class PersonEditor extends BaseComponent {
       monthlyWage:           Number(el.querySelector('[data-id="monthlyWage"]').value),
       selfEmployed:          el.querySelector('[data-id="selfEmployed"]').checked,
       retirementDate:        el.querySelector('[data-id="retirementDate"]').value,
+      k401ToIraConversionDate: el.querySelector('[data-id="k401ToIraConversionDate"]').value || null,
       ssCurrency:            el.querySelector('[data-id="ssCurrency"]').value,
       wageCurrency:          el.querySelector('[data-id="wageCurrency"]').value,
       // "" ⇒ follow residency. Normalised to null so the stored shape matches

@@ -223,7 +223,8 @@ export class InheritanceNeTaxApplyReducer extends AccountServiceReducer {
  * RMDs, design-58 drawdowns, and Roth conversions — that YTD figure is the
  * competing "other ordinary income" the bracketFill strategy works under.
  *
- * Each account carries `{ stateKey, isRoth, inheritanceYear, heirId, strategyId }`;
+ * Each account carries `{ stateKey, isRoth, inheritanceYear, heirId, strategyId }`, where
+ * `inheritanceYear` is the calendar year of the bequest's `inheritanceDate` (design 117);
  * the tunable params (`fillCeilingReal` real USD, `lumpYear`, `weights`) are
  * global, baked in from context.parameters at compile (the Opt/MC path recompiles
  * per candidate). `yearIndex = year − inheritanceYear`; the strategy's terminal

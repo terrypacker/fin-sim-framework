@@ -77,7 +77,7 @@ function inheritanceConfig(bequestOverrides = {}) {
     bequests: [
       { __type: 'Bequest', id: 'beq1', stateKey: 'estateBequest', name: "Mother's Estate", decedentName: 'Jane Doe',
         relationship: 'immediate', decedentState: 'NE', heirId: 'primary',
-        inheritanceYear: 2030, inheritanceMonth: 5, inheritanceDay: 15,
+        inheritanceDate: '2030-06-15',
         assets: baseBequestAssets(),
         ...bequestOverrides },
     ],
@@ -148,7 +148,7 @@ test('EVT-63: currency derives from asset country (USD vs AUD)', () => {
 test('EVT-63: BequestService assigns stable stateKeys to assets that lack one', () => {
   const services = ServiceRegistry.getInstance();
   const bq = services.bequestService.createBequest(new Bequest({
-    name: 'Estate', inheritanceYear: 2030,
+    name: 'Estate', inheritanceDate: '2030-01-15',
     assets: [
       { __type: 'BrokerageAccount', inheritedValue: 100_000 },      // no stateKey
       { __type: 'Collectible', inheritedValue: 50_000, stateKey: 'keepMe' },
@@ -174,7 +174,7 @@ test('EVT-63: Bequest survives serialize/deserialize round-trip', () => {
   const original = new Bequest({
     id: 'beq7', name: "Father's Estate", decedentName: 'John Doe',
     relationship: 'remote', decedentState: 'HI', heirId: 'primary',
-    inheritanceYear: 2032, inheritanceMonth: 3, inheritanceDay: 1,
+    inheritanceDate: '2032-04-01',
     paidViaEstate: true,
     assets: baseBequestAssets(),
   });
@@ -186,7 +186,7 @@ test('EVT-63: Bequest survives serialize/deserialize round-trip', () => {
   assert.strictEqual(back.relationship, 'remote');
   assert.strictEqual(back.decedentState, 'HI');
   assert.strictEqual(back.paidViaEstate, true);
-  assert.strictEqual(back.inheritanceMonth, 3);
+  assert.strictEqual(back.inheritanceDate, '2032-04-01', 'the day survives, not only the year');
   assert.strictEqual(back.assets.length, 4);
   assert.strictEqual(back.assets[2].deceasedCostBase, 200_000);
   assert.strictEqual(back.assets[0].stateKey, 'inheritBrokerage');
@@ -196,7 +196,7 @@ test('EVT-63: bequests round-trip through the full scenario serializer path', ()
   const services = ServiceRegistry.getInstance();
   services.bequestService.createBequest(new Bequest({
     name: 'Estate', decedentName: 'Jane', relationship: 'immediate',
-    inheritanceYear: 2030, assets: baseBequestAssets(),
+    inheritanceDate: '2030-01-15', assets: baseBequestAssets(),
   }));
   const snap = ScenarioSerializer.snapshotServices(services);
   assert.strictEqual(snap.bequests.length, 1);
@@ -551,7 +551,7 @@ function raConfig(assetOverride = {}, params = {}) {
     bequests: [
       { __type: 'Bequest', id: 'beq1', stateKey: 'estateBequest', name: 'Estate', decedentName: 'Parent',
         relationship: 'immediate', heirId: 'primary',
-        inheritanceYear: 2030, inheritanceMonth: 5, inheritanceDay: 15,
+        inheritanceDate: '2030-06-15',
         // Strategy is now per-asset (distributionMode); default 'equal' for the tests.
         assets: [ { __type: 'TraditionalIRAAccount', name: 'Inherited IRA', country: 'US',
                     inheritedValue: 300_000, stateKey: 'inheritIra', distributionMode: 'equal', ...assetOverride } ] },
@@ -640,7 +640,7 @@ function superConfig(assetOverride = {}, bequestOverride = {}) {
     bequests: [
       { __type: 'Bequest', id: 'beq1', stateKey: 'estateBequest', name: 'Estate', decedentName: 'Parent',
         relationship: 'immediate', decedentState: null, heirId: 'primary',
-        inheritanceYear: 2030, inheritanceMonth: 5, inheritanceDay: 15,
+        inheritanceDate: '2030-06-15',
         assets: [ { __type: 'SuperannuationAccount', name: 'Inherited Super', country: 'AU',
                     inheritedValue: 500_000, stateKey: 'inheritSuper', ...assetOverride } ],
         ...bequestOverride },
@@ -708,7 +708,7 @@ function neConfig(relationship, decedentState) {
     bequests: [
       { __type: 'Bequest', id: 'beq1', stateKey: 'estateBequest', name: 'Estate', decedentName: 'Parent',
         relationship, decedentState, heirId: 'primary',
-        inheritanceYear: 2030, inheritanceMonth: 5, inheritanceDay: 15,
+        inheritanceDate: '2030-06-15',
         assets: [ { __type: 'BrokerageAccount', name: 'Inherited Brokerage', country: 'US',
                     inheritedValue: 500_000, stateKey: 'inheritBrokerage' } ] },
     ],
@@ -757,20 +757,23 @@ test('EVT-63: no heir tax for a non-NE decedent situs (SD / HI)', () => {
 // EVT-63: P5 — default-scenario example bequest (inert by default, activatable)
 // ══════════════════════════════════════════════════════════════════════════════
 
-test('EVT-63: default scenario ships an inert example bequest (no state until a year is set)', () => {
+test('EVT-63: default scenario ships an inert example bequest (no state until a date is set)', () => {
   const cfg = IntlRetirementScenario.buildDefaultConfig({}, new Date(Date.UTC(2026, 0, 1)), new Date(Date.UTC(2041, 0, 1)));
   assert.ok((cfg.bequests ?? []).length === 1, 'one example bequest is present in the default config');
-  assert.strictEqual(cfg.bequests[0].inheritanceYear ?? null, null, 'inert by default');
+  assert.strictEqual(cfg.bequests[0].inheritanceDate ?? null, null, 'inert by default');
 
   const { sim } = loadToolsetScenario(cfg);
   assert.ok(sim.state.inheritedBrokerageAccount == null, 'inert ⇒ no inherited state seeded');
   assert.ok(sim.state.inheritedIraAccount == null);
 });
 
-test('EVT-63: setting inheritanceYear activates the default example bequest', () => {
-  const cfg = IntlRetirementScenario.buildDefaultConfig({ inheritanceYear: 2035 },
+test('EVT-63: setting inheritanceDate activates the default example bequest', () => {
+  const cfg = IntlRetirementScenario.buildDefaultConfig({ inheritanceDate: '2035-01-15' },
     new Date(Date.UTC(2026, 0, 1)), new Date(Date.UTC(2046, 0, 1)));
-  assert.strictEqual(cfg.bequests[0].inheritanceYear, 2035, 'param baked onto the bequest');
+  assert.strictEqual(cfg.bequests[0].inheritanceDate, '2035-01-15', 'param baked onto the bequest');
+  // A legacy year override is 15 Jan of that year (design 117).
+  assert.strictEqual(IntlRetirementScenario.buildDefaultConfig({ inheritanceYear: 2035 }).bequests[0].inheritanceDate,
+    '2035-01-15');
 
   const { sim } = loadToolsetScenario(cfg);
   assert.strictEqual(sim.state.inheritedBrokerageAccount.balance, 0, 'seeded at 0 pre-date');
@@ -791,7 +794,7 @@ test('EVT-63: no Bequest record ⇒ no inheritance params are generated', () => 
     'no bequest/raAsset params without a Bequest record');
 });
 
-test('EVT-63: a Bequest generates a per-record inheritanceYear param (linked via node)', () => {
+test('EVT-63: a Bequest generates a per-record inheritanceDate param (linked via node)', () => {
   const cfg = {
     bequests: [{
       __type: 'Bequest', stateKey: 'estateBequest', name: "Parent's Estate",
@@ -799,9 +802,10 @@ test('EVT-63: a Bequest generates a per-record inheritanceYear param (linked via
     }],
   };
   const gen = ScenarioParamGenerator.generate(cfg);
-  const yearParam = gen.find(e => e.key === 'bequest.estateBequest.inheritanceYear');
-  assert.ok(yearParam, 'inheritanceYear param generated per Bequest');
-  assert.deepStrictEqual(yearParam.node, { type: 'bequest', stateKey: 'estateBequest', field: 'inheritanceYear' });
+  const dateParam = gen.find(e => e.key === 'bequest.estateBequest.inheritanceDate');
+  assert.ok(dateParam, 'inheritanceDate param generated per Bequest');
+  assert.strictEqual(dateParam.type, 'Date');
+  assert.deepStrictEqual(dateParam.node, { type: 'bequest', stateKey: 'estateBequest', field: 'inheritanceDate' });
   // A brokerage (non-retirement) asset grows NO drawdown params.
   assert.ok(!gen.some(e => e.key.startsWith('raAsset.')), 'brokerage asset ⇒ no RA drawdown params');
 });
@@ -883,7 +887,7 @@ function promotionConfig(assets, { usSavings = 2_000_000, monthlyWage = 0 } = {}
     bequests: [
       { __type: 'Bequest', id: 'beq1', stateKey: 'estateBequest', name: 'Estate', decedentName: 'Parent',
         relationship: 'immediate', heirId: 'primary',
-        inheritanceYear: 2030, inheritanceMonth: 5, inheritanceDay: 15, assets },
+        inheritanceDate: '2030-06-15', assets },
     ],
   };
 }

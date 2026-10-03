@@ -9,7 +9,7 @@ stamps:
   panel:config-list: 786f94
   panel:config-graph: bbebb1
   panel:paycheque: f8d503
-  node:person: ad138c
+  node:person: 7194f3
 ---
 
 A member of the household: who they are, what they earn, when they stop, and what

@@ -26,7 +26,7 @@ import { SimGraphNode } from '../../graph/sim-graph-node.js';
  *
  * A Bequest is the mirror of the design-49 CompanyEquity/COMPANY_SALE mechanic:
  * where COMPANY_SALE *zeroes* an asset at a scheduled date, an `INHERIT` event
- * *funds* the inherited assets at the `inheritanceYear` date. The container holds
+ * *funds* the inherited assets on the `inheritanceDate`. The container holds
  * a decedent descriptor, the inheritance date, and a list of inherited-asset
  * descriptors that reuse the existing asset/account types (no new asset classes).
  *
@@ -72,22 +72,28 @@ export class Bequest extends SimGraphNode {
    *                                                     heir's residency (design 63 §4.2). Null ⇒
    *                                                     defaults to the heir's residency state.
    * @param {string|null} [opts.heirId=null]          - Person id of the inheriting scenario person
-   * @param {number|null} [opts.inheritanceYear=null] - Calendar year of the inheritance
-   * @param {number}      [opts.inheritanceMonth=0]   - 0-based month of the inheritance date
-   * @param {number}      [opts.inheritanceDay=15]    - Day-of-month of the inheritance date
+   * @param {string|null} [opts.inheritanceDate=null] - Day of the inheritance, 'YYYY-MM-DD'; null = inert.
+   *                                                     It replaced inheritanceYear/Month/Day (design 117).
    * @param {boolean}     [opts.paidViaEstate=false]  - AU super: paid via estate (no +2% Medicare)
    *                                                     vs direct to beneficiary (design 63 §6.4)
    * @param {InheritedAsset[]} [opts.assets=[]]       - Inherited-asset descriptors
    */
   constructor(opts = {}) {
     super({ id: opts.id ?? null, kind: 'bequest', layer: 'config', name: opts.name ?? '' });
+    // Design 117: the year (and its hidden month/day) became one date. A saved plan is
+    // converted on load, so a year here is a path that skipped it — an inheritance that
+    // would silently never happen.
+    for (const old of ['inheritanceYear', 'inheritanceMonth', 'inheritanceDay']) {
+      if (opts[old] !== undefined) {
+        throw new Error(`Bequest "${opts.name ?? ''}": \`${old}\` is retired (design 117); use `
+          + `\`inheritanceDate\` ('YYYY-MM-DD'). A saved plan is converted on load by migrateYearFieldsToDates.`);
+      }
+    }
     this.decedentName     = opts.decedentName     ?? '';
     this.relationship     = opts.relationship     ?? 'immediate';
     this.decedentState    = opts.decedentState    ?? null;
     this.heirId           = opts.heirId           ?? null;
-    this.inheritanceYear  = opts.inheritanceYear  ?? null;
-    this.inheritanceMonth = opts.inheritanceMonth ?? 0;
-    this.inheritanceDay   = opts.inheritanceDay   ?? 15;
+    this.inheritanceDate  = opts.inheritanceDate  ?? null;
     this.paidViaEstate    = opts.paidViaEstate    ?? false;
     this.assets           = opts.assets           ?? [];
   }

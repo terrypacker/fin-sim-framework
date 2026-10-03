@@ -20,6 +20,7 @@
 import { BaseService }       from '../../services/base-service.js';
 import { USD, AUD, ACCOUNT_TYPE } from '../assets/account.js';
 import { ACCOUNT_ROLES }     from '../state/account-roles.js';
+import { saleDateToUtc } from '../../scenarios/year-date-migration.js';
 
 /**
  * Per-`__type` metadata for an inherited asset descriptor: how it seeds into
@@ -158,9 +159,7 @@ export class BequestService extends BaseService {
   expand(bequest) {
     const seeds     = {};
     const inherited = [];
-    const inheritanceDateMs = bequest.inheritanceYear != null
-      ? Date.UTC(bequest.inheritanceYear, bequest.inheritanceMonth ?? 0, bequest.inheritanceDay ?? 15)
-      : null;
+    const inheritanceDateMs = saleDateToUtc(bequest.inheritanceDate)?.getTime() ?? null;
 
     // Inline assets: retirement / super (never promoted — SECURE stream / lump-sum),
     // plus brokerage/property/collectible in the fallback case where promotion did

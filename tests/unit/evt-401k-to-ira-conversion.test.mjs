@@ -51,6 +51,7 @@ function makeConfig({
   conversionMonth    = null,
   conversionDay      = null,
   conversionYear     = null,
+  rolloverDate       = null,   // the person's own date (design 117 D9); the three params above are legacy
   includeIra         = true,
   usEquityGrowthRate = 0,   // design 99: the 401(k) and IRA both earn the US market's total
 } = {}) {
@@ -98,6 +99,7 @@ function makeConfig({
       __type: 'Person', id: 'primary', name: 'Primary', birthDate: '1966-01-01',
       citizen: ['US'], lifeExpectancy: 90, monthlyWage: 0,
       retirementDate, socialSecurityMonthly: 0,
+      ...(rolloverDate ? { k401ToIraConversionDate: rolloverDate } : {}),
     }],
     accounts,
   };
@@ -250,13 +252,11 @@ test('Toolset: does NOT schedule conversion when owner has no IRA', () => {
   assert.strictEqual(sim.state.k401Account.balance, 100_000);
 });
 
-test('Toolset: conversion param overrides (year/month/day) can delay past retirement date', () => {
+test('Toolset: the person\'s rollover date can delay past retirement date', () => {
   const { sim } = loadToolsetScenario(makeConfig({
     conversionEnabled: true,
     retirementDate:    '2030-06-15',
-    conversionYear:    2031,
-    conversionMonth:   3,
-    conversionDay:     10,
+    rolloverDate:      '2031-03-10',
   }));
 
   // Not yet — override is 2031-03-10, later than the 2030-06-15 retirement date
@@ -273,9 +273,7 @@ test('Toolset: conversion date before retirement is clamped up to retirement (no
   const { sim } = loadToolsetScenario(makeConfig({
     conversionEnabled: true,
     retirementDate:    '2030-06-15',
-    conversionYear:    2027,
-    conversionMonth:   1,
-    conversionDay:     1,
+    rolloverDate:      '2027-01-01',
   }));
 
   // Must NOT convert on the requested (illegal, still-working) 2027-01-01 date...
@@ -289,7 +287,10 @@ test('Toolset: conversion date before retirement is clamped up to retirement (no
   assert.strictEqual(sim.state.iraAccount.balance, 100_000);
 });
 
-test('Toolset: partial overrides — only month set, year/day default to retirement', () => {
+// A plan saved before design 117 carries the three shared params. The loader turns them into
+// the person's date, each blank part from that person's retirement date (D9) — so this still
+// runs the conversion on the day it always did.
+test('Toolset: legacy partial override — only the month param set, year/day from retirement', () => {
   const { sim } = loadToolsetScenario(makeConfig({
     conversionEnabled: true,
     retirementDate:    '2030-06-15',
@@ -304,6 +305,17 @@ test('Toolset: partial overrides — only month set, year/day default to retirem
   sim.stepTo(new Date(2030, 11, 31));
   assert.strictEqual(sim.state.k401Account.balance, 0);
   assert.strictEqual(sim.state.iraAccount.balance, 100_000);
+});
+
+test('Toolset: a legacy year/month/day override still converts on its day', () => {
+  const { sim } = loadToolsetScenario(makeConfig({
+    conversionEnabled: true, retirementDate: '2030-06-15',
+    conversionYear: 2031, conversionMonth: 3, conversionDay: 10,
+  }));
+  sim.stepTo(new Date(Date.UTC(2031, 2, 9)));
+  assert.strictEqual(sim.state.k401Account.balance, 100_000, 'not before 10 Mar 2031');
+  sim.stepTo(new Date(Date.UTC(2031, 2, 10)));
+  assert.strictEqual(sim.state.k401Account.balance, 0, 'on 10 Mar 2031');
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

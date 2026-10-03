@@ -3,7 +3,7 @@ id: roth-conversions
 kind: concept
 title: Roth Conversions
 panels: [paycheque, journal-report]
-params: [rothConversionEnabled, rothConversionStartYear, rothConversionEndYear, rothConversionMaxBracket, rothConversionOwner, rothConversionMonth, rothConversionDay, rothConversionSchedule, rothConversionScheduleMode, k401ToIraConversionEnabled, k401ToIraConversionMonth, k401ToIraConversionDay, k401ToIraConversionYear]
+params: [rothConversionEnabled, rothConversionStartYear, rothConversionEndYear, rothConversionMaxBracket, rothConversionOwner, rothConversionMonth, rothConversionDay, rothConversionSchedule, rothConversionScheduleMode, k401ToIraConversionEnabled]
 design: [29-behavioral-layer.md]
 stamps:
   param:rothConversionEnabled: dd5059
@@ -15,10 +15,7 @@ stamps:
   param:rothConversionDay: 60869a
   param:rothConversionSchedule: b17ede
   param:rothConversionScheduleMode: ab7ce6
-  param:k401ToIraConversionEnabled: 6b2a99
-  param:k401ToIraConversionMonth: d27d49
-  param:k401ToIraConversionDay: b8b57a
-  param:k401ToIraConversionYear: c9e861
+  param:k401ToIraConversionEnabled: 7a93d4
   panel:paycheque: f8d503
   panel:journal-report: e88448
 ---
@@ -46,7 +43,8 @@ gain ceiling is measured against the same income.
 
 Rolling a 401(k) into an IRA at retirement is a different operation with no tax
 consequence, and it is here because it usually has to happen first: it consolidates
-the balance that conversions then draw from.
+the balance that conversions then draw from. When it happens is set on each person, in
+[People](../nodes/person.md), because it follows that person's own separation from work.
 
 For a cross-border plan, check what the destination country does with a Roth before
 assuming the conversion is settled — a wrapper that is tax-free in one jurisdiction
