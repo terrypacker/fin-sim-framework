@@ -25,8 +25,8 @@ import { RealPropertyEditor } from '../../../src/visualization/assets/real-prope
 
 const TERM_FIELDS = [
   'mortgageInterestOnly',
-  'mortgageInterestOnlyUntilYear',
-  'mortgageMaturityYear',
+  'mortgageInterestOnlyUntil',
+  'mortgageMaturityDate',
   'mortgageDeductibleFraction',
   'mortgageBookingFxRate',
 ];
@@ -61,8 +61,8 @@ describe('real-property editor — mortgage term fields (design 86)', () => {
 
     const data = editor._readForm(el);
     expect(data.mortgageInterestOnly).toBe(false);
-    expect(data.mortgageInterestOnlyUntilYear).toBeNull();
-    expect(data.mortgageMaturityYear).toBeNull();
+    expect(data.mortgageInterestOnlyUntil).toBeNull();
+    expect(data.mortgageMaturityDate).toBeNull();
     expect(data.mortgageDeductibleFraction).toBeNull();
     expect(data.mortgageBookingFxRate).toBeNull();
   });
@@ -72,19 +72,19 @@ describe('real-property editor — mortgage term fields (design 86)', () => {
       id: 'p1', name: 'AU House', country: 'AU',
       mortgageBalance: 500_000, monthlyMortgage: 0,
       mortgageInterestOnly: true,
-      mortgageInterestOnlyUntilYear: 2031,
-      mortgageMaturityYear: 2051,
+      mortgageInterestOnlyUntil: '2031-07-01',
+      mortgageMaturityDate: '2051-07-01',
       mortgageDeductibleFraction: 0.6,
       mortgageBookingFxRate: 1.42,
     });
     const el = editor._rootEl;
     expect(el.querySelector('[data-id="mortgageInterestOnly"]').checked).toBe(true);
-    expect(el.querySelector('[data-id="mortgageInterestOnlyUntilYear"]').value).toBe('2031');
+    expect(el.querySelector('[data-id="mortgageInterestOnlyUntil"]').value).toBe('2031-07-01');
 
     const data = editor._readForm(el);
     expect(data.mortgageInterestOnly).toBe(true);
-    expect(data.mortgageInterestOnlyUntilYear).toBe(2031);
-    expect(data.mortgageMaturityYear).toBe(2051);
+    expect(data.mortgageInterestOnlyUntil).toBe('2031-07-01');
+    expect(data.mortgageMaturityDate).toBe('2051-07-01');
     expect(data.mortgageDeductibleFraction).toBe(0.6);
     expect(data.mortgageBookingFxRate).toBe(1.42);
   });
@@ -112,12 +112,12 @@ describe('real-property editor — mortgage term fields (design 86)', () => {
     editor._updateMortgageTermHint(el);
     expect(hint()).toMatch(/interest-only for life/i);
 
-    el.querySelector('[data-id="mortgageInterestOnlyUntilYear"]').value = '2031';
+    el.querySelector('[data-id="mortgageInterestOnlyUntil"]').value = '2031-07-01';
     editor._updateMortgageTermHint(el);
     // No maturity year ⇒ scheduledLoanPayment falls back to the fixed payment.
-    expect(hint()).toMatch(/set a Maturity Year/i);
+    expect(hint()).toMatch(/set a Maturity Date/i);
 
-    el.querySelector('[data-id="mortgageMaturityYear"]').value = '2051';
+    el.querySelector('[data-id="mortgageMaturityDate"]').value = '2051-07-01';
     editor._updateMortgageTermHint(el);
     expect(hint()).toMatch(/2031.*re-amortised.*2051/i);
   });

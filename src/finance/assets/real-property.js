@@ -150,11 +150,11 @@ export class RealProperty extends Asset {
     // Income-producing share of the mortgage's purpose (design 86 G3). null keeps the
     // pre-86 rule: fully deductible while the property is renting, nil otherwise.
     this.mortgageDeductibleFraction = opts.mortgageDeductibleFraction ?? null;
-    // Loan term (design 86 G6), absolute calendar years. An IO mortgage reverts to
-    // P&I amortised over the remaining term at `mortgageInterestOnlyUntilYear`, and
-    // must be discharged by `mortgageMaturityYear`. Both null ⇒ no term (pre-86).
-    this.mortgageInterestOnlyUntilYear = opts.mortgageInterestOnlyUntilYear ?? null;
-    this.mortgageMaturityYear          = opts.mortgageMaturityYear          ?? null;
+    // Loan term (design 86 G6; dates since design 117). An IO mortgage reverts to P&I
+    // amortised over the remaining term from `mortgageInterestOnlyUntil`, and must be
+    // discharged by `mortgageMaturityDate`. Both null ⇒ no term (pre-86).
+    this.mortgageInterestOnlyUntil     = opts.mortgageInterestOnlyUntil     ?? null;
+    this.mortgageMaturityDate          = opts.mortgageMaturityDate          ?? null;
     // §988 booking rate (design 86 G7): foreign units per USD on the date the
     // mortgage was incurred. Only meaningful on a non-USD mortgage held by a US
     // person, where each principal repayment realizes ordinary exchange gain or
@@ -174,7 +174,7 @@ export class RealProperty extends Asset {
     // LoanAccount fields of the same name without the `mortgage` prefix. All null ⇒ the
     // loan resolves its rate exactly as before: variable with a spread, fixed without.
     this.mortgageRateType               = opts.mortgageRateType               ?? null;
-    this.mortgageFixedRateUntilYear     = opts.mortgageFixedRateUntilYear     ?? null;
+    this.mortgageFixedRateUntil         = opts.mortgageFixedRateUntil         ?? null;
     this.mortgageRevertInterestRate     = opts.mortgageRevertInterestRate     ?? null;
     this.mortgageOffsetWhileFixed       = opts.mortgageOffsetWhileFixed       ?? null;
     this.mortgageBreakCostOnPayoff      = opts.mortgageBreakCostOnPayoff      ?? null;

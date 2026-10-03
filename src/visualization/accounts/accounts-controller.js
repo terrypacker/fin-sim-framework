@@ -24,11 +24,13 @@ const VARIABLE_COUNTRY = new Set(['checking', 'savings', 'brokerage', 'offset', 
 // and it must stay nullable there (a cash account clearing its rate sends null, which
 // a loan-style `Number(null) || 0` would silently turn into a 0% pinned rate).
 const LOAN_NUM_FIELDS      = ['monthlyPayment'];
-const LOAN_NULLABLE_FIELDS = ['interestOnlyUntilYear', 'maturityYear', 'deductibleFraction', 'bookingFxRate'];
+const LOAN_NULLABLE_FIELDS = ['deductibleFraction', 'bookingFxRate'];
+/** Loan-term DATES (design 117): blank is null ("no term"), a date stays 'YYYY-MM-DD'. */
+const LOAN_DATE_FIELDS = ['interestOnlyUntil', 'maturityDate', 'fixedRateUntil'];
 const LOAN_KEY_FIELDS      = ['linkedPropertyKey', 'paymentSourceKey'];
 // Design 113 rate terms. Numbers stay null when blank; the two flags are tri-state (null =
 // not set, which a legacy loan relies on), so they are not coerced with `!!`.
-const LOAN_RATE_NULLABLE_FIELDS = ['fixedRateUntilYear', 'revertInterestRate', 'fixedExtraRepaymentCap', 'fixedAtPrimeRate'];
+const LOAN_RATE_NULLABLE_FIELDS = ['revertInterestRate', 'fixedExtraRepaymentCap', 'fixedAtPrimeRate'];
 const LOAN_RATE_FLAG_FIELDS     = ['offsetWhileFixed', 'breakCostOnPayoff'];
 
 /**
@@ -163,11 +165,11 @@ export class AccountsController {
         .paymentSourceKey(data.paymentSourceKey  || null)
         .interestOnly(!!data.interestOnly)
         .deductibleFraction(_nullableNum(data.deductibleFraction))
-        .interestOnlyUntilYear(_nullableNum(data.interestOnlyUntilYear))
-        .maturityYear(_nullableNum(data.maturityYear))
+        .interestOnlyUntil(data.interestOnlyUntil || null)
+        .maturityDate(data.maturityDate || null)
         .bookingFxRate(_nullableNum(data.bookingFxRate))
         .rateType(data.rateType || null)
-        .fixedRateUntilYear(_nullableNum(data.fixedRateUntilYear))
+        .fixedRateUntil(data.fixedRateUntil || null)
         .revertInterestRate(_nullableNum(data.revertInterestRate))
         .offsetWhileFixed(_nullableFlag(data.offsetWhileFixed))
         .breakCostOnPayoff(_nullableFlag(data.breakCostOnPayoff))
@@ -280,6 +282,7 @@ export class AccountsController {
     // create(): a cleared year/fraction is `null` (unset), not 0.
     for (const f of LOAN_NUM_FIELDS)      if (f in n) n[f] = _num(n[f]);
     for (const f of LOAN_NULLABLE_FIELDS) if (f in n) n[f] = _nullableNum(n[f]);
+    for (const f of LOAN_DATE_FIELDS)     if (f in n) n[f] = n[f] ? String(n[f]).slice(0, 10) : null;
     for (const f of LOAN_KEY_FIELDS)      if (f in n) n[f] = n[f] || null;
     if ('interestOnly' in n) n.interestOnly = !!n.interestOnly;
     if ('rateType' in n) n.rateType = n.rateType || null;

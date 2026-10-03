@@ -345,3 +345,44 @@ describe('phase 4 — the moves', () => {
     assert.equal(cfg.parameters.moveYear, undefined);
   });
 });
+
+// ─── Phase 5: loan terms, by the loan's country (D6) ─────────────────────────
+
+describe('phase 5 — loan terms', () => {
+  test('a term year becomes the day the engine ended it: 1 Jan for US, 1 Jul for AU', () => {
+    const cfg = migrateYearFieldsToDates({
+      accounts: [
+        { type: 'loan', country: 'US', fixedRateUntilYear: 2030, interestOnlyUntilYear: 2031, maturityYear: 2050 },
+        { type: 'loan', country: 'AU', fixedRateUntilYear: 2030, interestOnlyUntilYear: null, maturityYear: 2050 },
+      ],
+      realProperties: [{ country: 'AU', mortgageFixedRateUntilYear: 2029, mortgageMaturityYear: 2046 }],
+    });
+    assert.deepEqual(cfg.accounts, [
+      { type: 'loan', country: 'US', fixedRateUntil: '2030-01-01', interestOnlyUntil: '2031-01-01', maturityDate: '2050-01-01' },
+      { type: 'loan', country: 'AU', fixedRateUntil: '2030-07-01', interestOnlyUntil: null, maturityDate: '2050-07-01' },
+    ]);
+    assert.deepEqual(cfg.realProperties, [{ country: 'AU', mortgageFixedRateUntil: '2029-07-01', mortgageMaturityDate: '2046-07-01' }]);
+  });
+
+  for (const name of ['us-single-homeowner', 'au-single-homeowner']) {
+    test(`${name}: the plan saved with a maturity YEAR runs to the identical end state`, async () => {
+      const { GOLDEN_SPECS } = await import('../helpers/golden-specs.js');
+      const { runGolden } = await import('../helpers/golden-harness.js');
+      const spec = GOLDEN_SPECS.find(s => s.name === name);
+      const legacy = {
+        ...spec,
+        mutateCfg: (cfg) => {
+          spec.mutateCfg?.(cfg);
+          // Back to the pre-117 shape: the 2046 term as a YEAR on the property.
+          for (const p of cfg.realProperties ?? []) {
+            if (p.mortgageMaturityDate == null) continue;
+            p.mortgageMaturityYear = Number(p.mortgageMaturityDate.slice(0, 4));
+            delete p.mortgageMaturityDate;
+          }
+        },
+      };
+      assert.deepStrictEqual(runGolden(legacy).snapshot, runGolden(spec).snapshot);
+    });
+  }
+});
+

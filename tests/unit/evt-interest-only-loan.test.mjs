@@ -255,10 +255,10 @@ function runYears(state, fromYear, toYear, opts = {}) {
   return { state: s, byYear: payments };
 }
 
-test('TERM-1: an IO loan reverts to P&I at interestOnlyUntilYear and pays off by maturity', () => {
+test('TERM-1: an IO loan reverts to P&I at interestOnlyUntil and pays off by maturity', () => {
   const loan = loanEntry({
     balance: BALANCE, interestRate: RATE, interestOnly: true,
-    interestOnlyUntilYear: 2031, maturityYear: 2041, paymentSourceKey: 'cash',
+    interestOnlyUntil: '2031-01-01', maturityDate: '2041-01-01', paymentSourceKey: 'cash',
   });
   const { state: end, byYear } = runYears({ hLoan: loan, cash: cashEntry(5_000_000) }, 2026, 2041);
 
@@ -280,7 +280,7 @@ test('TERM-1: an IO loan reverts to P&I at interestOnlyUntilYear and pays off by
 test('TERM-2: maturity forces payoff even if the IO period never ended', () => {
   const loan = loanEntry({
     balance: BALANCE, interestRate: RATE, interestOnly: true,
-    maturityYear: 2030, paymentSourceKey: 'cash',
+    maturityDate: '2030-01-01', paymentSourceKey: 'cash',
   });
   const { state: end } = runYears({ hLoan: loan, cash: cashEntry(5_000_000) }, 2026, 2030);
   assert.ok(Math.abs(end.hLoan.balance) < 0.01, 'a balloon repayment at maturity');
@@ -294,17 +294,17 @@ test('TERM-3: no term means no change — an IO loan runs flat forever', () => {
 });
 
 test('TERM-U1: scheduledLoanPayment, at each branch', () => {
-  const io = { interestOnly: true, monthlyPayment: 99, interestOnlyUntilYear: 2031, maturityYear: 2041 };
+  const io = { interestOnly: true, monthlyPayment: 99, interestOnlyUntil: '2031-01-01', maturityDate: '2041-01-01' };
   // inside the IO window → the interest
-  assert.equal(scheduledLoanPayment(io, 500_000, 2_500, 0.06, 2030), 2_500);
+  assert.equal(scheduledLoanPayment(io, 500_000, 2_500, 0.06, 2030 * 12), 2_500);
   // past maturity → balance + interest
-  assert.equal(scheduledLoanPayment(io, 500_000, 2_500, 0.06, 2041), 502_500);
+  assert.equal(scheduledLoanPayment(io, 500_000, 2_500, 0.06, 2041 * 12), 502_500);
   // reverted → amortising over the months left, above the interest and below payoff
-  const rev = scheduledLoanPayment(io, 500_000, 2_500, 0.06, 2031);
+  const rev = scheduledLoanPayment(io, 500_000, 2_500, 0.06, 2031 * 12);
   assert.ok(rev > 2_500 && rev < 502_500, rev);
   // no term at all → the authored fixed payment, capped at payoff
-  assert.equal(scheduledLoanPayment({ monthlyPayment: 3_000 }, 500_000, 2_500, 0.06, 2031), 3_000);
-  assert.equal(scheduledLoanPayment({ monthlyPayment: 3_000 }, 1_000, 5, 0.06, 2031), 1_005);
+  assert.equal(scheduledLoanPayment({ monthlyPayment: 3_000 }, 500_000, 2_500, 0.06, 2031 * 12), 3_000);
+  assert.equal(scheduledLoanPayment({ monthlyPayment: 3_000 }, 1_000, 5, 0.06, 2031 * 12), 1_005);
   // unknown year (a synthetic state with no period) → IO stays IO, never a surprise balloon
   assert.equal(scheduledLoanPayment(io, 500_000, 2_500, 0.06, null), 2_500);
 });
@@ -323,7 +323,7 @@ function fullyOffset(loanOverrides = {}) {
   return {
     hLoan: loanEntry({
       balance: BALANCE, interestRate: RATE, interestOnly: true,
-      interestOnlyUntilYear: 2031, maturityYear: 2056,
+      interestOnlyUntil: '2031-01-01', maturityDate: '2056-01-01',
       paymentSourceKey: 'cash', ...loanOverrides,
     }),
     off:  { type: 'offset', kind: 'account', stateKey: 'off', balance: BALANCE,
@@ -356,7 +356,7 @@ test('TERM-7: without an offset the anchored schedule is the ordinary one', () =
   // over the months left IS the fixed payment, so anchoring must change nothing.
   const loan = loanEntry({
     balance: BALANCE, interestRate: RATE, interestOnly: true,
-    interestOnlyUntilYear: 2031, maturityYear: 2041,
+    interestOnlyUntil: '2031-01-01', maturityDate: '2041-01-01',
     postIoPrincipal: BALANCE, paymentSourceKey: 'cash',
   });
   const { state: end, byYear } = runYears({ hLoan: loan, cash: cashEntry(5_000_000) }, 2026, 2041);
@@ -379,20 +379,20 @@ test('TERM-8: an unanchored legacy loan keeps the pre-correction behaviour exact
 });
 
 test('TERM-U2: scheduledLoanPayment — anchored is flat, unanchored follows the balance', () => {
-  const base = { interestOnly: true, interestOnlyUntilYear: 2031, maturityYear: 2056 };
+  const base = { interestOnly: true, interestOnlyUntil: '2031-01-01', maturityDate: '2056-01-01' };
   const anch = { ...base, postIoPrincipal: 500_000 };
   // Same payment whatever the live balance has done, because the anchor is fixed.
-  const a2032 = scheduledLoanPayment(anch, 480_000, 0, 0.06, 2032);
-  const a2040 = scheduledLoanPayment(anch, 200_000, 0, 0.06, 2040);
+  const a2032 = scheduledLoanPayment(anch, 480_000, 0, 0.06, 2032 * 12);
+  const a2040 = scheduledLoanPayment(anch, 200_000, 0, 0.06, 2040 * 12);
   assert.ok(Math.abs(a2032 - a2040) < 0.01, `anchored payment moved: ${a2032} vs ${a2040}`);
   // …but it still tracks the RATE, which was the original design intent.
-  assert.ok(scheduledLoanPayment(anch, 480_000, 0, 0.09, 2032) > a2032 * 1.2,
+  assert.ok(scheduledLoanPayment(anch, 480_000, 0, 0.09, 2032 * 12) > a2032 * 1.2,
     'a rate rise must still raise the payment');
   // Unanchored: the payment follows the live balance down.
-  assert.ok(scheduledLoanPayment(base, 200_000, 0, 0.06, 2040)
-          < scheduledLoanPayment(base, 480_000, 0, 0.06, 2032));
+  assert.ok(scheduledLoanPayment(base, 200_000, 0, 0.06, 2040 * 12)
+          < scheduledLoanPayment(base, 480_000, 0, 0.06, 2032 * 12));
   // Capped at payoff, and never below it, in both modes.
-  assert.equal(scheduledLoanPayment(anch, 1_000, 5, 0.06, 2040), 1_005);
+  assert.equal(scheduledLoanPayment(anch, 1_000, 5, 0.06, 2040 * 12), 1_005);
 });
 
 test('TERM-9: postIoPrincipal defaults from the balance and round-trips', () => {
@@ -409,7 +409,7 @@ test('TERM-9: postIoPrincipal defaults from the balance and round-trips', () => 
 
   // serializer: survives save/load, or the next load silently reverts the schedule
   const acct = new LoanAccount(BALANCE, {
-    stateKey: 'hLoan', interestOnly: true, interestOnlyUntilYear: 2031, maturityYear: 2056,
+    stateKey: 'hLoan', interestOnly: true, interestOnlyUntil: '2031-01-01', maturityDate: '2056-01-01',
   });
   const wire = ScenarioSerializer._serializeAccount(acct);
   assert.equal(wire.postIoPrincipal, BALANCE, 'must be written to the wire');
@@ -439,7 +439,7 @@ test('TERM-10: an AU-seeded standalone IO loan keeps its anchor, so its post-IO 
   const services = ServiceRegistry.getInstance();
   const cfg = AuSingleHomeownerScenario.buildDefaultConfig({}, START, END);
   const loan = new LoanAccount(400_000, {
-    interestOnly: true, interestOnlyUntilYear: 2030, maturityYear: 2050,
+    interestOnly: true, interestOnlyUntil: '2030-01-01', maturityDate: '2050-01-01',
     country: 'AU', currency: AUD, interestRate: 0.06,
   });
   Object.assign(loan, { id: 'auIoLoan', name: 'AU IO Loan', stateKey: 'auIoLoan', role: 'au-loan' });

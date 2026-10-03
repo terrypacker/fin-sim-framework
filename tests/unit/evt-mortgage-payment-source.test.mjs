@@ -40,7 +40,7 @@ const AUD = { code: 'AUD', symbol: 'A$' };
 // and the test fails for a reason that has nothing to do with what it is testing.
 const property = (extra = {}) => new RealProperty(1_200_000, {
   id: 'p1', name: 'AU House', stateKey: 'auHouseProperty', country: 'AU', currency: AUD,
-  mortgageBalance: 363_000, monthlyMortgage: 2_600, mortgageMaturityYear: 2046, ...extra,
+  mortgageBalance: 363_000, monthlyMortgage: 2_600, mortgageMaturityDate: '2046-07-01', ...extra,
 });
 
 test('a property mortgage carries mortgagePaymentSourceKey onto its loan entry', () => {

@@ -330,7 +330,8 @@ describe('facility lever', () => {
     assert.equal(loan.balance, 800_000, 'facility wins on balance');
     assert.equal(loan.primeSpread, 0.045, 'and does not clobber the rate');
     assert.equal(loan.interestOnly, true);
-    assert.equal(cfg.realProperties[0].mortgageMaturityYear, 2056);
+    // The year lever is a shorthand: an AU loan's term year ends on 1 July (design 117).
+    assert.equal(cfg.realProperties[0].mortgageMaturityDate, '2056-07-01');
   });
 
   test('re-books the §988 rate at today\'s spot, so a bigger facility is not a bigger phantom gain', () => {

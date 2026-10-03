@@ -36,7 +36,7 @@ export class LoanRateTermsForm {
    * @param {string}  o.rateId           data-id of the rate input
    * @param {string}  o.rateHintId       data-id of the hint under it
    * @param {string}  o.ioId             data-id of the Interest Only checkbox
-   * @param {string}  o.maturityId       data-id of the Maturity Year input
+   * @param {string}  o.maturityId       data-id of the Maturity Date input
    * @param {?object} o.primeRates       { US, AU } Prime rates, or null
    * @param {function(HTMLElement, string, function): void} o.listen  the editor's listen()
    */
@@ -75,7 +75,8 @@ export class LoanRateTermsForm {
     this._rateTypeTouched = !isNew;
 
     this.el.querySelector(`[data-id="${this.rateId}"]`).value = this._absoluteRate(v, derived);
-    this._q('fixedRateUntilYear').value     = v?.fixedRateUntilYear ?? '';
+    // A date (design 117): `<input type="date">` takes 'YYYY-MM-DD' only.
+    this._q('fixedRateUntil').value         = v?.fixedRateUntil ? String(v.fixedRateUntil).slice(0, 10) : '';
     this._q('revertRate').value             = derived === LOAN_RATE_TYPE.FIXED_PERIOD ? this._revertRate(v) : '';
     this._q('offsetWhileFixed').checked     = v?.offsetWhileFixed ?? (!v?.rateType && !isNew);
     this._q('breakCostOnPayoff').checked    = v?.breakCostOnPayoff ?? (!v?.rateType && !isNew ? false : country === 'AU');
@@ -92,7 +93,7 @@ export class LoanRateTermsForm {
       }
       refresh();
     });
-    for (const id of [this.rateId, this.id('fixedRateUntilYear'), this.id('revertRate'),
+    for (const id of [this.rateId, this.id('fixedRateUntil'), this.id('revertRate'),
                       this.id('breakCostOnPayoff'), this.id('fixedExtraRepaymentCap'),
                       this.ioId, this.maturityId]) {
       const input = this.el.querySelector(`[data-id="${id}"]`);
@@ -135,7 +136,7 @@ export class LoanRateTermsForm {
       interestRate: rate ?? 0,
       primeSpread: null,
       revertInterestRate: null,
-      fixedRateUntilYear: null,
+      fixedRateUntil: null,
       offsetWhileFixed: null,
       breakCostOnPayoff: null,
       fixedExtraRepaymentCap: null,
@@ -150,7 +151,7 @@ export class LoanRateTermsForm {
     out.fixedExtraRepaymentCap = num(this._q('fixedExtraRepaymentCap'));
     out.fixedAtPrimeRate       = num(this._q('fixedAtPrimeRate'));
     if (type === LOAN_RATE_TYPE.FIXED_PERIOD) {
-      out.fixedRateUntilYear = num(this._q('fixedRateUntilYear'), true);
+      out.fixedRateUntil = this._q('fixedRateUntil').value || null;   // blank = fixed for life
       const revert = num(this._q('revertRate'));
       if (revert != null && prime != null) out.primeSpread = revert - prime;
       else if (revert != null)             out.revertInterestRate = revert;
@@ -176,15 +177,15 @@ export class LoanRateTermsForm {
       const spread = Number(raw) - prime;
       return `= Prime (${fmtPct(prime)}) ${spread >= 0 ? '+' : '−'} ${fmtPct(Math.abs(spread))}`;
     };
-    const until = this._q('fixedRateUntilYear').value;
+    const until = this._q('fixedRateUntil').value;
     const rateHint = this.el.querySelector(`[data-id="${this.rateHintId}"]`);
     if (rateHint) {
       const raw = this.el.querySelector(`[data-id="${this.rateId}"]`).value;
       rateHint.textContent =
           type === LOAN_RATE_TYPE.VARIABLE ? primeText(raw)
         : type === LOAN_RATE_TYPE.FIXED    ? 'Fixed for the life of the loan. Prime moves do not change it.'
-        : until ? `Fixed until 1 January ${until}, then the revert rate.`
-        : 'Set Fixed Until Year, or the rate stays fixed for the life of the loan.';
+        : until ? `Fixed until ${until}, then the revert rate (from that month's payment).`
+        : 'Set Fixed Until, or the rate stays fixed for the life of the loan.';
     }
     const revertHint = this._q('revertRateHint');
     if (revertHint) {
@@ -201,14 +202,14 @@ export class LoanRateTermsForm {
     const notes = [];
     if (type === LOAN_RATE_TYPE.FIXED_PERIOD && until && !io) {
       notes.push(maturity
-        ? `From ${until} the payment is re-amortised at the revert rate over the years to ${maturity}.`
-        : `From ${until} the monthly payment continues unchanged. Set a Maturity Year to re-amortise it.`);
+        ? `From ${until} the payment is re-amortised at the revert rate over the months to ${maturity}.`
+        : `From ${until} the monthly payment continues unchanged. Set a Maturity Date to re-amortise it.`);
     }
     if (this._q('breakCostOnPayoff').checked && type === LOAN_RATE_TYPE.FIXED && !maturity) {
-      notes.push('There is no Maturity Year, so a break cost cannot be priced.');
+      notes.push('There is no Maturity Date, so a break cost cannot be priced.');
     }
     if (this._q('fixedExtraRepaymentCap').value !== '' && !maturity) {
-      notes.push('The extra-repayment cap needs a Maturity Year to measure extra repayments against.');
+      notes.push('The extra-repayment cap needs a Maturity Date to measure extra repayments against.');
     }
     return notes.join(' ');
   }

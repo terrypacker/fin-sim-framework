@@ -342,15 +342,16 @@ export class AccountEditor extends BaseComponent {
     // stores the absolute, and a FIXED_PERIOD loan stores its REVERT rate that way.
     this._loanRateTerms = new LoanRateTermsForm({
       el, prefix: '', rateId: 'loanRate', rateHintId: 'loanRateHint',
-      ioId: 'interestOnly', maturityId: 'maturityYear', primeRates: this._primeRates,
+      ioId: 'interestOnly', maturityId: 'maturityDate', primeRates: this._primeRates,
       listen: (target, evt, fn) => this.listen(target, evt, fn),
     });
     this._loanRateTerms.render(n, { isNew: !n || n.type !== 'loan' });
 
     el.querySelector('[data-id="monthlyPayment"]').value        = n?.monthlyPayment        ?? 0;
     el.querySelector('[data-id="interestOnly"]').checked        = n?.interestOnly          ?? false;
-    el.querySelector('[data-id="interestOnlyUntilYear"]').value = n?.interestOnlyUntilYear ?? '';
-    el.querySelector('[data-id="maturityYear"]').value          = n?.maturityYear          ?? '';
+    // Loan-term dates (design 117): a date input takes 'YYYY-MM-DD' only.
+    el.querySelector('[data-id="interestOnlyUntil"]').value = n?.interestOnlyUntil ? String(n.interestOnlyUntil).slice(0, 10) : '';
+    el.querySelector('[data-id="maturityDate"]').value      = n?.maturityDate      ? String(n.maturityDate).slice(0, 10)      : '';
     el.querySelector('[data-id="deductibleFraction"]').value    = n?.deductibleFraction    ?? '';
     el.querySelector('[data-id="bookingFxRate"]').value         = n?.bookingFxRate         ?? '';
 
@@ -358,7 +359,7 @@ export class AccountEditor extends BaseComponent {
     this._populatePaymentSourceSelect(el, n?.paymentSourceKey ?? null);
 
     const refreshTerm = () => this._refreshLoanTermHint(el);
-    for (const id of ['interestOnly', 'interestOnlyUntilYear', 'maturityYear']) {
+    for (const id of ['interestOnly', 'interestOnlyUntil', 'maturityDate']) {
       this.listen(el.querySelector(`[data-id="${id}"]`), 'change', refreshTerm);
       this.listen(el.querySelector(`[data-id="${id}"]`), 'input',  refreshTerm);
     }
@@ -368,27 +369,27 @@ export class AccountEditor extends BaseComponent {
   /**
    * Describe the loan's life from the three term fields, because their interaction is
    * the part that is easy to author wrong — in particular an IO expiry with no maturity
-   * year has nothing to amortise over, so `scheduledLoanPayment` falls back to the
+   * date has nothing to amortise over, so `scheduledLoanPayment` falls back to the
    * authored fixed payment (a real behaviour, almost never the intended one).
    */
   _refreshLoanTermHint(el) {
     const hint = el.querySelector('[data-id="loanTermHint"]');
     if (!hint) return;
     const io       = el.querySelector('[data-id="interestOnly"]').checked;
-    const ioUntil  = el.querySelector('[data-id="interestOnlyUntilYear"]').value;
-    const maturity = el.querySelector('[data-id="maturityYear"]').value;
+    const ioUntil  = el.querySelector('[data-id="interestOnlyUntil"]').value;
+    const maturity = el.querySelector('[data-id="maturityDate"]').value;
 
     if (!io && !ioUntil && !maturity) { hint.textContent = ''; return; }
     if (!io) {
       hint.textContent = maturity
-        ? `P&I, discharged in full in ${maturity}.`
-        : 'IO Until Year applies to an interest-only loan only — tick Interest Only.';
+        ? `P&I, discharged in full on ${maturity}.`
+        : 'IO Until applies to an interest-only loan only — tick Interest Only.';
       return;
     }
     if (!ioUntil) { hint.textContent = 'Interest-only for life — Monthly Payment is inert.'; return; }
     hint.textContent = maturity
       ? `Interest-only to ${ioUntil}, then P&I re-amortised over the remaining term to ${maturity}.`
-      : `Interest-only to ${ioUntil}, then the fixed Monthly Payment — set a Maturity Year to re-amortise instead.`;
+      : `Interest-only to ${ioUntil}, then the fixed Monthly Payment — set a Maturity Date to re-amortise instead.`;
   }
 
   /** Loan → property picker; see {@link _linkableProperties} for what is offered. */
@@ -1200,8 +1201,9 @@ export class AccountEditor extends BaseComponent {
       Object.assign(data, this._loanRateTerms.read());
       data.monthlyPayment        = Number(el.querySelector('[data-id="monthlyPayment"]').value) || 0;
       data.interestOnly          = el.querySelector('[data-id="interestOnly"]').checked;
-      data.interestOnlyUntilYear = num('interestOnlyUntilYear', true);
-      data.maturityYear          = num('maturityYear', true);
+      // Blank dates stay null — "no term" — never a default day (design 117).
+      data.interestOnlyUntil     = el.querySelector('[data-id="interestOnlyUntil"]').value || null;
+      data.maturityDate          = el.querySelector('[data-id="maturityDate"]').value      || null;
       // The post-IO payment anchor is DERIVED, not edited — there is no field for it.
       // It has to be carried across an edit explicitly, because rebuilding the account
       // from the form alone would re-derive it from the CURRENT balance, and for a loan

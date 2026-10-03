@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-224 parameters · 33 panels · 11 node types (180 fields) · 172 action types · 86 tools · 282 state field types · 74 topics · 125 design docs
+224 parameters · 33 panels · 11 node types (180 fields) · 172 action types · 86 tools · 284 state field types · 74 topics · 125 design docs
 
 ---
 
@@ -689,21 +689,21 @@ Explained in [`help/nodes`](nodes/account.md). 5 field(s) described by a record 
 - **`offsetsPropertyKey`** — Offsets Property · `select` · topic
   The property whose mortgage this offset account reduces. An offset does not earn interest; it lowers the interest-bearing principal of the linked loan instead, dollar for dollar, which is why draining one costs more than the cash it releases.
 - **`rateType`** — Rate Type · `select` · topic
-  How the loan's rate is set. Variable pays Prime plus a margin and moves with every Prime step. Fixed for the whole term holds one rate for the life of the loan, the usual US 15- or 30-year mortgage. Fixed period, then variable holds the rate until the Fixed Until Year and then reverts, the usual Australian three-to-five-year fix or a US adjustable-rate mortgage. A new US loan starts on fixed and a new Australian loan on variable.
+  How the loan's rate is set. Variable pays Prime plus a margin and moves with every Prime step. Fixed for the whole term holds one rate for the life of the loan, the usual US 15- or 30-year mortgage. Fixed period, then variable holds the rate until the Fixed Until date and then reverts, the usual Australian three-to-five-year fix or a US adjustable-rate mortgage. A new US loan starts on fixed and a new Australian loan on variable.
 - **`loanRate`** — Interest Rate · `number` · topic
   The annual rate the lender quotes, as an absolute decimal (0.06 = 6%). On a variable loan it is stored as a margin over Prime where Prime is configured, so a Prime move re-rates it. On a fixed loan, or during a fixed period, it is the fixed rate itself and no Prime move reaches it.
-- **`fixedRateUntilYear`** — Fixed Until Year · `number` · topic
-  The calendar year a fixed period ends: from 1 January of that year the loan pays the revert rate. On a principal-and-interest loan with a maturity year the payment is also recalculated then, from the balance at that point over the years left to maturity. Blank keeps the rate fixed for the life of the loan.
+- **`fixedRateUntil`** — Fixed Until · `date` · topic
+  The day a fixed period ends: from that month's payment the loan pays the revert rate. On a principal-and-interest loan with a maturity date the payment is also recalculated then, from the balance at that point over the months left to maturity. Blank keeps the rate fixed for the life of the loan.
 - **`revertRate`** — Revert Rate · `number` · topic
   The variable rate the loan moves to when its fixed period ends, typed as today's absolute rate. It is stored as a margin over Prime, so it keeps following Prime after the switch. Lenders' revert rates usually sit above what a new borrower is offered, and that step-up is part of the cost of fixing. Blank keeps the fixed rate after the period ends.
 - **`monthlyPayment`** — Monthly Payment · `number` · topic
-  The monthly principal-and-interest payment. Inert while interest-only is on, and inert again after the interest-only period expires when a maturity year is set, because the loan then re-amortises over the remaining term. On a variable loan with a maturity year it is recalculated when Prime moves, keeping whatever you pay above the schedule; without one it is held, so a rate rise lengthens the loan. A payment below the accrued interest simply grows the balance.
+  The monthly principal-and-interest payment. Inert while interest-only is on, and inert again after the interest-only period expires when a maturity date is set, because the loan then re-amortises over the remaining term. On a variable loan with a maturity date it is recalculated when Prime moves, keeping whatever you pay above the schedule; without one it is held, so a rate rise lengthens the loan. A payment below the accrued interest simply grows the balance.
 - **`interestOnly`** — Interest Only · `checkbox` · topic
   Pay exactly the interest accrued on the effective, offset-reduced principal each month. The balance is then flat by construction and a variable rate is tracked automatically. This is the safe way to express interest-only: a fixed payment set below the accrued interest negatively amortises instead, silently.
-- **`interestOnlyUntilYear`** — IO Until Year · `number` · topic
-  The calendar year the interest-only period ends. From then the loan reverts to principal-and-interest over the remaining term, which needs a maturity year to amortise against. Blank means interest-only forever — and that payment step-up is exactly the exposure a "hold the leverage" plan is running.
-- **`maturityYear`** — Maturity Year · `number` · topic
-  The calendar year the loan must be discharged: the whole remaining balance plus interest is paid in that year, and a shortfall runs the ordinary replenish path. Blank means no term at all.
+- **`interestOnlyUntil`** — IO Until · `date` · topic
+  The day the interest-only period ends. From that month's payment the loan reverts to principal-and-interest over the remaining term, which needs a maturity date to amortise against. Blank means interest-only forever — and that payment step-up is exactly the exposure a "hold the leverage" plan is running.
+- **`maturityDate`** — Maturity Date · `date` · topic
+  The day the loan must be discharged: the whole remaining balance plus interest is paid with that month's payment, and a shortfall runs the ordinary replenish path. Blank means no term at all.
 - **`offsetWhileFixed`** — Offset While Fixed · `checkbox` · topic
   Whether a linked offset still reduces this loan's interest while the rate is fixed. Most Australian lenders give no offset on a fixed loan and some give the full offset, so check the loan contract. Off, the offset cash stays spendable but earns nothing against this loan until the fixed period ends. A variable loan is always offset.
 - **`breakCostOnPayoff`** — Break Cost on Sale · `checkbox` · topic
@@ -711,7 +711,7 @@ Explained in [`help/nodes`](nodes/account.md). 5 field(s) described by a record 
 - **`fixedAtPrimeRate`** — Prime at Fix · `number` · topic
   The Prime rate on the day the loan's rate was fixed, the break fee's reference point: the fee grows as Prime falls below it. Blank takes Prime at the loan's first payment in the run, which is right for a loan fixed now and understates the fee for one fixed years ago when rates were higher.
 - **`fixedExtraRepaymentCap`** — Extra Repay Cap /yr · `number` · topic
-  The most extra principal the lender accepts per calendar year while the rate is fixed. Extra here means the part of the monthly payment above the payment that would retire the loan by its maturity year at the fixed rate, so the cap needs a maturity year. Anything over the cap stays in the paying account. Blank means no cap.
+  The most extra principal the lender accepts per calendar year while the rate is fixed. Extra here means the part of the monthly payment above the payment that would retire the loan by its maturity date at the fixed rate, so the cap needs a maturity date. Anything over the cap stays in the paying account. Blank means no cap.
 - **`deductibleFraction`** — Deductible Frac. · `number` · topic
   The income-producing share of the borrowed money's use, 0 to 1 — the use test, not the security. Blank keeps the default rule: fully deductible while a linked property is renting, nil otherwise. It also sets the §988 business share, so it moves the exchange gain or loss treatment too. On a standalone loan a stated fraction deducts the interest in full against Australian assessable income, and on the US return only up to net investment income.
 - **`linkedPropertyKey`** — Linked Property · `select` · topic
@@ -766,21 +766,21 @@ Explained in [`help/nodes`](nodes/real-property.md). 5 field(s) described by a r
 - **`mortgageBalance`** — Mortgage Bal. · `number` · topic
   Outstanding principal, in the property's currency. Above zero this synthesizes a linked loan liability, and the property itself then contributes equity only. Set it to zero and author a separate loan account instead when the debt needs its own payment source or a second lender.
 - **`monthlyMortgage`** — Monthly Mtg. · `number` · topic
-  The monthly principal-and-interest payment. Inert while interest-only is on, because the payment is then derived from the accrued interest, and inert again after the interest-only expiry when a maturity year re-amortises the loan over its remaining term. On a variable mortgage with a maturity year it is recalculated whenever Prime moves, keeping whatever you pay above the schedule; without one it is held as entered.
+  The monthly principal-and-interest payment. Inert while interest-only is on, because the payment is then derived from the accrued interest, and inert again after the interest-only expiry when a maturity date re-amortises the loan over its remaining term. On a variable mortgage with a maturity date it is recalculated whenever Prime moves, keeping whatever you pay above the schedule; without one it is held as entered.
 - **`mortgageRateType`** — Rate Type · `select` · topic
   Variable, fixed for the whole term, or a fixed period that then reverts to variable. Only a variable mortgage, or one past its fixed period, follows Prime. The usual US mortgage is fixed for 15 or 30 years; the usual Australian one is variable or fixed for three to five years. A split mortgage, part fixed and part variable, is authored as this mortgage plus a loan account linked to this property.
 - **`mortgageInterestRate`** — Mtg. Int. Rate · `number` · topic
   The annual rate the bank quotes, as an absolute decimal. A variable mortgage stores it as a margin over Prime where Prime is configured. A fixed mortgage, or one inside its fixed period, keeps it as the fixed rate, untouched by Prime.
-- **`mortgageFixedRateUntilYear`** — Fixed Until Year · `number` · topic
-  The year the fixed period ends; the revert rate applies from 1 January. A principal-and-interest mortgage with a maturity year has its payment recalculated then over the remaining years. Blank means fixed for life.
+- **`mortgageFixedRateUntil`** — Fixed Until · `date` · topic
+  The day the fixed period ends; the revert rate applies from that month's payment. A principal-and-interest mortgage with a maturity date has its payment recalculated then over the remaining months. Blank means fixed for life.
 - **`mortgageRevertRate`** — Revert Rate · `number` · topic
   The rate the mortgage moves to after its fixed period, typed as today's rate and stored as a margin over Prime so it follows Prime from then on. A lender's revert rate is usually higher than its new-customer rate. Blank carries the fixed rate on.
 - **`mortgageInterestOnly`** — Interest Only · `checkbox` · topic
   Pay exactly the interest accrued on the effective, offset-reduced principal each month. The balance is flat by construction and a variable rate is tracked automatically. This is the safe way to express interest-only — a fixed payment below the accrued interest negatively amortises instead, silently.
-- **`mortgageInterestOnlyUntilYear`** — IO Until Year · `number` · topic
-  The calendar year the interest-only period ends. From then the loan reverts to principal-and-interest over the remaining term, which needs a maturity year. Blank means interest-only forever, and the step-up at that expiry is the exposure a leveraged plan is actually carrying.
-- **`mortgageMaturityYear`** — Maturity Year · `number` · topic
-  The calendar year the loan must be discharged: the whole remaining balance plus interest is paid that year, and a shortfall runs the ordinary replenish path. Blank means no term.
+- **`mortgageInterestOnlyUntil`** — IO Until · `date` · topic
+  The day the interest-only period ends. From that month the loan reverts to principal-and-interest over the remaining term, which needs a maturity date. Blank means interest-only forever, and the step-up at that expiry is the exposure a leveraged plan is actually carrying.
+- **`mortgageMaturityDate`** — Maturity Date · `date` · topic
+  The day the loan must be discharged: the whole remaining balance plus interest is paid with that month's payment, and a shortfall runs the ordinary replenish path. Blank means no term.
 - **`mortgageOffsetWhileFixed`** — Offset While Fixed · `checkbox` · topic
   Whether an offset account linked to this property reduces the mortgage's interest during the fixed period. Many Australian lenders offer no offset on a fixed loan. Off, the cash in the offset earns nothing against this mortgage until the fixed period ends; a variable mortgage is always offset.
 - **`mortgageBreakCostOnPayoff`** — Break Cost on Sale · `checkbox` · topic
@@ -788,7 +788,7 @@ Explained in [`help/nodes`](nodes/real-property.md). 5 field(s) described by a r
 - **`mortgageFixedAtPrimeRate`** — Prime at Fix · `number` · topic
   Prime when the rate was fixed, which the break fee is measured from. Blank uses Prime at the first payment of the run, which understates the fee on a rate fixed while Prime was higher.
 - **`mortgageFixedExtraRepaymentCap`** — Extra Repay Cap /yr · `number` · topic
-  The yearly limit on extra principal during the fixed period: payment above what would clear the mortgage by its maturity year at the fixed rate. It needs a maturity year to measure against. Any excess stays in the paying account. Blank is uncapped.
+  The yearly limit on extra principal during the fixed period: payment above what would clear the mortgage by its maturity date at the fixed rate. It needs a maturity date to measure against. Any excess stays in the paying account. Blank is uncapped.
 - **`mortgageDeductibleFraction`** — Deductible Frac. · `number` · topic
   The income-producing share of the borrowed money's use, 0 to 1 — the use test, not what secures the loan. Blank keeps the default rule: fully deductible while the property is renting, nil otherwise. It also decides the §988 business share, so it moves the exchange gain or loss treatment with it.
 - **`mortgagePaymentSourceKey`** — Payment From · `select` · topic
@@ -1785,7 +1785,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 
 ---
 
-## State field types (282)
+## State field types (284)
 
 The scenario-INDEPENDENT half of `StateSchemaRegistry`: the globs and exact paths it
 installs in its own constructor, with the value type that decides how each formats.
@@ -1815,6 +1815,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `*.earningsBasis` | currency |
 | `*.fixedAtPrimeRate` | rate |
 | `*.fixedExtraYear` | year |
+| `*.fixedRateUntil` | date |
 | `*.fxBasisRate` | fxRate |
 | `*.fxBasisUsd` | currency(USD) |
 | `*.holdings.*.acquisitionDateByCountry.*` | date |
@@ -1838,15 +1839,16 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `*.holdings.*.rollTermYears` | integer |
 | `*.holdings.*.taxLossPartner` | text |
 | `*.holdings.*.units` | decimal |
+| `*.interestOnlyUntil` | date |
 | `*.interestRate` | rate |
-| `*.maturityYear` | year |
+| `*.maturityDate` | date |
 | `*.minimumAge` | decimal |
 | `*.minimumBalance` | currency |
 | `*.paymentSchedule.fromMonth` | integer |
 | `*.paymentSchedule.months` | integer |
 | `*.paymentSchedule.rate` | rate |
 | `*.plannedSaleDate` | date |
-| `*.postFixedFromYear` | year |
+| `*.postFixedFromMonth` | integer |
 | `*.primeSpread` | rate |
 | `*.purchaseDate` | date |
 | `*.repairLambda` | decimal |

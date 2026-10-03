@@ -245,12 +245,12 @@ export class LoanAccount extends Account {
     // expressed. Stated rather than traced: mixed-purpose accounts have no clean
     // tracing model, and a stated fraction is both honest and sufficient.
     this.deductibleFraction = opts.deductibleFraction ?? null;
-    // Loan term (design 86 G6), absolute calendar years. An IO loan reverts to P&I
-    // amortised over the remaining term at `interestOnlyUntilYear`, and must be
-    // discharged by `maturityYear`. Both null ⇒ no term: the loan amortises (or stays
+    // Loan term (design 86 G6; 'YYYY-MM-DD' dates since design 117). An IO loan reverts
+    // to P&I amortised over the remaining term from `interestOnlyUntil`, and must be
+    // discharged by `maturityDate`. Both null ⇒ no term: the loan amortises (or stays
     // interest-only) forever, which is the pre-86 behaviour.
-    this.interestOnlyUntilYear = opts.interestOnlyUntilYear ?? null;
-    this.maturityYear          = opts.maturityYear          ?? null;
+    this.interestOnlyUntil     = opts.interestOnlyUntil     ?? null;
+    this.maturityDate          = opts.maturityDate          ?? null;
     // The principal the post-IO P&I payment amortises from (see scheduledLoanPayment).
     // A real lender fixes that payment when the IO period ends and holds it, so extra
     // principal — an offset paying the loan down faster than schedule — shortens the
@@ -269,10 +269,10 @@ export class LoanAccount extends Account {
     // Rate type and fixed period (design 113). `rateType` null resolves exactly as before
     // it existed: a `primeSpread` makes the loan variable, none makes it fixed. FIXED is
     // `interestRate` for life (a US 30-year); FIXED_PERIOD is `interestRate` until
-    // `fixedRateUntilYear`, then Prime + `primeSpread` — the REVERT spread — or the
+    // `fixedRateUntil`, then Prime + `primeSpread` — the REVERT spread — or the
     // absolute `revertInterestRate` when no Prime is configured.
     this.rateType               = opts.rateType               ?? null;
-    this.fixedRateUntilYear     = opts.fixedRateUntilYear     ?? null;
+    this.fixedRateUntil         = opts.fixedRateUntil         ?? null;
     this.revertInterestRate     = opts.revertInterestRate     ?? null;
     // Inside the fixed window: does a linked offset still reduce interest (most AU lenders:
     // no), does a sale pay a break cost, and how much extra may be repaid per year.

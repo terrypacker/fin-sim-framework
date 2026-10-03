@@ -88,8 +88,8 @@ export function accountToStatePlain(account) {
     plain.paymentSourceKey      = account.paymentSourceKey      ?? null;
     plain.interestOnly          = account.interestOnly          ?? false;
     plain.deductibleFraction    = account.deductibleFraction    ?? null;
-    plain.interestOnlyUntilYear = account.interestOnlyUntilYear ?? null;
-    plain.maturityYear          = account.maturityYear          ?? null;
+    plain.interestOnlyUntil     = account.interestOnlyUntil     ?? null;
+    plain.maturityDate          = account.maturityDate          ?? null;
     plain.bookingFxRate         = account.bookingFxRate         ?? null;
     // Anchor for the post-IO payment (see scheduledLoanPayment). Same reason as every
     // other field here: the handler reads the runtime STATE entry, so leaving it out

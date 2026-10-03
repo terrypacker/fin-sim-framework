@@ -127,26 +127,26 @@ export class RealPropertyEditor extends BaseComponent {
    *     amortise over, so at expiry it falls back to the authored fixed payment. That
    *     is a real behaviour, not an error, but it is almost never what was meant.
    *   · IO with both → the reversion this whole gap exists to model.
-   *   · maturity alone  → the balance is discharged in that year, in one payment.
+   *   · maturity alone  → the balance is discharged in that month, in one payment.
    */
   _updateMortgageTermHint(el) {
     const hint = el.querySelector('[data-id="mortgageTermHint"]');
     if (!hint) return;
     const io       = el.querySelector('[data-id="mortgageInterestOnly"]').checked;
-    const ioUntil  = el.querySelector('[data-id="mortgageInterestOnlyUntilYear"]').value;
-    const maturity = el.querySelector('[data-id="mortgageMaturityYear"]').value;
+    const ioUntil  = el.querySelector('[data-id="mortgageInterestOnlyUntil"]').value;
+    const maturity = el.querySelector('[data-id="mortgageMaturityDate"]').value;
 
     if (!io && !ioUntil && !maturity) { hint.textContent = ''; return; }
     if (!io) {
       hint.textContent = maturity
-        ? `P&I, discharged in full in ${maturity}.`
-        : 'IO Until Year applies to an interest-only loan only — tick Interest Only.';
+        ? `P&I, discharged in full on ${maturity}.`
+        : 'IO Until applies to an interest-only loan only — tick Interest Only.';
       return;
     }
     if (!ioUntil) { hint.textContent = 'Interest-only for life — Monthly Mtg. is inert.'; return; }
     hint.textContent = maturity
       ? `Interest-only to ${ioUntil}, then P&I re-amortised over the remaining term to ${maturity}.`
-      : `Interest-only to ${ioUntil}, then the fixed Monthly Mtg. — set a Maturity Year to re-amortise instead.`;
+      : `Interest-only to ${ioUntil}, then the fixed Monthly Mtg. — set a Maturity Date to re-amortise instead.`;
   }
 
   render() {
@@ -188,18 +188,19 @@ export class RealPropertyEditor extends BaseComponent {
     // bank quotes, and the rate type decides how it is stored — see LoanRateTermsForm.
     this._mortgageRateTerms = new LoanRateTermsForm({
       el, prefix: 'mortgage', rateId: 'mortgageInterestRate', rateHintId: 'mortgageRateHint',
-      ioId: 'mortgageInterestOnly', maturityId: 'mortgageMaturityYear', primeRates: this._primeRates,
+      ioId: 'mortgageInterestOnly', maturityId: 'mortgageMaturityDate', primeRates: this._primeRates,
       listen: (target, evt, fn) => this.listen(target, evt, fn),
     });
     this._mortgageRateTerms.render(_mortgageAsLoan(this._node), { isNew: !this._node });
     // Mortgage terms + deductibility (design 86 G2/G3/G6/G7). Every one is blank/off
     // by default, which reproduces the pre-86 loan exactly: no term, no IO, the
     // "deductible iff the property rents" rule, and a §988 booking rate stamped at the
-    // first payment. A blank year/fraction must round-trip as null, NOT 0 — 0 is a real
-    // maturity year and a real "nothing is deductible" fraction.
+    // first payment. A blank date/fraction must round-trip as null, NOT 0 — 0 is a real
+    // "nothing is deductible" fraction.
     el.querySelector('[data-id="mortgageInterestOnly"]').checked = this._node?.mortgageInterestOnly ?? false;
-    el.querySelector('[data-id="mortgageInterestOnlyUntilYear"]').value = this._node?.mortgageInterestOnlyUntilYear ?? '';
-    el.querySelector('[data-id="mortgageMaturityYear"]').value          = this._node?.mortgageMaturityYear          ?? '';
+    const termDay = (v) => (v ? String(v).slice(0, 10) : '');   // dates since design 117
+    el.querySelector('[data-id="mortgageInterestOnlyUntil"]').value = termDay(this._node?.mortgageInterestOnlyUntil);
+    el.querySelector('[data-id="mortgageMaturityDate"]').value      = termDay(this._node?.mortgageMaturityDate);
     el.querySelector('[data-id="mortgageDeductibleFraction"]').value    = this._node?.mortgageDeductibleFraction    ?? '';
     el.querySelector('[data-id="mortgageBookingFxRate"]').value         = this._node?.mortgageBookingFxRate         ?? '';
     // The cash pool the mortgage direct-debits (design 54 P4). The data path has always
@@ -213,7 +214,7 @@ export class RealPropertyEditor extends BaseComponent {
     // mortgage derives its own payment, so the payment field goes inert. Both are
     // easy to get silently wrong, so say so under the fields rather than in a tooltip.
     const refreshTerm = () => this._updateMortgageTermHint(el);
-    for (const id of ['mortgageInterestOnly', 'mortgageInterestOnlyUntilYear', 'mortgageMaturityYear']) {
+    for (const id of ['mortgageInterestOnly', 'mortgageInterestOnlyUntil', 'mortgageMaturityDate']) {
       this.listen(el.querySelector(`[data-id="${id}"]`), 'change', refreshTerm);
       this.listen(el.querySelector(`[data-id="${id}"]`), 'input',  refreshTerm);
     }
@@ -400,8 +401,8 @@ export class RealPropertyEditor extends BaseComponent {
       // deductible fraction is clamped to [0,1] because it is a share, and a stray
       // 50 (percent, not fraction) would otherwise multiply the deduction by fifty.
       mortgageInterestOnly:          el.querySelector('[data-id="mortgageInterestOnly"]').checked,
-      mortgageInterestOnlyUntilYear: nullableNum('mortgageInterestOnlyUntilYear', true),
-      mortgageMaturityYear:          nullableNum('mortgageMaturityYear', true),
+      mortgageInterestOnlyUntil:     el.querySelector('[data-id="mortgageInterestOnlyUntil"]').value || null,
+      mortgageMaturityDate:          el.querySelector('[data-id="mortgageMaturityDate"]').value      || null,
       mortgageDeductibleFraction:    (() => {
         const f = nullableNum('mortgageDeductibleFraction');
         return f == null ? null : Math.min(1, Math.max(0, f));

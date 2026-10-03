@@ -549,10 +549,12 @@ export class StateSchemaRegistry {
     this.registerPattern('*.bookingFxRate',         ParameterValueType.fxRate());
     this.registerPattern('*.interestRate',          ParameterValueType.rate());
     this.registerPattern('*.primeSpread',           ParameterValueType.rate());
-    this.registerPattern('*.maturityYear',          ParameterValueType.year());
+    this.registerPattern('*.maturityDate',          ParameterValueType.date());
+    this.registerPattern('*.interestOnlyUntil',     ParameterValueType.date());
+    this.registerPattern('*.fixedRateUntil',        ParameterValueType.date());
     // Design 113 loan stamps. Their money is stamped per loan, in the loan's currency.
     this.registerPattern('*.fixedAtPrimeRate',      ParameterValueType.rate());
-    this.registerPattern('*.postFixedFromYear',     ParameterValueType.year());
+    this.registerPattern('*.postFixedFromMonth',    ParameterValueType.integer()); // year × 12 + month
     this.registerPattern('*.fixedExtraYear',        ParameterValueType.year());
     this.registerPattern('*.paymentSchedule.rate',      ParameterValueType.rate());
     this.registerPattern('*.paymentSchedule.fromMonth', ParameterValueType.integer()); // year × 12 + month

@@ -11,7 +11,7 @@
 import { PRIORITY, AccountServiceReducer } from '../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction, FieldValueAction } from '../../simulation-framework/actions.js';
-import { findLoansForProperty, effectivePrincipal, resolveLoanRate } from './loan-classes.js';
+import { findLoansForProperty, effectivePrincipal, resolveLoanRate, loanClock } from './loan-classes.js';
 import { resolveCashKey } from './cash-routing.js';
 
 /** Resolve the US / AU cash pools (savings first, checking fallback). */
@@ -53,8 +53,10 @@ const firstResidency = (state) =>
  *                           property (findLoansForProperty) — a split has two, and each
  *                           deducts its own interest at its own rate (design 113 §8)
  * @param {object} [state]    Full runtime state, for the Phase-3 offset hook in effectivePrincipal
+ * @param {Date}   [date]     the month's date: a loan term ending this month applies (design 117)
  */
-export function computeRentalMonth(p, propState, country, inflationFactor = 1, loan = null, state = null) {
+export function computeRentalMonth(p, propState, country, inflationFactor = 1, loan = null, state = null,
+                                   date = null) {
   const monthlyRent   = (p.monthlyRent         ?? 0) * (inflationFactor || 1);
   // Clamped: an MC/Opt sweep of the occupancy lever can draw either side of [0, 1].
   const occupancy     = Math.min(1, Math.max(0, p.occupancyRate ?? 0.95));
@@ -69,7 +71,7 @@ export function computeRentalMonth(p, propState, country, inflationFactor = 1, l
   const loans = Array.isArray(loan) ? loan : (loan ? [loan] : []);
   let deductibleInterest = 0;
   for (const l of loans) {
-    const loanPrincipal = effectivePrincipal(state, l.stateKey, l);
+    const loanPrincipal = effectivePrincipal(state, l.stateKey, l, date);
     // The deductible-interest rate is the loan's EFFECTIVE rate (design 56 Phase 3): a
     // Prime-linked mortgage's deduction tracks `Prime + spread` in lockstep with the
     // payment accrual (LoanPaymentHandler), so the two never diverge; a fixed loan uses
@@ -82,7 +84,7 @@ export function computeRentalMonth(p, propState, country, inflationFactor = 1, l
     // mortgage secured on a rental but partly drawn down for private use is only
     // partly deductible. `null` (the default, and every pre-86 loan) means 1 — fully
     // deductible while the property rents — so this is inert unless stated.
-    const accruedInterest = Math.max(0, loanPrincipal * resolveLoanRate(state, l) / 12);
+    const accruedInterest = Math.max(0, loanPrincipal * resolveLoanRate(state, l, loanClock(state, l, date)) / 12);
     const deductibleShare = l.deductibleFraction ?? 1;
     deductibleInterest += accruedInterest * Math.min(1, Math.max(0, deductibleShare));
   }
@@ -131,7 +133,7 @@ export class UsRentalIncomeHandler extends HandlerEntry {
     return h;
   }
 
-  call({ state }) {
+  call({ state, date }) {
     const cashKey   = resolveCashKey(this.stateRegistry, 'US', state);
     const residency = firstResidency(state);
     // Index rent to the effective (regime-adjusted) US inflation path.
@@ -144,7 +146,7 @@ export class UsRentalIncomeHandler extends HandlerEntry {
       // Skip when there is no rent, or the property has been sold (value zeroed).
       if (!propState || (propState.value ?? 0) <= 0 || (p.monthlyRent ?? 0) <= 0) continue;
       const loan = findLoansForProperty(state, p.stateKey);
-      const m = computeRentalMonth(p, propState, 'US', inflationFactor, loan, state);
+      const m = computeRentalMonth(p, propState, 'US', inflationFactor, loan, state, date);
       anyRent += m.netCash;
       actions.push({
         type:                'US_RENTAL_INCOME_APPLY',
@@ -224,7 +226,7 @@ export class AuRentalIncomeHandler extends HandlerEntry {
     return h;
   }
 
-  call({ state }) {
+  call({ state, date }) {
     const cashKey   = resolveCashKey(this.stateRegistry, 'AU', state);
     const residency = firstResidency(state);
     // Index rent to the effective (regime-adjusted) AU inflation path.
@@ -237,7 +239,7 @@ export class AuRentalIncomeHandler extends HandlerEntry {
       // Skip when there is no rent, or the property has been sold (value zeroed).
       if (!propState || (propState.value ?? 0) <= 0 || (p.monthlyRent ?? 0) <= 0) continue;
       const loan = findLoansForProperty(state, p.stateKey);
-      const m = computeRentalMonth(p, propState, 'AU', inflationFactor, loan, state);
+      const m = computeRentalMonth(p, propState, 'AU', inflationFactor, loan, state, date);
       anyRent += m.netCash;
       actions.push({
         type:                'AU_RENTAL_INCOME_APPLY',

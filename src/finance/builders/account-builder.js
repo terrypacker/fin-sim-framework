@@ -97,8 +97,8 @@ class LoanAccountBuilder extends BaseAccountBuilder {
     this._paymentSourceKey  = null;
     this._interestOnly      = false;
     this._deductibleFraction = null;
-    this._interestOnlyUntilYear = null;
-    this._maturityYear          = null;
+    this._interestOnlyUntil     = null;
+    this._maturityDate          = null;
     this._bookingFxRate         = null;
     this._postIoPrincipal       = null;
     this._rateTerms             = {};
@@ -113,9 +113,11 @@ class LoanAccountBuilder extends BaseAccountBuilder {
   /** Income-producing share of the loan's purpose, 0..1 (design 86 G3). */
   deductibleFraction(v) { this._deductibleFraction = v; return this; }
   /** Calendar year the IO period ends and the loan reverts to P&I (design 86 G6). */
-  interestOnlyUntilYear(v) { this._interestOnlyUntilYear = v; return this; }
+  /** 'YYYY-MM-DD' (design 117). */
+  interestOnlyUntil(v) { this._interestOnlyUntil = v; return this; }
   /** Calendar year the loan must be discharged (design 86 G6). */
-  maturityYear(v) { this._maturityYear = v; return this; }
+  /** 'YYYY-MM-DD' (design 117). */
+  maturityDate(v) { this._maturityDate = v; return this; }
   /** Foreign units per USD when the debt was incurred — the §988 basis (design 86 G7). */
   bookingFxRate(v) { this._bookingFxRate = v; return this; }
   /** Principal the post-IO P&I payment amortises from; defaults to the opening balance. */
@@ -123,7 +125,8 @@ class LoanAccountBuilder extends BaseAccountBuilder {
   /** VARIABLE | FIXED | FIXED_PERIOD (design 113 §4). */
   rateType(v) { this._rateTerms.rateType = v; return this; }
   /** Calendar year a FIXED_PERIOD loan's fixed rate ends (design 113 §4). */
-  fixedRateUntilYear(v) { this._rateTerms.fixedRateUntilYear = v; return this; }
+  /** 'YYYY-MM-DD' (design 117). */
+  fixedRateUntil(v) { this._rateTerms.fixedRateUntil = v; return this; }
   /** Absolute revert rate, used only when no Prime is configured (design 113 §4). */
   revertInterestRate(v) { this._rateTerms.revertInterestRate = v; return this; }
   /** Whether a linked offset works inside the fixed window (design 113 §5). */
@@ -144,8 +147,8 @@ class LoanAccountBuilder extends BaseAccountBuilder {
       paymentSourceKey:  this._paymentSourceKey,
       interestOnly:      this._interestOnly,
       deductibleFraction: this._deductibleFraction,
-      interestOnlyUntilYear: this._interestOnlyUntilYear,
-      maturityYear:          this._maturityYear,
+      interestOnlyUntil:     this._interestOnlyUntil,
+      maturityDate:          this._maturityDate,
       bookingFxRate:         this._bookingFxRate,
       postIoPrincipal:       this._postIoPrincipal,
       ...this._rateTerms,

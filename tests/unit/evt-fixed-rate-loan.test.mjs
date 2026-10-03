@@ -49,7 +49,7 @@ import { USD, AUD, LoanAccount } from '../../src/finance/assets/account.js';
 import {
   LoanPaymentHandler, LoanPaymentApplyReducer, LOAN_RATE_TYPE,
   resolveLoanRate, effectivePrincipal, loanBreakCost, synthesizeLoanForProperty, capFixedExtraRepayment,
-  findLoansForProperty, resolvePaymentSchedule, PAYMENT_SCHEDULE_PHASE,
+  findLoansForProperty, resolvePaymentSchedule, PAYMENT_SCHEDULE_PHASE, loanClock,
 } from '../../src/finance/account-rules/loan-classes.js';
 import { AuHouseSaleHandler, AuHouseSaleApplyReducer } from '../../src/finance/account-rules/au/au-real-property-classes.js';
 import { loansForOffset } from '../../src/finance/pools/pool-metrics.js';
@@ -132,12 +132,12 @@ test('FRL-1: resolveLoanRate follows the rate type; no rate type resolves as bef
   // VARIABLE is Prime + spread.
   assert.equal(resolveLoanRate(s, loan({ rateType: VARIABLE, primeSpread: 0.02 })), 0.07);
   // FIXED_PERIOD: the fixed rate before the year, the revert spread from it.
-  const fp = loan({ rateType: FIXED_PERIOD, fixedRateUntilYear: 2031, primeSpread: 0.025 });
+  const fp = loan({ rateType: FIXED_PERIOD, fixedRateUntil: '2031-01-01', primeSpread: 0.025 });
   assert.equal(resolveLoanRate(withClock({}, 2030, 0.05), fp), 0.06);
   assert.ok(Math.abs(resolveLoanRate(withClock({}, 2031, 0.05), fp) - 0.075) < 1e-12);
   // No Prime configured: the absolute revert rate.
   const noPrime = { currentPeriods: { AU: { startMs: yearMs(2032) } } };
-  assert.equal(resolveLoanRate(noPrime, loan({ rateType: FIXED_PERIOD, fixedRateUntilYear: 2031,
+  assert.equal(resolveLoanRate(noPrime, loan({ rateType: FIXED_PERIOD, fixedRateUntil: '2031-01-01',
     revertInterestRate: 0.068 })), 0.068);
   // No Fixed Until Year: fixed for life.
   assert.equal(resolveLoanRate(withClock({}, 2090, 0.09), loan({ rateType: FIXED_PERIOD })), 0.06);
@@ -148,7 +148,7 @@ test('FRL-1: resolveLoanRate follows the rate type; no rate type resolves as bef
 test('FRL-2: a US 30-year fixed loan ignores a Prime hike; a variable loan pays it', () => {
   const primeAt = (y) => (y < 2032 ? 0.04 : 0.07);
   const base = { interestRate: 0.06, monthlyPayment: 3_000, country: 'US', currency: USD };
-  const fixed = runMonths({ hLoan: loan({ ...base, rateType: FIXED, maturityYear: 2056 }), cash: cash() },
+  const fixed = runMonths({ hLoan: loan({ ...base, rateType: FIXED, maturityDate: '2056-01-01' }), cash: cash() },
     2030, 48, { primeAt });
   const variable = runMonths({ hLoan: loan({ ...base, rateType: VARIABLE, interestRate: 0, primeSpread: 0.02 }),
     cash: cash() }, 2030, 48, { primeAt });
@@ -166,8 +166,8 @@ test('FRL-2: a US 30-year fixed loan ignores a Prime hike; a variable loan pays 
 // ── FRL-3 ────────────────────────────────────────────────────────────────────
 
 test('FRL-3: a fixed period ends in a re-amortised payment at the revert rate, anchored at expiry', () => {
-  const l = loan({ rateType: FIXED_PERIOD, interestRate: 0.055, fixedRateUntilYear: 2033,
-                   primeSpread: 0.03, maturityYear: 2055, monthlyPayment: 3_200 });
+  const l = loan({ rateType: FIXED_PERIOD, interestRate: 0.055, fixedRateUntil: '2033-01-01',
+                   primeSpread: 0.03, maturityDate: '2055-01-01', monthlyPayment: 3_200 });
   const primeAt = () => 0.04;                       // revert rate = 7%
   const { state, payments } = runMonths({ hLoan: l, cash: cash() }, 2030, 5 * 12, { primeAt });
 
@@ -177,7 +177,7 @@ test('FRL-3: a fixed period ends in a re-amortised payment at the revert rate, a
 
   // The anchor is the balance on the first payment of 2033.
   assert.ok(state.hLoan.postFixedPrincipal > 0);
-  assert.equal(state.hLoan.postFixedFromYear, 2033);
+  assert.equal(state.hLoan.postFixedFromMonth, 2033 * 12, 'the month index of that payment');
   const i = 0.07 / 12, n = (2055 - 2033) * 12;
   const expected = state.hLoan.postFixedPrincipal * i / (1 - Math.pow(1 + i, -n));
   for (const p of after) assert.ok(Math.abs(p.payment - expected) < 1e-6, `${p.payment} vs ${expected}`);
@@ -188,7 +188,7 @@ test('FRL-3: a fixed period ends in a re-amortised payment at the revert rate, a
 // ── FRL-4 ────────────────────────────────────────────────────────────────────
 
 test('FRL-4: no offset inside a fixed window unless allowed; it returns when the window ends', () => {
-  const fp = { rateType: FIXED_PERIOD, fixedRateUntilYear: 2032, primeSpread: 0.02 };
+  const fp = { rateType: FIXED_PERIOD, fixedRateUntil: '2032-01-01', primeSpread: 0.02 };
   const at = (y, l) => withClock({ hLoan: l, off: offset(200_000) }, y);
 
   assert.equal(effectivePrincipal(at(2030, loan(fp)), 'hLoan', loan(fp)), 500_000);
@@ -211,7 +211,7 @@ test('FRL-4: no offset inside a fixed window unless allowed; it returns when the
 test('FRL-5: a split counts the offset once — variable part first, fixed part excluded', () => {
   const variable = loan({ stateKey: 'hLoan', balance: 300_000, rateType: VARIABLE, primeSpread: 0.02 });
   const fixedPart = loan({ stateKey: 'hFixedLoan', balance: 200_000, rateType: FIXED_PERIOD,
-                           fixedRateUntilYear: 2033 });
+                           fixedRateUntil: '2033-01-01' });
   const s = withClock({ hLoan: variable, hFixedLoan: fixedPart, off: offset(350_000) }, 2030);
 
   assert.deepEqual(findLoansForProperty(s, 'h').map(l => l.stateKey), ['hLoan', 'hFixedLoan']);
@@ -230,7 +230,7 @@ test('FRL-5: a split counts the offset once — variable part first, fixed part 
 
 test('FRL-6: extra repayments inside the fixed window are capped per calendar year', () => {
   // Scheduled P&I on 500k at 6% over ~25 years is ~3,220/month; paying 5,000 is ~1,780 extra.
-  const l = loan({ rateType: FIXED_PERIOD, fixedRateUntilYear: 2035, maturityYear: 2055,
+  const l = loan({ rateType: FIXED_PERIOD, fixedRateUntil: '2035-01-01', maturityDate: '2055-01-01',
                    monthlyPayment: 5_000, fixedExtraRepaymentCap: 10_000 });
   const capped   = runMonths({ hLoan: l, cash: cash() }, 2030, 24);
   const uncapped = runMonths({ hLoan: { ...l, fixedExtraRepaymentCap: null }, cash: cash() }, 2030, 24);
@@ -250,7 +250,7 @@ test('FRL-6: extra repayments inside the fixed window are capped per calendar ye
 // ── FRL-7 ────────────────────────────────────────────────────────────────────
 
 test('FRL-7: break cost — inside the window, when rates have fallen, and only if charged', () => {
-  const l = loan({ rateType: FIXED_PERIOD, interestRate: 0.06, fixedRateUntilYear: 2033,
+  const l = loan({ rateType: FIXED_PERIOD, interestRate: 0.06, fixedRateUntil: '2033-01-01',
                    breakCostOnPayoff: true, fixedAtPrimeRate: 0.05 });
   const date = new Date(Date.UTC(2030, 0, 15));        // 36 months left in the window
 
@@ -263,11 +263,13 @@ test('FRL-7: break cost — inside the window, when rates have fallen, and only 
   assert.ok(Math.abs(fell.amount - expected) < 0.01);
 
   assert.equal(loanBreakCost(withClock({}, 2030, 0.06), l, date).amount, 0, 'rates rose: no fee');
-  assert.equal(loanBreakCost(withClock({}, 2033, 0.03), l, date).amount, 0, 'window over: no fee');
+  // The sale's own date decides whether the window is over (design 117: the month clock).
+  assert.equal(loanBreakCost(withClock({}, 2033, 0.03), l, new Date(Date.UTC(2033, 0, 15))).amount, 0,
+    'window over: no fee');
   assert.equal(loanBreakCost(withClock({}, 2030, 0.03), { ...l, breakCostOnPayoff: false }, date).amount, 0);
   // A FIXED loan's window ends at maturity; without one there is nothing to price.
   assert.equal(loanBreakCost(withClock({}, 2030, 0.03), { ...l, rateType: FIXED }, date).amount, 0);
-  assert.ok(loanBreakCost(withClock({}, 2030, 0.03), { ...l, rateType: FIXED, maturityYear: 2050 }, date).amount > fell.amount);
+  assert.ok(loanBreakCost(withClock({}, 2030, 0.03), { ...l, rateType: FIXED, maturityDate: '2050-01-01' }, date).amount > fell.amount);
 });
 
 // ── FRL-8 ────────────────────────────────────────────────────────────────────
@@ -276,7 +278,7 @@ test('FRL-8: a sale discharges every loan on the property and pays the break cos
   const variable = loan({ stateKey: 'auHouseLoan', linkedPropertyKey: 'auHouse', balance: 300_000,
                           rateType: VARIABLE, primeSpread: 0.02 });
   const fixedPart = loan({ stateKey: 'auFixedLoan', linkedPropertyKey: 'auHouse', balance: 200_000,
-                           rateType: FIXED_PERIOD, interestRate: 0.06, fixedRateUntilYear: 2033,
+                           rateType: FIXED_PERIOD, interestRate: 0.06, fixedRateUntil: '2033-01-01',
                            breakCostOnPayoff: true, fixedAtPrimeRate: 0.05 });
   const savings = { ...makeAccount({ stateKey: 'auSavingsAccount', currency: 'AUD',
     holdings: [{ id: 'h', marketValue: 1_000, costBasis: 1_000 }] }) };
@@ -312,7 +314,7 @@ test('FRL-8: a sale discharges every loan on the property and pays the break cos
 // ── FRL-9 ────────────────────────────────────────────────────────────────────
 
 test('FRL-9: the rate terms round-trip, and a mortgage carries them onto its loan', () => {
-  const terms = { rateType: FIXED_PERIOD, fixedRateUntilYear: 2031, revertInterestRate: 0.07,
+  const terms = { rateType: FIXED_PERIOD, fixedRateUntil: '2031-01-01', revertInterestRate: 0.07,
                   offsetWhileFixed: true, breakCostOnPayoff: true, fixedExtraRepaymentCap: 10_000,
                   fixedAtPrimeRate: 0.041 };
   const acct = new LoanAccount(400_000, { interestRate: 0.055, country: 'AU', ...terms });
@@ -326,18 +328,18 @@ test('FRL-9: the rate terms round-trip, and a mortgage carries them onto its loa
   assert.equal(synthesized.rateType, FIXED);
   assert.equal(synthesized.breakCostOnPayoff, true);
   // Unset terms are not projected at all, so a legacy mortgage's entry is unchanged.
-  assert.equal('fixedRateUntilYear' in synthesized, false);
+  assert.equal('fixedRateUntil' in synthesized, false);
   const legacy = synthesizeLoanForProperty({ stateKey: 'h', mortgageBalance: 1, country: 'AU' });
   assert.equal('rateType' in legacy, false);
 
   // The property record's own save/load, and a legacy property writes none of the fields.
   const prop = ScenarioSerializer._makeRealProperty({ stateKey: 'h', value: 1, country: 'AU',
-    mortgageRateType: FIXED_PERIOD, mortgageFixedRateUntilYear: 2031, mortgageOffsetWhileFixed: false });
+    mortgageRateType: FIXED_PERIOD, mortgageFixedRateUntil: '2031-01-01', mortgageOffsetWhileFixed: false });
   const saved = ScenarioSerializer._serializeRealProperty(prop);
   assert.equal(saved.mortgageRateType, FIXED_PERIOD);
   assert.equal(saved.mortgageOffsetWhileFixed, false, 'false is a real answer and must survive');
   const reloaded = ScenarioSerializer._makeRealProperty(saved);
-  assert.equal(reloaded.mortgageFixedRateUntilYear, 2031);
+  assert.equal(reloaded.mortgageFixedRateUntil, '2031-01-01');
   const plain = ScenarioSerializer._serializeRealProperty(
     ScenarioSerializer._makeRealProperty({ stateKey: 'h', value: 1, country: 'AU' }));
   assert.equal('mortgageRateType' in plain, false);
@@ -352,8 +354,9 @@ test('FRL-10: a fixed-period mortgage authored on a property reaches the running
       const p = cfg.realProperties.find(r => r.stateKey === 'auHouseProperty');
       Object.assign(p, {
         mortgageBalance: 400_000, mortgageInterestRate: 0.055, monthlyMortgage: 2_500,
-        mortgageMaturityYear: 2050,
-        mortgageRateType: FIXED_PERIOD, mortgageFixedRateUntilYear: 2028, mortgagePrimeSpread: 0.03,
+        // A real AU plan: its terms end on 1 July, the day the AU period year turns.
+        mortgageMaturityDate: '2050-07-01',
+        mortgageRateType: FIXED_PERIOD, mortgageFixedRateUntil: '2028-07-01', mortgagePrimeSpread: 0.03,
       });
     },
   });
@@ -368,7 +371,7 @@ test('FRL-10: a fixed-period mortgage authored on a property reaches the running
   l = sim.state[loanKey];
   const prime = sim.state.effectiveInterestRates.PRIME_AU;
   assert.ok(Math.abs(resolveLoanRate(sim.state, l) - (prime + 0.03)) < 1e-12, 'after it: Prime + revert');
-  assert.equal(l.postFixedFromYear, 2028, 'the post-fixed anchor was taken in the expiry year');
+  assert.equal(l.postFixedFromMonth, 2028 * 12 + 6, 'the post-fixed anchor was taken at the July 2028 payment');
 });
 
 // ── FRL-11 … FRL-14: payment reset when the rate moves (§6.1) ─────────────────
@@ -378,7 +381,7 @@ const pmt = (p, r, n) => { const i = r / 12; return p * i / (1 - Math.pow(1 + i,
 
 /** A variable P&I loan at Prime 4% + 2% = 6%, paying exactly the 25-year schedule to 2055. */
 const variablePI = (overrides = {}) => loan({
-  rateType: VARIABLE, interestRate: 0, primeSpread: 0.02, maturityYear: 2055,
+  rateType: VARIABLE, interestRate: 0, primeSpread: 0.02, maturityDate: '2055-01-01',
   monthlyPayment: pmt(500_000, 0.06, 300), ...overrides,
 });
 
@@ -396,12 +399,12 @@ test('FRL-11: at a constant Prime the authored payment is paid exactly; a fixed 
   // fixed window, and a variable loan with no maturity.
   const s0 = withClock({}, 2030, 0.04);
   for (const other of [
-    loan({ rateType: FIXED, maturityYear: 2055 }),
-    loan({ maturityYear: 2055 }),
-    loan({ rateType: FIXED_PERIOD, fixedRateUntilYear: 2033, primeSpread: 0.02, maturityYear: 2055 }),
-    variablePI({ maturityYear: null }),
+    loan({ rateType: FIXED, maturityDate: '2055-01-01' }),
+    loan({ maturityDate: '2055-01-01' }),
+    loan({ rateType: FIXED_PERIOD, fixedRateUntil: '2033-01-01', primeSpread: 0.02, maturityDate: '2055-01-01' }),
+    variablePI({ maturityDate: null }),
   ]) {
-    assert.equal(resolvePaymentSchedule(s0, other, 500_000, 0.06, 2030, new Date(Date.UTC(2030, 0, 15))), null);
+    assert.equal(resolvePaymentSchedule(s0, other, 500_000, 0.06, 2030 * 12, new Date(Date.UTC(2030, 0, 15))), null);
   }
 });
 
@@ -422,14 +425,14 @@ test('FRL-12: a variable P&I loan re-amortises when Prime moves and still retire
 
   // No maturity: nothing to amortise against, the authored payment is held.
   const primeAt = (y) => (y < 2032 ? 0.04 : 0.07);
-  const { payments } = runMonths({ hLoan: variablePI({ maturityYear: null, monthlyPayment: 3_300 }),
+  const { payments } = runMonths({ hLoan: variablePI({ maturityDate: null, monthlyPayment: 3_300 }),
     cash: cash() }, 2030, 48, { primeAt });
   for (const p of payments) assert.equal(p.payment, 3_300);
 });
 
 test('FRL-13: the post-IO payment re-amortises from the scheduled balance — no balloon after a cut', () => {
   const io = loan({ rateType: VARIABLE, interestRate: 0, primeSpread: 0.02, interestOnly: true,
-                    interestOnlyUntilYear: 2030, postIoPrincipal: 500_000, maturityYear: 2055,
+                    interestOnlyUntil: '2030-01-01', postIoPrincipal: 500_000, maturityDate: '2055-01-01',
                     monthlyPayment: 0 });
   const primeAt = (y) => (y < 2040 ? 0.04 : 0.02);
   const { state, payments } = runMonths({ hLoan: io, cash: cash() }, 2030, 25 * 12, { primeAt });
@@ -462,21 +465,54 @@ test('FRL-15: AU month counts run to the 1 July boundary the tax period enforces
   const aug = new Date(Date.UTC(2029, 7, 15));        // AU period year 2029
 
   // Break cost: the window ends when the period year reaches 2033, i.e. 1 July 2033.
-  const l = loan({ rateType: FIXED_PERIOD, interestRate: 0.06, fixedRateUntilYear: 2033,
+  // The window ends on 1 July 2033 — the date an AU term year always meant (design 117).
+  const l = loan({ rateType: FIXED_PERIOD, interestRate: 0.06, fixedRateUntil: '2033-07-01',
                    breakCostOnPayoff: true, fixedAtPrimeRate: 0.05 });
   const s = clock(2029, 2030, 0.03);
   assert.equal(loanBreakCost(s, l, jan).months, 42, 'Jan 2030 → Jul 2033');
   assert.equal(loanBreakCost(s, l, aug).months, 47, 'Aug 2029 → Jul 2033');
   // A US loan's window still ends on 1 January.
-  const us = { ...l, country: 'US', currency: USD };
+  const us = { ...l, country: 'US', currency: USD, fixedRateUntil: '2033-01-01' };
   assert.equal(loanBreakCost(s, us, jan).months, 36);
 
   // Extra cap: the schedule it measures "extra" against runs to 1 July of the maturity year.
-  const capped = loan({ rateType: FIXED_PERIOD, fixedRateUntilYear: 2035, maturityYear: 2055,
+  const capped = loan({ rateType: FIXED_PERIOD, fixedRateUntil: '2035-07-01', maturityDate: '2055-07-01',
                         fixedExtraRepaymentCap: 1e9 });
-  const { extra } = capFixedExtraRepayment(capped, 5_000, 500_000, 0.06, 2029, jan, s);
+  const { extra } = capFixedExtraRepayment(capped, 5_000, 500_000, 0.06, loanClock(s, capped, jan), jan, s);
   assert.ok(Math.abs(extra - (5_000 - pmt(500_000, 0.06, 2055 * 12 + 6 - (2030 * 12)))) < 1e-9);
-  // Without a state the period is unknown and the calendar-year convention applies.
-  const bare = capFixedExtraRepayment(capped, 5_000, 500_000, 0.06, 2030, jan).extra;
-  assert.ok(Math.abs(bare - (5_000 - pmt(500_000, 0.06, 300))) < 1e-9);
+  // Without a state the date still says when the term ends: there is no hidden convention
+  // to fall back on any more (design 117 closed design 113 Q6), so the count is the same.
+  const bare = capFixedExtraRepayment(capped, 5_000, 500_000, 0.06, 2030 * 12, jan).extra;
+  assert.ok(Math.abs(bare - extra) < 1e-9);
+});
+
+// ── FRL-16/17 — design 117 phase 5: loan terms are dates ────────────────────
+
+test('FRL-16: a mid-year IO end takes effect with that month\'s payment, not at a year boundary', () => {
+  // A US loan, interest-only until 20 May 2031: Jan–Apr pay interest only, May steps up.
+  const io = loan({ country: 'US', currency: USD, interestOnly: true, interestOnlyUntil: '2031-05-20',
+                    postIoPrincipal: 500_000, maturityDate: '2051-05-20', monthlyPayment: 0 });
+  const { payments } = runMonths({ hLoan: io, cash: cash() }, 2031, 8);
+  const interestOnly = payments.filter(p => p.month < 4);
+  const amortising   = payments.filter(p => p.month >= 4);
+  for (const p of interestOnly) assert.ok(Math.abs(p.payment - p.interest) < 1e-9, `IO in month ${p.month}`);
+  for (const p of amortising)   assert.ok(p.payment > p.interest + 1, `P&I from May, month ${p.month}`);
+  // Re-amortised over the 240 months from May 2031 to May 2051.
+  assert.ok(Math.abs(amortising[0].payment - pmt(500_000, 0.06, 240)) < 1e-6);
+});
+
+test('FRL-17: an AU loan can now end a fixed period on 1 January (design 113 Q6, closed)', () => {
+  // A real AU tax year (from 1 July 2029). As a YEAR, "2030" ended an AU fixed period on
+  // 1 July 2030; as a date the author can say 1 January 2030 and mean it.
+  const s = {
+    currentPeriods: { AU: { startMs: Date.UTC(2029, 6, 1) }, US: { startMs: yearMs(2030) } },
+    effectiveInterestRates: { PRIME_AU: 0.04, PRIME_US: 0.04 },
+  };
+  const fp = loan({ rateType: FIXED_PERIOD, interestRate: 0.055, primeSpread: 0.03, fixedRateUntil: '2030-01-01' });
+  const dec = new Date(Date.UTC(2029, 11, 31)), jan = new Date(Date.UTC(2030, 0, 31));
+  assert.equal(resolveLoanRate(s, fp, loanClock(s, fp, dec)), 0.055, 'December: still fixed');
+  assert.ok(Math.abs(resolveLoanRate(s, fp, loanClock(s, fp, jan)) - 0.07) < 1e-12, 'January: Prime + 3%');
+  // And a migrated AU year still ends on 1 July — the day it always did.
+  const migrated = loan({ rateType: FIXED_PERIOD, interestRate: 0.055, primeSpread: 0.03, fixedRateUntil: '2030-07-01' });
+  assert.equal(resolveLoanRate(s, migrated, loanClock(s, migrated, jan)), 0.055);
 });
