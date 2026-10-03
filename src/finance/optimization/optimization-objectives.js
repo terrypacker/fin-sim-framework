@@ -8,18 +8,31 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { OPT_DATE_TYPE } from './opt-date.js';
+
 /**
  * Param type constants for optimization configs.
  *
  * ENUM       — discrete set of explicit values (e.g., bracket rates)
  * INTEGER    — integer range [min, max] stepped by step
  * CONTINUOUS — continuous range [min, max] stepped by step (discretised for grid search)
+ * DATE       — ISO-day range [min, max]; solvers search it as an integer month (or, with an
+ *              `anchor`, year) count — see opt-date.js (design 117 §5)
  */
 export const OPT_PARAM_TYPES = {
   ENUM:       'enum',
   INTEGER:    'integer',
   CONTINUOUS: 'continuous',
+  DATE:       OPT_DATE_TYPE,
 };
+
+/**
+ * Does a solver treat this variable as an integer? INTEGER, and DATE, whose solver view
+ * is an integer count (design 117 §5.1).
+ */
+export function isIntegralVariable(v) {
+  return v?.type === OPT_PARAM_TYPES.INTEGER || v?.type === OPT_PARAM_TYPES.DATE;
+}
 
 /**
  * Default penalty weight λ for DIE_WITH_TARGET. Large enough that each dollar of

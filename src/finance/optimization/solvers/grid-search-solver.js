@@ -9,6 +9,7 @@
  */
 
 import { valuesForConfig, cartesianProduct } from '../opt-values.js';
+import { presentEntries } from './solver-support.js';
 
 /**
  * GridSearchSolver — exhaustive Cartesian enumeration (design/38 §4).
@@ -76,9 +77,11 @@ export class GridSearchSolver {
     }
 
     results.sort((a, b) => b.score - a.score);
+    const present = presentEntries(problem, results);
+    const ranked  = results.map(e => present.get(e));
     return {
-      candidates:  results,
-      best:        results[0] ?? null,
+      candidates:  ranked,
+      best:        ranked[0] ?? null,
       evaluations: results.length,
       solver:      GridSearchSolver.key,
     };

@@ -23,19 +23,31 @@ export const GRID_MODES = Object.freeze({ MC: 'mc', DETERMINISTIC: 'deterministi
 /** Values per axis. More than this does not fit a results pane as a readable table. */
 export const MAX_AXIS_VALUES = 15;
 
+const _ISO_DAY = /^\d{4}-\d{2}-\d{2}/;
+
 /**
  * Index of `planValue` in `values`: an exact match, else the nearest number, else null.
- * An enum value that is not in the list has no nearest.
+ * A date axis (ISO days, design 117 §5) is nearest by time. An enum value that is not in
+ * the list has no nearest.
  */
 export function nearestIndex(values, planValue) {
   if (planValue === undefined || planValue === null) return null;
   const exact = values.findIndex(v => v === planValue);
   if (exact >= 0) return exact;
-  if (typeof planValue !== 'number') return null;
+  const asNum = (x) => {
+    if (typeof x === 'number') return x;
+    if (x instanceof Date) return x.getTime();
+    return typeof x === 'string' && _ISO_DAY.test(x) ? Date.parse(x) : NaN;
+  };
+  const target = asNum(planValue);
+  if (!Number.isFinite(target)) return null;
+  // Numbers match numbers and dates match dates — never a year against a date.
+  const sameKind = (v) => (typeof v === 'number') === (typeof planValue === 'number');
   let best = null, bestD = Infinity;
   values.forEach((v, j) => {
-    if (typeof v !== 'number') return;
-    const d = Math.abs(v - planValue);
+    const n = asNum(v);
+    if (!sameKind(v) || !Number.isFinite(n)) return;
+    const d = Math.abs(n - target);
     if (d < bestD) { bestD = d; best = j; }
   });
   return best;

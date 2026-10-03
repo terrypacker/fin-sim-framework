@@ -317,9 +317,10 @@ export function sweepKindOf(entry, flag, center) {
   const declared = entry?.[flag];
   if (typeof declared === 'string') return declared;
   const type = entry?.type;
+  // Date first: a Date-typed key is a date whatever its name says (design 117 D2).
+  if (type === 'Date')  return 'date';
   if (type === 'Integer' || /Year$/.test(entry?.key ?? '')) return 'year';
   if (type === 'Enum' || type === 'Boolean') return 'enum';
-  if (type === 'Date')  return 'date';
   if (type === 'Money') return 'amount';
   if (type === 'Number') return Math.abs(Number(center)) <= 1 ? 'rate' : 'amount';
   return null;
@@ -348,7 +349,7 @@ function _isScalarFor(kind, v) {
  *      when the key is absent from the base, and a null `acct.*.growthRate` means
  *      "inherit the role rate", which has no center of its own.
  *
- *      One exception, declared by the entry: a `sweepUnset` year whose value is an
+ *      One exception, declared by the entry: a `sweepUnset` year or date whose value is an
  *      explicit `null` — a sale year left blank, i.e. the event does not happen. It is
  *      emitted as an UNSET row (`unset: true`, `rowFor(kind, null, entry)`), still with
  *      no synthesized center: the engine decides what an unset row can be (Opt a range
@@ -387,7 +388,7 @@ export function harvestSweepVariables(entries, schema, baseParams, { flag, alias
     const unset  = center === null && s.sweepUnset === true;
     if (center == null && !unset) continue;
     const kind = sweepKindOf(s, flag, center);
-    if (unset ? kind !== 'year' : (!kind || !_isScalarFor(kind, center))) continue;
+    if (unset ? (kind !== 'year' && kind !== 'date') : (!kind || !_isScalarFor(kind, center))) continue;
     const sweep = rowFor(kind, unset ? null : center, s);
     if (!sweep) continue;
     covered.add(s.key);

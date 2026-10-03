@@ -24,8 +24,9 @@ import { repinExpensesIfChanged } from '../spending/strategies/explicit-bands-sp
 import { captureDerivedState, applyDerivedState, applyDerivedStateAt, captureDerivedEvents,
          spliceDerivedEvents } from '../../scenarios/toolsets/derived-manifest.js';
 import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES, objectiveIsWindowable,
-         infeasibilityOf, INFEASIBLE_OFFSET } from './optimization-objectives.js';
+         infeasibilityOf, INFEASIBLE_OFFSET, isIntegralVariable } from './optimization-objectives.js';
 import { valuesForConfig }     from './opt-values.js';
+import { dateSolverView, dateSolverValue, isDateVariable, paramCandidate } from './opt-date.js';
 import { DateUtils }           from '../../simulation-framework/date-utils.js';
 import { rolloutProfiler }     from './rollout-profiler.js';
 import { realRatesOf }         from '../fx/real-basis.js';
@@ -96,7 +97,8 @@ export class OptimizationProblem {
     horizonYears = null,   // sliding window length H (design 41); null/0 = full horizon
     feasibilityFirst = false,  // lexicographic solvency ranking (design 80 U2)
   } = {}) {
-    this.variables    = variables;
+    // DATE variables become integer views here (design 117 §5.1), so no solver sees a date.
+    this.variables    = variables.map(dateSolverView);
     this.baseParams   = baseParams;
     this.objective    = objective;
     this.simStart     = simStart;
@@ -158,7 +160,15 @@ export class OptimizationProblem {
 
   // ── Vector ⇄ candidate codec ──────────────────────────────────────────────
 
-  /** candidate object → numeric vector (variable order). ENUMs encode as index. */
+  /**
+   * A candidate as the params see it: DATE values as ISO days (design 117 §5.1). Solver
+   * results are reported through this, so a caller never meets a month count.
+   */
+  paramCandidate(candidate) {
+    return paramCandidate(this.variables, candidate);
+  }
+
+  /** candidate object → numeric vector (variable order). ENUMs encode as index; DATEs as their ordinal. */
   encode(candidate) {
     return this.variables.map(v => {
       const val = candidate?.[v.paramKey];
@@ -166,6 +176,7 @@ export class OptimizationProblem {
         const idx = (v.values ?? []).findIndex(o => _eq(o, val));
         return idx < 0 ? 0 : idx;
       }
+      if (isDateVariable(v)) return dateSolverValue(v, val);
       return Number(val);
     });
   }
@@ -179,7 +190,7 @@ export class OptimizationProblem {
         const opts = v.values ?? [];
         const idx  = opts.length ? _clamp(Math.round(raw), 0, opts.length - 1) : 0;
         candidate[v.paramKey] = opts[idx];
-      } else if (v.type === OPT_PARAM_TYPES.INTEGER) {
+      } else if (isIntegralVariable(v)) {
         candidate[v.paramKey] = _clamp(Math.round(raw), v.min, v.max);
       } else { // CONTINUOUS
         candidate[v.paramKey] = _clamp(raw, v.min, v.max);
@@ -195,7 +206,7 @@ export class OptimizationProblem {
       if (v.type === OPT_PARAM_TYPES.ENUM) {
         const opts = v.values ?? [];
         candidate[v.paramKey] = opts[Math.floor(rng() * opts.length)] ?? opts[0];
-      } else if (v.type === OPT_PARAM_TYPES.INTEGER) {
+      } else if (isIntegralVariable(v)) {
         candidate[v.paramKey] = Math.round(v.min + rng() * (v.max - v.min));
       } else { // CONTINUOUS
         candidate[v.paramKey] = v.min + rng() * (v.max - v.min);
@@ -298,11 +309,12 @@ export class OptimizationProblem {
   /**
    * Apply a candidate's paramKey→value pairs onto a deep clone of base using
    * path-aware set(), so nested paths (e.g. spendingExpenseBands[0].monthlyAmount)
-   * reach the correct location in the params tree (design 25a).
+   * reach the correct location in the params tree (design 25a). A DATE variable's solver
+   * ordinal becomes its ISO day here, the one place a candidate meets the params.
    */
   _applyCandidate(base, candidate) {
     const params = structuredClone(base);
-    for (const [k, v] of Object.entries(candidate)) set(params, k, v);
+    for (const [k, v] of Object.entries(paramCandidate(this.variables, candidate))) set(params, k, v);
     return params;
   }
 

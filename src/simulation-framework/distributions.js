@@ -121,19 +121,68 @@ export class BernoulliDistribution {
  * Returns a YYYY-MM-DD string so it can be stored as a scenario param.
  */
 export class UniformDateDistribution {
-  constructor({ min, max }) {
+  constructor({ min, max, anchor = null }) {
     this._min = new Date(min).getTime();
     this._max = new Date(max).getTime();
     if (Number.isNaN(this._min) || Number.isNaN(this._max))
       throw new RangeError('UniformDateDistribution: min and max must be valid dates');
     if (this._min > this._max)
       throw new RangeError('UniformDateDistribution: min must be <= max');
+    this._anchor = _parseAnchor(anchor);
   }
 
   sample(rngFn) {
     const ms = this._min + rngFn() * (this._max - this._min);
-    return new Date(ms).toISOString().slice(0, 10);
+    return _dateSample(ms, this._anchor);
   }
+}
+
+/**
+ * Normal distribution over dates (design 117 D10): `mean` is a date, `stdDev` is in DAYS.
+ * Samples an ISO day. It keeps the shape of a NORMAL year sweep when a year field becomes
+ * a date, which UNIFORM_DATE would not.
+ */
+export class NormalDateDistribution {
+  constructor({ mean, stdDev, anchor = null }) {
+    this._mean = new Date(mean).getTime();
+    if (Number.isNaN(this._mean))
+      throw new RangeError('NormalDateDistribution: mean must be a valid date');
+    if (!(stdDev >= 0)) throw new RangeError('NormalDateDistribution: stdDev (days) must be >= 0');
+    this._stdDevMs = stdDev * DAY_MS;
+    this._anchor   = _parseAnchor(anchor);
+  }
+
+  sample(rngFn) {
+    if (this._stdDevMs === 0) return _dateSample(this._mean, this._anchor);
+    // Box-Muller, as NormalDistribution: guard u1 away from 0 to avoid log(0)
+    const u1 = Math.max(rngFn(), 1e-10);
+    const u2 = rngFn();
+    const z  = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+    return _dateSample(this._mean + this._stdDevMs * z, this._anchor);
+  }
+}
+
+const DAY_MS = 86400000;
+
+/** `'MM-DD'` → { month0, day }, or null. A date field pinned to one day of the year. */
+function _parseAnchor(anchor) {
+  const m = typeof anchor === 'string' ? /^(\d{2})-(\d{2})$/.exec(anchor) : null;
+  return m ? { month0: Number(m[1]) - 1, day: Number(m[2]) } : null;
+}
+
+/**
+ * A sampled instant → its ISO day. With an anchor (design 117 D5), the anchor date nearest
+ * the instant, so a draw never lands on a day the loader rejects.
+ */
+function _dateSample(ms, anchor) {
+  if (!anchor) return new Date(ms).toISOString().slice(0, 10);
+  const y = new Date(ms).getUTCFullYear();
+  let best = null;
+  for (const yy of [y - 1, y, y + 1]) {
+    const t = Date.UTC(yy, anchor.month0, anchor.day);
+    if (best === null || Math.abs(t - ms) < Math.abs(best - ms)) best = t;
+  }
+  return new Date(best).toISOString().slice(0, 10);
 }
 
 /**
@@ -170,6 +219,7 @@ export const DISTRIBUTION_TYPES = {
   CONSTANT:          'constant',
   UNIFORM:           'uniform',
   UNIFORM_DATE:      'uniformDate',
+  NORMAL_DATE:       'normalDate',
   NORMAL:            'normal',
   LOG_NORMAL:        'logNormal',
   BERNOULLI:         'bernoulli',
@@ -185,6 +235,7 @@ export function createDistribution(config) {
     case DISTRIBUTION_TYPES.CONSTANT:     return new ConstantDistribution(config);
     case DISTRIBUTION_TYPES.UNIFORM:      return new UniformDistribution(config);
     case DISTRIBUTION_TYPES.UNIFORM_DATE: return new UniformDateDistribution(config);
+    case DISTRIBUTION_TYPES.NORMAL_DATE:  return new NormalDateDistribution(config);
     case DISTRIBUTION_TYPES.NORMAL:       return new NormalDistribution(config);
     case DISTRIBUTION_TYPES.LOG_NORMAL:   return new LogNormalDistribution(config);
     case DISTRIBUTION_TYPES.BERNOULLI:         return new BernoulliDistribution(config);

@@ -9,6 +9,7 @@
  */
 
 import { OPT_PARAM_TYPES }            from './optimization-objectives.js';
+import { parseDateAnchor, toUtcDate }  from './opt-date.js';
 import { INTL_RETIREMENT_DEFAULTS, DRAWDOWN_STRATEGIES, buildDrawdownWeightSchema, IntlRetirementScenario,
          presentDrawdownWeightRoles, drawdownWeightKey, DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP,
          buildAllocWeightSchema, presentAllocations, allocWeightKey,
@@ -42,7 +43,7 @@ const _round6 = x => Math.round(x * 1e6) / 1e6;
  * Default Opt range for a harvested row, by sweep kind (design 98 W3.4). Every
  * harvested row ships disabled; these are starting ranges for the user to narrow.
  */
-function optRowFor(kind, center, entry, window = null) {
+export function optRowFor(kind, center, entry, window = null) {
   switch (kind) {
     case 'year': {
       // An UNSET year (a sale that does not happen, `sweepUnset`) has no center to range
@@ -76,9 +77,35 @@ function optRowFor(kind, center, entry, window = null) {
         : (entry.options ?? []).map(o => (o && typeof o === 'object') ? o.value : o);
       return values.length > 1 ? { type: OPT_PARAM_TYPES.ENUM, values } : null;
     }
-    default:     // 'date': the optimizer has no date variable type
+    case 'date':
+      return optDateRowFor(center, entry, window);
+    default:
       return null;
   }
+}
+
+/**
+ * Default Opt range for a `date` row (design 117 §5.1): ±2 years around the center in
+ * 1-month steps, or in 1-year steps on the entry's `dateAnchor` day. An UNSET date (a
+ * `sweepUnset` event that does not happen) searches the plan window, as an unset year does.
+ */
+function optDateRowFor(center, entry, window) {
+  const anchor = entry?.dateAnchor ?? null;
+  const a      = parseDateAnchor(anchor);
+  const iso    = (y, m0, d) => new Date(Date.UTC(y, m0, d)).toISOString().slice(0, 10);
+  let min, max;
+  if (center === null) {
+    if (!window) return null;
+    min = iso(window.from, a?.month0 ?? 0, a?.day ?? 1);
+    max = iso(window.to,   a?.month0 ?? 0, a?.day ?? 1);
+  } else {
+    const d = toUtcDate(center);
+    if (!d) return null;
+    const y = d.getUTCFullYear(), m0 = a ? a.month0 : d.getUTCMonth(), day = a ? a.day : d.getUTCDate();
+    min = iso(y - 2, m0, day);
+    max = iso(y + 2, m0, day);
+  }
+  return { type: OPT_PARAM_TYPES.DATE, min, max, step: 1, ...(anchor ? { anchor } : {}) };
 }
 
 /**

@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { OPT_PARAM_TYPES } from '../optimization-objectives.js';
+import { OPT_PARAM_TYPES, isIntegralVariable } from '../optimization-objectives.js';
 import { makeSeededRng, EvalLedger } from './solver-support.js';
 
 /**
@@ -84,7 +84,7 @@ export class SimulatedAnnealingSolver {
           t[k] += (rng() < 0.5 ? -1 : 1) * (1 + Math.floor(rng() * span));
         } else {
           const range = v.max - v.min;
-          const base  = v.type === OPT_PARAM_TYPES.INTEGER
+          const base  = isIntegralVariable(v)
             ? Math.max(v.step ?? 1, range * 0.3)
             : range * 0.3;
           t[k] += (rng() * 2 - 1) * base * frac;

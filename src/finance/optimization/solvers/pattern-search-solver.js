@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { OPT_PARAM_TYPES } from '../optimization-objectives.js';
+import { OPT_PARAM_TYPES, isIntegralVariable } from '../optimization-objectives.js';
 import { makeSeededRng, EvalLedger } from './solver-support.js';
 
 /**
@@ -23,7 +23,7 @@ function stepProfile(variables) {
   for (const v of variables) {
     if (v.type === OPT_PARAM_TYPES.ENUM) {
       step.push(1); min.push(1);
-    } else if (v.type === OPT_PARAM_TYPES.INTEGER) {
+    } else if (isIntegralVariable(v)) {   // INTEGER, or a DATE's month/year count
       const m = Math.max(1, v.step ?? 1);
       step.push(Math.max(m, Math.round((v.max - v.min) / 4))); min.push(m);
     } else { // CONTINUOUS
@@ -88,8 +88,8 @@ export class PatternSearchSolver {
     // fractional step + decode-rounding would skip legal values, e.g. ±1.5 from
     // 1 probes 3 and 0 but never 2). CONTINUOUS coordinates step by the raw size.
     const effStep = (k) => {
-      const t = problem.variables[k].type;
-      if (t === OPT_PARAM_TYPES.ENUM || t === OPT_PARAM_TYPES.INTEGER) return Math.floor(step[k]);
+      const v = problem.variables[k];
+      if (v.type === OPT_PARAM_TYPES.ENUM || isIntegralVariable(v)) return Math.floor(step[k]);
       return step[k];
     };
 

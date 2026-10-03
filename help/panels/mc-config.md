@@ -16,6 +16,10 @@ parameter marked for Monte Carlo appears here — including a row per shock. Eac
 has a centre and a spread; the centre is the plan's current value for that parameter
 unless you typed your own.
 
+A date is drawn as *uniformDate* (any day between two dates, the default) or *normalDate*
+(around a centre date, spread in days). A date pinned to one day of the year, such as a
+1 July move, keeps that day and varies only the year.
+
 That distinction matters more than it looks. Rows you have not touched are re-synced
 from the live scenario on every run, so a panel opened at load time does not keep
 sampling a plan you have since edited away from. Centres you set by hand are never

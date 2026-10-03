@@ -36,7 +36,7 @@ function schemaByKey() {
  * `Date.UTC(year, …)` truncates and the axis runs half a year early (F10, W0b).
  * Enums have no categorical distribution, so they are Opt-only.
  */
-function mcRowFor(kind, center, entry) {
+export function mcRowFor(kind, center, entry) {
   switch (kind) {
     case 'year':
       // An UNSET year (a sale that does not happen) has nothing to sample around: the row
@@ -53,10 +53,16 @@ function mcRowFor(kind, center, entry) {
       return center === 0 ? null
         : { type: DISTRIBUTION_TYPES.NORMAL, mean: center, stdDev: 0.1 * Math.abs(center) };
     case 'date': {
+      // A date pinned to one day of the year (`dateAnchor`, design 117 D5) rides on the
+      // row, so every draw snaps to that day.
+      const anchor = entry?.dateAnchor ? { anchor: entry.dateAnchor } : {};
+      // An UNSET date, like an unset year: the spread and no center (NORMAL_DATE, σ in
+      // days), so it cannot run enabled until the user types a mean date.
+      if (center === null) return { type: DISTRIBUTION_TYPES.NORMAL_DATE, stdDev: 548, ...anchor };
       const d   = new Date(center);
       const iso = dy => new Date(Date.UTC(d.getUTCFullYear() + dy, d.getUTCMonth(), d.getUTCDate()))
         .toISOString().slice(0, 10);
-      return { type: DISTRIBUTION_TYPES.UNIFORM_DATE, min: iso(-2), max: iso(2) };
+      return { type: DISTRIBUTION_TYPES.UNIFORM_DATE, min: iso(-2), max: iso(2), ...anchor };
     }
     default:
       return null;
@@ -353,7 +359,8 @@ export function refineCenterSource(v, { ownParams = null, schemaDefaults = null 
 /**
  * Tag one resolved variable with center provenance:
  *   centerSource   — see CENTER_SOURCES
- *   center         — the numeric center actually used (undefined for UNIFORM_DATE)
+ *   center         — the center actually used: a number, or a NORMAL_DATE's mean date
+ *                    (undefined for UNIFORM_DATE)
  *   scenarioValue  — the loaded scenario's value at this paramKey (undefined when absent)
  *   centerDiverges — center and scenarioValue are both numeric and differ
  */
@@ -374,9 +381,13 @@ function centerProvenance(resolved, scenarioValue, override) {
                      : resolved.unset           ? CENTER_SOURCES.UNSET
                      : scenarioValue !== undefined ? CENTER_SOURCES.SCENARIO
                      :                               CENTER_SOURCES.DEFAULT;
+  const dayOf = x => (typeof x === 'string' || x instanceof Date) && !Number.isNaN(new Date(x).getTime())
+    ? new Date(x).toISOString().slice(0, 10) : null;
   const centerDiverges =
     typeof center === 'number' && typeof scenarioValue === 'number'
-      && Math.abs(center - scenarioValue) > 1e-9;
+      ? Math.abs(center - scenarioValue) > 1e-9
+      // A NORMAL_DATE's center is a date (design 117 D10): compare the days.
+      : dayOf(center) != null && dayOf(scenarioValue) != null && dayOf(center) !== dayOf(scenarioValue);
   return { centerSource, center, scenarioValue, centerDiverges };
 }
 
@@ -390,10 +401,18 @@ function centerProvenance(resolved, scenarioValue, override) {
  * @returns {Array<object>} the offending variables
  */
 export function variablesMissingCenter(variables) {
-  const centerOf = v => v.type === DISTRIBUTION_TYPES.CONSTANT ? v.value
-    : (v.type === DISTRIBUTION_TYPES.NORMAL || v.type === DISTRIBUTION_TYPES.LOG_NORMAL) ? v.mean
-    : 0;   // the rest carry a range (min/max) or a table, not a center
-  return (variables ?? []).filter(v => v.enabled && !Number.isFinite(centerOf(v)));
+  const isDate = x => typeof x === 'string' && !Number.isNaN(Date.parse(x));
+  const hasCenter = v => {
+    switch (v.type) {
+      case DISTRIBUTION_TYPES.CONSTANT:     return Number.isFinite(v.value) || isDate(v.value);
+      case DISTRIBUTION_TYPES.NORMAL:
+      case DISTRIBUTION_TYPES.LOG_NORMAL:   return Number.isFinite(v.mean);
+      case DISTRIBUTION_TYPES.NORMAL_DATE:  return isDate(v.mean);
+      case DISTRIBUTION_TYPES.UNIFORM_DATE: return isDate(v.min) && isDate(v.max);
+      default:                              return true;   // a range or a table, not a center
+    }
+  };
+  return (variables ?? []).filter(v => v.enabled && !hasCenter(v));
 }
 
 /**

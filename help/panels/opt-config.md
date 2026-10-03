@@ -15,6 +15,8 @@ with a range per row. A parameter left unchecked is held at the plan's value —
 search is over what you enable, so enabling everything is rarely what you want. The
 narrower the space, the more the candidate budget buys.
 
+A date row steps in months; one pinned to a day of the year (a 1 July move) steps years.
+
 A row tagged **INERT** cannot move this plan's result at any value — typically a drawdown
 weight on a plan whose pools already set the spend order. It stays selectable; the tag says
 why, and starting a run with one enabled warns you.

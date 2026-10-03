@@ -218,6 +218,8 @@ import { resolveActiveMpcRun, activeDecisionsAt, allDecisionsOf, truncateActiveR
 import { DEFAULT_OPTIMIZATION_CONFIGS, buildOptVariables, buildGridAxes } from './finance/optimization/intl-retirement-opt-config.js';
 import { IntlRetirementOptimizer } from './finance/optimization/intl-retirement-optimizer.js';
 import { valuesForConfig, cartesianProduct } from './finance/optimization/opt-values.js';
+import { isIntegralVariable } from './finance/optimization/optimization-objectives.js';
+import { dateSolverView, paramCandidate as optDateParamCandidate, ordinalToIso, dateOrdinal } from './finance/optimization/opt-date.js';
 import { OPT_PARAM_TYPES, DEFAULT_TERMINAL_WEALTH_PENALTY, DEFAULT_DEFICIT_PENALTY, windowedDeficit, infeasibilityOf, isFeasibleResult, INFEASIBLE_OFFSET, DIE_WITH_TARGET_FAMILY, DIE_WITH_TARGET_AXES, resolveTerminalKey, terminalAxesFor, OPTIMIZATION_OBJECTIVES, OBJECTIVE_FAMILY_LABELS, objectivePrimaryMetric, objectiveIsWindowable, resolveDieWithTargetKey, groupedObjectiveOptions } from './finance/optimization/optimization-objectives.js';
 import { OptimizationProblem } from './finance/optimization/optimization-problem.js';
 import { initProblem, runTask, runSeriesTask } from './finance/optimization/parallel/rollout-worker-core.js';
@@ -455,7 +457,7 @@ import { ReducerBuilder } from './simulation-framework/builders/reducer-builder.
 import { EXECUTION_KINDS, EXECUTION_PHASES, SIMULATION_BUS_MESSAGES, BusMessage, SimulationBusMessage, ExecutionBusMessage, BreakpointHitMessage, ServiceActionEvent, ServiceBulkActionEvent, ServiceEdgeActionEvent } from './simulation-framework/bus-messages.js';
 import { DateUtils } from './simulation-framework/date-utils.js';
 import { DerivedMetricsRegistry } from './simulation-framework/derived-metrics-registry.js';
-import { ConstantDistribution, UniformDistribution, NormalDistribution, LogNormalDistribution, BernoulliDistribution, UniformDateDistribution, ActuarialLifespanDistribution, DISTRIBUTION_TYPES, createDistribution } from './simulation-framework/distributions.js';
+import { ConstantDistribution, UniformDistribution, NormalDistribution, LogNormalDistribution, BernoulliDistribution, UniformDateDistribution, NormalDateDistribution, ActuarialLifespanDistribution, DISTRIBUTION_TYPES, createDistribution } from './simulation-framework/distributions.js';
 import { EventBus } from './simulation-framework/event-bus.js';
 import { BaseEvent } from './simulation-framework/events/base-event.js';
 import { EventSeries } from './simulation-framework/events/event-series.js';
@@ -1439,6 +1441,11 @@ export const Finance = {
   valuesForConfig,
   cartesianProduct,
   OPT_PARAM_TYPES,
+  isIntegralVariable,
+  dateSolverView,
+  optDateParamCandidate,
+  ordinalToIso,
+  dateOrdinal,
   DEFAULT_TERMINAL_WEALTH_PENALTY,
   DEFAULT_DEFICIT_PENALTY,
   windowedDeficit,
@@ -1976,6 +1983,7 @@ export const Engine = {
   LogNormalDistribution,
   BernoulliDistribution,
   UniformDateDistribution,
+  NormalDateDistribution,
   ActuarialLifespanDistribution,
   DISTRIBUTION_TYPES,
   createDistribution,
