@@ -1079,10 +1079,10 @@ test('ASSET-13: PATH-4 load overrides restore edited fields on realProperties, c
 
   // Edit a field on each asset/domain type
   const usHouse = registry.realPropertyService.getAll().find(p => p.country === 'US');
-  registry.realPropertyService.updateProperty(usHouse, { plannedSaleYear: 2033 });
+  registry.realPropertyService.updateProperty(usHouse, { plannedSaleDate: '2033-01-15' });
 
   const gold = registry.collectibleService.getAll()[0];
-  registry.collectibleService.updateCollectible(gold, { plannedSaleYear: 2035 });
+  registry.collectibleService.updateCollectible(gold, { plannedSaleDate: '2035-01-15' });
 
   const usSavings = registry.accountService.getAll().find(a => a.stateKey === 'usSavingsAccount');
   registry.accountService.updateAccount(usSavings, { minimumBalance: 5000 });
@@ -1100,8 +1100,8 @@ test('ASSET-13: PATH-4 load overrides restore edited fields on realProperties, c
   });
 
   // Verify the serialized config captured the edits
-  assert.strictEqual(config.realProperties.find(p => p.country === 'US')?.plannedSaleYear, 2033);
-  assert.strictEqual(config.collectibles[0]?.plannedSaleYear, 2035);
+  assert.strictEqual(config.realProperties.find(p => p.country === 'US')?.plannedSaleDate, '2033-01-15');
+  assert.strictEqual(config.collectibles[0]?.plannedSaleDate, '2035-01-15');
   assert.strictEqual(config.accounts.find(a => a.stateKey === 'usSavingsAccount')?.minimumBalance, 5000);
   assert.strictEqual(config.persons.find(p => p.id === 'primary')?.lifeExpectancy, 95);
 
@@ -1111,8 +1111,8 @@ test('ASSET-13: PATH-4 load overrides restore edited fields on realProperties, c
 
   const registry2 = ServiceRegistry.getInstance();
   // Confirm defaults were reset (pre-override state)
-  assert.strictEqual(registry2.realPropertyService.getAll().find(p => p.country === 'US')?.plannedSaleYear, null,
-    'plannedSaleYear should be null before override is applied');
+  assert.strictEqual(registry2.realPropertyService.getAll().find(p => p.country === 'US')?.plannedSaleDate, null,
+    'plannedSaleDate should be null before override is applied');
   assert.strictEqual(registry2.personService.getAll().find(p => p.id === 'primary')?.lifeExpectancy, 90,
     'lifeExpectancy should be default 90 before override is applied');
 
@@ -1121,12 +1121,12 @@ test('ASSET-13: PATH-4 load overrides restore edited fields on realProperties, c
 
   // Verify all edits were restored
   const usHouseFinal = registry2.realPropertyService.getAll().find(p => p.country === 'US');
-  assert.strictEqual(usHouseFinal.plannedSaleYear, 2033, 'realProperty.plannedSaleYear restored');
+  assert.strictEqual(usHouseFinal.plannedSaleDate, '2033-01-15', 'realProperty.plannedSaleDate restored');
   assert.strictEqual(usHouseFinal.value, 1_000_000, 'other fields not corrupted');
   assert.strictEqual(usHouseFinal.stateKey, 'usHouseProperty', 'stateKey preserved');
 
   const goldFinal = registry2.collectibleService.getAll()[0];
-  assert.strictEqual(goldFinal.plannedSaleYear, 2035, 'collectible.plannedSaleYear restored');
+  assert.strictEqual(goldFinal.plannedSaleDate, '2035-01-15', 'collectible.plannedSaleDate restored');
 
   const usSavingsFinal = registry2.accountService.getAll().find(a => a.stateKey === 'usSavingsAccount');
   assert.strictEqual(usSavingsFinal.minimumBalance, 5000, 'account.minimumBalance restored');
@@ -1141,18 +1141,18 @@ test('ASSET-13: PATH-4 load overrides restore edited fields on realProperties, c
 // Regression: a single US_HOUSE_SALE event was observed to trigger 4 credits
 // to the US savings account instead of 1.  The root cause is duplicate event
 // or handler registration when the config is compiled via ScenarioLoader.load()
-// with plannedSaleYear already set in cfg.realProperties.
+// with plannedSaleDate already set in cfg.realProperties.
 //
 // We exercise the realistic browser path:
 //   1. buildSim() — creates the Simulation
 //   2. ScenarioLoader.load(cfg) — compiles toolsets from a config that already
-//      has plannedSaleYear set (mirrors save→reload after user edits property)
+//      has plannedSaleDate set (mirrors save→reload after user edits property)
 // ═════════════════════════════════════════════════════════════════════════════
 
 /**
  * Build a scenario via ScenarioLoader.load() with optional sale years set on
  * real properties. This mirrors the browser's save→reload path where
- * plannedSaleYear has already been persisted in cfg.realProperties before
+ * plannedSaleDate has already been persisted in cfg.realProperties before
  * ScenarioCompiler.compile() runs.
  */
 function buildScenarioViaSaveReload({ usSaleYear = null, auSaleYear = null, collectibleSaleYear = null } = {}) {
@@ -1164,17 +1164,17 @@ function buildScenarioViaSaveReload({ usSaleYear = null, auSaleYear = null, coll
   const cfg = IntlRetirementScenario.buildDefaultConfig({});
 
   // Patch real properties and collectibles with sale years — simulates a config
-  // that was saved after the user set plannedSaleYear in the editor.
+  // that was saved after the user set plannedSaleDate in the editor (a year → 15 Jan).
   if (usSaleYear != null) {
     const prop = cfg.realProperties.find(p => p.country === 'US');
-    if (prop) prop.plannedSaleYear = usSaleYear;
+    if (prop) prop.plannedSaleDate = `${usSaleYear}-01-15`;
   }
   if (auSaleYear != null) {
     const prop = cfg.realProperties.find(p => p.country === 'AU');
-    if (prop) prop.plannedSaleYear = auSaleYear;
+    if (prop) prop.plannedSaleDate = `${auSaleYear}-01-15`;
   }
   if (collectibleSaleYear != null) {
-    if (cfg.collectibles?.length > 0) cfg.collectibles[0].plannedSaleYear = collectibleSaleYear;
+    if (cfg.collectibles?.length > 0) cfg.collectibles[0].plannedSaleDate = `${collectibleSaleYear}-01-15`;
   }
 
   new ScenarioLoader().load(cfg, registry);

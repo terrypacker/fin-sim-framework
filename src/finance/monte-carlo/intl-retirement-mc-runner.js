@@ -17,6 +17,7 @@ import { IntlRetirementMcConfig, CENTER_SOURCES, refineCenterSource, variablesMi
 import { scenarioParamValues, paramSchemaDefaults } from '../param-schema-utils.js';
 import { buildIterationRunner, perturbParams, samplingSignature, mcEquityModel, mcInflationModel, mcPrimeModel } from './parallel/mc-worker-core.js';
 import { McWorkerPool }              from './parallel/mc-worker-pool.js';
+import { migrateYearFieldsToDates, migrateParamBag } from '../../scenarios/year-date-migration.js';
 
 // What a path records lives in ./mc-sampling.js so the worker core can import it
 // without importing this module (which owns the BATCH: param layering, provenance,
@@ -193,6 +194,9 @@ export class IntlRetirementMcRunner {
     // what makes the template postMessage-able to a worker.
     const rawTemplate = this.cfgTemplate
       ?? IntlRetirementScenario.buildDefaultConfig({}, simStart, simEnd);
+    // Design 117: convert sale years to dates BEFORE the template is read or serialized,
+    // so its params, record centers and every worker's copy agree on one shape.
+    migrateYearFieldsToDates(rawTemplate);
     const cfgTemplate = ScenarioSerializer.serializeScenario(rawTemplate);
     // Read the template's params from the RAW record: serializeScenario carries the
     // typed `params` list but not the `parameters` bag, and a cfg straight out of
@@ -221,7 +225,7 @@ export class IntlRetirementMcRunner {
     //   4. baseParams       — an explicit caller override wins over all of them.
     const schemaDefaults = paramSchemaDefaults(IntlRetirementScenario.buildFullParamSchema());
     const recordCenters  = resolveRecordCenters(rawTemplate);
-    // Legacy-keyed levers (`auHouseSaleYear`, the wages) centre on their generated
+    // Legacy-keyed levers (the wages) centre on their generated
     // successor's value — a loaded cfg carries only that one.
     const aliasCenters   = resolveAliasCenters(rawTemplate);
     // Leg C's axes (a pool size factor, a gate threshold, a gate dwell) are hidden generated
@@ -230,7 +234,7 @@ export class IntlRetirementMcRunner {
     // no centre (design 110 §6.2 / §6.3).
     const poolCenters    = resolveLiquidityAxisCenters(rawTemplate);
     const base = { ...schemaDefaults, ...recordCenters, ...templateParams, ...aliasCenters,
-                   ...poolCenters, ...baseParams, endDate: simEnd };
+                   ...poolCenters, ...migrateParamBag(baseParams), endDate: simEnd };
     // Harvest from the raw template: its records carry the generated per-record params
     // (design 98 W3). Once, here on the main thread — workers get resolved `variables`.
     const variables  = this.mcConfig.buildVariables(base, { cfg: rawTemplate });

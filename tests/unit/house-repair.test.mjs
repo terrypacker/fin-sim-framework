@@ -235,7 +235,7 @@ describe('house repair — e2e', () => {
     const cfgFor = (capitalize) => (cfg) => {
       const p = cfg.realProperties.find(pr => pr.country === 'US');
       Object.assign(p, {
-        isPrimaryResidence: false, plannedSaleYear: 2035, costBasis: 100000,
+        isPrimaryResidence: false, plannedSaleDate: '2035-01-15', costBasis: 100000,
         repairModel: 'CONTINUOUS', repairMedian: 20000, repairSigma: 0.15, capitalizeRepairs: capitalize,
       });
     };

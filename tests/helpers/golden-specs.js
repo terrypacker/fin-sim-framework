@@ -102,13 +102,13 @@ export const GOLDEN_SPECS = [
     mutateCfg: (cfg) => {
       const prop = key => cfg.realProperties.find(p => p.stateKey === key);
       // Post-move: a US-source disposal landing on an AU return (and on a US one).
-      prop('usHouseProperty').plannedSaleYear = 2033;
+      prop('usHouseProperty').plannedSaleDate = '2033-01-15';
       // Later, so the two sales do not share a tax year and their gains stay legible
       // in the fixture; AU-domiciled, AU-resident, the simple leg of the pair.
-      prop('auHouseProperty').plannedSaleYear = 2035;
+      prop('auHouseProperty').plannedSaleDate = '2035-01-15';
       // Pre-move, deliberately: a US-resident collectible disposal, so the golden
       // holds the gold path on the side of the move where no AU assessment applies.
-      cfg.collectibles[0].plannedSaleYear = 2029;
+      cfg.collectibles[0].plannedSaleDate = '2029-01-15';
     },
   },
   {
@@ -127,12 +127,12 @@ export const GOLDEN_SPECS = [
   {
     name:        'speculative-conversion',
     description:
-      'Design 88 D2/§2: the same speculative stake WITH a plannedSaleYear inside the '
+      'Design 88 D2/§2: the same speculative stake WITH a plannedSaleDate inside the '
       + 'run. The flag suppresses the carrying value, never the mechanics — so this '
       + 'golden holds the whole COMPANY_SALE → COMPANY_SALE_TAX path firing normally '
       + 'for a stake that was recognised at zero the day before, with the proceeds '
       + 'recognised in full from the instant they land in the destination account.',
-    params:   { companySaleYear: 2029 },
+    params:   { 'equity.companyEquityAccount.plannedSaleDate': '2029-01-15' },
     simStart: new Date(Date.UTC(2026, 0, 1)),
     simEnd:   new Date(Date.UTC(2032, 0, 1)),
     mutateCfg: cfg => { cfg.companyEquities[0].speculative = true; },

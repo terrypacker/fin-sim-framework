@@ -275,10 +275,9 @@ export function resolveSweepVariables(entries, schemaByKey, baseParams = {}) {
 
 /**
  * File a legacy-keyed row under the group of the generated key it aliases, when the
- * loaded plan carries that key. `usHouseSaleYear` then sits beside the same house's
- * `prop.<sk>.value` / `appreciationRate` rows ("US · US House") instead of alone in
- * "Real Properties", so one property's levers read as one group in both the MC and
- * the Opt / grid lists. Without a generated successor (an unloaded cfg) a row keeps
+ * loaded plan carries that key. `primaryMonthlyWage` then sits beside the same person's
+ * other generated rows instead of alone in its static group, so one record's levers read
+ * as one group in both the MC and the Opt / grid lists. Without a generated successor (an unloaded cfg) a row keeps
  * its own group.
  *
  * @param {Array<object>} entries  sweep rows
@@ -343,7 +342,7 @@ function _isScalarFor(kind, v) {
  *
  * Emitted only when both hold:
  *   1. it is not covered — covered = the overlay's keys plus their alias targets, so
- *      `prop.usHouseProperty.plannedSaleYear` does not double `usHouseSaleYear`;
+ *      `person.primary.monthlyWage` does not double `primaryMonthlyWage`;
  *   2. its value in `baseParams` is a non-null scalar of its kind. Never a
  *      synthesized center: perturbParams WRITES a disabled row's reference value
  *      when the key is absent from the base, and a null `acct.*.growthRate` means

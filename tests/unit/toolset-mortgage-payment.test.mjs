@@ -45,7 +45,7 @@ function loadToolsetScenario(config) {
 
 // ─── Base config builders ──────────────────────────────────────────────────────
 
-function makeUsConfig({ mortgageBalance, monthlyMortgage, plannedSaleYear = null, simStart = '2026-01-01', simEnd = '2028-01-01', initialBalance = 500_000, minimumBalance = 0 }) {
+function makeUsConfig({ mortgageBalance, monthlyMortgage, plannedSaleDate = null, simStart = '2026-01-01', simEnd = '2028-01-01', initialBalance = 500_000, minimumBalance = 0 }) {
   return {
     toolsets: ['US_RETIREMENT', 'US_REAL_PROPERTY'],
     simStart,
@@ -95,7 +95,7 @@ function makeUsConfig({ mortgageBalance, monthlyMortgage, plannedSaleYear = null
         ownerId:                'primary',
         owners:                 [],
         ownershipType:          'sole',
-        plannedSaleYear,
+        plannedSaleDate,
         saleDestinationAccount: 'usSavingsAccount',
         stateKey:               'usHouseProperty',
         value:                  800_000,
@@ -104,7 +104,7 @@ function makeUsConfig({ mortgageBalance, monthlyMortgage, plannedSaleYear = null
   };
 }
 
-function makeAuConfig({ mortgageBalance, monthlyMortgage, plannedSaleYear = null, simStart = '2026-01-01', simEnd = '2028-01-01', initialBalance = 500_000, minimumBalance = 0 }) {
+function makeAuConfig({ mortgageBalance, monthlyMortgage, plannedSaleDate = null, simStart = '2026-01-01', simEnd = '2028-01-01', initialBalance = 500_000, minimumBalance = 0 }) {
   return {
     toolsets: ['AU_RETIREMENT', 'AU_REAL_PROPERTY', 'US_TAX'],
     simStart,
@@ -154,7 +154,7 @@ function makeAuConfig({ mortgageBalance, monthlyMortgage, plannedSaleYear = null
         ownerId:                'primary',
         owners:                 [],
         ownershipType:          'sole',
-        plannedSaleYear,
+        plannedSaleDate,
         saleDestinationAccount: 'auSavingsAccount',
         stateKey:               'auHouseProperty',
         value:                  800_000,
@@ -248,7 +248,7 @@ test('Mortgage-US-4: Mortgage payments stop after the house is sold', () => {
   const { sim } = loadToolsetScenario(makeUsConfig({
     mortgageBalance:  1_000_000, // large so it would never naturally reach 0
     monthlyMortgage:  2_000,
-    plannedSaleYear:  2026,      // sale on Jan 15, 2026
+    plannedSaleDate:  '2026-01-15',      // sale on Jan 15, 2026
     simStart:         '2025-12-01',
     simEnd:           '2028-01-01',
   }));
@@ -335,7 +335,7 @@ test('Mortgage-AU-4: AU mortgage payments stop after the house is sold', () => {
   const { sim } = loadToolsetScenario(makeAuConfig({
     mortgageBalance: 1_000_000,
     monthlyMortgage: 2_000,
-    plannedSaleYear: 2026,
+    plannedSaleDate: '2026-01-15',
     simStart:        '2025-12-01',
     simEnd:          '2028-01-01',
   }));

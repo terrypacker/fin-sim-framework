@@ -84,7 +84,7 @@ function propertyPlanConfig() {
       appreciationRate: 0.02, costBasis: 600_000, value: 900_000,
       mortgageBalance: 300_000, monthlyMortgage: 2_200, mortgageInterestRate: 0.055,
       isPrimaryResidence: true, ownerId: 'primary', owners: [], ownershipType: 'sole',
-      plannedSaleYear: null, saleDestinationAccount: 'usSavingsAccount',
+      plannedSaleDate: null, saleDestinationAccount: 'usSavingsAccount',
       stateKey: 'usHouseProperty', currency: USD,
       annualRunningCost: 14_000, runningCostValuePct: 0, runningCostGrowth: 0,
       repairModel: 'CONTINUOUS', repairMedian: 12_000, repairSigma: 0.4, capitalizeRepairs: 0.3,

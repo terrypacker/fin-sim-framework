@@ -28,7 +28,7 @@
  *
  * The default exists so every tool here runs from a fresh clone with no private
  * data. It is NOT a stand-in for a real plan: its simEnd is ~15 years out and no
- * property carries a `plannedSaleYear`, so solvency questions on it are close to
+ * property carries a `plannedSaleDate`, so solvency questions on it are close to
  * meaningless. A tool that prints a decision should say which source it used.
  *
  * GOTCHA: a persisted `initialState` SHADOWS param-level growth rates. Setting
@@ -41,6 +41,7 @@
 import { readFileSync } from 'node:fs';
 
 import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
+import { migrateYearFieldsToDates } from '../../src/scenarios/year-date-migration.js';
 
 /**
  * Load the base cfg a tool will build variants from.
@@ -57,6 +58,8 @@ export function loadBaseConfig({ file = null, index = 0, params = {} } = {}) {
     const list = doc.scenarios ?? (Array.isArray(doc) ? doc : [doc]);
     const cfg = list[index];
     if (!cfg) throw new Error(`no scenario at index ${index} in ${file}`);
+    // A saved plan may still carry sale YEARS; every tool reads dates (design 117).
+    migrateYearFieldsToDates(cfg);
     return { cfg, source: `${file}#${index}`, synthetic: false };
   }
   return {

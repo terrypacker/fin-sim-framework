@@ -30,6 +30,7 @@ import { dateSolverView, dateSolverValue, isDateVariable, paramCandidate } from 
 import { DateUtils }           from '../../simulation-framework/date-utils.js';
 import { rolloutProfiler }     from './rollout-profiler.js';
 import { realRatesOf }         from '../fx/real-basis.js';
+import { migrateYearFieldsToDates, migrateParamBag } from '../../scenarios/year-date-migration.js';
 
 /** Deep-ish equality good enough for ENUM value matching (primitives + arrays of primitives). */
 function _eq(a, b) {
@@ -135,7 +136,7 @@ export class OptimizationProblem {
     // neither `cfg.params` nor `paramSchemaDefaults` and the base would carry no value for them —
     // the same gap `resolveAliasCenters` fills for a legacy-keyed lever.
     this._resolvedBase ??= { ...scenarioParamValues(raw), ...resolveAliasCenters(raw),
-                             ...resolveLiquidityAxisCenters(raw), ...this.baseParams };
+                             ...resolveLiquidityAxisCenters(raw), ...migrateParamBag(this.baseParams) };
     return this._resolvedBase;
   }
 
@@ -320,8 +321,8 @@ export class OptimizationProblem {
 
   /** The cfg template as handed in (or the synthetic default), built at most once. */
   _rawTemplate() {
-    this._rawTemplateCache ??= this.initialState?.cfgTemplate
-      ?? IntlRetirementScenario.buildDefaultConfig({}, this.simStart, this.simEnd);
+    this._rawTemplateCache ??= migrateYearFieldsToDates(this.initialState?.cfgTemplate
+      ?? IntlRetirementScenario.buildDefaultConfig({}, this.simStart, this.simEnd));
     return this._rawTemplateCache;
   }
 

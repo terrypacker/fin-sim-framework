@@ -19,6 +19,7 @@ import { get }                      from './mc-param-paths.js';
 import { lookupLifeTable }          from './life-tables.js';
 import { indexParamSchema, resolveSweepVariables, harvestSweepVariables,
          groupWithAliasSuccessor } from '../param-schema-utils.js';
+import { migrateMcVariableConfig } from '../../scenarios/year-date-migration.js';
 
 const D = INTL_RETIREMENT_DEFAULTS;
 
@@ -212,14 +213,14 @@ export const DEFAULT_MC_VARIABLE_CONFIGS = [
     group: 'Transfer & Expenses',      enabled: false,
   },
 
-  // ── Record levers: balances, wages, sale years ────────────────────────────
+  // ── Record levers: balances, wages, sale dates ────────────────────────────
   // Not listed here: every per-record lever comes from the harvest in buildVariables,
   // keyed by the record's own generated param — `acct.<sk>.balance` / the hidden
   // `acct.<sk>.balanceTarget` (design 55 §13), `person.<id>.monthlyWage`,
-  // `prop.<sk>.plannedSaleYear` — and centred on the record by `resolveRecordCenters`.
+  // `prop.<sk>.plannedSaleDate` — and centred on the record by `resolveRecordCenters`.
   // The legacy rows that stood here (`rothBalance` …, `primaryMonthlyWage`,
   // `usHouseSaleYear`) aliased to the REFERENCE plan's record ids, so on another plan some
-  // were inert and that plan's other records had no row. A blank sale year still gets an
+  // were inert and that plan's other records had no row. A blank sale date still gets an
   // UNSET row (`sweepUnset`). `fromVariableConfigs` maps a saved legacy key.
 ];
 
@@ -417,7 +418,7 @@ export function variablesMissingCenter(variables) {
 
 /**
  * A retired legacy row's generated successor (`rothBalance` → `acct.rothAccount.balanceTarget`,
- * `usHouseSaleYear` → `prop.usHouseProperty.plannedSaleYear`), or undefined for any other
+ * `primaryMonthlyWage` → `person.primary.monthlyWage`), or undefined for any other
  * key. No MC row is keyed by a legacy alias any more, so every one with a generated
  * successor maps.
  */
@@ -533,7 +534,10 @@ export class IntlRetirementMcConfig {
    * user's enabled/distribution settings after the fix:
    *   usInflationRate   → inflationRate
    *
-   * And a retired legacy record row to the generated key it aliased
+   * And a saved sale-YEAR row (`usHouseSaleYear`, `prop.<sk>.plannedSaleYear`, …) to its
+ * sale-DATE row, a NORMAL year becoming a NORMAL_DATE (design 117 phase 2).
+ *
+ * And a retired legacy record row to the generated key it aliased
    * (`rothBalance` → `acct.rothAccount.balanceTarget`, `primaryMonthlyWage` →
    * `person.primary.monthlyWage`). On a plan with no such record the setting finds no row
    * and is dropped, which is what the legacy row did silently.
@@ -550,7 +554,10 @@ export class IntlRetirementMcConfig {
       usInflationRate:      'inflationRate',
     };
     const config = new IntlRetirementMcConfig();
-    for (const v of variableConfigs) {
+    for (const saved of variableConfigs) {
+      // Design 117: a saved sale-YEAR row (generated or legacy flat key) becomes its
+      // sale-DATE row, distribution converted so the saved sweep keeps its shape.
+      const v   = migrateMcVariableConfig(saved);
       const key = ALIASES[v.paramKey] ?? retiredLegacyKey(v.paramKey) ?? v.paramKey;
       config.applyOverride(key, v);
     }

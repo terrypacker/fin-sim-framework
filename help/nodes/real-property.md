@@ -8,7 +8,7 @@ design: [75-house-costs-and-property-return-path.md, 83-us-au-tax-treaty-intrica
 stamps:
   panel:config-list: 786f94
   panel:config-graph: bbebb1
-  node:real-property: 1a5f1a
+  node:real-property: 4446c5
 ---
 
 A dwelling or land parcel: the most configurable record in the app, because a house is
@@ -41,9 +41,9 @@ after the sale.
 - `costBasis` — What was paid, plus capitalised improvements — the number the taxable gain is measured from. A basis left at 0 taxes the entire sale proceeds as gain. Capitalised repairs lift it over the run; depreciation claimed against rent reduces it, and is recaptured on a US sale.
 - `saleDestinationAccount` — Which account receives the net proceeds when this property sells. Blank sends them to the country's cash pool, where the spending rule can consume them. Naming a brokerage account is how a downsize is reinvested rather than quietly spent.
 - `ownershipType` — Sole or joint, which decides how the gain, the rent and the deductions are split between the two people. With different marginal rates or different residencies it is one of the larger levers on a property plan.
-- `ownerId` — The person who owns it when ownership is sole. Their residency, age and rate at the sale year decide what the gain costs.
-- `purchaseYear` — The calendar year this dwelling is bought. Blank means it is already owned at the start of the run. Set, the property is dormant — worth nothing, costing nothing — until 15 January of that year, when the price is debited and it becomes an ordinary property. The purchase settles after any sale on the same date.
-- `purchasePrice` — What the dwelling costs, in today's money, in its own currency. It is grown to the purchase date at this property's own appreciation rate rather than at CPI, so a price set as a share of what you are selling keeps that share. A purchase year with no price buys nothing.
+- `ownerId` — The person who owns it when ownership is sole. Their residency, age and rate at the sale date decide what the gain costs.
+- `purchaseDate` — The day this dwelling is bought. Blank means it is already owned at the start of the run. Set, the property is dormant — worth nothing, costing nothing — until that day, when the price is debited and it becomes an ordinary property. The purchase settles after any sale on the same day.
+- `purchasePrice` — What the dwelling costs, in today's money, in its own currency. It is grown over the whole years from the start of the run to the purchase year, at this property's own appreciation rate rather than at CPI, so a price set as a share of what you are selling keeps that share. A purchase date with no price buys nothing.
 - `purchasePriceIsNominal` — Tick when the price is already stated as at the purchase date — a contracted price. Unticked, the default, treats it as today's money and grows it to that year.
 - `purchaseFundFrom` — The account the purchase price is debited from. Blank uses the property country's cash pool. If the balance would breach its minimum the shortfall is raised through the ordinary drawdown queue, which is what makes a purchase interact with the portfolio instead of looking free.
 - `acquisitionDate` — When the dwelling was actually bought. It is the denominator of the Australian ownership-period fraction and of the CGT discount testing period, and the start of the US nonqualified-use window. LEAVE IT BLANK AND THOSE CONCESSIONS ARE DENIED — it is deliberately not defaulted to the start of the run, because that would inflate every fraction in your favour. Set automatically when a dwelling is bought mid-run.
@@ -82,4 +82,4 @@ after the sale.
 - `repairValuePct` — An alternative severity anchor: the median repair is this fraction of current value (0.02 is about 2% of the house). It overrides the fixed median when above zero, and keeps severity growing with the property instead of staying at a base-year figure.
 - `repairSigma` — The lognormal shape of repair severity — how heavy the tail is. Higher means more of the cost arrives in rare, large repairs, which is what actually threatens a plan with a thin cash buffer.
 - `capitalizeRepairs` — The fraction of each repair treated as a capital improvement rather than maintenance. It lifts the cost basis and so cuts the eventual capital-gains tax. Zero treats every repair as pure maintenance.
-- `speculative` — Simulate this property but do not count it as yours. It still appreciates, still sells in its sale year and still pays the tax — but until it converts it is worth zero in net worth and in everything downstream of it. Disclosed separately as "incl. speculative", so nothing is hidden. Incompatible with a drawdown priority.
+- `speculative` — Simulate this property but do not count it as yours. It still appreciates, still sells on its sale date and still pays the tax — but until it converts it is worth zero in net worth and in everything downstream of it. Disclosed separately as "incl. speculative", so nothing is hidden. Incompatible with a drawdown priority.

@@ -83,6 +83,8 @@ import { runJobsParallel } from '../lib/parallel.mjs';
 import { buildGridModel, makeIdOf } from '../lib/grid-report.mjs';
 import { table, note } from '../lib/format.mjs';
 
+const WORKER = new URL('../lib/grid-worker.mjs', import.meta.url).pathname;
+
 const opts = parseFlags(process.argv.slice(2), {
   usage: 'node scripts/lab/variant-grid.mjs --spec <spec.json> [options]\n\n'
        + 'variant-grid — run every cell of a declarative lever grid.',

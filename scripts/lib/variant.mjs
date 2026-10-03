@@ -71,6 +71,7 @@
 // only equity rates, so the shift below has to know them; restating the list here would
 // be a copy of the table docs/market-returns/SOURCES.md is the authority for.
 import { MARKET_GROWTH_PARAMS } from '../../src/finance/economic-regimes/market-returns.js';
+import { toSaleDate, yearOfDate } from '../../src/scenarios/year-date-migration.js';
 
 /**
  * @param {object} cfg    base cfg (not mutated)
@@ -281,13 +282,13 @@ export function addCompanyEquity(cfg, {
   (cfg.companyEquities ??= []).push({
     __type: 'CompanyEquity', id: key, name: key,
     value, costBasis, appreciationRate,
-    plannedSaleYear: saleYear, saleDestinationAccount: destination,
+    plannedSaleDate: toSaleDate(saleYear), saleDestinationAccount: destination,
     ownershipType, ownerId, drawdownPriority: null, owners: [],
     country, currency, stateKey: key, appreciationSchedule: null,
   });
   (cfg.initialState ??= {})[key] = {
     kind: 'company', stateKey: key, value, costBasis,
-    appreciationRate, plannedSaleYear: saleYear,
+    appreciationRate, plannedSaleDate: toSaleDate(saleYear),
     ownershipType, ownerId, country, appreciationSchedule: null,
   };
 }
@@ -311,7 +312,7 @@ export function addCompanyEquity(cfg, {
  * `saleYear: null` is meaningful and is the DEFAULT STATE of an unvested tranche, so
  * this distinguishes "absent" from "explicitly null" via `in`. It is also close to
  * inert for solvency: US_COMPANY_SALE schedules a COMPANY_SALE only when
- * `plannedSaleYear != null`, so a null tranche appreciates onto the balance sheet
+ * `plannedSaleDate != null`, so a null tranche appreciates onto the balance sheet
  * forever and never converts to cash. Expect it to move `netWorth` a great deal and
  * `failed` not at all — which is exactly why `failed` is the primary outcome here.
  */
@@ -324,9 +325,11 @@ export function applyCompanyEquity(cfg, set, stateKey, o = {}) {
   }
 
   if ('saleYear' in o) {
-    if (rec) rec.plannedSaleYear = o.saleYear;
-    if (st)  st.plannedSaleYear  = o.saleYear;
-    set(`equity.${stateKey}.plannedSaleYear`, o.saleYear);
+    // A year (or a date) — written as the sale DATE the engine reads (design 117).
+    const date = toSaleDate(o.saleYear);
+    if (rec) rec.plannedSaleDate = date;
+    if (st)  st.plannedSaleDate  = date;
+    set(`equity.${stateKey}.plannedSaleDate`, date);
   }
   if (o.value != null || o.valueMult != null) {
     const base = o.value ?? (rec?.value ?? st?.value ?? 0);
@@ -368,9 +371,11 @@ export function applyProperty(cfg, set, stateKey, o = {}) {
   if (!rec && !st) throw new Error(`property lever: no property "${stateKey}"`);
 
   if ('saleYear' in o) {
-    if (rec) rec.plannedSaleYear = o.saleYear;
-    if (st)  st.plannedSaleYear  = o.saleYear;
-    set(`prop.${stateKey}.plannedSaleYear`, o.saleYear);
+    // A year (or a date) — written as the sale DATE the engine reads (design 117).
+    const date = toSaleDate(o.saleYear);
+    if (rec) rec.plannedSaleDate = date;
+    if (st)  st.plannedSaleDate  = date;
+    set(`prop.${stateKey}.plannedSaleDate`, date);
   }
   // Where the sale proceeds land. A first-class lever because it is not a detail: on a
   // cross-border plan the destination decides the proceeds' currency, asset class, owner
@@ -1083,7 +1088,7 @@ export function applySpendTotal(cfg, set, total, propertyKey, { ownStrategy = tr
 
   const mortgage = monthlyDebtService(cfg, prop);
   const saleYear = prop
-    ? (prop.plannedSaleYear ?? cfg.initialState?.[prop.stateKey]?.plannedSaleYear ?? null)
+    ? yearOfDate(prop.plannedSaleDate ?? cfg.initialState?.[prop.stateKey]?.plannedSaleDate ?? null)
     : null;
 
   const preSale = Math.max(0, total - mortgage);

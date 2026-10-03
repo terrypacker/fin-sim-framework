@@ -557,7 +557,8 @@ export class StateSchemaRegistry {
     this.registerPattern('*.paymentSchedule.rate',      ParameterValueType.rate());
     this.registerPattern('*.paymentSchedule.fromMonth', ParameterValueType.integer()); // year × 12 + month
     this.registerPattern('*.paymentSchedule.months',    ParameterValueType.integer());
-    this.registerPattern('*.plannedSaleYear',       ParameterValueType.year());
+    this.registerPattern('*.plannedSaleDate',       ParameterValueType.date());
+    this.registerPattern('*.purchaseDate',          ParameterValueType.date());
     this.registerPattern('*.acquisitionPriceLevel', ParameterValueType.decimal(4));
     this.registerPattern('*.appreciationRate',      ParameterValueType.rate());
     // Property running costs and the repair model (design 75). Money is stamped per asset.

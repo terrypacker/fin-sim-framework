@@ -1,8 +1,8 @@
 # 117 — Year fields become Dates
 
 **Status:** ACCEPTED, 2 Oct 2026. The decisions in §3 were taken with the author, and Q1–Q3
-(§11) are answered as proposed (D8–D10). **Phase 1 BUILT** 2 Oct 2026 (§12); phases 2–7
-not started.
+(§11) are answered as proposed (D8–D10). **Phases 1 and 2 BUILT** 2 Oct 2026 (§12, §13);
+phases 3–7 not started.
 Scope is groups A and B of the 2 Oct inventory (§2): fields where a year stands for one
 moment, and loan-term boundaries. Annual windows and year-keyed schedules stay years (§2.3).
 Design 116 (employment spells) phase 4 waits on §5, the optimizer's Date type.
@@ -84,7 +84,7 @@ None of the six is sweepable.
 
 | # | Question | Decision |
 |---|---|---|
-| D1 | Representation | An ISO day (`YYYY-MM-DD`) on records and params. Epoch ms in state, under a `…Ms` name, matching §2.4. |
+| D1 | Representation | An ISO day (`YYYY-MM-DD`) on records and params. In state, the same ISO day under the record's own field name — amended while building phase 2 (§13): a property's state entry already carries `acquisitionDate` and `mainResidenceFrom` that way, so an `…Ms` field beside them would give one entry two date conventions. |
 | D2 | Keys | **Renamed**: `moveYear` → `moveDate`, `plannedSaleYear` → `plannedSaleDate`, and so on (§4). A key that says Year and holds a date misleads every reader, and `sweepKindOf` treats any key ending in `Year` as a year. Old keys are rewritten on load with the value converted (§6). |
 | D3 | Results on load | **Unchanged.** Each year migrates to the exact date the code builds from it today (§6.1), so every run produces the same numbers. Goldens change only where a renamed key sits in state (§9). |
 | D4 | Optimizer | A real `DATE` variable type (§5). It is encoded as an integer month count, so the solvers see an integer. A fractional-year proxy (the `mainResidenceFromYear` pattern) is rejected: it shows 2031.5 to the author, and design 116 needs real dates. |
@@ -288,7 +288,7 @@ The rollover keeps its legal clamp: a date before separation moves to separation
 
 - **Projections.** The toolsets project `plannedSaleYear`, `purchaseYear` and the loan terms
   into state, and `state-schema-registry.js` types `*.plannedSaleYear` and `*.maturityYear` as
-  `year()`. These become `…Ms` fields typed `date()`.
+  `year()`. These become date fields typed `date()`, holding the record's ISO day (D1).
 - **Goldens.** They pin whole-state JSON, so the renamed keys change the fixtures even
   though no number changes. Each phase regolds with `REGOLD=1`. The diff is then checked
   mechanically: map each old key and year to its new key and ms under §6.1, and assert that
@@ -373,3 +373,51 @@ The reasoning as proposed:
   bypassed, the same two ordinals score identically, so the test fails if the conversion
   breaks. `tests/viz/date-sweep-panels.test.mjs` (7) covers the panels. No golden changed:
   no field is converted yet.
+
+## 13. As built — phase 2 (2 Oct 2026)
+
+- **`year-date-migration.js`** (`src/scenarios/`, a leaf). It converts a sale or purchase
+  year to `Y-01-15`, which is the date the toolsets built from it. It covers the records,
+  a bequest's inline assets, the typed `cfg.params` list, the flat `cfg.parameters` bag,
+  asset entries in a saved `initialState`, and saved MC and Opt rows. A retired flat key in
+  the bag goes to the record its typed entry's node names, not to the default record.
+- **Where it runs.** Every conversion is idempotent. It runs in `ScenarioLoader.load` (first),
+  `applyParamBagToConfig` and `resolveRecordCenters`, because both read a cfg before the
+  loader does. It also runs in `BaseScenario.applyParams`, the MC runner and
+  `OptimizationProblem` (on their templates and base params), `buildDefaultConfig` (a legacy
+  override), the record deserializers (per field), `fromVariableConfigs` (a saved MC row), and
+  the scripts' `loadBaseConfig` and `sweep-scenario`.
+- **Two names for one sale.** An old MC run recorded both `usHouseSaleYear` and
+  `prop.<sk>.plannedSaleYear`: one moved by the lever, one at the plan value. On replay, the
+  value that differs from the plan wins. This is the same rule as `reconcileAliasPairs`, so
+  an old grid run does not replay as the plan's sale in every cell.
+- **The guard.** An asset built with `plannedSaleYear` or `purchaseYear` throws
+  (`rejectRetiredYearFields`), so any path that skipped the migration fails loudly. It
+  cannot quietly skip a sale.
+- **Retired.** `companySaleYear` (static schema param), the `usHouseSaleYear` /
+  `auHouseSaleYear` aliases, and `applyRealPropertySaleYearParams`. The company template
+  now has `plannedSaleDate` with `mc: false, opt: false`, like the static key it replaces.
+  `INTL_RETIREMENT_DEFAULTS` names the sales by their generated keys.
+- **Unchanged on purpose.** The purchase price still grows in whole years from the start
+  year to the purchase date's year (§7.2). The sale and purchase events fire at UTC
+  midnight of the day (`saleDateToUtc`), which for a migrated year is exactly the old
+  `Date.UTC(Y, 0, 15)`.
+- **Goldens.** 15 fixtures were regolded. A scripted check mapped every
+  `plannedSaleYear`/`purchaseYear: Y` in the old fixture to its date field and `Y-01-15`,
+  then compared whole states. It found 81 renamed fields and no other difference. The
+  golden specs were then moved to the new keys and matched without another regold.
+- **Editors.** The real-property, collectible, company-equity and bequest editors author a
+  date (`index.html` inputs `type="date"`). The node help topics `real-property`, `company`
+  and `collectible`, and the concept `cost-basis-and-equity`, were rewritten and restamped.
+- **Tests.** `year-date-migration.test.mjs` (17) and `real-property-sale-date-param.test.mjs`
+  (8, replacing the sale-year file) are new. The second includes a sale dated 1 Jul that
+  fires on 1 Jul and not in January. The lever-liveness gate (`lever-reaches-loaded-sim`
+  LRS-2) used to skip any non-numeric plan value; it now drives date levers too.
+  `tests/viz/editors/sale-date-fields.test.mjs` (5) covers the three other editors. Around
+  40 test files now author dates. The ones that keep a year are the legacy-input tests,
+  on purpose.
+- **Smoke run.** A pre-117 export (sale years and a saved `companySaleYear`) went through
+  `sweep-scenario --param companySaleYear` (each year moved the result) and
+  `variant-grid` with a `saleYear` lever (selling in 2030 vs never moved net liquidity by
+  about 1.35M). The run also found that `variant-grid` had been broken since the design
+  108 parseFlags migration: its `WORKER` constant was dropped. It is restored.

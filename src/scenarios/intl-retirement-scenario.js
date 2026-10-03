@@ -64,6 +64,7 @@ import {
   synthesizeTargetAllocation, allocWeightsFromMix, allocWeightsFromPreset, presentAllocations,
   DRAWDOWN_OWNER_MODES, DRAWDOWN_OWNER_DEFAULT, resolveOwnerBanding,
 } from './params/lever-weights.js';
+import { migrateParamBag } from './year-date-migration.js';
 
 export {
   DRAWDOWN_STRATEGIES, DRAWDOWN_ROLES, DRAWDOWN_WEIGHT_MODE, DRAWDOWN_WEIGHT_PREFIX,
@@ -344,12 +345,13 @@ export const INTL_RETIREMENT_DEFAULTS = {
   // US Retirement — Social Security
   primarySsClaimAge: 67,  // FRA; varying has no effect until TODO #292 is resolved
 
-  // Real Property sale years (null = no planned sale; set to override property's own plannedSaleYear)
-  usHouseSaleYear: null,
-  auHouseSaleYear: null,
-
-  // Company equity sale year (null = no planned sale)
-  companySaleYear: 2033,
+  // Sale dates (design 117 phase 2), keyed by the generated param that carries each one, so
+  // a buildDefaultConfig override and a saved plan name a sale the same way. A legacy
+  // `usHouseSaleYear` / `auHouseSaleYear` / `companySaleYear` override still works: it is
+  // migrated to these keys (year-date-migration.js). Null = no planned sale.
+  'prop.usHouseProperty.plannedSaleDate':          null,
+  'prop.auHouseProperty.plannedSaleDate':          null,
+  'equity.companyEquityAccount.plannedSaleDate':   '2033-01-15',
 
   // Inheritance year for the example bequest (null = inert; design 63)
   inheritanceYear: null,
@@ -430,18 +432,9 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
   // flagged transaction account. The old global usSavingsMinBalance /
   // auSavingsMinBalance keys retire behind aliases (see INTL_RETIREMENT_PARAM_ALIASES).
 
-  // Real-property value / appreciation / sale-year params are generated from the
-  // property records (design 55). companySaleYear stays static until the
-  // company-equity template is populated (Phase 4).
-
-  // ── Company Equity ───────────────────────────────────────────────────────
-  {
-    key: 'companySaleYear', label: 'Company Sale Year',
-    type: 'Number', group: 'Company Equity', mc: false, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.companySaleYear,
-    description: 'Calendar year the company equity stake is sold (null = no planned sale)',
-    node: { type: 'companyEquity', stateKey: 'companyEquityAccount', field: 'plannedSaleYear' },
-  },
+  // Real-property value / appreciation / sale-date params, and a company stake's sale
+  // date, are generated from the records (design 55; design 117 phase 2 retired the
+  // static `companySaleYear`).
 
   // Inheritance (design 63): the inheritanceYear + per-inherited-RA drawdown knobs
   // are GENERATED per-record from the Bequest records (design 55 template path /
@@ -748,9 +741,9 @@ export const INTL_RETIREMENT_PARAM_ALIASES = Object.freeze({
   spouseIraBalance:      'acct.spouseIraAccount.balanceTarget',
   spouseK401Balance:     'acct.spouseK401Account.balanceTarget',
   spouseSuperBalance:    'acct.spouseSuperAccount.balanceTarget',
-  // Real property
-  usHouseSaleYear:       'prop.usHouseProperty.plannedSaleYear',
-  auHouseSaleYear:       'prop.auHouseProperty.plannedSaleYear',
+  // Real property sale years: no alias. `usHouseSaleYear` / `auHouseSaleYear` /
+  // `companySaleYear` hold a YEAR and their successors a DATE, so they are converted by
+  // year-date-migration.js (design 117 phase 2) before any alias runs, not renamed here.
   // Cash floors (design 55 §7/§13) — now per-account on the canonical savings accounts
   usSavingsMinBalance:   'acct.usSavingsAccount.minimumBalance',
   auSavingsMinBalance:   'acct.auSavingsAccount.minimumBalance',
@@ -902,7 +895,9 @@ export class IntlRetirementScenario extends BaseScenario {
    * (with stable stateKeys) plus a parameters map aligned to toolset param keys.
    */
   static buildDefaultConfig(params = {}, simStart, simEnd) {
-    const p = { ...INTL_RETIREMENT_DEFAULTS, ...params };
+    // Legacy sale-year overrides (`usHouseSaleYear: 2035`) become the generated sale-date
+    // key, converted to the date they always meant (design 117 §6.1).
+    const p = { ...INTL_RETIREMENT_DEFAULTS, ...migrateParamBag(params) };
     const toDate = v => (v instanceof Date ? v : new Date(v));
     p.primaryBirthDate      = toDate(p.primaryBirthDate);
     p.spouseBirthDate       = toDate(p.spouseBirthDate);
@@ -1157,14 +1152,16 @@ export class IntlRetirementScenario extends BaseScenario {
           value: 1_000_000, costBasis: 800_000, appreciationRate: 0.04,
           isPrimaryResidence: true, ownershipType: 'joint', ownerId: 'primary',
           country: 'US',
-          ...(p.usHouseSaleYear != null ? { plannedSaleYear: p.usHouseSaleYear } : {}),
+          ...(p['prop.usHouseProperty.plannedSaleDate'] != null
+            ? { plannedSaleDate: p['prop.usHouseProperty.plannedSaleDate'] } : {}),
         },
         {
           __type: 'RealProperty', name: 'AU House', stateKey: 'auHouseProperty',
           value: 1_000_000, costBasis: 900_000, appreciationRate: 0.04,
           isPrimaryResidence: true, ownershipType: 'joint', ownerId: 'primary',
           country: 'AU',
-          ...(p.auHouseSaleYear != null ? { plannedSaleYear: p.auHouseSaleYear } : {}),
+          ...(p['prop.auHouseProperty.plannedSaleDate'] != null
+            ? { plannedSaleDate: p['prop.auHouseProperty.plannedSaleDate'] } : {}),
         },
       ],
 
@@ -1187,7 +1184,8 @@ export class IntlRetirementScenario extends BaseScenario {
           value: 500_000, costBasis: 50_000, appreciationRate: 0.08,
           ownershipType: 'sole', ownerId: 'primary', country: 'US',
           saleDestinationAccount: 'usSavingsAccount',
-          ...(p.companySaleYear != null ? { plannedSaleYear: p.companySaleYear } : {}),
+          ...(p['equity.companyEquityAccount.plannedSaleDate'] != null
+            ? { plannedSaleDate: p['equity.companyEquityAccount.plannedSaleDate'] } : {}),
         },
       ],
 
@@ -1289,19 +1287,6 @@ export class IntlRetirementScenario extends BaseScenario {
   }
 }
 
-/**
- * Patch real property sale year params into a serialized scenario cfg.
- *
- * When MC or OPT perturbs usHouseSaleYear / auHouseSaleYear, the perturbed
- * value lives in params but the toolsets read from cfg.realProperties[i].plannedSaleYear.
- * This function bridges that gap: it finds each property by stateKey and
- * overwrites its plannedSaleYear when the corresponding param is non-null.
- *
- * Rounding to integer guards against floating-point samples from NORMAL distributions.
- *
- * @param {object} cfg    - Mutable clone of the serialized scenario config.
- * @param {object} params - Perturbed parameter map.
- */
 /**
  * The default brokerage book is 60% equity / 40% bond (a representative balanced
  * split, design 66 §G3). The bond leg makes the golden exercise the whole bond
@@ -1420,13 +1405,3 @@ function _k401Holdings(p) {
   ];
 }
 
-export function applyRealPropertySaleYearParams(cfg, params) {
-  if (!Array.isArray(cfg.realProperties)) return;
-  for (const prop of cfg.realProperties) {
-    if (prop.stateKey === 'usHouseProperty' && params.usHouseSaleYear != null) {
-      prop.plannedSaleYear = Math.round(params.usHouseSaleYear);
-    } else if (prop.stateKey === 'auHouseProperty' && params.auHouseSaleYear != null) {
-      prop.plannedSaleYear = Math.round(params.auHouseSaleYear);
-    }
-  }
-}

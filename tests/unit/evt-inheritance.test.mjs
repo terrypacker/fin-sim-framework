@@ -255,8 +255,8 @@ test('EVT-63 §14: promoted inherited assets gain per-record OPT/MC params throu
   // holdings' market returns like any other account.
   assert.ok(!keys.has('acct.inheritBrokerage.growthRate'),  'no inherited brokerage growth-rate param');
   assert.ok(!keys.has('acct.inheritBrokerage.dividendRate'), 'no inherited brokerage dividend-rate param');
-  assert.ok(keys.has('prop.inheritHome.plannedSaleYear'),  'inherited home sale-year param');
-  assert.ok(keys.has('coll.inheritArt.plannedSaleYear'),   'inherited art sale-year param');
+  assert.ok(keys.has('prop.inheritHome.plannedSaleDate'),  'inherited home sale-date param');
+  assert.ok(keys.has('coll.inheritArt.plannedSaleDate'),   'inherited art sale-date param');
   // Design 63 §15 (P8): the promoted retirement IRA keeps its SECURE-drawdown knobs on
   // raAsset.* AND gains the standard acct.* earnings/priority knobs — disjoint prefixes
   // (§14.5), so both cascade onto the one promoted record.
@@ -926,7 +926,7 @@ test('EVT-63 §13: inherited real property appreciates and is sellable at a set 
   const { sim } = loadToolsetScenario(promotionConfig([
     { __type: 'RealProperty', name: 'Inherited Home', country: 'US',
       inheritedValue: 600_000, deceasedCostBase: 200_000, appreciationRate: 0.04,
-      plannedSaleYear: 2035, stateKey: 'inheritHome' },
+      plannedSaleDate: '2035-01-15', stateKey: 'inheritHome' },
   ]));
   sim.stepTo(new Date(Date.UTC(2033, 0, 31)));
   assert.ok(sim.state.inheritHome.value > 600_000, `home should appreciate, got ${sim.state.inheritHome.value}`);
@@ -940,7 +940,7 @@ test('EVT-63 §13: inherited real property appreciates and is sellable at a set 
 test('EVT-63 §13: inherited collectible is sellable at a set sale year', () => {
   const { sim } = loadToolsetScenario(promotionConfig([
     { __type: 'Collectible', name: 'Inherited Gold', country: 'US', isGold: true,
-      inheritedValue: 100_000, appreciationRate: 0.03, plannedSaleYear: 2034, stateKey: 'inheritGold' },
+      inheritedValue: 100_000, appreciationRate: 0.03, plannedSaleDate: '2034-01-15', stateKey: 'inheritGold' },
   ]));
   sim.stepTo(new Date(Date.UTC(2033, 0, 31)));
   assert.ok(sim.state.inheritGold.value >= 100_000, `gold should appreciate, got ${sim.state.inheritGold.value}`);
@@ -950,27 +950,27 @@ test('EVT-63 §13: inherited collectible is sellable at a set sale year', () => 
 
 test('EVT-63 §13: promoted inherited property/collectible generate the standard sale-year param', () => {
   // Design 63 §14: promoted inherited property/collectible are real records, so they
-  // generate the standard prop./coll. plannedSaleYear param (keyed by the real record,
+  // generate the standard prop./coll. plannedSaleDate param (keyed by the real record,
   // node type realProperty/collectible) — the bequest-specific saleAsset. is retired.
   const cfg = {
     realProperties: [{ __type: 'RealProperty', stateKey: 'inhHome', name: 'Inherited Home',
-      country: 'US', value: 0, inherited: true, bequestId: 'beq1', plannedSaleYear: null }],
+      country: 'US', value: 0, inherited: true, bequestId: 'beq1', plannedSaleDate: null }],
     collectibles:   [{ __type: 'Collectible', stateKey: 'inhArt', name: 'Inherited Art',
-      country: 'US', value: 0, inherited: true, bequestId: 'beq1', plannedSaleYear: null }],
+      country: 'US', value: 0, inherited: true, bequestId: 'beq1', plannedSaleDate: null }],
     accounts:       [{ __type: 'BrokerageAccount', stateKey: 'inhBrokAccount', name: 'Inherited Brokerage',
       type: 'brokerage', role: 'us-stock', country: 'US', inherited: true, bequestId: 'beq1' }],
   };
   const gen  = ScenarioParamGenerator.generate(cfg);
   const keys = new Set(gen.map(e => e.key));
-  assert.ok(keys.has('prop.inhHome.plannedSaleYear'), 'property sale-year param');
-  assert.ok(keys.has('coll.inhArt.plannedSaleYear'),  'collectible sale-year param');
+  assert.ok(keys.has('prop.inhHome.plannedSaleDate'), 'property sale-date param');
+  assert.ok(keys.has('coll.inhArt.plannedSaleDate'),  'collectible sale-date param');
   // The promoted brokerage is discovered too (its own acct. params), but accounts have
-  // no plannedSaleYear field.
+  // no plannedSaleDate field.
   assert.ok([...keys].some(k => k.startsWith('acct.inhBrokAccount.')), 'brokerage generates acct. params');
-  assert.ok(![...keys].some(k => k.endsWith('.plannedSaleYear') && k.startsWith('acct.')), 'brokerage grows no sale-year param');
+  assert.ok(![...keys].some(k => k.endsWith('.plannedSaleDate') && k.startsWith('acct.')), 'brokerage grows no sale-date param');
   assert.deepStrictEqual(
-    gen.find(e => e.key === 'prop.inhHome.plannedSaleYear').node,
-    { type: 'realProperty', stateKey: 'inhHome', field: 'plannedSaleYear' });
+    gen.find(e => e.key === 'prop.inhHome.plannedSaleDate').node,
+    { type: 'realProperty', stateKey: 'inhHome', field: 'plannedSaleDate' });
 });
 
 test('EVT-63 §13: the sale-year PARAM cascades onto the asset and liquidates it', () => {
@@ -978,11 +978,11 @@ test('EVT-63 §13: the sale-year PARAM cascades onto the asset and liquidates it
     { __type: 'RealProperty', name: 'Inherited Home', country: 'US',
       inheritedValue: 600_000, deceasedCostBase: 200_000, appreciationRate: 0.04, stateKey: 'inheritHome' },
   ]);
-  // Sale year supplied ONLY via the generated per-record param (no plannedSaleYear
+  // Sale date supplied ONLY via the generated per-record param (no plannedSaleDate
   // on the asset descriptor) — proves the param → cascade → promoted-record → sale
   // chain. The promoted home is a real realProperty record, so the standard
-  // prop.<sk>.plannedSaleYear param cascades onto it (design 63 §14).
-  cfg.parameters = { 'prop.inheritHome.plannedSaleYear': 2035 };
+  // prop.<sk>.plannedSaleDate param cascades onto it (design 63 §14).
+  cfg.parameters = { 'prop.inheritHome.plannedSaleDate': '2035-01-15' };
   const { sim } = loadToolsetScenario(cfg);
 
   const cashBefore = sim.state.usSavingsAccount.balance;

@@ -18,6 +18,7 @@ import {deriveNetWorth} from "../finance/derived-metrics/net-worth.js";
 import {deriveNetLiquidity} from "../finance/derived-metrics/net-liquidity.js";
 import {deriveOffsetCapacity} from "../finance/derived-metrics/offset-capacity.js";
 import {roundRecordField, recordFieldPatch} from "./params/record-field-rounding.js";
+import { migrateParamBag } from './year-date-migration.js';
 
 /**
  * Base class for simulation scenarios.
@@ -174,6 +175,8 @@ export class BaseScenario extends SimGraphNode {
    */
   applyParams(params) {
     if (!params || !Array.isArray(this.params)) return;
+    // A sale YEAR (a legacy or `…plannedSaleYear` key) is a sale DATE now (design 117).
+    params = migrateParamBag(params);
 
     // Step 1 — update typed params array
     for (const p of this.params) {

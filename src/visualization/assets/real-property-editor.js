@@ -170,8 +170,7 @@ export class RealPropertyEditor extends BaseComponent {
     el.querySelector('[data-id="mortgageBalance"]').value   = this._node?.mortgageBalance   ?? 0;
     el.querySelector('[data-id="monthlyMortgage"]').value   = this._node?.monthlyMortgage   ?? 0;
 
-    const saleYearInput = el.querySelector('[data-id="plannedSaleYear"]');
-    saleYearInput.value = this._node?.plannedSaleYear ?? '';
+    el.querySelector('[data-id="plannedSaleDate"]').value = this._node?.plannedSaleDate ?? '';
 
     el.querySelector('[data-id="ownershipType"]').value = this._node?.ownershipType ?? 'sole';
 
@@ -253,7 +252,7 @@ export class RealPropertyEditor extends BaseComponent {
       const t = typeof v === 'number' ? v : Date.parse(v);
       return Number.isNaN(t) ? '' : new Date(t).toISOString().slice(0, 10);
     };
-    el.querySelector('[data-id="purchaseYear"]').value  = this._node?.purchaseYear  ?? '';
+    el.querySelector('[data-id="purchaseDate"]').value  = asDateValue(this._node?.purchaseDate);
     el.querySelector('[data-id="purchasePrice"]').value = this._node?.purchasePrice ?? '';
     el.querySelector('[data-id="purchasePriceIsNominal"]').checked = this._node?.purchasePriceIsNominal ?? false;
     el.querySelector('[data-id="acquisitionDate"]').value    = asDateValue(this._node?.acquisitionDate);
@@ -297,7 +296,7 @@ export class RealPropertyEditor extends BaseComponent {
 
   /**
    * Route param-backed real-property fields through their param (design/32, design 55 §14.3).
-   * All generated real-property fields (value, appreciationRate, plannedSaleYear,
+   * All generated real-property fields (value, appreciationRate, plannedSaleDate,
    * monthlyRent, occupancyRate, isPrimaryResidence) are bound so a direct edit writes the param (the source of truth)
    * rather than only the record — otherwise the param→record cascade clobbers the edit on
    * the next Rebuild.
@@ -322,8 +321,8 @@ export class RealPropertyEditor extends BaseComponent {
 
     bindField('value',            'value',            (raw) => Number(raw));
     bindField('appreciationRate', 'appreciationRate', (raw) => Number(raw));
-    bindField('plannedSaleYear',  'plannedSaleYear',
-      (raw) => (raw === '' || raw == null) ? null : Math.round(Number(raw)));
+    bindField('plannedSaleDate',  'plannedSaleDate',
+      (raw) => (raw === '' || raw == null) ? null : String(raw));
     // Generated only while the property is a rental (the template's `appliesTo`).
     bindField('monthlyRent',      'monthlyRent',      (raw) => Math.round(Number(raw)));
     bindField('occupancyRate',    'occupancyRate',    (raw) => Number(raw));
@@ -351,7 +350,6 @@ export class RealPropertyEditor extends BaseComponent {
   }
 
   _readForm(el) {
-    const saleYearRaw = el.querySelector('[data-id="plannedSaleYear"]').value;
     /** A blank numeric input means "unset" (null), never 0 — see the render comment. */
     const nullableNum = (dataId, round = false) => {
       const raw = el.querySelector(`[data-id="${dataId}"]`).value;
@@ -370,12 +368,13 @@ export class RealPropertyEditor extends BaseComponent {
       appreciationRate:     +el.querySelector('[data-id="appreciationRate"]').value,
       mortgageBalance:      +el.querySelector('[data-id="mortgageBalance"]').value,
       monthlyMortgage:      +el.querySelector('[data-id="monthlyMortgage"]').value,
-      plannedSaleYear:      saleYearRaw ? +saleYearRaw : null,
+      // A blank date is "no planned sale" (design 117); the picker gives 'YYYY-MM-DD'.
+      plannedSaleDate:      el.querySelector('[data-id="plannedSaleDate"]').value || null,
       saleDestinationAccount: el.querySelector('[data-id="saleDestinationAccount"]').value || null,
-      // Purchase (design 83 §10 follow-on). A blank year or price means "no purchase",
-      // never 0 — a year 0 purchase and a free house are both real values that differ
-      // from "unset", which is the same trap the loan term fields document.
-      purchaseYear:           nullableNum('purchaseYear', true),
+      // Purchase (design 83 §10 follow-on). A blank date or price means "no purchase",
+      // never 0 — a free house is a real value that differs from "unset", which is the
+      // same trap the loan term fields document.
+      purchaseDate:           el.querySelector('[data-id="purchaseDate"]').value || null,
       purchasePrice:          nullableNum('purchasePrice'),
       purchasePriceIsNominal: el.querySelector('[data-id="purchasePriceIsNominal"]').checked,
       purchaseFundFrom:       el.querySelector('[data-id="purchaseFundFrom"]').value || null,

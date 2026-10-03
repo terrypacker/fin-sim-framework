@@ -10,7 +10,7 @@
 /**
  * Real-property editor — the purchase path and the main-residence history.
  *
- * Both engines shipped without an authoring surface: `purchaseYear` and the design 83
+ * Both engines shipped without an authoring surface: `purchaseDate` (then a year) and the design 83
  * G7 date fields were reachable only from a spec file, which is the same state the
  * design-86 loan terms were in before their UI landed — and that phase found three
  * silent defects that only an authoring surface could reach.
@@ -32,7 +32,7 @@ import { loadHtml, makeMockContainer } from '../../helpers/viz-utils.js';
 import { RealPropertyEditor } from '../../../src/visualization/assets/real-property-editor.js';
 import { ParamFieldLinks }    from '../../../src/visualization/scenario/param-field-links.js';
 
-const PURCHASE_FIELDS = ['purchaseYear', 'purchasePrice', 'purchasePriceIsNominal', 'purchaseFundFrom'];
+const PURCHASE_FIELDS = ['purchaseDate', 'purchasePrice', 'purchasePriceIsNominal', 'purchaseFundFrom'];
 const HISTORY_FIELDS  = ['acquisitionDate', 'mainResidenceMode', 'mainResidenceFrom',
                          'mainResidenceUntil', 'claimDownsizerContribution'];
 
@@ -64,7 +64,7 @@ describe('real-property editor — purchase + main-residence history', () => {
 
   test('a fresh property is inert: no purchase, no stated history', () => {
     const el = render({ id: 'p1', name: 'AU House' })._rootEl;
-    expect(el.querySelector('[data-id="purchaseYear"]').value).toBe('');
+    expect(el.querySelector('[data-id="purchaseDate"]').value).toBe('');
     expect(el.querySelector('[data-id="purchasePrice"]').value).toBe('');
     expect(el.querySelector('[data-id="purchasePriceIsNominal"]').checked).toBe(false);
     expect(el.querySelector('[data-id="acquisitionDate"]').value).toBe('');
@@ -72,12 +72,12 @@ describe('real-property editor — purchase + main-residence history', () => {
     expect(el.querySelector('[data-id="claimDownsizerContribution"]').checked).toBe(false);
   });
 
-  test('a blank purchase year and price round-trip as null, never 0', () => {
-    // `purchaseYear: 0` is a real (if absurd) year and `purchasePrice: 0` is a free
-    // house; both differ from "no purchase", which is what blank has to mean.
+  test('a blank purchase date and price round-trip as null, never 0', () => {
+    // `purchasePrice: 0` is a free house and an empty date string is not a date; both
+    // differ from "no purchase", which is what blank has to mean.
     const data = render({ id: 'p1', name: 'AU House' })._readForm(
       render({ id: 'p1', name: 'AU House' })._rootEl);
-    expect(data.purchaseYear).toBeNull();
+    expect(data.purchaseDate).toBeNull();
     expect(data.purchasePrice).toBeNull();
     expect(data.purchaseFundFrom).toBeNull();
     expect(data.acquisitionDate).toBeNull();
@@ -88,14 +88,15 @@ describe('real-property editor — purchase + main-residence history', () => {
   test('authored values round-trip through render → read', () => {
     const editor = render({
       id: 'p1', name: 'Downsize', country: 'AU',
-      purchaseYear: 2036, purchasePrice: 600_000, purchasePriceIsNominal: true,
+      purchaseDate: '2036-01-15', purchasePrice: 600_000, purchasePriceIsNominal: true,
       purchaseFundFrom: 'auSavingsAccount',
       acquisitionDate: Date.UTC(2006, 0, 1),
       mainResidenceFrom: '2032-01-01',
       claimDownsizerContribution: true,
     });
     const el = editor._rootEl;
-    expect(el.querySelector('[data-id="purchaseYear"]').value).toBe('2036');
+    expect(el.querySelector('[data-id="purchaseDate"]').value).toBe('2036-01-15');
+    expect(el.querySelector('[data-id="purchaseDate"]').type).toBe('date');
     expect(el.querySelector('[data-id="purchasePriceIsNominal"]').checked).toBe(true);
     expect(el.querySelector('[data-id="claimDownsizerContribution"]').checked).toBe(true);
 
@@ -107,7 +108,7 @@ describe('real-property editor — purchase + main-residence history', () => {
     expect(el.querySelector('[data-id="mainResidenceFrom"]').value).toBe('2032-01-01');
 
     const data = editor._readForm(el);
-    expect(data.purchaseYear).toBe(2036);
+    expect(data.purchaseDate).toBe('2036-01-15');
     expect(data.purchasePrice).toBe(600_000);
     expect(data.purchaseFundFrom).toBe('auSavingsAccount');
     expect(data.acquisitionDate).toBe('2006-01-01');

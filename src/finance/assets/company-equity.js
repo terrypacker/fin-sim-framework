@@ -42,7 +42,7 @@ export class CompanyEquity extends Asset {
    * @param {number|null}   [opts.drawdownPriority=null]        - Liquidation order (1 = first)
    * @param {number}        [opts.costBasis=0]                  - Original acquisition / strike cost
    * @param {number}        [opts.appreciationRate=0.08]        - Annual appreciation rate as a decimal (equity default 8%)
-   * @param {number|null}   [opts.plannedSaleYear=null]         - Calendar year of the liquidity event
+   * @param {string|null}   [opts.plannedSaleDate=null]         - Date of the liquidity event, 'YYYY-MM-DD' (design 117)
    * @param {string|null}   [opts.saleDestinationAccount=null]  - Account id to receive net sale proceeds
    * @param {CompanyEquityOwner[]} [opts.owners=[]]             - Per-person ownership breakdown; overrides sole/joint split
    * @param {number|null}   [opts.balanceAtResidencyChange=null] - Value snapshot on first residency change
@@ -56,7 +56,7 @@ export class CompanyEquity extends Asset {
     this.value                    = initialValue;
     this.costBasis                = opts.costBasis                ?? 0;
     this.appreciationRate         = opts.appreciationRate         ?? 0.08;
-    this.plannedSaleYear          = opts.plannedSaleYear          ?? null;
+    this.plannedSaleDate          = opts.plannedSaleDate          ?? null;
     this.saleDestinationAccount   = opts.saleDestinationAccount   ?? null;
     this.owners                   = opts.owners                   ?? [];
     this.balanceAtResidencyChange = opts.balanceAtResidencyChange ?? null;

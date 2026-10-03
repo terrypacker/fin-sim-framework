@@ -30,8 +30,9 @@ import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scen
 import { ScenarioLoader }         from '../../src/scenarios/scenario-loader.js';
 import { resolveRecordCenters }   from '../../src/scenarios/scenario-param-apply.js';
 
-const YEAR_ROWS = ['stateMoveYear', 'prop.usHouseProperty.plannedSaleYear',
-  'prop.auHouseProperty.plannedSaleYear'];
+// The house sale YEARS were integer rows here until design 117 phase 2 made them dates;
+// W0b-1b pins what they are now.
+const YEAR_ROWS = ['stateMoveYear'];
 
 function yearRow(params, paramKey, override, opts) {
   const config = new IntlRetirementMcConfig();
@@ -42,16 +43,30 @@ function yearRow(params, paramKey, override, opts) {
 /** The calendar year a consumer actually runs for a sampled value. */
 const effectiveYear = (v) => new Date(Date.UTC(v, 0, 1)).getUTCFullYear();
 
-test('W0b-1: the state-move and house-sale-year rows declare integer: true', () => {
-  // The sale years are harvested per property (the legacy usHouseSaleYear rows are retired),
-  // so they need the cfg whose records carry them, and the record centers.
-  const cfg = IntlRetirementScenario.buildDefaultConfig({ usHouseSaleYear: 2035, auHouseSaleYear: 2040 });
-  const params = { stateMoveYear: 2031, ...resolveRecordCenters(cfg) };
+test('W0b-1: the state-move row declares integer: true', () => {
+  const params = { stateMoveYear: 2031 };
   for (const key of YEAR_ROWS) {
-    const row = yearRow(params, key, null, { cfg });
+    const row = yearRow(params, key);
     assert.ok(row, `${key} row should be emitted`);
     assert.equal(row.integer, true, `${key} must carry integer: true`);
     assert.equal(row.enabled, false, `${key} ships disabled — no default run moves`);
+  }
+});
+
+test('W0b-1b: a house sale is a DATE row now, with no integer rounding to fight', () => {
+  // Harvested per property, so it needs the cfg whose records carry the dates.
+  const cfg = IntlRetirementScenario.buildDefaultConfig({
+    'prop.usHouseProperty.plannedSaleDate': '2035-01-15', 'prop.auHouseProperty.plannedSaleDate': '2040-01-15' });
+  const params = resolveRecordCenters(cfg);
+  for (const [key, day] of [['prop.usHouseProperty.plannedSaleDate', '2035-01-15'],
+                            ['prop.auHouseProperty.plannedSaleDate', '2040-01-15']]) {
+    const row = yearRow(params, key, null, { cfg });
+    assert.ok(row, `${key} row should be emitted`);
+    assert.equal(row.type, DISTRIBUTION_TYPES.UNIFORM_DATE);
+    assert.equal(row.integer, undefined, 'a date is never rounded as a number');
+    assert.equal(row.enabled, false);
+    const [lo, hi] = [Number(day.slice(0, 4)) - 2, Number(day.slice(0, 4)) + 2];
+    assert.deepStrictEqual([row.min, row.max], [`${lo}${day.slice(4)}`, `${hi}${day.slice(4)}`]);
   }
 });
 

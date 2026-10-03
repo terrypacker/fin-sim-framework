@@ -255,7 +255,7 @@ function auRentalConfig({ offsetBalance = null } = {}) {
       appreciationRate: 0, costBasis: 800_000, value: 1_000_000,
       mortgageBalance: 500_000, monthlyMortgage: 0, mortgageInterestRate: 0.06,
       isPrimaryResidence: false, ownerId: 'primary', owners: [], ownershipType: 'sole',
-      plannedSaleYear: null, saleDestinationAccount: 'auSavingsAccount',
+      plannedSaleDate: null, saleDestinationAccount: 'auSavingsAccount',
       stateKey: 'auHouseProperty',
       rentalEnabled: true, monthlyRent: 3_000, occupancyRate: 0.9,
       rentalExpenseRatio: 0.25, landValueRatio: 0.2, annualDepreciationOverride: 12_000,

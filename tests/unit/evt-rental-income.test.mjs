@@ -81,7 +81,7 @@ function usConfig(rentalOverrides = {}, propOverrides = {}) {
       appreciationRate: 0, costBasis: 800000, value: 1000000,
       mortgageBalance: 0, monthlyMortgage: 0, isPrimaryResidence: false,
       ownerId: 'primary', owners: [], ownershipType: 'sole',
-      plannedSaleYear: null, saleDestinationAccount: 'usSavingsAccount',
+      plannedSaleDate: null, saleDestinationAccount: 'usSavingsAccount',
       stateKey: 'usHouseProperty',
       rentalEnabled: true, monthlyRent: 3000, occupancyRate: 0.9,
       rentalExpenseRatio: 0.25, mortgageInterestRate: 0, landValueRatio: 0.2,
@@ -109,7 +109,7 @@ function auConfig(propOverrides = {}) {
       appreciationRate: 0, costBasis: 800000, value: 1000000,
       mortgageBalance: 0, monthlyMortgage: 0, isPrimaryResidence: false,
       ownerId: 'primary', owners: [], ownershipType: 'sole',
-      plannedSaleYear: null, saleDestinationAccount: 'auSavingsAccount',
+      plannedSaleDate: null, saleDestinationAccount: 'auSavingsAccount',
       stateKey: 'auHouseProperty',
       rentalEnabled: true, monthlyRent: 3000, occupancyRate: 0.9,
       rentalExpenseRatio: 0.25, mortgageInterestRate: 0, landValueRatio: 0.2,
@@ -255,7 +255,7 @@ test('EVT-RENT-9: rent is indexed to the effective inflation accumulator', () =>
 
 test('EVT-RENT-8: accumulated depreciation reduces the tax basis at sale (larger gain)', () => {
   const { sim } = loadToolsetScenario(auConfig({
-    plannedSaleYear: 2027, annualDepreciationOverride: 12000,
+    plannedSaleDate: '2027-01-15', annualDepreciationOverride: 12000,
   }));
   assert.doesNotThrow(() => sim.stepTo(MAR_2027));
 
@@ -362,7 +362,7 @@ test('EVT-RENT-14: an opening accumulatedDepreciation enlarges the sale gain by 
   const saleGain = (opening) => {
     ServiceRegistry.resetAll();
     const { sim } = loadToolsetScenario(auConfig({
-      plannedSaleYear: 2027, annualDepreciationOverride: 12000, accumulatedDepreciation: opening,
+      plannedSaleDate: '2027-01-15', annualDepreciationOverride: 12000, accumulatedDepreciation: opening,
     }));
     sim.stepTo(MAR_2027);
     const [sale] = sim.journal.getActions('AU_HOUSE_SALE_TAX');

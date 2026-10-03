@@ -124,7 +124,7 @@ export const AU_SINGLE_HOMEOWNER_DEFAULTS = {
   carValue:               75_000,
   carCostBasis:           45_000,
   carAppreciationRate:      0.04,
-  carSaleYear:              2040,
+  carSaleDate:              '2040-01-15',
 
   // ── Inheritance ────────────────────────────────────────────────────────────
   inheritanceYear:        2036,
@@ -367,7 +367,7 @@ export class AuSingleHomeownerScenario extends BaseScenario {
           // and the AU return assesses them without an FX leg.
           country: 'AU', currency: AUD,
           isGold: false,
-          plannedSaleYear: p.carSaleYear,
+          plannedSaleDate: p.carSaleDate,
         },
       ],
 

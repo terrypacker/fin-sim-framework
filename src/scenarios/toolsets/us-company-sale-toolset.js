@@ -11,6 +11,7 @@
 import { OneOffEvent }             from '../../simulation-framework/events/one-off-event.js';
 import { EventSeries }             from '../../simulation-framework/events/event-series.js';
 import { AssetAppreciationHandler } from '../../finance/handlers/asset-appreciation-handler.js';
+import { saleDateToUtc } from '../year-date-migration.js';
 
 const COMPANY_EQUITY_APPRECIATE_TYPE = 'COMPANY_EQUITY_APPRECIATE';
 
@@ -27,7 +28,7 @@ const COMPANY_EQUITY_APPRECIATE_TYPE = 'COMPANY_EQUITY_APPRECIATE';
  * This toolset contributes only:
  *   - state()     — seeds each CompanyEquity's stateKey (kind: 'company') so it
  *                   shows on the balance sheet / net worth before the sale.
- *   - schedules() — a one-off COMPANY_SALE per equity with a plannedSaleYear, plus
+ *   - schedules() — a one-off COMPANY_SALE per equity with a plannedSaleDate, plus
  *                   a toolset-private annual COMPANY_EQUITY_APPRECIATE series.
  *   - handlers()  — an AssetAppreciationHandler bound to that series. The shared
  *                   AssetAppreciateReducer (ASSET_APPRECIATE_APPLY) is registered
@@ -60,11 +61,11 @@ export const US_COMPANY_SALE = {
 
   schedules(context) {
     const schedules = (context.companyEquities ?? [])
-      .filter(e => e.plannedSaleYear != null)
+      .filter(e => e.plannedSaleDate != null)
       .map(e => new OneOffEvent({
         name:    `Sell ${e.name}`,
         type:    'COMPANY_SALE',
-        date:    new Date(Date.UTC(e.plannedSaleYear, 0, 15)),
+        date:    saleDateToUtc(e.plannedSaleDate),
         data:    { costBasis: e.costBasis, stateKey: e.stateKey, saleDestinationAccount: e.saleDestinationAccount },
         enabled: true,
         color:   '#6A1B9A',
@@ -111,7 +112,7 @@ function _companyEquityToStatePlain(eq) {
     value:                eq.value            ?? 0,
     costBasis:            eq.costBasis         ?? 0,
     appreciationRate:     eq.appreciationRate  ?? 0,
-    plannedSaleYear:      eq.plannedSaleYear   ?? null,
+    plannedSaleDate:      eq.plannedSaleDate   ?? null,
     ownershipType:        eq.ownershipType     ?? 'sole',
     ownerId:              eq.ownerId           ?? null,
     // Design 76 Gap A — owners[] outranks sole/joint; needed by P3's gain attribution.

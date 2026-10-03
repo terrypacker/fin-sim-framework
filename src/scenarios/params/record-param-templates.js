@@ -30,7 +30,7 @@
  *                  currency. Phase 1 keeps balances as plain Number for byte-for-byte
  *                  display parity with the static params they replace; Phase 2 (§8)
  *                  flips this on alongside per-account rates.
- *     - nullable : field legitimately holds null (e.g. plannedSaleYear = "never")
+ *     - nullable : field legitimately holds null (e.g. plannedSaleDate = "never")
  *     - sweepUnset : null means the EVENT DOES NOT HAPPEN (a sale year left blank), so an
  *                  unset value is still offered as a disabled MC/Opt row — sweeping it
  *                  is the what-if "and if it did, when?". Opt searches a default range
@@ -203,9 +203,9 @@ export const REAL_PROPERTY_PARAM_TEMPLATE = [
     description: 'Current market value of this property.' },
   { field: 'appreciationRate', label: 'Appreciation Rate', type: 'Number', mc: true, opt: false,
     description: 'Annual appreciation rate for this property, as a fraction (0.04 = 4%).' },
-  { field: 'plannedSaleYear',  label: 'Planned Sale Year', type: 'Number', mc: true, opt: true, nullable: true,
+  { field: 'plannedSaleDate',  label: 'Planned Sale Date', type: 'Date', mc: true, opt: true, nullable: true,
     sweepUnset: true,
-    description: 'Calendar year this property is sold. Leave blank for no planned sale.' },
+    description: 'The day this property is sold. Leave blank for no planned sale.' },
   // Rental income (design 48). Gated on `rentalEnabled`: with the switch off neither
   // field is read, and a lever that moves nothing is worse than no lever. Rent is an
   // `amount` for the BALANCE reason (a $0 rent would otherwise infer as a rate); the
@@ -241,17 +241,25 @@ export const REAL_PROPERTY_PARAM_TEMPLATE = [
       'an investment or second home, whose full gain is taxable.' },
 ];
 
-// A collectible's optional planned sale year — parallels REAL_PROPERTY_PARAM_TEMPLATE.
-// A set year liquidates the collectible to cash; blank leaves it held (it still
-// appreciates + counts toward net worth). This is also the sale-year knob for an
+// A collectible's optional planned sale date — parallels REAL_PROPERTY_PARAM_TEMPLATE.
+// A set date liquidates the collectible to cash; blank leaves it held (it still
+// appreciates + counts toward net worth). This is also the sale-date knob for an
 // inherited collectible, which is now a first-class collectible record (design 63
 // §14 — the bequest-specific `saleAsset.` template is retired in favor of this).
 export const COLLECTIBLE_PARAM_TEMPLATE    = [
-  { field: 'plannedSaleYear',  label: 'Planned Sale Year', type: 'Number', mc: true, opt: true, nullable: true,
+  { field: 'plannedSaleDate',  label: 'Planned Sale Date', type: 'Date', mc: true, opt: true, nullable: true,
     sweepUnset: true,
-    description: 'Calendar year this collectible is sold (proceeds → cash). Leave blank for no planned sale.' },
+    description: 'The day this collectible is sold (proceeds → cash). Leave blank for no planned sale.' },
 ];
-export const COMPANY_EQUITY_PARAM_TEMPLATE = [];
+// A company stake's liquidity event (design 117 phase 2). It replaced the static
+// `companySaleYear`, which could name only the reference plan's `companyEquityAccount`.
+// Not swept, as the static key was not: when a private stake exits is rarely the
+// household's choice.
+export const COMPANY_EQUITY_PARAM_TEMPLATE = [
+  { field: 'plannedSaleDate',  label: 'Planned Sale Date', type: 'Date', mc: false, opt: false, nullable: true,
+    description: 'The day of the liquidity event. Leave blank for no planned sale: the stake '
+      + 'then appreciates forever and counts only toward net worth.' },
+];
 
 // ── Inheritance (design 63 §12.3) ────────────────────────────────────────────
 // Per-record params derived from Bequest records + their inherited retirement
@@ -284,5 +292,5 @@ export const INHERITED_RA_PARAM_TEMPLATE = [
 
 // NOTE (design 63 §14): the former INHERITED_SALE_PARAM_TEMPLATE / `saleAsset.`
 // prefix is retired. Inherited real property / collectible are now first-class
-// service records, so their sale-year knob is the standard REAL_PROPERTY /
-// COLLECTIBLE `plannedSaleYear` param above — one source, shared with owned assets.
+// service records, so their sale-date knob is the standard REAL_PROPERTY /
+// COLLECTIBLE `plannedSaleDate` param above — one source, shared with owned assets.

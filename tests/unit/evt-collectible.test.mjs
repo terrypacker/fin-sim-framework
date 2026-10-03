@@ -74,7 +74,7 @@ const US_COLLECTIBLE_JSON = {
       value:            10000,
       costBasis:        7000,
       appreciationRate: 0,
-      plannedSaleYear:  2027,
+      plannedSaleDate:  '2027-01-15',
       ownershipType:    'sole',
       ownerId:          'primary',
       country:          'US',
@@ -141,7 +141,7 @@ const AU_COLLECTIBLE_JSON = {
       value:            10000,
       costBasis:        7000,
       appreciationRate: 0,
-      plannedSaleYear:  2027,
+      plannedSaleDate:  '2027-01-15',
       ownershipType:    'sole',
       ownerId:          'primary',
       country:          'US',
@@ -261,7 +261,7 @@ test('EVT-36: collectible sale is not AU taxable if not AU resident', () => {
 test('EVT-45: collectible value increase updates collectibleAccount.value', () => {
   const config = structuredClone(US_COLLECTIBLE_JSON);
   config.collectibles[0].value = 5000;
-  config.collectibles[0].plannedSaleYear = null;
+  config.collectibles[0].plannedSaleDate = null;
   const { sim } = loadToolsetScenario(config);
 
   sim.schedule({ date: new Date(2026, 0, 15), type: 'COLLECTIBLE_VALUE_CHANGE', data: { change: 2000 } });
@@ -273,7 +273,7 @@ test('EVT-45: collectible value increase updates collectibleAccount.value', () =
 test('EVT-45: collectible value decrease updates collectibleAccount.value', () => {
   const config = structuredClone(US_COLLECTIBLE_JSON);
   config.collectibles[0].value = 5000;
-  config.collectibles[0].plannedSaleYear = null;
+  config.collectibles[0].plannedSaleDate = null;
   const { sim } = loadToolsetScenario(config);
 
   sim.schedule({ date: new Date(2026, 0, 15), type: 'COLLECTIBLE_VALUE_CHANGE', data: { change: -1500 } });
@@ -285,7 +285,7 @@ test('EVT-45: collectible value decrease updates collectibleAccount.value', () =
 test('EVT-45: collectible value change is not a US or AU taxable event', () => {
   const config = structuredClone(US_COLLECTIBLE_JSON);
   config.collectibles[0].value = 5000;
-  config.collectibles[0].plannedSaleYear = null;
+  config.collectibles[0].plannedSaleDate = null;
   const { sim } = loadToolsetScenario(config);
 
   sim.schedule({ date: new Date(2026, 0, 15), type: 'COLLECTIBLE_VALUE_CHANGE', data: { change: 2000 } });
@@ -298,7 +298,7 @@ test('EVT-45: collectible value change is not a US or AU taxable event', () => {
 test('EVT-45: collectible value change does not affect savings balance', () => {
   const config = structuredClone(US_COLLECTIBLE_JSON);
   config.collectibles[0].value = 5000;
-  config.collectibles[0].plannedSaleYear = null;
+  config.collectibles[0].plannedSaleDate = null;
   const { sim } = loadToolsetScenario(config);
 
   sim.schedule({ date: new Date(2026, 0, 15), type: 'COLLECTIBLE_VALUE_CHANGE', data: { change: 2000 } });
@@ -377,7 +377,7 @@ test('EVT-47: gold collectible value appreciation updates collectibleAccount.val
   const config = structuredClone(US_COLLECTIBLE_JSON);
   config.collectibles[0].name           = 'Gold';
   config.collectibles[0].value          = 30000;
-  config.collectibles[0].plannedSaleYear = null;
+  config.collectibles[0].plannedSaleDate = null;
   const { sim } = loadToolsetScenario(config);
 
   sim.schedule({ date: new Date(2026, 0, 15), type: 'COLLECTIBLE_VALUE_CHANGE', data: { change: 5000 } });
@@ -390,7 +390,7 @@ test('EVT-47: gold collectible value change is not a US or AU taxable event', ()
   const config = structuredClone(US_COLLECTIBLE_JSON);
   config.collectibles[0].name           = 'Gold';
   config.collectibles[0].value          = 30000;
-  config.collectibles[0].plannedSaleYear = null;
+  config.collectibles[0].plannedSaleDate = null;
   const { sim } = loadToolsetScenario(config);
 
   sim.schedule({ date: new Date(2026, 0, 15), type: 'COLLECTIBLE_VALUE_CHANGE', data: { change: 5000 } });
@@ -502,13 +502,13 @@ const TWO_COLLECTIBLE_JSON = {
     {
       __type: 'Collectible', id: 'col1', name: 'Baseball Cards',
       value: 10000, costBasis: 7000, appreciationRate: 0,
-      plannedSaleYear: 2027, ownershipType: 'sole', ownerId: 'primary',
+      plannedSaleDate: '2027-01-15', ownershipType: 'sole', ownerId: 'primary',
       country: 'US', stateKey: 'collectibleAccount',
     },
     {
       __type: 'Collectible', id: 'col2', name: 'Gold',
       value: 50000, costBasis: 30000, appreciationRate: 0,
-      plannedSaleYear: 2030, ownershipType: 'sole', ownerId: 'primary',
+      plannedSaleDate: '2030-01-15', ownershipType: 'sole', ownerId: 'primary',
       country: 'US', stateKey: 'goldCollectible',
     },
   ],
@@ -541,8 +541,8 @@ test('multi-collectible: second sale zeroes only its own state entry', () => {
 
 test('multi-collectible: COLLECTIBLE_VALUE_CHANGE with stateKey targets correct entry', () => {
   const config = structuredClone(TWO_COLLECTIBLE_JSON);
-  config.collectibles[0].plannedSaleYear = null;
-  config.collectibles[1].plannedSaleYear = null;
+  config.collectibles[0].plannedSaleDate = null;
+  config.collectibles[1].plannedSaleDate = null;
   const { sim } = loadToolsetScenario(config);
 
   sim.schedule({ date: new Date(2026, 0, 15), type: 'COLLECTIBLE_VALUE_CHANGE',
@@ -555,8 +555,8 @@ test('multi-collectible: COLLECTIBLE_VALUE_CHANGE with stateKey targets correct 
 
 test('multi-collectible: COLLECTIBLE_VALUE_CHANGE without stateKey falls back to collectibleAccount', () => {
   const config = structuredClone(TWO_COLLECTIBLE_JSON);
-  config.collectibles[0].plannedSaleYear = null;
-  config.collectibles[1].plannedSaleYear = null;
+  config.collectibles[0].plannedSaleDate = null;
+  config.collectibles[1].plannedSaleDate = null;
   const { sim } = loadToolsetScenario(config);
 
   sim.schedule({ date: new Date(2026, 0, 15), type: 'COLLECTIBLE_VALUE_CHANGE',

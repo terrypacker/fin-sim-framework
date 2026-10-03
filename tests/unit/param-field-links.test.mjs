@@ -20,8 +20,8 @@ const PARAMS = [
     node: { type: 'account', stateKey: 'usSavingsAccount', field: 'minimumBalance' } },
   { name: 'primaryWage',      value: 8000,
     node: { type: 'person', id: 'primary', field: 'monthlyWage' } },
-  { name: 'usHouseSaleYear',  value: 2035,
-    node: { type: 'realProperty', stateKey: 'usHouseProperty', field: 'plannedSaleYear' } },
+  { name: 'prop.usHouseProperty.plannedSaleDate', value: '2035-01-15',
+    node: { type: 'realProperty', stateKey: 'usHouseProperty', field: 'plannedSaleDate' } },
   { name: 'monthlyExpenses',  value: 6000 }, // free-standing, no node
 ];
 
@@ -30,7 +30,8 @@ test('getParamFor resolves account / person / realProperty field links', () => {
   assert.equal(links.getParamFor('account', 'usStockAccount', 'balance').name, 'usStockBalance');
   assert.equal(links.getParamFor('account', 'usSavingsAccount', 'minimumBalance').name, 'usSavingsMinimum');
   assert.equal(links.getParamFor('person', 'primary', 'monthlyWage').name, 'primaryWage');
-  assert.equal(links.getParamFor('realProperty', 'usHouseProperty', 'plannedSaleYear').name, 'usHouseSaleYear');
+  assert.equal(links.getParamFor('realProperty', 'usHouseProperty', 'plannedSaleDate').name,
+    'prop.usHouseProperty.plannedSaleDate');
 });
 
 test('getParamFor returns null for unlinked fields and missing owners', () => {

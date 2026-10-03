@@ -16,6 +16,7 @@ import {
 } from '../../finance/account-rules/us/us-collectible-classes.js';
 import { AssetAppreciationHandler } from '../../finance/handlers/asset-appreciation-handler.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
+import { saleDateToUtc } from '../year-date-migration.js';
 
 const COLLECTIBLE_APPRECIATE_TYPE = 'COLLECTIBLE_APPRECIATE';
 
@@ -27,7 +28,7 @@ const COLLECTIBLE_APPRECIATE_TYPE = 'COLLECTIBLE_APPRECIATE';
  *   which is taxed at the 28% collectibles rate inside the US tax module)
  *
  * Schedules:
- *   One-off COLLECTIBLE_SALE event for each collectible whose plannedSaleYear
+ *   One-off COLLECTIBLE_SALE event for each collectible whose plannedSaleDate
  *   is set.  The sale price is baked in at the collectible's initial value;
  *   users who need appreciation-adjusted pricing should register their own
  *   one-off event instead.
@@ -99,11 +100,11 @@ export const US_COLLECTIBLES = {
 
   schedules(context) {
     const schedules = (context.collectibles ?? [])
-      .filter(c => c.plannedSaleYear != null)
+      .filter(c => c.plannedSaleDate != null)
       .map(c => new OneOffEvent({
         name:    `Sell ${c.name}`,
         type:    'COLLECTIBLE_SALE',
-        date:    new Date(Date.UTC(c.plannedSaleYear, 0, 15)),
+        date:    saleDateToUtc(c.plannedSaleDate),
         data:    { costBasis: c.costBasis, stateKey: c.stateKey, saleDestinationAccount: c.saleDestinationAccount },
         enabled: true,
         color:   '#FF8F00',
@@ -156,7 +157,7 @@ function _collectibleToStatePlain(col) {
     value:               col.value            ?? 0,
     costBasis:           col.costBasis        ?? 0,
     appreciationRate:    col.appreciationRate ?? 0,
-    plannedSaleYear:     col.plannedSaleYear  ?? null,
+    plannedSaleDate:     col.plannedSaleDate  ?? null,
     ownershipType:       col.ownershipType    ?? 'sole',
     ownerId:             col.ownerId          ?? null,
     // Design 76 Gap A — owners[] outranks sole/joint; needed by P3's gain attribution.

@@ -72,8 +72,7 @@ export class CollectibleEditor extends BaseComponent {
 
     el.querySelector('[data-id="appreciationRate"]').value = this._node?.appreciationRate ?? 0.035;
 
-    const saleYearInput = el.querySelector('[data-id="plannedSaleYear"]');
-    saleYearInput.value = this._node?.plannedSaleYear ?? '';
+    el.querySelector('[data-id="plannedSaleDate"]').value = this._node?.plannedSaleDate ?? '';
 
     el.querySelector('[data-id="ownershipType"]').value = this._node?.ownershipType ?? 'sole';
 
@@ -106,21 +105,20 @@ export class CollectibleEditor extends BaseComponent {
     const stateKey = this._node?.stateKey;
     if (!stateKey || !this._links) return;
 
-    const param = this._links.getParamFor('collectible', stateKey, 'plannedSaleYear');
+    const param = this._links.getParamFor('collectible', stateKey, 'plannedSaleDate');
     if (!param) return;
-    const input   = el.querySelector('[data-id="plannedSaleYear"]');
+    const input   = el.querySelector('[data-id="plannedSaleDate"]');
     const labelEl = input?.closest('.node-field')?.querySelector('label');
     bindParamLinkedField({
       input, labelEl, param,
-      coerce:   (raw) => (raw === '' || raw == null) ? null : Math.round(Number(raw)),
+      coerce:   (raw) => (raw === '' || raw == null) ? null : String(raw),
       onChange: () => this.onParamChange?.(),
       onOpen:   (p) => this.onOpenParam?.(p),
     });
-    this._linkedFields.add('plannedSaleYear');
+    this._linkedFields.add('plannedSaleDate');
   }
 
   _readForm(el) {
-    const saleYearRaw = el.querySelector('[data-id="plannedSaleYear"]').value;
     const data = {
       id:                   this._node?.id ?? null,
       name:                 el.querySelector('[data-id="name"]').value.trim(),
@@ -129,7 +127,7 @@ export class CollectibleEditor extends BaseComponent {
       country:              el.querySelector('[data-id="country"]').value,
       currency:             el.querySelector('[data-id="currency"]').value, // code; mapped to descriptor on save
       appreciationRate:     +el.querySelector('[data-id="appreciationRate"]').value,
-      plannedSaleYear:      saleYearRaw ? +saleYearRaw : null,
+      plannedSaleDate:      el.querySelector('[data-id="plannedSaleDate"]').value || null,
       saleDestinationAccount: el.querySelector('[data-id="saleDestinationAccount"]').value || null,
       ownershipType:        el.querySelector('[data-id="ownershipType"]').value,
       ownerId:              el.querySelector('[data-id="ownerId"]').value || null,

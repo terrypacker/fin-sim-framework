@@ -9,11 +9,11 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-228 parameters · 33 panels · 11 node types (179 fields) · 172 action types · 86 tools · 281 state field types · 74 topics · 125 design docs
+227 parameters · 33 panels · 11 node types (179 fields) · 172 action types · 86 tools · 282 state field types · 74 topics · 125 design docs
 
 ---
 
-## Parameters (228)
+## Parameters (227)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
@@ -110,11 +110,6 @@ scenario's own schema), which is where to go to change it.
   Optional POLICY cap on how much loss to realize per year — blank (the default) = no cap. It is deliberately NOT the \$3,000 figure any more (design 94 §8.1h): that is §1211(b)'s limit on capital loss deductible against ORDINARY income, it is already applied on the return along with the §1212(b) carryforward, and capping the harvest at it limited the same loss twice — so the strategy could never accumulate the carryforward that is most of what it is for. Set it only if the household genuinely will not sell more than this in a year.
 - **`taxLossHarvestOnRegimeEntry`** — TLH on Regime Entry · `Boolean` · default `true` · sweep: opt · conditional · via ECONOMIC_REGIMES
   Also trigger tax-loss harvesting on PANIC_SELL_TRIGGER regime entry, not just at year-end
-
-### Company Equity (1)
-
-- **`companySaleYear`** — Company Sale Year · `Number` · default `2033` · via SCENARIO
-  Calendar year the company equity stake is sold (null = no planned sale)
 
 ### Contributions (13)
 
@@ -746,18 +741,18 @@ Explained in [`help/nodes`](nodes/real-property.md). 5 field(s) described by a r
   What was paid, plus capitalised improvements — the number the taxable gain is measured from. A basis left at 0 taxes the entire sale proceeds as gain. Capitalised repairs lift it over the run; depreciation claimed against rent reduces it, and is recaptured on a US sale.
 - **`appreciationRate`** — Apprec. Rate · `number` · param
   Annual appreciation rate for this property, as a fraction (0.04 = 4%).
-- **`plannedSaleYear`** — Sale Year · `number` · param
-  Calendar year this property is sold. Leave blank for no planned sale.
+- **`plannedSaleDate`** — Sale Date · `date` · param
+  The day this property is sold. Leave blank for no planned sale.
 - **`saleDestinationAccount`** — Sale Acct. · `select` · topic
   Which account receives the net proceeds when this property sells. Blank sends them to the country's cash pool, where the spending rule can consume them. Naming a brokerage account is how a downsize is reinvested rather than quietly spent.
 - **`ownershipType`** — Ownership · `select` · topic
   Sole or joint, which decides how the gain, the rent and the deductions are split between the two people. With different marginal rates or different residencies it is one of the larger levers on a property plan.
 - **`ownerId`** — Owner · `select` · topic
-  The person who owns it when ownership is sole. Their residency, age and rate at the sale year decide what the gain costs.
-- **`purchaseYear`** — Purchase Year · `number` · topic
-  The calendar year this dwelling is bought. Blank means it is already owned at the start of the run. Set, the property is dormant — worth nothing, costing nothing — until 15 January of that year, when the price is debited and it becomes an ordinary property. The purchase settles after any sale on the same date.
+  The person who owns it when ownership is sole. Their residency, age and rate at the sale date decide what the gain costs.
+- **`purchaseDate`** — Purchase Date · `date` · topic
+  The day this dwelling is bought. Blank means it is already owned at the start of the run. Set, the property is dormant — worth nothing, costing nothing — until that day, when the price is debited and it becomes an ordinary property. The purchase settles after any sale on the same day.
 - **`purchasePrice`** — Purchase Price · `number` · topic
-  What the dwelling costs, in today's money, in its own currency. It is grown to the purchase date at this property's own appreciation rate rather than at CPI, so a price set as a share of what you are selling keeps that share. A purchase year with no price buys nothing.
+  What the dwelling costs, in today's money, in its own currency. It is grown over the whole years from the start of the run to the purchase year, at this property's own appreciation rate rather than at CPI, so a price set as a share of what you are selling keeps that share. A purchase date with no price buys nothing.
 - **`purchasePriceIsNominal`** — Price Is Nominal · `checkbox` · topic
   Tick when the price is already stated as at the purchase date — a contracted price. Unticked, the default, treats it as today's money and grows it to that year.
 - **`purchaseFundFrom`** — Fund From · `select` · topic
@@ -839,7 +834,7 @@ Explained in [`help/nodes`](nodes/real-property.md). 5 field(s) described by a r
 - **`capitalizeRepairs`** — Capitalize Frac. · `number` · topic
   The fraction of each repair treated as a capital improvement rather than maintenance. It lifts the cost basis and so cuts the eventual capital-gains tax. Zero treats every repair as pure maintenance.
 - **`speculative`** — Speculative · `checkbox` · topic
-  Simulate this property but do not count it as yours. It still appreciates, still sells in its sale year and still pays the tax — but until it converts it is worth zero in net worth and in everything downstream of it. Disclosed separately as "incl. speculative", so nothing is hidden. Incompatible with a drawdown priority.
+  Simulate this property but do not count it as yours. It still appreciates, still sells on its sale date and still pays the tax — but until it converts it is worth zero in net worth and in everything downstream of it. Disclosed separately as "incl. speculative", so nothing is hidden. Incompatible with a drawdown priority.
 
 ### Collectibles — `collectible` (11 fields)
 
@@ -857,8 +852,8 @@ Explained in [`help/nodes`](nodes/collectible.md). 1 field(s) described by a rec
   What was paid for it, in this asset's currency, plus anything capitalised since. The gain taxed at sale is the sale value less this, so a basis left at 0 taxes the entire proceeds as gain.
 - **`appreciationRate`** — Apprec. Rate · `number` · topic
   Annual growth as a decimal (0.035 = 3.5%), compounded. Deterministic: unlike a market holding, a collectible does not take a return draw, so this rate is exactly what it earns in every run of a Monte Carlo batch.
-- **`plannedSaleYear`** — Sale Year · `number` · param
-  Calendar year this collectible is sold (proceeds → cash). Leave blank for no planned sale.
+- **`plannedSaleDate`** — Sale Date · `date` · param
+  The day this collectible is sold (proceeds → cash). Leave blank for no planned sale.
 - **`saleDestinationAccount`** — Sale Acct. · `select` · topic
   Which account receives the net proceeds when this asset sells. Blank sends them to the country's cash pool. Worth setting when the proceeds are meant to be invested rather than spent, because cash landing in a transaction account is cash the spending rule can quietly consume.
 - **`ownershipType`** — Ownership · `select` · topic
@@ -866,11 +861,11 @@ Explained in [`help/nodes`](nodes/collectible.md). 1 field(s) described by a rec
 - **`ownerId`** — Owner · `select` · topic
   The person who owns it when ownership is sole. Their residency and marginal rate are what the sale is taxed at, so this is a tax input rather than a label.
 - **`speculative`** — Speculative · `checkbox` · topic
-  Simulate this asset but do not count it as yours. It still appreciates, still sells in its sale year and still pays the tax — but until it converts it is worth zero in net worth and in everything downstream of net worth. For a stake that may never find a buyer. Disclosed separately as "incl. speculative", so nothing is hidden. Incompatible with a drawdown priority.
+  Simulate this asset but do not count it as yours. It still appreciates, still sells on its sale date and still pays the tax — but until it converts it is worth zero in net worth and in everything downstream of net worth. For a stake that may never find a buyer. Disclosed separately as "incl. speculative", so nothing is hidden. Incompatible with a drawdown priority.
 
 ### Company Equity — `company` (11 fields)
 
-Explained in [`help/nodes`](nodes/company.md). 0 field(s) described by a record parameter.
+Explained in [`help/nodes`](nodes/company.md). 1 field(s) described by a record parameter.
 
 - **`name`** — Name · `text` · topic
   What the stake is called, in the Nodes list and in every net-worth breakdown. Free text.
@@ -884,16 +879,16 @@ Explained in [`help/nodes`](nodes/company.md). 0 field(s) described by a record 
   What the stake cost — the acquisition price, or the strike paid to exercise. The taxable gain at exit is the sale value less this, so a basis left at 0 taxes the whole exit as gain.
 - **`appreciationRate`** — Apprec. Rate · `number` · topic
   Annual growth as a decimal, compounded (the default, 0.08, is an equity-like 8%). Deterministic: a private stake takes no return draw, so it grows identically in every run of a Monte Carlo batch, and a plan that depends on it is not being stress-tested by one.
-- **`plannedSaleYear`** — Sale Year · `number` · topic
-  The calendar year of the liquidity event. Blank means the stake is never sold, so it appreciates forever and contributes only to net worth. There is no partial exit: the whole stake converts in that year.
+- **`plannedSaleDate`** — Sale Date · `date` · param
+  The day of the liquidity event. Leave blank for no planned sale: the stake then appreciates forever and counts only toward net worth.
 - **`saleDestinationAccount`** — Sale Acct. · `select` · topic
   Which account receives the net proceeds. Blank sends them to the country's cash pool, where the spending rule can consume them; naming a brokerage account instead is how an exit is reinvested rather than spent.
 - **`ownershipType`** — Ownership · `select` · topic
   Sole or joint, which decides how the gain is split between people. It matters most when the two have different marginal rates or different residencies at the exit.
 - **`ownerId`** — Owner · `select` · topic
-  The person holding the stake when ownership is sole. Their residency and rate at the sale year is what the gain is taxed at.
+  The person holding the stake when ownership is sole. Their residency and rate at the sale date is what the gain is taxed at.
 - **`speculative`** — Speculative · `checkbox` · topic
-  Simulate this stake but do not count it as yours. It still appreciates, still sells in its sale year and still pays the tax — but until it converts it is worth zero in net worth and in everything downstream of net worth. This is the honest setting for an exit that may never come, and it is disclosed separately as "incl. speculative" rather than hidden. Incompatible with a drawdown priority.
+  Simulate this stake but do not count it as yours. It still appreciates, still sells on its sale date and still pays the tax — but until it converts it is worth zero in net worth and in everything downstream of net worth. This is the honest setting for an exit that may never come, and it is disclosed separately as "incl. speculative" rather than hidden. Incompatible with a drawdown priority.
 
 ### Inheritance — `bequest` (7 fields)
 
@@ -1794,7 +1789,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 
 ---
 
-## State field types (281)
+## State field types (282)
 
 The scenario-INDEPENDENT half of `StateSchemaRegistry`: the globs and exact paths it
 installs in its own constructor, with the value type that decides how each formats.
@@ -1854,9 +1849,10 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `*.paymentSchedule.fromMonth` | integer |
 | `*.paymentSchedule.months` | integer |
 | `*.paymentSchedule.rate` | rate |
-| `*.plannedSaleYear` | year |
+| `*.plannedSaleDate` | date |
 | `*.postFixedFromYear` | year |
 | `*.primeSpread` | rate |
+| `*.purchaseDate` | date |
 | `*.repairLambda` | decimal |
 | `*.repairProb` | percentage |
 | `*.repairSigma` | decimal |
@@ -2112,7 +2108,7 @@ what the in-app panel keys on.
 | [Graph](panels/config-graph.md) | panel | 197 | 1 panel |
 | [Nodes](panels/config-list.md) | panel | 173 | 1 panel |
 | [Contributions and Payroll](concepts/contributions-and-payroll.md) | concept | 242 | 1 panel · 13 params · design 95 |
-| [Cost Basis and Company Equity](concepts/cost-basis-and-equity.md) | concept | 247 | 2 panels · 4 params · design 94, 72 |
+| [Cost Basis and Company Equity](concepts/cost-basis-and-equity.md) | concept | 247 | 2 panels · 3 params · design 94, 72 |
 | [Field × Action](panels/cross-action-query.md) | panel | 196 | 1 panel |
 | [Cross-Border Residency](concepts/cross-border-residency.md) | concept | 238 | 2 panels · 4 params · design 36, 52 |
 | [Dashboard](panels/dashboard.md) | panel | 183 | 1 panel |

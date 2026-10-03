@@ -9,8 +9,8 @@ sources: [src/finance/assets/collectible.js]
 stamps:
   panel:config-list: 786f94
   panel:config-graph: bbebb1
-  node:collectible: a5f795
-  src/finance/assets/collectible.js: 6de9b8
+  node:collectible: dd905c
+  src/finance/assets/collectible.js: 2b5b45
 ---
 
 A physical asset held for its market value — art, wine, jewellery, a vintage car,
@@ -28,9 +28,9 @@ taxed by the rules of the country you put it in — which in Australia is the
 collectables class, with its own loss quarantining, and in the US the 28% rate that
 applies to collectibles rather than the ordinary long-term rate.
 
-Sale is a single dated event: in the planned sale year the asset is disposed of at
+Sale is a single dated event: on the planned sale date the asset is disposed of at
 its grown value, the gain is taxed, and the net proceeds land in the destination
-account. There is no partial sale, and no market for it before that year.
+account. There is no partial sale, and no market for it before that day.
 
 ## Fields
 
@@ -43,4 +43,4 @@ account. There is no partial sale, and no market for it before that year.
 - `saleDestinationAccount` — Which account receives the net proceeds when this asset sells. Blank sends them to the country's cash pool. Worth setting when the proceeds are meant to be invested rather than spent, because cash landing in a transaction account is cash the spending rule can quietly consume.
 - `ownershipType` — Sole or joint. It decides how the gain is split across people, which matters whenever the two have different marginal rates or different residencies. Joint splits evenly; an explicit per-person breakdown in a scenario file overrides both.
 - `ownerId` — The person who owns it when ownership is sole. Their residency and marginal rate are what the sale is taxed at, so this is a tax input rather than a label.
-- `speculative` — Simulate this asset but do not count it as yours. It still appreciates, still sells in its sale year and still pays the tax — but until it converts it is worth zero in net worth and in everything downstream of net worth. For a stake that may never find a buyer. Disclosed separately as "incl. speculative", so nothing is hidden. Incompatible with a drawdown priority.
+- `speculative` — Simulate this asset but do not count it as yours. It still appreciates, still sells on its sale date and still pays the tax — but until it converts it is worth zero in net worth and in everything downstream of net worth. For a stake that may never find a buyer. Disclosed separately as "incl. speculative", so nothing is hidden. Incompatible with a drawdown priority.

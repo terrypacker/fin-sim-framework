@@ -38,7 +38,7 @@ const SIM_END = new Date(Date.UTC(2036, 0, 1));
 /** The default plan, LOADED, with the AU house bought in 2026 and moved into later. */
 function loadedCfg() {
   return loadScenarioSim({
-    params: { auHouseSaleYear: 2032 }, simEnd: SIM_END, telemetry: 'off',
+    params: { 'prop.auHouseProperty.plannedSaleDate': '2032-01-15' }, simEnd: SIM_END, telemetry: 'off',
     mutateCfg: (cfg) => {
       const au = cfg.realProperties.find(r => r.stateKey === 'auHouseProperty');
       Object.assign(au, { isPrimaryResidence: false, acquisitionDate: '2026-01-01',
@@ -67,8 +67,10 @@ test('MRF-2 the cascade writes the date, and is a no-op at the plan value or nul
     'a null lever never clears a move-in date');
   assert.deepStrictEqual(recordFieldPatch(rec, 'mainResidenceFromYear', 2030.5),
     { mainResidenceFrom: '2030-07-01' });
-  assert.deepStrictEqual(recordFieldPatch(rec, 'plannedSaleYear', 2030.4), { plannedSaleYear: 2030 },
+  assert.deepStrictEqual(recordFieldPatch(rec, 'value', 600_000.4), { value: 600_000 },
     'an ordinary field still rounds');
+  assert.deepStrictEqual(recordFieldPatch(rec, 'plannedSaleDate', '2030-03-15T00:00:00.000Z'),
+    { plannedSaleDate: '2030-03-15' }, 'a sale date lands in the record\'s own day form (design 117)');
 });
 
 test('MRF-3 the generated param lives in Cross Border, seeded from the date', () => {

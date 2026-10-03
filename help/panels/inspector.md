@@ -16,7 +16,7 @@ an account editor for an account, a property editor for a property. The form is
 built per kind, so the fields you see are the fields that record actually has.
 
 Open it when you need to change a structural fact of the plan: an account's opening
-balance, a property's sale year, a person's retirement date. For the settings those
+balance, a property's sale date, a person's retirement date. For the settings those
 records run under, use [Parameters](parameters.md) instead.
 
 With nothing selected it shows a placeholder. It follows selection rather than

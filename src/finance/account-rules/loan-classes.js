@@ -176,8 +176,7 @@ export function synthesizeLoanForProperty(prop) {
     // Interest-only mortgage (design 86 G2). Absent ⇒ false ⇒ the P&I path, byte-for-byte.
     interestOnly:      prop.mortgageInterestOnly ?? false,
     deductibleFraction: prop.mortgageDeductibleFraction ?? null,
-    // Loan term (design 86 G6). Absolute calendar years, like plannedSaleYear /
-    // moveYear elsewhere — a real offset loan has an IO period of ~5 years and a
+    // Loan term (design 86 G6). Absolute calendar years, like moveYear elsewhere — a real offset loan has an IO period of ~5 years and a
     // 25–30 year term, and both are dates the borrower knows, not durations.
     interestOnlyUntilYear: prop.mortgageInterestOnlyUntilYear ?? null,
     maturityYear:          prop.mortgageMaturityYear          ?? null,

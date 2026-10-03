@@ -9,8 +9,8 @@ sources: [src/finance/assets/company-equity.js]
 stamps:
   panel:config-list: 786f94
   panel:config-graph: bbebb1
-  node:company: 9c4add
-  src/finance/assets/company-equity.js: 3b5bc0
+  node:company: 0f188d
+  src/finance/assets/company-equity.js: 9b0324
 ---
 
 A stake in a private company: founder shares, an early-employee holding, an LLC
@@ -41,8 +41,7 @@ not modelled; see design 49 for what is and is not claimed.
 - `value` — Current market value of the stake, in its own currency: the number you would put on it today, not the exit you are hoping for. It grows from here at the appreciation rate.
 - `costBasis` — What the stake cost — the acquisition price, or the strike paid to exercise. The taxable gain at exit is the sale value less this, so a basis left at 0 taxes the whole exit as gain.
 - `appreciationRate` — Annual growth as a decimal, compounded (the default, 0.08, is an equity-like 8%). Deterministic: a private stake takes no return draw, so it grows identically in every run of a Monte Carlo batch, and a plan that depends on it is not being stress-tested by one.
-- `plannedSaleYear` — The calendar year of the liquidity event. Blank means the stake is never sold, so it appreciates forever and contributes only to net worth. There is no partial exit: the whole stake converts in that year.
 - `saleDestinationAccount` — Which account receives the net proceeds. Blank sends them to the country's cash pool, where the spending rule can consume them; naming a brokerage account instead is how an exit is reinvested rather than spent.
 - `ownershipType` — Sole or joint, which decides how the gain is split between people. It matters most when the two have different marginal rates or different residencies at the exit.
-- `ownerId` — The person holding the stake when ownership is sole. Their residency and rate at the sale year is what the gain is taxed at.
-- `speculative` — Simulate this stake but do not count it as yours. It still appreciates, still sells in its sale year and still pays the tax — but until it converts it is worth zero in net worth and in everything downstream of net worth. This is the honest setting for an exit that may never come, and it is disclosed separately as "incl. speculative" rather than hidden. Incompatible with a drawdown priority.
+- `ownerId` — The person holding the stake when ownership is sole. Their residency and rate at the sale date is what the gain is taxed at.
+- `speculative` — Simulate this stake but do not count it as yours. It still appreciates, still sells on its sale date and still pays the tax — but until it converts it is worth zero in net worth and in everything downstream of net worth. This is the honest setting for an exit that may never come, and it is disclosed separately as "incl. speculative" rather than hidden. Incompatible with a drawdown priority.

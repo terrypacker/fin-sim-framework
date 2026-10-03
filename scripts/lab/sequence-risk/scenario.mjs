@@ -178,7 +178,7 @@ export function buildScenario({ params = {}, plan = {} } = {}) {
   // collections that are NOT accounts and that it therefore never reached: a $500k company
   // equity grant appreciating at 8 %, a $100k gold collectible, and an (inert) bequest. The
   // grant is the one that matters, and it does not merely dilute:
-  // `INTL_RETIREMENT_DEFAULTS.companySaleYear` is **2033**, so it sells for ~$680k after tax
+  // the default company sale date is **15 Jan 2033**, so it sells for ~$680k after tax
   // into `usSavingsAccount` — the spend source — in the year AFTER the dated crash, and funds
   // eleven years of spending. The whole post-crash recovery window, which is the only window
   // the policy under test is about, ran with the portfolio untouched in EVERY arm.
