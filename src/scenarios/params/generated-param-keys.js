@@ -36,7 +36,10 @@ export const GENERATED_KEY_PREFIXES = ['acct.', 'person.', 'prop.', 'coll.', 'eq
   // Design 110 §6.4 / design 109 Q1 — `shape.<shapeId>.yearShift`, the switch-year axis. Q1
   // named this trap itself: `liquidityGraphSchedule[i].year` is a nested path, a dotted key is
   // dropped by `set()`, and the answer is a flat scalar companion in a generated namespace.
-  'shape.'];
+  'shape.',
+  // Design 116 phase 4 — `job.<jobId>.<field>`, the per-job wage and real growth. A cfg
+  // record like a person (keyed by `id`), cascaded onto `cfg.jobs` by the loader.
+  'job.'];
 
 /** True when `key` is a generated per-record param key (by namespace). */
 export function isGeneratedParamKey(key) {

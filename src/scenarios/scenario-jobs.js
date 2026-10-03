@@ -9,6 +9,7 @@
  */
 
 import { validateJobs } from '../finance/payroll/employment.js';
+import { JOB_PARAM_TEMPLATE } from './params/record-param-templates.js';
 
 /**
  * Authoring `cfg.jobs` — design 116 §7, the write half of employment spells.
@@ -76,7 +77,31 @@ export function replacePersonJobs(scenario, personId, rows) {
   const next = [...others, ...mine];
   if (next.length > 0) scenario.jobs = next;
   else delete scenario.jobs;
+  _syncJobParams(scenario, mine);
   return next;
+}
+
+/**
+ * Carry an edited job's values onto its generated `job.<id>.<field>` params (design 116
+ * phase 4).
+ *
+ * A generated param is the authority the loader cascades ONTO the record at every load,
+ * so a Jobs-table edit that left a saved param at its old value would be overwritten by it
+ * on the next Rebuild — the edit visibly made, then silently undone. Writing both here, the
+ * one place jobs are written, keeps the two stores in agreement. Typed entries are updated
+ * in place: the Scenario panel holds that array by reference. A deleted job's params are
+ * pruned by the loader, since nothing generates them any more.
+ */
+function _syncJobParams(scenario, jobs) {
+  for (const j of jobs) {
+    for (const { field } of JOB_PARAM_TEMPLATE) {
+      const key = `job.${j.id}.${field}`;
+      const val = j[field] ?? 0;
+      const typed = Array.isArray(scenario.params) ? scenario.params.find(p => p.name === key) : null;
+      if (typed) typed.value = val;
+      if (scenario.parameters && key in scenario.parameters) scenario.parameters[key] = val;
+    }
+  }
 }
 
 /**

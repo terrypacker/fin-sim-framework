@@ -27,6 +27,7 @@ import {
   BEQUEST_PARAM_TEMPLATE,
   INHERITED_RA_PARAM_TEMPLATE,
   BALANCE_TARGET,
+  JOB_PARAM_TEMPLATE,
 } from './record-param-templates.js';
 import { INHERITED_RETIREMENT_ROLES } from '../../finance/state/account-roles.js';
 // Design 110 §6.2 — the liquidity-pool size axis. Its owner is a pool inside the
@@ -84,7 +85,11 @@ const PREFIX_TO_NODE_TYPE = {
   acct: 'account', person: 'person', prop: 'realProperty',
   coll: 'collectible', equity: 'companyEquity',
   bequest: 'bequest', raAsset: 'bequestAsset',
+  job: 'job',
 };
+
+/** Node types whose records are keyed by `id` rather than `stateKey`. */
+const ID_KEYED_NODE_TYPES = new Set(['person', 'job']);
 
 /**
  * Decode a generated key back into its cascade `node` (design 55 §3 "Decodable").
@@ -102,7 +107,7 @@ export function decodeGeneratedParamKey(key) {
   const owner = key.slice(firstDot + 1, lastDot);
   const field = key.slice(lastDot + 1);
   if (!type || !owner || !field) return null;
-  return type === 'person'
+  return ID_KEYED_NODE_TYPES.has(type)
     ? { type, id: owner, field }
     : { type, stateKey: owner, field };
 }
@@ -146,6 +151,13 @@ export class ScenarioParamGenerator {
         ? PERSON_PARAM_TEMPLATE.filter(t => !JOB_OWNED_PERSON_FIELDS.has(t.field))
         : PERSON_PARAM_TEMPLATE;
       add(this._expand('person', 'person', p, p.id, template));
+    }
+    // Design 116 phase 4 — per-job levers, labelled by whose job and when it runs.
+    const personName = new Map((cfg.persons ?? []).map(p => [p.id, p.name || p.id]));
+    for (const j of cfg.jobs ?? []) {
+      const name = `${personName.get(j.personId) ?? j.personId} · job `
+        + `${j.startDate ?? 'start'}–${j.endDate ?? 'open'}`;
+      add(this._expand('job', 'job', { ...j, name }, j.id, JOB_PARAM_TEMPLATE));
     }
     for (const r of cfg.realProperties ?? [])
       add(this._expand('prop', 'realProperty', r, r.stateKey, REAL_PROPERTY_PARAM_TEMPLATE));
@@ -299,7 +311,7 @@ export class ScenarioParamGenerator {
       // prerequisite (a later phase). Warn so the gap is visible, then skip.
       console.warn(
         `[ScenarioParamGenerator] ${nodeType} record "${record?.name ?? '?'}" has no ` +
-        `${prefix === 'person' ? 'id' : 'stateKey'}; skipping ${template.length} generated param(s).`);
+        `${ID_KEYED_NODE_TYPES.has(nodeType) ? 'id' : 'stateKey'}; skipping ${template.length} generated param(s).`);
       return [];
     }
     const recordName = record.name || identity;
@@ -319,8 +331,8 @@ export class ScenarioParamGenerator {
       // the field applies to every record of the type, which is every existing entry.
       .filter((t) => (typeof t.appliesTo !== 'function') || t.appliesTo(record))
       .map((t) => {
-        const node = nodeType === 'person'
-          ? { type: 'person', id: identity, field: t.field }
+        const node = ID_KEYED_NODE_TYPES.has(nodeType)
+          ? { type: nodeType, id: identity, field: t.field }
           : { type: nodeType, stateKey: identity, field: t.field };
         const entry = {
           key:          `${prefix}.${identity}.${t.field}`,

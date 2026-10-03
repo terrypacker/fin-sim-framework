@@ -504,6 +504,7 @@ async function recordParamDescriptions() {
     collectible:     flat(t.COLLECTIBLE_PARAM_TEMPLATE),
     company:         flat(t.COMPANY_EQUITY_PARAM_TEMPLATE),
     bequest:         flat(t.BEQUEST_PARAM_TEMPLATE),
+    job:             flat(t.JOB_PARAM_TEMPLATE),
   };
   const out = new Map();
   for (const [kind, entries] of Object.entries(byKind)) {

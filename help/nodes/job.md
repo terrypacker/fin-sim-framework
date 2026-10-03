@@ -36,8 +36,6 @@ job; blank inherits. The Nodes panel lists every job; selecting one opens its pe
 
 - `startDate` — The first day of the job. Blank means it runs from the start of the plan.
 - `endDate` — The day the job stops, not worked. Blank means it never ends, which for the last job means working until death. A job may end on the day the next one starts.
-- `monthlyWage` — Gross pay per month in today's money, before any deduction. Inflation is added on top each year, so do not inflate it yourself. Zero is a job that pays nothing.
-- `realGrowth` — A yearly raise above inflation, compounding on each anniversary of this job's own start; 0.02 is 2% a year. Blank or 0 keeps the job level with inflation.
 - `wageCurrency` — The currency this job pays in. It picks the payroll stream: USD pay reaches the 401(k), IRA and Roth elections; AUD pay reaches super. A split that names an account in the other currency falls back to the transaction account.
 - `workCountry` — Where this job's work is physically done, which decides which country taxes it as local income. "Residency" follows wherever the person lives at the time.
 - `selfEmployed` — This job's pay is self-employment income rather than wages: US self-employment tax applies, and in Australia there is no employer to pay the Super Guarantee or take a salary sacrifice.

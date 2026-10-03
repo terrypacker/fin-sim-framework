@@ -165,7 +165,9 @@ export class BaseScenario extends SimGraphNode {
    * silently dropped on that path — and for a GENERATED per-record param that is
    * worse than inert, because the design-55 §6 harvest re-seeds the param from its
    * record, blanking the user's value. Node types with no simple record target
-   * (`bequest`, `bequestAsset`, `accountPriority`) are load-path only by design.
+   * (`bequest`, `bequestAsset`, `accountPriority`) are load-path only by design, and so
+   * is `job` (design 116): a job is scenario data in `cfg.jobs`, with no service record
+   * for an in-place update to reach.
    * Whole-number coercion is shared via `roundRecordField` so neither path rounds a
    * fractional rate to zero.
    *

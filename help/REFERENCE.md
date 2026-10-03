@@ -652,16 +652,16 @@ Explained in [`help/nodes`](nodes/person.md). 12 field(s) described by a record 
 
 ### Jobs — `job` (10 fields)
 
-Explained in [`help/nodes`](nodes/job.md). 0 field(s) described by a record parameter.
+Explained in [`help/nodes`](nodes/job.md). 2 field(s) described by a record parameter.
 
 - **`startDate`** — Start · `date` · topic
   The first day of the job. Blank means it runs from the start of the plan.
 - **`endDate`** — End · `date` · topic
   The day the job stops, not worked. Blank means it never ends, which for the last job means working until death. A job may end on the day the next one starts.
-- **`monthlyWage`** — Wage /mo · `number` · topic
-  Gross pay per month in today's money, before any deduction. Inflation is added on top each year, so do not inflate it yourself. Zero is a job that pays nothing.
-- **`realGrowth`** — Real Growth · `number` · topic
-  A yearly raise above inflation, compounding on each anniversary of this job's own start; 0.02 is 2% a year. Blank or 0 keeps the job level with inflation.
+- **`monthlyWage`** — Wage /mo · `number` · param
+  Gross monthly pay for this job in today's money, before tax, in the job's own currency. Each year it rises with that currency's inflation, plus this job's real growth.
+- **`realGrowth`** — Real Growth · `number` · param
+  Yearly raise above inflation for this job, compounding on each anniversary of its start (0.02 = 2% a year). 0 keeps the job level with inflation.
 - **`wageCurrency`** — Currency · `select` · topic
   The currency this job pays in. It picks the payroll stream: USD pay reaches the 401(k), IRA and Roth elections; AUD pay reaches super. A split that names an account in the other currency falls back to the transaction account.
 - **`workCountry`** — Work Country · `select` · topic

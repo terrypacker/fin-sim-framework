@@ -760,7 +760,11 @@ export class ScenarioLoader {
    * @private
    */
   _applyParamNode(cfg, node, val) {
-    if (node.type === 'person') {
+    if (node.type === 'job') {
+      // Design 116 phase 4 — a job lever lands on its `cfg.jobs` row.
+      const rec = (cfg.jobs ?? []).find(r => r.id === node.id);
+      if (rec) rec[node.field] = val;
+    } else if (node.type === 'person') {
       const rec = (cfg.persons ?? []).find(r => r.id === node.id);
       // Design 15: canonicalize Date values to full ISO strings so the
       // cascaded field matches the serialized representation everywhere.

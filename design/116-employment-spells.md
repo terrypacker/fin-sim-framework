@@ -1,6 +1,7 @@
 # 116 — Employment spells: more than one job per person
 
-**Status:** IN PROGRESS, 3 Oct 2026. Phases 1 (engine), 2 (editor + help) and 3 (employer terms) BUILT — see §11. Decisions in §3 were
+**Status:** BUILT through phase 4, 3 Oct 2026 — see §11. Open: date sweeps (blocked on Q2)
+and phase 5 (D5, later). Decisions in §3 were
 taken with the author; Q1 and Q3 are answered (D6, D7) and Q2 is open with one constraint (§10).
 D6 (Social Security decoupled from work) moved to design 118 as its phase 1, 2 Oct 2026:
 the claim age it defers to cannot be defined while `retirementDate` also gates payment.
@@ -281,7 +282,8 @@ Recorded so a later design starts from the list:
 ## 10. Open questions
 
 - **Q1 — answered: D6.** Social Security starts at the claiming age only (§5.1a).
-- **Q2 — open.** How spell dates are swept without creating an overlap. One constraint is
+- **Q2 — open (the only thing blocking date sweeps; phases 1-4 are built).** How spell
+  dates are swept without creating an overlap. One constraint is
   decided: the sweep must **not duplicate date ranges**. Two adjacent spells must not each
   carry their own range for the boundary they share, since that is two variables for one fact
   and most draws of the pair would be invalid. Clamping versus rejecting a candidate, and how
@@ -366,3 +368,25 @@ Recorded so a later design starts from the list:
 - **Tests.** ESP-12 (a job's match wins, a blank one inherits, the deferral follows the
   person), ESP-13 (a second employer in the same FY restarts the base), and the editor's
   inherit/opt-out round trip.
+
+### Phase 4 — sweeps (3 Oct 2026)
+
+- **Namespace.** `job.` is in `GENERATED_KEY_PREFIXES`, so `set()` writes a job key flat;
+  `PREFIX_TO_NODE_TYPE.job` decodes `job.<id>.<field>` to `{ type: 'job', id, field }`, and
+  `ScenarioLoader._applyParamNode` lands it on the `cfg.jobs` row. `BaseScenario.applyParams`
+  does not handle `job` (it has no record store; load-path only, like `bequest`).
+- **Template.** `JOB_PARAM_TEMPLATE`: `monthlyWage` (mc, opt; `amount`) and `realGrowth`
+  (`mc: 'rate'`, `opt: 'rate'` — additive, so a 0 center still sweeps ±). Employer terms are
+  not levers (design 98 W2). **No date levers:** naming a shared boundary as one variable is
+  Q2, still open, and generating `startDate`/`endDate` params now would pre-empt that.
+- **Harvest.** Free: `resolveRecordCenters` reads the generator.
+- **Two-store trap, found and fixed.** A generated param is the authority the loader cascades
+  onto its record at every load, so a Jobs-table edit left the saved `job.<id>.monthlyWage`
+  at its old value, and the next Rebuild silently put the old wage back. `replacePersonJobs`
+  now writes the matching typed param and bag entry too (JSW-6 fails without it).
+- **Help.** `help-index.mjs` reads `JOB_PARAM_TEMPLATE` for the `job` kind, so the wage and
+  growth fields are documented by their param descriptions (tier 1) and `job.md` no longer
+  restates them.
+- **Tests.** `tests/unit/evt-job-sweeps.test.mjs` (JSW-1..6): every lever set the way an MC
+  iteration sets it (`set()` → `applyParamBagToConfig` → `ScenarioLoader.load`), asserting
+  the credited wage.

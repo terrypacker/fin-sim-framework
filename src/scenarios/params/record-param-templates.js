@@ -219,6 +219,27 @@ export const PERSON_PARAM_TEMPLATE = [
     description: 'A scenario cap on this person\'s EMPLOYER SG alone, measured against their own SG for the financial year. The Div 291 concessional cap applies separately and is never disabled by leaving this blank. Empty inherits the household cap.' },
 ];
 
+/**
+ * Design 116 phase 4 — the sweepable fields of a `job` record (`job.<id>.<field>`).
+ *
+ * The job's DATES are deliberately absent. Sweeping one boundary as two variables (one
+ * job's end, the next one's start) makes most draws an overlap the loader rejects, so how
+ * a shared boundary is named as one variable is design 116 Q2, still open. The employer
+ * terms are absent for the reason they are on the Person template (design 98 W2): they are
+ * set by an employer, not chosen by the household.
+ */
+export const JOB_PARAM_TEMPLATE = [
+  { field: 'monthlyWage', label: 'Monthly Wage', type: 'Number', mc: true, opt: true,
+    description: 'Gross monthly pay for this job in today\'s money, before tax, in the job\'s '
+      + 'own currency. Each year it rises with that currency\'s inflation, plus this job\'s '
+      + 'real growth.' },
+  // An ADDITIVE rate centred on 0 for most jobs, so the kind is named: inferred, a 0 center
+  // is still a rate, but a multiplicative sweep of 0 would be a dead axis.
+  { field: 'realGrowth', label: 'Real Wage Growth', type: 'Number', mc: 'rate', opt: 'rate',
+    description: 'Yearly raise above inflation for this job, compounding on each anniversary '
+      + 'of its start (0.02 = 2% a year). 0 keeps the job level with inflation.' },
+];
+
 export const REAL_PROPERTY_PARAM_TEMPLATE = [
   { field: 'value',            label: 'Value',            type: 'Number', mc: true,  opt: false,
     description: 'Current market value of this property.' },
