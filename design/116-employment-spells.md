@@ -2,8 +2,8 @@
 
 **Status:** PROPOSED, 2 Oct 2026. Decisions in §3 were taken with the author; Q1 and Q3 are
 answered (D6, D7) and Q2 is open with one constraint (§10). Not built.
-Phase 4's date sweeps wait on the optimizer gaining a Date variable type. The author is
-adding that separately, before this design is built.
+Phase 4's date sweeps needed the optimizer to gain a Date variable type. Design 117 phase 1
+built it (2 Oct 2026): `OPT_PARAM_TYPES.DATE`, plus NORMAL_DATE and UNIFORM_DATE for MC.
 
 ## 1. The ask
 

@@ -9,23 +9,27 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { OPT_PARAM_TYPES } from './optimization-objectives.js';
+import { OPT_PARAM_TYPES, isIntegralVariable } from './optimization-objectives.js';
+import { dateSolverView } from './opt-date.js';
 
 /**
  * Expand a single optimization config into the concrete values it covers.
  * Shared by OptimizationProblem (candidateCount) and GridSearchSolver
  * (exhaustive enumeration). ENUM returns a copy of its value set; INTEGER /
- * CONTINUOUS discretise [min, max] by step.
+ * CONTINUOUS discretise [min, max] by step. A DATE (authored with ISO bounds, or already
+ * a solver view) returns its solver ordinals, which the problem turns back into ISO days
+ * (design 117 §5.1).
  */
-export function valuesForConfig(cfg) {
-  if (cfg.type === OPT_PARAM_TYPES.ENUM) return cfg.values.slice();
+export function valuesForConfig(config) {
+  if (config.type === OPT_PARAM_TYPES.ENUM) return config.values.slice();
+  const cfg  = dateSolverView(config);
   const min  = Number(cfg.min);
   const max  = Number(cfg.max);
   const step = Number(cfg.step);
   if (!isFinite(min) || !isFinite(max) || !isFinite(step) || step <= 0) return [];
   const vals = [];
   for (let v = min; v <= max + 1e-9; v += step) {
-    vals.push(cfg.type === OPT_PARAM_TYPES.INTEGER ? Math.round(v) : v);
+    vals.push(isIntegralVariable(cfg) ? Math.round(v) : v);
   }
   return vals;
 }

@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { OPT_PARAM_TYPES } from '../optimization-objectives.js';
+import { OPT_PARAM_TYPES, isIntegralVariable } from '../optimization-objectives.js';
 import { makeSeededRng, EvalLedger } from './solver-support.js';
 
 /**
@@ -19,7 +19,7 @@ function valueFromUnit(v, u) {
     const opts = v.values ?? [];
     return opts[Math.min(opts.length - 1, Math.floor(u * opts.length))] ?? opts[0];
   }
-  if (v.type === OPT_PARAM_TYPES.INTEGER) {
+  if (isIntegralVariable(v)) {   // INTEGER, or a DATE's month/year count
     return Math.round(v.min + u * (v.max - v.min));
   }
   return v.min + u * (v.max - v.min); // CONTINUOUS

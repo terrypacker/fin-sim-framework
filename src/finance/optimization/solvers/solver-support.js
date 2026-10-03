@@ -26,6 +26,19 @@ export function makeSeededRng(seed) {
 }
 
 /**
+ * entry → the same entry with its candidate in param space (`problem.paramCandidate`).
+ * An entry whose candidate needs no change is returned as itself.
+ */
+export function presentEntries(problem, entries) {
+  const out = new Map();
+  for (const e of entries) {
+    const c = problem?.paramCandidate ? problem.paramCandidate(e.candidate) : e.candidate;
+    out.set(e, c === e.candidate ? e : { ...e, candidate: c });
+  }
+  return out;
+}
+
+/**
  * EvalLedger — shared evaluation bookkeeping for the sampling/local-search
  * solvers (design/38 §4).
  *
@@ -180,12 +193,17 @@ export class EvalLedger {
     return candidates.map(c => this.problem.evaluate(c));
   }
 
-  /** Final result in the shared solver shape, candidates ranked best-first. */
+  /**
+   * Final result in the shared solver shape, candidates ranked best-first, each candidate
+   * as the params see it (a DATE as an ISO day, design 117 §5.1). `best` is one of the
+   * returned entries, not a copy, so callers can compare by identity.
+   */
   result(solverKey) {
-    const candidates = [...this.evaluations].sort((a, b) => b.score - a.score);
+    const present = presentEntries(this.problem, this.evaluations);
+    const candidates = [...this.evaluations].sort((a, b) => b.score - a.score).map(e => present.get(e));
     return {
       candidates,
-      best:        this.best ?? candidates[0] ?? null,
+      best:        (this.best ? present.get(this.best) : null) ?? candidates[0] ?? null,
       evaluations: this.evaluations.length,
       solver:      solverKey,
     };

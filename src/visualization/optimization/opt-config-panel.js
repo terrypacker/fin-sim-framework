@@ -15,6 +15,7 @@ import {
   DIE_WITH_TARGET_AXES, resolveDieWithTargetKey, resolveTerminalKey,
 } from '../../finance/optimization/optimization-objectives.js';
 import { valuesForConfig }              from '../../finance/optimization/opt-values.js';
+import { isoDay }                       from '../../finance/optimization/opt-date.js';
 import { SOLVER_REGISTRY }              from '../../finance/optimization/solvers/solver-registry.js';
 import { SweepVariableTable }           from '../common/sweep-variable-table.js';
 import { parseGateAxisKey }             from '../../finance/pools/pool-gate-axis.js';
@@ -107,7 +108,13 @@ export class OptConfigPanel extends BaseComponent {
       if (!row) return { ...cfg };
 
       const out     = { ...cfg, enabled: row.enabledCb.checked };
-      if (cfg.type !== OPT_PARAM_TYPES.ENUM && row.minInp) {
+      if (cfg.type === OPT_PARAM_TYPES.DATE && row.minInp) {
+        // ISO-day bounds, a whole-number step in months (years when anchored).
+        if (row.minInp.value) out.min = row.minInp.value;
+        if (row.maxInp.value) out.max = row.maxInp.value;
+        const step = Math.round(parseFloat(row.stepInp.value));
+        if (isFinite(step) && step > 0) out.step = step;
+      } else if (cfg.type !== OPT_PARAM_TYPES.ENUM && row.minInp) {
         const min  = parseFloat(row.minInp.value);
         const max  = parseFloat(row.maxInp.value);
         const step = parseFloat(row.stepInp.value);
@@ -150,7 +157,11 @@ export class OptConfigPanel extends BaseComponent {
       const row = this._rowMap.get(cfg.paramKey);
       if (!row) continue;
       const snap = { enabled: row.enabledCb.checked };
-      if (cfg.type !== OPT_PARAM_TYPES.ENUM && row.minInp) {
+      if (cfg.type === OPT_PARAM_TYPES.DATE && row.minInp) {
+        snap.min  = row.minInp.value;
+        snap.max  = row.maxInp.value;
+        snap.step = parseFloat(row.stepInp.value);
+      } else if (cfg.type !== OPT_PARAM_TYPES.ENUM && row.minInp) {
         snap.min  = parseFloat(row.minInp.value);
         snap.max  = parseFloat(row.maxInp.value);
         snap.step = parseFloat(row.stepInp.value);
@@ -381,10 +392,12 @@ export class OptConfigPanel extends BaseComponent {
         cfg.values.map(v => `<span class="opt-enum-pill">${pct(v)}</span>`).join(' ') +
         `</div>`;
     } else {
-      // Editable min / max / step inputs
-      const minInp  = this._numInput(String(cfg.min ?? ''),  'min',  '54px');
-      const maxInp  = this._numInput(String(cfg.max ?? ''),  'max',  '54px');
-      const stepInp = this._numInput(String(cfg.step ?? ''), 'step', '42px');
+      // Editable min / max / step inputs. A DATE (design 117 §5.2) takes date bounds and a
+      // step in months, or in years when it is pinned to an anchor day (shown, not typed).
+      const isDate  = cfg.type === OPT_PARAM_TYPES.DATE;
+      const minInp  = isDate ? this._dateInput(cfg.min, 'from') : this._numInput(String(cfg.min ?? ''),  'min',  '54px');
+      const maxInp  = isDate ? this._dateInput(cfg.max, 'to')   : this._numInput(String(cfg.max ?? ''),  'max',  '54px');
+      const stepInp = this._numInput(String(cfg.step ?? ''), isDate ? (cfg.anchor ? 'years' : 'months') : 'step', '42px');
 
       const lbl = (t) => {
         const s = document.createElement('span');
@@ -393,7 +406,14 @@ export class OptConfigPanel extends BaseComponent {
         return s;
       };
 
-      rangeRow.append(lbl('min'), minInp, lbl('max'), maxInp, lbl('step'), stepInp);
+      rangeRow.append(lbl('min'), minInp, lbl('max'), maxInp,
+        lbl(isDate ? (cfg.anchor ? 'step (yrs)' : 'step (mo)') : 'step'), stepInp);
+      if (isDate && cfg.anchor) {
+        const a = lbl(`on ${cfg.anchor}`);
+        a.dataset.id = 'opt-date-anchor';
+        a.title = 'This date is pinned to one day of the year; only the year is searched.';
+        rangeRow.append(a);
+      }
 
       refs = { ...refs, minInp, maxInp, stepInp };
 
@@ -411,6 +431,16 @@ export class OptConfigPanel extends BaseComponent {
     });
 
     return { el, refs };
+  }
+
+  _dateInput(value, placeholder) {
+    const inp = document.createElement('input');
+    inp.type        = 'date';
+    inp.value       = isoDay(value) ?? '';
+    inp.placeholder = placeholder;
+    inp.className   = 'opt-num-input';
+    inp.style.width = '118px';
+    return inp;
   }
 
   _numInput(value, placeholder, width) {

@@ -14,8 +14,16 @@ import { DISTRIBUTION_TYPES }          from '../../simulation-framework/distribu
 import { SweepVariableTable }          from '../common/sweep-variable-table.js';
 import { valuesForConfig }             from '../../finance/optimization/opt-values.js';
 import { OPT_PARAM_TYPES }             from '../../finance/optimization/optimization-objectives.js';
+import { dateSolverView, dateParamValue } from '../../finance/optimization/opt-date.js';
 import { GRID_MODES, MAX_AXIS_VALUES } from '../../finance/monte-carlo/mc-grid.js';
 import { formatAxisValue, formatDuration } from './mc-grid-format.js';
+
+/** A date-like value → `YYYY-MM-DD` for a date input, or '' when it is not a date. */
+function _isoDay(v) {
+  if (v == null || v === '') return '';
+  const d = v instanceof Date ? v : new Date(v);
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+}
 
 /**
  * McConfigPanel — left pane of the MC tab.
@@ -46,7 +54,7 @@ export class McConfigPanel extends BaseComponent {
     super();
     this._container  = containerEl;
     this.onOpenHelp  = onOpenHelp;
-    this._rowMap     = new Map(); // paramKey → { enabledCb, typeSel, meanInp, stdDevInp, valueInp, minDateInp, maxDateInp }
+    this._rowMap     = new Map(); // paramKey → { enabledCb, typeSel, meanInp, meanDateInp, stdDevInp, valueInp, minDateInp, maxDateInp }
     this._variables  = DEFAULT_MC_VARIABLE_CONFIGS; // current variable list
     this._iterEl     = null;
     this._runBtn     = null;
@@ -141,17 +149,21 @@ export class McConfigPanel extends BaseComponent {
       // Date-valued params have no single numeric center to copy into a [min,max]
       // window — leave the user-set bounds alone.
       if (type === DISTRIBUTION_TYPES.UNIFORM_DATE) continue;
-      const inp = type === DISTRIBUTION_TYPES.CONSTANT ? row.valueInp : row.meanInp;
+      const inp = type === DISTRIBUTION_TYPES.CONSTANT ? row.valueInp
+        : type === DISTRIBUTION_TYPES.NORMAL_DATE ? row.meanDateInp : row.meanInp;
 
       if (pristineOnly && row.centerDirty) {
-        const center    = parseFloat(inp.value);
-        const disagrees = isFinite(center) && typeof v === 'number' && Math.abs(center - v) > 1e-9;
+        const isDay     = inp === row.meanDateInp;
+        const center    = isDay ? inp.value : parseFloat(inp.value);
+        const disagrees = isDay
+          ? !!center && !!_isoDay(v) && center !== _isoDay(v)
+          : isFinite(center) && typeof v === 'number' && Math.abs(center - v) > 1e-9;
         if (disagrees) diverged.push({ paramKey: cfg.paramKey, center, scenarioValue: v });
         this._markDiverged(row, disagrees ? v : null);
         continue;
       }
 
-      inp.value = String(v);
+      inp.value = inp === row.meanDateInp ? _isoDay(v) : String(v);
       row.centerDirty = false;      // the center is the scenario's again
       this._markDiverged(row, null);
       this._renderSource(row);
@@ -253,6 +265,11 @@ export class McConfigPanel extends BaseComponent {
       } else if (type === DISTRIBUTION_TYPES.UNIFORM_DATE) {
         out.min = row.minDateInp.value || cfg.min || '';
         out.max = row.maxDateInp.value || cfg.max || '';
+      } else if (type === DISTRIBUTION_TYPES.NORMAL_DATE) {
+        // Mean is a date, σ is in days (design 117 D10). An unset row stays centerless.
+        out.mean   = row.meanDateInp.value || (cfg.unset ? undefined : _isoDay(cfg.mean) || undefined);
+        out.stdDev = parseFloat(row.stdDevInp.value);
+        if (!isFinite(out.stdDev)) out.stdDev = cfg.stdDev ?? 0;
       } else {
         out.mean   = parseFloat(row.meanInp.value);
         out.stdDev = parseFloat(row.stdDevInp.value);
@@ -282,6 +299,9 @@ export class McConfigPanel extends BaseComponent {
       } else if (type === DISTRIBUTION_TYPES.UNIFORM_DATE) {
         snap.min = row.minDateInp.value;
         snap.max = row.maxDateInp.value;
+      } else if (type === DISTRIBUTION_TYPES.NORMAL_DATE) {
+        snap.mean   = row.meanDateInp.value;
+        snap.stdDev = row.stdDevInp.value;
       } else {
         snap.mean   = row.meanInp.value;
         snap.stdDev = row.stdDevInp.value;
@@ -555,6 +575,28 @@ export class McConfigPanel extends BaseComponent {
           }),
         };
         axis.valuesEl.appendChild(wrap);
+      } else if (cfg.type === OPT_PARAM_TYPES.DATE) {
+        // A DATE lever (design 117 §5): date bounds, a step in months (years when the
+        // lever is pinned to an anchor day). Values are ISO days, never month counts.
+        const wrap = document.createElement('div');
+        wrap.className = 'mc-grid-range';
+        const inp = (cls, type, placeholder, v) => {
+          const el = document.createElement('input');
+          el.type = type;
+          el.className = `mc-num-input ${cls}`;
+          el.placeholder = placeholder;
+          el.value = v == null ? '' : String(v);
+          return el;
+        };
+        axis.inputs = {
+          date: true,
+          min:  inp('mc-grid-min', 'date', 'from', _isoDay(cfg.min)),
+          max:  inp('mc-grid-max', 'date', 'to', _isoDay(cfg.max)),
+          step: inp('mc-grid-step', 'number', cfg.anchor ? 'years' : 'months', cfg.step ?? 1),
+        };
+        wrap.append(axis.inputs.min, '–', axis.inputs.max, cfg.anchor ? 'step (years)' : 'step (months)',
+          axis.inputs.step);
+        axis.valuesEl.appendChild(wrap);
       } else {
         const wrap = document.createElement('div');
         wrap.className = 'mc-grid-range';
@@ -634,6 +676,14 @@ export class McConfigPanel extends BaseComponent {
     }
     const { min, max, step } = axis.inputs;
     if ([min, max, step].some(i => i.value.trim() === '')) return { values: [], count: 0 };
+    if (axis.inputs.date) {
+      const view = dateSolverView({ type: OPT_PARAM_TYPES.DATE, min: min.value, max: max.value,
+        step: Number(step.value), anchor: axis.cfg.anchor ?? null });
+      if (![view.min, view.max].every(Number.isFinite) || view.max < view.min) return { values: [], count: 0 };
+      const count = Math.floor((view.max - view.min) / view.step + 1e-9) + 1;
+      if (count > MAX_AXIS_VALUES) return { values: [], count };
+      return { values: valuesForConfig(view).map(n => dateParamValue(view, n)), count };
+    }
     const lo = Number(min.value), hi = Number(max.value), st = Number(step.value);
     if (![lo, hi, st].every(Number.isFinite) || st <= 0 || hi < lo) return { values: [], count: 0 };
     const count = Math.floor((hi - lo) / st + 1e-9) + 1;
@@ -664,6 +714,7 @@ export class McConfigPanel extends BaseComponent {
   _buildVarRow(cfg) {
     const isConst = cfg.type === DISTRIBUTION_TYPES.CONSTANT;
     const isDate  = cfg.type === DISTRIBUTION_TYPES.UNIFORM_DATE;
+    const isNDate = cfg.type === DISTRIBUTION_TYPES.NORMAL_DATE;
 
     const el = document.createElement('div');
     el.className = 'mc-var-row';
@@ -688,6 +739,7 @@ export class McConfigPanel extends BaseComponent {
       DISTRIBUTION_TYPES.LOG_NORMAL,
       DISTRIBUTION_TYPES.UNIFORM,
       DISTRIBUTION_TYPES.UNIFORM_DATE,
+      DISTRIBUTION_TYPES.NORMAL_DATE,
       DISTRIBUTION_TYPES.CONSTANT,
     ].map(t => `<option value="${t}" ${cfg.type === t ? 'selected' : ''}>${t}</option>`).join('');
 
@@ -695,10 +747,17 @@ export class McConfigPanel extends BaseComponent {
     meanInp.type  = 'number';
     meanInp.step  = 'any';
     meanInp.placeholder = 'mean';
-    meanInp.value = (isConst || isDate) ? '' : String(cfg.mean ?? cfg.defaultValue ?? '');
+    meanInp.value = (isConst || isDate || isNDate) ? '' : String(cfg.mean ?? cfg.defaultValue ?? '');
     meanInp.className = 'mc-num-input';
     meanInp.style.width = '60px';
-    meanInp.style.display = (isConst || isDate) ? 'none' : 'block';
+
+    // NORMAL_DATE's mean is a date (design 117 D10); its σ reuses stdDevInp, in days.
+    const meanDateInp = document.createElement('input');
+    meanDateInp.type = 'date';
+    meanDateInp.dataset.id = 'mc-mean-date';
+    meanDateInp.value = isNDate ? _isoDay(cfg.mean ?? cfg.defaultValue) : '';
+    meanDateInp.className = 'mc-num-input';
+    meanDateInp.style.width = '110px';
 
     const stdDevInp = document.createElement('input');
     stdDevInp.type  = 'number';
@@ -707,7 +766,6 @@ export class McConfigPanel extends BaseComponent {
     stdDevInp.value = (isConst || isDate) ? '' : String(cfg.stdDev ?? '');
     stdDevInp.className = 'mc-num-input';
     stdDevInp.style.width = '48px';
-    stdDevInp.style.display = (isConst || isDate) ? 'none' : 'block';
 
     const valueInp = document.createElement('input');
     valueInp.type  = 'number';
@@ -716,7 +774,6 @@ export class McConfigPanel extends BaseComponent {
     valueInp.value = isConst ? String(cfg.value ?? cfg.mean ?? '') : '';
     valueInp.className = 'mc-num-input';
     valueInp.style.width = '72px';
-    valueInp.style.display = isConst ? 'block' : 'none';
 
     const minDateInp = document.createElement('input');
     minDateInp.type = 'date';
@@ -724,7 +781,6 @@ export class McConfigPanel extends BaseComponent {
     minDateInp.value = isDate ? String(cfg.min ?? '') : '';
     minDateInp.className = 'mc-num-input';
     minDateInp.style.width = '110px';
-    minDateInp.style.display = isDate ? 'block' : 'none';
 
     const maxDateInp = document.createElement('input');
     maxDateInp.type = 'date';
@@ -732,27 +788,32 @@ export class McConfigPanel extends BaseComponent {
     maxDateInp.value = isDate ? String(cfg.max ?? '') : '';
     maxDateInp.className = 'mc-num-input';
     maxDateInp.style.width = '110px';
-    maxDateInp.style.display = isDate ? 'block' : 'none';
 
-    inputRow.append(typeSel, meanInp, stdDevInp, valueInp, minDateInp, maxDateInp);
+    inputRow.append(typeSel, meanInp, meanDateInp, stdDevInp, valueInp, minDateInp, maxDateInp);
     el.appendChild(inputRow);
 
-    this.listen(typeSel, 'change', () => {
-      const c = typeSel.value === DISTRIBUTION_TYPES.CONSTANT;
-      const d = typeSel.value === DISTRIBUTION_TYPES.UNIFORM_DATE;
-      meanInp.style.display    = (c || d) ? 'none' : 'block';
-      stdDevInp.style.display  = (c || d) ? 'none' : 'block';
-      valueInp.style.display   = c ? 'block' : 'none';
-      minDateInp.style.display = d ? 'block' : 'none';
-      maxDateInp.style.display = d ? 'block' : 'none';
-    });
+    const showFor = (type) => {
+      const c  = type === DISTRIBUTION_TYPES.CONSTANT;
+      const d  = type === DISTRIBUTION_TYPES.UNIFORM_DATE;
+      const nd = type === DISTRIBUTION_TYPES.NORMAL_DATE;
+      const vis = on => (on ? 'block' : 'none');
+      meanInp.style.display     = vis(!c && !d && !nd);
+      meanDateInp.style.display = vis(nd);
+      stdDevInp.style.display   = vis(!c && !d);
+      stdDevInp.placeholder     = nd ? 'σ days' : 'σ';
+      valueInp.style.display    = vis(c);
+      minDateInp.style.display  = vis(d);
+      maxDateInp.style.display  = vis(d);
+    };
+    showFor(cfg.type);
+    this.listen(typeSel, 'change', () => showFor(typeSel.value));
 
     const enabledCb = labelRow.querySelector('input[type="checkbox"]');
     const labelEl   = labelRow.querySelector('.mc-var-label');
     labelEl.dataset.label = cfg.label ?? '';
 
     const refs = {
-      el, labelEl, enabledCb, typeSel, meanInp, stdDevInp, valueInp, minDateInp, maxDateInp,
+      el, labelEl, enabledCb, typeSel, meanInp, meanDateInp, stdDevInp, valueInp, minDateInp, maxDateInp,
       sourceEl:    labelRow.querySelector('.mc-var-source'),
       // Where this row's center comes from when the user hasn't touched it.
       centerSource: cfg.centerSource ?? null,
@@ -760,7 +821,7 @@ export class McConfigPanel extends BaseComponent {
       // re-sync (syncScenarioCenters) instead of being silently overwritten.
       centerDirty: !!cfg.centerDirty,
     };
-    for (const centerInp of [meanInp, valueInp]) {
+    for (const centerInp of [meanInp, meanDateInp, valueInp]) {
       this.listen(centerInp, 'input', () => { refs.centerDirty = true; this._renderSource(refs); });
     }
     this._renderSource(refs);

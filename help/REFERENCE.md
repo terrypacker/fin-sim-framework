@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-228 parameters · 33 panels · 11 node types (179 fields) · 172 action types · 86 tools · 281 state field types · 74 topics · 123 design docs
+228 parameters · 33 panels · 11 node types (179 fields) · 172 action types · 86 tools · 281 state field types · 74 topics · 125 design docs
 
 ---
 
@@ -2136,12 +2136,12 @@ what the in-app panel keys on.
 | [Journal Report](panels/journal-report.md) | panel | 193 | 1 panel · design 16 |
 | [Lineage](panels/lineage.md) | panel | 196 | 1 panel · design 30 |
 | [Liquidity Pools](concepts/liquidity-pools.md) | concept | 294 | 1 panel · 6 params · design 97 |
-| [Monte Carlo](panels/mc-config.md) | panel | 194 | 1 panel · design 100 |
+| [Monte Carlo](panels/mc-config.md) | panel | 239 | 1 panel · design 100 |
 | [MC Results](panels/mc-results.md) | panel | 202 | 1 panel · design 100, 89 |
 | [MC Runs](panels/mc-runs.md) | panel | 196 | 1 panel · design 100 |
 | [Mortality and Survivorship](concepts/mortality.md) | concept | 253 | 2 panels · 5 params |
 | [MPC Cockpit](panels/mpc-cockpit.md) | panel | 244 | 1 panel · design 39, 80 |
-| [Optimize](panels/opt-config.md) | panel | 228 | 1 panel |
+| [Optimize](panels/opt-config.md) | panel | 248 | 1 panel |
 | [OPT Results](panels/opt-results.md) | panel | 186 | 1 panel |
 | [OPT Runs](panels/opt-runs.md) | panel | 139 | 1 panel |
 | [Objectives and After-Tax Value](concepts/optimizer-objectives.md) | concept | 258 | 3 panels · 7 params · design 40 |
@@ -2174,7 +2174,7 @@ what the in-app panel keys on.
 
 ---
 
-## Design documents (123)
+## Design documents (125)
 
 Tier 3 — the full argument behind each mechanic, in `design/`. The title is each
 file's own H1, read out of it; there is no summary column, because a one-line precis
@@ -2303,6 +2303,8 @@ between 10 and 11.
 | [`113-fixed-rate-loans.md`](../design/113-fixed-rate-loans.md) | 113 — Fixed-rate loans, fixed periods and split loans |
 | [`114-pool-shape-inheritance-and-editor.md`](../design/114-pool-shape-inheritance-and-editor.md) | 114 — Pool shapes that inherit, and a pool editor that fits its panel |
 | [`115-asset-class-restrictions.md`](../design/115-asset-class-restrictions.md) | 115 — Asset-class restrictions: keeping gold out of a US citizen's super |
+| [`116-employment-spells.md`](../design/116-employment-spells.md) | 116 — Employment spells: more than one job per person |
+| [`117-year-fields-to-dates.md`](../design/117-year-fields-to-dates.md) | 117 — Year fields become Dates |
 | [`bus-unification-plan.md`](../design/bus-unification-plan.md) | Bus Unification Plan |
 | [`inconsistencies.md`](../design/inconsistencies.md) | Inconsistencies, Rework Candidates, and Open Questions |
 | [`requirements.md`](../design/requirements.md) | Requirements Tracker |
