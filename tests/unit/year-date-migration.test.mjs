@@ -64,7 +64,7 @@ describe('param keys', () => {
   });
 
   test('every other key is left alone', () => {
-    for (const k of ['moveYear', 'stateMoveYear', 'prop.cabin.plannedSaleDate', 'acct.x.plannedSaleYear',
+    for (const k of ['prop.cabin.plannedSaleDate', 'acct.x.plannedSaleYear', 'moveDate',
       'prop.cabin.mainResidenceFromYear', 'rothConversionStartYear', null, 42]) {
       assert.equal(migratedParamKey(k), null, String(k));
     }
@@ -307,5 +307,41 @@ describe('phase 3 — liveness on a loaded plan', () => {
     assert.equal(run(null), 0);
     // …unless the rollover is dated September, which the lever must reach.
     assert.ok(run('2040-09-01') > 0, 'the per-person date reached the sim');
+  });
+});
+
+// ─── Phase 4: the moves, pinned to a tax-year boundary (D5, D8) ───────────────
+
+describe('phase 4 — the moves', () => {
+  test('a move YEAR is that year\'s anchor day: 1 Jul for the AU move, 1 Jan for a state move', () => {
+    assert.deepEqual(migrateParamBag({ moveYear: 2031, stateMoveYear: 2030, moveYearX: 1 }),
+      { moveDate: '2031-07-01', stateMoveDate: '2030-01-01', moveYearX: 1 });
+    const cfg = migrateYearFieldsToDates({ params: [{ name: 'moveYear', type: 'Number', value: 2032 }] });
+    assert.deepEqual([cfg.params[0].name, cfg.params[0].type, cfg.params[0].value], ['moveDate', 'Date', '2032-07-01']);
+  });
+
+  test('saved sweep rows keep their shape and land on the anchor', () => {
+    assert.deepEqual(migrateMcVariableConfig({ paramKey: 'moveYear', type: 'normal', mean: 2031, stdDev: 1.5, integer: true }),
+      { paramKey: 'moveDate', type: 'normalDate', mean: '2031-07-01', stdDev: 548, anchor: '07-01' });
+    assert.deepEqual(migrateOptVariableConfig({ paramKey: 'stateMoveYear', type: 'integer', min: 2026, max: 2035, step: 1 }),
+      { paramKey: 'stateMoveDate', type: 'date', min: '2026-01-01', max: '2035-01-01', step: 1, anchor: '01-01' });
+  });
+
+  test('assertOnAnchor passes the anchor day and a blank, and refuses any other day', async () => {
+    const { assertOnAnchor, dateFromYearFor } = await import('../../src/scenarios/year-date-migration.js');
+    assert.equal(assertOnAnchor('moveDate', '2031-07-01'), '2031-07-01');
+    assert.equal(assertOnAnchor('moveDate', 2031), '2031-07-01', 'a bare year means its anchor day');
+    assert.equal(assertOnAnchor('moveDate', null), null);
+    assert.throws(() => assertOnAnchor('moveDate', '2031-03-15'), /must fall on 07-01/);
+    assert.throws(() => assertOnAnchor('stateMoveDate', '2031-07-01'), /must fall on 01-01/);
+    assert.throws(() => assertOnAnchor('moveDate', 'soon'), /not a date/);
+    assert.equal(dateFromYearFor('moveDate', 2030), '2030-07-01');
+    assert.equal(dateFromYearFor('prop.x.plannedSaleDate', 2030), '2030-01-15');
+  });
+
+  test('a legacy moveYear override on buildDefaultConfig still moves on 1 Jul', () => {
+    const cfg = IntlRetirementScenario.buildDefaultConfig({ moveYear: 2033 });
+    assert.equal(cfg.parameters.moveDate, '2033-07-01');
+    assert.equal(cfg.parameters.moveYear, undefined);
   });
 });

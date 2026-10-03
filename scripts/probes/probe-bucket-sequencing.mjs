@@ -71,6 +71,7 @@
 import { openSim, quiet } from '../lib/run.mjs';
 import { loadBaseConfig, describeSource } from '../lib/scenario-source.mjs';
 import { parseFlags } from '../lib/cli.mjs';
+import { yearOfDate } from '../../src/scenarios/year-date-migration.js';
 
 const WRAPPER_TYPES = new Set(['ira', '401k', 'k401', 'roth', 'super']);
 const SLEEVES       = ['CASH', 'BOND', 'EQUITY', 'GOLD'];
@@ -109,7 +110,8 @@ function setParam(c, key, value) {
 if (PIN_FX)   setParam(cfg, 'fxProcessModel', 'NONE');
 if (NO_SHOCK) setParam(cfg, 'shocks', []);
 
-const moveYear = (cfg.params ?? []).find(p => (p.key ?? p.name) === 'moveYear')?.value ?? null;
+// The move is a date since design 117; the year is what the table marks.
+const moveYear = yearOfDate((cfg.params ?? []).find(p => (p.key ?? p.name) === 'moveDate')?.value ?? null);
 
 if (OFF_PRIO != null) {
   for (const a of cfg.accounts ?? []) if (a.type === 'offset') a.drawdownPriority = Number(OFF_PRIO);

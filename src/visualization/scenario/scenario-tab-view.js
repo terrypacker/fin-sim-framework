@@ -749,6 +749,8 @@ export class ScenarioTabView {
           param.value = valueInput.value === 'true';
           this._maybeRerenderForController(param, scenario);
         });
+      } else if (param.type === 'Date' && param.dateAnchor) {
+        valueInput = _buildAnchoredDateEditor(param);
       } else if (param.type === 'Date') {
         valueInput = document.createElement('input');
         valueInput.type = 'date';
@@ -1215,6 +1217,38 @@ function _buildShockListEditor(param) {
 }
 
 // ─── AgeBandList editor ───────────────────────────────────────────────────────
+
+const _MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * A Date param pinned to one day of the year (design 117 D5 — the moves): the author picks
+ * the YEAR and the day is shown, not typed, so the editor cannot produce a date the
+ * toolset would reject. Blank is "no move" (null).
+ */
+function _buildAnchoredDateEditor(param) {
+  const [mm, dd] = String(param.dateAnchor).split('-');
+  const wrap = document.createElement('span');
+  wrap.className = 'anchored-date';
+  const year = document.createElement('input');
+  year.type = 'number';
+  year.step = '1';
+  year.min  = '1900';
+  year.max  = '2200';
+  year.placeholder = 'year';
+  year.dataset.id = 'anchored-date-year';
+  const v = param.value instanceof Date ? param.value.toISOString() : String(param.value ?? '');
+  year.value = /^\d{4}/.test(v) ? v.slice(0, 4) : '';
+  const day = document.createElement('span');
+  day.className = 'anchored-date-day';
+  day.textContent = ` on ${Number(dd)} ${_MONTHS[Number(mm) - 1]}`;
+  day.title = 'This date is fixed to one day of the year until part-year tax residency is modelled.';
+  year.addEventListener('change', () => {
+    const y = year.value.trim();
+    param.value = /^\d{4}$/.test(y) ? `${y}-${mm}-${dd}` : null;
+  });
+  wrap.append(year, day);
+  return wrap;
+}
 
 /**
  * Build a self-contained DOM editor for an AgeBandList parameter (design/33).

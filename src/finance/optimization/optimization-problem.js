@@ -121,7 +121,7 @@ export class OptimizationProblem {
    * `cfg.params` list but DROPS the `cfg.parameters` bag — so a template built by
    * `buildDefaultConfig()` (the fallback, and what every headless lab uses) arrives
    * at `_compile` with no params at all and the loader fills in schema defaults.
-   * `moveYear` and the `people` map aren't even in the schema, so they simply went
+   * `moveDate` and the `people` map aren't even in the schema, so they simply went
    * missing: the plan's move to AU never happened. Same defect the MC runner had.
    *
    * Resolved once and memoized. A WORKER must not redo the merge — it is handed a

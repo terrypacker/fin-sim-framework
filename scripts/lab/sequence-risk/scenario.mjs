@@ -87,7 +87,7 @@ export function buildScenario({ params = {}, plan = {} } = {}) {
   const cfg = IntlRetirementScenario.buildDefaultConfig({
     // The three that make it a US-only, deterministic-FX world.
     fxProcessModel: 'NONE',
-    moveYear:       P.simEndYear + 10,   // never moves; residency is one country for the run
+    moveDate:       `${P.simEndYear + 10}-07-01`,   // never moves; residency is one country for the run
     startingResidency: 'US',
 
     // One sleeve, one rate. The dividend is paid out rather than reinvested (the default),

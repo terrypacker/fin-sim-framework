@@ -608,20 +608,21 @@ test('toolset params: cfg.params has no duplicates when multiple toolsets declar
 });
 
 test('toolset params: cfg.params[].value seeds from cfg.parameters when set by buildDefaultConfig', () => {
-  // buildDefaultConfig populates cfg.parameters.moveYear = 2031, but the toolset
-  // paramSchema's defaultValue is undefined. The merged cfg.params entry must use
-  // 2031 (the value the compiler actually consumed), not undefined — otherwise
-  // saving + reloading the scenario would lose the move year.
+  // buildDefaultConfig populates cfg.parameters.moveDate = '2031-07-01', but the toolset
+  // paramSchema's defaultValue is undefined. The merged cfg.params entry must use the
+  // value the compiler actually consumed, not undefined — otherwise saving + reloading
+  // the scenario would lose the move.
   const cfg = freshDeclarativeConfig();
-  assert.strictEqual(cfg.parameters.moveYear, 2031,
-    'precondition: buildDefaultConfig should set moveYear');
+  assert.strictEqual(cfg.parameters.moveDate, '2031-07-01',
+    'precondition: buildDefaultConfig should set moveDate');
 
   loadIntoFreshServices(cfg);
 
-  const moveYear = cfg.params.find(p => p.name === 'moveYear');
-  assert.ok(moveYear, 'moveYear should appear in cfg.params (from US_AU_CROSS_BORDER paramSchema)');
-  assert.strictEqual(moveYear.value, 2031,
+  const move = cfg.params.find(p => p.name === 'moveDate');
+  assert.ok(move, 'moveDate should appear in cfg.params (from US_AU_CROSS_BORDER paramSchema)');
+  assert.strictEqual(move.value, '2031-07-01',
     'cfg.params[].value must mirror cfg.parameters when buildDefaultConfig sets it');
+  assert.strictEqual(move.dateAnchor, '07-01', 'the anchor rides on the entry the editor renders');
 });
 
 test('toolset params: schema-drift adds newly-introduced toolset keys to existing cfg.params', () => {

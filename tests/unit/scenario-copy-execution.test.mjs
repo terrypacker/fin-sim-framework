@@ -224,7 +224,7 @@ test('copy with modified monthlyExpenses diverges from original at 2028-01-01', 
 // Root cause: ScenarioLoader.load() takes the deserialize branch whenever
 // cfg.events is non-empty, which restores the frozen cfg.initialState snapshot
 // and overwrites anything that changed.  Tests that exercise params→state,
-// person→state, and account→state currently FAIL.  The moveYear→event-date
+// person→state, and account→state currently FAIL.  The moveDate→event-date
 // test also FAILS because the compiled event date is frozen in cfg.events even
 // when the param that produced it is changed.  Only tests that mutate cfg.events
 // directly currently pass (test 3 above).  These tests document the full scope
@@ -283,12 +283,12 @@ test('direct event date edits in cfg.events are overridden by param-driven recom
   // For toolset scenarios, the event schedule is always derived from params.  Editing
   // cfg.events[i].date directly (as the graph UI would do) is overridden on the next
   // load because the compile branch regenerates the schedule from the current params.
-  // To change an event date, change the controlling param (e.g. moveYear) instead.
+  // To change an event date, change the controlling param (e.g. moveDate) instead.
   const { services } = buildAndCompilePrebuilt();
   const active  = services.scenarioService.getActive();
   const created = services.scenarioService.newScenario(active);
 
-  // Directly edit the CHANGE_RESIDENCY event date in cfg.events (moveYear param still 2031)
+  // Directly edit the CHANGE_RESIDENCY event date in cfg.events (moveDate param still 2031-07-01)
   const changeResEvent = created.events?.find(e => e.type === 'CHANGE_RESIDENCY');
   assert.ok(changeResEvent, 'CHANGE_RESIDENCY event must exist in the compiled events');
   changeResEvent.date = new Date(Date.UTC(2027, 6, 1)).toISOString();
@@ -296,27 +296,27 @@ test('direct event date edits in cfg.events are overridden by param-driven recom
   const sim = loadCopyIntoFreshServices(created);
   sim.stepTo(TARGET);
 
-  // moveYear param = 2031 (after TARGET) → event recompiled to 2031-07-01 → direct edit ignored
+  // moveDate param = 2031-07-01 (after TARGET) → event recompiled to it → direct edit ignored
   const primaryResidency = Object.values(sim.state.people ?? {})[0]?.residency;
   assert.notStrictEqual(
     primaryResidency,
     'AU',
-    `Direct event date edit is overridden by recompile; moveYear=2031 so residency should not be AU at TARGET, got ${primaryResidency}`,
+    `Direct event date edit is overridden by recompile; moveDate=2031-07-01 so residency should not be AU at TARGET, got ${primaryResidency}`,
   );
 });
 
-test('changing moveYear param updates the CHANGE_RESIDENCY event date via initialization flow', () => {
-  // Default moveYear = 2031 → CHANGE_RESIDENCY compiled to 2031-07-01 (after TARGET).
-  // Changing the param to 2027 should make the event fire on 2027-07-01 (before TARGET),
+test('changing the moveDate param updates the CHANGE_RESIDENCY event date via initialization flow', () => {
+  // Default moveDate = 2031-07-01 → CHANGE_RESIDENCY compiled to it (after TARGET).
+  // Changing the param to 2027-07-01 should make the event fire then (before TARGET),
   // so isAuResident must be true at TARGET.  Currently FAILS because the param change
   // is not cascaded to the frozen event date in cfg.events.
   const { services } = buildAndCompilePrebuilt();
   const active  = services.scenarioService.getActive();
   const created = services.scenarioService.newScenario(active);
 
-  const moveParam = created.params?.find(p => p.name === 'moveYear');
-  assert.ok(moveParam, 'moveYear param must exist in the copy');
-  moveParam.value = 2027;
+  const moveParam = created.params?.find(p => p.name === 'moveDate');
+  assert.ok(moveParam, 'moveDate param must exist in the copy');
+  moveParam.value = '2027-07-01';
 
   const sim = loadCopyIntoFreshServices(created);
   sim.stepTo(TARGET);
@@ -325,7 +325,7 @@ test('changing moveYear param updates the CHANGE_RESIDENCY event date via initia
   assert.strictEqual(
     primaryResidency,
     'AU',
-    `residency should be AU at TARGET after moveYear param changed to 2027, got ${primaryResidency}`,
+    `residency should be AU at TARGET after the moveDate param changed to 2027-07-01, got ${primaryResidency}`,
   );
 });
 

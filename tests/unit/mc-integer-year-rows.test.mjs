@@ -9,7 +9,8 @@
  */
 
 /**
- * mc-integer-year-rows.test.mjs — design 98 W0b (F10).
+ * mc-integer-year-rows.test.mjs — design 98 W0b (F10); the year rows it was written for
+ * are dates since design 117.
  *
  * MC samples year axes from a continuous distribution, and every consumer turns the
  * year into a date with `Date.UTC(year, …)`, which TRUNCATES. Unrounded, a symmetric
@@ -30,11 +31,13 @@ import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scen
 import { ScenarioLoader }         from '../../src/scenarios/scenario-loader.js';
 import { resolveRecordCenters }   from '../../src/scenarios/scenario-param-apply.js';
 
-// The house sale YEARS were integer rows here until design 117 phase 2 made them dates;
-// W0b-1b pins what they are now.
-const YEAR_ROWS = ['stateMoveYear'];
+// Every year row this file was written for became a DATE in design 117: the house sales
+// (phase 2) and the two moves (phase 4). The integer rounding is still the mechanism for
+// any year row (W0b-2/3, on a synthetic row); W0b-1/4 pin what the moves are now.
+const YEAR_ROW = { paramKey: 'someYear', type: DISTRIBUTION_TYPES.NORMAL, mean: 2031, stdDev: 1.5,
+  integer: true, enabled: true };
 
-function yearRow(params, paramKey, override, opts) {
+function moveRow(params, paramKey, override, opts) {
   const config = new IntlRetirementMcConfig();
   if (override) config.applyOverride(paramKey, override);
   return config.buildVariables(params, opts).find(v => v.paramKey === paramKey);
@@ -43,14 +46,15 @@ function yearRow(params, paramKey, override, opts) {
 /** The calendar year a consumer actually runs for a sampled value. */
 const effectiveYear = (v) => new Date(Date.UTC(v, 0, 1)).getUTCFullYear();
 
-test('W0b-1: the state-move row declares integer: true', () => {
-  const params = { stateMoveYear: 2031 };
-  for (const key of YEAR_ROWS) {
-    const row = yearRow(params, key);
+test('W0b-1: the two moves are date rows pinned to their day, emitted only when set', () => {
+  const params = { stateMoveDate: '2031-01-01', moveDate: '2030-07-01' };
+  for (const [key, anchor] of [['stateMoveDate', '01-01'], ['moveDate', '07-01']]) {
+    const row = moveRow(params, key);
     assert.ok(row, `${key} row should be emitted`);
-    assert.equal(row.integer, true, `${key} must carry integer: true`);
+    assert.deepEqual([row.type, row.anchor, row.integer], [DISTRIBUTION_TYPES.UNIFORM_DATE, anchor, undefined]);
     assert.equal(row.enabled, false, `${key} ships disabled — no default run moves`);
   }
+  assert.equal(moveRow({}, 'stateMoveDate'), undefined, 'an unset move has no row');
 });
 
 test('W0b-1b: a house sale is a DATE row now, with no integer rounding to fight', () => {
@@ -60,7 +64,7 @@ test('W0b-1b: a house sale is a DATE row now, with no integer rounding to fight'
   const params = resolveRecordCenters(cfg);
   for (const [key, day] of [['prop.usHouseProperty.plannedSaleDate', '2035-01-15'],
                             ['prop.auHouseProperty.plannedSaleDate', '2040-01-15']]) {
-    const row = yearRow(params, key, null, { cfg });
+    const row = moveRow(params, key, null, { cfg });
     assert.ok(row, `${key} row should be emitted`);
     assert.equal(row.type, DISTRIBUTION_TYPES.UNIFORM_DATE);
     assert.equal(row.integer, undefined, 'a date is never rounded as a number');
@@ -71,14 +75,10 @@ test('W0b-1b: a house sale is a DATE row now, with no integer rounding to fight'
 });
 
 test('W0b-2: an integer row samples integers, centred on its mean (not half a year early)', () => {
-  const base = { stateMoveYear: 2031 };
-  const row  = yearRow(base, 'stateMoveYear', { enabled: true });
-  assert.equal(row.integer, true, 'the flag survives a panel override');
-
   const N = 2000;
   let sum = 0;
   for (let i = 0; i < N; i++) {
-    const v = perturbParams(base, i, [row]).stateMoveYear;
+    const v = perturbParams({}, i, [YEAR_ROW]).someYear;
     assert.ok(Number.isInteger(v), `iteration ${i} sampled a non-integer year ${v}`);
     sum += effectiveYear(v);
   }
@@ -94,12 +94,12 @@ test('W0b-3: a row without integer: true is written unrounded', () => {
   assert.ok(!Number.isInteger(v) && v !== 0.03, `rate row must keep its continuous sample, got ${v}`);
 });
 
-test('W0b-4: a sampled 2031.9 moves state residency on 1 Jan 2032, not 2031', () => {
-  const base = { residencyState: '', stateMoveYear: 2031, stateMoveDestination: 'NE' };
-  const row  = yearRow(base, 'stateMoveYear',
-    { enabled: true, type: DISTRIBUTION_TYPES.CONSTANT, value: 2031.9 });
+test('W0b-4: a sampled state move lands on its 1 Jan and moves residency that day', () => {
+  const base = { residencyState: '', stateMoveDate: '2031-01-01', stateMoveDestination: 'NE' };
+  const row  = moveRow(base, 'stateMoveDate',
+    { enabled: true, type: DISTRIBUTION_TYPES.NORMAL_DATE, mean: '2031-12-20', stdDev: 0 });
   const params = perturbParams(base, 0, [row]);
-  assert.equal(params.stateMoveYear, 2032, 'r.params records the year the sim runs');
+  assert.equal(params.stateMoveDate, '2032-01-01', 'the draw snaps to the nearest 1 Jan, which r.params records');
 
   ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();

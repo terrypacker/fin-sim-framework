@@ -247,7 +247,7 @@ describe('OptimizationProblem — snapshot rollout', () => {
 // `cfg.parameters` bag, so a template that only has the bag (everything out of
 // buildDefaultConfig, i.e. every headless lab) used to reach _compile with no params
 // at all — the loader then filled schema defaults, and keys absent from the schema
-// (moveYear, the people map) simply went missing. Same defect the MC runner had.
+// (the move, the people map) simply went missing. Same defect the MC runner had.
 
 describe('OptimizationProblem — base params come from the cfg template', () => {
   const simStart = new Date(Date.UTC(2026, 0, 1));
@@ -262,30 +262,30 @@ describe('OptimizationProblem — base params come from the cfg template', () =>
   test('the template parameters bag reaches the rollout', () => {
     const problem = makeProblem({
       initialState: { kind: 'compile', cfgTemplate: {
-        parameters: { moveYear: 2029, brokerageGrowthRate: 0.10 },
+        parameters: { moveDate: '2029-07-01', brokerageGrowthRate: 0.10 },
       } },
     });
     const base = problem._resolveBase();
-    assert.strictEqual(base.moveYear, 2029);
+    assert.strictEqual(base.moveDate, '2029-07-01');
     assert.strictEqual(base.brokerageGrowthRate, 0.10);
   });
 
   test('the typed params list wins over the bag, and the caller wins over both', () => {
     const problem = makeProblem({
-      baseParams: { moveYear: 2035 },
+      baseParams: { moveDate: '2035-07-01' },
       initialState: { kind: 'compile', cfgTemplate: {
-        parameters: { moveYear: 2029, inflationRate: 0.02 },
+        parameters: { moveDate: '2029-07-01', inflationRate: 0.02 },
         params:     [{ name: 'inflationRate', value: 0.04 }],
       } },
     });
     const base = problem._resolveBase();
     assert.strictEqual(base.inflationRate, 0.04, 'the editor-owned list is the live store');
-    assert.strictEqual(base.moveYear, 2035, 'an explicit caller override still wins');
+    assert.strictEqual(base.moveDate, '2035-07-01', 'an explicit caller override still wins');
   });
 
-  test('the synthetic default template carries its own params (moveYear is not in the schema)', () => {
+  test('the synthetic default template carries its own params (the move date, the people map)', () => {
     const base = makeProblem({})._resolveBase();
-    assert.strictEqual(base.moveYear, 2031,
+    assert.strictEqual(base.moveDate, '2031-07-01',
       'buildDefaultConfig declares a move to AU; dropping it runs a different plan entirely');
     assert.ok(base.people, 'the people map is not in the param schema and is only carried here');
   });
@@ -297,19 +297,19 @@ describe('OptimizationProblem — base params come from the cfg template', () =>
     // rollouts silently run a different world than serial ones. This broke once
     // already: `rolloutContext` evaluates `_cfgTemplate()` before `_resolveBase()`,
     // so any guard keyed on "has a serialized template" fires in the wrong order.
-    const problem = makeProblem({ baseParams: { moveYear: 2035 } });
-    problem._resolvedBase = { moveYear: 2035 };
-    assert.deepStrictEqual(problem._resolveBase(), { moveYear: 2035 });
+    const problem = makeProblem({ baseParams: { moveDate: '2035-07-01' } });
+    problem._resolvedBase = { moveDate: '2035-07-01' };
+    assert.deepStrictEqual(problem._resolveBase(), { moveDate: '2035-07-01' });
   });
 
   test('rolloutContext ships the RESOLVED base, whatever order it is built in', async () => {
     const { rolloutContext } = await import('../../src/finance/optimization/parallel/rollout-worker-pool.js');
     const problem = makeProblem({
       initialState: { kind: 'compile', cfgTemplate: {
-        parameters: { moveYear: 2029 }, params: [], accounts: [], persons: [],
+        parameters: { moveDate: '2029-07-01' }, params: [], accounts: [], persons: [],
       } },
     });
     // Built cold — no rollout has run, so nothing has memoized the base yet.
-    assert.strictEqual(rolloutContext(problem).baseParams.moveYear, 2029);
+    assert.strictEqual(rolloutContext(problem).baseParams.moveDate, '2029-07-01');
   });
 });

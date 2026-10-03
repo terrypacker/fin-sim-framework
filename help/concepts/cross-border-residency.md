@@ -3,10 +3,10 @@ id: cross-border-residency
 kind: concept
 title: Cross-Border Residency
 panels: [journal-report, scenario-compare]
-params: [moveYear, startingResidency, usFeieElected, intlTransferFeeUsd]
+params: [moveDate, startingResidency, usFeieElected, intlTransferFeeUsd]
 design: [36-au-move-tax-effect-analysis.md, 52-true-foreign-tax-credit.md]
 stamps:
-  param:moveYear: f6feaa
+  param:moveDate: 6a4e42
   param:startingResidency: 598a5f
   param:usFeieElected: 00dd02
   param:intlTransferFeeUsd: e53b1e
@@ -22,7 +22,9 @@ nearly everything that matters. Capital gains discounts, retirement wrapper
 treatment, what counts as income at all: moving the year of the move shifts the whole
 plan onto different rules from that date.
 
-The move is a year, on a fixed mid-year date. Before it the starting residency
+The move is a date, but only its year is chosen: it always falls on 1 July, the first
+day of an Australian financial year, because part of a year as a resident is not
+modelled yet. Before it the starting residency
 applies; after it the other. That sounds simple and the consequences are not: assets
 held across the boundary may be deemed disposed or may carry over, a wrapper that was
 tax-free may stop being so, and a credit that relieved double taxation on one side

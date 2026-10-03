@@ -676,7 +676,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
       // §988(a)(1)(A) makes it ORDINARY, not capital, and §988(a)(3)(A) sources it
       // by the **residence of the taxpayer** — which §988(a)(3)(B)(i)(I) defines as
       // the country of the individual's TAX HOME under §911(d)(3), not their
-      // citizenship. So the source is not a constant: it follows `moveYear`.
+      // citizenship. So the source is not a constant: it follows `moveDate`.
       //
       //   · tax home in the US  ⇒ US-source. No foreign §904 basket, as before.
       //   · tax home in Australia ⇒ FOREIGN-source, general category. A currency item

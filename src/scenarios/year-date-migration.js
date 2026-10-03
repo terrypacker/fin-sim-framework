@@ -32,6 +32,14 @@
  *                       person's `k401ToIraConversionDate`, every missing part filled from
  *                       THAT person's retirement date, as us-retirement-toolset did (D9)
  *
+ * Phase 4 adds the two moves, Dates pinned to a tax-year boundary (design 117 D5, D8):
+ *
+ *   moveYear Y        → moveDate      'Y-07-01'   (the AU financial year starts 1 Jul)
+ *   stateMoveYear Y   → stateMoveDate 'Y-01-01'   (a state move is pinned to 1 Jan)
+ *
+ * `DATE_ANCHORS` is the one table of pinned dates: the schema, this migration, the MC and
+ * Opt rows, the param editor and the scripts all read it.
+ *
  * Every function here is IDEMPOTENT and cheap, because a cfg reaches the engine by more
  * than one road and each one calls it: `ScenarioLoader.load`, `applyParamBagToConfig` (a
  * MC iteration or an optimizer candidate is applied BEFORE the loader runs),
@@ -73,6 +81,19 @@ export const RETIRED_SALE_YEAR_KEYS = Object.freeze({
   companySaleYear: 'equity.companyEquityAccount.plannedSaleDate',
 });
 
+/**
+ * Date params pinned to one day of the year (design 117 D5): key → 'MM-DD'. Until
+ * part-year tax is modelled (phase 7) a move on any other day would be taxed wrongly, so
+ * the toolsets reject one (`assertOnAnchor`) and every sweep snaps to the day.
+ */
+export const DATE_ANCHORS = Object.freeze({
+  moveDate:      '07-01',   // the AU settle taxes only the resident part of a 1 Jul–30 Jun year
+  stateMoveDate: '01-01',   // design 34 §9.1: the destination state taxes the whole calendar year
+});
+
+/** The retired move YEAR keys → their anchored date successors. */
+export const RETIRED_MOVE_YEAR_KEYS = Object.freeze({ moveYear: 'moveDate', stateMoveYear: 'stateMoveDate' });
+
 const _pad2 = (n) => String(n).padStart(2, '0');
 
 /**
@@ -88,6 +109,52 @@ export function yearToIsoDate(year, month0 = SALE_MONTH0, day = SALE_DAY) {
 
 /** A year as a sale/purchase date. */
 export const saleDateFromYear = (year) => yearToIsoDate(year);
+
+/** The anchor of a pinned date key as { month0, day }, or null. */
+function _anchorOf(key) {
+  const a = DATE_ANCHORS[key];
+  if (!a) return null;
+  const [mm, dd] = a.split('-').map(Number);
+  return { month0: mm - 1, day: dd };
+}
+
+/**
+ * A year as the date it means under `key`: the key's anchor day when it is pinned
+ * (`moveDate` → 1 Jul), else a sale's 15 Jan.
+ */
+export function dateFromYearFor(key, year) {
+  const a = _anchorOf(key);
+  return a ? yearToIsoDate(year, a.month0, a.day) : yearToIsoDate(year);
+}
+
+/** A value as the date it means under `key`: a number is a year (see dateFromYearFor). */
+export function toDateFor(key, v) {
+  return typeof v === 'number' || (typeof v === 'string' && /^\d{4}$/.test(v.trim()))
+    ? dateFromYearFor(key, Number(v)) : toSaleDate(v);
+}
+
+/**
+ * Throw when a pinned date param is set off its anchor day (design 117 D5). The error is
+ * the point: until part-year tax exists (phase 7), a move on another day would be taxed as
+ * if it fell on the boundary, which is a silently wrong answer.
+ *
+ * @param {string} key    the param key ('moveDate', 'stateMoveDate')
+ * @param {*}      value  its value; null/undefined is "no move" and passes
+ * @returns {string|null} the value as 'YYYY-MM-DD'
+ */
+export function assertOnAnchor(key, value) {
+  if (value == null || value === '') return null;
+  const iso = toDateFor(key, value);
+  const anchor = DATE_ANCHORS[key];
+  if (typeof iso !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    throw new Error(`${key}: "${value}" is not a date ('YYYY-MM-DD').`);
+  }
+  if (anchor && iso.slice(5) !== anchor) {
+    throw new Error(`${key} must fall on ${anchor} (MM-DD) until part-year tax residency is `
+      + `modelled (design 117 D5); got ${iso}. Pick the year — the day is fixed.`);
+  }
+  return iso;
+}
 
 /**
  * A value that is already a date passes through as `YYYY-MM-DD`; a number is a legacy
@@ -128,6 +195,7 @@ export function yearOfDate(v) {
  */
 export function migratedParamKey(key, node = null) {
   if (typeof key !== 'string') return null;
+  if (Object.hasOwn(RETIRED_MOVE_YEAR_KEYS, key)) return RETIRED_MOVE_YEAR_KEYS[key];
   if (Object.hasOwn(RETIRED_SALE_YEAR_KEYS, key)) {
     const prefix = PREFIX_BY_NODE_TYPE[node?.type];
     return prefix && node?.stateKey ? `${prefix}.${node.stateKey}.plannedSaleDate`
@@ -170,7 +238,7 @@ export function migratedParamKey(key, node = null) {
  */
 export function migrateParamBag(bag, { planOf = null, keyFor = null, toDate = null, persons = null } = {}) {
   if (!bag || typeof bag !== 'object') return bag;
-  const conv = (next, v) => (toDate ? toDate(next, v) : toSaleDate(v));
+  const conv = (next, v) => (toDate ? toDate(next, v) : toDateFor(next, v));
   let rolled = bag;
   if (persons && RETIRED_ROLLOVER_KEYS.some(k => Object.hasOwn(bag, k))) {
     rolled = { ...bag };
@@ -199,7 +267,7 @@ export function migrateParamBag(bag, { planOf = null, keyFor = null, toDate = nu
     let value = candidates[0];
     const own = planOf ? planOf(next) : undefined;
     if (own !== undefined) {
-      const plan  = toSaleDate(own);
+      const plan  = toDateFor(next, own);
       const moved = candidates.find(v => v !== plan);
       if (moved !== undefined) value = moved;
     }
@@ -326,7 +394,7 @@ export function migrateYearFieldsToDates(cfg) {
   }
   const conv = (next, v) => {
     const md = bequestDay.get(next);
-    return md && typeof v === 'number' ? yearToIsoDate(v, md[0], md[1]) : toSaleDate(v);
+    return md && typeof v === 'number' ? yearToIsoDate(v, md[0], md[1]) : toDateFor(next, v);
   };
 
   // The 401(k) rollover parts, typed entry first (the live store), then the flat bag.
@@ -411,19 +479,21 @@ export function migrateMcVariableConfig(v) {
   if (!next) return v;
   const out = { ...v, paramKey: next };
   delete out.integer;
+  const day = (x) => toDateFor(next, x);
+  if (DATE_ANCHORS[next]) out.anchor = DATE_ANCHORS[next];   // every draw lands on the day
   switch (v.type) {
     case 'normal':
       out.type = 'normalDate';
-      if (v.mean != null) out.mean = toSaleDate(v.mean);
+      if (v.mean != null) out.mean = day(v.mean);
       if (v.stdDev != null) out.stdDev = Math.round(Number(v.stdDev) * DAYS_PER_YEAR);
       break;
     case 'uniform':
       out.type = 'uniformDate';
-      out.min = toSaleDate(v.min);
-      out.max = toSaleDate(v.max);
+      out.min = day(v.min);
+      out.max = day(v.max);
       break;
     case 'constant':
-      out.value = toSaleDate(v.value);
+      out.value = day(v.value);
       break;
     default:
       break;
@@ -433,7 +503,8 @@ export function migrateMcVariableConfig(v) {
 
 /**
  * A saved optimizer row for a renamed key, converted: an INTEGER year range becomes a
- * DATE range on the same day, its step in months (design 117 §6.2). Any other row is
+ * DATE range on the same day, its step in months — or in years, on its anchor day, for a
+ * pinned date (design 117 §6.2). Any other row is
  * returned unchanged (the same object).
  */
 export function migrateOptVariableConfig(v) {
@@ -441,10 +512,14 @@ export function migrateOptVariableConfig(v) {
   if (!next) return v;
   const out = { ...v, paramKey: next };
   if (v.type === 'integer' || v.type === 'continuous') {
+    const anchor = DATE_ANCHORS[next];
     out.type = 'date';
-    out.min  = toSaleDate(v.min);
-    out.max  = toSaleDate(v.max);
-    out.step = Math.max(1, Math.round(Number(v.step ?? 1) * 12));
+    out.min  = toDateFor(next, v.min);
+    out.max  = toDateFor(next, v.max);
+    // A pinned date steps in whole years (design 117 §5.1); any other in months.
+    out.step = anchor ? Math.max(1, Math.round(Number(v.step ?? 1)))
+      : Math.max(1, Math.round(Number(v.step ?? 1) * 12));
+    if (anchor) out.anchor = anchor;
   }
   return out;
 }

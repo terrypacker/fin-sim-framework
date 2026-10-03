@@ -230,7 +230,7 @@ export const REAL_PROPERTY_PARAM_TEMPLATE = [
       'and turnover. A long-term let is around 0.95; a short-term let is far lower, near ' +
       '0.55, which is the honest cost of the higher headline rent.' },
   // The move-in date (`mainResidenceFrom`, design 83 G7) as a sweepable FRACTIONAL year,
-  // filed in Cross Border beside moveYear. Sweep it against the sale year: the AU
+  // filed in Cross Border beside moveDate. Sweep it against the sale year: the AU
   // s118-185 exemption is a smooth day count, but the US §121 2-of-5 use test is a cliff
   // at 730 days, so the fraction is what lets a grid sample either side of it. Blank
   // (no move-in date) harvests no lever — there is no centre to sweep around.

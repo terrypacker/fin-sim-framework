@@ -207,7 +207,7 @@ const fi = rows[LEDGER_METHOD.FIFO];
 console.log(`\n§988 lot-consumption method — dispersion across ${SEEDS} FX paths`);
 console.log(`source        : ${source}${synthetic ? '  (SYNTHETIC — an engine answer, not a plan answer)' : ''}`);
 console.log(`FX            : MEAN_REVERTING, vol ${VOL}, reversion ${REVERSION}`);
-console.log(`moveYear      : ${MOVE_YEAR ?? (allParams(base).moveYear ?? 'none')}`);
+console.log(`moveYear      : ${MOVE_YEAR ?? (allParams(base).moveDate?.slice?.(0, 4) ?? 'none')}`);
 console.log(`§212 branch   : ${AU_RENTAL ? 'ON (AU house made a rental with running costs)' : 'off — every disposition is PERSONAL'}`);
 console.log('');
 

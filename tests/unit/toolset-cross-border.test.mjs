@@ -165,7 +165,7 @@ const CROSS_BORDER_JSON = {
     usSavingsInterestRate: 0.03,
     monthlyExpenses:       6_000,
     inflationAdjust:       false,
-    moveYear:              2026,   // move Jul 1 2026 (within test window)
+    moveDate:              '2026-07-01',   // move Jul 1 2026 (within test window)
   },
   persons: [
     {
@@ -308,7 +308,7 @@ test('cross-border: inflationAccumulator has both US and AU keys', () => {
   assert.ok('AU' in sim.state.inflationAccumulator);
 });
 
-test('cross-border: CHANGE_RESIDENCY event registered when moveYear is set', () => {
+test('cross-border: CHANGE_RESIDENCY event registered when moveDate is set', () => {
   ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
 
@@ -338,13 +338,13 @@ test('cross-border: CHANGE_RESIDENCY event registered when moveYear is set', () 
 
   const events = services.eventService.getAll();
   const changeEvent = events.find(e => e.type === 'CHANGE_RESIDENCY');
-  assert.ok(changeEvent != null, 'CHANGE_RESIDENCY event must be registered when moveYear is set');
+  assert.ok(changeEvent != null, 'CHANGE_RESIDENCY event must be registered when moveDate is set');
 });
 
-test('cross-border: CHANGE_RESIDENCY event not registered when moveYear is unset', () => {
+test('cross-border: CHANGE_RESIDENCY event not registered when moveDate is unset', () => {
   const configNoMove = {
     ...CROSS_BORDER_JSON,
-    parameters: { ...CROSS_BORDER_JSON.parameters, moveYear: undefined },
+    parameters: { ...CROSS_BORDER_JSON.parameters, moveDate: undefined },
   };
 
   ServiceRegistry.resetAll();
@@ -376,7 +376,7 @@ test('cross-border: CHANGE_RESIDENCY event not registered when moveYear is unset
 
   const events = services.eventService.getAll();
   const changeEvent = events.find(e => e.type === 'CHANGE_RESIDENCY');
-  assert.ok(changeEvent == null, 'CHANGE_RESIDENCY event must NOT be registered when moveYear is unset');
+  assert.ok(changeEvent == null, 'CHANGE_RESIDENCY event must NOT be registered when moveDate is unset');
 });
 
 test('cross-border: runs 3 months without error', () => {
@@ -385,7 +385,7 @@ test('cross-border: runs 3 months without error', () => {
   assert.doesNotThrow(() => sim.stepTo(Q1_2026));
 });
 
-test('cross-border: person residency becomes AU after moveYear Jul 1', () => {
+test('cross-border: person residency becomes AU after the 1 Jul move date', () => {
   const { sim } = loadCrossBorderScenario(CROSS_BORDER_JSON);
   // Before move: should be US
   const primaryBefore = Object.values(sim.state.people ?? {})[0];
@@ -394,7 +394,7 @@ test('cross-border: person residency becomes AU after moveYear Jul 1', () => {
   const afterMove = new Date(Date.UTC(2026, 7, 1));  // Aug 1 2026
   sim.stepTo(afterMove);
   const primaryAfter = Object.values(sim.state.people ?? {})[0];
-  assert.strictEqual(primaryAfter?.residency, 'AU', 'residency must be AU after moveYear Jul 1');
+  assert.strictEqual(primaryAfter?.residency, 'AU', 'residency must be AU after the 1 Jul move date');
 });
 
 test('cross-border: usSavingsAccount and auSavingsAccount both in state', () => {
@@ -413,4 +413,10 @@ test('cross-border: AU and US YTD counters both initialized', () => {
   // AU
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
   assert.strictEqual(sim.state.auCapitalGainsYTD, 0);
+});
+
+test('cross-border: a move date off 1 Jul is rejected, naming the rule (design 117 D5)', () => {
+  assert.throws(() => loadCrossBorderScenario({
+    ...CROSS_BORDER_JSON, parameters: { ...CROSS_BORDER_JSON.parameters, moveDate: '2026-03-15' },
+  }), /moveDate must fall on 07-01/);
 });

@@ -26,7 +26,7 @@
  *
  *   params            {name: value}    set any scenario param (the generic escape hatch)
  *   retire            {personId: year} retirement date → Jan 1 of that year
- *   moveYear          number           residency-change year
+ *   moveYear          number           residency-change year (the move is that year's 1 Jul)
  *   equityShift       number           parallel shift on EVERY equity growth rate,
  *                                      in rate points (-0.03 turns 10% into 7%)
  *   equity            [{...}]          inject CompanyEquity records (tranches)
@@ -71,7 +71,7 @@
 // only equity rates, so the shift below has to know them; restating the list here would
 // be a copy of the table docs/market-returns/SOURCES.md is the authority for.
 import { MARKET_GROWTH_PARAMS } from '../../src/finance/economic-regimes/market-returns.js';
-import { toSaleDate, yearOfDate } from '../../src/scenarios/year-date-migration.js';
+import { toSaleDate, yearOfDate, dateFromYearFor } from '../../src/scenarios/year-date-migration.js';
 
 /**
  * @param {object} cfg    base cfg (not mutated)
@@ -91,7 +91,8 @@ export function buildVariant(cfg, levers = {}) {
     }
   }
 
-  if (levers.moveYear != null) set('moveYear', levers.moveYear);
+  // The move is a DATE pinned to 1 Jul (design 117 D5); the lever names its year.
+  if (levers.moveYear != null) set('moveDate', dateFromYearFor('moveDate', levers.moveYear));
   if (levers.equityShift) applyEquityShift(out, set, levers.equityShift);
   if (levers.equity) for (const rec of levers.equity) addCompanyEquity(out, rec);
   if (levers.companyEquity) {
