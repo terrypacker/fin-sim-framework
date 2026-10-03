@@ -17,7 +17,7 @@ import {createCurrencyLotObserver} from "../finance/account-rules/currency-lot-o
 import {deriveNetWorth} from "../finance/derived-metrics/net-worth.js";
 import {deriveNetLiquidity} from "../finance/derived-metrics/net-liquidity.js";
 import {deriveOffsetCapacity} from "../finance/derived-metrics/offset-capacity.js";
-import {roundRecordField, recordFieldPatch, DATE_RECORD_FIELDS} from "./params/record-field-rounding.js";
+import {roundRecordField, DATE_RECORD_FIELDS} from "./params/record-field-rounding.js";
 import { migrateParamBag } from './year-date-migration.js';
 
 /**
@@ -215,8 +215,7 @@ export class BaseScenario extends SimGraphNode {
       } else if (node.type === 'realProperty') {
         const realPropertyService = this.context?.realPropertyService;
         const prop = realPropertyService?.getAll().find(r => r.stateKey === node.stateKey);
-        const patch = prop ? recordFieldPatch(prop, node.field, val) : {};
-        if (Object.keys(patch).length > 0) realPropertyService.updateProperty(prop, patch);
+        if (prop) realPropertyService.updateProperty(prop, { [node.field]: roundRecordField(node.field, val) });
       } else if (node.type === 'collectible') {
         const collectibleService = this.context?.collectibleService;
         const col = collectibleService?.getAll().find(c => c.stateKey === node.stateKey);

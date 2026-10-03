@@ -1,8 +1,8 @@
 # 117 — Year fields become Dates
 
 **Status:** ACCEPTED, 2 Oct 2026. The decisions in §3 were taken with the author, and Q1–Q3
-(§11) are answered as proposed (D8–D10). **Phases 1–5 BUILT** 2 Oct 2026 (§12–§16);
-phases 6–7 not started.
+(§11) are answered as proposed (D8–D10). **Phases 1–6 BUILT** 2 Oct 2026 (§12–§17);
+phase 7 not started.
 Scope is groups A and B of the 2 Oct inventory (§2): fields where a year stands for one
 moment, and loan-term boundaries. Annual windows and year-keyed schedules stay years (§2.3).
 Design 116 (employment spells) phase 4 waits on §5, the optimizer's Date type.
@@ -532,3 +532,32 @@ The reasoning as proposed:
   `account` and `real-property` node topics no longer say "1 January". Design 113 Q6 is
   closed: the author states the day.
 
+## 17. As built — phase 6 (2 Oct 2026)
+
+- **The lever is the date.** The real-property template's `mainResidenceFromYear` (a
+  `Number` with `fractionalYear: true`) became `mainResidenceFrom`, `type: 'Date'`, still
+  `mc` and `opt`, still filed in Cross Border beside `moveDate`. The generated key is
+  `prop.<sk>.mainResidenceFrom`, seeded straight from the record's date.
+- **Retired.** `FRACTIONAL_YEAR_DATE_FIELDS`, `dateToFractionalYear`, `recordFieldValue`
+  and `recordFieldPatch` (`record-field-rounding.js`), and the `fractionalYear` branches
+  of `optRowFor` and `mcRowFor`. `mainResidenceFrom` joined `DATE_RECORD_FIELDS`, so both
+  cascades write it as `YYYY-MM-DD`, like the sale and purchase dates.
+  `fractionalYearToIsoDate` moved into `year-date-migration.js`, where only the migration
+  uses it.
+- **Sweeps.** The harvested rows are the ordinary date rows: MC UNIFORM_DATE ±2 years,
+  Opt and grid DATE ±2 years in 1-month steps. The half-year step could not reach either
+  side of §121's 730-day cliff to the month; the month step can.
+- **Migration.** `prop.<sk>.mainResidenceFromYear` renames to `prop.<sk>.mainResidenceFrom`
+  in the bag, the typed list (key, node field, `type: 'Date'`, the `fractionalYear` flag
+  dropped) and saved sweep rows. The value converts as the fraction it was — 2031.5 is
+  `2031-07-01`, not a sale's 15 Jan. A saved NORMAL row becomes NORMAL_DATE (σ 1 year →
+  365 days); a saved CONTINUOUS Opt row becomes DATE with its 0.5-year step as 6 months.
+  The record field was always a date, so no record or state changes.
+- **Editor.** The property editor keeps the lever in step with the history dropdown, now
+  with the date itself.
+- **Help.** The field's prose moved from the `real-property` node topic into the template
+  `description`, which tier 1 emits.
+- **Goldens.** No fixture sets a move-in date, so all matched without a regold.
+- **Tests.** `main-residence-from-lever.test.mjs` was rewritten for the Date lever (4),
+  including liveness on a loaded plan for both the new key and an old run's recorded
+  fractional key. `year-date-migration.test.mjs` gained 3.

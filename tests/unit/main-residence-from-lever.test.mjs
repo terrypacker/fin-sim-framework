@@ -11,9 +11,10 @@
 /**
  * main-residence-from-lever.test.mjs — the move-in date as a sweepable lever.
  *
- * `mainResidenceFrom` is a stored date; the lever is `prop.<sk>.mainResidenceFromYear`, a
- * FRACTIONAL year, filed in Cross Border beside moveDate. Fractional because the US §121
- * 2-of-5 test is a cliff at 730 days and a whole-year grid strides over it.
+ * `mainResidenceFrom` is a stored date, and since design 117 phase 6 its lever is the date
+ * itself: `prop.<sk>.mainResidenceFrom`, a Date row filed in Cross Border beside moveDate.
+ * The Opt row steps in months, because the US §121 2-of-5 test is a cliff at 730 days and
+ * a whole-year grid strides over it.
  */
 
 import { test }   from 'node:test';
@@ -23,15 +24,15 @@ import { loadScenarioSim }        from '../helpers/scenario-harness.js';
 import { IntlRetirementMcRunner } from '../../src/finance/monte-carlo/intl-retirement-mc-runner.js';
 import { buildOptVariables, buildGridAxes } from '../../src/finance/optimization/intl-retirement-opt-config.js';
 import { OPT_PARAM_TYPES }        from '../../src/finance/optimization/optimization-objectives.js';
+import { DISTRIBUTION_TYPES }     from '../../src/simulation-framework/distributions.js';
 import { applyParamBagToConfig }  from '../../src/scenarios/scenario-param-apply.js';
 import { ScenarioLoader }         from '../../src/scenarios/scenario-loader.js';
 import { ServiceRegistry }        from '../../src/services/service-registry.js';
 import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
 import { ScenarioParamGenerator } from '../../src/scenarios/params/scenario-param-generator.js';
-import { dateToFractionalYear, fractionalYearToIsoDate, recordFieldPatch }
-                                  from '../../src/scenarios/params/record-field-rounding.js';
+import { roundRecordField }       from '../../src/scenarios/params/record-field-rounding.js';
 
-const KEY     = 'prop.auHouseProperty.mainResidenceFromYear';
+const KEY     = 'prop.auHouseProperty.mainResidenceFrom';
 const MOVE_IN = '2029-05-26';
 const SIM_END = new Date(Date.UTC(2036, 0, 1));
 
@@ -47,61 +48,42 @@ function loadedCfg() {
   }).cfg;
 }
 
-test('MRF-1 a fractional year is month-based and round-trips a date exactly', () => {
-  assert.strictEqual(dateToFractionalYear('2031-07-01'), 2031.5);
-  assert.strictEqual(dateToFractionalYear('2031-01-01T00:00:00.000Z'), 2031);
-  assert.strictEqual(fractionalYearToIsoDate(2031.5), '2031-07-01');
-  assert.strictEqual(fractionalYearToIsoDate(2031.25), '2031-04-01');
-  for (const iso of ['2029-05-26', '2028-02-29', '2030-12-31', '2031-01-01', '2032-11-15']) {
-    assert.strictEqual(fractionalYearToIsoDate(dateToFractionalYear(iso)), iso, iso);
-  }
-  assert.strictEqual(dateToFractionalYear(null), null);
-  assert.strictEqual(dateToFractionalYear('not a date'), null);
+test('MRF-1 the cascade writes the move-in date as its day', () => {
+  assert.strictEqual(roundRecordField('mainResidenceFrom', MOVE_IN), MOVE_IN);
+  assert.strictEqual(roundRecordField('mainResidenceFrom', '2030-07-01T00:00:00.000Z'), '2030-07-01');
+  assert.strictEqual(roundRecordField('mainResidenceFrom', null), null);
 });
 
-test('MRF-2 the cascade writes the date, and is a no-op at the plan value or null', () => {
-  const rec = { mainResidenceFrom: MOVE_IN };
-  assert.deepStrictEqual(recordFieldPatch(rec, 'mainResidenceFromYear', dateToFractionalYear(MOVE_IN)), {},
-    'the plan value leaves the authored date string untouched');
-  assert.deepStrictEqual(recordFieldPatch(rec, 'mainResidenceFromYear', null), {},
-    'a null lever never clears a move-in date');
-  assert.deepStrictEqual(recordFieldPatch(rec, 'mainResidenceFromYear', 2030.5),
-    { mainResidenceFrom: '2030-07-01' });
-  assert.deepStrictEqual(recordFieldPatch(rec, 'value', 600_000.4), { value: 600_000 },
-    'an ordinary field still rounds');
-  assert.deepStrictEqual(recordFieldPatch(rec, 'plannedSaleDate', '2030-03-15T00:00:00.000Z'),
-    { plannedSaleDate: '2030-03-15' }, 'a sale date lands in the record\'s own day form (design 117)');
-});
-
-test('MRF-3 the generated param lives in Cross Border, seeded from the date', () => {
+test('MRF-2 the generated param is a Date in Cross Border, seeded from the record', () => {
   const cfg = { realProperties: [
     { stateKey: 'auHouseProperty', name: 'AU House', country: 'AU', mainResidenceFrom: MOVE_IN },
     { stateKey: 'usHouseProperty', name: 'US House', country: 'US' },
   ] };
   const byKey = new Map(ScenarioParamGenerator.generate(cfg).map(e => [e.key, e]));
   const au = byKey.get(KEY);
+  assert.strictEqual(au.type, 'Date');
   assert.strictEqual(au.group, 'Cross Border');
-  assert.strictEqual(au.defaultValue, dateToFractionalYear(MOVE_IN));
-  assert.strictEqual(au.fractionalYear, true);
-  assert.deepStrictEqual(au.node, { type: 'realProperty', stateKey: 'auHouseProperty', field: 'mainResidenceFromYear' });
-  assert.strictEqual(byKey.get('prop.usHouseProperty.mainResidenceFromYear').defaultValue, null,
+  assert.strictEqual(au.defaultValue, MOVE_IN);
+  assert.strictEqual(au.fractionalYear, undefined);
+  assert.deepStrictEqual(au.node, { type: 'realProperty', stateKey: 'auHouseProperty', field: 'mainResidenceFrom' });
+  assert.ok(byKey.get('prop.usHouseProperty.mainResidenceFrom').defaultValue == null,
     'no move-in date → no centre');
+  assert.ok(!byKey.has('prop.auHouseProperty.mainResidenceFromYear'), 'the proxy key is retired');
   assert.strictEqual(byKey.get('prop.auHouseProperty.value').group, 'AU · AU House',
     'the rest of the house keeps its own group');
 });
 
-test('MRF-4 the MC list, the grid and the optimizer offer it beside moveDate, fractional', () => {
+test('MRF-3 the MC list, the grid and the optimizer offer a date row beside moveDate', () => {
   const cfg = loadedCfg();
   const { ctx } = new IntlRetirementMcRunner({ simEnd: SIM_END, cfgTemplate: cfg })._prepare({});
-  const plan = dateToFractionalYear(MOVE_IN);
 
   const mc = ctx.variables.find(v => v.paramKey === KEY);
   assert.ok(mc, 'the MC batch list offers the move-in date');
+  assert.strictEqual(mc.group, 'Cross Border');
   assert.strictEqual(mc.group, ctx.variables.find(v => v.paramKey === 'moveDate').group,
     'in the same section as the move date');
-  assert.strictEqual(mc.group, 'Cross Border');
-  assert.strictEqual(mc.mean, plan);
-  assert.ok(!mc.integer, 'an MC draw keeps its fraction');
+  assert.deepStrictEqual([mc.type, mc.min, mc.max],
+    [DISTRIBUTION_TYPES.UNIFORM_DATE, '2027-05-26', '2031-05-26']);
 
   for (const [name, rows] of [['grid', buildGridAxes(ctx.base, null, { cfg })],
                               ['opt',  buildOptVariables(ctx.base, null, { cfg })]]) {
@@ -110,12 +92,13 @@ test('MRF-4 the MC list, the grid and the optimizer offer it beside moveDate, fr
     assert.strictEqual(row.group, 'Cross Border', `${name}: in Cross Border`);
     assert.strictEqual(rows.find(v => v.paramKey === 'moveDate').group, row.group,
       `${name}: beside the move date, as in the batch list`);
-    assert.strictEqual(row.type, OPT_PARAM_TYPES.CONTINUOUS, `${name}: not whole years`);
-    assert.strictEqual(row.step, 0.5);
+    assert.deepStrictEqual([row.type, row.min, row.max, row.step],
+      [OPT_PARAM_TYPES.DATE, '2027-05-26', '2031-05-26', 1], `${name}: ±2 years in months`);
+    assert.strictEqual(row.anchor, undefined, `${name}: any day of the year`);
   }
 });
 
-test('MRF-5 a lever value reaches the loaded record; the plan value leaves it alone', () => {
+test('MRF-4 a lever value reaches the loaded record — a legacy fractional key too', () => {
   const template = loadedCfg();
   // As an MC worker loads a cell (lever-reaches-loaded-sim `loadCell`): build, then load.
   const load = (bag) => {
@@ -129,6 +112,8 @@ test('MRF-5 a lever value reaches the loaded record; the plan value leaves it al
     return cfg.realProperties.find(r => r.stateKey === 'auHouseProperty').mainResidenceFrom;
   };
   assert.strictEqual(load({}), MOVE_IN);
-  assert.strictEqual(load({ [KEY]: dateToFractionalYear(MOVE_IN) }), MOVE_IN);
-  assert.strictEqual(load({ [KEY]: 2030.5 }), '2030-07-01');
+  assert.strictEqual(load({ [KEY]: MOVE_IN }), MOVE_IN);
+  assert.strictEqual(load({ [KEY]: '2030-07-15' }), '2030-07-15');
+  assert.strictEqual(load({ 'prop.auHouseProperty.mainResidenceFromYear': 2030.5 }), '2030-07-01',
+    'an old run\'s recorded proxy still moves the date');
 });

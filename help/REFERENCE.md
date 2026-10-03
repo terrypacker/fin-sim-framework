@@ -723,7 +723,7 @@ Explained in [`help/nodes`](nodes/account.md). 5 field(s) described by a record 
 
 ### Real Property — `real-property` (53 fields)
 
-Explained in [`help/nodes`](nodes/real-property.md). 5 field(s) described by a record parameter.
+Explained in [`help/nodes`](nodes/real-property.md). 6 field(s) described by a record parameter.
 
 - **`name`** — Name · `text` · topic
   What this property is called throughout the app. Free text.
@@ -757,8 +757,8 @@ Explained in [`help/nodes`](nodes/real-property.md). 5 field(s) described by a r
   When the dwelling was actually bought. It is the denominator of the Australian ownership-period fraction and of the CGT discount testing period, and the start of the US nonqualified-use window. LEAVE IT BLANK AND THOSE CONCESSIONS ARE DENIED — it is deliberately not defaulted to the start of the run, because that would inflate every fraction in your favour. Set automatically when a dwelling is bought mid-run.
 - **`mainResidenceMode`** — History · `select` · topic
   Which main-residence history this dwelling has: never, throughout, from the start then moved out, or became one later. Never is an investment property with no exemption in either country; throughout is fully exempt in Australia and takes the full US exclusion. The two mixed options each prorate, and the order matters — renting after you move out is forgiven by the US look-back rule, renting before you move in is not.
-- **`mainResidenceFrom`** — Moved In · `date` · topic
-  When this dwelling first became the main residence. Australia exempts only the fraction of ownership days it actually was one, so moving into a long-rented house late buys a small fraction of the exemption and not the whole of it.
+- **`mainResidenceFrom`** — Moved In · `date` · param
+  When this dwelling first became the main residence. Australia exempts only the fraction of ownership days it actually was one, so moving into a long-rented house late buys a small fraction of the exemption and not the whole of it. Blank when it has none.
 - **`mainResidenceUntil`** — Moved Out · `date` · topic
   When it stopped being the main residence. Everything after this date is a rental period — which the US rules forgive, unlike the years before you moved in.
 - **`claimDownsizerContribution`** — Downsizer Contrib. · `checkbox` · topic

@@ -49,6 +49,12 @@
  *   maturityYear          → maturityDate       (+ mortgageMaturityDate)
  *   postFixedFromYear Y   → postFixedFromMonth Y × 12 + (AU ? 6 : 0)   (a saved state stamp)
  *
+ * Phase 6 retires the move-in proxy. `mainResidenceFrom` was always a date; only its
+ * lever was a fractional year, so only lever keys and saved sweep rows convert:
+ *
+ *   prop.<sk>.mainResidenceFromYear 2031.5 → prop.<sk>.mainResidenceFrom '2031-07-01'
+ *   a saved Opt row's step of 0.5 years    → 6 months
+ *
  * Every function here is IDEMPOTENT and cheap, because a cfg reaches the engine by more
  * than one road and each one calls it: `ScenarioLoader.load`, `applyParamBagToConfig` (a
  * MC iteration or an optimizer candidate is applied BEFORE the loader runs),
@@ -71,8 +77,18 @@ export const RECORD_FIELD_RENAMES = Object.freeze({
 const NODE_TYPE_BY_PREFIX = Object.freeze({ prop: 'realProperty', coll: 'collectible', equity: 'companyEquity',
   bequest: 'bequest' });
 
-/** Generated-key field renames (the record fields above, plus a bequest's year). */
-const KEY_FIELD_RENAMES = Object.freeze({ ...RECORD_FIELD_RENAMES, inheritanceYear: 'inheritanceDate' });
+/**
+ * Generated-key field renames: the record fields above, a bequest's year, and the
+ * move-in lever (phase 6), which swept the property's `mainResidenceFrom` date as a
+ * FRACTIONAL year until the optimizer had a Date type.
+ */
+const KEY_FIELD_RENAMES = Object.freeze({ ...RECORD_FIELD_RENAMES, inheritanceYear: 'inheritanceDate',
+  mainResidenceFromYear: 'mainResidenceFrom' });
+
+/** Generated-key fields whose old value was a fractional year (2031.5 = 1 Jul 2031). */
+const FRACTIONAL_YEAR_FIELDS = new Set(['mainResidenceFrom']);
+const _isFractionalKey = (key) => typeof key === 'string'
+  && FRACTIONAL_YEAR_FIELDS.has(key.slice(key.lastIndexOf('.') + 1));
 
 /** The three scenario params the per-person rollover date replaced (design 117 D9). */
 export const RETIRED_ROLLOVER_KEYS = Object.freeze(
@@ -119,6 +135,26 @@ export function yearToIsoDate(year, month0 = SALE_MONTH0, day = SALE_DAY) {
 /** A year as a sale/purchase date. */
 export const saleDateFromYear = (year) => yearToIsoDate(year);
 
+const _daysIn = (y, m0) => new Date(Date.UTC(y, m0 + 1, 0)).getUTCDate();
+
+/**
+ * A retired fractional year (the old move-in lever) → the `YYYY-MM-DD` day it wrote:
+ * month-based, so 2031.5 is 1 Jul 2031 and 2031.25 is 1 Apr, with the day a fraction of
+ * its own month. Null when `x` is not a finite number.
+ */
+export function fractionalYearToIsoDate(x) {
+  if (x == null || x === '') return null;
+  x = Number(x);
+  if (!Number.isFinite(x)) return null;
+  let y = Math.floor(x);
+  const months = (x - y) * 12;
+  let m = Math.floor(months + 1e-9);
+  let day = 1 + Math.max(0, Math.round((months - m) * _daysIn(y, m)));
+  if (day > _daysIn(y, m)) { day = 1; m += 1; }
+  if (m > 11) { m = 0; y += 1; }
+  return `${y}-${_pad2(m + 1)}-${_pad2(day)}`;
+}
+
 /** The anchor of a pinned date key as { month0, day }, or null. */
 function _anchorOf(key) {
   const a = DATE_ANCHORS[key];
@@ -129,15 +165,19 @@ function _anchorOf(key) {
 
 /**
  * A year as the date it means under `key`: the key's anchor day when it is pinned
- * (`moveDate` → 1 Jul), else a sale's 15 Jan.
+ * (`moveDate` → 1 Jul), the exact day of a fractional year for the move-in date, else a
+ * sale's 15 Jan.
  */
 export function dateFromYearFor(key, year) {
+  if (_isFractionalKey(key)) return fractionalYearToIsoDate(year);
   const a = _anchorOf(key);
   return a ? yearToIsoDate(year, a.month0, a.day) : yearToIsoDate(year);
 }
 
 /** A value as the date it means under `key`: a number is a year (see dateFromYearFor). */
 export function toDateFor(key, v) {
+  if (_isFractionalKey(key) && (typeof v === 'number'
+    || (typeof v === 'string' && /^\d{4}(\.\d+)?$/.test(v.trim())))) return fractionalYearToIsoDate(v);
   return typeof v === 'number' || (typeof v === 'string' && /^\d{4}$/.test(v.trim()))
     ? dateFromYearFor(key, Number(v)) : toSaleDate(v);
 }
@@ -413,6 +453,7 @@ function _migrateTypedParam(p, conv) {
   const field = next.slice(next.lastIndexOf('.') + 1);
   p.name  = next;
   p.type  = 'Date';
+  delete p.fractionalYear;
   p.value = conv(next, p.value);
   if (p.defaultValue !== undefined) p.defaultValue = conv(next, p.defaultValue);
   if (p.node && Object.hasOwn(KEY_FIELD_RENAMES, p.node.field)) p.node = { ...p.node, field };

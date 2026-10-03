@@ -29,7 +29,6 @@ import {
   BALANCE_TARGET,
 } from './record-param-templates.js';
 import { INHERITED_RETIREMENT_ROLES } from '../../finance/state/account-roles.js';
-import { recordFieldValue } from './record-field-rounding.js';
 // Design 110 §6.2 — the liquidity-pool size axis. Its owner is a pool inside the
 // `liquidityGraph` PARAM rather than a cfg record, which is why it is the one generated
 // namespace with no cascade `node`; see `_expandPoolTargetScales`.
@@ -318,13 +317,12 @@ export class ScenarioParamGenerator {
           // A template field may file itself outside its record's group — the move-in
           // date sits in "Cross Border" beside moveDate, the lever it is swept against.
           group:        t.group ?? group,
-          defaultValue: recordFieldValue(record, t.deriveDefaultFrom ?? t.field),
+          defaultValue: record?.[t.deriveDefaultFrom ?? t.field],
           node,
           mc:           t.mc  ?? false,
           opt:          t.opt ?? false,
         };
         if (t.hidden)  entry.hidden  = t.hidden;
-        if (t.fractionalYear) entry.fractionalYear = true;
         if (t.sweepUnset) entry.sweepUnset = true;
         if (t.options) entry.options = t.options;
         // Field-level description (design 55 §4) → the param's hover tooltip in the

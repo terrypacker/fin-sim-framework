@@ -49,7 +49,7 @@ import { inheritedAssetMeta } from '../finance/services/bequest-service.js';
 import { deriveEarningsBasis } from '../finance/assets/investment-account.js';
 import { rescaleHoldingsToBalance } from '../finance/holdings/holding-utils.js';
 import { ACCOUNT_ROLES } from '../finance/state/account-roles.js';
-import { roundRecordField, recordFieldPatch, DATE_RECORD_FIELDS } from './params/record-field-rounding.js';
+import { roundRecordField, DATE_RECORD_FIELDS } from './params/record-field-rounding.js';
 
 // Retirement roles carry the contribution/earnings basis ledger (design 53 §2)
 // whose `earningsBasis` is DERIVED from `balance − contributionBasis` (design 53
@@ -795,9 +795,9 @@ export class ScenarioLoader {
       const rec = (cfg.realProperties ?? []).find(r => r.stateKey === node.stateKey);
       // Round whole-number fields (dollar value) but NOT fractional
       // rates like appreciationRate (design 55 property template) — Math.round on a
-      // 0.04 rate would zero it, corrupting appreciation on Rebuild. A date-backed
-      // lever (mainResidenceFromYear) writes its date field instead.
-      if (rec) Object.assign(rec, recordFieldPatch(rec, node.field, val));
+      // 0.04 rate would zero it, corrupting appreciation on Rebuild. A date field (the
+      // sale, purchase and move-in dates) lands as 'YYYY-MM-DD'.
+      if (rec) rec[node.field] = roundRecordField(node.field, val);
     } else if (node.type === 'collectible') {
       // Same shape as realProperty: whole-number value, a sale date as 'YYYY-MM-DD',
       // fractional rates passed through. Without this branch the generated `coll.<sk>.plannedSaleDate`

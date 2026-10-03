@@ -54,12 +54,6 @@ export function optRowFor(kind, center, entry, window = null) {
         return window ? { type: OPT_PARAM_TYPES.INTEGER, min: window.from, max: window.to, step: 1 }
           : null;
       }
-      // A date-backed year (the move-in date) keeps its fraction: §121's 2-of-5 test is
-      // a cliff at 730 days, which whole-year steps would stride straight over.
-      if (entry?.fractionalYear) {
-        return { type: OPT_PARAM_TYPES.CONTINUOUS,
-          min: _round6(center - 2), max: _round6(center + 2), step: 0.5 };
-      }
       const c = Math.round(center);
       return { type: OPT_PARAM_TYPES.INTEGER, min: c - 5, max: c + 5, step: 1 };
     }

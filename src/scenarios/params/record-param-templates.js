@@ -229,15 +229,16 @@ export const REAL_PROPERTY_PARAM_TEMPLATE = [
     description: 'The fraction of gross rent actually realised, covering vacancy, arrears ' +
       'and turnover. A long-term let is around 0.95; a short-term let is far lower, near ' +
       '0.55, which is the honest cost of the higher headline rent.' },
-  // The move-in date (`mainResidenceFrom`, design 83 G7) as a sweepable FRACTIONAL year,
-  // filed in Cross Border beside moveDate. Sweep it against the sale year: the AU
-  // s118-185 exemption is a smooth day count, but the US §121 2-of-5 use test is a cliff
-  // at 730 days, so the fraction is what lets a grid sample either side of it. Blank
-  // (no move-in date) harvests no lever — there is no centre to sweep around.
-  { field: 'mainResidenceFromYear', label: 'Main Residence From', type: 'Number', mc: true, opt: true,
-    nullable: true, group: 'Cross Border', fractionalYear: true,
-    description: 'The date this property became the main residence, as a fractional year ' +
-      '(2031.5 = 1 Jul 2031). Writes the property\'s move-in date. Blank when it has none.' },
+  // The move-in date (`mainResidenceFrom`, design 83 G7), swept as a Date (design 117
+  // phase 6) and filed in Cross Border beside moveDate. Sweep it against the sale date:
+  // the AU s118-185 exemption is a smooth day count, but the US §121 2-of-5 use test is a
+  // cliff at 730 days, and a 1-month Opt step can land either side of it. Blank (no
+  // move-in date) harvests no lever — there is no centre to sweep around.
+  { field: 'mainResidenceFrom', label: 'Main Residence From', type: 'Date', mc: true, opt: true,
+    nullable: true, group: 'Cross Border',
+    description: 'When this dwelling first became the main residence. Australia exempts only ' +
+      'the fraction of ownership days it actually was one, so moving into a long-rented house ' +
+      'late buys a small fraction of the exemption and not the whole of it. Blank when it has none.' },
   // Primary-residence flag (design 55 §4). Boolean, never an MC/Opt target. Drives the
   // capital-gains exclusion at sale — US IRC §121 ($250k Single / $500k MFJ) and, for a
   // foreign dwelling of an AU resident, the AU main-residence absence rule. Exposing it

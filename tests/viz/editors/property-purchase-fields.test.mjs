@@ -234,9 +234,9 @@ describe('main-residence history dropdown', () => {
 
   test('Save keeps the move-in lever param in step, so "Never" survives a Rebuild', () => {
     // The lever param cascades onto the record BEFORE it is re-read from it, so a stale
-    // 2036 left in the param wrote 2036-01-01 straight back over "Never".
-    const param = { name: 'prop.auHouseProperty.mainResidenceFromYear', value: 2036,
-      node: { type: 'realProperty', stateKey: 'auHouseProperty', field: 'mainResidenceFromYear' } };
+    // 2036-01-01 left in the param wrote straight back over "Never".
+    const param = { name: 'prop.auHouseProperty.mainResidenceFrom', value: '2036-01-01',
+      node: { type: 'realProperty', stateKey: 'auHouseProperty', field: 'mainResidenceFrom' } };
     const saved = [];
     let paramChanges = 0;
     const editor = new RealPropertyEditor({
@@ -260,6 +260,6 @@ describe('main-residence history dropdown', () => {
     el.querySelector('[data-id="mainResidenceFrom"]').value = '2031-07-01';
     save();
     expect(saved.at(-1).mainResidenceFrom).toBe('2031-07-01');
-    expect(param.value).toBe(2031.5);
+    expect(param.value).toBe('2031-07-01');
   });
 });

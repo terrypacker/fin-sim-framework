@@ -18,7 +18,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { migrateYearFieldsToDates, migrateParamBag, migratedParamKey, toSaleDate, saleDateToUtc,
-  yearOfDate, migrateMcVariableConfig, migrateOptVariableConfig }
+  yearOfDate, migrateMcVariableConfig, migrateOptVariableConfig, fractionalYearToIsoDate }
   from '../../src/scenarios/year-date-migration.js';
 import { RealProperty } from '../../src/finance/assets/real-property.js';
 import { Collectible } from '../../src/finance/assets/collectible.js';
@@ -65,7 +65,7 @@ describe('param keys', () => {
 
   test('every other key is left alone', () => {
     for (const k of ['prop.cabin.plannedSaleDate', 'acct.x.plannedSaleYear', 'moveDate',
-      'prop.cabin.mainResidenceFromYear', 'rothConversionStartYear', null, 42]) {
+      'prop.cabin.mainResidenceFrom', 'rothConversionStartYear', null, 42]) {
       assert.equal(migratedParamKey(k), null, String(k));
     }
   });
@@ -386,3 +386,40 @@ describe('phase 5 — loan terms', () => {
   }
 });
 
+// ─── Phase 6: the move-in proxy retires ──────────────────────────────────────
+
+describe('phase 6 — mainResidenceFromYear', () => {
+  const OLD = 'prop.cabin.mainResidenceFromYear';
+  const NEW = 'prop.cabin.mainResidenceFrom';
+
+  test('the fractional year converts to the exact day it wrote', () => {
+    assert.equal(fractionalYearToIsoDate(2031.5), '2031-07-01');
+    assert.equal(fractionalYearToIsoDate(2031.25), '2031-04-01');
+    assert.equal(fractionalYearToIsoDate(2031), '2031-01-01');
+    assert.equal(fractionalYearToIsoDate(null), null);
+    assert.equal(migratedParamKey(OLD), NEW);
+    assert.deepEqual(migrateParamBag({ [OLD]: 2031.5 }), { [NEW]: '2031-07-01' },
+      'a fraction is not a sale year: 2031.5 is 1 Jul, never 15 Jan');
+    assert.deepEqual(migrateParamBag({ [OLD]: null }), { [NEW]: null });
+  });
+
+  test('a typed entry renames its key, node and type, and loses the proxy flag', () => {
+    const cfg = migrateYearFieldsToDates({
+      realProperties: [{ stateKey: 'cabin', mainResidenceFrom: '2031-07-01' }],
+      params: [{ name: OLD, type: 'Number', value: 2031.5, fractionalYear: true, group: 'Cross Border',
+        node: { type: 'realProperty', stateKey: 'cabin', field: 'mainResidenceFromYear' } }],
+      parameters: { [OLD]: 2031.5 },
+    });
+    assert.deepEqual(cfg.params, [{ name: NEW, type: 'Date', value: '2031-07-01', group: 'Cross Border',
+      node: { type: 'realProperty', stateKey: 'cabin', field: 'mainResidenceFrom' } }]);
+    assert.deepEqual(cfg.parameters, { [NEW]: '2031-07-01' });
+    assert.equal(cfg.realProperties[0].mainResidenceFrom, '2031-07-01', 'the record was always a date');
+  });
+
+  test('saved sweep rows: NORMAL years → NORMAL_DATE; a half-year Opt step → 6 months', () => {
+    assert.deepEqual(migrateMcVariableConfig({ paramKey: OLD, type: 'normal', mean: 2031.5, stdDev: 1 }),
+      { paramKey: NEW, type: 'normalDate', mean: '2031-07-01', stdDev: 365 });
+    assert.deepEqual(migrateOptVariableConfig({ paramKey: OLD, type: 'continuous', min: 2029.5, max: 2033.5, step: 0.5 }),
+      { paramKey: NEW, type: 'date', min: '2029-07-01', max: '2033-07-01', step: 6 });
+  });
+});

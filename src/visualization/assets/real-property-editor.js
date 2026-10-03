@@ -19,7 +19,6 @@ import { bindParamLinkedField } from '../scenario/param-linked-field.js';
 import { LoanRateTermsForm } from '../common/loan-rate-terms-form.js';
 import { LOAN_RATE_TERM_FIELDS } from '../../finance/account-rules/loan-classes.js';
 import { defaultCurrencyForCountry as _countryCurrency } from '../../finance/country-codes.js';
-import { dateToFractionalYear } from '../../scenarios/params/record-field-rounding.js';
 
 /**
  * RealPropertyEditor — renders the real-property edit form from
@@ -334,19 +333,18 @@ export class RealPropertyEditor extends BaseComponent {
   }
 
   /**
-   * Keep the move-in lever (`prop.<sk>.mainResidenceFromYear`) in step with the date the
+   * Keep the move-in lever (`prop.<sk>.mainResidenceFrom`) in step with the date the
    * history dropdown just wrote. The param is the source of truth on Rebuild, and the
    * cascade runs BEFORE the generated params are re-read from their records — so a stale
-   * lever year would write its date straight back over "Never a main residence". Not a
-   * bindParamLinkedField: the dropdown owns three fields at once, and the record keeps
-   * the exact date string; the lever at the same year is a cascade no-op.
+   * lever date would be written straight back over "Never a main residence". Not a
+   * bindParamLinkedField: the dropdown owns three fields at once.
    */
   _syncMainResidenceParam(data) {
-    const param = this._links?.getParamFor('realProperty', this._node?.stateKey, 'mainResidenceFromYear');
+    const param = this._links?.getParamFor('realProperty', this._node?.stateKey, 'mainResidenceFrom');
     if (!param) return;
-    const year = dateToFractionalYear(data.mainResidenceFrom);
-    if (param.value === year) return;
-    param.value = year;
+    const date = data.mainResidenceFrom ?? null;
+    if (param.value === date) return;
+    param.value = date;
     this.onParamChange?.();
   }
 
