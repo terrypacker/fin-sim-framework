@@ -191,9 +191,9 @@ describe('Param-linked editor fields', () => {
     expect(spouse._readForm(spouse._rootEl).residencyState).toBe('HI');
   });
 
-  test('RealProperty plannedSaleYear routes through its param', () => {
-    const param = { name: 'usHouseSaleYear', value: 2035,
-                    node: { type: 'realProperty', stateKey: 'usHouseProperty', field: 'plannedSaleYear' } };
+  test('RealProperty plannedSaleDate routes through its param', () => {
+    const param = { name: 'prop.usHouseProperty.plannedSaleDate', value: '2035-01-15', type: 'Date',
+                    node: { type: 'realProperty', stateKey: 'usHouseProperty', field: 'plannedSaleDate' } };
     const editor = new RealPropertyEditor({
       container: makeMockContainer(),
       node: { id: 'r1', name: 'US House', country: 'US', stateKey: 'usHouseProperty' },
@@ -201,12 +201,16 @@ describe('Param-linked editor fields', () => {
       links: new ParamFieldLinks([param]),
     });
     editor.render();
-    const input = editor._rootEl.querySelector('[data-id="plannedSaleYear"]');
-    expect(input.value).toBe('2035');
-    input.value = '2040';
-    fire(input, 'input');
-    expect(param.value).toBe(2040);
-    expect('plannedSaleYear' in editor._readForm(editor._rootEl)).toBe(false);
+    const input = editor._rootEl.querySelector('[data-id="plannedSaleDate"]');
+    expect(input.type).toBe('date');
+    expect(input.value).toBe('2035-01-15');
+    input.value = '2040-07-01';
+    fire(input, 'change');
+    expect(param.value).toBe('2040-07-01');
+    input.value = '';
+    fire(input, 'change');
+    expect(param.value).toBeNull();
+    expect('plannedSaleDate' in editor._readForm(editor._rootEl)).toBe(false);
   });
 
   test('RealProperty value and appreciationRate route through their params (design 55 §14.3)', () => {

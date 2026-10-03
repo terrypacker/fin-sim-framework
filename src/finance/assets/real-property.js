@@ -42,7 +42,7 @@ export class RealProperty extends Asset {
    * @param {number}        [opts.monthlyMortgage=0]            - Fixed monthly mortgage payment
    * @param {number}        [opts.appreciationRate=0.035]       - Annual appreciation rate as a decimal
    * @param {boolean}       [opts.isPrimaryResidence=false]     - Affects capital-gains tax treatment
-   * @param {number|null}   [opts.plannedSaleYear=null]         - Calendar year of planned sale
+   * @param {string|null}   [opts.plannedSaleDate=null]         - Planned sale date, 'YYYY-MM-DD' (design 117)
    * @param {string|null}   [opts.saleDestinationAccount=null]  - Account id to receive net sale proceeds
    * @param {PropertyOwner[]} [opts.owners=[]]                  - Per-person ownership breakdown; overrides sole/joint split
    * @param {number|null}   [opts.balanceAtResidencyChange=null] - Value snapshot on first residency change
@@ -92,13 +92,13 @@ export class RealProperty extends Asset {
     // would treat a twenty-year hold as a three-year one and inflate both the exempt
     // fraction and the discount. Absent ⇒ the day-count concessions are denied outright.
     this.acquisitionDate         = opts.acquisitionDate         ?? null;
-    this.plannedSaleYear         = opts.plannedSaleYear         ?? null;
+    this.plannedSaleDate         = opts.plannedSaleDate         ?? null;
     // Purchase (design 83 §10 follow-on — sell one dwelling and buy another). A
-    // property with a future `purchaseYear` sits DORMANT at value 0 until then: running
+    // property with a future `purchaseDate` sits DORMANT at value 0 until then: running
     // costs skip a zero-value property and appreciation on 0 is 0, so dormancy needs no
     // gate of its own. At the purchase date the price is debited from
     // `purchaseFundFrom` (or the country cash pool) and becomes both value and cost base.
-    this.purchaseYear            = opts.purchaseYear            ?? null;
+    this.purchaseDate            = opts.purchaseDate            ?? null;   // 'YYYY-MM-DD' (design 117)
     this.purchasePrice           = opts.purchasePrice           ?? null;
     this.purchaseFundFrom        = opts.purchaseFundFrom        ?? null;
     // Is `purchasePrice` stated in today's money (default) or as at the purchase date?

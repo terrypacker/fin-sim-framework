@@ -337,7 +337,7 @@ test('MR-23: end to end — a returning resident\'s AU house discount is apporti
     simStart: '2026-01-01', simEnd: '2040-01-01',
     mutateCfg: (cfg) => {
       const au = cfg.realProperties.find(p => p.stateKey === 'auHouseProperty');
-      au.plannedSaleYear   = 2036;
+      au.plannedSaleDate   = '2036-01-15';
       au.acquisitionDate   = Date.UTC(2006, 0, 1);   // owned long before the move
       au.isPrimaryResidence = false;                  // investment property: no exemption
     },
@@ -447,7 +447,7 @@ test('MR-28: the exemption day-count ends at the SALE, not at the tax period sta
       au.acquisitionDate    = Date.UTC(2016, 6, 1);
       au.isPrimaryResidence = false;
       au.mainResidenceFrom  = '2031-07-01';   // moved in on the first day of FY2031-32
-      au.plannedSaleYear    = 2032;           // sold 15 Jan 2032 — same financial year
+      au.plannedSaleDate    = '2032-01-15';           // sold 15 Jan 2032 — same financial year
     },
     stepTo: '2033-01-01',
   });
@@ -477,7 +477,7 @@ test('MR-29: AUD house proceeds are CONVERTED into a USD destination account', a
     simStart: '2026-01-01', simEnd: '2034-01-01',
     mutateCfg: (cfg) => {
       const au = cfg.realProperties.find(p => p.stateKey === 'auHouseProperty');
-      au.plannedSaleYear        = 2032;
+      au.plannedSaleDate        = '2032-01-15';
       au.saleDestinationAccount = 'usStockAccount';   // USD, while the house is AUD
     },
     stepTo: '2032-03-01',

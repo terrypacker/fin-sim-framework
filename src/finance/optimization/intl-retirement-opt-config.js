@@ -241,9 +241,10 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
   },
 
   // ── Real Property sale timing ─────────────────────────────────────────────
-  // Harvested per property, as `prop.<sk>.plannedSaleYear` — including a property with no
-  // planned sale, as an UNSET row searched over the plan window (`sweepUnset`). The two
-  // legacy rows (`usHouseSaleYear` / `auHouseSaleYear`) named the reference plan's houses.
+  // Harvested per property, as a DATE row on `prop.<sk>.plannedSaleDate` (design 117) —
+  // including a property with no planned sale, as an UNSET row searched over the plan
+  // window (`sweepUnset`). The legacy rows (`usHouseSaleYear` / `auHouseSaleYear`) named
+  // the reference plan's houses.
 
   // ── Drawdown order (decision lever) ───────────────────────────────────────
   {

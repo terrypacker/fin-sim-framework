@@ -89,7 +89,8 @@ test('SRH-2: each key shape routes where its words are', () => {
   // A legacy alias follows its successor, and `balanceTarget` is the Balance box.
   assert.deepEqual(at('rothBalance'),         { node: 'account', field: 'balance' });
   assert.deepEqual(at('primaryMonthlyWage'),  { node: 'person', field: 'monthlyWage' });
-  assert.deepEqual(at('usHouseSaleYear'),     { node: 'real-property', field: 'plannedSaleYear' });
+  // (The sale YEAR aliases were retired by design 117: no row is keyed on them.)
+  assert.deepEqual(at('prop.anyHouse.plannedSaleDate'), { node: 'real-property', field: 'plannedSaleDate' });
   // Generated keys, whatever the record's id.
   assert.deepEqual(at('acct.anyAccount.minimumBalance'), { node: 'account', field: 'minimumBalance' });
   assert.deepEqual(at('prop.anyHouse.appreciationRate'), { node: 'real-property', field: 'appreciationRate' });

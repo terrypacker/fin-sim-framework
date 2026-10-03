@@ -324,11 +324,11 @@ describe('McConfigPanel — pool axis hygiene', () => {
   });
 });
 
-// ── Unset rows: a blank sale year (design 98 W3.2 rule 3 amendment) ─────────────
+// ── Unset rows: a blank sale date (design 98 W3.2 rule 3 amendment; a date since 117) ──
 describe('McConfigPanel — an unset row', () => {
   const UNSET = {
-    paramKey: 'prop.cabin.plannedSaleYear', label: 'Cabin — Planned Sale Year', group: 'US · Cabin',
-    type: DISTRIBUTION_TYPES.NORMAL, stdDev: 1.5, integer: true,
+    paramKey: 'prop.cabin.plannedSaleDate', label: 'Cabin — Planned Sale Date', group: 'US · Cabin',
+    type: DISTRIBUTION_TYPES.NORMAL_DATE, stdDev: 548,
     enabled: false, unset: true, harvested: true, centerSource: 'unset',
   };
   const row = (panel) => panel._rowMap.get(UNSET.paramKey);
@@ -336,13 +336,13 @@ describe('McConfigPanel — an unset row', () => {
   test('shows no center and says it is unset', () => {
     const { panel } = makePanel();
     panel.setVariables([UNSET]);
-    expect(row(panel).meanInp.value).toBe('');
+    expect(row(panel).meanDateInp.value).toBe('');
     expect(row(panel).sourceEl.textContent).toBe('unset');
     expect(row(panel).sourceEl.title).toMatch(/does not happen/);
     panel.destroy();
   });
 
-  test('stays centerless in getConfig rather than falling to year 0', () => {
+  test('stays centerless in getConfig rather than falling to a default date', () => {
     const { panel } = makePanel();
     panel.setVariables([UNSET]);
     const cfg = panel.getConfig().variableConfigs.find(v => v.paramKey === UNSET.paramKey);
@@ -359,14 +359,14 @@ describe('McConfigPanel — an unset row', () => {
 
     container.querySelector('.mc-batch-run').click();
     expect(runs).toHaveLength(0);
-    expect(container.querySelector('.mc-status-el').textContent).toMatch(/Cabin — Planned Sale Year/);
+    expect(container.querySelector('.mc-status-el').textContent).toMatch(/Cabin — Planned Sale Date/);
 
-    row(panel).meanInp.value = '2040';
-    row(panel).meanInp.dispatchEvent(new Event('input'));
+    row(panel).meanDateInp.value = '2040-03-01';
+    row(panel).meanDateInp.dispatchEvent(new Event('input'));
     container.querySelector('.mc-batch-run').click();
     expect(runs).toHaveLength(1);
     const sent = runs[0].variableConfigs.find(v => v.paramKey === UNSET.paramKey);
-    expect([sent.enabled, sent.mean, sent.centerDirty]).toEqual([true, 2040, true]);
+    expect([sent.enabled, sent.mean, sent.centerDirty]).toEqual([true, '2040-03-01', true]);
     panel.destroy();
   });
 });

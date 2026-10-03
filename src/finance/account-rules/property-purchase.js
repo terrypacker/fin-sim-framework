@@ -17,7 +17,7 @@
  * new house cost to run? what does its own eventual sale look like?) needs it.
  *
  * ─── dormancy is free, which is why this is small ────────────────────────────
- * A property with a future `purchaseYear` sits at `value: 0` until then, and the engine
+ * A property with a future `purchaseDate` sits at `value: 0` until then, and the engine
  * already treats a zero-value property as absent: `HouseRunningCostHandler` skips
  * `value <= 0`, appreciation multiplies 0 by a rate and gets 0, and net worth sums
  * `value`. So no handler needs a "not yet owned" gate — the state IS the gate. At the
@@ -49,6 +49,7 @@ import { fxRate } from '../fx/fx-conversion.js';
 import { auCpiLevel } from '../holdings/holding-period.js';
 import { propertyExpenseBusinessFraction } from './currency-basis.js';
 import { cashFloorOf } from './cash-floor.js';
+import { yearOfDate } from '../../scenarios/year-date-migration.js';
 
 /**
  * `order` for a purchase event. The sale events are authored at the default 0, so any
@@ -71,7 +72,8 @@ function currencyCode(entry) {
  * appreciation rate, or a nominal price, returns the stated figure unchanged.
  *
  * @param {object} prop      property state entry
- * @param {number} saleYear  the calendar year of the purchase
+ * @param {number} purchaseYear the calendar year of the purchase (the purchase date's year:
+ *                  growth runs in whole years, as it did before design 117 §7.2)
  * @param {number} startYear the simulation's start year
  */
 export function resolvePurchasePrice(prop, purchaseYear, startYear) {
@@ -84,12 +86,12 @@ export function resolvePurchasePrice(prop, purchaseYear, startYear) {
 }
 
 /**
- * Does this property need a purchase event scheduled? A `purchaseYear` with no price is
+ * Does this property need a purchase event scheduled? A `purchaseDate` with no price is
  * an authoring slip rather than a free house, so it schedules nothing — the same
- * treatment `plannedSaleYear` gives a property with no value.
+ * treatment `plannedSaleDate` gives a property with no value.
  */
 export function propertyNeedsPurchase(prop) {
-  return prop?.purchaseYear != null && (prop?.purchasePrice ?? 0) > 0;
+  return prop?.purchaseDate != null && (prop?.purchasePrice ?? 0) > 0;
 }
 
 // ─── Handler ─────────────────────────────────────────────────────────────────
@@ -129,7 +131,7 @@ export class PropertyPurchaseHandler extends HandlerEntry {
     // to a later, higher price — quietly erasing the gain.
     if ((prop.value ?? 0) > 0) return [];
 
-    const price = resolvePurchasePrice(prop, data.purchaseYear, data.startYear);
+    const price = resolvePurchasePrice(prop, yearOfDate(data.purchaseDate), data.startYear);
     if (!(price > 0)) return [];
 
     // Funding: the nominated account, else the country cash pool. Same resolution the
@@ -193,7 +195,7 @@ export class PropertyPurchaseHandler extends HandlerEntry {
 /** US-scoped purchase handler — fires on `US_HOUSE_PURCHASE`, buys only US property. */
 export class UsPropertyPurchaseHandler extends PropertyPurchaseHandler {
   static type        = 'UsPropertyPurchaseHandler';
-  static description = 'Buys a US property on its purchaseYear (design 83 §10 follow-on).';
+  static description = 'Buys a US property on its purchaseDate (design 83 §10 follow-on).';
   static eventType   = 'US_HOUSE_PURCHASE';
   constructor({ stateRegistry = null } = {}) { super({ country: 'US', stateRegistry }); }
 }
@@ -201,7 +203,7 @@ export class UsPropertyPurchaseHandler extends PropertyPurchaseHandler {
 /** AU-scoped purchase handler — fires on `AU_HOUSE_PURCHASE`, buys only AU property. */
 export class AuPropertyPurchaseHandler extends PropertyPurchaseHandler {
   static type        = 'AuPropertyPurchaseHandler';
-  static description = 'Buys an AU property on its purchaseYear (design 83 §10 follow-on).';
+  static description = 'Buys an AU property on its purchaseDate (design 83 §10 follow-on).';
   static eventType   = 'AU_HOUSE_PURCHASE';
   constructor({ stateRegistry = null } = {}) { super({ country: 'AU', stateRegistry }); }
 }

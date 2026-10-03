@@ -115,17 +115,18 @@ test('SRH-V4: the Optimize panel gets the same, through the same table', async (
   document.body.appendChild(container);
   const panel = new OptConfigPanel(container, { onOpenHelp: ref => opened.push(ref) });
   panel.setVariables([
-    { paramKey: 'usHouseSaleYear', label: 'US House Sale Year', group: 'Real Properties',
-      type: OPT_PARAM_TYPES.INTEGER, min: 2030, max: 2040, step: 1, enabled: false },
+    { paramKey: 'prop.usHouseProperty.plannedSaleDate', label: 'US House — Planned Sale Date',
+      group: 'US · US House', type: OPT_PARAM_TYPES.DATE, min: '2030-01-15', max: '2040-01-15', step: 1,
+      enabled: false },
   ]);
   await settle();
 
-  const { labelEl, btn } = rowParts(container, '.opt-var-label', 'US House Sale Year');
+  const { labelEl, btn } = rowParts(container, '.opt-var-label', 'US House — Planned Sale Date');
   const field = INDEX.nodes.find(n => n.kind === 'real-property').fields
-    .find(f => f.field === 'plannedSaleYear');
+    .find(f => f.field === 'plannedSaleDate');
   assert.equal(labelEl.title, field.description);
   btn.click();
-  assert.deepEqual(opened, [{ node: 'real-property', field: 'plannedSaleYear' }]);
+  assert.deepEqual(opened, [{ node: 'real-property', field: 'plannedSaleDate' }]);
   panel.destroy();
 });
 

@@ -33,7 +33,7 @@ function sampleCfg() {
       { id: 'primary', name: 'Primary', monthlyWage: 8000, retirementDate: '2040-01-01T00:00:00.000Z' },
     ],
     realProperties: [
-      { stateKey: 'usHouseProperty', name: 'US House', country: 'US', value: 1000000, appreciationRate: 0.04, plannedSaleYear: null },
+      { stateKey: 'usHouseProperty', name: 'US House', country: 'US', value: 1000000, appreciationRate: 0.04, plannedSaleDate: null },
     ],
   };
 }
@@ -52,9 +52,10 @@ test('GEN-1: emits namespaced keys with per-record node and record-seeded value'
   assert.deepStrictEqual(wage.node, { type: 'person', id: 'primary', field: 'monthlyWage' });
   assert.strictEqual(wage.defaultValue, 8000);
 
-  const sale = byKey.get('prop.usHouseProperty.plannedSaleYear');
-  assert.deepStrictEqual(sale.node, { type: 'realProperty', stateKey: 'usHouseProperty', field: 'plannedSaleYear' });
+  const sale = byKey.get('prop.usHouseProperty.plannedSaleDate');
+  assert.deepStrictEqual(sale.node, { type: 'realProperty', stateKey: 'usHouseProperty', field: 'plannedSaleDate' });
   assert.strictEqual(sale.defaultValue, null, 'nullable field seeds null');
+  assert.strictEqual(sale.type, 'Date', 'a sale is a date (design 117)');
 });
 
 test('GEN-2: per-type templates — savings gets balance only, roth adds contributionBasis', () => {
@@ -165,8 +166,8 @@ test('GEN-9: decodeGeneratedParamKey round-trips a generated key back to its nod
     { type: 'account', stateKey: 'rothAccount', field: 'balance' });
   assert.deepStrictEqual(decodeGeneratedParamKey('person.primary.monthlyWage'),
     { type: 'person', id: 'primary', field: 'monthlyWage' });
-  assert.deepStrictEqual(decodeGeneratedParamKey('prop.usHouseProperty.plannedSaleYear'),
-    { type: 'realProperty', stateKey: 'usHouseProperty', field: 'plannedSaleYear' });
+  assert.deepStrictEqual(decodeGeneratedParamKey('prop.usHouseProperty.plannedSaleDate'),
+    { type: 'realProperty', stateKey: 'usHouseProperty', field: 'plannedSaleDate' });
   assert.strictEqual(decodeGeneratedParamKey('rothBalance'), null, 'non-generated key → null');
   assert.strictEqual(decodeGeneratedParamKey('acct.balance'), null, 'malformed (no owner) → null');
 });
@@ -178,18 +179,22 @@ test('GEN-9: decodeGeneratedParamKey round-trips a generated key back to its nod
 // generator change. These tests pin that wiring: the plumbing (loop, key namespace,
 // node shape, decode) is in place ahead of the fields.
 
-test('GEN-10: collectibles generate a sale-year param; companyEquities (empty template) emit none', () => {
+test('GEN-10: collectibles and company stakes each generate one sale-date param', () => {
   const cfg = {
     collectibles:    [{ stateKey: 'artCollectible', name: 'Art', country: 'US', value: 50000 }],
-    companyEquities: [{ stateKey: 'companyEquityAccount', name: 'RSUs', country: 'US', value: 120000 }],
+    companyEquities: [{ stateKey: 'companyEquityAccount', name: 'RSUs', country: 'US', value: 120000,
+      plannedSaleDate: '2033-01-15' }],
   };
   const out = ScenarioParamGenerator.generate(cfg);
-  // Collectibles now carry a plannedSaleYear param (design 63 §14 folded the inherited
-  // sale-year knob into the standard collectible template); companyEquities stay empty.
-  const keys = new Set(out.map(e => e.key));
-  assert.ok(keys.has('coll.artCollectible.plannedSaleYear'), 'collectible sale-year param');
-  assert.ok(![...keys].some(k => k.startsWith('equity.')), 'companyEquity template still empty');
-  assert.strictEqual(out.length, 1);
+  // Collectibles carry a plannedSaleDate param (design 63 §14 folded the inherited sale
+  // knob into the standard collectible template). A company stake's replaced the static
+  // `companySaleYear` (design 117 phase 2): per record, and not swept.
+  const byKey = new Map(out.map(e => [e.key, e]));
+  assert.ok(byKey.has('coll.artCollectible.plannedSaleDate'), 'collectible sale-date param');
+  const eq = byKey.get('equity.companyEquityAccount.plannedSaleDate');
+  assert.ok(eq, 'company sale-date param');
+  assert.deepStrictEqual([eq.type, eq.defaultValue, eq.mc, eq.opt], ['Date', '2033-01-15', false, false]);
+  assert.strictEqual(out.length, 2);
 });
 
 test('GEN-11: a populated collectible/equity template field generates the coll./equity. namespace', () => {
@@ -207,13 +212,14 @@ test('GEN-11: a populated collectible/equity template field generates the coll./
 
   const [eq] = ScenarioParamGenerator._expand(
     'equity', 'companyEquity',
-    { name: 'RSUs', plannedSaleYear: 2035 }, 'companyEquityAccount',
-    [{ field: 'plannedSaleYear', label: 'Planned Sale Year', type: 'Number' }],
+    { name: 'RSUs', plannedSaleDate: '2035-01-15' }, 'companyEquityAccount',
+    [{ field: 'plannedSaleDate', label: 'Planned Sale Date', type: 'Date' }],
   );
-  assert.strictEqual(eq.key, 'equity.companyEquityAccount.plannedSaleYear');
-  assert.deepStrictEqual(eq.node, { type: 'companyEquity', stateKey: 'companyEquityAccount', field: 'plannedSaleYear' });
+  assert.strictEqual(eq.key, 'equity.companyEquityAccount.plannedSaleDate');
+  assert.strictEqual(eq.defaultValue, '2035-01-15');
+  assert.deepStrictEqual(eq.node, { type: 'companyEquity', stateKey: 'companyEquityAccount', field: 'plannedSaleDate' });
   assert.deepStrictEqual(decodeGeneratedParamKey(eq.key),
-    { type: 'companyEquity', stateKey: 'companyEquityAccount', field: 'plannedSaleYear' });
+    { type: 'companyEquity', stateKey: 'companyEquityAccount', field: 'plannedSaleDate' });
 });
 
 test('GEN-12: minimumBalance is a per-account SAVINGS/CHECKING param (floor travels with the flagged account, §7/§13)', () => {

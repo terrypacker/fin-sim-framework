@@ -52,7 +52,7 @@ function makeLoadedCfg() {
     ],
     parameters: {},
     accounts:   [{ stateKey: 'usStockAccount', balance: 100_000 }],
-    realProperties: [{ stateKey: 'usHouseProperty', plannedSaleYear: 2030 }],
+    realProperties: [{ stateKey: 'usHouseProperty', plannedSaleDate: '2030-01-15' }],
   };
 }
 
@@ -79,13 +79,22 @@ test('applyParamBagToConfig: NESTED bag keys reach the flat map', () => {
   assert.strictEqual(cfg.parameters.people.primary.lifeExpectancy, 91);
 });
 
-test('applyParamBagToConfig: house sale year reaches cfg.realProperties', () => {
-  const cfg = makeLoadedCfg();
+test('applyParamBagToConfig: a recorded house sale YEAR reaches cfg.realProperties as its date', () => {
+  // An MC run recorded before design 117 carries a sampled sale year; replaying it must
+  // still move the sale. The year (rounded, as the old patch did) becomes 15 Jan.
+  const cfg = IntlRetirementScenario.buildDefaultConfig({});
   applyParamBagToConfig(cfg, { usHouseSaleYear: 2034.4 });
+  assert.strictEqual(cfg.parameters['prop.usHouseProperty.plannedSaleDate'], '2034-01-15');
+  assert.strictEqual(cfg.parameters.usHouseSaleYear, undefined, 'no dead year key is left behind');
 
-  assert.strictEqual(cfg.realProperties[0].plannedSaleYear, 2034,
-    'sampled sale years are rounded onto the property record — cfg.parameters alone '
-    + 'is not where the real-property toolset reads it from');
+  ServiceRegistry.resetAll();
+  const services = ServiceRegistry.getInstance();
+  new IntlRetirementScenario({ context: services.simulationContext, params: {},
+    simStart: SIM_START, simEnd: SIM_END }).buildSim();
+  new ScenarioLoader().load(cfg, services);
+  const house = cfg.realProperties.find(p => p.stateKey === 'usHouseProperty');
+  assert.strictEqual(house.plannedSaleDate, '2034-01-15',
+    'the cascade carries it onto the record the real-property toolset reads');
 });
 
 test('applyParamBagToConfig: a typed entry still wins its own key', () => {
@@ -103,46 +112,58 @@ test('applyParamBagToConfig: a typed entry still wins its own key', () => {
 
 /** A loaded cfg whose US house sells in `plan` (typed entry under the generated key). */
 function makeLoadedSaleCfg(plan) {
+  // A LOADED cfg today: the typed entry and the record both hold the sale DATE.
   return {
     scenarioClass: IntlRetirementScenario,
-    params: [{ name: 'prop.usHouseProperty.plannedSaleYear', value: plan, type: 'Number' }],
+    params: [{ name: 'prop.usHouseProperty.plannedSaleDate', value: plan, type: 'Date',
+      node: { type: 'realProperty', stateKey: 'usHouseProperty', field: 'plannedSaleDate' } }],
     parameters: {},
-    realProperties: [{ stateKey: 'usHouseProperty', plannedSaleYear: plan }],
+    realProperties: [{ stateKey: 'usHouseProperty', plannedSaleDate: plan }],
   };
 }
 
+// An MC run recorded before design 117 carries BOTH names of the sale, as years: the flat
+// legacy key and the old generated key, one moved by the lever and one at the plan value.
+// Replay must keep the one that moved, or every cell of a grid on the other runs the
+// plan's sale (the inert-lever failure `reconcileAliasPairs` exists for).
+
 test('applyParamBagToConfig: a lever on the LEGACY key beats the generated key at plan', () => {
-  const cfg = makeLoadedSaleCfg(2030);
+  const cfg = makeLoadedSaleCfg('2030-01-15');
   applyParamBagToConfig(cfg, { usHouseSaleYear: 2034, 'prop.usHouseProperty.plannedSaleYear': 2030 });
 
-  assert.strictEqual(cfg.params[0].value, 2034,
-    'the base carries the generated key at the plan value; letting it win made every cell '
-    + 'of an auHouseSaleYear grid run the plan\'s sale year');
-  assert.strictEqual(cfg.parameters['prop.usHouseProperty.plannedSaleYear'], 2034,
-    'the loader drops the legacy key when the target is present, so the target must agree');
+  assert.strictEqual(cfg.params[0].value, '2034-01-15');
+  assert.strictEqual(cfg.parameters['prop.usHouseProperty.plannedSaleDate'], '2034-01-15',
+    'the flat map agrees, so the loader cannot sync the plan value back');
+  assert.strictEqual(cfg.parameters.usHouseSaleYear, undefined, 'no dead year key is left behind');
 });
 
 test('applyParamBagToConfig: a lever on the GENERATED key beats the legacy key at plan', () => {
-  const cfg = makeLoadedSaleCfg(2030);
+  const cfg = makeLoadedSaleCfg('2030-01-15');
   applyParamBagToConfig(cfg, { usHouseSaleYear: 2030, 'prop.usHouseProperty.plannedSaleYear': 2034 });
 
-  assert.strictEqual(cfg.params[0].value, 2034);
-  assert.strictEqual(cfg.realProperties[0].plannedSaleYear, 2034,
-    'the direct sale-year patch reads the legacy key, so it must carry the lever too');
+  assert.strictEqual(cfg.params[0].value, '2034-01-15');
 });
 
 test('applyParamBagToConfig: a legacy lever wins when the plan never sells (null)', () => {
   const cfg = makeLoadedSaleCfg(null);
   applyParamBagToConfig(cfg, { usHouseSaleYear: 2034, 'prop.usHouseProperty.plannedSaleYear': null });
 
-  assert.strictEqual(cfg.params[0].value, 2034, 'a null plan value is still a plan value');
+  assert.strictEqual(cfg.params[0].value, '2034-01-15', 'a null plan value is still a plan value');
+});
+
+test('applyParamBagToConfig: a date lever on the new key reaches the record on its own day', () => {
+  const cfg = makeLoadedSaleCfg('2030-01-15');
+  applyParamBagToConfig(cfg, { 'prop.usHouseProperty.plannedSaleDate': '2033-07-01' });
+
+  assert.strictEqual(cfg.params[0].value, '2033-07-01');
+  assert.strictEqual(cfg.parameters['prop.usHouseProperty.plannedSaleDate'], '2033-07-01');
 });
 
 test('applyParamBagToConfig: reconciling never mutates the caller\'s bag', () => {
   const bag = { usHouseSaleYear: 2034, 'prop.usHouseProperty.plannedSaleYear': 2030 };
-  applyParamBagToConfig(makeLoadedSaleCfg(2030), bag);
+  applyParamBagToConfig(makeLoadedSaleCfg('2030-01-15'), bag);
 
-  assert.strictEqual(bag['prop.usHouseProperty.plannedSaleYear'], 2030,
+  assert.deepStrictEqual(bag, { usHouseSaleYear: 2034, 'prop.usHouseProperty.plannedSaleYear': 2030 },
     'the bag is a run\'s recorded params; replay re-applies it');
 });
 

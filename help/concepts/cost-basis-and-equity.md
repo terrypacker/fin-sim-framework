@@ -3,13 +3,12 @@ id: cost-basis-and-equity
 kind: concept
 title: Cost Basis and Company Equity
 panels: [securities, holdings]
-params: [stockBasisUS, stockBasisIntl, stockSplitRatio, companySaleYear]
+params: [stockBasisUS, stockBasisIntl, stockSplitRatio]
 design: [94-equity-as-security-positions.md, 72-company-equity-sale-fixes.md]
 stamps:
   param:stockBasisUS: 8496f4
   param:stockBasisIntl: b32aae
   param:stockSplitRatio: 1c3adb
-  param:companySaleYear: ce4b0c
   panel:securities: 80facb
   panel:holdings: 359688
 ---
@@ -36,7 +35,7 @@ unchanged. It is bookkeeping, and it matters only because unit counts appear in
 [Securities](../panels/securities.md).
 
 **Company equity** is the illiquid case: a private stake with no market price, which
-does nothing at all until its sale year arrives and then converts to cash in one
+does nothing at all until its sale date arrives and then converts to cash in one
 event. That lumpiness is the interesting part — one year's tax bill, one year's
-reinvestment decision, and a large sensitivity to which year you assume. Leave the
-year unset for a stake that is never sold.
+reinvestment decision, and a large sensitivity to which date you assume. Leave the
+date unset for a stake that is never sold.

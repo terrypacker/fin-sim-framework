@@ -470,11 +470,11 @@ test('IntlRetirementMcRunner: usEquityDividendYield perturbation reaches the sim
 });
 
 test('IntlRetirementMcRunner: an enabled UNSET row with no mean is refused, naming it', async () => {
-  // The reference plan leaves the US house unsold, so its sale year is an unset row.
+  // The reference plan leaves the US house unsold, so its sale date is an unset row.
   const cfgTemplate = IntlRetirementScenario.buildDefaultConfig(
-    { fxProcessModel: 'NONE', usHouseSaleYear: null }, SIM_START, SIM_END);
+    { fxProcessModel: 'NONE' }, SIM_START, SIM_END);
   const mcConfig = new IntlRetirementMcConfig();
-  mcConfig.applyOverride('prop.usHouseProperty.plannedSaleYear', { enabled: true });
+  mcConfig.applyOverride('prop.usHouseProperty.plannedSaleDate', { enabled: true });
   await assert.rejects(() => makeRunner({ mcConfig, cfgTemplate }).run(),
-    /no center: .*Planned Sale Year/);
+    /no center: .*Planned Sale Date/);
 });

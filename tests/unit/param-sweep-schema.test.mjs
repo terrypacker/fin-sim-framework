@@ -343,9 +343,10 @@ test('SWEEP-11: every curated/contributed MC variable is schema-eligible (mc:tru
 // row for — or already be offered by a curated row (alias-resolved), which supplies its
 // own distribution / candidate set (e.g. the EnumMulti strategy pickers). A flag that
 // fails both is a promise no panel can keep. Rules: record-param-templates.js header.
+// The optimizer gained a Date variable in design 117 phase 1.
 const HARVESTABLE_TYPES = {
   mc:  new Set(['Number', 'Integer', 'Money', 'Date']),
-  opt: new Set(['Number', 'Integer', 'Money', 'Enum', 'Boolean']),
+  opt: new Set(['Number', 'Integer', 'Money', 'Enum', 'Boolean', 'Date']),
 };
 
 test('SWEEP-18: every mc/opt-flagged entry (static + generated) is harvestable or curated', () => {

@@ -399,13 +399,14 @@ import { QueryApi } from './query/query-api.js';
 import { AU_SINGLE_HOMEOWNER_DEFAULTS, AU_SINGLE_HOMEOWNER_PARAM_SCHEMA, AuSingleHomeownerScenario } from './scenarios/au-single-homeowner-scenario.js';
 import { BaseScenario } from './scenarios/base-scenario.js';
 import { BlankScenario } from './scenarios/blank-scenario.js';
-import { buildDrawdownWeightSchema, DEFAULT_DRAWDOWN_WEIGHT_PARAMS, DEFAULT_SLEEVE_WEIGHTS, buildSleeveWeightSchema, DEFAULT_SLEEVE_WEIGHT_PARAMS, buildAllocWeightSchema, DEFAULT_ALLOC_WEIGHT_PARAMS, INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, INTL_RETIREMENT_PARAM_ALIASES, IntlRetirementScenario, applyRealPropertySaleYearParams } from './scenarios/intl-retirement-scenario.js';
+import { buildDrawdownWeightSchema, DEFAULT_DRAWDOWN_WEIGHT_PARAMS, DEFAULT_SLEEVE_WEIGHTS, buildSleeveWeightSchema, DEFAULT_SLEEVE_WEIGHT_PARAMS, buildAllocWeightSchema, DEFAULT_ALLOC_WEIGHT_PARAMS, INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, INTL_RETIREMENT_PARAM_ALIASES, IntlRetirementScenario } from './scenarios/intl-retirement-scenario.js';
 import { GENERATED_KEY_PREFIXES, isGeneratedParamKey } from './scenarios/params/generated-param-keys.js';
 import { DRAWDOWN_STRATEGIES, DRAWDOWN_ROLES, DRAWDOWN_WEIGHT_MODE, DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP, drawdownWeightKey, DRAWDOWN_WEIGHT_ROLES, DRAWDOWN_CASH_ROLES, DRAWDOWN_ROLE_LABELS, presentDrawdownWeightRoles, drawdownWeightsFromStrategy, DEFAULT_DRAWDOWN_WEIGHTS, synthesizeWeightedPriorities, ALLOCATION_OPTIMIZED_MODE, ALLOC_WEIGHT_CLASSES, ALLOC_WEIGHT_PREFIX, ALLOC_WEIGHT_SEP, allocWeightKey, ALLOC_WEIGHT_CLASS_LABELS, ALLOCATION_PRESETS, DEFAULT_ALLOC_WEIGHTS, synthesizeTargetAllocation, allocWeightsFromMix, allocWeightsFromPreset, presentAllocations, DRAWDOWN_OWNER_MODES, DRAWDOWN_OWNER_DEFAULT, resolveOwnerBanding } from './scenarios/params/lever-weights.js';
 import { WHOLE_NUMBER_RECORD_FIELDS, roundRecordField, FRACTIONAL_YEAR_DATE_FIELDS, dateToFractionalYear, fractionalYearToIsoDate, recordFieldValue, recordFieldPatch } from './scenarios/params/record-field-rounding.js';
 import { BALANCE_TARGET, ACCOUNT_PARAM_TEMPLATES, PERSON_PARAM_TEMPLATE, REAL_PROPERTY_PARAM_TEMPLATE, COLLECTIBLE_PARAM_TEMPLATE, COMPANY_EQUITY_PARAM_TEMPLATE, BEQUEST_PARAM_TEMPLATE, INHERITED_RA_PARAM_TEMPLATE } from './scenarios/params/record-param-templates.js';
 import { decodeGeneratedParamKey, ScenarioParamGenerator } from './scenarios/params/scenario-param-generator.js';
 import { RETIRED_RATE_PARAMS, INTEREST_DEFAULTS, retireRateParams } from './scenarios/retired-rate-params.js';
+import { migrateYearFieldsToDates, migrateParamBag, migrateMcVariableConfig, migrateOptVariableConfig, migratedParamKey, toSaleDate, saleDateToUtc, yearOfDate, RETIRED_SALE_YEAR_KEYS } from './scenarios/year-date-migration.js';
 import { ScenarioLoader } from './scenarios/scenario-loader.js';
 import { resolveRecordCenters, resolveAliasCenters, applyParamBagToConfig } from './scenarios/scenario-param-apply.js';
 import { ScenarioRegistry } from './scenarios/scenario-registry.js';
@@ -2096,7 +2097,6 @@ export const Scenarios = {
   INTL_RETIREMENT_PARAM_SCHEMA,
   INTL_RETIREMENT_PARAM_ALIASES,
   IntlRetirementScenario,
-  applyRealPropertySaleYearParams,
   GENERATED_KEY_PREFIXES,
   isGeneratedParamKey,
   WHOLE_NUMBER_RECORD_FIELDS,
@@ -2119,6 +2119,15 @@ export const Scenarios = {
   RETIRED_RATE_PARAMS,
   INTEREST_DEFAULTS,
   retireRateParams,
+  migrateYearFieldsToDates,
+  migrateParamBag,
+  migrateMcVariableConfig,
+  migrateOptVariableConfig,
+  migratedParamKey,
+  toSaleDate,
+  saleDateToUtc,
+  yearOfDate,
+  RETIRED_SALE_YEAR_KEYS,
   ScenarioLoader,
   resolveRecordCenters,
   resolveAliasCenters,

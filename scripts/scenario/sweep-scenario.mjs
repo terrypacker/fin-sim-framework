@@ -25,10 +25,10 @@
  * that is exactly how design/72 was found.
  *
  * Usage:
- *   node scripts/sweep-scenario.mjs s.json --param companySaleYear --range 2027:2035
+ *   node scripts/sweep-scenario.mjs s.json --param equity.companyEquityAccount.plannedSaleDate --range 2027:2035
  *   node scripts/sweep-scenario.mjs s.json --param moveYear --range 2028:2036 --step 2
  *   node scripts/sweep-scenario.mjs s.json --param usStockGrowthRate --values 0.06,0.08,0.10
- *   node scripts/sweep-scenario.mjs s.json --param companySaleYear --range 2027:2035 --json
+ *   node scripts/sweep-scenario.mjs s.json --param prop.usHouseProperty.plannedSaleDate --range 2027:2035 --json
  *
  * Options:
  *   --param <name>     Param to vary (must exist in the scenario's params list).
@@ -42,16 +42,16 @@
  * SCOPE: this drives `cfg.params`, so it can vary anything exposed as a param —
  * which since design/55 includes generated per-record params, so most domain-record
  * fields ARE reachable:
- *   prop.<stateKey>.plannedSaleYear / .value / .appreciationRate
+ *   prop.<stateKey>.plannedSaleDate / .value / .appreciationRate
  *   acct.<stateKey>.growthRate / .interestRate / .minimumBalance / ...
- *   coll.<stateKey>.plannedSaleYear
+ *   coll.<stateKey>.plannedSaleDate
+ *   equity.<stateKey>.plannedSaleDate
  *   person.<id>.retirementDate / .monthlyWage
  * Run with a bogus --param to print the full list for a given scenario.
  *
- * NOT reachable: **company equity has no generated per-record params** — only the
- * single global `companySaleYear`, node-linked to `companyEquityAccount`. A scenario
- * with several tranches cannot sweep the 2nd or 3rd this way; script the cfg mutation
- * directly (see design/72 §4, which wants per-record company-equity params anyway).
+ * A sale date swept with --range takes years: each year Y runs the sale on 15 Jan of Y,
+ * the date a sale year always meant (design 117). A retired `companySaleYear` /
+ * `…plannedSaleYear` --param is read as its date successor.
  */
 
 import { readFileSync } from 'node:fs';
@@ -60,6 +60,7 @@ import { ServiceRegistry }     from '../../src/services/service-registry.js';
 import { BaseScenario }        from '../../src/scenarios/base-scenario.js';
 import { ScenarioLoader }      from '../../src/scenarios/scenario-loader.js';
 import { computeNetLiquidity } from '../../src/finance/derived-metrics/net-liquidity.js';
+import { migrateYearFieldsToDates, migratedParamKey, toSaleDate } from '../../src/scenarios/year-date-migration.js';
 import { parseFlags }          from '../lib/cli.mjs';
 
 // ─── CLI parsing ──────────────────────────────────────────────────────────────
@@ -68,8 +69,8 @@ const opts = parseFlags(process.argv.slice(2), {
   usage: 'npm run sweep -- <file.json> --param <name> (--range a:b | --values a,b,c)\n\n'
        + 'sweep-scenario — vary one param across a range and table the results.\n\n'
        + 'Run with a bogus --param to list every param in a given scenario. Since design/55\n'
-       + 'most domain-record fields are exposed (prop.*/acct.*/coll.*/person.*); company\n'
-       + 'equity is the exception — only the global companySaleYear.',
+       + 'most domain-record fields are exposed (prop.*/acct.*/coll.*/equity.*/person.*).\n'
+       + 'A sale date swept with --range takes years (each one 15 Jan of that year).',
   positional: { name: 'file', type: 'string', required: true, help: 'scenario export to sweep' },
   param:  { type: 'string', help: "param to vary (must exist in the scenario's params)" },
   range:  { type: 'string', help: 'inclusive numeric range, a:b' },
@@ -94,7 +95,11 @@ function runOne(baseCfg, param, value, endDate) {
   const cfg = structuredClone(baseCfg);
   let found = false;
   for (const p of (cfg.params ?? [])) {
-    if (p.name === param) { p.value = value; found = true; }
+    if (p.name !== param) continue;
+    // A Date param (a sale date, design 117) swept by year: the year's sale date.
+    if (p.type === 'Date' && typeof value === 'number') value = toSaleDate(value);
+    p.value = value;
+    found = true;
   }
   if (!found) return { missing: true };
   // Params are also read from cfg.parameters on some paths; keep both in step.
@@ -137,6 +142,10 @@ function main() {
   const cfg = Array.isArray(parsed.scenarios) ? parsed.scenarios[0]
             : Array.isArray(parsed)           ? parsed[0]
             : parsed;
+  // A saved plan may still carry sale YEARS; its params are dates now (design 117).
+  migrateYearFieldsToDates(cfg);
+  // `--param companySaleYear` (or a `…plannedSaleYear` key) names the date param now.
+  opts.param = migratedParamKey(opts.param) ?? opts.param;
 
   // `--values` arrives as strings; the sweep sets a numeric param.
   let values = opts.values?.map(Number);

@@ -32,14 +32,14 @@ import { resolvePurchasePrice, propertyNeedsPurchase, PROPERTY_PURCHASE_ORDER }
 
 const near = (a, b, eps = 1.0) => Math.abs(a - b) < eps;
 
-/** Add a downsize dwelling: bought in `purchaseYear`, stated in today's money. */
+/** Add a downsize dwelling: bought on `purchaseDate`, stated in today's money. */
 function addDownsize(cfg, over = {}) {
   cfg.realProperties.push({
     __type: 'RealProperty', name: 'Downsize', stateKey: 'downsizeProperty',
     country: 'AU', currency: { code: 'AUD', symbol: 'A$' },
     value: 0, costBasis: 0, appreciationRate: 0.04,
     isPrimaryResidence: false, ownershipType: 'joint', ownerId: 'primary',
-    purchaseYear: 2030, purchasePrice: 600_000,
+    purchaseDate: '2030-01-15', purchasePrice: 600_000,
     purchaseFundFrom: 'auSavingsAccount',
     ...over,
   });
@@ -64,12 +64,12 @@ describe('purchase price resolution', () => {
   });
 
   test('BUY-3: a purchase year with no price schedules nothing', () => {
-    // An authoring slip, not a free house — the same treatment plannedSaleYear gives a
+    // An authoring slip, not a free house — the same treatment plannedSaleDate gives a
     // property with no value.
-    assert.equal(propertyNeedsPurchase({ purchaseYear: 2030, purchasePrice: 0 }), false);
-    assert.equal(propertyNeedsPurchase({ purchaseYear: 2030, purchasePrice: null }), false);
-    assert.equal(propertyNeedsPurchase({ purchaseYear: null, purchasePrice: 600_000 }), false);
-    assert.equal(propertyNeedsPurchase({ purchaseYear: 2030, purchasePrice: 600_000 }), true);
+    assert.equal(propertyNeedsPurchase({ purchaseDate: '2030-01-15', purchasePrice: 0 }), false);
+    assert.equal(propertyNeedsPurchase({ purchaseDate: '2030-01-15', purchasePrice: null }), false);
+    assert.equal(propertyNeedsPurchase({ purchaseDate: null, purchasePrice: 600_000 }), false);
+    assert.equal(propertyNeedsPurchase({ purchaseDate: '2030-01-15', purchasePrice: 600_000 }), true);
   });
 
   test('BUY-4: the purchase settles AFTER the sale on the same date', () => {
@@ -186,7 +186,7 @@ describe('the purchase', () => {
     // forcing dormancy would strand it at 0 for the whole run.
     const { sim } = loadScenarioSim({
       simStart: '2026-01-01', simEnd: '2030-01-01', telemetry: 'off',
-      mutateCfg: (cfg) => addDownsize(cfg, { purchaseYear: 2010, value: 600_000 }),
+      mutateCfg: (cfg) => addDownsize(cfg, { purchaseDate: '2010-01-15', value: 600_000 }),
       stepTo: '2027-01-01',
     });
     assert.ok(sim.state.downsizeProperty.value > 0, 'an already-owned house is not dormant');
@@ -203,8 +203,8 @@ test('BUY-14: sell and buy in the same January — proceeds land before the cheq
     simStart: '2026-01-01', simEnd: '2036-01-01',
     mutateCfg: (cfg) => {
       const au = cfg.realProperties.find(p => p.stateKey === 'auHouseProperty');
-      au.plannedSaleYear = 2030;
-      addDownsize(cfg, { purchaseYear: 2030, purchasePrice: 400_000 });
+      au.plannedSaleDate = '2030-01-15';
+      addDownsize(cfg, { purchaseDate: '2030-01-15', purchasePrice: 400_000 });
     },
     stepTo: '2030-06-01',
   });

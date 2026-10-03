@@ -46,7 +46,8 @@ const SIM_END = new Date(Date.UTC(2036, 0, 1));
 
 /** The default plan, LOADED, with both houses on a planned sale. */
 function loadedCfg() {
-  return loadScenarioSim({ params: { auHouseSaleYear: 2030, usHouseSaleYear: 2028 },
+  return loadScenarioSim({ params: { 'prop.auHouseProperty.plannedSaleDate': '2030-01-15',
+                                     'prop.usHouseProperty.plannedSaleDate': '2028-01-15' },
                            simEnd: SIM_END, telemetry: 'off' }).cfg;
 }
 
@@ -72,6 +73,10 @@ function loadCell(ctx, overrides) {
 function offPlan(v, plan) {
   if (v.values?.length) return v.values.find(x => JSON.stringify(x) !== JSON.stringify(plan));
   if (typeof plan === 'boolean') return !plan;
+  // A date lever (a sale date, design 117): three years later, still inside the horizon.
+  if (typeof plan === 'string' && /^\d{4}-\d{2}-\d{2}/.test(plan)) {
+    return `${Number(plan.slice(0, 4)) + 3}${plan.slice(4, 10)}`;
+  }
   if (typeof plan !== 'number') return undefined;
   if (v.min != null && v.max != null) return Math.abs(v.max - plan) >= Math.abs(plan - v.min) ? v.max : v.min;
   if (v.integer || (Number.isInteger(plan) && plan > 1900 && plan < 2200)) return plan + 3;
@@ -81,8 +86,10 @@ function offPlan(v, plan) {
 test('LRS-1 a legacy-keyed lever centres on its generated successor\'s plan value', () => {
   const cfg = loadedCfg();
   const centers = resolveAliasCenters(cfg);
-  assert.strictEqual(centers.auHouseSaleYear, 2030);
-  assert.strictEqual(centers.usHouseSaleYear, 2028);
+  // The house sale YEARS are no aliases any more: their successors hold a date, so they
+  // are converted on the way in (design 117 phase 2) and no lever is keyed on them.
+  assert.strictEqual(centers.auHouseSaleYear, undefined);
+  assert.strictEqual(centers.usHouseSaleYear, undefined);
 
   const { ctx } = new IntlRetirementMcRunner({ simEnd: SIM_END, cfgTemplate: cfg })._prepare({});
   // Every lever keyed on a legacy alias whose successor has a plan value must have one too:
@@ -119,19 +126,23 @@ test('LRS-2 every MC variable and Opt / grid lever reaches the loaded sim', () =
     if (loadCell(ctx, { [key]: value }) === plan) inert.push(`${key} → ${JSON.stringify(value)}`);
   }
   assert.ok(tested > 50, `the gate exercised the lever list (tested ${tested})`);
+  assert.ok(levers.has('prop.auHouseProperty.plannedSaleDate')
+    && offPlan(levers.get('prop.auHouseProperty.plannedSaleDate'),
+      get(ctx.base, 'prop.auHouseProperty.plannedSaleDate')) !== undefined,
+    'a sale-DATE lever is in the gate, not skipped for being a string');
   assert.deepStrictEqual(inert, [], 'a lever whose value never reaches the loaded sim is silently inert');
 });
 
-test('LRS-3 an MC grid on the AU house sale year: the column moves the result', async () => {
+test('LRS-3 an MC grid on the AU house sale date: the column moves the result', async () => {
   const cfg  = loadedCfg();
   const grid = await new McGridRunner({
     simEnd: SIM_END, cfgTemplate: cfg, mode: GRID_MODES.DETERMINISTIC,
-    axes: [{ paramKey: 'auHouseSaleYear', values: [2029, 2033] }],
+    axes: [{ paramKey: 'prop.auHouseProperty.plannedSaleDate', values: ['2029-01-15', '2033-07-01'] }],
   }).run();
 
-  assert.deepStrictEqual(grid.planValues, [2030], 'the axis has the plan\'s value, so a reference cell');
+  assert.deepStrictEqual(grid.planValues, ['2030-01-15'], 'the axis has the plan\'s value, so a reference cell');
   const [a, b] = grid.cells.map(c => c.rows[0].nw);
-  assert.notStrictEqual(a, b, 'two sale years inside the horizon must not end on the same net worth');
+  assert.notStrictEqual(a, b, 'two sale dates inside the horizon must not end on the same net worth');
 });
 
 // The property's starting value is uncertain, not chosen: an MC lever (`mc: true`) but
@@ -142,7 +153,7 @@ test('LRS-4 a grid of AU house value × sale year: every cell is its own world',
   const cfg = loadedCfg();
   const { ctx } = new IntlRetirementMcRunner({ simEnd: SIM_END, cfgTemplate: cfg })._prepare({});
   const VALUE = 'prop.auHouseProperty.value';
-  const YEAR  = 'prop.auHouseProperty.plannedSaleYear';
+  const DATE  = 'prop.auHouseProperty.plannedSaleDate';
   const plan  = get(ctx.base, VALUE);
   assert.ok(plan > 0, 'the plan carries a starting value for the AU house');
 
@@ -155,30 +166,29 @@ test('LRS-4 a grid of AU house value × sale year: every cell is its own world',
 
   const grid = await new McGridRunner({
     simEnd: SIM_END, cfgTemplate: cfg, mode: GRID_MODES.DETERMINISTIC,
-    axes: [{ paramKey: VALUE, values: [plan * 0.8, plan] }, { paramKey: YEAR, values: [2030, 2033] }],
+    axes: [{ paramKey: VALUE, values: [plan * 0.8, plan] }, { paramKey: DATE, values: ['2030-01-15', '2033-01-15'] }],
   }).run();
 
-  assert.deepStrictEqual(grid.planValues, [plan, 2030]);
+  assert.deepStrictEqual(grid.planValues, [plan, '2030-01-15']);
   assert.ok(grid.referenceCell.exact, 'the plan cell is on the grid');
   const nw = grid.cells.map(c => c.rows[0].nw);
   assert.strictEqual(new Set(nw).size, 4, 'no two cells end on the same net worth');
   // Row-major, last axis fastest: [0.8×, 2030] [0.8×, 2033] [plan, 2030] [plan, 2033].
-  assert.ok(nw[2] > nw[0] && nw[3] > nw[1], 'a dearer house ends richer, in either sale year');
+  assert.ok(nw[2] > nw[0] && nw[3] > nw[1], 'a dearer house ends richer, on either sale date');
 });
 
-// One property's levers read as one group in both panel modes. The sale year is offered
-// under the legacy `auHouseSaleYear` key (it covers the generated one), so it must be
-// filed under the generated key's group, beside the same house's value.
-test('LRS-5 a house\'s value and sale year share one group, in the batch list and the grid axes', () => {
+// One property's levers read as one group in both panel modes: the sale date sits beside
+// the same house's value.
+test('LRS-5 a house\'s value and sale date share one group, in the batch list and the grid axes', () => {
   const cfg = loadedCfg();
   const { ctx } = new IntlRetirementMcRunner({ simEnd: SIM_END, cfgTemplate: cfg })._prepare({});
   const groupsIn = (rows) => Object.fromEntries(rows
-    .filter(v => ['prop.auHouseProperty.value', 'prop.auHouseProperty.plannedSaleYear'].includes(v.paramKey))
+    .filter(v => ['prop.auHouseProperty.value', 'prop.auHouseProperty.plannedSaleDate'].includes(v.paramKey))
     .map(v => [v.paramKey, v.group]));
   for (const [mode, rows] of [['batch', ctx.variables], ['grid', buildGridAxes(ctx.base, null, { cfg })]]) {
     const g = groupsIn(rows);
     assert.ok(g['prop.auHouseProperty.value'], `${mode}: the house value is offered`);
-    assert.strictEqual(g['prop.auHouseProperty.plannedSaleYear'], g['prop.auHouseProperty.value'],
-      `${mode}: the sale year sits in the house's own group`);
+    assert.strictEqual(g['prop.auHouseProperty.plannedSaleDate'], g['prop.auHouseProperty.value'],
+      `${mode}: the sale date sits in the house's own group`);
   }
 });

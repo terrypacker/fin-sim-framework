@@ -86,6 +86,7 @@ const BUILT_IN_TOOLSETS = [
  * calls the SAME function rather than a third copy (D7), and it cannot import this module.
  */
 import { synthesizeWeightedPriorities, resolveOwnerBanding } from './params/lever-weights.js';
+import { migrateYearFieldsToDates } from './year-date-migration.js';
 export { synthesizeWeightedPriorities } from './params/lever-weights.js';
 
 /**
@@ -134,6 +135,10 @@ export class ScenarioLoader {
   load(cfg, services) {
     if (!cfg) return;
 
+    // Design 117: sale and purchase YEARS are dates now. First, before anything reads a
+    // record or a param, so every later step sees one shape (idempotent).
+    migrateYearFieldsToDates(cfg);
+
     // Resolve scenarioId string → class so that _driftMergeDomainRecords and
     // _mergeParamSchema can apply scenario-level schema even for re-imported JSONs
     // (serializeScenario writes a string id; the class reference isn't serializable).
@@ -150,7 +155,7 @@ export class ScenarioLoader {
       // Design 63 §14: hoist each ACTIVE bequest's inherited brokerage / property /
       // collectible OUT of `cfg.bequests[].assets` into `cfg.accounts / realProperties
       // / collectibles` as tagged records — BEFORE the param cascade, so their
-      // per-record params (drawdownPriority, plannedSaleYear, rate overrides) cascade
+      // per-record params (drawdownPriority, plannedSaleDate, rate overrides) cascade
       // onto them like any owned record (the §14.4 load-order invariant). Retirement /
       // super stay inline. Runs after drift-merge (so drift-added bequests hoist too).
       this._promoteBequestAssets(cfg);
@@ -452,14 +457,14 @@ export class ScenarioLoader {
       return { list: cfg.realProperties, rec: {
         __type: 'RealProperty', name: asset.name ?? 'Inherited Home', stateKey: asset.stateKey,
         value: 0, appreciationRate: asset.appreciationRate ?? 0.04,
-        plannedSaleYear: asset.plannedSaleYear ?? null, ownerId, country, currency,
+        plannedSaleDate: asset.plannedSaleDate ?? null, ownerId, country, currency,
         isPrimaryResidence: false, ...inh } };
     }
     if (meta.category === 'collectible') {
       return { list: cfg.collectibles, rec: {
         __type: 'Collectible', name: asset.name ?? 'Inherited Collectible', stateKey: asset.stateKey,
         value: 0, appreciationRate: asset.appreciationRate ?? 0.035,
-        plannedSaleYear: asset.plannedSaleYear ?? null, isGold: asset.isGold ?? false,
+        plannedSaleDate: asset.plannedSaleDate ?? null, isGold: asset.isGold ?? false,
         ownerId, country, currency, ...inh } };
     }
     // Inherited RETIREMENT (design 63 §15, P8): IRA / 401(k) / Roth promote to a
@@ -587,7 +592,7 @@ export class ScenarioLoader {
     // When cfg.scenarioClass is unresolved (e.g. user-created scenarios whose
     // scenarioId is a user-generated "u:N" ID rather than the class ID
     // "intl-retirement"), fall back to ALL registered scenario classes so that
-    // params like usHouseSaleYear still cascade correctly.
+    // node-linked params still cascade correctly.
     const schemaNodeByKey = new Map();
     const schemasToSearch = cfg.scenarioClass
       ? [cfg.scenarioClass]
@@ -712,7 +717,7 @@ export class ScenarioLoader {
    * Extracted from `_applyParamAliases` so callers OUTSIDE the loader can resolve the
    * same renames the loader will perform. `applyParamBagToConfig` needs it: a param bag
    * from Monte Carlo or the optimizer is keyed by the LEGACY names (`stockBalance`,
-   * `usHouseSaleYear`), while the typed `cfg.params` entries have already been renamed
+   * `primaryMonthlyWage`), while the typed `cfg.params` entries have already been renamed
    * to their generated successors — so matching a bag key against `p.name` alone silently
    * drops every aliased lever.
    *
@@ -784,14 +789,14 @@ export class ScenarioLoader {
       }
     } else if (node.type === 'realProperty') {
       const rec = (cfg.realProperties ?? []).find(r => r.stateKey === node.stateKey);
-      // Round whole-number fields (dollar value, sale year) but NOT fractional
+      // Round whole-number fields (dollar value) but NOT fractional
       // rates like appreciationRate (design 55 property template) — Math.round on a
       // 0.04 rate would zero it, corrupting appreciation on Rebuild. A date-backed
       // lever (mainResidenceFromYear) writes its date field instead.
       if (rec) Object.assign(rec, recordFieldPatch(rec, node.field, val));
     } else if (node.type === 'collectible') {
-      // Same shape as realProperty: whole-number value / sale year, fractional rates
-      // passed through. Without this branch the generated `coll.<sk>.plannedSaleYear`
+      // Same shape as realProperty: whole-number value, a sale date as 'YYYY-MM-DD',
+      // fractional rates passed through. Without this branch the generated `coll.<sk>.plannedSaleDate`
       // param never reached its record, so the §6 harvest (which re-seeds a generated
       // param from its record) blanked the value on every Rebuild/reload — and the
       // collectible editor, whose sale-year field is param-owned, showed it empty.

@@ -72,7 +72,7 @@ household figures, which is why this lives in source control rather than under `
 
 `buildScenario` empties `companyEquities`, `collectibles` and `bequests` and then asserts they
 are empty. That is not tidiness: `buildDefaultConfig` ships a \$500k company-equity grant whose
-default `companySaleYear` is 2033, and the arms above put a crash in 2032 (§20.12). A scenario
+default sale date is 15 Jan 2033, and the arms above put a crash in 2032 (§20.12). A scenario
 that claims minimality has to assert it rather than perform it.
 
 ## Read it this way

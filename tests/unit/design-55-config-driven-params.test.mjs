@@ -97,9 +97,10 @@ test('D55-2: legacy flat key in cfg.parameters aliases to the generated key and 
 // ── Alias back-compat: persisted typed params (saved scenario) ──────────────────
 
 test('D55-3: persisted legacy typed param is renamed to its generated key and cascades', () => {
-  // Uses the property sale-year alias (a generated key that survives the holdings
-  // model — balance aliases now target a derived, non-generated field). Exercises the
-  // same rename + per-record group/label re-sync path (design 55 §4).
+  // Uses the property sale year (a generated key that survives the holdings model —
+  // balance aliases now target a derived, non-generated field). Since design 117 the
+  // rename also CONVERTS: the year becomes the sale date it always meant (15 Jan), and
+  // the entry re-syncs to the per-record group/label (design 55 §4).
   const cfg = freshCfg();
   cfg.params = [
     { name: 'usHouseSaleYear', label: 'US House Sale Year', type: 'Number',
@@ -109,15 +110,16 @@ test('D55-3: persisted legacy typed param is renamed to its generated key and ca
   loadCfg(cfg);
 
   assert.strictEqual(paramNamed(cfg, 'usHouseSaleYear'), undefined, 'legacy entry renamed away');
-  const gen = paramNamed(cfg, 'prop.usHouseProperty.plannedSaleYear');
+  const gen = paramNamed(cfg, 'prop.usHouseProperty.plannedSaleDate');
   assert.ok(gen, 'generated key present after rename');
+  assert.strictEqual(gen.value, '2035-01-15', 'the year converts to the date it always meant');
   assert.strictEqual(
-    (cfg.realProperties ?? []).find(r => r.stateKey === 'usHouseProperty').plannedSaleYear, 2_035,
+    (cfg.realProperties ?? []).find(r => r.stateKey === 'usHouseProperty').plannedSaleDate, '2035-01-15',
     'renamed entry still cascades');
   // The migrated entry adopts the per-record group/label (design 55 §4), not the
   // stale "Real Estate" group it carried as a static param.
   assert.strictEqual(gen.group, 'US · US House', 'migrated entry re-syncs to the per-record group');
-  assert.strictEqual(gen.label, 'US House — Planned Sale Year', 'migrated entry re-syncs its derived label');
+  assert.strictEqual(gen.label, 'US House — Planned Sale Date', 'migrated entry re-syncs its derived label');
 });
 
 // ── Editing a generated param drives the record and survives Rebuild (§6) ────────
@@ -171,25 +173,28 @@ test('D55-6: generated property appreciationRate round-trips (not rounded to 0)'
 
 // ── Collectible sale year cascades like a property's (regression) ────────────────
 
-test('D55-6b: generated collectible plannedSaleYear cascades and survives Rebuild', () => {
+test('D55-6b: generated collectible plannedSaleDate cascades and survives Rebuild', () => {
   const cfg = freshCfg();
   loadCfg(cfg);
 
-  const key = 'coll.collectibleAccount.plannedSaleYear';
-  assert.ok(paramNamed(cfg, key), 'collectible sale-year param generated');
+  const key = 'coll.collectibleAccount.plannedSaleDate';
+  assert.ok(paramNamed(cfg, key), 'collectible sale-date param generated');
 
-  // Edit the linked param (what the collectible editor does — its sale-year field is
+  // Edit the linked param (what the collectible editor does — its sale-date field is
   // param-owned, so the record is only ever written through this cascade).
-  paramNamed(cfg, key).value = 2_035;
+  paramNamed(cfg, key).value = '2035-06-30';
   loadCfg(cfg); // Rebuild
 
   const col = (cfg.collectibles ?? []).find(c => c.stateKey === 'collectibleAccount');
-  assert.strictEqual(col.plannedSaleYear, 2_035, 'sale year cascaded onto the collectible record');
-  assert.strictEqual(paramNamed(cfg, key).value, 2_035,
+  assert.strictEqual(col.plannedSaleDate, '2035-06-30', 'sale date cascaded onto the collectible record');
+  assert.strictEqual(paramNamed(cfg, key).value, '2035-06-30',
     'param value survives the §6 harvest (no blank-out on Rebuild)');
   // The cascade is what makes the sale actually happen.
   assert.ok((cfg.events ?? []).some(e => e.type === 'COLLECTIBLE_SALE'),
-    'a COLLECTIBLE_SALE event is scheduled for the planned year');
+    'a COLLECTIBLE_SALE event is scheduled for the planned date');
+  const sale = (cfg.events ?? []).find(e => e.type === 'COLLECTIBLE_SALE');
+  assert.strictEqual(new Date(sale.date).toISOString().slice(0, 10), '2035-06-30',
+    'and it fires on that day, not on 15 Jan of its year (design 117)');
 });
 
 // ── Orphan generated params are de-generated on Rebuild (§14) ────────────────────

@@ -19,6 +19,7 @@ import { UsRentalIncomeHandler, UsRentalIncomeApplyReducer } from '../../finance
 import { AssetAppreciationHandler } from '../../finance/handlers/asset-appreciation-handler.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
 import { USD, AUD } from '../../finance/assets/account.js';
+import { saleDateToUtc, yearOfDate } from '../year-date-migration.js';
 
 const US_REAL_PROPERTY_APPRECIATE_TYPE = 'US_REAL_PROPERTY_APPRECIATE';
 
@@ -41,7 +42,7 @@ const _rentalParams = (p) => ({
  *
  * Schedules:
  *   One-off US_HOUSE_SALE event for each US real property whose
- *   plannedSaleYear is set.  The sale price is the property's value on the
+ *   plannedSaleDate is set.  The sale price is the property's value on the
  *   sale date (UsHouseSaleHandler reads state), so it carries the appreciation
  *   and return path from the authored starting value.
  *
@@ -164,11 +165,11 @@ export const US_REAL_PROPERTY = {
   schedules(context) {
     const usProps = (context.realProperties ?? []).filter(p => p.country === 'US');
     const schedules = usProps
-      .filter(p => p.plannedSaleYear != null)
+      .filter(p => p.plannedSaleDate != null)
       .map(p => new OneOffEvent({
         name:    `Sell ${p.name}`,
         type:    'US_HOUSE_SALE',
-        date:    new Date(Date.UTC(p.plannedSaleYear, 0, 15)),
+        date:    saleDateToUtc(p.plannedSaleDate),
         data:    { costBasis: p.costBasis, stateKey: p.stateKey, saleDestinationAccount: p.saleDestinationAccount },
         enabled: true,
         color:   '#795548',
@@ -183,10 +184,10 @@ export const US_REAL_PROPERTY = {
       schedules.push(new OneOffEvent({
         name:    `Buy ${p.name}`,
         type:    'US_HOUSE_PURCHASE',
-        date:    new Date(Date.UTC(p.purchaseYear, 0, 15)),
+        date:    saleDateToUtc(p.purchaseDate),
         order:   PROPERTY_PURCHASE_ORDER,
-        data:    { stateKey: p.stateKey, purchaseYear: p.purchaseYear,
-                   startYear: new Date(context.startDate ?? Date.UTC(p.purchaseYear, 0, 1)).getUTCFullYear() },
+        data:    { stateKey: p.stateKey, purchaseDate: p.purchaseDate,
+                   startYear: yearOfDate(context.startDate ?? p.purchaseDate) },
         enabled: true,
         color:   '#6D4C41',
       }));
@@ -294,14 +295,14 @@ function _startYear(context) {
 }
 
 /**
- * Is this dwelling not yet owned when the run begins? A purchase year at or after the
- * start means the property is bought DURING the run and must project dormant; a
- * purchase year in the past describes a house already owned, whose event would never
+ * Is this dwelling not yet owned when the run begins? A purchase date in or after the
+ * start year means the property is bought DURING the run and must project dormant; a
+ * purchase date in the past describes a house already owned, whose event would never
  * fire, so it projects at its authored value as before.
  */
 function _dormantAtStart(prop, startYear) {
-  return prop?.purchaseYear != null && (prop?.purchasePrice ?? 0) > 0
-      && (startYear == null || prop.purchaseYear >= startYear);
+  return prop?.purchaseDate != null && (prop?.purchasePrice ?? 0) > 0
+      && (startYear == null || yearOfDate(prop.purchaseDate) >= startYear);
 }
 
 function _propertyToStatePlain(prop, startYear) {
@@ -343,12 +344,12 @@ function _propertyToStatePlain(prop, startYear) {
     mainResidenceFrom:   prop.mainResidenceFrom  ?? null,
     mainResidenceUntil:  prop.mainResidenceUntil ?? null,
     acquisitionDate:     prop.acquisitionDate    ?? null,
-    purchaseYear:        prop.purchaseYear       ?? null,
+    purchaseDate:        prop.purchaseDate       ?? null,
     purchasePrice:       prop.purchasePrice      ?? null,
     purchaseFundFrom:    prop.purchaseFundFrom   ?? null,
     purchasePriceIsNominal: prop.purchasePriceIsNominal ?? false,
     claimDownsizerContribution: prop.claimDownsizerContribution ?? false,
-    plannedSaleYear:     prop.plannedSaleYear    ?? null,
+    plannedSaleDate:     prop.plannedSaleDate    ?? null,
     ownershipType:       prop.ownershipType      ?? 'sole',
     ownerId:             prop.ownerId            ?? null,
     // Design 76 Gap A — see the AU sibling; owners[] outranks sole/joint.

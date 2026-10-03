@@ -92,7 +92,7 @@ function purchaseAction({ rentalEnabled }) {
                purchasePrice: 900000, rentalEnabled },
   } });
   const h = new AuPropertyPurchaseHandler({ stateRegistry: registry });
-  const actions = h.call({ data: { stateKey: 'auHouse', purchaseYear: 2030, startYear: 2026 }, state });
+  const actions = h.call({ data: { stateKey: 'auHouse', purchaseDate: '2030-01-15', startYear: 2026 }, state });
   return { state, apply: actions.find(a => a.type === 'PROPERTY_PURCHASE_APPLY') };
 }
 

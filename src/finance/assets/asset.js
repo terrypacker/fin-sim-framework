@@ -40,12 +40,30 @@ export class Asset extends SimGraphNode {
     this.drawdownPriority = opts.drawdownPriority ?? null;
     // Design 88 D1/D3: "simulate this, but do not count it as mine." SUPPRESSES THE
     // CARRYING VALUE, NEVER THE MECHANICS — the asset still appreciates, still sells
-    // on its plannedSaleYear, still pays CGT, and its proceeds are recognised in full
+    // on its plannedSaleDate, still pays CGT, and its proceeds are recognised in full
     // from the instant they land in an account. Lives on the base because a
     // pre-construction property and an unauthenticated artwork are speculative in
     // exactly the same sense as a private stake. Absent ⇒ false ⇒ today's behaviour.
     this.speculative      = opts.speculative === true;
     assertSpeculativeConsistency(this);
+    rejectRetiredYearFields(opts, name);
+  }
+}
+
+/**
+ * Design 117 phase 2: the sale and purchase YEARS became dates (`plannedSaleDate`,
+ * `purchaseDate`). Every saved plan is converted on load (year-date-migration.js), so a
+ * year reaching a constructor is a path that skipped the migration. Throw: an ignored
+ * `plannedSaleYear` would be a sale that silently never happens.
+ *
+ * @throws {Error} when `opts` still carries a retired year field
+ */
+export function rejectRetiredYearFields(opts, name = '') {
+  for (const [old, now] of [['plannedSaleYear', 'plannedSaleDate'], ['purchaseYear', 'purchaseDate']]) {
+    if (opts?.[old] !== undefined) {
+      throw new Error(`Asset "${name || opts?.stateKey || '?'}": \`${old}\` is retired (design 117); `
+        + `use \`${now}\` ('YYYY-MM-DD'). A saved plan is converted on load by migrateYearFieldsToDates.`);
+    }
   }
 }
 
@@ -55,7 +73,7 @@ export class Asset extends SimGraphNode {
  * model must not quietly fund a grocery bill from it. Reject rather than silently
  * pick a winner.
  *
- * This does NOT conflict with a scheduled sale: an explicit `plannedSaleYear` is
+ * This does NOT conflict with a scheduled sale: an explicit `plannedSaleDate` is
  * the planner stating an assumption, whereas opportunistic liquidation by the
  * drawdown engine is the model making one up. Only the second is prevented.
  *

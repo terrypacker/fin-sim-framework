@@ -561,7 +561,7 @@ test('copy of an original with an EDITED company equity runs identically', () =>
   assertCopyMatchesEditedOriginal('companyEquities', (cfg) => {
     assert.ok(cfg.companyEquities?.length, 'reference scenario must carry a company equity');
     cfg.companyEquities[0].value           = 2_000_000;
-    cfg.companyEquities[0].plannedSaleYear = 2032;
+    cfg.companyEquities[0].plannedSaleDate = '2032-01-15';
   });
 });
 

@@ -334,10 +334,10 @@ function makeAssetParamScenario() {
   const scenario = new BaseScenario({
     context: sr.simulationContext,
     params: [
-      { name: 'coll.collectibleAccount.plannedSaleYear', type: 'Number', value: null,
-        node: { type: 'collectible', stateKey: 'collectibleAccount', field: 'plannedSaleYear' } },
-      { name: 'prop.usHouseProperty.plannedSaleYear', type: 'Number', value: null,
-        node: { type: 'realProperty', stateKey: 'usHouseProperty', field: 'plannedSaleYear' } },
+      { name: 'coll.collectibleAccount.plannedSaleDate', type: 'Date', value: null,
+        node: { type: 'collectible', stateKey: 'collectibleAccount', field: 'plannedSaleDate' } },
+      { name: 'prop.usHouseProperty.plannedSaleDate', type: 'Date', value: null,
+        node: { type: 'realProperty', stateKey: 'usHouseProperty', field: 'plannedSaleDate' } },
       { name: 'prop.usHouseProperty.appreciationRate', type: 'Number', value: 0.04,
         node: { type: 'realProperty', stateKey: 'usHouseProperty', field: 'appreciationRate' } },
     ],
@@ -347,20 +347,28 @@ function makeAssetParamScenario() {
 
 test('applyParams: cascades a collectible field via its node declaration', () => {
   const { scenario, sr } = makeAssetParamScenario();
-  scenario.applyParams({ 'coll.collectibleAccount.plannedSaleYear': 2035 });
+  scenario.applyParams({ 'coll.collectibleAccount.plannedSaleDate': '2035-01-15' });
   const col = sr.collectibleService.getAll().find(c => c.stateKey === 'collectibleAccount');
-  assert.strictEqual(col.plannedSaleYear, 2035);
+  assert.strictEqual(col.plannedSaleDate, '2035-01-15');
 });
 
-test('applyParams: rounds whole-number asset fields but not fractional rates', () => {
+test('applyParams: a sale date lands as YYYY-MM-DD; a fractional rate is not rounded', () => {
   const { scenario, sr } = makeAssetParamScenario();
   scenario.applyParams({
-    'prop.usHouseProperty.plannedSaleYear':  2035.4,
+    'prop.usHouseProperty.plannedSaleDate':  '2035-03-15T00:00:00.000Z',
     'prop.usHouseProperty.appreciationRate': 0.04,
   });
   const prop = sr.realPropertyService.getAll().find(r => r.stateKey === 'usHouseProperty');
-  assert.strictEqual(prop.plannedSaleYear, 2035, 'sale year rounds to a whole year');
+  assert.strictEqual(prop.plannedSaleDate, '2035-03-15', 'the record keeps its day form');
   assert.strictEqual(prop.appreciationRate, 0.04, 'fractional rate is not rounded to 0');
+});
+
+test('applyParams: a legacy sale-YEAR key reaches the record as its 15 Jan date (design 117)', () => {
+  const { scenario, sr } = makeAssetParamScenario();
+  scenario.applyParams({ 'coll.collectibleAccount.plannedSaleYear': 2036 });
+  const col = sr.collectibleService.getAll().find(c => c.stateKey === 'collectibleAccount');
+  assert.strictEqual(col.plannedSaleDate, '2036-01-15');
+  assert.strictEqual(col.plannedSaleYear, undefined, 'no dead year field is written');
 });
 
 // ─── rebuild ──────────────────────────────────────────────────────────────────

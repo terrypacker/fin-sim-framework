@@ -58,7 +58,7 @@ function run(mutate) {
   const cfg = registry.scenarioService.getActive();
 
   const usHouse = (cfg.realProperties ?? []).find(p => p.stateKey === 'usHouseProperty');
-  usHouse.plannedSaleYear = 2035;            // sell 4 years after the 2031 move
+  usHouse.plannedSaleDate = '2035-01-15';    // sell 4 years after the 2031 move
   mutate?.(usHouse);
 
   new ScenarioLoader().load(cfg, registry);

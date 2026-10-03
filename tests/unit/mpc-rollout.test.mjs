@@ -27,7 +27,7 @@ import { OptimizationProblem } from '../../src/finance/optimization/optimization
 
 const RICH_PARAMS = {
   moveYear:        2031,   // US→AU residency change on Jul 1 2031 (post-snapshot)
-  usHouseSaleYear: 2033,   // planned property sale (post-snapshot, post-move)
+  'prop.usHouseProperty.plannedSaleDate': '2033-01-15',   // planned property sale (post-snapshot, post-move)
 };
 
 // Metrics that span many independent state dimensions — a lost or mis-fired

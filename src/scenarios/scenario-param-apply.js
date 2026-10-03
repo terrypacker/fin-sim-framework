@@ -9,14 +9,14 @@
  */
 
 import { ScenarioLoader } from './scenario-loader.js';
-import { applyRealPropertySaleYearParams } from './intl-retirement-scenario.js';
+import { migrateYearFieldsToDates, migrateParamBag } from './year-date-migration.js';
 import { scenarioParamValues } from '../finance/param-schema-utils.js';
 import { ScenarioParamGenerator } from './params/scenario-param-generator.js';
 
 /**
  * The record's own value for every generated per-record MC/Opt lever, keyed by its
  * generated key (`acct.<sk>.balanceTarget`, `person.<id>.monthlyWage`,
- * `prop.<sk>.plannedSaleYear`, …) — including an explicit `null` for a blank one.
+ * `prop.<sk>.plannedSaleDate`, …) — including an explicit `null` for a blank one.
  *
  * Layer it UNDER the cfg's own params, never over: a typed param the user edited since
  * the last Rebuild is fresher than the record it will cascade onto. What it adds is the
@@ -41,6 +41,8 @@ import { ScenarioParamGenerator } from './params/scenario-param-generator.js';
  */
 export function resolveRecordCenters(cfg) {
   if (!cfg) return {};
+  // An unloaded cfg may still carry sale YEARS (design 117); its levers are dates now.
+  migrateYearFieldsToDates(cfg);
   const centers = {};
   for (const e of ScenarioParamGenerator.generate(cfg)) {
     // `node`-less entries (pool / gate / shape axes) are not record fields; their centers
@@ -154,15 +156,15 @@ function reconcileAliasPairs(cfg, params) {
  */
 export function applyParamBagToConfig(cfg, params) {
   if (!cfg || !params) return cfg;
+  // Design 117: this runs BEFORE the loader, so convert both sides here — a legacy cfg
+  // would not yet have the `plannedSaleDate` entries a new bag names, and a saved bag
+  // (an old MC run's params) may still name a sale YEAR.
+  migrateYearFieldsToDates(cfg);
+  params = migrateParamBag(params, { planOf: (key) => templateValue(cfg, key) });
   params = reconcileAliasPairs(cfg, params);
 
   // The flat map: carries aliased, nested and untyped keys into the loader.
   cfg.parameters = { ...(cfg.parameters ?? {}), ...params };
-
-  // Real property sale years reach cfg.realProperties through the alias + generated-key
-  // cascade above, but the direct patch is kept: it is what the MC path has always done,
-  // and a scenario whose class cannot be resolved gets no aliases at all.
-  applyRealPropertySaleYearParams(cfg, params);
 
   // The typed array, which the loader syncs over the flat map. Alias-aware: a typed entry
   // already renamed to its generated key still takes the bag's legacy value.

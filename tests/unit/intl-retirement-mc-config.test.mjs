@@ -171,14 +171,14 @@ test('resolveRecordCenters: every account balance, under the generated key its l
   assert.ok(!('stockBalance' in centers) && !('rothBalance' in centers));
 });
 
-test('resolveRecordCenters: a person\'s wage and a blank sale year, from the records', () => {
+test('resolveRecordCenters: a person\'s wage and a blank sale date, from the records', () => {
   const centers = resolveRecordCenters({
     persons: [{ id: 'alex', name: 'Alex', monthlyWage: 9_000 }],
-    realProperties: [{ stateKey: 'cabin', name: 'Cabin', country: 'US', plannedSaleYear: null }],
+    realProperties: [{ stateKey: 'cabin', name: 'Cabin', country: 'US', plannedSaleDate: null }],
   });
   assert.strictEqual(centers['person.alex.monthlyWage'], 9_000);
-  assert.ok('prop.cabin.plannedSaleYear' in centers, 'a blank sale year is carried …');
-  assert.strictEqual(centers['prop.cabin.plannedSaleYear'], null, '… as an explicit null');
+  assert.ok('prop.cabin.plannedSaleDate' in centers, 'a blank sale date is carried …');
+  assert.strictEqual(centers['prop.cabin.plannedSaleDate'], null, '… as an explicit null');
 });
 
 test('resolveRecordCenters: tolerates a missing/empty cfg', () => {

@@ -15,7 +15,7 @@
  * EVT-51  Company Sale   − basis   US: capital gain (LTCG)   AU: capital gain if resident
  *
  * The CompanyEquity asset sits on the balance sheet (kind: 'company'), appreciates
- * annually, and liquidates at plannedSaleYear via the COMPANY_SALE →
+ * annually, and liquidates on plannedSaleDate via the COMPANY_SALE →
  * COMPANY_SALE_APPLY → COMPANY_SALE_TAX pathway owned by US_INCOME + US_TAX.
  */
 
@@ -56,7 +56,7 @@ function usCompanyConfig(overrides = {}) {
       {
         __type: 'CompanyEquity', id: 'com1', name: 'Startup Equity',
         value: 500_000, costBasis: 50_000, appreciationRate: 0,
-        plannedSaleYear: 2027, ownershipType: 'sole', ownerId: 'primary',
+        plannedSaleDate: '2027-01-15', ownershipType: 'sole', ownerId: 'primary',
         country: 'US', stateKey: 'companyEquityAccount',
         ...overrides,
       },
@@ -95,7 +95,7 @@ function auCompanyConfig() {
       {
         __type: 'CompanyEquity', id: 'com1', name: 'Startup Equity',
         value: 500_000, costBasis: 50_000, appreciationRate: 0,
-        plannedSaleYear: 2027, ownershipType: 'sole', ownerId: 'primary',
+        plannedSaleDate: '2027-01-15', ownershipType: 'sole', ownerId: 'primary',
         country: 'US', stateKey: 'companyEquityAccount',
       },
     ],
@@ -211,14 +211,14 @@ test('EVT-51: company sale records gain as AU capital gain + FTC if AU resident'
 
 test('EVT-51: company equity appreciates before the sale year', () => {
   // No sale — verify the stake grows year over year.
-  const { sim } = loadToolsetScenario(usCompanyConfig({ appreciationRate: 0.10, plannedSaleYear: null }));
+  const { sim } = loadToolsetScenario(usCompanyConfig({ appreciationRate: 0.10, plannedSaleDate: null }));
   assert.doesNotThrow(() => sim.stepTo(new Date(Date.UTC(2029, 0, 31))));
   assert.ok(sim.state.companyEquityAccount.value > 500_000,
     'appreciating stake should exceed its initial value after several years');
 });
 
 test('EVT-51: an appreciated company sale sells at the grown value (gain > nominal)', () => {
-  const { sim } = loadToolsetScenario(usCompanyConfig({ appreciationRate: 0.10, plannedSaleYear: 2030 }));
+  const { sim } = loadToolsetScenario(usCompanyConfig({ appreciationRate: 0.10, plannedSaleDate: '2030-01-15' }));
   assert.doesNotThrow(() => sim.stepTo(new Date(Date.UTC(2031, 0, 31))));
 
   const applyEntries = sim.journal.getActions('COMPANY_SALE_APPLY');

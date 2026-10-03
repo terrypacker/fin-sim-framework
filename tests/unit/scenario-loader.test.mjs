@@ -555,12 +555,12 @@ test('toolset params: cfg.params[].description is propagated from schema for UI 
     'k401ToIraConversionEnabled.description must be populated from US_RETIREMENT.paramSchema');
 
   // Scenario-owned key (node-bound) — description must come from the scenario schema.
-  // (Per-record balance/wage/min-balance params are now generated from records and
-  // carry no description; companySaleYear is a retained static node-bound param.)
-  const saleYear = cfg.params.find(p => p.name === 'companySaleYear');
-  assert.ok(saleYear);
-  assert.ok(saleYear.description && saleYear.description.length > 0,
-    'companySaleYear.description must be populated from the scenario schema');
+  // (Per-record balance/wage/min-balance/sale-date params are generated from records;
+  // residencyState is a retained static node-bound param.)
+  const residency = cfg.params.find(p => p.name === 'residencyState');
+  assert.ok(residency);
+  assert.ok(residency.description && residency.description.length > 0,
+    'residencyState.description must be populated from the scenario schema');
 });
 
 test('toolset params: drift guard backfills missing description on pre-existing cfg.params entries', () => {
@@ -570,9 +570,9 @@ test('toolset params: drift guard backfills missing description on pre-existing 
   const cfg = freshDeclarativeConfig();
   cfg.scenarioClass = IntlRetirementScenario;
   cfg.params = [
-    { name: 'companySaleYear', label: 'Company Sale Year',
-      type: 'Number', group: 'Company Equity', value: 2035,
-      node: { type: 'companyEquity', stateKey: 'companyEquityAccount', field: 'plannedSaleYear' } },
+    { name: 'residencyState', label: 'US Residency State',
+      type: 'Enum', group: 'US Tax', value: 'CA',
+      node: { type: 'person', id: 'primary', field: 'residencyState' } },
     // saved value the user edited — must not be reset by backfill
     { name: 'monthlyExpenses', label: 'Monthly Expenses (USD)',
       type: 'Number', group: 'US Retirement', value: 7500 },
@@ -580,8 +580,8 @@ test('toolset params: drift guard backfills missing description on pre-existing 
 
   loadIntoFreshServices(cfg);
 
-  const saleYear = cfg.params.find(p => p.name === 'companySaleYear');
-  assert.ok(saleYear?.description?.length > 0,
+  const residency = cfg.params.find(p => p.name === 'residencyState');
+  assert.ok(residency?.description?.length > 0,
     'scenario-schema description should be backfilled onto pre-existing entries');
 
   const expenses = cfg.params.find(p => p.name === 'monthlyExpenses');

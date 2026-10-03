@@ -150,7 +150,7 @@ test('DOWN-11: end to end — selling the AU dwelling moves A$300k into super', 
     simStart: '2026-01-01', simEnd: '2040-01-01',
     mutateCfg: (cfg) => {
       const au = cfg.realProperties.find(p => p.stateKey === 'auHouseProperty');
-      au.plannedSaleYear = 2036;                    // primary is 55+ by then
+      au.plannedSaleDate = '2036-01-15';                    // primary is 55+ by then
       au.acquisitionDate = Date.UTC(2006, 0, 1);    // a thirty-year hold
       au.mainResidenceFrom = Date.UTC(2028, 0, 1);  // moved in after returning
       au.claimDownsizerContribution = claim;

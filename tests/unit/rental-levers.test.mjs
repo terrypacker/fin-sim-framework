@@ -35,7 +35,7 @@ const RENT = 'prop.auHouseProperty.monthlyRent';
 const OCC  = 'prop.auHouseProperty.occupancyRate';
 
 const prop = (extra) => ({ stateKey: 'h', name: 'H', country: 'AU', value: 800000,
-                           appreciationRate: 0.03, plannedSaleYear: null, ...extra });
+                           appreciationRate: 0.03, plannedSaleDate: null, ...extra });
 
 test('RL-1 the rent levers are generated, linked and seeded only for a rental', () => {
   const keysOf = (p) => ScenarioParamGenerator.generate({ realProperties: [p] }).map(e => e.key);
@@ -62,7 +62,7 @@ test('RL-2 occupancy outside [0, 1] is clamped — a rate sweep around 0.95 draw
 
 function rentalCfg() {
   return loadScenarioSim({
-    params: { auHouseSaleYear: 2031 }, simEnd: SIM_END, telemetry: 'off',
+    params: { 'prop.auHouseProperty.plannedSaleDate': '2031-01-15' }, simEnd: SIM_END, telemetry: 'off',
     mutateCfg: (cfg) => {
       const h = cfg.realProperties.find(p => p.stateKey === 'auHouseProperty');
       Object.assign(h, { rentalEnabled: true, monthlyRent: 3000, occupancyRate: 0.9 });

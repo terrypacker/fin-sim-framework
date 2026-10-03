@@ -188,10 +188,10 @@ export class BequestEditor extends BaseComponent {
       const mode = this._select(row, 'RA strategy', STRATEGIES, a.distributionMode ?? '', true);
       this.listen(mode, 'change', () => { a.distributionMode = mode.value || undefined; });
 
-      // Sale year (design 63 §13): a set year liquidates an inherited real property
-      // / collectible to cash. Ignored for account types.
-      const sale = this._field(row, 'Sale year (property/collectible)', 'number', a.plannedSaleYear ?? '', true);
-      this.listen(sale, 'input', () => { a.plannedSaleYear = sale.value === '' ? null : Math.round(Number(sale.value)); });
+      // Sale date (design 63 §13; a date since design 117): a set date liquidates an
+      // inherited real property / collectible to cash. Ignored for account types.
+      const sale = this._field(row, 'Sale date (property/collectible)', 'date', a.plannedSaleDate ?? '', true);
+      this.listen(sale, 'change', () => { a.plannedSaleDate = sale.value || null; });
 
       const rm = this._el('button', { type: 'button', class: 'btn btn-danger btn-sm', text: '×' });
       this.listen(rm, 'click', () => { this._assets.splice(i, 1); this._renderAssets(); });

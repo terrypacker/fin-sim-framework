@@ -54,7 +54,8 @@ function arm(name, { speculative, saleYear = null }) {
     name,
     simStart:  new Date(Date.UTC(2026, 0, 1)),
     simEnd:    SIM_END,
-    ...(saleYear != null ? { params: { companySaleYear: saleYear } } : {}),
+    ...(saleYear != null
+      ? { params: { 'equity.companyEquityAccount.plannedSaleDate': `${saleYear}-01-15` } } : {}),
     mutateCfg: cfg => { cfg.companyEquities[0].speculative = speculative; },
   };
   return runGolden(spec);

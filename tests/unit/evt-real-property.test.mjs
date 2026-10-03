@@ -107,7 +107,7 @@ const US_HOUSE_JSON = {
       ownerId: "primary",
       owners: [],
       ownershipType: "joint",
-      plannedSaleYear: 2027,
+      plannedSaleDate: '2027-01-15',
       saleDestinationAccount: "usSavingsAccount",
       stateKey: "usHouseProperty",
       value: 1000000
@@ -170,7 +170,7 @@ const AU_HOUSE_JSON = {
       ownerId: "primary",
       owners: [],
       ownershipType: "joint",
-      plannedSaleYear: 2027,
+      plannedSaleDate: '2027-01-15',
       saleDestinationAccount: "auSavingsAccount",
       stateKey: "auHouseProperty",
       value: 1200000
@@ -243,7 +243,7 @@ const CROSS_BORDER_HOUSE_JSON = {
       ownerId: "primary",
       owners: [],
       ownershipType: "joint",
-      plannedSaleYear: 2027,
+      plannedSaleDate: '2027-01-15',
       saleDestinationAccount: "auSavingsAccount",
       stateKey: "auHouseProperty",
       value: 1200000
