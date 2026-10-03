@@ -16,6 +16,7 @@ import {
   RothConversionHandler, RothConversionPolicyHandler,
 } from '../../finance/account-rules/us/roth-conversion-classes.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
+import { lastWorkDate } from '../../finance/payroll/employment.js';
 
 // Base year for the per-year income-target schedule (design 39 §12.3): real
 // targets are quoted in this year's USD and compounded by inflation, matching
@@ -262,8 +263,9 @@ export const US_ROTH_CONVERSION = {
     const toFiniteYear = (v, fallback) =>
       (typeof v === 'number' && Number.isFinite(v)) ? v : fallback;
 
-    const defaultStartYear = primary?.retirementDate
-      ? new Date(primary.retirementDate).getUTCFullYear()
+    const primaryWorkEnd   = primary ? lastWorkDate(primary, context.spellsByPerson) : null;
+    const defaultStartYear = primaryWorkEnd
+      ? new Date(primaryWorkEnd).getUTCFullYear()
       : context.startDate.getUTCFullYear();
     const defaultEndYear = new Date(primary?.birthDate ?? context.startDate).getUTCFullYear() + 72;
 

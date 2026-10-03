@@ -1,7 +1,7 @@
 # 116 — Employment spells: more than one job per person
 
-**Status:** PROPOSED, 2 Oct 2026. Decisions in §3 were taken with the author; Q1 and Q3 are
-answered (D6, D7) and Q2 is open with one constraint (§10). Not built.
+**Status:** IN PROGRESS, 3 Oct 2026. Phase 1 (engine) BUILT — see §11. Decisions in §3 were
+taken with the author; Q1 and Q3 are answered (D6, D7) and Q2 is open with one constraint (§10).
 D6 (Social Security decoupled from work) moved to design 118 as its phase 1, 2 Oct 2026:
 the claim age it defers to cannot be defined while `retirementDate` also gates payment.
 Phase 4's date sweeps needed the optimizer to gain a Date variable type. Design 117 phase 1
@@ -101,7 +101,7 @@ exact-match.
 ### 4.3 State for a person with spells
 
 ```
-state.people[id].spells = [{ id, start, end, baseMonthlyWage, realGrowth,
+state.people[id].spells = [{ id, startMs, endMs, baseMonthlyWage, realGrowth,
                               wageCurrency, workCountry, selfEmployed, ...employerTerms }]
 state.wageIndex = { US, AU }   // written only when some person has spells
 ```
@@ -111,6 +111,9 @@ state.wageIndex = { US, AU }   // written only when some person has spells
   `person-projection.js` already documents).
 - `state.wageIndex[cc]` starts at 1 and is advanced by `InflationAdjustReducer` on
   `US_PERIOD_ADVANCE` at the same `rateFor(cc)` it uses for wages today.
+
+`startMs`/`endMs` are epoch ms (the `ssEntitledMs` convention). An empty `startDate` is
+projected as the run's start, which is also the anchor `realGrowth` compounds from.
 
 **Why a new index and not `inflationAccumulator`.** `inflationAccumulator.AU` advances only on
 `AU_PERIOD_ADVANCE`, and the AU period only starts at a move. Today an AUD wage inflates from
@@ -266,8 +269,9 @@ Recorded so a later design starts from the list:
 - **FICA.** Each employer withholds Social Security up to the wage base, and the excess is a
   credit on the return (§31(b)). With D3 a mid-year job change is modelled as one cumulative
   base per person: the tax is right, but the cash timing of the over-withholding refund is
-  not modelled. Phase 1 should confirm how `computePayroll` accumulates the base, and record
-  it as built.
+  not modelled. **Confirmed in phase 1:** `computePayroll` withholds against
+  `state.usSsWagesByPersonYTD[personKey]`, a per-PERSON running total, so a second job in
+  the same year continues from the first job's base rather than restarting at 0.
 - **401(k) limits.** §402(g) applies per person, as now. §415(c) applies per employer, and
   the model's per-person cap is conservative for someone who changes employer mid-year.
 - **Super Guarantee.** The s10A maximum contributions base applies per employer per quarter.
@@ -284,3 +288,35 @@ Recorded so a later design starts from the list:
   a boundary is named as a sweep variable, are still to decide. This blocks only phase 4's date
   sweeps.
 - **Q3 — answered: D7.** Real growth is per spell.
+
+## 11. Build log
+
+### Phase 1 — engine (3 Oct 2026)
+
+- **Storage.** `cfg.jobs` is plain authored scenario data, like `cfg.securities` and
+  `cfg.corporateActions`: one store, no service copy. `serializeScenario` emits it only when
+  non-empty, so a scenario without jobs round-trips byte-for-byte. The compiler resolves it
+  once into `context.spellsByPerson` (`buildSpellsByPerson`), which the three people
+  projections and the compile-time readers share.
+- **Resolver.** `src/finance/payroll/employment.js`, a leaf (no imports): `spellAt`,
+  `wageAt`, `earnerView`, `everEarns`, `lastWorkDate`, `buildSpells`, `validateJobs`. Each
+  takes either a state person (which carries `spells`) or a Person plus `spellsByPerson`.
+  `earnerView` returns a legacy earner as the SAME object, which is why the payroll pipeline
+  is byte-identical without a second code path.
+- **Validation.** `ScenarioLoader.load` throws before deserializing anything on an overlap,
+  `endDate ≤ startDate`, an unparseable date, a duplicate job id, or an orphan `personId`.
+- **Readers moved** (§4.5): `computePayroll` (via `earnerView`), the bonus earner in
+  `us-income-classes.js` (its private `_isEarning` copy deleted; a legacy person is still
+  ranked by flat wage when nobody is working, so that fallback is unchanged),
+  `hasPayrollContributions` (4th arg `spellsByPerson`), `InflationAdjustReducer` (skips
+  `monthlyWage` for a spell person; advances `state.wageIndex` only when one exists), the
+  guardrail `RETIREMENT_DATE_REACHED` schedules, the Roth window default, the age-band anchor,
+  and the paycheque report (currency and SE flag from the wage action's type). The Social
+  Security row was design 118's.
+- **401(k) rollover separation** is the end of the last **USD** spell, not of the last spell:
+  a US→AU mover separates from the 401(k) sponsor at the move. A person whose jobs include no
+  USD spell has separated at the run's start.
+- **Display.** `registerSpells` stamps each spell's base wage in its own currency;
+  `wageIndex.*` is a decimal.
+- **Tests.** `tests/unit/evt-employment-spells.test.mjs` (ESP-1..11). Every golden is
+  byte-identical (7445 unit tests green).

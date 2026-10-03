@@ -494,6 +494,10 @@ export class ScenarioSerializer {
       // graph), so it round-trips as itself; emitted only when present, so no scenario
       // saved before step 8 gains a key.
       ...(scenario.corporateActions?.length ? { corporateActions: scenario.corporateActions.map(a => ({ ...a })) } : {}),
+      // design 116 — job spells, one flat row per job joined to its person by
+      // `personId`. Plain authored data like `corporateActions`; emitted only when present,
+      // so a scenario without jobs round-trips byte-for-byte.
+      ...(scenario.jobs?.length ? { jobs: scenario.jobs.map(j => ({ ...j })) } : {}),
       bequests:       (scenario.bequests ?? []).map(n => ScenarioSerializer._serializeBequest(n)),
       events:   (scenario.events ?? []).map(n => ScenarioSerializer._serializeEvent(n)),
       handlers: (scenario.handlers ?? []).map(n => ScenarioSerializer._serializeHandler(n)),

@@ -306,6 +306,8 @@ export class StateSchemaRegistry {
     // Move date (ms) stamped by ChangeResidencyApplyReducer — backs the FEIE
     // full-qualifying-year gate (design 52 §4.2).
     this.registerPattern('people.*.residencySinceMs', ParameterValueType.date());
+    // Design 116 — the wage index a job spell's sim-start base is scaled by.
+    this.registerPattern('wageIndex.*', ParameterValueType.decimal(4));
     // Person income (monthlyWage / socialSecurityMonthly) is stamped per-person and
     // per-field via registerPerson() (design 10 §Phase 5), keyed on each person's
     // wageCurrency / ssCurrency. No code-less glob remains so an unstamped person
@@ -799,6 +801,30 @@ export class StateSchemaRegistry {
     const ss   = person.ssCurrency   ?? fallback;
     this.register(`people.${id}.monthlyWage`,           ParameterValueType.currency(wage));
     this.register(`people.${id}.socialSecurityMonthly`, ParameterValueType.currency(ss));
+  }
+
+  /**
+   * Register the state paths of a person's job spells (design 116 §4.3). Index-keyed
+   * because `spells` is an array sorted by start; each base wage is stamped with its
+   * own spell's currency, which may differ from the person's (a US job, then an AU one).
+   *
+   * @param {object}        person  Person instance; reads id, wageCurrency
+   * @param {Array<object>} jobs    this person's `cfg.jobs` rows, any order
+   */
+  registerSpells(person, jobs) {
+    const id = person?.id;
+    if (!id || !Array.isArray(jobs) || jobs.length === 0) return;
+    const fallback = person.wageCurrency ?? _personDefaultCurrency(person);
+    const sorted = [...jobs].sort((a, b) =>
+      (Date.parse(a.startDate ?? '') || -Infinity) - (Date.parse(b.startDate ?? '') || -Infinity));
+    sorted.forEach((j, i) => {
+      const base = `people.${id}.spells.${i}`;
+      this.register(`${base}.baseMonthlyWage`, ParameterValueType.currency(j.wageCurrency ?? fallback));
+      this.register(`${base}.startMs`,         ParameterValueType.date());
+      this.register(`${base}.endMs`,           ParameterValueType.date());
+      this.register(`${base}.realGrowth`,      ParameterValueType.rate());
+      this.register(`${base}.selfEmployed`,    ParameterValueType.boolean());
+    });
   }
 
   /**

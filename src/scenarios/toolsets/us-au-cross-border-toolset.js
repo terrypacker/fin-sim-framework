@@ -237,7 +237,9 @@ export const US_AU_CROSS_BORDER = {
     // Because _mergeStatePatches does a shallow (key-level) merge for 'people', we must
     // emit the complete person entries here; a partial { residency } object would discard
     // fields set by US_RETIREMENT / AU_RETIREMENT.
-    const people = projectPeople(context.people, { residency: startingResidency });
+    const people = projectPeople(context.people, {
+      residency: startingResidency, spellsByPerson: context.spellsByPerson,
+    });
 
     // FX state patches: initialise base and effective rate/fee maps plus legacy flat fields.
     const fxPatches = _getFxService(context)

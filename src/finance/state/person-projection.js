@@ -58,29 +58,41 @@ import { normalizeClaimAge } from '../account-rules/us/us-social-security-rules.
  *                                              person's own, then their first citizenship
  * @param {string}  [opts.defaultWageCurrency='USD']
  * @param {string}  [opts.defaultCitizen='US']
+ * @param {Array<object>|null} [opts.spells]  the person's job spells (design 116), from
+ *                                            `buildSpells`; null/empty ⇒ the legacy shape
  * @returns {object} the state entry
  */
 export function projectPerson(person, {
   residency = undefined,
   defaultWageCurrency = 'USD',
   defaultCitizen = 'US',
+  spells = null,
 } = {}) {
   const citizen = person.citizen ?? [defaultCitizen];
+  // Design 116 §4.3: a person with spells carries `spells` and NONE of the flat job
+  // fields, so no reader can quietly fall back to a stale single-job value. A person
+  // without them projects exactly as before — not even an empty `spells` key — so every
+  // legacy state is byte-identical (§4.2).
+  const job = Array.isArray(spells) && spells.length > 0
+    ? { spells: spells.map(s => ({ ...s, wageCurrency: s.wageCurrency ?? defaultWageCurrency })) }
+    : {
+      monthlyWage:           person.monthlyWage           ?? 0,
+      // Self-employment flag (design 69) — routes monthlyWage through the SE path.
+      selfEmployed:          person.selfEmployed          ?? false,
+      // Native currency of the wage (design 50) — drives PayrollHandler's US vs
+      // AU routing. MUST be projected or every wage reads as the default.
+      wageCurrency:          person.wageCurrency          ?? defaultWageCurrency,
+      // Where the employment is exercised (design 73 Gap 1) — the attribute that
+      // actually determines the source of employment income. null ⇒ the earner works
+      // where they live, resolved per accrual so it tracks a mid-sim move.
+      workCountry:           person.workCountry           ?? null,
+      retirementDate:        person.retirementDate        ?? null,
+    };
   return {
     id:                    person.id,
     name:                  person.name,
     birthDate:             person.birthDate,
-    monthlyWage:           person.monthlyWage           ?? 0,
-    // Self-employment flag (design 69) — routes monthlyWage through the SE path.
-    selfEmployed:          person.selfEmployed          ?? false,
-    // Native currency of the wage (design 50) — drives PayrollHandler's US vs
-    // AU routing. MUST be projected or every wage reads as the default.
-    wageCurrency:          person.wageCurrency          ?? defaultWageCurrency,
-    // Where the employment is exercised (design 73 Gap 1) — the attribute that
-    // actually determines the source of employment income. null ⇒ the earner works
-    // where they live, resolved per accrual so it tracks a mid-sim move.
-    workCountry:           person.workCountry           ?? null,
-    retirementDate:        person.retirementDate        ?? null,
+    ...job,
     socialSecurityMonthly: person.socialSecurityMonthly ?? 0,
     // Design 118 D5/D7: the claim age (null = FRA) and the month the claim was made,
     // stamped by SsEntitlementApplyReducer at the first payment. Both are read by
@@ -115,9 +127,13 @@ export function projectPerson(person, {
  *
  * @param {Array<object>} people
  * @param {object} [opts] — forwarded to {@link projectPerson}
+ * @param {object} [opts.spellsByPerson]  design 116 spells keyed by person id (the
+ *                                        compiler's `context.spellsByPerson`)
  */
-export function projectPeople(people, opts) {
+export function projectPeople(people, { spellsByPerson = null, ...opts } = {}) {
   const out = {};
-  for (const person of people ?? []) out[person.id] = projectPerson(person, opts);
+  for (const person of people ?? []) {
+    out[person.id] = projectPerson(person, { ...opts, spells: spellsByPerson?.[person.id] ?? null });
+  }
   return out;
 }

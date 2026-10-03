@@ -8,6 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { buildSpellsByPerson } from '../../finance/payroll/employment.js';
 import {
   HoldingTransactReducer, HoldingRevalueReducer, HoldingSetBasisReducer,
   HoldingSplitReducer, HoldingRetitleReducer,
@@ -190,10 +191,18 @@ export class ScenarioCompiler {
     // services.*.getAll() like any owned record — their own
     // toolsets seed (at 0), grow, draw, and sell them; the INHERIT event funds
     // them at the date. No transient context-injection (and so no double-serialize).
+    const people = services.personService?.getAll() ?? [];
+    // Design 116 — `job` records are authored SCENARIO data, like `corporateActions`:
+    // one store (`cfg.jobs`), no service copy. Resolved once here into each person's
+    // sorted spells, which both the state projection and the compile-time readers
+    // (payroll gating, work end date) use; ScenarioLoader has already validated them.
+    const jobs = definition?.jobs ?? [];
     return {
       startDate:      new Date(definition.simStart),
       endDate:        new Date(definition.simEnd),
-      people:         services.personService?.getAll()         ?? [],
+      people,
+      jobs,
+      spellsByPerson: buildSpellsByPerson(jobs, people, new Date(definition.simStart)),
       accounts:       services.accountService?.getAll()      ?? [],
       realProperties: services.realPropertyService?.getAll() ?? [],
       collectibles:   services.collectibleService?.getAll()  ?? [],

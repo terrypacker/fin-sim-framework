@@ -18,6 +18,7 @@ import { ficaOnWage, LAST_PUBLISHED_FICA_YEAR }    from '../tax/us/fica-rates.js
 import { bracketIndexationFactor, BRACKET_INDEX_SERIES }
   from '../tax/inflation-adjusted-tax-rates.js';
 import { monthlyAuSuper, auFinancialYearOf }      from '../payroll/au-super-caps.js';
+import { earnerView, everEarns }                  from '../payroll/employment.js';
 
 /**
  * payroll-handler.js — design 95 phase 0. One pipeline, two queue positions.
@@ -136,10 +137,14 @@ const cents = n => +n.toFixed(2);
  * @param {Array<object>} people   the household
  * @param {object}        params   toolset parameters (household defaults)
  * @param {string[]}      fields   election names that imply a contribution
+ * @param {object}        [spellsByPerson]  design 116 job spells by person id. A person
+ *                        with spells earns if ANY spell pays — including one whose USD and
+ *                        AUD jobs need both countries' streams — whatever the flat
+ *                        `monthlyWage` (cleared when a person is converted) says.
  */
-export function hasPayrollContributions(people, params, fields) {
+export function hasPayrollContributions(people, params, fields, spellsByPerson = null) {
   const positive = (src) => fields.some(f => (src?.[f] ?? 0) > 0);
-  const earning  = (people ?? []).filter(p => (p?.monthlyWage ?? 0) > 0);
+  const earning  = (people ?? []).filter(p => everEarns(p, spellsByPerson));
   if (earning.length === 0) return false;
   // A household default only counts if SOMEONE can inherit it — a person who has
   // explicitly elected 0 in every gating field is opted out, not merely silent.
@@ -198,17 +203,6 @@ function _ownsAuStream(person, au = {}) {
       || (elect(person, 'superSalarySacrificePct',             au.salarySacrificePct ?? 0)             > 0)
       || (elect(person, 'superPersonalDeductibleContribution', au.personalDeductibleContribution ?? 0) > 0)
       || (elect(person, 'superNonConcessionalContribution',    au.nonConcessionalContribution ?? 0)    > 0);
-}
-
-/**
- * Is `person` drawing employment income on `date`?
- *
- * The single definition. The three handlers this replaced each had their own
- * copy; they agreed, but nothing made them agree.
- */
-function isEarning(person, date) {
-  if ((person?.monthlyWage ?? 0) <= 0) return false;
-  return person.retirementDate ? date < person.retirementDate : true;
 }
 
 /**
@@ -280,8 +274,14 @@ export function computePayroll({ date, state, stateRegistry, us = {}, au = {},
   const ficaIndexFactor = bracketIndexationFactor(
     state, BRACKET_INDEX_SERIES.US_FICA, LAST_PUBLISHED_FICA_YEAR);
 
-  for (const [personKey, person] of Object.entries(state.people ?? {})) {
-    if (!isEarning(person, date)) continue;
+  for (const [personKey, statePerson] of Object.entries(state.people ?? {})) {
+    // Is this person drawing employment income on `date`, and from which job? The
+    // single definition lives in `employment.js` (design 116 §4.4); `us-income-classes`
+    // asks the same module. A legacy earner comes back as the state entry itself, so
+    // everything below reads exactly what it always did; a spell earner comes back
+    // with the in-force spell's wage, currency, work country and SE flag laid over it.
+    const person = earnerView(statePerson, date, state);
+    if (person == null) continue;
 
     const wage      = person.monthlyWage ?? 0;
     const isAud     = person.wageCurrency === 'AUD';

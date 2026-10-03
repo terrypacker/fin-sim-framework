@@ -61,6 +61,7 @@ import { LateLifeCareHandler }                  from '../../finance/spending/str
 import { LateLifeCareApplyReducer }             from '../../finance/spending/strategies/late-life-care-apply-reducer.js';
 import { accountToStatePlain }                from './account-state-projection.js';
 import { marketReturnFor }                    from './economic-regimes-toolset.js';
+import { lastWorkDate }              from '../../finance/payroll/employment.js';
 
 /**
  * AU_RETIREMENT toolset — AU retirement/superannuation scenario wiring.
@@ -378,6 +379,7 @@ export const AU_RETIREMENT = {
 
     const people = {};
     Object.assign(people, projectPeople(context.people, {
+      spellsByPerson: context.spellsByPerson,
       residency: 'AU', defaultWageCurrency: 'AUD', defaultCitizen: 'AU',
     }));
 
@@ -463,7 +465,8 @@ export const AU_RETIREMENT = {
     // contributions sit at the same point in a month.
     // Design 95 §7.1 phase 1 — household default OR any person's own SG election.
     if (superAccts.length > 0
-        && hasPayrollContributions(people, context.parameters ?? {}, AU_CONTRIBUTION_FIELDS)) {
+        && hasPayrollContributions(people, context.parameters ?? {}, AU_CONTRIBUTION_FIELDS,
+                                   context.spellsByPerson)) {
       if (!context.schedulesById['PAYROLL_CONTRIBUTIONS']) {
         schedules.push(
           EventBuilder.eventSeries()
@@ -492,8 +495,9 @@ export const AU_RETIREMENT = {
     if (strategies.includes('GUARDRAIL') && !context._auSharedDelegated) {
       const simStart = context.simStart ?? new Date();
       for (const person of people) {
-        if (!person.retirementDate) continue;
-        const retDate = new Date(person.retirementDate);
+        const workEnd = lastWorkDate(person, context.spellsByPerson);
+        if (!workEnd) continue;
+        const retDate = new Date(workEnd);
         if (retDate > simStart && !context.schedulesById['RETIREMENT_DATE_REACHED']) {
           schedules.push(new OneOffEvent({
             name:    `Retirement Date — ${person.name}`,
@@ -634,7 +638,7 @@ export const AU_RETIREMENT = {
     // each country's parameters owned by its own toolset, exactly as the two
     // separate events did, without either toolset knowing the other's params.
     const sgEvent = context.schedulesById['PAYROLL_CONTRIBUTIONS'];
-    if (sgEvent && hasPayrollContributions(people, p, AU_CONTRIBUTION_FIELDS)) {
+    if (sgEvent && hasPayrollContributions(people, p, AU_CONTRIBUTION_FIELDS, context.spellsByPerson)) {
       const sgHandler = new PayrollHandler({
         stateRegistry:     sr,
         stage:             PAYROLL_STAGE.CONTRIBUTIONS,

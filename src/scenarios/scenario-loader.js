@@ -87,6 +87,7 @@ const BUILT_IN_TOOLSETS = [
  */
 import { synthesizeWeightedPriorities, resolveOwnerBanding } from './params/lever-weights.js';
 import { migrateYearFieldsToDates } from './year-date-migration.js';
+import { validateJobs } from '../finance/payroll/employment.js';
 export { synthesizeWeightedPriorities } from './params/lever-weights.js';
 
 /**
@@ -161,6 +162,14 @@ export class ScenarioLoader {
       this._promoteBequestAssets(cfg);
       this._normalizeParams(cfg);
       this._normalizeRetirementBasis(cfg);
+    }
+
+    // Design 116 §4.6 — job records that cannot run are an error, not a warning: an
+    // overlapping or orphaned spell would otherwise be a silently wrong wage. Before
+    // anything is built, so a bad scenario never half-loads.
+    const jobErrors = validateJobs(cfg.jobs, cfg.persons);
+    if (jobErrors.length > 0) {
+      throw new Error(`Scenario jobs are invalid:\n  ${jobErrors.join('\n  ')}`);
     }
 
     ScenarioSerializer.deserializePersonsAccounts(cfg, services);
@@ -383,6 +392,9 @@ export class ScenarioLoader {
     // Per-person income currency (monthlyWage / socialSecurityMonthly).
     for (const person of services.personService?.getAll() ?? []) {
       reg.registerPerson(person);
+      // Design 116 — a person with jobs carries `spells` instead of `monthlyWage`; each
+      // spell's base is in its own wage currency.
+      reg.registerSpells(person, (cfg.jobs ?? []).filter(j => j?.personId === person.id));
     }
     // Free-standing money params (e.g. monthlyExpenses) stamp the state paths
     // they own with the currency chosen in the param editor.

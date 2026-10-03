@@ -15,6 +15,7 @@ import { creditPay } from '../../payroll/wage-splits.js';
 import { resolveCashKey, resolveDestinationCashKey, resolveSaleDestinationKey, creditSaleProceeds } from '../cash-routing.js';
 import { singleAssetTermFields } from '../../holdings/holding-period.js';
 import { toMs } from '../main-residence.js';
+import { wageAt, hasSpells } from '../../payroll/employment.js';
 
 /** Resolve the US cash pool (legacy tail; prefer resolveCashKey for routing). */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
@@ -336,13 +337,6 @@ export class SeIncomeUsHandler extends HandlerEntry {
   }
 }
 
-/** Whether `person` is drawing employment income on `date` (matches PayrollHandler). */
-function _isEarning(person, date) {
-  if ((person?.monthlyWage ?? 0) <= 0) return false;
-  const retDate = person.retirementDate;
-  return retDate ? date < retDate : true;
-}
-
 /** One warning per session for an unattributed bonus, not one per event. */
 let _warnedBonusFallback = false;
 
@@ -375,14 +369,18 @@ export function resolveBonusEarner(state, data, date) {
   // (1) Explicit.
   if (data?.personId != null && people[data.personId] != null) return data.personId;
 
-  // (2) Exactly one person is still working.
-  const working = keys.filter(k => _isEarning(people[k], date));
+  // (2) Exactly one person is still working. The same predicate PayrollHandler uses
+  // (design 116: `employment.js` is the single definition).
+  const working = keys.filter(k => wageAt(people[k], date, state) > 0);
   if (working.length === 1) return working[0];
 
-  // (3) Highest wage among the plausible set; deterministic, and warned about.
+  // (3) Highest wage among the plausible set; deterministic, and warned about. A person
+  // with job spells is ranked by their wage on the date; a legacy person by their flat
+  // wage, retired or not, exactly as before.
   const pool = working.length > 0 ? working : keys;
-  const best = pool.reduce((a, b) =>
-    (people[b].monthlyWage ?? 0) > (people[a].monthlyWage ?? 0) ? b : a, pool[0]);
+  const wageOf = k => (hasSpells(people[k]) ? wageAt(people[k], date, state)
+                                            : (people[k].monthlyWage ?? 0));
+  const best = pool.reduce((a, b) => (wageOf(b) > wageOf(a) ? b : a), pool[0]);
   if (keys.length > 1 && !_warnedBonusFallback) {
     _warnedBonusFallback = true;
     console.warn(

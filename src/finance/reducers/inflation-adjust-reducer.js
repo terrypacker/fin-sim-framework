@@ -11,6 +11,7 @@
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { LAST_PUBLISHED_YEAR } from '../tax/us/us-contribution-limits.js';
 import { LAST_PUBLISHED_FY }   from '../tax/au/au-super-limits.js';
+import { hasSpells }           from '../payroll/employment.js';
 
 /**
  * InflationAdjustReducer — applies annual inflation adjustments when a
@@ -178,11 +179,18 @@ export class InflationAdjustReducer extends Reducer {
         return state.effectiveInflationRates?.[wcc] ?? state.inflationRates?.[wcc] ?? 0;
       };
       const people = {};
+      let anySpells = false;
       for (const [key, person] of Object.entries(state.people ?? {})) {
+        // Design 116 §4.3: a person with job spells has no flat `monthlyWage` to
+        // multiply. Their wages are base × `wageIndex`, advanced once below; writing a
+        // `monthlyWage` here would invent the stale single-job field the projection
+        // deliberately leaves out.
+        const spells = hasSpells(person);
+        anySpells ||= spells;
         const wageFactor = 1 + rateFor(person.wageCurrency);
         people[key] = {
           ...person,
-          monthlyWage:           (person.monthlyWage           ?? 0) * wageFactor,
+          ...(!spells && { monthlyWage: (person.monthlyWage ?? 0) * wageFactor }),
           socialSecurityMonthly: (person.socialSecurityMonthly ?? 0) * factor,
           // A widow(er)'s inherited PIA (design 118 phase 4) moves as the deceased's
           // would have. Absent until a death, and kept absent.
@@ -190,6 +198,19 @@ export class InflationAdjustReducer extends Reducer {
         };
       }
       updates.people = people;
+
+      // Design 116 §4.3 — the wage index a spell's sim-start base is scaled by, one
+      // factor per wage-currency country at the SAME `rateFor(cc)` the legacy wages use,
+      // so an AUD job inflates at AU CPI from t0 exactly as a legacy AUD wage does.
+      // Not `inflationAccumulator.AU`: that advances only once an AU period exists,
+      // which before a move would leave an AUD spell flat. Written only when some person
+      // has spells, so a legacy state never gains the key.
+      if (anySpells) {
+        updates.wageIndex = {
+          US: (state.wageIndex?.US ?? 1) * (1 + rateFor('USD')),
+          AU: (state.wageIndex?.AU ?? 1) * (1 + rateFor('AUD')),
+        };
+      }
 
       // Inflate expenses once per year, here on the US advance (which fires every
       // year — it already drives wage/SS inflation), at the *residence* country's

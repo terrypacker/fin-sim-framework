@@ -42,6 +42,7 @@
  */
 
 import { auFinancialYearOf } from './au-super-caps.js';
+import { hasSpells } from './employment.js';
 
 /** The wage/self-employment apply actions, per country and employment type. */
 export const WAGE_APPLY_TYPES = new Set([
@@ -242,9 +243,14 @@ export function buildPaycheque({ journal, personKey, monthKey, state = null }) {
     personKey,
     monthKey,
     name:     state?.people?.[personKey]?.name ?? personKey,
-    currency: state?.people?.[personKey]?.wageCurrency
-      ?? (String(wage.type ?? '').startsWith('AU') ? 'AUD' : 'USD'),
-    selfEmployed: !!state?.people?.[personKey]?.selfEmployed,
+    // A person with job spells (design 116) carries no flat job fields; the wage
+    // action's own type says which stream — and so which currency and SE path — paid it.
+    ...(hasSpells(state?.people?.[personKey])
+      ? { currency:     /AU/.test(String(wage.type ?? '')) ? 'AUD' : 'USD',
+          selfEmployed: String(wage.type ?? '').startsWith('SE_') }
+      : { currency: state?.people?.[personKey]?.wageCurrency
+            ?? (String(wage.type ?? '').startsWith('AU') ? 'AUD' : 'USD'),
+          selfEmployed: !!state?.people?.[personKey]?.selfEmployed }),
     salaryPackage,
     sacrificed,
     assessable,

@@ -99,6 +99,7 @@ import { accountToStatePlain }                from './account-state-projection.j
 import { assertInterestBearingHoldings } from '../../finance/holdings/default-allocations.js';
 import { marketReturnFor }                    from './economic-regimes-toolset.js';
 import { saleDateToUtc } from '../year-date-migration.js';
+import { lastWorkDate }                 from '../../finance/payroll/employment.js';
 
 /**
  * Design 99 — a handler's market rate of last resort: its market's total and yield, from
@@ -146,7 +147,8 @@ function _hasPayrollContributions(context) {
   // election. Reading only the former left a per-person election inert whenever the
   // household default was 0 — no event scheduled, so nothing consumed the field.
   return hasPayrollContributions(
-    context.people ?? [], context.parameters ?? {}, US_CONTRIBUTION_FIELDS);
+    context.people ?? [], context.parameters ?? {}, US_CONTRIBUTION_FIELDS,
+    context.spellsByPerson);
 }
 
 export const US_RETIREMENT = {
@@ -586,6 +588,7 @@ export const US_RETIREMENT = {
     // here field by field and had drifted from the cross-border toolset's copy,
     // silently dropping `residencyState` and taking US state income tax with it.
     const people = projectPeople(context.people, {
+      spellsByPerson: context.spellsByPerson,
       defaultWageCurrency: 'USD', defaultCitizen: 'US',
     });
 
@@ -706,7 +709,11 @@ export const US_RETIREMENT = {
     const strategies = p.spendingStrategy ?? ['FIXED'];
     if (strategies.includes('GUARDRAIL')) {
       const simStart     = context.simStart ?? new Date();
-      const anyRetired   = context.people.some(pe => pe.retirementDate && new Date(pe.retirementDate) <= simStart);
+      // Design 116: the work end date is the last job's end when the person has jobs.
+      const anyRetired   = context.people.some(pe => {
+        const end = lastWorkDate(pe, context.spellsByPerson);
+        return end && new Date(end) <= simStart;
+      });
       if (anyRetired) {
         const drawdownAccounts = context.accounts.filter(a => a.drawdownPriority != null);
         const portfolioValue   = drawdownAccounts.reduce((sum, a) => sum + (a.balance ?? 0), 0);
@@ -903,11 +910,16 @@ export const US_RETIREMENT = {
     if (p.k401ToIraConversionEnabled && k401Accounts.length > 0) {
       for (const k401 of k401Accounts) {
         const owner = people.find(pe => pe.id === k401.ownerId);
-        if (!owner?.retirementDate) continue;
+        // Separation from the 401(k) sponsor. Design 116: with jobs, that is the end of
+        // the last USD job — not of a later Australian one — and a person with no USD job
+        // in the run has already separated at its start.
+        let separation = lastWorkDate(owner, context.spellsByPerson, { currency: 'USD' });
+        if (separation === undefined) separation = context.startDate;
+        if (!separation) continue;
         const ownerIra = iraAccounts.find(a => a.ownerId === k401.ownerId);
         if (!ownerIra) continue;
 
-        const retirement = new Date(owner.retirementDate);
+        const retirement = new Date(separation);
 
         // Legal gate: a 401(k) can only be rolled over to an IRA after separating
         // from the sponsoring employer. This model has a single job per person,
@@ -936,8 +948,9 @@ export const US_RETIREMENT = {
     if (strategies.includes('GUARDRAIL')) {
       const simStart = context.simStart ?? new Date();
       for (const person of people) {
-        if (!person.retirementDate) continue;
-        const retDate = new Date(person.retirementDate);
+        const workEnd = lastWorkDate(person, context.spellsByPerson);
+        if (!workEnd) continue;
+        const retDate = new Date(workEnd);
         if (retDate > simStart) {
           schedules.push(new OneOffEvent({
             name:    `Retirement Date — ${person.name}`,

@@ -15,6 +15,7 @@ import { GuardrailAnnualCheckReducer }     from './strategies/guardrail-annual-c
 import { ExpenseEventApplyReducer }        from './strategies/expense-event-apply-reducer.js';
 import { AgeBandedSpendingReducer, DEFAULT_AGE_BANDS } from './strategies/age-banded-spending-reducer.js';
 import { ExplicitBandsSpendingReducer, DEFAULT_EXPENSE_BANDS } from './strategies/explicit-bands-spending-reducer.js';
+import { lastWorkDate } from '../payroll/employment.js';
 
 /**
  * Whole years of age as of asOfDate (matches the RMD handlers' _getAge).
@@ -43,8 +44,9 @@ function _ageBands(context) {
   if (p.ageBandDeclineRate != null) {
     const primary = context.people?.[0];
     let anchor = 65;
-    if (primary?.birthDate && primary?.retirementDate) {
-      anchor = _ageAt(primary.birthDate, primary.retirementDate);
+    const workEnd = primary ? lastWorkDate(primary, context.spellsByPerson) : null;
+    if (primary?.birthDate && workEnd) {
+      anchor = _ageAt(primary.birthDate, workEnd);
     }
     return [
       { startAge: 0,      multiplier: 1.0, annualRealDrift: 0 },
