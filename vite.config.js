@@ -1,7 +1,10 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, resolve }         from 'node:path';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, resolve }                       from 'node:path';
 
 import { defineConfig } from 'vite';
+
+import { SW_FILENAME, precacheManifest, readTree, renderServiceWorker }
+  from './scripts/lib/pwa-precache.mjs';
 
 /**
  * Regenerate the help index when a tier-2 topic changes (design 108 §8).
@@ -38,11 +41,36 @@ function helpTopicsWatcher() {
   };
 }
 
+/**
+ * Write dist/sw.js once the build is on disk (src/pwa/service-worker.js).
+ *
+ * Runs in closeBundle and reads the finished dist/ tree rather than the rollup bundle,
+ * because the precache list must include what rollup never sees: index.html as finally
+ * emitted, the two worker bundles from their own sub-builds, and everything copied from
+ * public/.
+ */
+function serviceWorkerPlugin() {
+  let outDir, base;
+  return {
+    name: 'finsim-service-worker',
+    apply: 'build',
+    configResolved(config) {
+      outDir = resolve(config.root, config.build.outDir);
+      base   = config.base;
+    },
+    closeBundle() {
+      const manifest = precacheManifest(readTree(outDir), base);
+      const source   = readFileSync(resolve(import.meta.dirname, 'src/pwa/service-worker.js'), 'utf8');
+      writeFileSync(resolve(outDir, SW_FILENAME), renderServiceWorker(source, manifest));
+    },
+  };
+}
+
 export default defineConfig({
   root: '.',
   base: '/',
   publicDir: 'public',
-  plugins: [helpTopicsWatcher()],
+  plugins: [helpTopicsWatcher(), serviceWorkerPlugin()],
   build: {
     outDir: 'dist',
     emptyOutDir: true,

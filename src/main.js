@@ -31,6 +31,7 @@ import { SimulationWorkbench } from './apps/simulation-workbench.js';
 import { ServiceRegistry }      from './services/service-registry.js';
 import { hydrateAppStorage, getAppStorage, clearMigratedLegacyKeys }
   from './storage/create-storage.js';
+import { registerServiceWorker } from './pwa/register-service-worker.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
   // MUST complete before anything constructs ServiceRegistry: the scenario,
@@ -43,6 +44,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const app = new SimulationWorkbench();
   app.initView();
   app.initScenario();
+
+  registerServiceWorker({ statusEl: document.getElementById('appUpdateStatus') });
 
   // Expose debug handles for console benchmarking.
   window.ServiceRegistry = ServiceRegistry;
