@@ -14,8 +14,8 @@
  * Tests for design/27 Increment 1 — deterministic mortality + survivor core.
  *
  *  MORT-1: PersonDiedApplyReducer records death and removes person from state.people
- *  MORT-2: SocialSecuritySurvivorApplyReducer sets survivor SS to max(self, deceased)
- *  MORT-3: SocialSecuritySurvivorApplyReducer keeps survivor SS when it's already higher
+ *  MORT-2: SocialSecuritySurvivorApplyReducer records the survivor benefit, own PIA untouched
+ *  MORT-3: SocialSecuritySurvivorApplyReducer: a deceased with no PIA leaves nothing
  *  MORT-4: AccountRetitleApplyReducer retitles solo-owned accounts to survivor
  *  MORT-5: AccountRetitleApplyReducer does NOT retitle accounts owned by survivor
  *  MORT-6: MortalityHandler emits full action chain when a spouse survives
@@ -84,31 +84,31 @@ test('MORT-1: PersonDiedApplyReducer records death and removes person from state
 
 // ── MORT-2 ────────────────────────────────────────────────────────────────────
 
-test('MORT-2: SocialSecuritySurvivorApplyReducer sets survivor SS to deceased SS when deceased is higher', () => {
-  const state  = baseState();
+test('MORT-2: SocialSecuritySurvivorApplyReducer records the survivor benefit and leaves the own PIA alone', () => {
+  // Design 118 phase 4: the deceased claimed at FRA (Jul 2031); the survivor (born 2 Jul
+  // 1966, survivor FRA 67 = Jul 2033, own claim at FRA) is widowed in Jan 2050.
+  const state = baseState({ people: { spouse: { ...basePeople().spouse, birthDate: '1966-07-02' } } });
   const action = {
-    type: 'SOCIAL_SECURITY_SURVIVOR_APPLY',
-    survivorId: 'spouse', deceasedSocialSecurityMonthly: 2_000,
+    type: 'SOCIAL_SECURITY_SURVIVOR_APPLY', survivorId: 'spouse', deceasedSocialSecurityMonthly: 2_000,
+    deceasedBirthDate: '1964-07-02', deceasedEntitledMs: Date.UTC(2031, 6, 1), deathMs: Date.UTC(2050, 0, 15),
   };
-  const next = ssR.reduce(state, action);
-  assert.strictEqual(next.people.spouse.socialSecurityMonthly, 2_000);
+  const s2 = ssR.reduce(state, action).people.spouse;
+  assert.strictEqual(s2.socialSecurityMonthly, 1_500, 'own PIA is not overwritten');
+  assert.strictEqual(s2.ssSurvivorPia, 2_000);
+  assert.strictEqual(s2.ssSurvivorRatio, 1);
+  assert.strictEqual(s2.ssSurvivorRibLimCap, null);
+  assert.strictEqual(s2.ssSurvivorFromMs, Date.UTC(2050, 0, 1));
 });
 
 // ── MORT-3 ────────────────────────────────────────────────────────────────────
 
-test('MORT-3: SocialSecuritySurvivorApplyReducer keeps survivor SS when it is already higher', () => {
-  const state = baseState({
-    people: {
-      ...basePeople(),
-      spouse: { ...basePeople().spouse, socialSecurityMonthly: 3_000 },
-    },
-  });
+test('MORT-3: SocialSecuritySurvivorApplyReducer: a deceased with no PIA leaves nothing to inherit', () => {
+  const state  = baseState();
   const action = {
-    type: 'SOCIAL_SECURITY_SURVIVOR_APPLY',
-    survivorId: 'spouse', deceasedSocialSecurityMonthly: 2_000,
+    type: 'SOCIAL_SECURITY_SURVIVOR_APPLY', survivorId: 'spouse', deceasedSocialSecurityMonthly: 0,
+    deceasedBirthDate: '1964-07-02', deceasedEntitledMs: null, deathMs: Date.UTC(2050, 0, 15),
   };
-  const next = ssR.reduce(state, action);
-  assert.strictEqual(next.people.spouse.socialSecurityMonthly, 3_000);
+  assert.deepStrictEqual(ssR.reduce(state, action).people.spouse, basePeople().spouse);
 });
 
 // ── MORT-4 ────────────────────────────────────────────────────────────────────

@@ -17,6 +17,7 @@
  *   SSR-FRA-*, SSR-ENT-*, SSR-F-*: FRA, the entitlement month and the factor
  *   SSR-SP-*:    the spousal benefit (phase 3), including POMS RS 00615.020 method C
  *                and RS 00615.694, whose example figures are read from the saved page
+ *   SSR-SV-*:    the survivor benefit (phase 4)
  */
 
 import { test } from 'node:test';
@@ -28,6 +29,7 @@ import {
   fullRetirementAge, fraMonth, attainDate, attainMonth, monthIndex, monthIndexToMs,
   entitlementMonth, ownFactor, drcMonthlyRate, earlyReduction, normalizeClaimAge, SS_CLAIM_AGES,
   spousalReduction, spousalFactor, spousalPayable,
+  survivorReduction, survivorFactor, survivorStartMonth, survivorBaseRatio, survivorBenefit,
 } from '../../src/finance/account-rules/us/us-social-security-rules.js';
 
 const DOCS = new URL('../../docs/us-social-security/', import.meta.url);
@@ -244,4 +246,69 @@ test('SSR-SP-3: no record of their own ⇒ half the worker\'s PIA, reduced by th
 test('SSR-SP-4: credits large enough to cover the excess suspend the spousal amount (not below zero)', () => {
   // Own 900 claimed at 70 (×1.24 = 1116); half the worker's PIA is 1000, excess 100 < 216 of credits.
   assert.equal(spousalPayable({ ownPia: 900, workerPia: 2000, ownBenefit: 1116, ownBenefitNoDrc: 900, factor: 1 }), 0);
+});
+
+// ── The survivor benefit (phase 4) ────────────────────────────────────────────
+
+test('SSR-SV-EX-1: 404.410(c)(1) — survivor FRA 65y4m, from 64, 16 of 64 months, 785.70 ⇒ reduction 55.98', () => {
+  assert.match(read('CFR-20-404.410-Reduction-Before-Full-Retirement-Age.txt'),
+    /\$785\.70 × 16 × \.285 divided by 64 or \$55\.98/);
+  const birth = '1941-06-15';                                     // survivor-table FRA 65y4m
+  assert.deepEqual(fullRetirementAge(birth, 'survivor'), { years: 65, months: 4 });
+  const start = fraMonth(birth, 'survivor') - 16;
+  assert.equal(fraMonth(birth, 'survivor') - attainMonth(birth, 60), 64);
+  assert.ok(Math.abs(785.70 * survivorReduction(birth, start) - 55.98) < 0.01);
+});
+
+test('SSR-SV-1: survivor FRA 67 ⇒ 28.5% at 60, about 20.4% at 62, none from FRA', () => {
+  const birth = '1964-07-02';                                     // ages attained on the 1st
+  const sFra = fraMonth(birth, 'survivor');
+  assert.equal(sFra - attainMonth(birth, 60), 84);
+  assert.ok(Math.abs(survivorReduction(birth, attainMonth(birth, 60)) - 0.285) < 1e-12);
+  assert.ok(Math.abs(survivorReduction(birth, attainMonth(birth, 62)) - 0.285 * 60 / 84) < 1e-12);
+  assert.equal(survivorFactor(birth, sFra), 1);
+  assert.equal(survivorFactor(birth, sFra + 30), 1);
+});
+
+const DEC = '1964-07-02';                                        // deceased: FRA Jul 2031, 70 in Jul 2034
+
+test('SSR-SV-2: deceased claimed at 62 ⇒ survivor capped at the larger of the RIB-LIM and 82½% (404.338(c))', () => {
+  const t = survivorBaseRatio({ birthDate: DEC, entitledMi: entitlementMonth(DEC, 62), deathMi: monthIndex('2040-03-10') });
+  assert.deepEqual(t, { ratio: 1, ribLimCap: 0.825 });           // 70% < 82½%
+  // an unreduced survivor is cut to 82½%; one reduced below it keeps their own reduction
+  assert.ok(Math.abs(survivorBenefit({ pia: 2000, ...t, factor: 1 }) - 1650) < 1e-9);
+  assert.ok(Math.abs(survivorBenefit({ pia: 2000, ...t, factor: 0.75 }) - 1500) < 1e-9);
+  // claimed at 66 (93⅓%): the RIB-LIM is the cap
+  const at66 = survivorBaseRatio({ birthDate: DEC, entitledMi: entitlementMonth(DEC, 66), deathMi: monthIndex('2040-03-10') });
+  assert.ok(Math.abs(at66.ribLimCap - (1 - 0.2 / 3)) < 1e-12);
+});
+
+test('SSR-SV-3: deceased claimed at 70 ⇒ the survivor inherits every credit (404.338(b))', () => {
+  const t = survivorBaseRatio({ birthDate: DEC, entitledMi: entitlementMonth(DEC, 70), deathMi: monthIndex('2040-03-10') });
+  assert.ok(Math.abs(t.ratio - 1.24) < 1e-12);
+  assert.equal(t.ribLimCap, null);
+});
+
+test('SSR-SV-4: died at 68 without claiming ⇒ credits to the month before death; the January wait is ignored', () => {
+  // Dies in Sep 2032: Jul 2031–Aug 2032 is 14 credits, though 8 were earned in the death year.
+  const t = survivorBaseRatio({ birthDate: DEC, entitledMi: null, deathMi: monthIndex('2032-09-20') });
+  assert.ok(Math.abs(t.ratio - (1 + 14 * 2 / 3 / 100)) < 1e-12);
+  // a late claimant who dies in the filing year also passes on every credit (402(e)(2)(C))
+  const late = survivorBaseRatio({ birthDate: DEC, entitledMi: entitlementMonth(DEC, 68), deathMi: monthIndex('2032-09-20') });
+  assert.ok(Math.abs(late.ratio - 1.08) < 1e-12);
+  // dying before FRA without a claim leaves the plain PIA
+  assert.deepEqual(survivorBaseRatio({ birthDate: DEC, entitledMi: null, deathMi: monthIndex('2029-01-15') }),
+    { ratio: 1, ribLimCap: null });
+});
+
+test('SSR-SV-5: a survivor under their FRA at the death waits for their claim month, and no later than survivor FRA (D10)', () => {
+  const surv = '1966-07-02';                                      // 62 in Jul 2028, survivor FRA Jul 2033
+  const death = monthIndex('2027-05-10');
+  assert.equal(survivorStartMonth(surv, entitlementMonth(surv, 62), death), monthIndex('2028-07-01'));
+  assert.equal(survivorStartMonth(surv, entitlementMonth(surv, 70), death), fraMonth(surv, 'survivor'));
+  // widowed after their own claim: from the death month
+  assert.equal(survivorStartMonth(surv, entitlementMonth(surv, 62), monthIndex('2030-02-03')), monthIndex('2030-02-01'));
+  const w = survivorBenefit({ pia: 2000, ratio: 1, ribLimCap: null,
+    factor: survivorFactor(surv, monthIndex('2028-07-01')) });
+  assert.ok(Math.abs(w - 2000 * (1 - 0.285 * 60 / 84)) < 1e-9);
 });

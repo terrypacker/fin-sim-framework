@@ -11,14 +11,8 @@
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../simulation-framework/actions.js';
 import { ACCOUNT_ROLES } from '../state/account-roles.js';
-import { entitlementMonth, monthIndex, monthIndexToMs, ownFactor, spousalFactor, spousalPayable }
-  from '../account-rules/us/us-social-security-rules.js';
-
-/** A person's own entitlement month: their stamp once made, else their claim age's. */
-function claimMonth(person) {
-  return person.ssEntitledMs != null ? monthIndex(person.ssEntitledMs)
-    : entitlementMonth(person.birthDate, person.ssClaimAge ?? null);
-}
+import { claimMonthOf as claimMonth, monthIndex, monthIndexToMs, ownFactor, spousalFactor,
+  spousalPayable, survivorBenefit, survivorFactor } from '../account-rules/us/us-social-security-rules.js';
 
 /**
  * Handles the MONTHLY_SS_INCOME event.
@@ -45,6 +39,12 @@ function claimMonth(person) {
  * of their own is entitled on the spousal benefit alone, from that same later month,
  * and that month is their stamp. The top-up ends when the spouse leaves `state.people`.
  *
+ * The survivor benefit (phase 4). SocialSecuritySurvivorApplyReducer writes the
+ * `ssSurvivor*` fields on a widow(er) at the death. From `ssSurvivorFromMs` they are paid
+ * the larger of their own benefit and the survivor benefit (404.407(a)), even before
+ * their own claim month: one claim age, but the survivor benefit does not wait past
+ * survivor FRA for it (D10).
+ *
  * The SsIncomeApplyReducer (registered via the US account module) handles the
  * actual cash credit and tax chaining (85% of SS is taxable ordinary income).
  *
@@ -52,7 +52,7 @@ function claimMonth(person) {
  * @param {import('../services/state-registry.js').StateRegistry} opts.stateRegistry
  */
 export class MonthlySocialSecurityHandler extends HandlerEntry {
-  static description = 'Credits the US cash pool with Social Security income for each eligible person from their claiming age, whether or not they are still working: the PIA reduced for an early claim or raised by delayed retirement credits, plus any spousal top-up on the other spouse\'s record.';
+  static description = 'Credits the US cash pool with Social Security income for each eligible person from their claiming age, whether or not they are still working: the PIA reduced for an early claim or raised by delayed retirement credits, plus any spousal top-up on the other spouse\'s record, or the larger survivor benefit once widowed.';
   static type        = 'MonthlySocialSecurityHandler';
   static eventType   = 'MONTHLY_SS_INCOME';
 
@@ -81,28 +81,38 @@ export class MonthlySocialSecurityHandler extends HandlerEntry {
       const workerPia = spouse?.socialSecurityMonthly ?? 0;
       const workerMi  = workerPia > 0 ? claimMonth(spouse) : Infinity;
       const spousal   = workerPia / 2 > pia;   // 404.330(d)
-      if (pia <= 0 && !spousal) continue;
+      const widowed   = (person.ssSurvivorPia ?? 0) > 0;
+      if (pia <= 0 && !spousal && !widowed) continue;
 
       const stamped    = person.ssEntitledMs != null;
       // No record of their own: entitled only once the worker is (42 U.S.C. 402(b)(1)).
       const entitledMi = pia > 0 || stamped ? claimMonth(person)
         : Math.max(claimMonth(person), workerMi);
-      if (nowMi < entitledMi) continue;
+      const survivorMi = widowed ? monthIndex(person.ssSurvivorFromMs) : Infinity;
+      if (nowMi < entitledMi && nowMi < survivorMi) continue;
 
-      // A claim month before sim start (someone already collecting) is stamped as that
-      // past month, so their factor is the one they actually claimed at.
-      if (!stamped) {
-        actions.push({ type: 'SS_ENTITLEMENT_APPLY', personKey: key, entitledMs: monthIndexToMs(entitledMi) });
+      let own = 0, top = 0;
+      if (nowMi >= entitledMi) {
+        // A claim month before sim start (someone already collecting) is stamped as that
+        // past month, so their factor is the one they actually claimed at.
+        if (!stamped) {
+          actions.push({ type: 'SS_ENTITLEMENT_APPLY', personKey: key, entitledMs: monthIndexToMs(entitledMi) });
+        }
+        const factor = pia > 0 ? ownFactor(person.birthDate, entitledMi, nowMi) : 0;
+        own = pia * factor;
+        top = spousal && nowMi >= workerMi
+          ? spousalPayable({ ownPia: pia, workerPia, ownBenefit: own,
+              ownBenefitNoDrc: pia * Math.min(1, factor),
+              factor: spousalFactor(person.birthDate, Math.max(entitledMi, workerMi)) })
+          : 0;
       }
-
-      const factor = pia > 0 ? ownFactor(person.birthDate, entitledMi, nowMi) : 0;
-      const own    = pia * factor;
-      const top    = spousal && nowMi >= workerMi
-        ? spousalPayable({ ownPia: pia, workerPia, ownBenefit: own,
-            ownBenefitNoDrc: pia * Math.min(1, factor),
-            factor: spousalFactor(person.birthDate, Math.max(entitledMi, workerMi)) })
+      // Only the excess over the own benefit is paid as survivor's (404.407(a)).
+      const survivor = nowMi >= survivorMi
+        ? Math.max(0, survivorBenefit({ pia: person.ssSurvivorPia, ratio: person.ssSurvivorRatio,
+            ribLimCap: person.ssSurvivorRibLimCap ?? null,
+            factor: survivorFactor(person.birthDate, survivorMi) }) - own)
         : 0;
-      const ssMonthly = own + top;
+      const ssMonthly = own + top + survivor;
       if (ssMonthly <= 0) continue;
       actions.push(
         // Design 76 Gap B: stamp WHOSE benefit this is — Social Security is
@@ -115,7 +125,7 @@ export class MonthlySocialSecurityHandler extends HandlerEntry {
         // they describe the payment, and a country that *may* assess a foreign
         // public pension would need exactly them.
         { type: 'SS_INCOME_APPLY', amount: ssMonthly, residency: person.residency ?? null, personKey: key,
-          own, spousal: top },
+          own, spousal: top, survivor },
         new FieldValueAction(`ss_income_${key}`, `${person.name || key} Social Security`, ssMonthly),
       );
     }

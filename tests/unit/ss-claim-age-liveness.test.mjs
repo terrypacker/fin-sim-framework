@@ -23,6 +23,8 @@
  *   SSCA-5: the person record round-trips its claim age through the serializer
  *   SSCA-6: phase 3 — a spouse whose PIA is under half the primary's is paid the spousal
  *           top-up on the loaded plan, reduced for its own start month
+ *   SSCA-7: phase 4 — when the primary (an early claimant) dies, the spouse is paid the
+ *           survivor benefit from the death month, through the real mortality path
  */
 
 import { test } from 'node:test';
@@ -155,4 +157,33 @@ test('SSCA-6: a spouse with under half the primary\'s PIA is paid the spousal to
   assert.ok(Math.abs(paid[0].own - own) < 1e-6, `own ${paid[0].own} vs ${own}`);
   assert.ok(Math.abs(paid[0].spousal - spousal) < 1e-6, `spousal ${paid[0].spousal} vs ${spousal}`);
   assert.ok(Math.abs(paid[0].amount - own - spousal) < 1e-6);
+});
+
+test('SSCA-7: a widow(er) on the loaded plan is paid the survivor benefit from the death month', () => {
+  // The primary claims at 62 (May 2040, 70.4%) and dies at 68 on 15 Apr 2046. The spouse
+  // (PIA 400) claimed at 62 in Oct 2045, so the survivor benefit starts in April 2046,
+  // 53 months before the spouse's survivor FRA (Sep 2050) out of 84 from age 60.
+  const { scenario } = loadPlan({ primarySsClaimAge: 62, primaryLifeExpectancy: 68 }, ({ spouse }) => {
+    spouse.socialSecurityMonthly = 400;
+    spouse.ssClaimAge = 62;
+  });
+  quietStepTo(scenario, new Date(Date.UTC(2046, 3, 30)));
+
+  const { people } = scenario.sim.state;
+  assert.equal(people.primary, undefined, 'the primary has died');
+  const died = scenario.sim.journal.journal
+    .find(e => e.action?.type === 'SOCIAL_SECURITY_SURVIVOR_APPLY')?.action.data;
+  assert.equal(died.deceasedEntitledMs, Date.UTC(2040, 4, 1));
+  const s = people.spouse;
+  assert.equal(s.ssSurvivorPia, died.deceasedSocialSecurityMonthly);
+  assert.equal(s.ssSurvivorRatio, 1);
+  assert.equal(s.ssSurvivorRibLimCap, 0.825, '70.4% is under the 82½% floor');
+  assert.equal(s.ssSurvivorFromMs, Date.UTC(2046, 3, 1));
+
+  const april = scenario.sim.journal.journal
+    .filter(e => e.action?.type === 'SS_INCOME_APPLY' && e.action.data?.personKey === 'spouse')
+    .map(e => e.action.data).at(-1);
+  const w = s.ssSurvivorPia * Math.min(1 - 0.285 * 53 / 84, 0.825);
+  assert.ok(Math.abs(april.amount - w) < 1e-6, `paid ${april.amount} vs ${w}`);
+  assert.ok(Math.abs(april.own + april.survivor - w) < 1e-6 && april.spousal === 0);
 });

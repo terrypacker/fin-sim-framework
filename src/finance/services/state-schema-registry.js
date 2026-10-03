@@ -651,6 +651,11 @@ export class StateSchemaRegistry {
     // Design 118: Social Security claim age (null = FRA) and the stamped claim month.
     this.registerPattern('people.*.ssClaimAge',         ParameterValueType.integer());
     this.registerPattern('people.*.ssEntitledMs',       ParameterValueType.date());
+    // Design 118 phase 4: what a widow(er) inherits, set at the spouse's death.
+    this.registerPattern('people.*.ssSurvivorPia',       ParameterValueType.currency('USD'));
+    this.registerPattern('people.*.ssSurvivorRatio',     ParameterValueType.decimal(6));
+    this.registerPattern('people.*.ssSurvivorRibLimCap', ParameterValueType.decimal(6));
+    this.registerPattern('people.*.ssSurvivorFromMs',    ParameterValueType.date());
     this.register('deficitMonths',                      ParameterValueType.integer());
     this.register('discretionarySharePct',              ParameterValueType.percentage());
     this.register('drawdownRebalanceWeight',            ParameterValueType.decimal(2));

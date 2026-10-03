@@ -29,8 +29,9 @@ spending, which barely moves, and one for discretionary, which falls further. Th
 split is the whole point — applying a single factor to total spending gets the answer
 wrong in the direction that flatters the plan.
 
-Income changes at the same moment and not in the same proportion: one Social Security
-benefit stops, filing status changes, and the survivor's brackets are narrower. A
+Income changes at the same moment and not in the same proportion: the survivor keeps
+only the larger Social Security benefit, set by when each spouse claimed, filing status
+changes, and the survivor's brackets are narrower. A
 household can be materially worse off on one income while spending nearly as much,
 which is precisely the risk this models.
 

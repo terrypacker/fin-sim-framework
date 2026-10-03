@@ -1,7 +1,7 @@
 # 118 — Social Security claiming: claim age, spousal and survivor benefits
 
 **Status:** ACCEPTED, 2 Oct 2026. D1–D3 in §3 were taken with the author; D4–D11 are
-proposals. **Phases 1–3 BUILT** 2 Oct 2026 (§12–§14); phases 4–5 not started. Resolves issue #292 (`MonthlySocialSecurityHandler` is FRA-only), and
+proposals. **Phases 1–4 BUILT** 2 Oct 2026 (§12–§15); phase 5 (close-out) not started. Resolves issue #292 (`MonthlySocialSecurityHandler` is FRA-only), and
 takes over design 116's D6, Social Security decoupled from work (§5.1, D4).
 Every rule below is cited to a source saved in `docs/us-social-security/` (§4).
 
@@ -436,4 +436,69 @@ the October 2045 payment split into the reduced own benefit and the reduced top-
 
 **Help.** `help/nodes/person.md` says the top-up exists and that survivor benefits are
 not modelled yet; `help/REFERENCE.md` lists the two new action fields.
+
+## 15. As built — phase 4 (2 Oct 2026)
+
+**Rules.** `us-social-security-rules.js` adds:
+
+- `survivorReduction` / `survivorFactor`: 404.410(c)(1), with the survivor FRA from table
+  404.409(b);
+- `survivorStartMonth`: the D10 rule;
+- `survivorBaseRatio`: 404.338 and 402(e)(2)(C)–(D);
+- `survivorBenefit`;
+- `claimMonthOf`: the stamp, else the claim age's month. It moved here from the
+  handler, because the survivor reducer needs it too.
+
+Three cases come from the statute rather than the CFR text, and are tested:
+
+- A late claimant who dies in the filing year passes on every credit. 402(e)(2)(C)
+  counts the death year's months "notwithstanding" the January wait of 404.313(c).
+- A deceased who never claimed and died after FRA passes on credits up to the month
+  before death, stopping at 70 (404.313(e)(1)).
+- A deceased who died before FRA without claiming passes on the plain PIA.
+
+**State (§5.3, as designed).** `SOCIAL_SECURITY_SURVIVOR_APPLY` no longer overwrites the
+survivor's `socialSecurityMonthly`. `MortalityHandler` carries the deceased's PIA, birth
+date, `ssEntitledMs` stamp and the death date. The reducer computes the terms and writes
+`ssSurvivorPia`, `ssSurvivorRatio`, `ssSurvivorRibLimCap` and `ssSurvivorFromMs`. The
+fields are absent until a death, not projected as nulls, so only a widowed person
+carries them. `InflationAdjustReducer` inflates `ssSurvivorPia` with the PIAs, only when
+present. All four are typed in the state schema. A deceased stamped before the death is
+taken to have claimed. One whose claim month is the death month dies before the
+month-end payment that would stamp them, so they are treated as never having claimed.
+
+**The handler.** A widow(er) is paid from the earlier of their own entitlement and
+`ssSurvivorFromMs`, so the survivor benefit no longer waits for their own claim (D10).
+The payment is `own + max(0, survivor − own)`, the larger of the two (404.407(a)), and
+the payload's new `survivor` field is that excess. A person with no record of their own
+is paid the survivor benefit and is never stamped: `ssEntitledMs` stays the own or
+spousal claim. Any spousal top-up ends at the death, because the worker leaves
+`state.people`.
+
+**Goldens: none changed.** No golden has a death (`golden-coverage-manifest.js` lists
+`SOCIAL_SECURITY_SURVIVOR_APPLY` and `PERSON_DIED_APPLY` as uncovered), and every
+new field and branch is reached only through one. §8 expected goldens with mortality on
+to move; there are none.
+
+**Tests.**
+
+- `us-social-security-rules.test.mjs` SSR-SV-*: the 404.410(c)(1) example (55.98, read
+  from the saved file); 28.5% at 60 and 60/84 of it at 62 for a survivor FRA of 67; a
+  deceased who claimed at 62 (the 82½% floor) and at 66 (the RIB-LIM); one who claimed
+  at 70; one who died at 68 without claiming; a late claimant dying in the filing year;
+  a survivor under FRA at the death.
+- `monthly-social-security-handler.test.mjs` SS-SURV-*: a smaller own benefit topped up
+  to the survivor benefit; a survivor with no record of their own; deferring the own
+  claim to 70 without deferring the survivor benefit, then the own benefit overtaking
+  it; the cap and inherited credits reaching the payment.
+- `evt-person-died.test.mjs` MORT-2/3 and the reducer postconditions: they pinned the
+  old overwrite and now pin the four fields.
+- `ss-claim-age-liveness.test.mjs` SSCA-7: on the loaded reference plan, the primary
+  claims at 62 and dies at 68. The spouse is paid from April 2046, the death month, at
+  the survivor factor, under the 82½% cap.
+
+**Help.** `help/nodes/person.md` now covers survivor benefits, and
+`help/concepts/mortality.md` says the survivor keeps the larger benefit.
+`real-vs-nominal` was restamped because the schema file it cites changed. Its claims
+are about currency and date types, which still hold.
 

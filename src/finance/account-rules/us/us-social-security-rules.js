@@ -278,3 +278,90 @@ export function spousalPayable({ ownPia, workerPia, ownBenefit, ownBenefitNoDrc,
   if (ownPia >= full) return 0;
   return Math.max(0, ownBenefitNoDrc + (full - ownPia) * factor - ownBenefit);
 }
+
+// ── The survivor benefit (design 118 §4.5, phase 4) ─────────────────────────────
+
+/** The 404.338(c) floor: a survivor of an early claimant keeps at least 82½% of the PIA. */
+export const SURVIVOR_RIB_LIM_FLOOR = 0.825;
+
+/**
+ * The month a person's own claim takes effect: their `ssEntitledMs` stamp once made,
+ * else the month their claim age gives (`entitlementMonth`). Reads a `state.people`
+ * entry.
+ */
+export function claimMonthOf(person) {
+  return person.ssEntitledMs != null ? monthIndex(person.ssEntitledMs)
+    : entitlementMonth(person.birthDate, person.ssClaimAge ?? null);
+}
+
+/**
+ * Reduction for a widow(er)'s benefit that starts in `startMi`, as a fraction (20 CFR
+ * 404.410(c)(1)): the months before the survivor FRA (table 404.409(b)) × 0.285, divided
+ * by the months from the month of attaining 60 to the month before attaining that FRA.
+ */
+export function survivorReduction(birthDate, startMi) {
+  const fra    = fraMonth(birthDate, 'survivor');
+  const months = Math.max(0, fra - startMi);
+  return months === 0 ? 0 : 0.285 * months / (fra - attainMonth(birthDate, 60));
+}
+
+/** The factor applied to a widow(er)'s benefit that starts in `startMi`. */
+export function survivorFactor(birthDate, startMi) {
+  return 1 - survivorReduction(birthDate, startMi);
+}
+
+/**
+ * The first month a survivor is paid the widow(er)'s benefit (design 118 D10): the later
+ * of the death month and the month they reach the earlier of their own claim and their
+ * survivor FRA. One claim age per person, so deferring their own benefit does not defer
+ * this one past survivor FRA.
+ *
+ * @param {Date|string|number} birthDate  the survivor's
+ * @param {number} claimMi                the survivor's own claim month (`claimMonthOf`)
+ * @param {number} deathMi                the month of the death
+ */
+export function survivorStartMonth(birthDate, claimMi, deathMi) {
+  return Math.max(deathMi, Math.min(claimMi, fraMonth(birthDate, 'survivor')));
+}
+
+/**
+ * What the deceased's record passes to a survivor, relative to the deceased's PIA
+ * (20 CFR 404.338; 42 U.S.C. 402(e)(2)(C)–(D); 404.313(e)(1)):
+ *
+ * - **Claimed early.** `ratio` 1, and `ribLimCap` = the larger of the deceased's own
+ *   reduced factor and 82½%. The survivor's benefit, after the survivor's own reduction,
+ *   is capped at PIA × `ribLimCap`.
+ * - **Claimed at or after FRA.** `ratio` = 1 + every delayed credit earned, the January
+ *   wait of 404.313(c) ignored (402(e)(2)(C)).
+ * - **Never claimed.** Credits run from FRA to the month before death (none if death came
+ *   before FRA), stopping at 70.
+ *
+ * @param {object} p
+ * @param {Date|string|number} p.birthDate  the deceased's
+ * @param {number|null} p.entitledMi        the deceased's stamped claim month, or null
+ * @param {number} p.deathMi                the month of death
+ * @returns {{ ratio: number, ribLimCap: number|null }}
+ */
+export function survivorBaseRatio({ birthDate, entitledMi, deathMi }) {
+  const fra = fraMonth(birthDate);
+  if (entitledMi != null && entitledMi < fra) {
+    return { ratio: 1, ribLimCap: Math.max(ownFactor(birthDate, entitledMi), SURVIVOR_RIB_LIM_FLOOR) };
+  }
+  const creditEnd = Math.min(entitledMi ?? deathMi, attainMonth(birthDate, 70));
+  return { ratio: 1 + Math.max(0, creditEnd - fra) * drcMonthlyRate(birthDate), ribLimCap: null };
+}
+
+/**
+ * The widow(er)'s benefit for a month, before the dual-entitlement offset against the
+ * survivor's own benefit (404.407(a): the survivor is paid the larger of the two).
+ *
+ * @param {object} p
+ * @param {number} p.pia         the deceased's PIA, inflated as if alive
+ * @param {number} p.ratio       from `survivorBaseRatio`
+ * @param {number|null} p.ribLimCap
+ * @param {number} p.factor      `survivorFactor` for the survivor's start month
+ */
+export function survivorBenefit({ pia, ratio, ribLimCap, factor }) {
+  const w = pia * ratio * factor;
+  return ribLimCap == null ? w : Math.min(w, pia * ribLimCap);
+}

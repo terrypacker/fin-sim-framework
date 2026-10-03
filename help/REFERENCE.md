@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-223 parameters · 33 panels · 11 node types (181 fields) · 173 action types · 86 tools · 286 state field types · 74 topics · 126 design docs
+223 parameters · 33 panels · 11 node types (181 fields) · 173 action types · 86 tools · 290 state field types · 74 topics · 126 design docs
 
 ---
 
@@ -1736,11 +1736,11 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `SE_INCOME_US_TAX` | amount: currency(USD), residency: text, personKey: text | US_INCOME |
 | `SECTION_988_GAIN` | loanKey: text, accountKey: text, holdingId: text, currency: text, amount: number, gross: number, disallowedLoss: number, deMinimis: number, capitalGain: number, longTerm: any, residency: text | AU_REAL_PROPERTY, US_AU_CROSS_BORDER, US_REAL_PROPERTY |
 | `SET_OUT_OF_FUNDS_DATE` | date: any | AU_RETIREMENT, US_RETIREMENT |
-| `SOCIAL_SECURITY_SURVIVOR_APPLY` | survivorId: text, deceasedSocialSecurityMonthly: number | AU_RETIREMENT, US_RETIREMENT |
+| `SOCIAL_SECURITY_SURVIVOR_APPLY` | survivorId: text, deceasedSocialSecurityMonthly: number, deceasedBirthDate: any, deceasedEntitledMs: number, deathMs: number | AU_RETIREMENT, US_RETIREMENT |
 | `SPENDING_REFILL` | date: any | ECONOMIC_REGIMES |
 | `SPENDING_STRATEGY_APPLY` | slice: text, delta: number, reason: text | AU_RETIREMENT, US_RETIREMENT |
 | `SS_ENTITLEMENT_APPLY` | personKey: text, entitledMs: number | AU_RETIREMENT, US_RETIREMENT |
-| `SS_INCOME_APPLY` | amount: currency(USD), residency: text, personKey: text, own: currency(USD), spousal: currency(USD) | US_INCOME |
+| `SS_INCOME_APPLY` | amount: currency(USD), residency: text, personKey: text, own: currency(USD), spousal: currency(USD), survivor: currency(USD) | US_INCOME |
 | `SS_INCOME_TAX` | amount: currency(USD), residency: text, personKey: text | US_INCOME |
 | `STATE_TAX_PAYMENT_DEBIT` | amount: currency(USD), escalated: boolean | US_STATE_TAX |
 | `STATE_TAX_SETTLE_APPLY` | tax: number, taxDetail: any, fxRate: number | US_STATE_TAX |
@@ -1786,7 +1786,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 
 ---
 
-## State field types (286)
+## State field types (290)
 
 The scenario-INDEPENDENT half of `StateSchemaRegistry`: the globs and exact paths it
 installs in its own constructor, with the value type that decides how each formats.
@@ -2003,6 +2003,10 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `people.*.residencyState` | text |
 | `people.*.ssClaimAge` | integer |
 | `people.*.ssEntitledMs` | date |
+| `people.*.ssSurvivorFromMs` | date |
+| `people.*.ssSurvivorPia` | currency(USD) |
+| `people.*.ssSurvivorRatio` | decimal |
+| `people.*.ssSurvivorRibLimCap` | decimal |
 | `primeDev.*` | rate |
 | `primeFloor.*` | rate |
 | `primeLinks.*.spread` | rate |
@@ -2136,7 +2140,7 @@ what the in-app panel keys on.
 | [Monte Carlo](panels/mc-config.md) | panel | 239 | 1 panel · design 100 |
 | [MC Results](panels/mc-results.md) | panel | 202 | 1 panel · design 100, 89 |
 | [MC Runs](panels/mc-runs.md) | panel | 196 | 1 panel · design 100 |
-| [Mortality and Survivorship](concepts/mortality.md) | concept | 253 | 2 panels · 5 params |
+| [Mortality and Survivorship](concepts/mortality.md) | concept | 263 | 2 panels · 5 params |
 | [MPC Cockpit](panels/mpc-cockpit.md) | panel | 244 | 1 panel · design 39, 80 |
 | [Optimize](panels/opt-config.md) | panel | 248 | 1 panel |
 | [OPT Results](panels/opt-results.md) | panel | 186 | 1 panel |
@@ -2145,7 +2149,7 @@ what the in-app panel keys on.
 | [Parameters](panels/parameters.md) | panel | 188 | 1 panel · design 98 |
 | [Paycheque](panels/paycheque.md) | panel | 197 | 1 panel · design 95, 107 |
 | [Performance](panels/perf.md) | panel | 201 | 1 panel · design 78 |
-| [Person](nodes/person.md) | node | 245 | 3 panels · design 34, 95, 83 |
+| [Person](nodes/person.md) | node | 250 | 3 panels · design 34, 95, 83 |
 | [Pool Shapes Over Time](concepts/pool-shapes-over-time.md) | concept | 395 | 3 params · design 109, 114, 112, 97 |
 | [Liquidity Pools](panels/pools.md) | panel | 236 | 1 panel · design 97 |
 | [Randomness and Seeds](concepts/randomness-and-seeds.md) | concept | 251 | 2 panels · 2 params · design 74 |

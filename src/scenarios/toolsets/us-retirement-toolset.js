@@ -320,7 +320,10 @@ export const US_RETIREMENT = {
       // Declared identically in AU_RETIREMENT, which owns the same reducers.
       { type: 'PERSON_DIED_APPLY',          fields: { personId: ValueType.text(), personName: ValueType.text(), date: ValueType.any(), taxJurisdiction: ValueType.text(), deceasedSocialSecurityMonthly: ValueType.number(), incomeSupportRecipient: ValueType.boolean() } },
       { type: 'ACCOUNT_RETITLE_APPLY',      fields: { deceasedId: ValueType.text(), survivorId: ValueType.text() } },
-      { type: 'SOCIAL_SECURITY_SURVIVOR_APPLY', fields: { survivorId: ValueType.text(), deceasedSocialSecurityMonthly: ValueType.number() } },
+      // The deceased's record (design 118 phase 4): the reducer needs it after the
+      // deceased has left state.people.
+      { type: 'SOCIAL_SECURITY_SURVIVOR_APPLY', fields: { survivorId: ValueType.text(), deceasedSocialSecurityMonthly: ValueType.number(),
+        deceasedBirthDate: ValueType.any(), deceasedEntitledMs: ValueType.number(), deathMs: ValueType.number() } },
       // The month a person's own Social Security entitlement began (design 118 D7).
       // Declared identically in both retirement toolsets, as the SS handler is.
       { type: 'SS_ENTITLEMENT_APPLY',       fields: { personKey: ValueType.text(), entitledMs: ValueType.number() } },

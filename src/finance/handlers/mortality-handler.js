@@ -18,7 +18,7 @@ import { ACCOUNT_ROLES } from '../state/account-roles.js';
  *  1. PERSON_DIED_APPLY       — records death, removes person from state.people
  *  2. ACCOUNT_RETITLE_APPLY   — (if spouse survives) transfers solo-owned accounts
  *  3. SPENDING_STRATEGY_APPLY — (if spouse survives) two deltas: essential + discretionary
- *  4. SOCIAL_SECURITY_SURVIVOR_APPLY — (if spouse survives) survivor SS = max(self, deceased)
+ *  4. SOCIAL_SECURITY_SURVIVOR_APPLY — (if spouse survives) the survivor benefit (design 118 §4.5)
  *  5. SCENARIO_COMPLETE_CHECK — always last; sets scenarioComplete if no survivors remain
  *
  * Pure action emitter — does not touch the scheduling queue (design/27 §2.1 Path A).
@@ -147,11 +147,15 @@ export class MortalityHandler extends HandlerEntry {
         reason: 'survivor',
       });
 
-      // 5. Surviving spouse SS = max(self, deceased)
+      // 5. Survivor Social Security (design 118 phase 4). The deceased's record is
+      //    carried on the action: they are gone from state.people when it reduces.
       actions.push({
         type:      'SOCIAL_SECURITY_SURVIVOR_APPLY',
         survivorId,
         deceasedSocialSecurityMonthly: person.socialSecurityMonthly ?? 0,
+        deceasedBirthDate:  person.birthDate,
+        deceasedEntitledMs: person.ssEntitledMs ?? null,
+        deathMs:            new Date(date).getTime(),
       });
     }
 

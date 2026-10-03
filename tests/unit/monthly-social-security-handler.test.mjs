@@ -19,7 +19,8 @@
  *   SS-WORK-3: each person is gated on their own age, in one household
  *
  * Phase 2: SS-CLAIM-* (the claim age, the factor, the stamp). Phase 3: SS-SPOUSE-* (the
- * spousal top-up in a two-person household).
+ * spousal top-up in a two-person household). Phase 4: SS-SURV-* (a widow(er) is paid the
+ * larger of their own and the survivor benefit).
  */
 
 import { test } from 'node:test';
@@ -163,4 +164,50 @@ test('SS-SPOUSE-6: the worker\'s own claim factor never touches the spousal amou
     const p = paidTo(h.call({ date: at(2035, 6), state: { people } }), 'spouse');
     assert.ok(near(p.spousal, 1500), `worker at ${age}: ${p.spousal}`);
   }
+});
+
+// ── Design 118 phase 4: the survivor benefit ────────────────────────────────────
+
+// A widow(er) born 2 Mar 1965: 60 in Mar 2025, 62 in Mar 2027, survivor and own FRA 67 in
+// Mar 2032 (404.409), 70 in Mar 2035. Their spouse's PIA was 3000.
+const widow = (o) => spouse({ ssSurvivorPia: 3000, ssSurvivorRatio: 1, ssSurvivorRibLimCap: null,
+  ssSurvivorFromMs: Date.UTC(2032, 2, 1), ...o });
+
+test('SS-SURV-1: widowed with a smaller own benefit ⇒ the survivor benefit, paid as the excess over own', () => {
+  const h = new MonthlySocialSecurityHandler();
+  const w = widow({ socialSecurityMonthly: 1000, ssClaimAge: 62, ssEntitledMs: Date.UTC(2027, 2, 1),
+    ssSurvivorFromMs: Date.UTC(2030, 0, 1) });
+  const p = paidTo(h.call({ date: at(2030, 0), state: { people: { spouse: w } } }), 'spouse');
+  // From Jan 2030, 26 months before survivor FRA; 84 months from 60 to it.
+  const surv = 3000 * (1 - 0.285 * 26 / 84);
+  assert.ok(near(p.own, 700) && near(p.survivor, surv - 700) && near(p.amount, surv), `paid ${p.amount}`);
+  assert.equal(p.spousal, 0);
+});
+
+test('SS-SURV-2: no record of their own ⇒ paid the survivor benefit alone, never stamped', () => {
+  const h = new MonthlySocialSecurityHandler();
+  const w = widow({ ssClaimAge: 67 });
+  assert.equal(payments(h.call({ date: at(2032, 1), state: { people: { spouse: w } } })).length, 0);
+  const actions = h.call({ date: at(2032, 2), state: { people: { spouse: w } } });
+  assert.equal(stamps(actions).length, 0);
+  const p = paidTo(actions, 'spouse');
+  assert.ok(near(p.amount, 3000) && p.own === 0 && near(p.survivor, 3000));
+});
+
+test('SS-SURV-3: deferring the own claim to 70 does not defer the survivor benefit past survivor FRA (D10)', () => {
+  const h = new MonthlySocialSecurityHandler();
+  const w = widow({ socialSecurityMonthly: 2600, ssClaimAge: 70 });
+  const before = paidTo(h.call({ date: at(2033, 5), state: { people: { spouse: w } } }), 'spouse');
+  assert.ok(near(before.amount, 3000) && before.own === 0, 'survivor only, unreduced, before 70');
+  // At 70 the own benefit (2600 × 1.24 = 3224) passes the survivor's: no survivor part.
+  const after = paidTo(h.call({ date: at(2035, 2), state: { people: { spouse: w } } }), 'spouse');
+  assert.ok(near(after.own, 3224) && after.survivor === 0 && near(after.amount, 3224));
+});
+
+test('SS-SURV-4: the early-claim cap and inherited credits reach the payment', () => {
+  const h = new MonthlySocialSecurityHandler();
+  const capped = widow({ ssSurvivorRibLimCap: 0.825 });
+  assert.ok(near(paidTo(h.call({ date: at(2033, 0), state: { people: { spouse: capped } } }), 'spouse').amount, 2475));
+  const credited = widow({ ssSurvivorRatio: 1.24 });
+  assert.ok(near(paidTo(h.call({ date: at(2033, 0), state: { people: { spouse: credited } } }), 'spouse').amount, 3720));
 });

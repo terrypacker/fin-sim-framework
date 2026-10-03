@@ -184,6 +184,9 @@ export class InflationAdjustReducer extends Reducer {
           ...person,
           monthlyWage:           (person.monthlyWage           ?? 0) * wageFactor,
           socialSecurityMonthly: (person.socialSecurityMonthly ?? 0) * factor,
+          // A widow(er)'s inherited PIA (design 118 phase 4) moves as the deceased's
+          // would have. Absent until a death, and kept absent.
+          ...(person.ssSurvivorPia != null && { ssSurvivorPia: person.ssSurvivorPia * factor }),
         };
       }
       updates.people = people;

@@ -414,18 +414,26 @@ test('SsEntitlementApplyReducer: a claim once stamped is never re-timed; absent 
 
 // ─── SocialSecuritySurvivorApplyReducer (pure; I1/I7) ──────────────────────────
 
-test('SocialSecuritySurvivorApplyReducer: survivor SS = max(own, deceased) (I1)', () => {
+test('SocialSecuritySurvivorApplyReducer: records the survivor terms, own PIA untouched (I1)', () => {
   const r = new SocialSecuritySurvivorApplyReducer();
-  const state = { people: { p2: { socialSecurityMonthly: 1000 } } };
-  const next = runReducer(r, state, makeAction('SOCIAL_SECURITY_SURVIVOR_APPLY', { survivorId: 'p2', deceasedSocialSecurityMonthly: 1500 }), DATE, {});
-  assert.equal(next.people.p2.socialSecurityMonthly, 1500, 'stepped up to the larger benefit');
+  const state = { people: { p2: { birthDate: '1966-07-02', socialSecurityMonthly: 1000, ssEntitledMs: null } } };
+  // Deceased born 2 Jul 1964 claimed at 62 (Jul 2026): 70%, so the 82.5% floor is the cap.
+  const next = runReducer(r, state, makeAction('SOCIAL_SECURITY_SURVIVOR_APPLY', {
+    survivorId: 'p2', deceasedSocialSecurityMonthly: 1500, deceasedBirthDate: '1964-07-02',
+    deceasedEntitledMs: Date.UTC(2026, 6, 1), deathMs: Date.UTC(2040, 2, 10) }), DATE, {});
+  const p2 = next.people.p2;
+  assert.equal(p2.socialSecurityMonthly, 1000);
+  assert.equal(p2.ssSurvivorPia, 1500);
+  assert.equal(p2.ssSurvivorRatio, 1);
+  assert.equal(p2.ssSurvivorRibLimCap, 0.825);
+  assert.equal(p2.ssSurvivorFromMs, Date.UTC(2040, 2, 1));
 });
 
-test('SocialSecuritySurvivorApplyReducer: keeps own when larger; absent survivor is a no-op (I7)', () => {
+test('SocialSecuritySurvivorApplyReducer: no PIA to inherit or an absent survivor is a no-op (I7)', () => {
   const r = new SocialSecuritySurvivorApplyReducer();
-  const kept = runReducer(r, { people: { p2: { socialSecurityMonthly: 2000 } } },
-    makeAction('SOCIAL_SECURITY_SURVIVOR_APPLY', { survivorId: 'p2', deceasedSocialSecurityMonthly: 1500 }), DATE, {});
-  assert.equal(kept.people.p2.socialSecurityMonthly, 2000);
+  const noPia = { people: { p2: { socialSecurityMonthly: 2000 } } };
+  assertStateUnchanged(noPia, runReducer(r, structuredClone(noPia),
+    makeAction('SOCIAL_SECURITY_SURVIVOR_APPLY', { survivorId: 'p2', deceasedSocialSecurityMonthly: 0 }), DATE, {}));
 
   const prev = { people: { p2: { socialSecurityMonthly: 2000 } } };
   const missing = runReducer(r, structuredClone(prev),
