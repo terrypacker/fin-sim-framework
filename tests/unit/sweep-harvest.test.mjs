@@ -97,15 +97,18 @@ test('W3-6: every harvested row on the reference plan is scenario-centred, never
   }
 });
 
-test('W3-7: year rows (stateMoveYear, moveYear) are harvested with integer: true, only when set', () => {
-  const vars = mcVars({ stateMoveYear: 2031, moveYear: 2030 });
-  for (const k of ['stateMoveYear', 'moveYear']) {
+test('W3-7: the moves are date rows on their anchor day, only when set; any year row is integer', () => {
+  const vars = mcVars({ stateMoveDate: '2031-01-01', moveDate: '2030-07-01' });
+  for (const [k, anchor, min, max] of [['stateMoveDate', '01-01', '2029-01-01', '2033-01-01'],
+                                       ['moveDate', '07-01', '2028-07-01', '2032-07-01']]) {
     const row = byKey(vars, k);
     assert.ok(row, `${k} should be an MC row`);
-    assert.equal(row.integer, true);
-    assert.equal(row.stdDev, 1.5);
+    assert.deepEqual([row.type, row.anchor, row.min, row.max], [DISTRIBUTION_TYPES.UNIFORM_DATE, anchor, min, max]);
   }
-  assert.equal(byKey(mcVars({}), 'stateMoveYear'), undefined, 'an unset move has no row');
+  assert.equal(byKey(mcVars({}), 'stateMoveDate'), undefined, 'an unset move has no row');
+  const opt = buildOptVariables({ moveDate: '2030-07-01' });
+  assert.deepEqual(['type', 'anchor', 'step'].map(k => byKey(opt, 'moveDate')[k]),
+    [OPT_PARAM_TYPES.DATE, '07-01', 1], 'the Opt row steps whole years on 1 Jul');
   const { cfg, base } = reference();
   for (const v of mcVars(base, { cfg }).filter(r => r.sweepKind === 'year')) {
     assert.equal(v.integer, true, `${v.paramKey} is a year row without integer: true`);

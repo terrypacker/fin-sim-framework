@@ -20,6 +20,7 @@ import { ChangeStateResidencyApplyReducer }
 import { US_STATE_CODES } from '../../finance/tax/state/us-states.js';
 import { OneOffEvent } from '../../simulation-framework/events/one-off-event.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
+import { DATE_ANCHORS, assertOnAnchor, saleDateToUtc } from '../year-date-migration.js';
 
 /**
  * US_STATE_TAX toolset — declarative shell around StateTaxService (design 34).
@@ -37,7 +38,7 @@ import { ValueType } from '../../simulation-framework/type-registry.js';
  * The residency state itself is a Person field, owned by the scenario (like
  * `residency`/`birthDate`), not by this toolset.
  *
- * State move (design 34 §9, Phase 3): when `stateMoveYear` is set, schedules a
+ * State move (design 34 §9, Phase 3): when `stateMoveDate` is set, schedules a
  * CHANGE_STATE_RESIDENCY one-off on Jan 1 of that year that flips every person's
  * residencyState to `stateMoveDestination`. Pinned to Jan 1 so the destination
  * state taxes the whole calendar year (no part-year apportionment — deferred).
@@ -69,10 +70,13 @@ export const US_STATE_TAX = {
   paramSchema() {
     return [
       {
-        key: 'stateMoveYear', label: 'State Move Year',
-        type: 'Number', group: 'US Tax', mc: true, opt: true,
+        // A date pinned to 1 Jan (design 117 D5; design 34 §9.1 — no part-year apportionment).
+        key: 'stateMoveDate', label: 'State Move Date',
+        type: 'Date', dateAnchor: DATE_ANCHORS.stateMoveDate, group: 'US Tax', mc: true, opt: true,
         defaultValue: undefined,
-        description: 'Calendar year to establish residency in the destination state (effective Jan 1). Leave unset for no state move.',
+        description: 'The day residency moves to the destination state. Only 1 January is '
+          + 'accepted, so the destination taxes the whole year, until part-year state residency '
+          + 'is modelled; the year is the choice. Leave unset for no state move.',
       },
       {
         key: 'stateMoveDestination', label: 'State Move Destination',
@@ -119,7 +123,7 @@ export const US_STATE_TAX = {
 
   handlers(context) {
     const handlers = [..._getStateContributions(context).handlers];
-    if (context.parameters.stateMoveYear) {
+    if (context.parameters.stateMoveDate) {
       const moveEvent = context.schedulesById['CHANGE_STATE_RESIDENCY'];
       const moveHandler = new ChangeStateResidencyHandler();
       if (moveEvent) moveHandler.handledEvents.push(moveEvent);
@@ -146,17 +150,17 @@ function _getStateContributions(context) {
 
 /**
  * Build the CHANGE_STATE_RESIDENCY one-off event for a Jan-1 state move, or null
- * when no `stateMoveYear` is configured. Mirrors how US_AU_CROSS_BORDER builds
- * CHANGE_RESIDENCY from `moveYear`.
+ * when no `stateMoveDate` is configured. Mirrors how US_AU_CROSS_BORDER builds
+ * CHANGE_RESIDENCY from `moveDate`.
  */
 function _buildStateMoveEvent(parameters) {
-  const year = parameters.stateMoveYear;
-  if (!year) return null;
+  const day = assertOnAnchor('stateMoveDate', parameters.stateMoveDate);
+  if (!day) return null;
   const destination = parameters.stateMoveDestination || null;
   return new OneOffEvent({
     name:    'Change State Residency',
     type:    'CHANGE_STATE_RESIDENCY',
-    date:    new Date(Date.UTC(year, 0, 1)),   // Jan 1 — destination taxes the full year (design 34 §9.1)
+    date:    saleDateToUtc(day),   // a 1 Jan — destination taxes the full year (design 34 §9.1)
     data:    { destination },
     enabled: true,
     color:   '#FF8A65',

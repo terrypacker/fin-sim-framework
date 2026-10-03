@@ -68,7 +68,7 @@ const IDENTITY = Object.freeze({ order: 100, prebuilt: false });
  * subtly not the one the lab ran.
  *
  * An `undefined` OBJECT PROPERTY is fine and is expected: `buildDefaultConfig` writes
- * `stateMoveYear: p.stateMoveYear ?? undefined` for a dozen optional keys, and the loader
+ * `stateMoveDate: p.stateMoveDate ?? undefined` for a dozen optional keys, and the loader
  * reads absent and undefined identically (`if (val === undefined) continue`). Inside an ARRAY
  * it is not fine — JSON turns a hole into `null`, which is a value — so the array branch
  * checks each element rather than trusting the object rule.

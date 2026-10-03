@@ -12,7 +12,7 @@
  * main-residence-from-lever.test.mjs — the move-in date as a sweepable lever.
  *
  * `mainResidenceFrom` is a stored date; the lever is `prop.<sk>.mainResidenceFromYear`, a
- * FRACTIONAL year, filed in Cross Border beside moveYear. Fractional because the US §121
+ * FRACTIONAL year, filed in Cross Border beside moveDate. Fractional because the US §121
  * 2-of-5 test is a cliff at 730 days and a whole-year grid strides over it.
  */
 
@@ -90,15 +90,15 @@ test('MRF-3 the generated param lives in Cross Border, seeded from the date', ()
     'the rest of the house keeps its own group');
 });
 
-test('MRF-4 the MC list, the grid and the optimizer offer it beside moveYear, fractional', () => {
+test('MRF-4 the MC list, the grid and the optimizer offer it beside moveDate, fractional', () => {
   const cfg = loadedCfg();
   const { ctx } = new IntlRetirementMcRunner({ simEnd: SIM_END, cfgTemplate: cfg })._prepare({});
   const plan = dateToFractionalYear(MOVE_IN);
 
   const mc = ctx.variables.find(v => v.paramKey === KEY);
   assert.ok(mc, 'the MC batch list offers the move-in date');
-  assert.strictEqual(mc.group, ctx.variables.find(v => v.paramKey === 'moveYear').group,
-    'in the same section as the move year');
+  assert.strictEqual(mc.group, ctx.variables.find(v => v.paramKey === 'moveDate').group,
+    'in the same section as the move date');
   assert.strictEqual(mc.group, 'Cross Border');
   assert.strictEqual(mc.mean, plan);
   assert.ok(!mc.integer, 'an MC draw keeps its fraction');
@@ -108,8 +108,8 @@ test('MRF-4 the MC list, the grid and the optimizer offer it beside moveYear, fr
     const row = rows.find(v => v.paramKey === KEY);
     assert.ok(row, `${name}: offered`);
     assert.strictEqual(row.group, 'Cross Border', `${name}: in Cross Border`);
-    assert.strictEqual(rows.find(v => v.paramKey === 'moveYear').group, row.group,
-      `${name}: beside the move year, as in the batch list`);
+    assert.strictEqual(rows.find(v => v.paramKey === 'moveDate').group, row.group,
+      `${name}: beside the move date, as in the batch list`);
     assert.strictEqual(row.type, OPT_PARAM_TYPES.CONTINUOUS, `${name}: not whole years`);
     assert.strictEqual(row.step, 0.5);
   }

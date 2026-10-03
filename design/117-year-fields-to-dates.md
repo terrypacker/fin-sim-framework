@@ -1,8 +1,8 @@
 # 117 — Year fields become Dates
 
 **Status:** ACCEPTED, 2 Oct 2026. The decisions in §3 were taken with the author, and Q1–Q3
-(§11) are answered as proposed (D8–D10). **Phases 1–3 BUILT** 2 Oct 2026 (§12–§14);
-phases 4–7 not started.
+(§11) are answered as proposed (D8–D10). **Phases 1–4 BUILT** 2 Oct 2026 (§12–§15);
+phases 5–7 not started.
 Scope is groups A and B of the 2 Oct inventory (§2): fields where a year stands for one
 moment, and loan-term boundaries. Annual windows and year-keyed schedules stay years (§2.3).
 Design 116 (employment spells) phase 4 waits on §5, the optimizer's Date type.
@@ -450,3 +450,36 @@ The reasoning as proposed:
   through the migration. A smoke run on a legacy export with year 2041 and month 3 set fired
   the two owners' rollovers on 1 Mar and 20 Mar 2041, their own retirement days.
 - **Help.** `bequest`, `person` and the concept `roth-conversions` were updated and restamped.
+
+## 15. As built — phase 4 (2 Oct 2026)
+
+- **The moves are anchored dates.** `moveYear` became `moveDate`, always a 1 Jul, and
+  `stateMoveYear` became `stateMoveDate`, always a 1 Jan. Both are `type: 'Date'` with a
+  `dateAnchor`, and a legacy year converts to that year's anchor day. One table,
+  `DATE_ANCHORS` in `year-date-migration.js`, is the source of the anchor days. The schema
+  entries, the migration (`dateFromYearFor`, `toDateFor`), the curated Opt rows, the
+  harvested MC rows, the Scenario panel editor and the scripts all read it.
+- **Rejection (D5).** Both toolsets pass the date through `assertOnAnchor` before scheduling
+  the move. A date on any other day throws, and the error names the rule and phase 7, so an
+  off-boundary move cannot run with the wrong tax. A bare year is read as its anchor day.
+- **Sweeps.** The curated Opt rows are DATE rows that step whole years on the anchor (2026
+  to 2035, as before). The harvested MC row is UNIFORM_DATE ±2 years with the anchor on the
+  row, so every draw snaps to the day. A saved NORMAL year row becomes an anchored
+  NORMAL_DATE, and a saved INTEGER Opt range becomes an anchored DATE range stepping years.
+- **Editor.** `dateAnchor` is carried onto the typed param entries, and re-synced as
+  schema-owned. The Scenario panel renders an anchored Date param as a year input with
+  "on 1 Jul" beside it, so it cannot produce a day the toolset would reject. Blank means no
+  move.
+- **Goldens.** No fixture carries the moves, so all 15 matched without a regold. The
+  move's CHANGE_RESIDENCY event fires at the same instant as before.
+- **Scripts.** `variant.mjs` keeps its `moveYear` lever and writes the 1 Jul date.
+  `sweep-scenario --param moveYear` (or `moveDate`) sweeps years onto 1 Jul. The probes read
+  the move's year from `moveDate`.
+- **Tests.** The cross-border tests author `moveDate` and add a rejection test. The
+  `mc-grid-runner` reference lever is now `moveDate`, and the `mc-axis-liveness` gate gained
+  a `date` nudge; before that it had no case for date rows. `mc-integer-year-rows` keeps the
+  integer mechanism on a synthetic row and pins the moves as anchored date rows; W0b-4 now
+  checks that a sampled draw snaps to 1 Jan 2032 and moves residency that day. Also added:
+  migration tests and a Scenario panel test for the year-only editor. A smoke run on a
+  pre-117 export swept `--param moveYear` across 2029 to 2033 (all on 1 Jul) and ran a
+  `variant-grid` `moveYear` axis; both moved the result.

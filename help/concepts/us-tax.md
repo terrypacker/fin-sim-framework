@@ -3,7 +3,7 @@ id: us-tax
 kind: concept
 title: US Tax
 panels: [journal-report]
-params: [residencyState, usFilingSingle, usFederalBracketIndexSpread, usStateBracketIndexSpread, usFicaWageBaseIndexSpread, usFeieCapIndexSpread, stateMoveYear, stateMoveDestination, primarySsClaimAge]
+params: [residencyState, usFilingSingle, usFederalBracketIndexSpread, usStateBracketIndexSpread, usFicaWageBaseIndexSpread, usFeieCapIndexSpread, stateMoveDate, stateMoveDestination, primarySsClaimAge]
 design: [71-tax-worksheet-csv-export.md]
 stamps:
   param:residencyState: 188c33
@@ -12,7 +12,7 @@ stamps:
   param:usStateBracketIndexSpread: 7f550c
   param:usFicaWageBaseIndexSpread: a676c0
   param:usFeieCapIndexSpread: 277ceb
-  param:stateMoveYear: cd47bc
+  param:stateMoveDate: ef6579
   param:stateMoveDestination: 2f214c
   param:primarySsClaimAge: b186dd
   panel:journal-report: e88448
@@ -22,8 +22,9 @@ Filing status, state residency, and how the federal thresholds are projected for
 
 **State residency is the lever people forget.** Federal tax is the same everywhere;
 state tax is not, and a few modelled states differ enough that moving between them is
-worth a run of its own. It can change mid-plan with its own move year and
-destination, independently of any international move — retiring from a high-tax state
+worth a run of its own. It can change mid-plan with its own move date — always a
+1 January, so the new state taxes the whole year — and destination, independently of
+any international move — retiring from a high-tax state
 to a no-tax one is a common and material plan.
 
 **The index spreads are the part worth understanding before trusting a long run.**

@@ -10,6 +10,7 @@
 
 import { OPT_PARAM_TYPES }            from './optimization-objectives.js';
 import { parseDateAnchor, toUtcDate }  from './opt-date.js';
+import { DATE_ANCHORS }               from '../../scenarios/year-date-migration.js';
 import { INTL_RETIREMENT_DEFAULTS, DRAWDOWN_STRATEGIES, buildDrawdownWeightSchema, IntlRetirementScenario,
          presentDrawdownWeightRoles, drawdownWeightKey, DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP,
          buildAllocWeightSchema, presentAllocations, allocWeightKey,
@@ -210,10 +211,11 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
 
   // ── Migration timing ──────────────────────────────────────────────────────
   {
-    paramKey: 'moveYear',
-    label:    'US→AU Move Year',
-    type:     OPT_PARAM_TYPES.INTEGER,
-    min: 2026, max: 2035, step: 1,
+    // A DATE pinned to 1 Jul (design 117 D5): the search steps whole years on that day.
+    paramKey: 'moveDate',
+    label:    'US→AU Move Date',
+    type:     OPT_PARAM_TYPES.DATE,
+    min: '2026-07-01', max: '2035-07-01', step: 1, anchor: DATE_ANCHORS.moveDate,
     // The schema's group, so the grid and Opt lists file it where the MC batch list
     // does — beside the move-in-date levers it is swept against.
     group:    'Cross Border',
@@ -222,10 +224,10 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
 
   // ── State move (design 34 §9 — establish residency in a destination state) ─
   {
-    paramKey: 'stateMoveYear',
-    label:    'State Move Year',
-    type:     OPT_PARAM_TYPES.INTEGER,
-    min: 2026, max: 2035, step: 1,
+    paramKey: 'stateMoveDate',
+    label:    'State Move Date',
+    type:     OPT_PARAM_TYPES.DATE,
+    min: '2026-01-01', max: '2035-01-01', step: 1, anchor: DATE_ANCHORS.stateMoveDate,
     group:    'US Tax',
     enabled:  false,
   },

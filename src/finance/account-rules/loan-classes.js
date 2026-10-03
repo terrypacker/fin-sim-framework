@@ -176,7 +176,7 @@ export function synthesizeLoanForProperty(prop) {
     // Interest-only mortgage (design 86 G2). Absent ⇒ false ⇒ the P&I path, byte-for-byte.
     interestOnly:      prop.mortgageInterestOnly ?? false,
     deductibleFraction: prop.mortgageDeductibleFraction ?? null,
-    // Loan term (design 86 G6). Absolute calendar years, like moveYear elsewhere — a real offset loan has an IO period of ~5 years and a
+    // Loan term (design 86 G6). Absolute calendar years, as the moves and sales were before design 117 — a real offset loan has an IO period of ~5 years and a
     // 25–30 year term, and both are dates the borrower knows, not durations.
     interestOnlyUntilYear: prop.mortgageInterestOnlyUntilYear ?? null,
     maturityYear:          prop.mortgageMaturityYear          ?? null,
@@ -1321,7 +1321,7 @@ function _section988ForPayment(state, loanKey, loan, oldBalance, principalPart) 
  * citizen whose tax home is Australia is therefore *foreign* for this purpose, and
  * the same gain that was US-source before the move becomes foreign-source after it.
  *
- * The model's per-person `residency` (flipped at `moveYear` by ChangeResidencyHandler)
+ * The model's per-person `residency` (flipped at `moveDate` by ChangeResidencyHandler)
  * is exactly that concept, so it is read directly rather than re-derived. A loan is
  * attributed to its own `ownerId`, else its linked property's, else the first person —
  * the fallback chain the earnings handlers already use. Both spouses move together in

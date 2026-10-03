@@ -440,9 +440,9 @@ export class IntlRetirementMcConfig {
   static contributors = [
     ()          => DEFAULT_MC_VARIABLE_CONFIGS,
     ({ params }) => buildShockMcConfigs(params),
-    // State Move Year (and the cross-border moveYear) now arrive through the schema
-    // harvest in buildVariables — `mc: true`, a year kind, so `integer: true` and
-    // emitted only when set (design 98 W3.7 retired buildStateMoveMcConfigs).
+    // The State Move Date (and the cross-border moveDate) arrive through the schema
+    // harvest in buildVariables — `mc: true`, a date kind pinned to its anchor day
+    // (design 117 D5), emitted only when set (design 98 W3.7 retired buildStateMoveMcConfigs).
     ({ params }) => buildMortalityMcConfigs(params),
   ];
 

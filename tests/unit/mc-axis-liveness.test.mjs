@@ -165,6 +165,9 @@ function nudged(v) {
     case 'year':   return Math.round(v.mean) - 2;
     case 'rate':   return v.mean + 0.02;
     case 'amount': return v.mean * 1.5;
+    // A date row (design 117): two years earlier, on the same day — an anchored move
+    // stays on its anchor.
+    case 'date':   return `${Number(String(v.mean).slice(0, 4)) - 2}${String(v.mean).slice(4, 10)}`;
     default:       return undefined;
   }
 }

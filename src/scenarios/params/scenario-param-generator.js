@@ -316,7 +316,7 @@ export class ScenarioParamGenerator {
           label:        `${recordName} — ${t.label}`,
           type:         t.money ? 'Money' : t.type,
           // A template field may file itself outside its record's group — the move-in
-          // date sits in "Cross Border" beside moveYear, the lever it is swept against.
+          // date sits in "Cross Border" beside moveDate, the lever it is swept against.
           group:        t.group ?? group,
           defaultValue: recordFieldValue(record, t.deriveDefaultFrom ?? t.field),
           node,

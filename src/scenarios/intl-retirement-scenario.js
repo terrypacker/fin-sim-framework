@@ -193,7 +193,7 @@ export const INTL_RETIREMENT_DEFAULTS = {
   spouseMonthlyWage:    4_000,
   primaryRetirementDate: new Date(Date.UTC(2040, 0, 1)),
   spouseRetirementDate:  new Date(Date.UTC(2040, 0, 1)),
-  moveYear:             2031,  // calendar year of US→AU move (Jul 1)
+  moveDate:             '2031-07-01',  // US→AU move — always a 1 Jul (design 117 D5)
 
   // US Savings (primary USD cash pool)
   initialUsSavings:     30_000,
@@ -218,8 +218,8 @@ export const INTL_RETIREMENT_DEFAULTS = {
 
   // US state income tax (design 34) — null = no state configured (no state tax)
   residencyState:   null,
-  // US state move (design 34 §9) — unset = no move; Jan-1 move to the destination
-  stateMoveYear:        undefined,
+  // US state move (design 34 §9) — unset = no move; a 1 Jan move to the destination
+  stateMoveDate:        undefined,
   stateMoveDestination: null,
 
   // Equity growth: no per-account rates since design 99 P2 — every equity holding earns
@@ -270,7 +270,7 @@ export const INTL_RETIREMENT_DEFAULTS = {
   exchangeRateUsdToAud: 1.55,  // 1 USD = 1.55 AUD
   intlTransferFeeUsd:   15,    // fixed fee per transfer in USD
 
-  // FX process (design 92). This plan moves to Australia in `moveYear` and stays
+  // FX process (design 92). This plan moves to Australia on `moveDate` and stays
   // there while the wealth remains USD-denominated, so the currency mismatch runs
   // the full horizon rather than ending at the house sale — see the fx-study
   // writeup. A pinned rate is therefore not a neutral default here, it is a
@@ -765,7 +765,7 @@ export const INTL_RETIREMENT_PARAM_ALIASES = Object.freeze({
 /**
  * IntlRetirementScenario — International two-person retirement simulation.
  *
- * Two people (primary + spouse), US→AU migration on Jul 1 of moveYear.
+ * Two people (primary + spouse), US→AU migration on moveDate (always a 1 Jul).
  * Wired entirely through the toolset compiler path (Path 2 in BaseApp):
  * getToolsets() declares all 11 toolsets; buildDefaultConfig() produces the
  * serialized persons/accounts/realProperties/collectibles for a fresh load.
@@ -896,8 +896,8 @@ export class IntlRetirementScenario extends BaseScenario {
    * (with stable stateKeys) plus a parameters map aligned to toolset param keys.
    */
   static buildDefaultConfig(params = {}, simStart, simEnd) {
-    // Legacy sale-year overrides (`usHouseSaleYear: 2035`) become the generated sale-date
-    // key, converted to the date they always meant (design 117 §6.1).
+    // Legacy year overrides (`usHouseSaleYear: 2035`, `moveYear: 2031`) become their date
+    // keys, converted to the date they always meant (design 117 §6.1).
     const p = { ...INTL_RETIREMENT_DEFAULTS, ...migrateParamBag(params) };
     const toDate = v => (v instanceof Date ? v : new Date(v));
     p.primaryBirthDate      = toDate(p.primaryBirthDate);
@@ -914,8 +914,8 @@ export class IntlRetirementScenario extends BaseScenario {
     const parameters = {
       // US_STATE_TAX (design 34) — cascades onto the primary person's residencyState
       residencyState:           p.residencyState || null,
-      // US_STATE_TAX state move (design 34 §9) — Jan-1 move to a destination state
-      stateMoveYear:            p.stateMoveYear ?? undefined,
+      // US_STATE_TAX state move (design 34 §9) — a 1 Jan move to a destination state
+      stateMoveDate:            p.stateMoveDate ?? undefined,
       stateMoveDestination:     p.stateMoveDestination || null,
       // US_BANKING
       usSavingsInterestRate:    p.usSavingsInterestRate,
@@ -975,7 +975,7 @@ export class IntlRetirementScenario extends BaseScenario {
         },
       },
       // US_AU_CROSS_BORDER
-      moveYear:                 p.moveYear,
+      moveDate:                 p.moveDate,
       exchangeRateUsdToAud:     p.exchangeRateUsdToAud,
       intlTransferFeeUsd:       p.intlTransferFeeUsd,
       fxProcessModel:           p.fxProcessModel,

@@ -1041,6 +1041,8 @@ export class ScenarioLoader {
       if (s.ordered)     entry.ordered     = s.ordered;
       if (s.visibleWhen) entry.visibleWhen = s.visibleWhen;
       if (s.hidden)      entry.hidden      = s.hidden;
+      // A date pinned to one day of the year (design 117 D5): the editor offers the year.
+      if (s.dateAnchor)  entry.dateAnchor  = s.dateAnchor;
       // Money param metadata (design 10 §Phase 5): seed the chosen currency from
       // cfg.parameters' sibling override or the schema default; carry the state
       // paths this param stamps and its default for re-seeding.
@@ -1093,6 +1095,9 @@ export class ScenarioLoader {
       // Text→Enum) must propagate onto already-persisted entries — not just be
       // backfilled when absent.
       if (s.type        && p.type !== s.type)                p.type        = s.type;
+      // The anchor is schema-owned too (design 117 D5): it is what a pinned date means.
+      if (s.dateAnchor)  p.dateAnchor = s.dateAnchor;
+      else if (p.dateAnchor) delete p.dateAnchor;
       if (p.description === undefined && s.description)     p.description = s.description;
       // The node is schema-owned metadata (the param→record cascade declaration),
       // not user data — so re-sync it from the schema rather than only backfilling

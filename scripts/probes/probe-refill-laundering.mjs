@@ -67,6 +67,7 @@ import { loadBaseConfig, describeSource } from '../lib/scenario-source.mjs';
 import { parseFlags } from '../lib/cli.mjs';
 import { allParams } from '../lib/variant.mjs';
 import { SHOCK_LIBRARY } from '../../src/finance/economic-shocks/shock-library.js';
+import { yearOfDate } from '../../src/scenarios/year-date-migration.js';
 
 const WRAPPER_TYPES = new Set(['ira', '401k', 'k401', 'roth', 'super']);
 const CASH_TYPES    = new Set(['savings', 'checking']);
@@ -239,7 +240,7 @@ function runArm(arm) {
 // ─── run ──────────────────────────────────────────────────────────────────────
 
 const cfgProbe  = structuredClone(base);
-const moveYear  = getParam(cfgProbe, 'moveYear');
+const moveYear  = yearOfDate(getParam(cfgProbe, 'moveDate'));   // a date since design 117
 const arms      = buildArms(cfgProbe);
 const results   = new Map();
 for (const arm of arms) results.set(arm.id, { arm, ...runArm(arm) });

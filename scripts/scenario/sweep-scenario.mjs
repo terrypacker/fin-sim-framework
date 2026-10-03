@@ -26,7 +26,7 @@
  *
  * Usage:
  *   node scripts/sweep-scenario.mjs s.json --param equity.companyEquityAccount.plannedSaleDate --range 2027:2035
- *   node scripts/sweep-scenario.mjs s.json --param moveYear --range 2028:2036 --step 2
+ *   node scripts/sweep-scenario.mjs s.json --param moveDate --range 2028:2036 --step 2
  *   node scripts/sweep-scenario.mjs s.json --param usStockGrowthRate --values 0.06,0.08,0.10
  *   node scripts/sweep-scenario.mjs s.json --param prop.usHouseProperty.plannedSaleDate --range 2027:2035 --json
  *
@@ -49,8 +49,8 @@
  *   person.<id>.retirementDate / .monthlyWage
  * Run with a bogus --param to print the full list for a given scenario.
  *
- * A sale date swept with --range takes years: each year Y runs the sale on 15 Jan of Y,
- * the date a sale year always meant (design 117). A retired `companySaleYear` /
+ * A date swept with --range takes years: each year Y runs a sale on 15 Jan of Y, the date
+ * a sale year always meant, and a move on its fixed day (1 Jul; a state move 1 Jan). A retired `companySaleYear` /
  * `…plannedSaleYear` --param is read as its date successor.
  */
 
@@ -60,7 +60,7 @@ import { ServiceRegistry }     from '../../src/services/service-registry.js';
 import { BaseScenario }        from '../../src/scenarios/base-scenario.js';
 import { ScenarioLoader }      from '../../src/scenarios/scenario-loader.js';
 import { computeNetLiquidity } from '../../src/finance/derived-metrics/net-liquidity.js';
-import { migrateYearFieldsToDates, migratedParamKey, toSaleDate } from '../../src/scenarios/year-date-migration.js';
+import { migrateYearFieldsToDates, migratedParamKey, toDateFor } from '../../src/scenarios/year-date-migration.js';
 import { parseFlags }          from '../lib/cli.mjs';
 
 // ─── CLI parsing ──────────────────────────────────────────────────────────────
@@ -96,8 +96,9 @@ function runOne(baseCfg, param, value, endDate) {
   let found = false;
   for (const p of (cfg.params ?? [])) {
     if (p.name !== param) continue;
-    // A Date param (a sale date, design 117) swept by year: the year's sale date.
-    if (p.type === 'Date' && typeof value === 'number') value = toSaleDate(value);
+    // A Date param swept by year (design 117): the year's sale date, or for a pinned date
+    // (the moves) that year's anchor day.
+    if (p.type === 'Date' && typeof value === 'number') value = toDateFor(param, value);
     p.value = value;
     found = true;
   }

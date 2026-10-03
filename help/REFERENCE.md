@@ -148,8 +148,8 @@ scenario's own schema), which is where to go to change it.
   USD to AUD exchange rate applied on international transfers
 - **`intlTransferFeeUsd`** — International Transfer Fee (USD) · `Number` · default `15` · sweep: mc · via US_AU_CROSS_BORDER
   Fixed fee per international wire transfer in USD
-- **`moveYear`** — US→AU Move Year · `Number` · default — · sweep: mc+opt · via US_AU_CROSS_BORDER
-  Calendar year of US→AU migration (Jul 1). Leave unset for no move.
+- **`moveDate`** — US→AU Move Date · `Date` · default — · sweep: mc+opt · via US_AU_CROSS_BORDER
+  The day of the US→AU migration. Only 1 July is accepted, the first day of the AU financial year, until a part-year resident's tax is modelled; the year is the choice. Leave unset for no move.
 - **`startingResidency`** — Starting Residency · `Enum` · default — · one of `US`, `AU` · sweep: opt · via US_AU_CROSS_BORDER
   Starting country of tax residency for all persons (e.g. "US", "AU"). Defaults to "US" when unset.
 - **`usFeieElected`** — US FEIE Elected (Form 2555) · `Boolean` · default `false` · sweep: opt · via US_AU_CROSS_BORDER
@@ -519,10 +519,10 @@ scenario's own schema), which is where to go to change it.
 
 - **`residencyState`** — US Residency State · `Enum` · default — · one of —, `NE`, `HI`, `SD` · sweep: opt · via SCENARIO
   US state of residency for state income tax (NE, HI, SD). Blank = none.
+- **`stateMoveDate`** — State Move Date · `Date` · default — · sweep: mc+opt · via US_STATE_TAX
+  The day residency moves to the destination state. Only 1 January is accepted, so the destination taxes the whole year, until part-year state residency is modelled; the year is the choice. Leave unset for no state move.
 - **`stateMoveDestination`** — State Move Destination · `Enum` · default — · one of `NE`, `HI`, `SD` · sweep: opt · via US_STATE_TAX
   Destination US state for the Jan-1 state move (design 34 §9).
-- **`stateMoveYear`** — State Move Year · `Number` · default — · sweep: mc+opt · via US_STATE_TAX
-  Calendar year to establish residency in the destination state (effective Jan 1). Leave unset for no state move.
 - **`usFederalBracketIndexSpread`** — US Federal Bracket Indexation Spread · `Number` · default `0` · sweep: mc · via US_TAX
   Annual rate at which US FEDERAL tax brackets, the standard deduction, the FICA wage base and the FEIE cap are projected to rise past the newest published table, expressed as a spread ADDED TO inflation (0 = track CPI, -0.03 against 3% inflation = frozen brackets). Published years are always used as legislated. Does NOT move the FICA wage base or the FEIE cap — those have their own spreads.
 - **`usFeieCapIndexSpread`** — US FEIE Cap Indexation Spread · `Number` · default `0` · sweep: mc · via US_TAX
@@ -2106,7 +2106,7 @@ what the in-app panel keys on.
 | [Contributions and Payroll](concepts/contributions-and-payroll.md) | concept | 242 | 1 panel · 13 params · design 95 |
 | [Cost Basis and Company Equity](concepts/cost-basis-and-equity.md) | concept | 247 | 2 panels · 3 params · design 94, 72 |
 | [Field × Action](panels/cross-action-query.md) | panel | 196 | 1 panel |
-| [Cross-Border Residency](concepts/cross-border-residency.md) | concept | 238 | 2 panels · 4 params · design 36, 52 |
+| [Cross-Border Residency](concepts/cross-border-residency.md) | concept | 265 | 2 panels · 4 params · design 36, 52 |
 | [Dashboard](panels/dashboard.md) | panel | 183 | 1 panel |
 | [Decision Graph](panels/dg-config.md) | panel | 168 | 1 panel · design 30 |
 | [DG Results](panels/dg-results.md) | panel | 162 | 1 panel · design 30 |
@@ -2161,7 +2161,7 @@ what the in-app panel keys on.
 | [Stochastic Return Paths](concepts/stochastic-return-paths.md) | concept | 268 | 2 panels · 15 params · design 74, 90, 102 |
 | [Tax Harvesting and Asset Location](concepts/tax-harvesting.md) | concept | 235 | 2 panels · 3 params · design 29, 94 |
 | [Timeline](panels/timeline.md) | panel | 203 | 1 panel |
-| [US Tax](concepts/us-tax.md) | concept | 244 | 1 panel · 9 params · design 71 |
+| [US Tax](concepts/us-tax.md) | concept | 256 | 1 panel · 9 params · design 71 |
 | [Watchlist](panels/watchlist.md) | panel | 209 | 1 panel · design 101 |
 
 ---

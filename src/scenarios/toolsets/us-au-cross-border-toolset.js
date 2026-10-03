@@ -24,6 +24,7 @@ import { FxTickHandler }              from '../../finance/fx/fx-tick-handler.js'
 import { FxStepApplyReducer }         from '../../finance/fx/fx-step-apply-reducer.js';
 import { FxProcessReducer }           from '../../finance/fx/fx-process-reducer.js';
 import { FX_PROCESS_MODEL_IDS }       from '../../finance/fx/fx-process-models.js';
+import { DATE_ANCHORS, assertOnAnchor, saleDateToUtc } from '../year-date-migration.js';
 
 /**
  * Per-context FxService singleton (reused across state/handlers/reducers calls).
@@ -133,10 +134,14 @@ export const US_AU_CROSS_BORDER = {
   paramSchema(context) {
     return [
       {
-        key: 'moveYear', label: 'US→AU Move Year',
-        type: 'Number', group: 'Cross Border', mc: true, opt: true,
+        // A date pinned to 1 Jul (design 117 D5): the AU settle taxes only the resident part
+        // of a July–June year, which is right only for a move on its first day.
+        key: 'moveDate', label: 'US→AU Move Date',
+        type: 'Date', dateAnchor: DATE_ANCHORS.moveDate, group: 'Cross Border', mc: true, opt: true,
         defaultValue: undefined,
-        description: 'Calendar year of US→AU migration (Jul 1). Leave unset for no move.',
+        description: 'The day of the US→AU migration. Only 1 July is accepted, the first day of '
+          + 'the AU financial year, until a part-year resident\'s tax is modelled; the year is the '
+          + 'choice. Leave unset for no move.',
       },
       {
         key: 'startingResidency', label: 'Starting Residency',
@@ -272,10 +277,10 @@ export const US_AU_CROSS_BORDER = {
         .events
     ));
 
-    const moveYear = context.parameters.moveYear;
-    if (moveYear) {
-      // CHANGE_RESIDENCY fires on Jul 1 of moveYear (matches IntlRetirementScenario)
-      const moveDate = new Date(Date.UTC(moveYear, 6, 1));
+    // CHANGE_RESIDENCY fires on the move date, which must be a 1 Jul (design 117 D5).
+    const moveDay = assertOnAnchor('moveDate', context.parameters.moveDate);
+    if (moveDay) {
+      const moveDate = saleDateToUtc(moveDay);
       events.push(new OneOffEvent({
         name:    'Change Residency',
         type:    'CHANGE_RESIDENCY',
@@ -316,7 +321,7 @@ export const US_AU_CROSS_BORDER = {
     }
 
     // Residency change handler
-    if (p.moveYear) {
+    if (p.moveDate) {
       const changeResEvent = context.schedulesById['CHANGE_RESIDENCY'];
       const changeResHandler = new ChangeResidencyHandler();
       if (changeResEvent) changeResHandler.handledEvents.push(changeResEvent);

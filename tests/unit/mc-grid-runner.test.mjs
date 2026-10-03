@@ -40,16 +40,20 @@ const template = () => IntlRetirementScenario.buildDefaultConfig({ fxProcessMode
 // A lever that is an Opt row and NOT an MC variable, so the plan-values cell must equal
 // the plain batch with nothing re-cut. It must HAVE a plan value: the first choice here
 // (`rothConversionStartYear`) is null on the default plan, and the tests still passed
-// with `undefined` and `NaN` as axis values. `planValue` now refuses that.
-const LEVER = 'moveYear';
+// with `undefined` and `NaN` as axis values. `planValue` now refuses that. The move is a
+// DATE pinned to 1 Jul since design 117, so its axis values are dates.
+const LEVER = 'moveDate';
 
 /** The value the batch world runs at for `key`; throws when the plan carries none. */
 function planValue(key) {
   const { ctx } = new IntlRetirementMcRunner({ simEnd: SIM_END, cfgTemplate: template() })._prepare({});
   const v = get(ctx.base, key);
-  assert.ok(Number.isInteger(v), `${key} has an integer plan value (got ${JSON.stringify(v)})`);
+  assert.match(String(v), /^\d{4}-07-01$/, `${key} has a 1 Jul plan date (got ${JSON.stringify(v)})`);
   return v;
 }
+
+/** `date` moved `years` on, on the same day. */
+const yearsOn = (date, years) => `${Number(date.slice(0, 4)) + years}${date.slice(4)}`;
 
 const strip = (rows) => rows.map(({ cell: _cell, ...r }) => r);
 const grid  = (opts) => new McGridRunner({ simEnd: SIM_END, cfgTemplate: template(), ...opts });
@@ -80,7 +84,7 @@ describe('McGridRunner (design 100 §7)', () => {
   test('MGR-3 an MC cell at the plan\'s values is the MC batch, exactly', async () => {
     const plan = planValue(LEVER);
     const plain = await new IntlRetirementMcRunner({ n: 3, simEnd: SIM_END, cfgTemplate: template() }).run();
-    const g = await grid({ n: 3, axes: [{ paramKey: LEVER, values: [plan, plan + 2] }] }).run();
+    const g = await grid({ n: 3, axes: [{ paramKey: LEVER, values: [plan, yearsOn(plan, 2)] }] }).run();
 
     assert.deepEqual(g.referenceCell, { index: 0, idx: [0], exact: true });
     assert.deepEqual(g.removedFromSampling, []);
@@ -109,7 +113,7 @@ describe('McGridRunner (design 100 §7)', () => {
     const single = await new IntlRetirementMcRunner({ n: 1, simEnd: SIM_END, cfgTemplate: template(), mcConfig: allOff })
       .run({ mcSequenceRisk: false, mcInflationPath: false });
 
-    const g = await grid({ n: 50, mode: GRID_MODES.DETERMINISTIC, axes: [{ paramKey: LEVER, values: [plan, plan + 2] }] }).run();
+    const g = await grid({ n: 50, mode: GRID_MODES.DETERMINISTIC, axes: [{ paramKey: LEVER, values: [plan, yearsOn(plan, 2)] }] }).run();
 
     assert.equal(g.n, 1, 'a deterministic cell is one path whatever n says');
     assert.ok(g.cells.every(c => c.rows.length === 1));
@@ -132,7 +136,7 @@ describe('McGridRunner (design 100 §7)', () => {
 
   test('MGR-6 a sharded 2-D grid is bit-identical to the serial one, cells in row-major order', async () => {
     const plan = planValue(LEVER);
-    const axes = [{ paramKey: LEVER, values: [plan, plan + 1] }, { paramKey: 'inflationRate', values: [0.02, 0.04] }];
+    const axes = [{ paramKey: LEVER, values: [plan, yearsOn(plan, 1)] }, { paramKey: 'inflationRate', values: [0.02, 0.04] }];
 
     const serial = await grid({ n: 2, axes }).run();
     const pool = new McWorkerPool({ size: 3, spawn: nodeMcSpawn() });
@@ -145,6 +149,6 @@ describe('McGridRunner (design 100 §7)', () => {
 
     assert.deepStrictEqual(par, serial);
     assert.deepEqual(serial.cells.map(c => c.values),
-      [[plan, 0.02], [plan, 0.04], [plan + 1, 0.02], [plan + 1, 0.04]]);
+      [[plan, 0.02], [plan, 0.04], [yearsOn(plan, 1), 0.02], [yearsOn(plan, 1), 0.04]]);
   });
 });

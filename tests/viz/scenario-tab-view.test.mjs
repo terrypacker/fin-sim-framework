@@ -380,6 +380,24 @@ test('_renderParamsList: editing Date input stores ISO string in param.value', (
   assert.strictEqual(scenario.params[0].value, '2038-06-15');
 });
 
+test('_renderParamsList: an anchored Date param (a move) edits the YEAR; the day is fixed', () => {
+  // Design 117 D5: the moves are dates pinned to 1 Jul / 1 Jan, so the editor cannot
+  // produce a day the toolset would reject.
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'moveDate', type: 'Date', value: '2031-07-01', dateAnchor: '07-01' }] };
+  view._renderParamsList(scenario);
+  assert.strictEqual(document.querySelectorAll('#paramsList input[type="date"]').length, 0, 'no free date picker');
+  const year = document.querySelector('#paramsList [data-id="anchored-date-year"]');
+  assert.strictEqual(year.value, '2031');
+  assert.match(document.querySelector('#paramsList .anchored-date-day').textContent, /on 1 Jul/);
+  year.value = '2034';
+  year.dispatchEvent(new Event('change'));
+  assert.strictEqual(scenario.params[0].value, '2034-07-01');
+  year.value = '';
+  year.dispatchEvent(new Event('change'));
+  assert.strictEqual(scenario.params[0].value, null, 'blank is no move');
+});
+
 test('_renderParamsList: Boolean param renders a select with true/false options', () => {
   const view = new ScenarioTabView();
   const scenario = { params: [{ name: 'reinvest', type: 'Boolean', value: false }] };
