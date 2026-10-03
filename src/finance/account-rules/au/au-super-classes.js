@@ -314,6 +314,14 @@ export class AuSuperCapsAccumulateReducer extends Reducer {
     const prev = all[key] ?? {};
     const rec  = { ...prev };
     for (const f of fields) rec[f] = +(((prev[f] ?? 0) + amount).toFixed(2));
+    // Design 116 §9 — the s10A base is per employer, so a job's qualifying earnings are
+    // also counted on their own. Only when the action names one: a legacy earner's record
+    // keeps its shape. The financial-year reset rebuilds the record without this map.
+    if (action.type === 'AU_QUALIFYING_EARNINGS_APPLY' && action.employerKey != null) {
+      const byEmp = { ...(prev.qualifyingEarningsByEmployer ?? {}) };
+      byEmp[action.employerKey] = +(((byEmp[action.employerKey] ?? 0) + amount).toFixed(2));
+      rec.qualifyingEarningsByEmployer = byEmp;
+    }
     // Remember WHICH fund this person's contributions went to. The settle needs it to
     // snapshot their total superannuation balance, and it has no StateRegistry to
     // resolve the role with — so recording the key the handler already resolved beats

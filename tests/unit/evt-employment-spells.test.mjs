@@ -22,6 +22,8 @@
  *   ESP-9: a person working past 67 draws a benefit and a wage in the same month
  *   ESP-10: jobs round-trip through serializeScenario; a scenario without jobs gains no key
  *   ESP-11: hasPayrollContributions sees a spell earner whose flat wage is 0
+ *   ESP-12: a job's employer match wins; a blank one inherits (phase 3)
+ *   ESP-13: a new employer restarts the s10A maximum contributions base (phase 3)
  */
 
 import { test } from 'node:test';
@@ -249,4 +251,59 @@ test('ESP-11: payroll gating sees a spell earner whose flat wage is 0', () => {
   assert.equal(hasPayrollContributions(people, {}, US_CONTRIBUTION_FIELDS), false);
   const spellsByPerson = { p: [{ id: 'j', startMs: 0, endMs: null, baseMonthlyWage: 5000 }] };
   assert.equal(hasPayrollContributions(people, {}, US_CONTRIBUTION_FIELDS, spellsByPerson), true);
+});
+
+/** Every action of `type` for `personKey`, one per action, with its month. */
+function actionsOf(sim, type, personKey, pred = () => true) {
+  const byId = new Map();
+  for (const e of sim.journal.journal) {
+    const d = payload(e);
+    if (e.action?.type !== type || d.personKey !== personKey || !pred(d)) continue;
+    byId.set(e.action.instanceId ?? `${e.seq}`, { month: ym(new Date(e.date)), ...d });
+  }
+  return [...byId.values()];
+}
+
+test('ESP-12: a job\'s employer match wins over the person; a blank one inherits', () => {
+  const { sim } = load({
+    simEnd: D(2026, 9, 1),
+    mutate: cfg => { cfg.persons.find(p => p.id === 'primary').k401DeferralPct = 0.10; },
+    jobs: [
+      { id: 'a', personId: 'primary', endDate: '2026-05-01', monthlyWage: 10000,
+        wageCurrency: 'USD', k401EmployerMatchPct: 0.06 },
+      { id: 'b', personId: 'primary', startDate: '2026-05-01', monthlyWage: 10000,
+        wageCurrency: 'USD' },
+    ],
+  });
+  sim.stepTo(D(2026, 9, 1));
+  const match = actionsOf(sim, 'K401_CONTRIBUTION_APPLY', 'primary', d => d.employerFunded);
+  const months = new Map(match.map(m => [m.month, m.amount]));
+  assert.equal(months.get('2026-03'), 600, '6% of 10,000 under job a');
+  assert.equal(months.get('2026-06') ?? 0, 0, 'job b inherits the household default of 0');
+  const deferral = actionsOf(sim, 'K401_CONTRIBUTION_APPLY', 'primary', d => !d.employerFunded);
+  assert.ok(deferral.some(d => d.month === '2026-06' && d.amount === 1000),
+    'the EMPLOYEE\'s deferral stays on the person across jobs');
+});
+
+test('ESP-13: a second employer in the same year starts its own s10A base', () => {
+  const big = 80000;   // well past the annual base inside one employer's half-year
+  const { sim } = load({
+    simEnd: D(2027, 3, 1),
+    jobs: [
+      { id: 'au1', personId: 'spouse', startDate: '2026-07-01', endDate: '2027-01-01',
+        monthlyWage: big, wageCurrency: 'AUD', workCountry: 'AU', superGuaranteePct: 0.12 },
+      { id: 'au2', personId: 'spouse', startDate: '2027-01-01', monthlyWage: big,
+        wageCurrency: 'AUD', workCountry: 'AU', superGuaranteePct: 0.12 },
+    ],
+  });
+  sim.stepTo(D(2027, 3, 1));
+  const sg = new Map(actionsOf(sim, 'SUPER_CONTRIBUTION_APPLY', 'spouse', d => d.employerFunded)
+    .map(a => [a.month, a.amount]));
+  const qe = actionsOf(sim, 'AU_QUALIFYING_EARNINGS_APPLY', 'spouse');
+  assert.ok(qe.every(a => a.employerKey === 'au1' || a.employerKey === 'au2'));
+  assert.ok((sg.get('2026-07') ?? 0) > 0, 'job one pays SG at first');
+  assert.equal(sg.get('2026-12') ?? 0, 0, 'job one\'s base is exhausted by December');
+  assert.ok((sg.get('2027-01') ?? 0) > 0, 'job two starts its own base in January');
+  const rec = sim.state.auSuperCapsByPerson.spouse;
+  assert.ok(rec.qualifyingEarningsByEmployer.au1 > 0 && rec.qualifyingEarningsByEmployer.au2 > 0);
 });

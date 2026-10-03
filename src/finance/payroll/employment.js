@@ -35,6 +35,17 @@
  * MPC lever (D5) would need this resolver. Keep it a leaf.
  */
 
+/**
+ * Employer-set terms a job may carry (design 116 phase 3). Each is optional: empty
+ * inherits the person's own value, then the household default — the chain `elect()` in
+ * the payroll handler already applies once the spell's value is laid over the person.
+ * The EMPLOYEE's elections (deferral, sacrifice, IRA, Roth, personal super) stay on the
+ * person: they move with the person, not with the job.
+ */
+export const JOB_EMPLOYER_TERMS = Object.freeze([
+  'k401EmployerMatchPct', 'k401MatchTiers', 'k401NonElectivePct', 'superGuaranteePct',
+]);
+
 /** A `job` record field that is a date ('YYYY-MM-DD'), as authored. */
 export const JOB_DATE_FIELDS = Object.freeze(['startDate', 'endDate']);
 
@@ -145,10 +156,23 @@ export function earnerView(person, date, state, spellsByPerson = null) {
     workCountry:  s.workCountry,
     selfEmployed: !!s.selfEmployed,
     spellId:      s.id,
+    // The job's employer terms win over the person's own; an empty one leaves the
+    // person's value (and through it the household default) in force.
+    ...Object.fromEntries(JOB_EMPLOYER_TERMS
+      .filter(f => s[f] != null).map(f => [f, s[f]])),
   };
 }
 
 /** Does this person draw a wage at any point in the run? (compile-time gating) */
+/**
+ * Does any of the person's jobs carry a positive value in one of `fields`? Lets the
+ * payroll gate schedule contributions for an employer term set only on a job.
+ */
+export function anySpellTerm(person, fields, spellsByPerson = null) {
+  const spells = spellsOf(person, spellsByPerson);
+  return !!spells?.some(s => fields.some(f => (typeof s[f] === 'number' ? s[f] : 0) > 0));
+}
+
 export function everEarns(person, spellsByPerson = null) {
   const spells = spellsOf(person, spellsByPerson);
   if (spells == null) return (person?.monthlyWage ?? 0) > 0;
@@ -199,6 +223,7 @@ export function buildSpells(jobs, person, simStart) {
       wageCurrency:    j.wageCurrency ?? person.wageCurrency ?? null,
       workCountry:     j.workCountry  ?? null,
       selfEmployed:    !!j.selfEmployed,
+      ...Object.fromEntries(JOB_EMPLOYER_TERMS.map(f => [f, j[f] ?? null])),
     }))
     .sort((a, b) => (a.startMs ?? -Infinity) - (b.startMs ?? -Infinity));
 }

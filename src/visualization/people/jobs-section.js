@@ -40,7 +40,14 @@ export const JOB_FORM_FIELDS = Object.freeze([
   { field: 'wageCurrency', label: 'Currency',      kind: 'select' },
   { field: 'workCountry',  label: 'Work Country',  kind: 'select' },
   { field: 'selfEmployed', label: 'Self-employed', kind: 'checkbox' },
+  // Phase 3 — employer terms. Blank inherits the person's value, then the household's.
+  { field: 'k401EmployerMatchPct', label: '401(k) Match',   kind: 'number' },
+  { field: 'k401NonElectivePct',   label: 'Non-Elective',   kind: 'number' },
+  { field: 'superGuaranteePct',    label: 'Super Guarantee', kind: 'number' },
 ]);
+
+/** The employer-term columns: nullable fractions, where blank means "inherit". */
+const TERM_FIELDS = ['k401EmployerMatchPct', 'k401NonElectivePct', 'superGuaranteePct'];
 
 /** The DOM id prefix of a job cell. */
 export const JOB_ID_PREFIX = 'job_';
@@ -57,6 +64,10 @@ const COLUMN_EXTRAS = {
                   options: [['', 'Residency'], ['US', 'US'], ['AU', 'AU']],
                   badge: r => (r.workCountry ? `works in ${r.workCountry}` : null) },
   selfEmployed: { width: '0.6fr', optional: true, badge: r => (r.selfEmployed ? 'self-employed' : null) },
+  ...Object.fromEntries(TERM_FIELDS.map(f => [f, {
+    step: '0.005', min: '0', max: '1', width: '0.8fr', placeholder: 'inherit', optional: true,
+    badge: r => (r[f] != null ? `${JOB_FORM_FIELDS.find(x => x.field === f).label} ${(r[f] * 100).toFixed(1)}%` : null),
+  }])),
 };
 
 const dateStr = v => (v == null || v === '' ? null
@@ -161,6 +172,11 @@ export class JobsSection {
       wageCurrency: r.wageCurrency ?? 'USD',
       workCountry:  r.workCountry || null,
       selfEmployed: !!r.selfEmployed,
+      // Blank stays null — "inherit" — and never becomes 0, which would opt the job out
+      // of the household's rate (design 95 §13.2's rule, applied per job).
+      ...Object.fromEntries(TERM_FIELDS
+        .filter(f => r[f] != null && r[f] !== '').map(f => [f, Number(r[f])])),
+      ...(Array.isArray(r.k401MatchTiers) && { k401MatchTiers: r.k401MatchTiers }),
     }));
   }
 }

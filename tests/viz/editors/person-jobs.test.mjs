@@ -126,4 +126,17 @@ describe('person editor — Jobs table (design 116)', () => {
       expect(q(root, 'jobsBody').querySelector(`[data-id="job_${f.field}"]`)).not.toBeNull();
     }
   });
+
+  test('an employer term left blank inherits; a typed 0 opts the job out (phase 3)', () => {
+    const { editor, root } = render(BASE_PERSON);
+    addJob(root);
+    const all = q(root, 'jobsShowAll');
+    all.checked = true;
+    fire(all, 'change');
+    expect('superGuaranteePct' in editor.readJobs()[0]).toBe(false);
+    const match = q(root, 'jobsBody').querySelector('[data-id="job_k401EmployerMatchPct"]');
+    match.value = '0';
+    fire(match, 'change');
+    expect(editor.readJobs()[0].k401EmployerMatchPct).toBe(0);
+  });
 });

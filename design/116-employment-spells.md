@@ -1,6 +1,6 @@
 # 116 — Employment spells: more than one job per person
 
-**Status:** IN PROGRESS, 3 Oct 2026. Phases 1 (engine) and 2 (editor + help) BUILT — see §11. Decisions in §3 were
+**Status:** IN PROGRESS, 3 Oct 2026. Phases 1 (engine), 2 (editor + help) and 3 (employer terms) BUILT — see §11. Decisions in §3 were
 taken with the author; Q1 and Q3 are answered (D6, D7) and Q2 is open with one constraint (§10).
 D6 (Social Security decoupled from work) moved to design 118 as its phase 1, 2 Oct 2026:
 the claim age it defers to cannot be defined while `retirementDate` also gates payment.
@@ -346,3 +346,23 @@ Recorded so a later design starts from the list:
 - **Help.** `help/nodes/job.md`; `help/nodes/person.md` explains one job vs several.
 - **Tests.** `tests/viz/editors/person-jobs.test.mjs`, `tests/unit/scenario-jobs.test.mjs`;
   verified in the browser (convert, add, save, Rebuild ⇒ `people.primary.spells` in state).
+
+### Phase 3 — employer terms per job (3 Oct 2026)
+
+- **Inheritance.** A job may carry `k401EmployerMatchPct`, `k401MatchTiers`,
+  `k401NonElectivePct` and `superGuaranteePct` (`JOB_EMPLOYER_TERMS`). `earnerView` lays a
+  non-null one over the person, so `elect()` resolves job → person → household with no new
+  code path. The employee's elections stay on the person.
+- **s10A base per employer.** `AU_QUALIFYING_EARNINGS_APPLY` carries `employerKey` (the job
+  id) for a spell earner; `AuSuperCapsAccumulateReducer` also keeps
+  `qualifyingEarningsByEmployer[jobId]`, and `computePayroll` measures a spell earner's base
+  against that job's own total. The model's base is ANNUAL (per FY), not quarterly, as it
+  was before this design; the new key makes it per employer within that. The FY reset
+  rebuilds the record, which drops the map. Legacy records keep their shape.
+- **Gating.** `hasPayrollContributions` also counts an employer term set only on a job.
+- **Editor.** Match, Non-Elective and Super Guarantee columns (behind "More columns"); blank
+  stays null (inherit), a typed 0 survives. `k401MatchTiers` is honoured by the engine but
+  has no column: a list inside a row would be a nested table. Open if wanted.
+- **Tests.** ESP-12 (a job's match wins, a blank one inherits, the deferral follows the
+  person), ESP-13 (a second employer in the same FY restarts the base), and the editor's
+  inherit/opt-out round trip.

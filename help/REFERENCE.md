@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-223 parameters · 33 panels · 12 node types (188 fields) · 173 action types · 86 tools · 291 state field types · 76 topics · 126 design docs
+223 parameters · 33 panels · 12 node types (191 fields) · 173 action types · 86 tools · 291 state field types · 76 topics · 126 design docs
 
 ---
 
@@ -579,7 +579,7 @@ true statement about the registry, not a gap in this file.
 
 ---
 
-## Node types (12 kinds · 188 fields)
+## Node types (12 kinds · 191 fields)
 
 Every kind of record the Nodes panel can open, and every control its edit form offers.
 The inventory is read from the FORM — the `<template>` in `index.html` the editor
@@ -650,7 +650,7 @@ Explained in [`help/nodes`](nodes/person.md). 12 field(s) described by a record 
 - **`superNonConcessionalContribution`** — Non-Concessional · `MONEY` · topic
   An annual after-tax contribution with no deduction and no 15% fund tax. It buys a tax-sheltered location rather than a deduction, and is bound by the non-concessional cap and its bring-forward rule.
 
-### Jobs — `job` (7 fields)
+### Jobs — `job` (10 fields)
 
 Explained in [`help/nodes`](nodes/job.md). 0 field(s) described by a record parameter.
 
@@ -668,6 +668,12 @@ Explained in [`help/nodes`](nodes/job.md). 0 field(s) described by a record para
   Where this job's work is physically done, which decides which country taxes it as local income. "Residency" follows wherever the person lives at the time.
 - **`selfEmployed`** — Self-employed · `checkbox` · topic
   This job's pay is self-employment income rather than wages: US self-employment tax applies, and in Australia there is no employer to pay the Super Guarantee or take a salary sacrifice.
+- **`k401EmployerMatchPct`** — 401(k) Match · `number` · topic
+  This employer's 401(k) match, read as a full match on the first share of pay; 0.04 matches up to 4%. Blank uses the person's own setting, then the household's. A typed 0 means this employer matches nothing.
+- **`k401NonElectivePct`** — Non-Elective · `number` · topic
+  A contribution this employer makes whether or not the person defers anything, as a share of pay. Blank inherits; 0 means none.
+- **`superGuaranteePct`** — Super Guarantee · `number` · topic
+  The Super Guarantee rate this employer pays on AUD wages. Blank inherits the person's rate, then the household's. Each employer has its own maximum contributions base, so a new job in the same year starts its base again.
 
 ### Accounts — `account` (33 fields)
 
@@ -1649,7 +1655,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `AU_HOUSE_SALE_TAX` | usShortTermGain: currency(AUD), usLongTermGain: currency(AUD), auShortTermGain: currency(AUD), auLongTermGain: currency(AUD), gain: currency(AUD), auIndexedGain: currency(AUD), depreciationGain: currency(AUD), residency: text, proceeds: currency(AUD), costBasis: currency(AUD), description: text, ownershipType: text, ownerId: text, owners: any, auTaxableFraction: number, auExemptionReason: text, acquisitionMs: number, saleMs: number, mainResidenceFrom: text, mainResidenceUntil: text, isPrimaryResidence: boolean | AU_REAL_PROPERTY |
 | `AU_INVESTMENT_INTEREST_DEDUCTION` | loanKey: text, amount: number, residency: text, currency: text, ownerId: text, ownershipType: text, owners: any | AU_REAL_PROPERTY, US_REAL_PROPERTY |
 | `AU_PERIOD_ADVANCE` | period: any | AU_TAX |
-| `AU_QUALIFYING_EARNINGS_APPLY` | amount: currency(AUD), personKey: text, clamps: any, carriedForward: currency(AUD) | AU_RETIREMENT |
+| `AU_QUALIFYING_EARNINGS_APPLY` | amount: currency(AUD), personKey: text, clamps: any, carriedForward: currency(AUD), employerKey: text | AU_RETIREMENT |
 | `AU_RENTAL_INCOME_APPLY` | netCash: currency(AUD), taxableRental: number, monthlyDepreciation: number, stateKey: text, residency: text | AU_REAL_PROPERTY |
 | `AU_RENTAL_INCOME_TAX` | amount: number, residency: text, ownershipType: text, ownerId: text, owners: any | AU_REAL_PROPERTY |
 | `AU_SAVINGS_CONTRIBUTION_APPLY` | amount: currency(AUD) | AU_BANKING |
@@ -2154,7 +2160,7 @@ what the in-app panel keys on.
 | [Inflation](concepts/inflation.md) | concept | 261 | 2 panels · 18 params · design 103 |
 | [Edit](panels/inspector.md) | panel | 182 | 1 panel |
 | [Interest Rates and the Yield Curve](concepts/interest-rates.md) | concept | 350 | 2 panels · 23 params · design 56, 67 |
-| [Job](nodes/job.md) | node | 205 | 2 panels · design 116, 50, 73 |
+| [Job](nodes/job.md) | node | 217 | 2 panels · design 116, 50, 73 |
 | [Journal Report](panels/journal-report.md) | panel | 193 | 1 panel · design 16 |
 | [Lineage](panels/lineage.md) | panel | 196 | 1 panel · design 30 |
 | [Liquidity Pools](concepts/liquidity-pools.md) | concept | 294 | 1 panel · 6 params · design 97 |

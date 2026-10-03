@@ -9,9 +9,9 @@ sources: [src/finance/payroll/employment.js, src/visualization/people/jobs-secti
 stamps:
   panel:config-list: 786f94
   panel:paycheque: f8d503
-  node:job: 8ec124
-  src/finance/payroll/employment.js: 3d1fde
-  src/visualization/people/jobs-section.js: 446435
+  node:job: 3cd594
+  src/finance/payroll/employment.js: be07c5
+  src/visualization/people/jobs-section.js: 73fb9a
 ---
 
 One stretch of employment for one person: a raise, a pay cut, part-time work before
@@ -29,7 +29,8 @@ The wage is entered in **today's money** and inflates with the CPI of its own cu
 country from the start of the run, before any move. A job starting in 2035 at 9,000 means
 a job paying what 9,000 buys now. The person's payroll elections (deferrals, salary
 sacrifice, splits) apply to whichever job is current; a USD job feeds the 401(k) and an
-AUD one feeds super. The Nodes panel lists every job; selecting one opens its person.
+AUD one feeds super. Employer terms (match, non-elective, Super Guarantee) can differ by
+job; blank inherits. The Nodes panel lists every job; selecting one opens its person.
 
 ## Fields
 
@@ -40,3 +41,6 @@ AUD one feeds super. The Nodes panel lists every job; selecting one opens its pe
 - `wageCurrency` — The currency this job pays in. It picks the payroll stream: USD pay reaches the 401(k), IRA and Roth elections; AUD pay reaches super. A split that names an account in the other currency falls back to the transaction account.
 - `workCountry` — Where this job's work is physically done, which decides which country taxes it as local income. "Residency" follows wherever the person lives at the time.
 - `selfEmployed` — This job's pay is self-employment income rather than wages: US self-employment tax applies, and in Australia there is no employer to pay the Super Guarantee or take a salary sacrifice.
+- `k401EmployerMatchPct` — This employer's 401(k) match, read as a full match on the first share of pay; 0.04 matches up to 4%. Blank uses the person's own setting, then the household's. A typed 0 means this employer matches nothing.
+- `k401NonElectivePct` — A contribution this employer makes whether or not the person defers anything, as a share of pay. Blank inherits; 0 means none.
+- `superGuaranteePct` — The Super Guarantee rate this employer pays on AUD wages. Blank inherits the person's rate, then the household's. Each employer has its own maximum contributions base, so a new job in the same year starts its base again.

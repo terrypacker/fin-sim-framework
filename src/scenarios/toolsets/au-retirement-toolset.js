@@ -170,7 +170,10 @@ export const AU_RETIREMENT = {
       { type: 'AU_QUALIFYING_EARNINGS_APPLY',      fields: { amount: ValueType.currency('AUD'),
                                                              personKey: ValueType.text(),
                                                              clamps: ValueType.any(),
-                                                             carriedForward: ValueType.currency('AUD') } },
+                                                             carriedForward: ValueType.currency('AUD'),
+                                                             // Design 116 §9 — the job whose
+                                                             // s10A base this counts toward.
+                                                             employerKey: ValueType.text() } },
       // The s290-150 deduction leg. Classified by AuTaxModule2026 into
       // auPersonDeductibleSuperYTD; carries no money of its own.
       { type: 'SUPER_PERSONAL_DEDUCTION',          fields: { amount: ValueType.currency('AUD'),

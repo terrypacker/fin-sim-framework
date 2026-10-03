@@ -18,7 +18,7 @@ import { ficaOnWage, LAST_PUBLISHED_FICA_YEAR }    from '../tax/us/fica-rates.js
 import { bracketIndexationFactor, BRACKET_INDEX_SERIES }
   from '../tax/inflation-adjusted-tax-rates.js';
 import { monthlyAuSuper, auFinancialYearOf }      from '../payroll/au-super-caps.js';
-import { earnerView, everEarns }                  from '../payroll/employment.js';
+import { earnerView, everEarns, anySpellTerm }    from '../payroll/employment.js';
 
 /**
  * payroll-handler.js — design 95 phase 0. One pipeline, two queue positions.
@@ -148,7 +148,9 @@ export function hasPayrollContributions(people, params, fields, spellsByPerson =
   if (earning.length === 0) return false;
   // A household default only counts if SOMEONE can inherit it — a person who has
   // explicitly elected 0 in every gating field is opted out, not merely silent.
-  return earning.some(p => positive(p) || fields.some(f => p?.[f] == null && (params?.[f] ?? 0) > 0));
+  return earning.some(p => positive(p)
+    || anySpellTerm(p, fields, spellsByPerson)
+    || fields.some(f => p?.[f] == null && (params?.[f] ?? 0) > 0));
 }
 
 /** Gating elections for the US stream. */
@@ -203,6 +205,21 @@ function _ownsAuStream(person, au = {}) {
       || (elect(person, 'superSalarySacrificePct',             au.salarySacrificePct ?? 0)             > 0)
       || (elect(person, 'superPersonalDeductibleContribution', au.personalDeductibleContribution ?? 0) > 0)
       || (elect(person, 'superNonConcessionalContribution',    au.nonConcessionalContribution ?? 0)    > 0);
+}
+
+/**
+ * The AU caps record as one employer sees it (design 116 §9).
+ *
+ * The s10A maximum contributions base is per EMPLOYER: a person who changes job starts
+ * the new employer's base from nothing. So a spell earner's qualifying earnings are read
+ * from their running total for THAT job, while every other figure (the concessional and
+ * non-concessional caps) stays per person. A legacy earner has no `spellId` and reads the
+ * record exactly as before.
+ */
+function _capsForEmployer(caps, spellId) {
+  if (spellId == null) return caps ?? {};
+  return { ...(caps ?? {}),
+           qualifyingEarningsYTD: caps?.qualifyingEarningsByEmployer?.[spellId] ?? 0 };
 }
 
 /**
@@ -446,7 +463,7 @@ export function computePayroll({ date, state, stateRegistry, us = {}, au = {},
                                   au.personalDeductibleContribution ?? 0),
           nonConcessionalAnnual: elect(person, 'superNonConcessionalContribution',
                                        au.nonConcessionalContribution ?? 0),
-          caps: state.auSuperCapsByPerson?.[personKey] ?? {},
+          caps: _capsForEmployer(state.auSuperCapsByPerson?.[personKey], person.spellId),
           // s292-85(3)(c) — the bring-forward is unavailable from the year you turn 75.
           age: ageAt(person.birthDate, new Date(Date.UTC(fy + 1, 5, 30))),
           indexFactor: auIndexFactor,
@@ -819,7 +836,9 @@ export class PayrollHandler extends HandlerEntry {
       if (e.ownsAuStream && e.auCaps && e.auCaps.countableEarnings > 0) {
         superStreams.push({ type: 'AU_QUALIFYING_EARNINGS_APPLY',
                             amount: e.auCaps.countableEarnings,
-                            personKey: e.personKey, ...auClamped });
+                            personKey: e.personKey, ...auClamped,
+                            // Design 116: the D9 seam — whose base this counts toward.
+                            ...(e.person.spellId != null && { employerKey: e.person.spellId }) });
       }
       if (superStreams.length > 0) {
         actions.push(...superStreams);
