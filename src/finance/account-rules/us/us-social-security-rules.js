@@ -226,3 +226,55 @@ export function ownFactor(birthDate, entitledMi, asOfMi = Infinity) {
   }
   return 1 + applied * drcMonthlyRate(birthDate);
 }
+
+// ── The spousal benefit (design 118 §4.4, phase 3) ──────────────────────────────
+
+/**
+ * Reduction for a wife's or husband's benefit `monthsEarly` months before FRA, as a
+ * fraction: 25/36 of 1% for each of the first 36 months, 5/12 of 1% beyond
+ * (20 CFR 404.410(b)).
+ */
+export function spousalReduction(monthsEarly) {
+  const n = Math.max(0, monthsEarly);
+  return (Math.min(n, 36) * 25 / 36 + Math.max(0, n - 36) * 5 / 12) / 100;
+}
+
+/**
+ * The factor applied to a spousal benefit that starts in `spousalStartMi`. The months are
+ * counted to the spouse's own FRA, table 404.409(a), which covers wife's and husband's
+ * benefits. Never above 1: delayed credits are an increase to the old-age benefit only
+ * (42 U.S.C. 402(w); 20 CFR 404.313(e)(2)).
+ */
+export function spousalFactor(birthDate, spousalStartMi) {
+  return 1 - spousalReduction(fraMonth(birthDate) - spousalStartMi);
+}
+
+/**
+ * The spousal amount payable on top of a person's own benefit, for one month (20 CFR
+ * 404.330(d), 404.333, 404.407(a); 42 U.S.C. 402(q)(3)(B); POMS RS 00615.020 method C and
+ * RS 00615.694):
+ *
+ * 1. The full spousal benefit is half the worker's PIA. A person whose own PIA is equal or
+ *    larger is not entitled to it, so nothing is payable.
+ * 2. The excess of the full spousal benefit over the person's own PIA is reduced by the
+ *    spousal factor.
+ * 3. The combined amount is the own benefit without delayed credits plus that excess. The
+ *    own benefit WITH its credits is subtracted from it, and the rest, not below zero, is
+ *    the spousal amount. Delayed credits on the person's own benefit therefore eat into
+ *    the excess rather than adding to it.
+ *
+ * A person with no record of their own passes `ownPia` 0 and both own benefits 0.
+ *
+ * @param {object} p
+ * @param {number} p.ownPia           the person's own PIA
+ * @param {number} p.workerPia        the spouse's PIA
+ * @param {number} p.ownBenefit       the person's own benefit this month, credits included
+ * @param {number} p.ownBenefitNoDrc  the same benefit without delayed credits
+ * @param {number} p.factor           `spousalFactor` for the month the spousal benefit began
+ * @returns {number}
+ */
+export function spousalPayable({ ownPia, workerPia, ownBenefit, ownBenefitNoDrc, factor }) {
+  const full = workerPia / 2;
+  if (ownPia >= full) return 0;
+  return Math.max(0, ownBenefitNoDrc + (full - ownPia) * factor - ownBenefit);
+}

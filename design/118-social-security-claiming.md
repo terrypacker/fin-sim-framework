@@ -1,7 +1,7 @@
 # 118 — Social Security claiming: claim age, spousal and survivor benefits
 
 **Status:** ACCEPTED, 2 Oct 2026. D1–D3 in §3 were taken with the author; D4–D11 are
-proposals. **Phases 1–2 BUILT** 2 Oct 2026 (§12–§13); phases 3–5 not started. Resolves issue #292 (`MonthlySocialSecurityHandler` is FRA-only), and
+proposals. **Phases 1–3 BUILT** 2 Oct 2026 (§12–§14); phases 4–5 not started. Resolves issue #292 (`MonthlySocialSecurityHandler` is FRA-only), and
 takes over design 116's D6, Social Security decoupled from work (§5.1, D4).
 Every rule below is cited to a source saved in `docs/us-social-security/` (§4).
 
@@ -99,6 +99,11 @@ benefit only, 402(w)).
   the spousal amount over their own (404.407(a)). Under 402(q)(3)(B), when the spouse
   claimed their own benefit early, the total is:
   `own PIA × own factor + max(0, ½ × worker PIA − own PIA) × spousal factor`.
+  *(Corrected in phase 3, §14.)* When the spouse's own benefit carries delayed credits,
+  the credits come out of the excess: the combined amount is computed without them, and
+  the own benefit with them is subtracted to give the spousal amount payable, not below
+  zero (POMS RS 00615.694, saved in `docs/us-social-security/`). So the total is
+  `max(own with credits, own without credits + reduced excess)`.
 - **Spousal reduction.** 25/36 of 1% for each of the first 36 months before the spouse's
   FRA, then 5/12 of 1% (404.410(b)). For FRA 67: 35% at 62, 30% at 63, 25% at 64, 16⅔% at
   65, 8⅓% at 66, none from 67. The months are counted from the month the spousal benefit
@@ -192,7 +197,8 @@ For each living person `p` (with spouse `s` when the household has two):
    `own = 0`.
 2. **Spousal** (only while `s` is alive and stamped, and `p` is entitled, D9):
    `excess = max(0, ½ × s.socialSecurityMonthly − p.socialSecurityMonthly)`;
-   `spousal = excess × spousalFactor(p, max(p.entitledMonth, s.entitledMonth))`. A person
+   `spousal = excess × spousalFactor(p, max(p.entitledMonth, s.entitledMonth))`, less any
+   delayed credits on `p`'s own benefit, not below zero (§4.4, §14). A person
    with no record of their own (`socialSecurityMonthly` 0) is entitled at their claim age
    on the spousal benefit alone.
 3. **Survivor** (only once widowed and at or past `ssSurvivorFromMs`):
@@ -376,4 +382,58 @@ fail.
 **Help.** `help/nodes/person.md` documents the PIA meaning and the claim-once rule, and
 says what is not modelled yet. The field itself is described only by its template
 (tier 1). `help/concepts/us-tax.md` drops the retired param and points at the person.
+
+## 14. As built — phase 3 (2 Oct 2026)
+
+**Rules.** `us-social-security-rules.js` adds `spousalReduction` (404.410(b): 25/36 of 1%
+for the first 36 months, 5/12 beyond), `spousalFactor` (counted to the spouse's own FRA,
+table 404.409(a), never above 1) and `spousalPayable`, which follows POMS step by step:
+nothing when the own PIA is at least half the worker's (404.330(d)); otherwise the own
+benefit without credits plus the reduced excess, less the own benefit with credits, not
+below zero.
+
+**A correction to §4.4 and §5.4.** The design took the excess to be untouched by the
+spouse's own delayed credits. The statute on disk did not settle it: 402(k)(3)(A)
+subtracts the old-age benefit "after reduction under subsection (q)" and says nothing of
+(w). SSA's manual does. Two POMS sections were fetched (secure.ssa.gov serves them,
+unlike www.ssa.gov) and saved: RS 00615.020 (dual entitlement, method C: the full own
+benefit comes off the full spouse benefit, then each is reduced) and RS 00615.694 (credits
+on the own benefit are subtracted from the combined amount). The tests read both pages'
+example figures from the saved files and reproduce them: 920 for method C, 290 for
+RS 00615.694. A spouse who delays to 70 can therefore lose the top-up entirely.
+
+**The handler.** In a household of exactly two (D8), each person's spouse is the other
+entry in `state.people`; the top-up ends when that entry is removed at death. Per person:
+
+- **Worker's month.** The spouse's stamp, or their claim age's month; none if the spouse
+  has no PIA.
+- **Own entitlement.** A person with a PIA is stamped at their own claim month, as in
+  phase 2. A person with no PIA is entitled, and stamped, at the later of their claim
+  month and the worker's (402(b)(1): no spousal benefit before the worker is entitled).
+  `ssEntitledMs` is therefore "first month entitled to any benefit", and both spouses'
+  stamps fix the spousal start for good (D7).
+- **Spousal start** is the later of the two entitlement months; the factor is counted
+  from it, not from the person's own claim. Deemed filing (D9) is this rule: no separate
+  spousal claim age exists.
+- **Paid** is `own + spousal`, as one `SS_INCOME_APPLY` whose payload now carries `own`
+  and `spousal` (declared on the action, so the journal keeps them). Survivor is phase 4.
+
+**Goldens: none changed.** Every golden with two people sets the spouse's PIA to exactly
+half the primary's, and 404.330(d) pays nothing at equality, so no top-up is due
+anywhere. That was checked against each fixture's people, not inferred from the
+unchanged run. The handler payload's two new fields are journal data, not state.
+
+**Tests.** `us-social-security-rules.test.mjs` SSR-SP-*: the 404.410(b) example (80.18,
+which the CFR truncates from 80.189), the two POMS examples, the FRA-67 spousal factors
+(65% at 62 … 100% from 67), no top-up at or above half, a zero-PIA spouse, credits that
+consume the whole excess. `monthly-social-security-handler.test.mjs` SS-SPOUSE-*: a
+zero-PIA spouse entitled at their claim age once the worker is; a worker claiming after
+the spouse (the top-up waits, reduced from its own start: 44 months); own PIA at or above
+half; the spouse's own credits eating the excess; a household of one; the worker's
+claim factor not reaching the spousal amount. `ss-claim-age-liveness.test.mjs` SSCA-6
+loads the reference plan with the spouse's PIA cut to 400 and a claim at 62, and finds
+the October 2045 payment split into the reduced own benefit and the reduced top-up.
+
+**Help.** `help/nodes/person.md` says the top-up exists and that survivor benefits are
+not modelled yet; `help/REFERENCE.md` lists the two new action fields.
 

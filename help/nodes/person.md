@@ -28,9 +28,9 @@ on residency, and a cross-border household needs both editable in one place.
 shown greyed behind it; a typed 0 elects nothing, and the two produce very different
 runs.
 
-**A Social Security claim is made once.** A run records the month of the first payment
-and keeps that factor for life. Not yet modelled: the earnings test on an early claim
-while working, which it overstates, and spousal and survivor benefits.
+**Social Security is claimed once**; the first month's factor holds for life. A
+spouse whose own benefit is under half the other's gets the difference from the later
+claim. Not modelled yet: the early-claim earnings test and survivor benefits.
 
 Several fields here are also scenario parameters — they carry a link badge, edits
 write the parameter rather than the record, and their full description lives with the

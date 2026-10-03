@@ -1,0 +1,121 @@
+Source: SSA Program Operations Manual System, RS 00615.020, effective 12/05/2023 (https://secure.ssa.gov/poms.nsf/lnx/0300615020). Fetched 2026-10-02.
+
+RS 00615.020 Dual Entitlement Overview
+A.  Policy
+1.  General
+A person may be entitled to more than one benefit at the same time. For example, a
+person may be entitled as a retired worker on their own record and as a spouse on
+another record. However, a person's benefit amount can never exceed the highest single
+benefit to which that person is entitled. Some benefits are calculated independently
+with the larger benefit being paid or the smaller benefit being paid plus the excess
+amount of the larger one. Other types of benefits are calculated with a carry-over
+reduction amount from the first benefit to the second.
+2.  Calculation Category
+The following are the types of calculations that are possible:
+•
+Method A - Both benefits calculated independently; one benefit payable.
+•
+Method B - Both benefits calculated and reduced independently; small MBA paid plus
+excess of larger MBA.
+NOTE : If larger MBA is a RIB or DIB just pay the RIB or DIB.
+•
+Method C - First benefit calculated independently; reduce excess of second benefit
+for age (if larger).
+•
+Method D - First benefit calculated independently; carry-over reduction applies to
+second benefit.
+3.  Examples of Calculations
+The following are examples of each of the four methods of calculating the reduced
+benefits:
+•
+Method A – A widow is entitled to a benefit of $850 before reduction on one deceased
+spouse's record. They are also entitled to a benefit of $670 before reduction on their
+second deceased spouse's record. Each benefit is reduced separately and the higher
+is paid.
+•
+Method B – A widow is entitled to a benefit of $1000 before reduction. They are also
+entitled to a RIB of $400 before reduction. Each benefit is reduced separately. The
+widow benefit is reduced to $900 and the RIB is reduced to $380. The reduced RIB is
+subtracted from the reduced widow benefit. The result is the excess widow benefit
+payable - $520. The total paid is $900, the sum of the reduced excess widow benefit
+and the reduced RIB.
+•
+Method C - A spouse is entitled to a benefit of $1000 before reduction. They are also
+entitled to a RIB of $400 before reduction. The full RIB is subtracted from the full
+spouse benefit. The excess ($600) is then reduced to $540. The RIB is reduced to $380.
+The total payable is $920, the sum of the reduced spouse excess and the reduced RIB.
+Note: For months in which a spouse has a child-in-care, the amount payable as a spouse will
+always be the difference between the unreduced spouse benefit and the reduced RIB
+rate.
+•
+Method D – A person is entitled to reduced RIB for six months. They then become entitled
+to DIB. The DIB is reduced by the number of months of reduced RIB entitlement.
+B.  Procedure — DUAL ENTITLEMENT CALCULATION CHART
+Use the following chart to determine the type of dual entitlement calculation from
+RS 00615.020A.2. for each situation:
+If the Type Benefits is...
+Then the Calculation Category is...
+HA then A
+a
+HA with A
+a
+HA then B
+c
+HA with B
+c
+HA then D/W
+c
+HA with D/W
+c
+A then B
+c
+A with B
+c
+A then D
+b
+A with D
+b
+A then HA
+d
+A with HA
+a
+A then secondary unreduced benefit
+b
+A with secondary unreduced benefit
+b
+B then HA
+b
+B with HA
+c
+B then A
+b
+B with A
+c
+B and B
+a
+Secondary unreduced benefit with A
+b
+Secondary unreduced benefit then A
+b
+C and C (if CFM applies, only one C benefit is payable but entitlement on all records
+is material in calculating the rate)
+a
+D then B
+b
+D then B6
+a
+D with D
+a
+D/W prior to age 62 then A or HA. If the date of birth is prior to 1/2/1928 a carry-over
+reduction applies and the calculation type is d.
+b
+D/W age 62 or older then A or HA
+b
+D/W with HA
+c
+D/W then HA
+b
+E/F and HA
+b
+F and F
+a

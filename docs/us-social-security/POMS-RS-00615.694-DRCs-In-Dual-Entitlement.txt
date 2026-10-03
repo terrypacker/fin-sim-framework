@@ -1,0 +1,41 @@
+Source: SSA Program Operations Manual System, RS 00615.694, effective 12/06/2023 (https://secure.ssa.gov/poms.nsf/lnx/0300615694). Fetched 2026-10-02.
+
+RS 00615.694 DRCs in Dual-Entitlement Cases
+A.  Policy
+If a beneficiary is entitled to their own RIB with DRCs and to benefits as an auxiliary/survivor,
+the combined payment amount is computed without consideration of the DRCs. The DRCs
+are then added to the RIB and that amount is subtracted from the combined payment
+amount to determine the amount payable as an auxiliary/survivor. See RS 00615.240 for reduced B benefits prior to A benefits.
+B.  Procedure
+To determine the auxiliary/survivor benefit amount when the RIB MOE is before or the
+same as the spouse MOE:
+Step 1. Determine RIB (without DRCs);
+Step 2. Determine unreduced spouse's benefit;
+Step 3. Determine spouse excess by subtracting the RIB PIA from the spouse original
+rate. Reduce if applicable.;
+Step 4. Add steps 1 and 3 for total auxiliary payment amount;
+Step 5. Add DRCs to step 1;
+Step 6. Subtract step 5 from step 4 for spouse's benefit payable.
+NOTE: The DRC increase can be an amount sufficient to cause the other benefit to be suspended
+or terminated.
+NOTE: In RIB/WIB cases calculate each benefit separately and subtract the RIB to determine
+the excess.
+C.  Example
+Toni, DOB 3/02/35, files for RIB benefits with an MOE of 3/97. They have earned 5
+DRCs on their RIB record through 12/01. In 4/02 Toni’s spouse files for RIB and Toni
+files for spouse’s benefits. Effective 4/02 Toni’s RIB PIA is $500.00 and their spouse’s
+RIB PIA is $1600.00. To calculate Toni’s 04/02 rate, follow these steps.
+Step 1. RIB MBA in 4/02 is $400.00 ($500 reduced for 36 RF)
+Step 2. Unreduced spouse benefit is $800 ($1600/2)
+Step 3. Excess spouse benefit is $300 ($800 - $500) - no age reduction applies.
+Step 4. Total payment is $700.00 ($400.00 + $300.00)
+Step 5. RIB with DRCs is $410.00 ($400 with 5 DRCs)
+Step 6. Spouse payment is $290 ($700 - $410)
+NOTE: The Interactive Computations Facility (ICF) may be used to complete these steps. For
+Step 1 use program #1 on ICF to calculate the RIB. The program will provide the benefit
+with and without DRCs. For Step 2 use program #5 to calculate the dual entitlement
+rates. This program will not permit DRCs on the RIB benefit amount. For Step 3 subtract
+the result from Step 1, ( with the DRCs) from the ‘Total B benefit amount’ from Step 2. This is the excess payable
+after DRCs are included on the RIB.
+D.  Reference
+Termination/Suspension, RS 00615.696 .

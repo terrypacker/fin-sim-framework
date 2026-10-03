@@ -34,7 +34,10 @@ export const US_INCOME = {
     handlers: [SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler, SeIncomeUsHandler, BonusHandler, CompanySaleHandler],
     reducers: [SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer, SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer],
     actions: [
-      { type: 'SS_INCOME_APPLY',     fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , personKey: ValueType.text()} },
+      // own/spousal (design 118 §5.4): what the payment is made of, so the journal can
+      // show the spousal top-up apart from the person's own benefit.
+      { type: 'SS_INCOME_APPLY',     fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , personKey: ValueType.text(),
+        own: ValueType.currency('USD'), spousal: ValueType.currency('USD') } },
       { type: 'SS_INCOME_TAX',       fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , personKey: ValueType.text()} },
       // workCountry — where the employment is EXERCISED (design 73 Gap 1), stamped by
       // PayrollHandler on every wage/SE apply. It decides source, and source

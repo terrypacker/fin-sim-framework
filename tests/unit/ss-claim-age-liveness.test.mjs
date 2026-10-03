@@ -21,6 +21,8 @@
  *   SSCA-3: the legacy primarySsClaimAge key is the same lever
  *   SSCA-4: a loaded plan claiming at 62 stamps the right month and pays 70.4% of the PIA
  *   SSCA-5: the person record round-trips its claim age through the serializer
+ *   SSCA-6: phase 3 — a spouse whose PIA is under half the primary's is paid the spousal
+ *           top-up on the loaded plan, reduced for its own start month
  */
 
 import { test } from 'node:test';
@@ -46,10 +48,11 @@ const SIM = {
 const KEY = 'person.primary.ssClaimAge';
 
 /** Build and load the reference plan, as the app does before any panel reads it. */
-function loadPlan(overrides = {}) {
+function loadPlan(overrides = {}, editPeople = () => {}) {
   ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
   const cfg = IntlRetirementScenario.buildDefaultConfig(overrides, SIM.simStart, SIM.simEnd);
+  editPeople(Object.fromEntries(cfg.persons.map(p => [p.id, p])));
   const scenario = new BaseScenario({
     context: services.simulationContext, initialState: cfg.initialState ?? {},
     simStart: SIM.simStart, simEnd: SIM.simEnd,
@@ -94,12 +97,16 @@ test('SSCA-3: primarySsClaimAge is an alias of person.primary.ssClaimAge', () =>
   assert.notDeepStrictEqual(viaAlias, rollout({ [KEY]: 67 }));
 });
 
-test('SSCA-4: a loaded plan claiming at 62 is entitled from May 2040 at 70.4% of the PIA', () => {
-  const { scenario } = loadPlan({ primarySsClaimAge: 62 });
+function quietStepTo(scenario, date) {
   const { log, warn } = console;
   console.log = () => {}; console.warn = () => {};
-  try { scenario.sim.stepTo(new Date(Date.UTC(2040, 4, 31))); }
+  try { scenario.sim.stepTo(date); }
   finally { console.log = log; console.warn = warn; }
+}
+
+test('SSCA-4: a loaded plan claiming at 62 is entitled from May 2040 at 70.4% of the PIA', () => {
+  const { scenario } = loadPlan({ primarySsClaimAge: 62 });
+  quietStepTo(scenario, new Date(Date.UTC(2040, 4, 31)));
 
   const primary = scenario.sim.state.people.primary;
   assert.equal(primary.ssClaimAge, 62);
@@ -124,4 +131,28 @@ test('SSCA-5: a person\'s claim age round-trips through the serializer, blank as
     assert.equal(ScenarioSerializer._makePerson(JSON.parse(JSON.stringify(saved))).ssClaimAge, age);
   }
   assert.throws(() => PersonBuilder.person().ssClaimAge(61).build(), /ssClaimAge/);
+});
+
+test('SSCA-6: a spouse with under half the primary\'s PIA is paid the spousal top-up on the loaded plan', () => {
+  // The spouse (born 22 Sep 1983) claims at 62: entitled Oct 2045, after the primary's
+  // FRA claim in Apr 2045, so the top-up starts with the spouse's own benefit, 59 months
+  // before the spouse's FRA (Sep 2050).
+  const { scenario } = loadPlan({}, ({ spouse }) => {
+    spouse.socialSecurityMonthly = 400;
+    spouse.ssClaimAge = 62;
+  });
+  quietStepTo(scenario, new Date(Date.UTC(2045, 9, 31)));
+
+  const { primary, spouse } = scenario.sim.state.people;
+  assert.equal(spouse.ssEntitledMs, Date.UTC(2045, 9, 1));
+  const paid = scenario.sim.journal.journal
+    .filter(e => e.action?.type === 'SS_INCOME_APPLY' && e.action.data?.personKey === 'spouse')
+    .map(e => e.action.data);
+  assert.equal(paid.length, 1, 'one payment, at the end of October 2045');
+  const own     = spouse.socialSecurityMonthly * (1 - (36 * 5 / 9 + 23 * 5 / 12) / 100);
+  const spousal = (primary.socialSecurityMonthly / 2 - spouse.socialSecurityMonthly)
+    * (1 - (36 * 25 / 36 + 23 * 5 / 12) / 100);
+  assert.ok(Math.abs(paid[0].own - own) < 1e-6, `own ${paid[0].own} vs ${own}`);
+  assert.ok(Math.abs(paid[0].spousal - spousal) < 1e-6, `spousal ${paid[0].spousal} vs ${spousal}`);
+  assert.ok(Math.abs(paid[0].amount - own - spousal) < 1e-6);
 });

@@ -11,8 +11,14 @@
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../simulation-framework/actions.js';
 import { ACCOUNT_ROLES } from '../state/account-roles.js';
-import { entitlementMonth, monthIndex, monthIndexToMs, ownFactor }
+import { entitlementMonth, monthIndex, monthIndexToMs, ownFactor, spousalFactor, spousalPayable }
   from '../account-rules/us/us-social-security-rules.js';
+
+/** A person's own entitlement month: their stamp once made, else their claim age's. */
+function claimMonth(person) {
+  return person.ssEntitledMs != null ? monthIndex(person.ssEntitledMs)
+    : entitlementMonth(person.birthDate, person.ssClaimAge ?? null);
+}
 
 /**
  * Handles the MONTHLY_SS_INCOME event.
@@ -31,6 +37,14 @@ import { entitlementMonth, monthIndex, monthIndexToMs, ownFactor }
  * and from then on the stamp, not `ssClaimAge`, decides the factor: a claim once made is
  * not re-timed by a lever that changes later.
  *
+ * The spousal benefit (design 118 §5.4, phase 3). In a household of exactly two people,
+ * each is the other's spouse (D8). A person whose own PIA is under half their spouse's
+ * is also paid the spousal top-up, from the later of their own entitlement and their
+ * spouse's: claiming their own benefit is deemed to claim the spousal one too (D9), and
+ * a spousal benefit cannot start before the worker is entitled. A person with no record
+ * of their own is entitled on the spousal benefit alone, from that same later month,
+ * and that month is their stamp. The top-up ends when the spouse leaves `state.people`.
+ *
  * The SsIncomeApplyReducer (registered via the US account module) handles the
  * actual cash credit and tax chaining (85% of SS is taxable ordinary income).
  *
@@ -38,7 +52,7 @@ import { entitlementMonth, monthIndex, monthIndexToMs, ownFactor }
  * @param {import('../services/state-registry.js').StateRegistry} opts.stateRegistry
  */
 export class MonthlySocialSecurityHandler extends HandlerEntry {
-  static description = 'Credits the US cash pool with Social Security income for each eligible person from their claiming age, whether or not they are still working: the PIA reduced for an early claim or raised by delayed retirement credits.';
+  static description = 'Credits the US cash pool with Social Security income for each eligible person from their claiming age, whether or not they are still working: the PIA reduced for an early claim or raised by delayed retirement credits, plus any spousal top-up on the other spouse\'s record.';
   static type        = 'MonthlySocialSecurityHandler';
   static eventType   = 'MONTHLY_SS_INCOME';
 
@@ -59,13 +73,20 @@ export class MonthlySocialSecurityHandler extends HandlerEntry {
     const cashKey = this.stateRegistry?.getStateKey(ACCOUNT_ROLES.US_SAVINGS) ?? 'usSavingsAccount';
     const nowMi   = monthIndex(date);
 
-    for (const [key, person] of Object.entries(state.people ?? {})) {
-      const pia = person.socialSecurityMonthly ?? 0;
-      if (pia <= 0) continue;
+    const entries = Object.entries(state.people ?? {});
+    for (const [key, person] of entries) {
+      const pia    = person.socialSecurityMonthly ?? 0;
+      // D8: a household of exactly two is a married couple; anything else has no spouse.
+      const spouse = entries.length === 2 ? entries.find(([k]) => k !== key)[1] : null;
+      const workerPia = spouse?.socialSecurityMonthly ?? 0;
+      const workerMi  = workerPia > 0 ? claimMonth(spouse) : Infinity;
+      const spousal   = workerPia / 2 > pia;   // 404.330(d)
+      if (pia <= 0 && !spousal) continue;
 
       const stamped    = person.ssEntitledMs != null;
-      const entitledMi = stamped ? monthIndex(person.ssEntitledMs)
-        : entitlementMonth(person.birthDate, person.ssClaimAge ?? null);
+      // No record of their own: entitled only once the worker is (42 U.S.C. 402(b)(1)).
+      const entitledMi = pia > 0 || stamped ? claimMonth(person)
+        : Math.max(claimMonth(person), workerMi);
       if (nowMi < entitledMi) continue;
 
       // A claim month before sim start (someone already collecting) is stamped as that
@@ -74,7 +95,15 @@ export class MonthlySocialSecurityHandler extends HandlerEntry {
         actions.push({ type: 'SS_ENTITLEMENT_APPLY', personKey: key, entitledMs: monthIndexToMs(entitledMi) });
       }
 
-      const ssMonthly = pia * ownFactor(person.birthDate, entitledMi, nowMi);
+      const factor = pia > 0 ? ownFactor(person.birthDate, entitledMi, nowMi) : 0;
+      const own    = pia * factor;
+      const top    = spousal && nowMi >= workerMi
+        ? spousalPayable({ ownPia: pia, workerPia, ownBenefit: own,
+            ownBenefitNoDrc: pia * Math.min(1, factor),
+            factor: spousalFactor(person.birthDate, Math.max(entitledMi, workerMi)) })
+        : 0;
+      const ssMonthly = own + top;
+      if (ssMonthly <= 0) continue;
       actions.push(
         // Design 76 Gap B: stamp WHOSE benefit this is — Social Security is
         // per-recipient by definition and the two people have different
@@ -85,7 +114,8 @@ export class MonthlySocialSecurityHandler extends HandlerEntry {
         // it identically whatever `residency` says. Both fields stay on the action:
         // they describe the payment, and a country that *may* assess a foreign
         // public pension would need exactly them.
-        { type: 'SS_INCOME_APPLY', amount: ssMonthly, residency: person.residency ?? null, personKey: key },
+        { type: 'SS_INCOME_APPLY', amount: ssMonthly, residency: person.residency ?? null, personKey: key,
+          own, spousal: top },
         new FieldValueAction(`ss_income_${key}`, `${person.name || key} Social Security`, ssMonthly),
       );
     }

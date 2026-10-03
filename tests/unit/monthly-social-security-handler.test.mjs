@@ -17,6 +17,9 @@
  *   SS-WORK-1: a person past the claiming age with a future retirementDate is paid
  *   SS-WORK-2: a person below the claiming age is not paid, retired or not
  *   SS-WORK-3: each person is gated on their own age, in one household
+ *
+ * Phase 2: SS-CLAIM-* (the claim age, the factor, the stamp). Phase 3: SS-SPOUSE-* (the
+ * spousal top-up in a two-person household).
  */
 
 import { test } from 'node:test';
@@ -90,4 +93,74 @@ test('SS-CLAIM-3: someone already collecting at sim start is stamped with their 
   assert.equal(stamps(actions)[0].entitledMs, Date.UTC(2020, 6, 1));
   const factor = 1 - (36 * 5 / 9 + 20 * 5 / 12) / 100;
   assert.ok(Math.abs(payments(actions)[0].amount - 3000 * factor) < 1e-9);
+});
+
+// ── Design 118 phase 3: the spousal benefit ─────────────────────────────────────
+
+const near = (a, b) => Math.abs(a - b) < 1e-9;
+const paidTo = (actions, key) => payments(actions).find(a => a.personKey === key);
+const at = (y, m) => new Date(Date.UTC(y, m, 28));
+
+// Both born on the 2nd, so each age is attained on the 1st and entitlement starts that
+// month. FRA 67 for both: the worker in Jul 2031, the spouse in Mar 2032.
+const worker = (o) => person({ name: 'W', birthDate: '1964-07-02', socialSecurityMonthly: 3000, ...o });
+const spouse = (o) => person({ name: 'S', birthDate: '1965-03-02', socialSecurityMonthly: 0, ...o });
+
+test('SS-SPOUSE-1: no record of their own ⇒ entitled at their claim age once the worker is, on half the PIA', () => {
+  const h = new MonthlySocialSecurityHandler();
+  const people = { primary: worker({ ssClaimAge: 67 }), spouse: spouse({ ssClaimAge: 67 }) };
+  // Mar 2032: the spouse reaches 67; the worker has been entitled since Jul 2031.
+  const actions = h.call({ date: at(2032, 2), state: { people } });
+  assert.deepEqual(stamps(actions).map(a => [a.personKey, a.entitledMs]),
+    [['primary', Date.UTC(2031, 6, 1)], ['spouse', Date.UTC(2032, 2, 1)]]);
+  const p = paidTo(actions, 'spouse');
+  assert.ok(near(p.amount, 1500) && p.own === 0 && near(p.spousal, 1500));
+  assert.equal(paidTo(h.call({ date: at(2032, 1), state: { people } }), 'spouse'), undefined, 'not before 67');
+});
+
+test('SS-SPOUSE-2: a worker claiming after the spouse ⇒ the spousal benefit waits, reduced from its own start', () => {
+  const h = new MonthlySocialSecurityHandler();
+  // Spouse claims at 62 (Mar 2027), worker at 64 (Jul 2028): 44 months before the spouse's FRA.
+  const people = { primary: worker({ ssClaimAge: 64 }), spouse: spouse({ ssClaimAge: 62, socialSecurityMonthly: 600 }) };
+  const before = paidTo(h.call({ date: at(2028, 5), state: { people } }), 'spouse');
+  assert.ok(near(before.own, 600 * 0.70) && before.spousal === 0, 'own benefit only until the worker claims');
+  const after = paidTo(h.call({ date: at(2028, 6), state: { people } }), 'spouse');
+  const f = 1 - (36 * 25 / 36 + 8 * 5 / 12) / 100;
+  assert.ok(near(after.own, 420) && near(after.spousal, (1500 - 600) * f), `spousal ${after.spousal}`);
+  assert.ok(near(after.amount, 420 + 900 * f));
+});
+
+test('SS-SPOUSE-3: own PIA at least half the worker\'s ⇒ no top-up', () => {
+  const h = new MonthlySocialSecurityHandler();
+  for (const pia of [1500, 2000]) {
+    const people = { primary: worker({ ssClaimAge: 67 }), spouse: spouse({ ssClaimAge: 67, socialSecurityMonthly: pia }) };
+    const p = paidTo(h.call({ date: at(2033, 0), state: { people } }), 'spouse');
+    assert.ok(near(p.amount, pia) && p.spousal === 0, `PIA ${pia}`);
+  }
+});
+
+test('SS-SPOUSE-4: the spouse\'s own delayed credits come out of the excess (POMS RS 00615.694)', () => {
+  const h = new MonthlySocialSecurityHandler();
+  // Spouse claims at 70 (Mar 2035, every credit at once): own 1000 × 1.24 = 1240; excess 500.
+  const people = { primary: worker({ ssClaimAge: 67 }), spouse: spouse({ ssClaimAge: 70, socialSecurityMonthly: 1000 }) };
+  const p = paidTo(h.call({ date: at(2035, 2), state: { people } }), 'spouse');
+  assert.ok(near(p.own, 1240) && near(p.spousal, 1000 + 500 - 1240) && near(p.amount, 1500));
+});
+
+test('SS-SPOUSE-5: the top-up ends with the worker; a household of one has none', () => {
+  const h = new MonthlySocialSecurityHandler();
+  const stamped = spouse({ ssClaimAge: 67, socialSecurityMonthly: 600, ssEntitledMs: Date.UTC(2032, 2, 1) });
+  const p = paidTo(h.call({ date: at(2033, 0), state: { people: { spouse: stamped } } }), 'spouse');
+  assert.ok(near(p.amount, 600) && p.spousal === 0);
+  const none = spouse({ ssClaimAge: 67 });
+  assert.equal(payments(h.call({ date: at(2033, 0), state: { people: { spouse: none } } })).length, 0);
+});
+
+test('SS-SPOUSE-6: the worker\'s own claim factor never touches the spousal amount', () => {
+  const h = new MonthlySocialSecurityHandler();
+  for (const age of [62, 70]) {
+    const people = { primary: worker({ ssClaimAge: age }), spouse: spouse({ ssClaimAge: 67 }) };
+    const p = paidTo(h.call({ date: at(2035, 6), state: { people } }), 'spouse');
+    assert.ok(near(p.spousal, 1500), `worker at ${age}: ${p.spousal}`);
+  }
 });

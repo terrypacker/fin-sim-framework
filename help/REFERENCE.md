@@ -1740,7 +1740,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `SPENDING_REFILL` | date: any | ECONOMIC_REGIMES |
 | `SPENDING_STRATEGY_APPLY` | slice: text, delta: number, reason: text | AU_RETIREMENT, US_RETIREMENT |
 | `SS_ENTITLEMENT_APPLY` | personKey: text, entitledMs: number | AU_RETIREMENT, US_RETIREMENT |
-| `SS_INCOME_APPLY` | amount: currency(USD), residency: text, personKey: text | US_INCOME |
+| `SS_INCOME_APPLY` | amount: currency(USD), residency: text, personKey: text, own: currency(USD), spousal: currency(USD) | US_INCOME |
 | `SS_INCOME_TAX` | amount: currency(USD), residency: text, personKey: text | US_INCOME |
 | `STATE_TAX_PAYMENT_DEBIT` | amount: currency(USD), escalated: boolean | US_STATE_TAX |
 | `STATE_TAX_SETTLE_APPLY` | tax: number, taxDetail: any, fxRate: number | US_STATE_TAX |
@@ -2145,7 +2145,7 @@ what the in-app panel keys on.
 | [Parameters](panels/parameters.md) | panel | 188 | 1 panel · design 98 |
 | [Paycheque](panels/paycheque.md) | panel | 197 | 1 panel · design 95, 107 |
 | [Performance](panels/perf.md) | panel | 201 | 1 panel · design 78 |
-| [Person](nodes/person.md) | node | 248 | 3 panels · design 34, 95, 83 |
+| [Person](nodes/person.md) | node | 245 | 3 panels · design 34, 95, 83 |
 | [Pool Shapes Over Time](concepts/pool-shapes-over-time.md) | concept | 395 | 3 params · design 109, 114, 112, 97 |
 | [Liquidity Pools](panels/pools.md) | panel | 236 | 1 panel · design 97 |
 | [Randomness and Seeds](concepts/randomness-and-seeds.md) | concept | 251 | 2 panels · 2 params · design 74 |

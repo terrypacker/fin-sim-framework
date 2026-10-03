@@ -15,6 +15,8 @@
  *                docs/us-social-security/ (the file is parsed, not re-typed)
  *   SSR-EX-*:    the regulation's own worked examples, before its dime/dollar rounding
  *   SSR-FRA-*, SSR-ENT-*, SSR-F-*: FRA, the entitlement month and the factor
+ *   SSR-SP-*:    the spousal benefit (phase 3), including POMS RS 00615.020 method C
+ *                and RS 00615.694, whose example figures are read from the saved page
  */
 
 import { test } from 'node:test';
@@ -25,6 +27,7 @@ import {
   FRA_OWN_TABLE, FRA_SURVIVOR_TABLE, DRC_TABLE,
   fullRetirementAge, fraMonth, attainDate, attainMonth, monthIndex, monthIndexToMs,
   entitlementMonth, ownFactor, drcMonthlyRate, earlyReduction, normalizeClaimAge, SS_CLAIM_AGES,
+  spousalReduction, spousalFactor, spousalPayable,
 } from '../../src/finance/account-rules/us/us-social-security-rules.js';
 
 const DOCS = new URL('../../docs/us-social-security/', import.meta.url);
@@ -185,4 +188,60 @@ test('SSR-F-4: the 404.410(a) reduction switches rate after 36 months', () => {
   assert.ok(Math.abs(earlyReduction(36) - 0.20) < 1e-12);
   assert.ok(Math.abs(earlyReduction(60) - 0.30) < 1e-12);
   assert.equal(earlyReduction(0), 0);
+});
+
+// ── The spousal benefit (phase 3) ─────────────────────────────────────────────
+
+test('SSR-SP-EX-1: 404.410(b) — FRA 65y4m, spousal from 63, 28 months early, 412.40 ⇒ reduction 80.18', () => {
+  assert.match(read('CFR-20-404.410-Reduction-Before-Full-Retirement-Age.txt'),
+    /\$412\.40 × 28 ×\s*25\/36 × \.01\. The resulting \$80\.18/);
+  const birth = '1939-06-15';                                     // FRA 65y4m row
+  assert.deepEqual(fullRetirementAge(birth), { years: 65, months: 4 });
+  const reduction = 412.40 * (1 - spousalFactor(birth, fraMonth(birth) - 28));
+  assert.ok(Math.abs(reduction - 80.18) < 0.01, `reduction ${reduction}`);   // CFR truncates 80.189
+});
+
+test('SSR-SP-EX-2: POMS RS 00615.020 method C — full RIB off the full spouse benefit, then each reduced', () => {
+  const text = read('POMS-RS-00615.020-Dual-Entitlement-Overview.txt');
+  assert.match(text, /spouse is entitled to a benefit of \$1000 before reduction[\s\S]*RIB of \$400 before reduction[\s\S]*excess \(\$600\) is then reduced to \$540\. The RIB is reduced to \$380\.\s*The total payable is \$920/);
+  const spousal = spousalPayable({ ownPia: 400, workerPia: 2000, ownBenefit: 380, ownBenefitNoDrc: 380, factor: 540 / 600 });
+  assert.ok(Math.abs(spousal - 540) < 1e-9);
+  assert.ok(Math.abs(380 + spousal - 920) < 1e-9);
+});
+
+test('SSR-SP-EX-3: POMS RS 00615.694 — delayed credits on the own benefit come out of the spousal excess', () => {
+  const text = read('POMS-RS-00615.694-DRCs-In-Dual-Entitlement.txt');
+  for (const step of ['RIB MBA in 4/02 is $400.00', 'Unreduced spouse benefit is $800 ($1600/2)',
+    'Excess spouse benefit is $300 ($800 - $500)', 'RIB with DRCs is $410.00', 'Spouse payment is $290 ($700 - $410)']) {
+    assert.ok(text.includes(step), step);
+  }
+  const spousal = spousalPayable({ ownPia: 500, workerPia: 1600, ownBenefit: 410, ownBenefitNoDrc: 400, factor: 1 });
+  assert.ok(Math.abs(spousal - 290) < 1e-9);
+});
+
+test('SSR-SP-1: FRA 67 spousal factors: 65% at 62 … 100% from 67, never above', () => {
+  const birth = '1964-07-02';
+  const f = (age) => spousalFactor(birth, entitlementMonth(birth, age));
+  const expect = { 62: 0.65, 63: 0.70, 64: 0.75, 65: 1 - 0.5 / 3, 66: 1 - 0.25 / 3, 67: 1, 70: 1 };
+  for (const [age, want] of Object.entries(expect)) {
+    assert.ok(Math.abs(f(Number(age)) - want) < 1e-12, `age ${age}: ${f(Number(age))} vs ${want}`);
+  }
+  assert.ok(Math.abs(spousalReduction(36) - 0.25) < 1e-12);
+  assert.ok(Math.abs(spousalReduction(48) - 0.30) < 1e-12);
+});
+
+test('SSR-SP-2: own PIA at or above half the worker\'s ⇒ no spousal benefit (404.330(d))', () => {
+  for (const ownPia of [1000, 1200]) {
+    assert.equal(spousalPayable({ ownPia, workerPia: 2000, ownBenefit: ownPia, ownBenefitNoDrc: ownPia, factor: 1 }), 0);
+  }
+});
+
+test('SSR-SP-3: no record of their own ⇒ half the worker\'s PIA, reduced by the spousal factor', () => {
+  assert.ok(Math.abs(spousalPayable({ ownPia: 0, workerPia: 3000, ownBenefit: 0, ownBenefitNoDrc: 0, factor: 0.65 })
+    - 975) < 1e-9);
+});
+
+test('SSR-SP-4: credits large enough to cover the excess suspend the spousal amount (not below zero)', () => {
+  // Own 900 claimed at 70 (×1.24 = 1116); half the worker's PIA is 1000, excess 100 < 216 of credits.
+  assert.equal(spousalPayable({ ownPia: 900, workerPia: 2000, ownBenefit: 1116, ownBenefitNoDrc: 900, factor: 1 }), 0);
 });
