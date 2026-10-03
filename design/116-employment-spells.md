@@ -2,6 +2,8 @@
 
 **Status:** PROPOSED, 2 Oct 2026. Decisions in §3 were taken with the author; Q1 and Q3 are
 answered (D6, D7) and Q2 is open with one constraint (§10). Not built.
+D6 (Social Security decoupled from work) moved to design 118 as its phase 1, 2 Oct 2026:
+the claim age it defers to cannot be defined while `retirementDate` also gates payment.
 Phase 4's date sweeps needed the optimizer to gain a Date variable type. Design 117 phase 1
 built it (2 Oct 2026): `OPT_PARAM_TYPES.DATE`, plus NORMAL_DATE and UNIFORM_DATE for MC.
 
@@ -175,6 +177,9 @@ the same as an empty `retirementDate` today.
 
 ### 5.1a Social Security is decoupled from work (D6)
 
+**Moved to design 118 phase 1** (`118-social-security-claiming.md` §5.1, D4). The text below
+stays as the record of the decision; design 118 builds it.
+
 Today `MonthlySocialSecurityHandler` pays a benefit only when the person is at least the rules'
 `minAge` (67) **and** past `retirementDate`, so someone who works past 67 has their benefit
 deferred until they stop. D6 removes the second test: benefits start at the claiming age
@@ -242,8 +247,8 @@ per-row fold.
 ## 8. Phasing
 
 1. **Engine.** `job` record type + loader validation, `employment.js` resolver, `wageIndex`,
-   the reader moves in §4.5, serializer round trip. Starts with D6's Social Security commit
-   (§5.1a) on its own. Tests: goldens byte-identical with no spells (after D6's regold); a
+   the reader moves in §4.5, serializer round trip. D6's Social Security commit (§5.1a) is
+   design 118 phase 1 and lands before this. Tests: goldens byte-identical with no spells; a
    two-spell US→AU person pays from the right stream on each side of the boundary; a gap pays
    nothing; `realGrowth` compounds on whole years from each spell's own start; a person working
    past 67 draws a benefit and a wage in the same month.

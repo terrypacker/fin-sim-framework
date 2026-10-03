@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-224 parameters · 33 panels · 11 node types (180 fields) · 172 action types · 86 tools · 284 state field types · 74 topics · 125 design docs
+224 parameters · 33 panels · 11 node types (180 fields) · 172 action types · 86 tools · 284 state field types · 74 topics · 126 design docs
 
 ---
 
@@ -2168,7 +2168,7 @@ what the in-app panel keys on.
 
 ---
 
-## Design documents (125)
+## Design documents (126)
 
 Tier 3 — the full argument behind each mechanic, in `design/`. The title is each
 file's own H1, read out of it; there is no summary column, because a one-line precis
@@ -2299,6 +2299,7 @@ between 10 and 11.
 | [`115-asset-class-restrictions.md`](../design/115-asset-class-restrictions.md) | 115 — Asset-class restrictions: keeping gold out of a US citizen's super |
 | [`116-employment-spells.md`](../design/116-employment-spells.md) | 116 — Employment spells: more than one job per person |
 | [`117-year-fields-to-dates.md`](../design/117-year-fields-to-dates.md) | 117 — Year fields become Dates |
+| [`118-social-security-claiming.md`](../design/118-social-security-claiming.md) | 118 — Social Security claiming: claim age, spousal and survivor benefits |
 | [`bus-unification-plan.md`](../design/bus-unification-plan.md) | Bus Unification Plan |
 | [`inconsistencies.md`](../design/inconsistencies.md) | Inconsistencies, Rework Candidates, and Open Questions |
 | [`requirements.md`](../design/requirements.md) | Requirements Tracker |
