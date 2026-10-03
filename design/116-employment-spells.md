@@ -1,7 +1,7 @@
 # 116 — Employment spells: more than one job per person
 
-**Status:** BUILT through phase 4, 3 Oct 2026 — see §11. Open: date sweeps (blocked on Q2)
-and phase 5 (D5, later). Decisions in §3 were
+**Status:** BUILT through phase 4, including date sweeps (Q2 answered as D8-D10), 3 Oct 2026
+— see §11. Open: phase 5 (D5, later). Decisions in §3 were
 taken with the author; Q1 and Q3 are answered (D6, D7) and Q2 is open with one constraint (§10).
 D6 (Social Security decoupled from work) moved to design 118 as its phase 1, 2 Oct 2026:
 the claim age it defers to cannot be defined while `retirementDate` also gates payment.
@@ -50,6 +50,9 @@ because `wageCurrency` gates which payroll stream (US or AU) a person's election
 | D5 | Stochastic job loss / career shocks in MC; career change as an MPC lever | **Later.** Not in this design. |
 | D6 | When Social Security starts (was Q1) | **At the claiming age only.** The work end date no longer gates benefits, for any person, with or without spells (§5.1a). |
 | D7 | Real growth (was Q3) | **Per spell.** `realGrowth` lives on the spell and compounds from that spell's start. No career-long rate on the Person. |
+| D8 | Who owns a shared boundary (Q2, 3 Oct) | **The later job's `startDate`.** It is a real field on a real record, so the lever is an ordinary `job.<id>.startDate` key; a named `jobEdge.<A>.<B>` would belong to no record and break on delete or reorder. Moving it moves the previous job's end. |
+| D9 | Overlap: clamp or reject (Q2, 3 Oct) | **Neither: make it unreachable.** Each date lever's range stops short of its neighbours (room split between them), so every in-range combination is valid. Clamping puts a point mass at the boundary; rejecting biases the sample. A hand-widened range that could cross is refused before the run, naming both rows. Minimum job length one month. |
+| D10 | MC on job dates (3 Oct) | **Off.** A career move is a decision, not an uncertainty; random job loss is D5. |
 
 **Why D2 and not an event.** An event at each spell boundary would need:
 
@@ -282,8 +285,7 @@ Recorded so a later design starts from the list:
 ## 10. Open questions
 
 - **Q1 — answered: D6.** Social Security starts at the claiming age only (§5.1a).
-- **Q2 — open (the only thing blocking date sweeps; phases 1-4 are built).** How spell
-  dates are swept without creating an overlap. One constraint is
+- **Q2 — answered: D8-D10.** How spell dates are swept without creating an overlap. One constraint is
   decided: the sweep must **not duplicate date ranges**. Two adjacent spells must not each
   carry their own range for the boundary they share, since that is two variables for one fact
   and most draws of the pair would be invalid. Clamping versus rejecting a candidate, and how
@@ -390,3 +392,22 @@ Recorded so a later design starts from the list:
 - **Tests.** `tests/unit/evt-job-sweeps.test.mjs` (JSW-1..6): every lever set the way an MC
   iteration sets it (`set()` → `applyParamBagToConfig` → `ScenarioLoader.load`), asserting
   the credited wage.
+
+### Phase 4b — date sweeps (Q2: D8-D10) (3 Oct 2026)
+
+- **Which dates are levers** (`jobDateLevers` in `employment.js`): a set `startDate`, always;
+  a set `endDate` only when no job starts on it (the last job's end, or the end before a
+  gap). A blank start or end is not a date. So a contiguous A→B has ONE lever,
+  `job.B.startDate`, and the loader's job cascade moves `A.endDate` with it (matched on the
+  old start, so a second cascade pass is a no-op).
+- **Reach.** Each lever carries `down`/`up` in whole months: neighbours split the room
+  between them less `JOB_MIN_LENGTH_MONTHS` (1), the earlier taking the larger half, capped at
+  ±24. The generator puts it on the entry as `dateReach`, and `optDateRowFor` clips the row to
+  it (day of month clamped, so the 31st does not roll over). Grid axes share `optRowFor`.
+- **Pre-run check.** `jobDateRangeConflicts` (a disabled row counts at its plan date);
+  `OptimizationPresenter._onRun` refuses a run whose job ranges can cross and names the rows.
+  Library/CLI callers that bypass the presenter still hit the loader's overlap error.
+- **MC off** (`mc: false`) on both date fields.
+- **Tests.** JSW-7..10; in the browser: a contiguous pair gave one Start Date row (49 months);
+  adding an end gave 28 + its own row, ending exactly a month apart; widening one was
+  refused; a 9-candidate date search ran clean.

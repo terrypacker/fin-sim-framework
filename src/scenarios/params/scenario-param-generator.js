@@ -28,7 +28,9 @@ import {
   INHERITED_RA_PARAM_TEMPLATE,
   BALANCE_TARGET,
   JOB_PARAM_TEMPLATE,
+  JOB_DATE_PARAM_FIELDS,
 } from './record-param-templates.js';
+import { jobDateLevers } from '../../finance/payroll/employment.js';
 import { INHERITED_RETIREMENT_ROLES } from '../../finance/state/account-roles.js';
 // Design 110 §6.2 — the liquidity-pool size axis. Its owner is a pool inside the
 // `liquidityGraph` PARAM rather than a cfg record, which is why it is the one generated
@@ -153,11 +155,23 @@ export class ScenarioParamGenerator {
       add(this._expand('person', 'person', p, p.id, template));
     }
     // Design 116 phase 4 — per-job levers, labelled by whose job and when it runs.
+    // A date field is generated only where it is a lever (design 116 Q2: one variable per
+    // fact), and carries `dateReach` — the months it may move before it could meet a
+    // neighbour — which the optimizer's date row clips its range to.
     const personName = new Map((cfg.persons ?? []).map(p => [p.id, p.name || p.id]));
+    const levers = new Map();
+    for (const list of jobDateLevers(cfg.jobs).values()) {
+      for (const l of list) levers.set(`${l.jobId}.${l.field}`, l);
+    }
     for (const j of cfg.jobs ?? []) {
       const name = `${personName.get(j.personId) ?? j.personId} · job `
         + `${j.startDate ?? 'start'}–${j.endDate ?? 'open'}`;
-      add(this._expand('job', 'job', { ...j, name }, j.id, JOB_PARAM_TEMPLATE));
+      const template = JOB_PARAM_TEMPLATE.filter(t =>
+        !JOB_DATE_PARAM_FIELDS.has(t.field) || levers.has(`${j.id}.${t.field}`));
+      add(this._expand('job', 'job', { ...j, name }, j.id, template).map(e => {
+        const l = levers.get(`${j.id}.${e.node.field}`);
+        return l ? { ...e, dateReach: { down: l.down, up: l.up } } : e;
+      }));
     }
     for (const r of cfg.realProperties ?? [])
       add(this._expand('prop', 'realProperty', r, r.stateKey, REAL_PROPERTY_PARAM_TEMPLATE));

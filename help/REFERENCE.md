@@ -652,12 +652,12 @@ Explained in [`help/nodes`](nodes/person.md). 12 field(s) described by a record 
 
 ### Jobs — `job` (10 fields)
 
-Explained in [`help/nodes`](nodes/job.md). 2 field(s) described by a record parameter.
+Explained in [`help/nodes`](nodes/job.md). 4 field(s) described by a record parameter.
 
-- **`startDate`** — Start · `date` · topic
-  The first day of the job. Blank means it runs from the start of the plan.
-- **`endDate`** — End · `date` · topic
-  The day the job stops, not worked. Blank means it never ends, which for the last job means working until death. A job may end on the day the next one starts.
+- **`startDate`** — Start · `date` · param
+  The first day of this job. Blank means it runs from the start of the plan. When the previous job ends on this day, moving it moves that end too.
+- **`endDate`** — End · `date` · param
+  The day this job stops, not worked. Blank means it never ends, which for the last job means working until death.
 - **`monthlyWage`** — Wage /mo · `number` · param
   Gross monthly pay for this job in today's money, before tax, in the job's own currency. Each year it rises with that currency's inflation, plus this job's real growth.
 - **`realGrowth`** — Real Growth · `number` · param

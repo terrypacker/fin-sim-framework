@@ -18,12 +18,16 @@
  * `applyParamBagToConfig` onto a serialized cfg, then `ScenarioLoader.load` — and the test
  * asserts the EFFECT: the wage the sim actually credits.
  *
- *   JSW-1: one monthlyWage and one realGrowth lever per job, no date levers (Q2 is open)
+ *   JSW-1: wage + real-growth levers per job; date levers only where they are a fact
  *   JSW-2: set() writes a `job.` key flat (it is a generated namespace)
  *   JSW-3: job.<id>.monthlyWage moves the credited wage
  *   JSW-4: job.<id>.realGrowth moves the wage after the first anniversary
  *   JSW-5: the MC harvest centres each lever on its job's value
  *   JSW-6: a Jobs-table edit is not clobbered by a saved param on the next load
+ *   JSW-7: Q2 — a shared boundary is ONE lever (the later start); a gap is two; reach splits room
+ *   JSW-8: the optimizer's date row is clipped to that reach, in whole months
+ *   JSW-9: moving a shared start moves the previous end with it, on a loaded scenario
+ *   JSW-10: hand-widened ranges that can cross are caught before a run; defaults never are
  */
 
 import { test } from 'node:test';
@@ -37,6 +41,8 @@ import { ScenarioParamGenerator } from '../../src/scenarios/params/scenario-para
 import { applyParamBagToConfig, resolveRecordCenters } from '../../src/scenarios/scenario-param-apply.js';
 import { replacePersonJobs }      from '../../src/scenarios/scenario-jobs.js';
 import { set }                    from '../../src/finance/monte-carlo/mc-param-paths.js';
+import { jobDateLevers, jobDateRangeConflicts } from '../../src/finance/payroll/employment.js';
+import { optRowFor }              from '../../src/finance/optimization/intl-retirement-opt-config.js';
 
 const D  = (y, m, d) => new Date(Date.UTC(y, m - 1, d));
 const SS = D(2026, 1, 1);
@@ -74,13 +80,19 @@ function primaryWages(cfg, simEnd) {
   return { wages: out, cfg, sim: sc.sim };
 }
 
-test('JSW-1: one wage and one real-growth lever per job, and no date lever', () => {
+test('JSW-1: wage and growth per job; the one shared boundary is one date lever', () => {
   const entries = ScenarioParamGenerator.generate(baseCfg(D(2027, 1, 1)))
     .filter(e => e.key.startsWith('job.'));
+  // Job 1 starts blank (the run's start) and ends where job 2 starts; job 2 never ends.
+  // So the only date that is a fact of its own is job 2's start.
   assert.deepEqual(entries.map(e => e.key).sort(), [
     'job.primary-job-1.monthlyWage', 'job.primary-job-1.realGrowth',
     'job.primary-job-2.monthlyWage', 'job.primary-job-2.realGrowth',
+    'job.primary-job-2.startDate',
   ]);
+  const start = entries.find(e => e.key === 'job.primary-job-2.startDate');
+  assert.equal(start.mc, false, 'a career move is a decision: optimizer only');
+  assert.equal(start.opt, true);
   const growth = entries.find(e => e.key === 'job.primary-job-2.realGrowth');
   assert.equal(growth.mc, 'rate', 'an additive rate centred on 0 is named, not inferred');
   assert.deepEqual(growth.node, { type: 'job', id: 'primary-job-2', field: 'realGrowth' });
@@ -130,4 +142,67 @@ test('JSW-6: a Jobs-table edit survives a saved param at the old value', () => {
     (j.id === 'primary-job-2' ? { ...j, monthlyWage: 9500 } : j)));
   const { wages } = primaryWages(cfg, end);
   assert.equal(wages['2026-08'], 9500);
+});
+
+test('JSW-7: one lever per boundary; neighbours split the room between them', () => {
+  const levers = jobDateLevers([
+    { id: 'a', personId: 'p', startDate: '2027-01-01', endDate: '2030-01-01' },
+    { id: 'b', personId: 'p', startDate: '2030-01-01', endDate: '2031-01-01' },  // shared start
+    { id: 'c', personId: 'p', startDate: '2031-06-01', endDate: '2040-01-01' },  // after a gap
+  ]).get('p');
+  assert.deepEqual(levers.map(l => `${l.jobId}.${l.field}`),
+    ['a.startDate', 'b.startDate', 'b.endDate', 'c.startDate', 'c.endDate'],
+    'a.endDate is b.startDate — one lever, owned by the start');
+  const at = k => levers.find(l => `${l.jobId}.${l.field}` === k);
+  // a.start ↔ b.start: 36 months apart, 35 to share; capped at the ±24 default reach.
+  assert.equal(at('a.startDate').up, 18);
+  assert.equal(at('b.startDate').down, 17);
+  // b.end ↔ c.start: a 5-month gap leaves 4 months to share, 2 each.
+  assert.equal(at('b.endDate').up, 2);
+  assert.equal(at('c.startDate').down, 2);
+  assert.equal(at('a.startDate').down, 24, 'no neighbour before: the default reach');
+  assert.equal(at('c.endDate').up, 24);
+  // Every lever at its extreme toward a neighbour still leaves a month between them.
+  for (let i = 1; i < levers.length; i++) {
+    const m = d => { const x = new Date(d); return x.getUTCFullYear() * 12 + x.getUTCMonth(); };
+    assert.ok(m(levers[i].date) - levers[i].down - (m(levers[i - 1].date) + levers[i - 1].up) >= 1);
+  }
+});
+
+test('JSW-8: the optimizer\'s date row is clipped to the lever\'s reach', () => {
+  const cfg = baseCfg(D(2027, 1, 1));
+  cfg.jobs[1].endDate = '2026-10-31';     // a short second job: little room after its start
+  const entries = ScenarioParamGenerator.generate(cfg);
+  const start = entries.find(e => e.key === 'job.primary-job-2.startDate');
+  const row = optRowFor('date', '2026-07-01', start);
+  assert.equal(row.max, '2026-08-01', '3 months to its own end leaves 2 to share: 1 each way');
+  assert.equal(row.min, '2024-07-01', 'no job before it starts: the ±2 year default');
+  const end = entries.find(e => e.key === 'job.primary-job-2.endDate');
+  assert.equal(optRowFor('date', '2026-10-31', end).min, '2026-09-30', 'the 31st clamps to the 30th');
+});
+
+test('JSW-9: moving a shared start moves the previous job\'s end with it', () => {
+  const end = D(2026, 9, 1);
+  const bag = {};
+  set(bag, 'job.primary-job-2.startDate', '2026-04-01');
+  const { wages, cfg } = primaryWages(applyParamBagToConfig(baseCfg(end), bag), end);
+  assert.equal(cfg.jobs.find(j => j.id === 'primary-job-1').endDate, '2026-04-01');
+  assert.equal(wages['2026-03'], 8000);
+  assert.equal(wages['2026-04'], 9000, 'the new job pays from April, with no overlap');
+});
+
+test('JSW-10: crossing hand-widened ranges are caught; the defaults never cross', () => {
+  const jobs = [
+    { id: 'a', personId: 'p', startDate: '2027-01-01', endDate: '2028-01-01' },
+    { id: 'b', personId: 'p', startDate: '2028-03-01' },
+  ];
+  const entries = ScenarioParamGenerator.generate({ persons: [{ id: 'p' }], jobs });
+  const rows = entries.filter(e => e.key.startsWith('job.') && e.type === 'Date').map(e => ({
+    paramKey: e.key, enabled: true, ...optRowFor('date', e.defaultValue, e) }));
+  assert.deepEqual(jobDateRangeConflicts(rows, jobs), []);
+  const widened = rows.map(r => (r.paramKey === 'job.a.endDate' ? { ...r, max: '2028-06-01' } : r));
+  assert.deepEqual(jobDateRangeConflicts(widened, jobs),
+    [{ earlier: 'job.a.endDate', later: 'job.b.startDate' }]);
+  const off = widened.map(r => (r.paramKey === 'job.a.endDate' ? { ...r, enabled: false } : r));
+  assert.deepEqual(jobDateRangeConflicts(off, jobs), [], 'a disabled row sits at its plan date');
 });

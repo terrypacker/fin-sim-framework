@@ -9,7 +9,7 @@
  */
 
 import { validateJobs } from '../finance/payroll/employment.js';
-import { JOB_PARAM_TEMPLATE } from './params/record-param-templates.js';
+import { JOB_PARAM_TEMPLATE, JOB_DATE_PARAM_FIELDS } from './params/record-param-templates.js';
 
 /**
  * Authoring `cfg.jobs` — design 116 §7, the write half of employment spells.
@@ -96,7 +96,7 @@ function _syncJobParams(scenario, jobs) {
   for (const j of jobs) {
     for (const { field } of JOB_PARAM_TEMPLATE) {
       const key = `job.${j.id}.${field}`;
-      const val = j[field] ?? 0;
+      const val = j[field] ?? (JOB_DATE_PARAM_FIELDS.has(field) ? null : 0);
       const typed = Array.isArray(scenario.params) ? scenario.params.find(p => p.name === key) : null;
       if (typed) typed.value = val;
       if (scenario.parameters && key in scenario.parameters) scenario.parameters[key] = val;

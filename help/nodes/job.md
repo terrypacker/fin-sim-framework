@@ -10,7 +10,7 @@ stamps:
   panel:config-list: 786f94
   panel:paycheque: f8d503
   node:job: 3cd594
-  src/finance/payroll/employment.js: be07c5
+  src/finance/payroll/employment.js: 4265c8
   src/visualization/people/jobs-section.js: 73fb9a
 ---
 
@@ -34,8 +34,6 @@ job; blank inherits. The Nodes panel lists every job; selecting one opens its pe
 
 ## Fields
 
-- `startDate` — The first day of the job. Blank means it runs from the start of the plan.
-- `endDate` — The day the job stops, not worked. Blank means it never ends, which for the last job means working until death. A job may end on the day the next one starts.
 - `wageCurrency` — The currency this job pays in. It picks the payroll stream: USD pay reaches the 401(k), IRA and Roth elections; AUD pay reaches super. A split that names an account in the other currency falls back to the transaction account.
 - `workCountry` — Where this job's work is physically done, which decides which country taxes it as local income. "Residency" follows wherever the person lives at the time.
 - `selfEmployed` — This job's pay is self-employment income rather than wages: US self-employment tax applies, and in Australia there is no employer to pay the Super Guarantee or take a salary sacrifice.

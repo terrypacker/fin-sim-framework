@@ -17,6 +17,7 @@ import { set }                from '../../finance/monte-carlo/mc-param-paths.js'
 import { scenarioParamValues } from '../../finance/param-schema-utils.js';
 import { ServiceRegistry }    from '../../services/service-registry.js';
 import { APP_EVENTS }         from '../app-display-settings.js';
+import { jobDateRangeConflicts } from '../../finance/payroll/employment.js';
 
 /**
  * OptimizationPresenter — wires OptConfigPanel callbacks to OptimizationController
@@ -94,6 +95,18 @@ export class OptimizationPresenter {
 
   _onRun(config) {
     const { optimizationConfigs, objective, objectiveKey, candidateCount, solverKey, solverOptions } = config;
+    // Design 116 Q2 — refused, not warned: two job-date ranges that can cross would draw
+    // candidates the loader rejects as overlapping jobs. The default ranges never do; a
+    // range widened by hand can, and the place to say so is here, naming both rows.
+    const activeJobs = ServiceRegistry.getInstance()?.scenarioService?.getActive?.()?.jobs ?? [];
+    const crossing = jobDateRangeConflicts(optimizationConfigs, activeJobs);
+    if (crossing.length > 0) {
+      this._configPanel.setRunWarning?.('Job date ranges overlap — a candidate could make two '
+        + 'jobs overlap. Narrow one of each pair so they stay at least a month apart: '
+        + crossing.map(c => `${c.earlier} / ${c.later}`).join('; ') + '.');
+      this._configPanel.enableRun?.();
+      return;
+    }
     // Warned, never refused: an inert lever costs candidates, not correctness, and the author may
     // be checking the verdict itself.
     const inertOn = (optimizationConfigs ?? []).filter(c => c.enabled && this._inertByParam?.has(c.paramKey));

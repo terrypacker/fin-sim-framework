@@ -244,6 +244,97 @@ export function buildSpellsByPerson(jobs, people, simStart) {
   return out;
 }
 
+/** Whole months between two dates (b − a), on the `year × 12 + month` scale. */
+function monthsBetween(a, b) {
+  const x = new Date(toMs(a)), y = new Date(toMs(b));
+  return (y.getUTCFullYear() * 12 + y.getUTCMonth()) - (x.getUTCFullYear() * 12 + x.getUTCMonth());
+}
+
+/** The default reach of a date lever either side of its value, in months (±2 years). */
+export const JOB_DATE_REACH_MONTHS = 24;
+
+/** The shortest a job may be made, and the least two neighbouring dates may close to. */
+export const JOB_MIN_LENGTH_MONTHS = 1;
+
+/**
+ * The job dates that are sweep levers, per person, in date order (design 116 §10 Q2).
+ *
+ * One variable per fact:
+ *  - a job's `startDate` is a lever whenever it is set. When the job before it ends on that
+ *    same day the two share one boundary, and the START owns it — moving it moves the
+ *    previous job's end with it (the loader's job cascade);
+ *  - a job's `endDate` is a lever only when no job starts on it: the last job's end (the
+ *    work end date) or the end of a job followed by a gap.
+ * A blank start (the run's start) or a blank end (never) is not a date, and not a lever.
+ *
+ * Each lever carries `down` / `up`: how many months it may move before it could meet a
+ * neighbour. Neighbours split the room between them, leaving `JOB_MIN_LENGTH_MONTHS`, so
+ * ANY combination of in-range values is a valid job sequence — nothing to clamp or reject.
+ *
+ * @param {Array<object>} jobs  cfg `job` records (any person's)
+ * @returns {Map<string, Array<{jobId, field, date, down, up}>>}
+ */
+export function jobDateLevers(jobs) {
+  const byPerson = new Map();
+  for (const j of jobs ?? []) {
+    if (!byPerson.has(j?.personId)) byPerson.set(j?.personId, []);
+    byPerson.get(j.personId).push(j);
+  }
+  const out = new Map();
+  for (const [personId, list] of byPerson) {
+    const sorted = [...list].sort((a, b) =>
+      (toMs(a.startDate) ?? -Infinity) - (toMs(b.startDate) ?? -Infinity));
+    const levers = [];
+    sorted.forEach((j, i) => {
+      if (toMs(j.startDate) != null) levers.push({ jobId: j.id, field: 'startDate', date: j.startDate });
+      const next = sorted[i + 1];
+      const shared = next && toMs(next.startDate) != null && toMs(next.startDate) === toMs(j.endDate);
+      if (toMs(j.endDate) != null && !shared) levers.push({ jobId: j.id, field: 'endDate', date: j.endDate });
+    });
+    levers.forEach((l, i) => {
+      const room = (a, b) => Math.max(0, monthsBetween(a.date, b.date) - JOB_MIN_LENGTH_MONTHS);
+      // The earlier lever takes the larger half of an odd split, so the two never add to
+      // more than the room between them.
+      const before = i > 0 ? room(levers[i - 1], l) : Infinity;
+      const after  = i < levers.length - 1 ? room(l, levers[i + 1]) : Infinity;
+      l.down = Math.min(JOB_DATE_REACH_MONTHS, Math.floor(before / 2));
+      l.up   = Math.min(JOB_DATE_REACH_MONTHS,
+        Number.isFinite(after) ? after - Math.floor(after / 2) : Infinity);
+    });
+    out.set(personId, levers);
+  }
+  return out;
+}
+
+/**
+ * Optimizer rows on job dates whose ranges can cross a neighbour's (design 116 Q2): the
+ * pre-run check for a range the author widened by hand. Each pair is two consecutive
+ * levers of one person; a disabled row counts at its plan value.
+ *
+ * @param {Array<object>} rows  optimizer variable configs ({ paramKey, enabled, min, max })
+ * @param {Array<object>} jobs  cfg `job` records
+ * @returns {Array<{ earlier: string, later: string }>} param keys, empty when none cross
+ */
+export function jobDateRangeConflicts(rows, jobs) {
+  const byKey = new Map((rows ?? []).map(r => [r.paramKey, r]));
+  const span = (l) => {
+    const r = byKey.get(`job.${l.jobId}.${l.field}`);
+    return r?.enabled && r.min != null && r.max != null ? [r.min, r.max] : [l.date, l.date];
+  };
+  const out = [];
+  for (const levers of jobDateLevers(jobs).values()) {
+    for (let i = 1; i < levers.length; i++) {
+      const [, prevMax] = span(levers[i - 1]);
+      const [nextMin]   = span(levers[i]);
+      if (monthsBetween(prevMax, nextMin) < JOB_MIN_LENGTH_MONTHS) {
+        out.push({ earlier: `job.${levers[i - 1].jobId}.${levers[i - 1].field}`,
+                   later:   `job.${levers[i].jobId}.${levers[i].field}` });
+      }
+    }
+  }
+  return out;
+}
+
 /**
  * Every reason the scenario's `job` records cannot run (§4.6). Errors, not warnings: an
  * inert spell is a silent wrong answer.

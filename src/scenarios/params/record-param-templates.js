@@ -222,11 +222,12 @@ export const PERSON_PARAM_TEMPLATE = [
 /**
  * Design 116 phase 4 — the sweepable fields of a `job` record (`job.<id>.<field>`).
  *
- * The job's DATES are deliberately absent. Sweeping one boundary as two variables (one
- * job's end, the next one's start) makes most draws an overlap the loader rejects, so how
- * a shared boundary is named as one variable is design 116 Q2, still open. The employer
- * terms are absent for the reason they are on the Person template (design 98 W2): they are
- * set by an employer, not chosen by the household.
+ * The DATES follow design 116 Q2: one variable per fact. A start is a lever whenever it is
+ * set, and owns a boundary it shares with the previous job's end; an end is a lever only
+ * when no job starts on it. The generator drops the rest, and gives each date row the reach
+ * that keeps it from meeting a neighbour (`jobDateLevers`). Optimizer only: a career move is
+ * a decision, not an uncertainty (`mc: false`). The employer terms are absent for the reason
+ * they are on the Person template (design 98 W2): they are set by an employer.
  */
 export const JOB_PARAM_TEMPLATE = [
   { field: 'monthlyWage', label: 'Monthly Wage', type: 'Number', mc: true, opt: true,
@@ -238,7 +239,16 @@ export const JOB_PARAM_TEMPLATE = [
   { field: 'realGrowth', label: 'Real Wage Growth', type: 'Number', mc: 'rate', opt: 'rate',
     description: 'Yearly raise above inflation for this job, compounding on each anniversary '
       + 'of its start (0.02 = 2% a year). 0 keeps the job level with inflation.' },
+  { field: 'startDate', label: 'Start Date', type: 'Date', mc: false, opt: true,
+    description: 'The first day of this job. Blank means it runs from the start of the plan. '
+      + 'When the previous job ends on this day, moving it moves that end too.' },
+  { field: 'endDate', label: 'End Date', type: 'Date', mc: false, opt: true,
+    description: 'The day this job stops, not worked. Blank means it never ends, which for '
+      + 'the last job means working until death.' },
 ];
+
+/** The `JOB_PARAM_TEMPLATE` fields that are dates. */
+export const JOB_DATE_PARAM_FIELDS = new Set(['startDate', 'endDate']);
 
 export const REAL_PROPERTY_PARAM_TEMPLATE = [
   { field: 'value',            label: 'Value',            type: 'Number', mc: true,  opt: false,

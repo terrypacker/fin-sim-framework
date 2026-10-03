@@ -88,6 +88,7 @@ const BUILT_IN_TOOLSETS = [
 import { synthesizeWeightedPriorities, resolveOwnerBanding } from './params/lever-weights.js';
 import { migrateYearFieldsToDates } from './year-date-migration.js';
 import { validateJobs } from '../finance/payroll/employment.js';
+import { JOB_DATE_PARAM_FIELDS } from './params/record-param-templates.js';
 export { synthesizeWeightedPriorities } from './params/lever-weights.js';
 
 /**
@@ -763,7 +764,23 @@ export class ScenarioLoader {
     if (node.type === 'job') {
       // Design 116 phase 4 — a job lever lands on its `cfg.jobs` row.
       const rec = (cfg.jobs ?? []).find(r => r.id === node.id);
-      if (rec) rec[node.field] = val;
+      if (rec) {
+        if (JOB_DATE_PARAM_FIELDS.has(node.field)) {
+          const day = val == null || val === '' ? null
+            : String(val instanceof Date ? val.toISOString() : val).slice(0, 10);
+          // Q2: a start OWNS the boundary it shares with the previous job's end, so moving
+          // it moves that end too — one variable for one fact. Matched on the OLD start,
+          // which makes a second pass of the cascade a no-op.
+          if (node.field === 'startDate' && rec.startDate != null) {
+            const prev = cfg.jobs.find(r => r !== rec && r.personId === rec.personId
+              && r.endDate != null && String(r.endDate).slice(0, 10) === String(rec.startDate).slice(0, 10));
+            if (prev) prev.endDate = day;
+          }
+          rec[node.field] = day;
+        } else {
+          rec[node.field] = val;
+        }
+      }
     } else if (node.type === 'person') {
       const rec = (cfg.persons ?? []).find(r => r.id === node.id);
       // Design 15: canonicalize Date values to full ISO strings so the

@@ -99,6 +99,16 @@ function optDateRowFor(center, entry, window) {
     const y = d.getUTCFullYear(), m0 = a ? a.month0 : d.getUTCMonth(), day = a ? a.day : d.getUTCDate();
     min = iso(y - 2, m0, day);
     max = iso(y + 2, m0, day);
+    // A job date (design 116 Q2) may move only as far as its neighbours leave room for, in
+    // whole months, so every combination of in-range values is a valid job sequence.
+    // `Date.UTC` rolls a month past 11 into the next year, so the offsets need no carry.
+    const reach = entry?.dateReach;
+    if (reach && !a) {
+      // The day clamped to the target month, so the 31st does not roll into the next one.
+      const shift = n => iso(y, m0 + n, Math.min(day, new Date(Date.UTC(y, m0 + n + 1, 0)).getUTCDate()));
+      min = shift(-reach.down);
+      max = shift(reach.up);
+    }
   }
   return { type: OPT_PARAM_TYPES.DATE, min, max, step: 1, ...(anchor ? { anchor } : {}) };
 }
