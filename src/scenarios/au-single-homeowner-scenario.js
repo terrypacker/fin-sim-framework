@@ -27,6 +27,7 @@ import { US_BROKERAGE }        from './toolsets/us-brokerage-toolset.js';
 import { INHERITANCE }         from './toolsets/inheritance-toolset.js';
 import { ECONOMIC_REGIMES }    from './toolsets/economic-regimes-toolset.js';
 import { toolsetParamKeys, forwardToolsetOverrides } from './toolset-param-forwarding.js';
+import { yearToIsoDate } from './year-date-migration.js';
 
 /**
  * AuSingleHomeownerScenario — the Australian sibling of UsSingleHomeownerScenario.
@@ -127,7 +128,7 @@ export const AU_SINGLE_HOMEOWNER_DEFAULTS = {
   carSaleDate:              '2040-01-15',
 
   // ── Inheritance ────────────────────────────────────────────────────────────
-  inheritanceYear:        2036,
+  inheritanceDate:        '2036-01-15',
   inheritedPropertyValue: 250_000,
   inheritedPropertyBasis:  90_000,
   inheritedBrokerageValue: 150_000,
@@ -381,7 +382,10 @@ export class AuSingleHomeownerScenario extends BaseScenario {
           // cost base (no step-up), which is the AU side of design 63.
           decedentState: null,
           heirId: 'primary', paidViaEstate: false,
-          inheritanceYear: p.inheritanceYear,
+          // A legacy `inheritanceYear` override (null included: no inheritance) is 15 Jan
+          // of that year (design 117), and beats the default date.
+          inheritanceDate: Object.hasOwn(params, 'inheritanceYear') && !Object.hasOwn(params, 'inheritanceDate')
+            ? yearToIsoDate(params.inheritanceYear) : p.inheritanceDate,
           assets: [
             { __type: 'RealProperty',     name: 'Inherited Home',      country: 'AU',
               stateKey: 'inheritedHomeProperty',

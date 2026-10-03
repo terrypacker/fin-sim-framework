@@ -9,13 +9,13 @@ sources: [src/finance/assets/bequest.js]
 stamps:
   panel:config-list: 786f94
   panel:config-graph: bbebb1
-  node:bequest: 0deb91
-  src/finance/assets/bequest.js: dd3ee6
+  node:bequest: 56b4df
+  src/finance/assets/bequest.js: 2f49e3
 ---
 
-An inheritance, modelled as a container: a decedent, an heir, a year, and the assets
-that arrive. Until the inheritance year it is **inert** — nothing appears in net
-worth, nothing earns, nothing is taxed. In that year its assets are funded at fair
+An inheritance, modelled as a container: a decedent, an heir, a date, and the assets
+that arrive. Until the inheritance date it is **inert** — nothing appears in net
+worth, nothing earns, nothing is taxed. On that day its assets are funded at fair
 market value and, for the kinds that have a first-class record, promoted into real
 accounts, properties and collectibles that behave like any other from then on.
 
@@ -23,7 +23,7 @@ That promotion is why the editor shows two lists. The rows you can edit are the 
 still inline; the read-only block below is what has already become a real record and
 is now edited in its own panel, tuned by its own parameters.
 
-Two things the year turns on. The **decedent's** relationship and state of death drive
+Two things the outcome turns on. The **decedent's** relationship and state of death drive
 inheritance tax, which in the modelled US states means Nebraska's class schedule —
 there is no federal inheritance tax, and the estate tax is the decedent's, not the
 heir's. The **heir** is who receives it, so their residency decides what the assets

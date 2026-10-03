@@ -9,11 +9,11 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-227 parameters · 33 panels · 11 node types (179 fields) · 172 action types · 86 tools · 282 state field types · 74 topics · 125 design docs
+224 parameters · 33 panels · 11 node types (180 fields) · 172 action types · 86 tools · 282 state field types · 74 topics · 125 design docs
 
 ---
 
-## Parameters (227)
+## Parameters (224)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
@@ -500,7 +500,7 @@ scenario's own schema), which is where to go to change it.
 - **`usSavingsInterestRate`** — US Savings Interest Rate · `Number` · default `0.03` · via US_BANKING
   Annual interest rate for US savings accounts (seed / fallback baseline; rate sweeps go through US Prime — design 56).
 
-### US Retirement (9)
+### US Retirement (6)
 
 - **`dividendReinvest`** — Reinvest Dividends (default) · `Boolean` · default `false` · sweep: opt · via US_RETIREMENT
   Household DEFAULT for US brokerage dividends and bond coupons: if true they are reinvested, otherwise paid out as cash. A real DRIP election is made per broker, so any brokerage account can override this on its own record (design 106); this value applies to every account that has not.
@@ -510,14 +510,8 @@ scenario's own schema), which is where to go to change it.
   Annual commodity growth rate for GOLD holdings (design 56 §7); decoupled from equity returns and central-bank Prime, taxed at the 28% collectibles rate on disposal.
 - **`inflationRate`** — Inflation Rate · `Number` · default `0.03` · sweep: mc · via US_RETIREMENT
   Annual inflation rate applied to expenses
-- **`k401ToIraConversionDay`** — 401(k)→IRA Conversion Day · `Number` · default — · via US_RETIREMENT
-  Day of month for the conversion; null = use the owner's retirement day
 - **`k401ToIraConversionEnabled`** — 401(k)→IRA Conversion Enabled · `Boolean` · default `true` · via US_RETIREMENT
-  If true, each 401(k) is rolled into the owner's first IRA on the owner's retirement date
-- **`k401ToIraConversionMonth`** — 401(k)→IRA Conversion Month · `Number` · default — · via US_RETIREMENT
-  Month (1–12) of the conversion; null = use the owner's retirement month
-- **`k401ToIraConversionYear`** — 401(k)→IRA Conversion Year · `Number` · default — · sweep: opt · via US_RETIREMENT
-  Year of the conversion; null = use the owner's retirement year
+  If true, each 401(k) is rolled into the owner's first IRA, on the date set on that person (blank = the day they stop work)
 - **`primarySsClaimAge`** — Primary SS Claim Age · `Number` · default `67` · via SCENARIO
   Age at which primary claims Social Security (62–70). Note: only age 67 (FRA) is modelled until TODO #292 is resolved.
 
@@ -587,7 +581,7 @@ true statement about the registry, not a gap in this file.
 
 ---
 
-## Node types (11 kinds · 179 fields)
+## Node types (11 kinds · 180 fields)
 
 Every kind of record the Nodes panel can open, and every control its edit form offers.
 The inventory is read from the FORM — the `<template>` in `index.html` the editor
@@ -599,9 +593,9 @@ scenario parameter and tier 1 emits its description verbatim; `topic` means the 
 tier-2 topic under `help/nodes/` says it. Exactly one of the two, never both — a field
 described twice is the copy that drifts.
 
-### People — `person` (25 fields)
+### People — `person` (26 fields)
 
-Explained in [`help/nodes`](nodes/person.md). 10 field(s) described by a record parameter.
+Explained in [`help/nodes`](nodes/person.md). 11 field(s) described by a record parameter.
 
 - **`name`** — Name · `text` · topic
   What this person is called throughout the app. Free text, but it is also how you will pick them out in every owner dropdown and every per-person chart.
@@ -627,6 +621,8 @@ Explained in [`help/nodes`](nodes/person.md). 10 field(s) described by a record 
   Where the work is physically performed, which decides whether the income is US- or AU-sourced for tax purposes — not the wage currency, and not residency. Leave it as "same as residency" unless modelling a cross-border commuter or someone remote-working for a foreign employer.
 - **`retirementDate`** — Retire Date · `date` · param
   Date this person stops earning wages (their last working month).
+- **`k401ToIraConversionDate`** — 401(k) Rollover · `date` · param
+  The day this person's 401(k) rolls into their first IRA. Blank means on the day they stop work. A date before that is moved to it: a 401(k) cannot be rolled over while still employed by its sponsor.
 - **`wageSplits`** — Direct Deposit · `SPLITS` · topic
   Where this person's net pay lands. Fixed amounts are taken first, in list order, then percentages of the original net pay; whatever remains goes to their transaction account. Cash routing only — it has no tax consequence, and it cannot be used to make a contribution.
 - **`k401DeferralPct`** — 401(k) Deferral · `PERCENT` · param
@@ -904,8 +900,8 @@ Explained in [`help/nodes`](nodes/bequest.md). 1 field(s) described by a record 
   The US state the decedent was domiciled in — the situs that decides whether a state inheritance tax applies at all. Only Nebraska currently levies one in this model; the other states are selectable and inert, so choosing one is a statement about the plan, not a no-op you can skip.
 - **`heirId`** — Heir · `select` · topic
   Which person in the household receives it. Their residency and marginal rate govern how the inherited assets are taxed from the inheritance year onward, which is usually a bigger number than the inheritance tax itself.
-- **`inheritanceYear`** — Inheritance year (blank = inert) · `number` · param
-  Calendar year this bequest is inherited. Leave blank to keep it inert — the inherited assets stay invisible (no net-worth, no drawdown) until a year is set.
+- **`inheritanceDate`** — Inheritance date (blank = inert) · `date` · param
+  The day this bequest is inherited. Leave blank to keep it inert — the inherited assets stay invisible (no net-worth, no drawdown) until a date is set.
 - **`paidViaEstate`** — AU super paid via estate (no +2% Medicare) · `check` · topic
   Tick when an Australian super death benefit is paid to the estate rather than directly to the beneficiary. It avoids the additional 2% Medicare levy on the taxable component, which is the whole of the difference; the 15% (or 30%) tax on the taxable component paid to a non-dependant applies either way.
 
@@ -2153,7 +2149,7 @@ what the in-app panel keys on.
 | [Recorded MPC Runs](concepts/recorded-mpc-runs.md) | concept | 400 | 1 panel · 3 params · design 81, 80 |
 | [Reducer](nodes/reducer.md) | node | 195 | 3 panels · design 2, 16 |
 | [Return Assumptions](concepts/return-assumptions.md) | concept | 266 | 2 panels · 13 params · design 99, 106 |
-| [Roth Conversions](concepts/roth-conversions.md) | concept | 272 | 2 panels · 13 params · design 29 |
+| [Roth Conversions](concepts/roth-conversions.md) | concept | 291 | 2 panels · 10 params · design 29 |
 | [Scenario](panels/scenario.md) | panel | 201 | 1 panel |
 | [Scenario Compare](panels/scenario-compare.md) | panel | 205 | 1 panel |
 | [Searching Pool Levers](concepts/searching-pool-levers.md) | concept | 399 | design 110, 97 |

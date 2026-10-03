@@ -64,7 +64,7 @@ import {
   synthesizeTargetAllocation, allocWeightsFromMix, allocWeightsFromPreset, presentAllocations,
   DRAWDOWN_OWNER_MODES, DRAWDOWN_OWNER_DEFAULT, resolveOwnerBanding,
 } from './params/lever-weights.js';
-import { migrateParamBag } from './year-date-migration.js';
+import { migrateParamBag, yearToIsoDate } from './year-date-migration.js';
 
 export {
   DRAWDOWN_STRATEGIES, DRAWDOWN_ROLES, DRAWDOWN_WEIGHT_MODE, DRAWDOWN_WEIGHT_PREFIX,
@@ -353,8 +353,9 @@ export const INTL_RETIREMENT_DEFAULTS = {
   'prop.auHouseProperty.plannedSaleDate':          null,
   'equity.companyEquityAccount.plannedSaleDate':   '2033-01-15',
 
-  // Inheritance year for the example bequest (null = inert; design 63)
-  inheritanceYear: null,
+  // Inheritance date for the example bequest (null = inert; design 63). A legacy
+  // `inheritanceYear` override still works: it is 15 Jan of that year (design 117).
+  inheritanceDate: null,
 };
 
 /**
@@ -436,7 +437,7 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
   // date, are generated from the records (design 55; design 117 phase 2 retired the
   // static `companySaleYear`).
 
-  // Inheritance (design 63): the inheritanceYear + per-inherited-RA drawdown knobs
+  // Inheritance (design 63): the inheritanceDate + per-inherited-RA drawdown knobs
   // are GENERATED per-record from the Bequest records (design 55 template path /
   // design 63 §12.3), so they are not hand-listed here.
 
@@ -1190,7 +1191,7 @@ export class IntlRetirementScenario extends BaseScenario {
       ],
 
       // ── Inheritance (design 63) ───────────────────────────────────────────────
-      // An example external-decedent bequest. Inert until inheritanceYear is set
+      // An example external-decedent bequest. Inert until inheritanceDate is set
       // (null default ⇒ contributes nothing, so the reference golden is unmoved).
       // Set the year to fund the inherited assets + arm the SECURE 10-year IRA
       // drawdown, the AU super lump-sum, and any NE inheritance tax.
@@ -1199,7 +1200,8 @@ export class IntlRetirementScenario extends BaseScenario {
           __type: 'Bequest', name: "Parent's Estate", stateKey: 'estateBequest',
           decedentName: 'Parent', relationship: 'immediate', decedentState: null,
           heirId: 'primary', paidViaEstate: false,
-          ...(p.inheritanceYear != null ? { inheritanceYear: p.inheritanceYear } : {}),
+          ...((p.inheritanceDate ?? p.inheritanceYear) != null
+            ? { inheritanceDate: p.inheritanceDate ?? yearToIsoDate(p.inheritanceYear) } : {}),
           assets: [
             { __type: 'BrokerageAccount',      name: 'Inherited Brokerage', country: 'US',
               stateKey: 'inheritedBrokerageAccount', inheritedValue: 400_000, deceasedCostBase: 150_000 },

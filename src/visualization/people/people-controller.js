@@ -62,6 +62,7 @@ export class PeopleController {
       wageCurrency:          data.wageCurrency,
       workCountry:           data.workCountry ?? null,  // design 73 Gap 1
       ssCurrency:            data.ssCurrency,
+      k401ToIraConversionDate: data.k401ToIraConversionDate || null,   // design 117 D9; blank = at separation
       // Payroll elections (design 95 §17 phase 10) — null-preserving; see `_elections`.
       ..._elections(data),
     });

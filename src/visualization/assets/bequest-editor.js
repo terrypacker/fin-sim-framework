@@ -48,7 +48,7 @@ export const BEQUEST_FORM_FIELDS = Object.freeze([
   { field: 'relationship',   label: 'Relationship (NE class)',                     kind: 'select', options: RELATIONSHIPS },
   { field: 'decedentState',  label: 'Decedent state (situs)',                      kind: 'select', options: SITUS },
   { field: 'heirId',         label: 'Heir',                                        kind: 'select' },
-  { field: 'inheritanceYear', label: 'Inheritance year (blank = inert)',           kind: 'number' },
+  { field: 'inheritanceDate', label: 'Inheritance date (blank = inert)',           kind: 'date' },
   { field: 'paidViaEstate',  label: 'AU super paid via estate (no +2% Medicare)',  kind: 'check' },
 ]);
 
@@ -97,7 +97,7 @@ export class BequestEditor extends BaseComponent {
     this._relationship  = this._inputs.relationship;
     this._decedentState = this._inputs.decedentState;
     this._heir          = this._inputs.heirId;
-    this._year          = this._inputs.inheritanceYear;
+    this._date          = this._inputs.inheritanceDate;
     this._paidViaEstate = this._inputs.paidViaEstate;
 
     // ── Inherited assets ──────────────────────────────────────────────────────
@@ -150,8 +150,8 @@ export class BequestEditor extends BaseComponent {
   }
 
   /**
-   * Route the param-backed `inheritanceYear` field through its generated
-   * `bequest.<stateKey>.inheritanceYear` param (design/32, design 55 §14.3): a
+   * Route the param-backed `inheritanceDate` field through its generated
+   * `bequest.<stateKey>.inheritanceDate` param (design/32, design 55 §14.3): a
    * direct edit writes the param (the source of truth) rather than only the
    * record, and a 🔗 badge jumps to the param in the Scenario panel. Without
    * this, the param→record cascade clobbers a form edit on the next Rebuild.
@@ -161,16 +161,16 @@ export class BequestEditor extends BaseComponent {
     const stateKey = this._node?.stateKey;
     if (!stateKey || !this._links) return;
 
-    const param = this._links.getParamFor('bequest', stateKey, 'inheritanceYear');
+    const param = this._links.getParamFor('bequest', stateKey, 'inheritanceDate');
     if (!param) return;
-    const labelEl = this._year?.closest('.node-field')?.querySelector('label');
+    const labelEl = this._date?.closest('.node-field')?.querySelector('label');
     bindParamLinkedField({
-      input: this._year, labelEl, param,
-      coerce: (raw) => (raw === '' || raw == null) ? null : Math.round(Number(raw)),
+      input: this._date, labelEl, param,
+      coerce: (raw) => (raw === '' || raw == null) ? null : String(raw),
       onChange: () => this.onParamChange?.(),
       onOpen:   (p) => this.onOpenParam?.(p),
     });
-    this._linkedFields.add('inheritanceYear');
+    this._linkedFields.add('inheritanceDate');
   }
 
   _renderAssets() {
@@ -201,7 +201,6 @@ export class BequestEditor extends BaseComponent {
   }
 
   _readForm() {
-    const yr = this._year.value;
     const data = {
       id:             this._node?.id ?? null,
       name:           this._name.value.trim(),
@@ -209,7 +208,7 @@ export class BequestEditor extends BaseComponent {
       relationship:   this._relationship.value,
       decedentState:  this._decedentState.value || null,
       heirId:         this._heir.value || null,
-      inheritanceYear: yr === '' ? null : Math.round(Number(yr)),
+      inheritanceDate: this._date.value || null,   // blank = inert (design 117: a date)
       paidViaEstate:  this._paidViaEstate.checked,
       assets:         this._assets.map(a => ({ ...a })),
     };

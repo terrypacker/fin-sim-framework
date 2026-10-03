@@ -286,50 +286,80 @@ describe('Param-linked editor fields', () => {
     expect('occupancyRate' in data).toBe(false);
   });
 
-  test('Bequest inheritanceYear routes through its param (read, write, badge, excluded, click-through)', () => {
-    const param = { name: 'bequest.dadEstate.inheritanceYear', value: 2035, label: 'Dad Estate — Inheritance Year',
-                    node: { type: 'bequest', stateKey: 'dadEstate', field: 'inheritanceYear' } };
+  test('Bequest inheritanceDate routes through its param (read, write, badge, excluded, click-through)', () => {
+    const param = { name: 'bequest.dadEstate.inheritanceDate', value: '2035-01-15', type: 'Date',
+                    label: 'Dad Estate — Inheritance Date',
+                    node: { type: 'bequest', stateKey: 'dadEstate', field: 'inheritanceDate' } };
     let changed = 0;
     let opened = null;
     const editor = new BequestEditor({
       container: makeMockContainer(),
-      node: { id: 'b1', name: 'Dad Estate', stateKey: 'dadEstate', inheritanceYear: null, assets: [] },
+      node: { id: 'b1', name: 'Dad Estate', stateKey: 'dadEstate', inheritanceDate: null, assets: [] },
       people: [{ id: 'primary', name: 'Alice' }],
       links: new ParamFieldLinks([param]),
       onParamChange: () => { changed++; },
       onOpenParam:   (p) => { opened = p; },
     });
     editor.render();
-    const root = editor._rootEl;
 
-    // Reads the param value (2035), not the node's null inheritanceYear.
-    expect(editor._year.value).toBe('2035');
-    // Badge present on the year field, and it click-throughs to the param.
-    const badge = editor._year.closest('.node-field').querySelector('.param-link-badge');
+    // Reads the param value, not the node's null inheritanceDate, in a date input.
+    expect(editor._date.type).toBe('date');
+    expect(editor._date.value).toBe('2035-01-15');
+    // Badge present on the date field, and it click-throughs to the param.
+    const badge = editor._date.closest('.node-field').querySelector('.param-link-badge');
     expect(badge).toBeTruthy();
     badge.click();
     expect(opened).toBe(param);
 
-    // Editing writes the param (rounded int), not the record payload.
-    editor._year.value = '2040';
-    fire(editor._year, 'input');
-    expect(param.value).toBe(2040);
+    // Editing writes the param, not the record payload; blank is inert (null).
+    editor._date.value = '2040-06-30';
+    fire(editor._date, 'change');
+    expect(param.value).toBe('2040-06-30');
     expect(changed).toBeGreaterThan(0);
+    editor._date.value = '';
+    fire(editor._date, 'change');
+    expect(param.value).toBeNull();
 
     const data = editor._readForm();
-    expect('inheritanceYear' in data).toBe(false); // owned by the param
+    expect('inheritanceDate' in data).toBe(false); // owned by the param
     expect(data.name).toBe('Dad Estate');          // free field still present
   });
 
-  test('Bequest with no link carries inheritanceYear in its save payload', () => {
+  test('Bequest with no link carries inheritanceDate in its save payload', () => {
     const editor = new BequestEditor({
       container: makeMockContainer(),
-      node: { id: 'b1', name: 'Dad Estate', stateKey: 'dadEstate', inheritanceYear: 2030, assets: [] },
+      node: { id: 'b1', name: 'Dad Estate', stateKey: 'dadEstate', inheritanceDate: '2030-01-15', assets: [] },
       people: [], links: new ParamFieldLinks([]),
     });
     editor.render();
-    expect(editor._year.value).toBe('2030');
-    expect(editor._readForm().inheritanceYear).toBe(2030);
+    expect(editor._date.value).toBe('2030-01-15');
+    expect(editor._readForm().inheritanceDate).toBe('2030-01-15');
+  });
+
+  test('Person 401(k) rollover date routes through its param; blank is null', () => {
+    const param = { name: 'person.primary.k401ToIraConversionDate', value: '2041-03-01', type: 'Date',
+                    node: { type: 'person', id: 'primary', field: 'k401ToIraConversionDate' } };
+    const editor = new PersonEditor({
+      container: makeMockContainer(),
+      node: { id: 'primary', name: 'Alice', citizen: ['US'], k401ToIraConversionDate: null },
+      links: new ParamFieldLinks([param]),
+    });
+    editor.render();
+    const input = editor._rootEl.querySelector('[data-id="k401ToIraConversionDate"]');
+    expect(input.type).toBe('date');
+    expect(input.value).toBe('2041-03-01');
+    input.value = '';
+    fire(input, 'change');
+    expect(param.value).toBeNull();
+    expect('k401ToIraConversionDate' in editor._readForm(editor._rootEl)).toBe(false);
+
+    const unlinked = new PersonEditor({
+      container: makeMockContainer(),
+      node: { id: 'spouse', name: 'Bo', citizen: ['US'], k401ToIraConversionDate: '2043-07-15' },
+      links: new ParamFieldLinks([]),
+    });
+    unlinked.render();
+    expect(unlinked._readForm(unlinked._rootEl).k401ToIraConversionDate).toBe('2043-07-15');
   });
 
   test('No links → fields behave normally (read from node, present in save)', () => {

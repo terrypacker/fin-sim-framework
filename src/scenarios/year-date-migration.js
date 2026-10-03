@@ -24,6 +24,14 @@
  *   generated key       prop.<sk>.plannedSaleYear → prop.<sk>.plannedSaleDate (coll., equity. too)
  *   retired flat keys   usHouseSaleYear, auHouseSaleYear, companySaleYear → the generated key
  *
+ * Phase 3 adds:
+ *
+ *   bequest             inheritanceYear + inheritanceMonth + inheritanceDay → inheritanceDate
+ *                       (`bequest.<sk>.inheritanceYear` → `bequest.<sk>.inheritanceDate`)
+ *   401(k) rollover     the scenario params k401ToIraConversionYear / Month / Day → each
+ *                       person's `k401ToIraConversionDate`, every missing part filled from
+ *                       THAT person's retirement date, as us-retirement-toolset did (D9)
+ *
  * Every function here is IDEMPOTENT and cheap, because a cfg reaches the engine by more
  * than one road and each one calls it: `ScenarioLoader.load`, `applyParamBagToConfig` (a
  * MC iteration or an optimizer candidate is applied BEFORE the loader runs),
@@ -42,8 +50,16 @@ export const RECORD_FIELD_RENAMES = Object.freeze({
   purchaseYear:    'purchaseDate',
 });
 
-/** Generated-key prefix → the cascade node type, for the records phase 2 converts. */
-const NODE_TYPE_BY_PREFIX = Object.freeze({ prop: 'realProperty', coll: 'collectible', equity: 'companyEquity' });
+/** Generated-key prefix → the cascade node type, for the records phases 2–3 convert. */
+const NODE_TYPE_BY_PREFIX = Object.freeze({ prop: 'realProperty', coll: 'collectible', equity: 'companyEquity',
+  bequest: 'bequest' });
+
+/** Generated-key field renames (the record fields above, plus a bequest's year). */
+const KEY_FIELD_RENAMES = Object.freeze({ ...RECORD_FIELD_RENAMES, inheritanceYear: 'inheritanceDate' });
+
+/** The three scenario params the per-person rollover date replaced (design 117 D9). */
+export const RETIRED_ROLLOVER_KEYS = Object.freeze(
+  ['k401ToIraConversionYear', 'k401ToIraConversionMonth', 'k401ToIraConversionDay']);
 const PREFIX_BY_NODE_TYPE = Object.freeze(Object.fromEntries(
   Object.entries(NODE_TYPE_BY_PREFIX).map(([p, t]) => [t, p])));
 
@@ -122,8 +138,8 @@ export function migratedParamKey(key, node = null) {
   if (firstDot < 0 || lastDot === firstDot) return null;
   const prefix = key.slice(0, firstDot);
   const field  = key.slice(lastDot + 1);
-  if (!NODE_TYPE_BY_PREFIX[prefix] || !Object.hasOwn(RECORD_FIELD_RENAMES, field)) return null;
-  return `${key.slice(0, lastDot)}.${RECORD_FIELD_RENAMES[field]}`;
+  if (!NODE_TYPE_BY_PREFIX[prefix] || !Object.hasOwn(KEY_FIELD_RENAMES, field)) return null;
+  return `${key.slice(0, lastDot)}.${KEY_FIELD_RENAMES[field]}`;
 }
 
 /**
@@ -145,9 +161,25 @@ export function migratedParamKey(key, node = null) {
  * @param {function(string): ?string} [opts.keyFor] the new key for an old one, when the
  *        caller knows better than the default (a retired flat key's record, from its typed
  *        entry's node); null falls back to `migratedParamKey`
+ * @param {function(string, *): *} [opts.toDate] the date an old value becomes under a new
+ *        key (a bequest's year keeps its own month and day); default `toSaleDate`
+ * @param {Array<object>} [opts.persons] the cfg's people: with them, the retired rollover
+ *        params become each 401(k) owner's `person.<id>.k401ToIraConversionDate`. Without
+ *        them the three keys are left as they are — nothing reads them, and no single date
+ *        can stand for them (design 117 D9).
  */
-export function migrateParamBag(bag, { planOf = null, keyFor = null } = {}) {
+export function migrateParamBag(bag, { planOf = null, keyFor = null, toDate = null, persons = null } = {}) {
   if (!bag || typeof bag !== 'object') return bag;
+  const conv = (next, v) => (toDate ? toDate(next, v) : toSaleDate(v));
+  let rolled = bag;
+  if (persons && RETIRED_ROLLOVER_KEYS.some(k => Object.hasOwn(bag, k))) {
+    rolled = { ...bag };
+    for (const [key, date] of rolloverDatesFor(persons, _rolloverParts(bag))) {
+      if (!Object.hasOwn(rolled, key)) rolled[key] = date;
+    }
+    for (const k of RETIRED_ROLLOVER_KEYS) delete rolled[k];
+    bag = rolled;
+  }
   const byTarget = new Map();     // new key → old keys, in key order
   for (const key of Object.keys(bag)) {
     const next = keyFor?.(key) ?? migratedParamKey(key);
@@ -155,14 +187,14 @@ export function migrateParamBag(bag, { planOf = null, keyFor = null } = {}) {
     if (!byTarget.has(next)) byTarget.set(next, []);
     byTarget.get(next).push(key);
   }
-  if (byTarget.size === 0) return bag;
+  if (byTarget.size === 0) return rolled;
   const flatLast = (a, b) => Number(Object.hasOwn(RETIRED_SALE_YEAR_KEYS, a))
     - Number(Object.hasOwn(RETIRED_SALE_YEAR_KEYS, b));
   const out = { ...bag };
   for (const [next, olds] of byTarget) {
     const candidates = [
-      ...(Object.hasOwn(bag, next) ? [toSaleDate(bag[next])] : []),
-      ...olds.sort(flatLast).map(k => toSaleDate(bag[k])),
+      ...(Object.hasOwn(bag, next) ? [conv(next, bag[next])] : []),
+      ...olds.sort(flatLast).map(k => conv(next, bag[k])),
     ];
     let value = candidates[0];
     const own = planOf ? planOf(next) : undefined;
@@ -175,6 +207,66 @@ export function migrateParamBag(bag, { planOf = null, keyFor = null } = {}) {
     for (const k of olds) delete out[k];
   }
   return out;
+}
+
+/** The rollover parts a param source carries: { year, month (1–12), day }, each or null. */
+function _rolloverParts(get) {
+  const read = typeof get === 'function' ? get : (k) => get?.[k];
+  const num  = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+  return {
+    year:  num(read('k401ToIraConversionYear')),
+    month: num(read('k401ToIraConversionMonth')),
+    day:   num(read('k401ToIraConversionDay')),
+  };
+}
+
+/**
+ * The per-person rollover dates the retired scenario params meant (design 117 D9), as
+ * `[generatedKey, 'YYYY-MM-DD']` pairs. A part left blank was filled from the OWNER's
+ * retirement date — one shared year therefore named a different day for each person — so
+ * each date is resolved here per person, exactly as us-retirement-toolset did. A person
+ * with no retirement date had no rollover then and gets none now. All parts blank means
+ * "at separation", which a blank person field still means: no pair is emitted.
+ *
+ * @param {Array<object>} persons  cfg person records (`id`, `retirementDate`)
+ * @param {{year, month, day}} parts
+ * @returns {Array<[string, string]>}
+ */
+export function rolloverDatesFor(persons, parts) {
+  if (!parts || (parts.year == null && parts.month == null && parts.day == null)) return [];
+  const out = [];
+  for (const person of (Array.isArray(persons) ? persons : [])) {
+    const t = person?.retirementDate == null ? NaN
+      : (person.retirementDate instanceof Date ? person.retirementDate.getTime() : Date.parse(person.retirementDate));
+    if (!person?.id || !Number.isFinite(t)) continue;
+    const r = new Date(t);
+    const year  = parts.year  ?? r.getUTCFullYear();
+    const month = (parts.month ?? (r.getUTCMonth() + 1)) - 1;
+    const day   = parts.day   ?? r.getUTCDate();
+    // Date.UTC normalizes an out-of-range day the way the toolset's Date.UTC did.
+    out.push([`person.${person.id}.k401ToIraConversionDate`,
+      new Date(Date.UTC(year, month, day)).toISOString().slice(0, 10)]);
+  }
+  return out;
+}
+
+/**
+ * A bequest's inheritance year, month and day as one date, in place. The month (0-based)
+ * and day were hidden fields defaulting to January and the 15th, which is what
+ * bequest-service built the INHERIT event from.
+ */
+function _migrateBequest(b) {
+  if (!b || typeof b !== 'object') return;
+  if (Object.hasOwn(b, 'inheritanceYear')) {
+    if (b.inheritanceDate === undefined) {
+      b.inheritanceDate = yearToIsoDate(b.inheritanceYear, b.inheritanceMonth ?? 0, b.inheritanceDay ?? 15);
+    }
+    delete b.inheritanceYear;
+  }
+  delete b.inheritanceMonth;
+  delete b.inheritanceDay;
+  const v = b.inheritanceDate;
+  if (v instanceof Date || (typeof v === 'string' && v.length > 10)) b.inheritanceDate = toSaleDate(v);
 }
 
 /**
@@ -201,21 +293,22 @@ function _migrateRecord(rec, { normalize = true } = {}) {
 const ASSET_STATE_KINDS = new Set(['real-property', 'collectible', 'company']);
 
 /** Rename one typed param entry in place, or report that it is superseded. */
-function _migrateTypedParam(p) {
+function _migrateTypedParam(p, conv) {
   const next = migratedParamKey(p?.name, p?.node);
   if (!next) return null;
   const field = next.slice(next.lastIndexOf('.') + 1);
   p.name  = next;
   p.type  = 'Date';
-  p.value = toSaleDate(p.value);
-  if (p.defaultValue !== undefined) p.defaultValue = toSaleDate(p.defaultValue);
-  if (p.node && Object.hasOwn(RECORD_FIELD_RENAMES, p.node.field)) p.node = { ...p.node, field };
+  p.value = conv(next, p.value);
+  if (p.defaultValue !== undefined) p.defaultValue = conv(next, p.defaultValue);
+  if (p.node && Object.hasOwn(KEY_FIELD_RENAMES, p.node.field)) p.node = { ...p.node, field };
   return next;
 }
 
 /**
- * Convert a scenario cfg's sale and purchase years to dates, in place (design 117
- * phase 2). Records, a bequest's inline assets, the typed `cfg.params` list, the flat
+ * Convert a scenario cfg's year fields to dates, in place (design 117 phases 2–3): sale
+ * and purchase years, a bequest's inheritance year, and the 401(k) rollover params.
+ * Records, a bequest's inline assets, the typed `cfg.params` list, the flat
  * `cfg.parameters` bag and a saved `cfg.initialState` are all covered. Idempotent.
  *
  * @param {object} cfg
@@ -223,6 +316,37 @@ function _migrateTypedParam(p) {
  */
 export function migrateYearFieldsToDates(cfg) {
   if (!cfg || typeof cfg !== 'object') return cfg;
+
+  // A bequest's generated year param keeps the bequest's own month and day, so read them
+  // before the records lose them.
+  const bequestDay = new Map();
+  for (const b of (Array.isArray(cfg.bequests) ? cfg.bequests : [])) {
+    const sk = b?.stateKey ?? b?.id;
+    if (sk != null) bequestDay.set(`bequest.${sk}.inheritanceDate`, [b.inheritanceMonth ?? 0, b.inheritanceDay ?? 15]);
+  }
+  const conv = (next, v) => {
+    const md = bequestDay.get(next);
+    return md && typeof v === 'number' ? yearToIsoDate(v, md[0], md[1]) : toSaleDate(v);
+  };
+
+  // The 401(k) rollover parts, typed entry first (the live store), then the flat bag.
+  const typedValue = (k) => {
+    const e = Array.isArray(cfg.params) ? cfg.params.find(p => p?.name === k) : undefined;
+    return e ? e.value : cfg.parameters?.[k];
+  };
+  const rollover = rolloverDatesFor(cfg.persons, _rolloverParts(typedValue));
+  for (const [key, date] of rollover) {
+    const id = key.slice('person.'.length, key.lastIndexOf('.'));
+    const person = cfg.persons.find(pe => pe?.id === id);
+    if (person && person.k401ToIraConversionDate == null) person.k401ToIraConversionDate = date;
+  }
+  if (Array.isArray(cfg.params)) cfg.params = cfg.params.filter(p => !RETIRED_ROLLOVER_KEYS.includes(p?.name));
+  if (cfg.parameters && RETIRED_ROLLOVER_KEYS.some(k => Object.hasOwn(cfg.parameters, k))) {
+    cfg.parameters = { ...cfg.parameters };
+    for (const k of RETIRED_ROLLOVER_KEYS) delete cfg.parameters[k];
+  }
+
+  for (const b of (Array.isArray(cfg.bequests) ? cfg.bequests : [])) _migrateBequest(b);
   for (const list of [cfg.realProperties, cfg.collectibles, cfg.companyEquities]) {
     for (const rec of (Array.isArray(list) ? list : [])) _migrateRecord(rec);
   }
@@ -242,7 +366,7 @@ export function migrateYearFieldsToDates(cfg) {
     const renamed = new Set();
     for (const p of cfg.params) {
       const old  = p?.name;
-      const next = _migrateTypedParam(p);
+      const next = _migrateTypedParam(p, conv);
       if (next) { renamed.add(p); keyByOldName.set(old, next); }
     }
     if (renamed.size) {
@@ -263,7 +387,7 @@ export function migrateYearFieldsToDates(cfg) {
     }
   }
   if (cfg.parameters && typeof cfg.parameters === 'object') {
-    const next = migrateParamBag(cfg.parameters, { keyFor: (k) => keyByOldName.get(k) ?? null });
+    const next = migrateParamBag(cfg.parameters, { keyFor: (k) => keyByOldName.get(k) ?? null, toDate: conv });
     if (next !== cfg.parameters) cfg.parameters = next;
   }
   return cfg;

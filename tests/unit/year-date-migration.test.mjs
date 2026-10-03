@@ -214,3 +214,98 @@ describe('every other road', () => {
     assert.equal(dflt.companyEquities[0].plannedSaleDate, '2033-01-15', 'the default sale: 15 Jan 2033, as before');
   });
 });
+
+// ─── Phase 3: the inheritance date and the per-person 401(k) rollover ─────────
+
+describe('phase 3 — inheritance date', () => {
+  test('a bequest\'s year, hidden month (0-based) and day become one date', () => {
+    const cfg = migrateYearFieldsToDates({ bequests: [
+      { stateKey: 'a', inheritanceYear: 2030, inheritanceMonth: 5, inheritanceDay: 3 },
+      { stateKey: 'b', inheritanceYear: 2031 },
+      { stateKey: 'c', inheritanceYear: null, inheritanceMonth: 0, inheritanceDay: 15 },
+    ] });
+    assert.deepEqual(cfg.bequests, [
+      { stateKey: 'a', inheritanceDate: '2030-06-03' },
+      { stateKey: 'b', inheritanceDate: '2031-01-15' },
+      { stateKey: 'c', inheritanceDate: null },
+    ]);
+  });
+
+  test('the bequest\'s generated year param keeps that bequest\'s own month and day', () => {
+    const cfg = migrateYearFieldsToDates({
+      bequests: [{ stateKey: 'estate', inheritanceYear: 2030, inheritanceMonth: 5, inheritanceDay: 3 }],
+      params: [{ name: 'bequest.estate.inheritanceYear', type: 'Number', value: 2032,
+        node: { type: 'bequest', stateKey: 'estate', field: 'inheritanceYear' } }],
+      parameters: { 'bequest.estate.inheritanceYear': 2032 },
+    });
+    assert.deepEqual([cfg.params[0].name, cfg.params[0].value, cfg.params[0].node.field],
+      ['bequest.estate.inheritanceDate', '2032-06-03', 'inheritanceDate']);
+    assert.deepEqual(cfg.parameters, { 'bequest.estate.inheritanceDate': '2032-06-03' });
+  });
+
+  test('a Bequest built with a retired field throws; the serializer reads a saved one', async () => {
+    const { Bequest } = await import('../../src/finance/assets/bequest.js');
+    assert.throws(() => new Bequest({ name: 'E', inheritanceYear: 2030 }), /inheritanceYear.*inheritanceDate/);
+    assert.throws(() => new Bequest({ name: 'E', inheritanceMonth: 2 }), /retired/);
+    const back = ScenarioSerializer._makeBequest(
+      { __type: 'Bequest', name: 'E', inheritanceYear: 2030, inheritanceMonth: 5, inheritanceDay: 3, assets: [] });
+    assert.equal(back.inheritanceDate, '2030-06-03');
+  });
+});
+
+describe('phase 3 — the 401(k) rollover becomes each person\'s date (D9)', () => {
+  const persons = () => [
+    { id: 'primary', retirementDate: '2040-01-01T00:00:00.000Z' },
+    { id: 'spouse',  retirementDate: '2042-07-15T00:00:00.000Z' },
+    { id: 'kid' },                                            // no retirement date
+  ];
+
+  test('a year-only setting meant a different day per owner — and still does', () => {
+    const cfg = migrateYearFieldsToDates({ persons: persons(),
+      params: [{ name: 'k401ToIraConversionYear', value: 2043 }, { name: 'x', value: 1 }],
+      parameters: { k401ToIraConversionYear: 2043, x: 1 } });
+    assert.deepEqual(cfg.persons.map(p => p.k401ToIraConversionDate ?? null),
+      ['2043-01-01', '2043-07-15', null], 'each blank part from THAT person\'s retirement date');
+    assert.deepEqual(cfg.params, [{ name: 'x', value: 1 }], 'the three params are retired');
+    assert.deepEqual(cfg.parameters, { x: 1 });
+  });
+
+  test('all three parts set: one date for every owner; none set: blank (at separation)', () => {
+    const full = migrateYearFieldsToDates({ persons: persons(),
+      parameters: { k401ToIraConversionYear: 2044, k401ToIraConversionMonth: 3, k401ToIraConversionDay: 10 } });
+    assert.deepEqual(full.persons.slice(0, 2).map(p => p.k401ToIraConversionDate), ['2044-03-10', '2044-03-10']);
+    const none = migrateYearFieldsToDates({ persons: persons(),
+      parameters: { k401ToIraConversionYear: null, k401ToIraConversionMonth: null } });
+    assert.ok(none.persons.every(p => p.k401ToIraConversionDate == null));
+    assert.deepEqual(none.parameters, {});
+  });
+
+  test('a person\'s own date is never overwritten, and migration is idempotent', () => {
+    const ps = persons(); ps[0].k401ToIraConversionDate = '2041-02-02';
+    const cfg = migrateYearFieldsToDates({ persons: ps, parameters: { k401ToIraConversionMonth: 12 } });
+    assert.deepEqual(cfg.persons.slice(0, 2).map(p => p.k401ToIraConversionDate), ['2041-02-02', '2042-12-15']);
+    assert.deepEqual(migrateYearFieldsToDates(structuredClone(cfg)), cfg);
+  });
+
+  test('a bag converts per person when the cfg\'s people are known', () => {
+    const out = migrateParamBag({ k401ToIraConversionYear: 2043, y: 2 }, { persons: persons() });
+    assert.deepEqual(out, { y: 2, 'person.primary.k401ToIraConversionDate': '2043-01-01',
+      'person.spouse.k401ToIraConversionDate': '2043-07-15' });
+  });
+});
+
+describe('phase 3 — liveness on a loaded plan', () => {
+  test('person.primary.k401ToIraConversionDate, applied as a lever, moves the rollover', async () => {
+    const { loadScenarioSim } = await import('../helpers/scenario-harness.js');
+    const { applyParamBagToConfig } = await import('../../src/scenarios/scenario-param-apply.js');
+    const run = (date) => loadScenarioSim({
+      simEnd: new Date(Date.UTC(2041, 0, 1)), telemetry: 'off',
+      mutateCfg: (cfg) => { if (date) applyParamBagToConfig(cfg, { 'person.primary.k401ToIraConversionDate': date }); },
+      stepTo: new Date(Date.UTC(2040, 5, 1)),
+    }).sim.state.k401Account.balance;
+    // The reference plan retires the primary on 1 Jan 2040: by June the 401(k) has rolled over…
+    assert.equal(run(null), 0);
+    // …unless the rollover is dated September, which the lever must reach.
+    assert.ok(run('2040-09-01') > 0, 'the per-person date reached the sim');
+  });
+});

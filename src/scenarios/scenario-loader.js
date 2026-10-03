@@ -49,7 +49,7 @@ import { inheritedAssetMeta } from '../finance/services/bequest-service.js';
 import { deriveEarningsBasis } from '../finance/assets/investment-account.js';
 import { rescaleHoldingsToBalance } from '../finance/holdings/holding-utils.js';
 import { ACCOUNT_ROLES } from '../finance/state/account-roles.js';
-import { roundRecordField, recordFieldPatch } from './params/record-field-rounding.js';
+import { roundRecordField, recordFieldPatch, DATE_RECORD_FIELDS } from './params/record-field-rounding.js';
 
 // Retirement roles carry the contribution/earnings basis ledger (design 53 §2)
 // whose `earningsBasis` is DERIVED from `balance − contributionBasis` (design 53
@@ -401,7 +401,7 @@ export class ScenarioLoader {
    * hoisted they are ordinary config records — they deserialize into their services,
    * flow through the per-record param generation + cascade, appear in the UI/opt
    * lists, and serialize ONCE (never double). Retirement / super stay inline (SECURE
-   * stream / lump-sum). An inert bequest (no inheritanceYear) is left untouched so the
+   * stream / lump-sum). An inert bequest (no inheritanceDate) is left untouched so the
    * reference golden is byte-identical (§14 regression guard). Idempotent: a record
    * already present by stateKey (a new-format save) is not re-added.
    * @private
@@ -413,7 +413,7 @@ export class ScenarioLoader {
     cfg.realProperties = cfg.realProperties ?? [];
     cfg.collectibles   = cfg.collectibles   ?? [];
     for (const b of bequests) {
-      if (b.inheritanceYear == null) continue;
+      if (b.inheritanceDate == null) continue;
       const remaining = [];
       for (const asset of (b.assets ?? [])) {
         const meta = inheritedAssetMeta(asset.__type);
@@ -752,7 +752,11 @@ export class ScenarioLoader {
       const rec = (cfg.persons ?? []).find(r => r.id === node.id);
       // Design 15: canonicalize Date values to full ISO strings so the
       // cascaded field matches the serialized representation everywhere.
-      if (rec) rec[node.field] = val instanceof Date ? val.toISOString() : val;
+      // A design-117 date field (the 401(k) rollover) lands as 'YYYY-MM-DD', like a sale.
+      if (rec) {
+        rec[node.field] = DATE_RECORD_FIELDS.has(node.field) ? roundRecordField(node.field, val)
+          : (val instanceof Date ? val.toISOString() : val);
+      }
     } else if (node.type === 'account') {
       const rec = (cfg.accounts ?? []).find(r => r.stateKey === node.stateKey);
       if (rec) {
@@ -806,8 +810,8 @@ export class ScenarioLoader {
       const rec = (cfg.companyEquities ?? []).find(r => r.stateKey === node.stateKey);
       if (rec) rec[node.field] = roundRecordField(node.field, val);
     } else if (node.type === 'bequest') {
-      // Design 63: the inheritanceYear param activates an inert bequest. Null keeps
-      // it inert (no INHERIT event); a year rounds to a whole number.
+      // Design 63: the inheritanceDate param activates an inert bequest. Null keeps
+      // it inert (no INHERIT event); a date lands as 'YYYY-MM-DD' (design 117).
       const rec = (cfg.bequests ?? []).find(r => r.stateKey === node.stateKey);
       if (rec) rec[node.field] = (val == null ? null : roundRecordField(node.field, val));
     } else if (node.type === 'bequestAsset') {

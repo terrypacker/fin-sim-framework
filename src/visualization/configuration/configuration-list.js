@@ -34,7 +34,7 @@ const KIND_SUBTITLES = {
   'real-property': (n) => [n.country, n.isPrimaryResidence ? 'Primary' : '', _spec(n)].filter(Boolean).join(' · '),
   collectible:     (n) => [n.country, _spec(n)].filter(Boolean).join(' · '),
   company:         (n) => [n.country, _spec(n)].filter(Boolean).join(' · '),
-  bequest:         (n) => [n.decedentName, n.inheritanceYear ? `→ ${n.inheritanceYear}` : 'inert'].filter(Boolean).join(' '),
+  bequest:         (n) => [n.decedentName, n.inheritanceDate ? `→ ${String(n.inheritanceDate).slice(0, 10)}` : 'inert'].filter(Boolean).join(' '),
   // A Security's subtitle is the market it tracks: it is the field that decides which
   // lots may legally name it (assertAllocationMatch) and the one an author gets wrong.
   security:        (n) => [n.symbol, n.rateKey].filter(Boolean).join(' · '),

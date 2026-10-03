@@ -97,6 +97,7 @@ import {
 import { accountToStatePlain }                from './account-state-projection.js';
 import { assertInterestBearingHoldings } from '../../finance/holdings/default-allocations.js';
 import { marketReturnFor }                    from './economic-regimes-toolset.js';
+import { saleDateToUtc } from '../year-date-migration.js';
 
 /**
  * Design 99 — a handler's market rate of last resort: its market's total and yield, from
@@ -448,26 +449,10 @@ export const US_RETIREMENT = {
         key: 'k401ToIraConversionEnabled', label: '401(k)→IRA Conversion Enabled',
         type: 'Boolean', group: 'US Retirement', mc: false, opt: false,
         defaultValue: true,
-        description: 'If true, each 401(k) is rolled into the owner\'s first IRA on the owner\'s retirement date',
+        description: 'If true, each 401(k) is rolled into the owner\'s first IRA, on the date set on that person (blank = the day they stop work)',
       },
-      {
-        key: 'k401ToIraConversionMonth', label: '401(k)→IRA Conversion Month',
-        type: 'Number', group: 'US Retirement', mc: false, opt: false,
-        defaultValue: null,
-        description: 'Month (1–12) of the conversion; null = use the owner\'s retirement month',
-      },
-      {
-        key: 'k401ToIraConversionDay', label: '401(k)→IRA Conversion Day',
-        type: 'Number', group: 'US Retirement', mc: false, opt: false,
-        defaultValue: null,
-        description: 'Day of month for the conversion; null = use the owner\'s retirement day',
-      },
-      {
-        key: 'k401ToIraConversionYear', label: '401(k)→IRA Conversion Year',
-        type: 'Number', group: 'US Retirement', mc: false, opt: true,
-        defaultValue: null,
-        description: 'Year of the conversion; null = use the owner\'s retirement year',
-      },
+      // The rollover's year / month / day params became each person's
+      // `k401ToIraConversionDate` (design 117 D9; year-date-migration.js converts a save).
       {
         key: 'discretionarySharePct', label: 'Discretionary Share',
         type: 'Number', group: 'Spending', mc: false, opt: true,
@@ -916,9 +901,6 @@ export const US_RETIREMENT = {
         if (!ownerIra) continue;
 
         const retirement = new Date(owner.retirementDate);
-        const year  = p.k401ToIraConversionYear  ?? retirement.getUTCFullYear();
-        const month = (p.k401ToIraConversionMonth ?? (retirement.getUTCMonth() + 1)) - 1;
-        const day   = p.k401ToIraConversionDay   ?? retirement.getUTCDate();
 
         // Legal gate: a 401(k) can only be rolled over to an IRA after separating
         // from the sponsoring employer. This model has a single job per person,
@@ -926,7 +908,8 @@ export const US_RETIREMENT = {
         // conversion date that lands before retirement up to the retirement date —
         // an in-service rollover while still working is not permitted. Later dates
         // (deliberately delaying the rollover) are still honored.
-        const requested = new Date(Date.UTC(year, month, day));
+        // The owner's own date (design 117 D9); blank means at separation.
+        const requested = saleDateToUtc(owner.k401ToIraConversionDate) ?? retirement;
         const convDate  = requested < retirement ? retirement : requested;
 
         schedules.push(new OneOffEvent({

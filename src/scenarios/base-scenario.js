@@ -17,7 +17,7 @@ import {createCurrencyLotObserver} from "../finance/account-rules/currency-lot-o
 import {deriveNetWorth} from "../finance/derived-metrics/net-worth.js";
 import {deriveNetLiquidity} from "../finance/derived-metrics/net-liquidity.js";
 import {deriveOffsetCapacity} from "../finance/derived-metrics/offset-capacity.js";
-import {roundRecordField, recordFieldPatch} from "./params/record-field-rounding.js";
+import {roundRecordField, recordFieldPatch, DATE_RECORD_FIELDS} from "./params/record-field-rounding.js";
 import { migrateParamBag } from './year-date-migration.js';
 
 /**
@@ -198,7 +198,8 @@ export class BaseScenario extends SimGraphNode {
         const person = personService.getAll().find(pr => pr.id === node.id);
         if (person) {
           personService.updatePerson(person, {
-            [node.field]: val instanceof Date ? val.toISOString() : val,
+            [node.field]: DATE_RECORD_FIELDS.has(node.field) ? roundRecordField(node.field, val)
+              : (val instanceof Date ? val.toISOString() : val),
           });
         }
       } else if (node.type === 'account') {

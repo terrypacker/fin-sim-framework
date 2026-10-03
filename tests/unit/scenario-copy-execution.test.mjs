@@ -568,7 +568,7 @@ test('copy of an original with an EDITED company equity runs identically', () =>
 test('copy of an original with an ARMED bequest runs identically', () => {
   assertCopyMatchesEditedOriginal('bequests', (cfg) => {
     assert.ok(cfg.bequests?.length, 'reference scenario must carry a bequest');
-    cfg.bequests[0].inheritanceYear = 2030;
+    cfg.bequests[0].inheritanceDate = '2030-01-15';
   });
 });
 

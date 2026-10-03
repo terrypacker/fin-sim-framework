@@ -157,10 +157,18 @@ export const ACCOUNT_PARAM_TEMPLATES = {
 export const PERSON_PARAM_TEMPLATE = [
   { field: 'monthlyWage',   label: 'Monthly Wage',    type: 'Number', mc: true,  opt: true,
     description: 'Gross monthly employment wage for this person, before tax, in their native currency.' },
-  // opt: false — a household choice, but the optimizer has no Date variable type, so an
-  // opt flag here promises an axis nothing can sweep (design 98 W2 / SWEEP-18).
+  // opt: false. The optimizer has had a Date variable since design 117 phase 1, but when a
+  // person stops work moves with design 116's employment spells; it is flagged there.
   { field: 'retirementDate', label: 'Retirement Date', type: 'Date',  mc: false, opt: false,
     description: 'Date this person stops earning wages (their last working month).' },
+  // The 401(k)→IRA rollover (design 117 D9). It was three scenario params shared by every
+  // owner, each blank part filled from that owner's retirement date — so one setting meant
+  // a different day per person. Per person, it is one date. Swept by Opt, as its year was.
+  { field: 'k401ToIraConversionDate', label: '401(k)→IRA Rollover Date', type: 'Date',
+    mc: false, opt: true, nullable: true,
+    description: 'The day this person\'s 401(k) rolls into their first IRA. Blank means on '
+      + 'the day they stop work. A date before that is moved to it: a 401(k) cannot be '
+      + 'rolled over while still employed by its sponsor.' },
 
   // ── Payroll elections (design 95 §7.1, phase 1) ────────────────────────────
   // Every one is nullable, and the null is meaningful: EMPTY inherits the
@@ -266,11 +274,12 @@ export const COMPANY_EQUITY_PARAM_TEMPLATE = [
 // assets, so the inheritance param surface exists only when an inheritance does
 // and each knob carries a `node` (linked, design 32) — parallel to accounts.
 
-// Per Bequest: the activation year. Blank ⇒ inert (no INHERIT event, no seed).
+// Per Bequest: the activation date (a year with a hidden month/day until design 117).
+// Blank ⇒ inert (no INHERIT event, no seed).
 export const BEQUEST_PARAM_TEMPLATE = [
-  { field: 'inheritanceYear', label: 'Inheritance Year', type: 'Number', mc: false, opt: false, nullable: true,
-    description: 'Calendar year this bequest is inherited. Leave blank to keep it inert — the ' +
-      'inherited assets stay invisible (no net-worth, no drawdown) until a year is set.' },
+  { field: 'inheritanceDate', label: 'Inheritance Date', type: 'Date', mc: false, opt: false, nullable: true,
+    description: 'The day this bequest is inherited. Leave blank to keep it inert — the ' +
+      'inherited assets stay invisible (no net-worth, no drawdown) until a date is set.' },
 ];
 
 // Per inherited retirement account (IRA / 401(k) / Roth): the SECURE 10-year

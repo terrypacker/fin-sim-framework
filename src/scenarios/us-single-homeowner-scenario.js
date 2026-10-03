@@ -30,6 +30,7 @@ import { US_EARLY_WITHDRAWAL } from './toolsets/us-early-withdrawal-toolset.js';
 import { INHERITANCE }         from './toolsets/inheritance-toolset.js';
 import { ECONOMIC_REGIMES }    from './toolsets/economic-regimes-toolset.js';
 import { toolsetParamKeys, forwardToolsetOverrides } from './toolset-param-forwarding.js';
+import { yearToIsoDate } from './year-date-migration.js';
 
 /**
  * UsSingleHomeownerScenario — one person, one country, a mortgage and a job.
@@ -152,7 +153,7 @@ export const US_SINGLE_HOMEOWNER_DEFAULTS = {
   // At 55. A property and a taxable brokerage from a parent — so the run reaches
   // the US step-up in basis AND the Nebraska inheritance tax on a close relative's
   // bequest, which no other scenario touches.
-  inheritanceYear:        2036,
+  inheritanceDate:        '2036-01-15',
   inheritedPropertyValue: 250_000,
   inheritedPropertyBasis:  90_000,
   inheritedBrokerageValue: 150_000,
@@ -437,7 +438,10 @@ export class UsSingleHomeownerScenario extends BaseScenario {
           // which is the ordinary case.
           decedentState: 'NE',
           heirId: 'primary', paidViaEstate: false,
-          inheritanceYear: p.inheritanceYear,
+          // A legacy `inheritanceYear` override (null included: no inheritance) is 15 Jan
+          // of that year (design 117), and beats the default date.
+          inheritanceDate: Object.hasOwn(params, 'inheritanceYear') && !Object.hasOwn(params, 'inheritanceDate')
+            ? yearToIsoDate(params.inheritanceYear) : p.inheritanceDate,
           assets: [
             { __type: 'RealProperty',     name: 'Inherited Home',      country: 'US',
               stateKey: 'inheritedHomeProperty',
