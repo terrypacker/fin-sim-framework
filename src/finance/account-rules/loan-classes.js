@@ -76,45 +76,71 @@ export function findLoansForProperty(state, propStateKey) {
 export const LOAN_RATE_TYPE = Object.freeze({
   VARIABLE:     'VARIABLE',      // Prime + primeSpread
   FIXED:        'FIXED',         // interestRate for the life of the loan (US 15/30-year)
-  FIXED_PERIOD: 'FIXED_PERIOD',  // interestRate until fixedRateUntilYear, then Prime + primeSpread
+  FIXED_PERIOD: 'FIXED_PERIOD',  // interestRate until fixedRateUntil, then Prime + primeSpread
 });
 
-/**
- * Is the loan inside a fixed-rate window at `year`? Only an EXPLICIT rate type has one:
- * a legacy spread-less loan is fixed in rate but keeps its pre-113 offset behaviour, so
- * nothing gated on the window (offset, break cost, extra cap) reaches it. A null year
- * (a synthetic state with no tax period) counts as inside, like the IO window does.
- */
-export function inFixedWindow(loan, year) {
-  if (loan?.rateType === LOAN_RATE_TYPE.FIXED) return true;
-  if (loan?.rateType !== LOAN_RATE_TYPE.FIXED_PERIOD) return false;
-  const until = loan.fixedRateUntilYear ?? null;
-  return until == null || year == null || year < until;
+// ─── The loan clock (design 117 phase 5) ─────────────────────────────────────
+//
+// A loan's terms are DATES ('YYYY-MM-DD'): `fixedRateUntil`, `interestOnlyUntil`,
+// `maturityDate`. Everything here compares and counts in MONTHS: a month index is
+// `year × 12 + month0`. Payments fire at month-end, so a boundary anywhere in a month
+// takes effect with that month's payment — the boundary's own month index.
+//
+// The clock is the payment's month when there is a date, else the start month of the
+// loan country's tax period. A term that was a YEAR migrated to 1 Jan (US) or 1 Jul (AU)
+// — the boundary the engine enforced, because it compared the tax period's year (design
+// 113 Q6) — and on those dates both clocks give exactly the old period-year answer.
+
+/** A loan-term date as its month index (`year × 12 + month0`), or null. */
+export function boundaryMonth(v) {
+  if (v == null || v === '') return null;
+  const t = v instanceof Date ? v.getTime() : (typeof v === 'number' ? NaN : Date.parse(v));
+  if (!Number.isFinite(t)) return null;
+  const d = new Date(t);
+  return d.getUTCFullYear() * 12 + d.getUTCMonth();
 }
 
 /**
- * The calendar year a loan's fixed window ends, or null when it has none that can be
- * priced: `fixedRateUntilYear` for a fixed period, `maturityYear` for a loan fixed for
- * its life.
+ * The loan's clock: the month index of the payment on `date`, else of the loan country's
+ * current tax-period start, else null (a synthetic state with no period).
  */
-export function fixedWindowEndYear(loan) {
-  if (loan?.rateType === LOAN_RATE_TYPE.FIXED_PERIOD) return loan.fixedRateUntilYear ?? null;
-  if (loan?.rateType === LOAN_RATE_TYPE.FIXED)        return loan.maturityYear       ?? null;
+export function loanClock(state, loan, date = null) {
+  const d = date != null ? new Date(date) : null;
+  if (d && !Number.isNaN(d.getTime())) return d.getUTCFullYear() * 12 + d.getUTCMonth();
+  const year = periodYear(state, loan?.country);
+  return year == null ? null : year * 12 + periodStartMonth(state, loan);
+}
+
+/**
+ * Is the loan inside a fixed-rate window at `clock`? Only an EXPLICIT rate type has one:
+ * a legacy spread-less loan is fixed in rate but keeps its pre-113 offset behaviour, so
+ * nothing gated on the window (offset, break cost, extra cap) reaches it. A null clock
+ * (a synthetic state with no tax period) counts as inside, like the IO window does.
+ */
+export function inFixedWindow(loan, clock) {
+  if (loan?.rateType === LOAN_RATE_TYPE.FIXED) return true;
+  if (loan?.rateType !== LOAN_RATE_TYPE.FIXED_PERIOD) return false;
+  const until = boundaryMonth(loan.fixedRateUntil);
+  return until == null || clock == null || clock < until;
+}
+
+/**
+ * The month a loan's fixed window ends, or null when it has none that can be priced:
+ * `fixedRateUntil` for a fixed period, `maturityDate` for a loan fixed for its life.
+ */
+export function fixedWindowEndMonth(loan) {
+  if (loan?.rateType === LOAN_RATE_TYPE.FIXED_PERIOD) return boundaryMonth(loan.fixedRateUntil);
+  if (loan?.rateType === LOAN_RATE_TYPE.FIXED)        return boundaryMonth(loan.maturityDate);
   return null;
 }
 
 /**
- * Can a linked offset reduce this loan's interest at `year`? Always, outside a fixed
+ * Can a linked offset reduce this loan's interest at `clock`? Always, outside a fixed
  * window; inside one only when the loan says so (design 113 §5 — most AU lenders give no
  * offset on a fixed loan, a few give full offset).
  */
-export function offsetApplies(loan, year) {
-  return !inFixedWindow(loan, year) || !!loan?.offsetWhileFixed;
-}
-
-/** The calendar year of the loan's country's current tax period, or null. */
-export function loanYear(state, loan) {
-  return periodYear(state, loan?.country);
+export function offsetApplies(loan, clock) {
+  return !inFixedWindow(loan, clock) || !!loan?.offsetWhileFixed;
 }
 
 /**
@@ -126,7 +152,7 @@ export function loanYear(state, loan) {
  */
 export const LOAN_RATE_TERM_FIELDS = Object.freeze({
   rateType:               'mortgageRateType',
-  fixedRateUntilYear:     'mortgageFixedRateUntilYear',
+  fixedRateUntil:         'mortgageFixedRateUntil',
   revertInterestRate:     'mortgageRevertInterestRate',
   offsetWhileFixed:       'mortgageOffsetWhileFixed',
   breakCostOnPayoff:      'mortgageBreakCostOnPayoff',
@@ -176,10 +202,11 @@ export function synthesizeLoanForProperty(prop) {
     // Interest-only mortgage (design 86 G2). Absent ⇒ false ⇒ the P&I path, byte-for-byte.
     interestOnly:      prop.mortgageInterestOnly ?? false,
     deductibleFraction: prop.mortgageDeductibleFraction ?? null,
-    // Loan term (design 86 G6). Absolute calendar years, as the moves and sales were before design 117 — a real offset loan has an IO period of ~5 years and a
-    // 25–30 year term, and both are dates the borrower knows, not durations.
-    interestOnlyUntilYear: prop.mortgageInterestOnlyUntilYear ?? null,
-    maturityYear:          prop.mortgageMaturityYear          ?? null,
+    // Loan term (design 86 G6; dates since design 117). A real offset loan has an IO
+    // period of ~5 years and a 25–30 year term, and both are dates the borrower knows,
+    // not durations.
+    interestOnlyUntil:     prop.mortgageInterestOnlyUntil     ?? null,
+    maturityDate:          prop.mortgageMaturityDate          ?? null,
     // The principal the post-IO P&I payment amortises from — see scheduledLoanPayment.
     // Defaulted to the authored balance because an IO loan does not amortise inside its
     // window, so its balance at IO expiry IS its balance now. Only meaningful for an IO
@@ -216,7 +243,7 @@ export function synthesizeLoanForProperty(prop) {
  *
  * The `monthlyMortgage > 0` half is the original design-54 gate. It is not sufficient
  * once design 86 exists: an interest-only loan DERIVES its payment, and a loan with a
- * maturity year is discharged from the term, so both leave `monthlyMortgage` inert —
+ * maturity date is discharged from the term, so both leave `monthlyMortgage` inert —
  * and a UI that offers "interest only" while the event stays unscheduled would silently
  * model a loan that is never paid at all. (`scripts/lib/variant.mjs` worked around this
  * by seeding a placeholder `monthlyMortgage = 1`; that hack is no longer needed.)
@@ -225,7 +252,7 @@ export function propertyNeedsLoanPayment(prop) {
   if (!((prop?.mortgageBalance ?? 0) > 0)) return false;
   return (prop.monthlyMortgage ?? 0) > 0
       || !!prop.mortgageInterestOnly
-      || prop.mortgageMaturityYear != null;
+      || prop.mortgageMaturityDate != null;
 }
 
 /**
@@ -242,7 +269,7 @@ export function accountNeedsLoanPayment(account, country) {
   if (!((account.balance ?? 0) > 0)) return false;
   return (account.monthlyPayment ?? 0) > 0
       || !!account.interestOnly
-      || account.maturityYear != null;
+      || account.maturityDate != null;
 }
 
 /**
@@ -313,7 +340,7 @@ function resolveLoanCashKey(stateRegistry, state, loan) {
  * @param {object} loan   The loan state entry (reads linkedPropertyKey + currency)
  * @returns {number} total offsetting cash (>= 0)
  */
-export function offsetBalanceForLoan(state, loan) {
+export function offsetBalanceForLoan(state, loan, date = null) {
   const propKey = loan?.linkedPropertyKey;
   if (!propKey || !state) return 0;
   const loanCcy = currencyCode(loan);
@@ -325,7 +352,7 @@ export function offsetBalanceForLoan(state, loan) {
       total += Math.max(0, v.balance ?? 0);
     }
   }
-  return allocateOffsetToLoan(state, loan, total);
+  return allocateOffsetToLoan(state, loan, total, date);
 }
 
 /**
@@ -337,12 +364,11 @@ export function offsetBalanceForLoan(state, loan) {
  * gets nothing. A loan that is not in state (a bare entry in a unit test) keeps the whole
  * total, which is the pre-113 answer.
  */
-function allocateOffsetToLoan(state, loan, total) {
-  const year = loanYear(state, loan);
-  if (!offsetApplies(loan, year)) return 0;
+function allocateOffsetToLoan(state, loan, total, date = null) {
+  if (!offsetApplies(loan, loanClock(state, loan, date))) return 0;
   const loanCcy  = currencyCode(loan);
   const eligible = findLoansForProperty(state, loan.linkedPropertyKey)
-    .filter(l => offsetApplies(l, loanYear(state, l))
+    .filter(l => offsetApplies(l, loanClock(state, l, date))
               && (loanCcy == null || currencyCode(l) == null || currencyCode(l) === loanCcy));
   const idx = eligible.findIndex(l => l === loan || (l.stateKey != null && l.stateKey === loan.stateKey));
   if (idx < 0) return total;
@@ -359,8 +385,8 @@ function allocateOffsetToLoan(state, loan, total) {
  * `LOAN_PAYMENT` interest accrual, so an offset lowers interest on rental *and*
  * owner-occupied loans and speeds owner-occupied payoff.
  */
-export function effectivePrincipal(state, _loanKey, loan) {
-  const offset = offsetBalanceForLoan(state, loan);
+export function effectivePrincipal(state, _loanKey, loan, date = null) {
+  const offset = offsetBalanceForLoan(state, loan, date);
   return Math.max(0, (loan.balance ?? 0) - offset);
 }
 
@@ -373,14 +399,14 @@ export function effectivePrincipal(state, _loanKey, loan) {
  * Prime series) it falls back to the fixed absolute `interestRate`, so a spread-less
  * loan is byte-for-byte the pre-56 fixed loan.
  */
-export function resolveLoanRate(state, loan, year = loanYear(state, loan)) {
+export function resolveLoanRate(state, loan, clock = loanClock(state, loan)) {
   const prime = primeFor(state, loan);
   // Design 113 §4. An explicit FIXED loan ignores Prime for its life — the US 30-year
   // mortgage. A FIXED_PERIOD loan pays `interestRate` inside its window and then reverts
   // to Prime + the revert spread (or the absolute revert rate when no Prime is set).
   if (loan?.rateType === LOAN_RATE_TYPE.FIXED) return loan.interestRate ?? 0;
   if (loan?.rateType === LOAN_RATE_TYPE.FIXED_PERIOD) {
-    if (inFixedWindow(loan, year)) return loan.interestRate ?? 0;
+    if (inFixedWindow(loan, clock)) return loan.interestRate ?? 0;
     if (loan.primeSpread != null && prime != null) return prime + loan.primeSpread;
     return loan.revertInterestRate ?? loan.interestRate ?? 0;
   }
@@ -402,43 +428,45 @@ function amortisingPayment(principal, rate, months) {
 }
 
 /**
- * The monthly payments left from `date` until the loan's tax-period year reaches
- * `endYear`, at least 0 — that is, until the engine's own year boundary (a fixed window
- * ending, maturity) actually fires. Every such boundary compares the tax period's year,
- * and the AU period starts on 1 July, so an AU boundary falls on 1 July of `endYear`, not
- * 1 January (design 113 Q5). Counting from the payment's calendar month keeps the two
- * halves of the year consistent; without a date the period's start is assumed.
+ * The monthly payments left from `date` until the boundary month `endMonth`, at least 0 —
+ * that is, until the boundary (a fixed window ending, maturity) actually fires. Counted
+ * from the payment's calendar month, or the clock without a date. For a term migrated
+ * from a year (1 Jul for AU, design 113 Q5) this is the count the period-year engine gave.
  */
-function monthsUntilPeriodYear(state, loan, date, year, endYear) {
-  return Math.max(0, endYear * 12 + periodStartMonth(state, loan)
-                     - paymentMonth(state, loan, date, year));
+function monthsUntil(state, loan, date, clock, endMonth) {
+  return Math.max(0, endMonth - paymentMonth(state, loan, date, clock));
+}
+
+/** The tax year the loan's cap counts in: the current period's year (design 113 §7.2). */
+function capYear(state, loan, clock) {
+  return periodYear(state, loan?.country) ?? (clock == null ? null : Math.floor(clock / 12));
 }
 
 /**
  * Cap the extra repayment inside a fixed window (design 113 §7.2).
  *
  * An extra repayment, in this model, is the part of the authored `monthlyPayment` above
- * the amortising payment that would retire the balance by `maturityYear` at the fixed
+ * the amortising payment that would retire the balance by `maturityDate` at the fixed
  * rate. AU fixed loans limit that to a yearly amount. The excess over the cap stays in the
- * cash pool. Without a maturity year the authored payment IS the schedule and there is
+ * cash pool. Without a maturity date the authored payment IS the schedule and there is
  * nothing extra to cap; an IO or discharge payment is never capped. `state` supplies the
  * tax period, so the schedule runs to the boundary where maturity actually fires (Q5).
  *
  * @returns {{ payment: number, extra: number }} the payment to make, and the extra it
  *          still contains (counted toward the year's cap by the reducer)
  */
-export function capFixedExtraRepayment(loan, payment, balance, rate, year, date, state = null) {
+export function capFixedExtraRepayment(loan, payment, balance, rate, clock, date, state = null) {
   const cap = loan?.fixedExtraRepaymentCap;
-  const maturity = loan?.maturityYear ?? null;
-  if (cap == null || year == null || maturity == null || year >= maturity
-      || !inFixedWindow(loan, year) || loan.interestOnly) {
+  const maturity = boundaryMonth(loan?.maturityDate);
+  if (cap == null || clock == null || maturity == null || clock >= maturity
+      || !inFixedWindow(loan, clock) || loan.interestOnly) {
     return { payment, extra: 0 };
   }
   const scheduled = amortisingPayment(balance, rate,
-                                      monthsUntilPeriodYear(state, loan, date, year, maturity));
+                                      monthsUntil(state, loan, date, clock, maturity));
   const extra = payment - scheduled;
   if (!(extra > 0)) return { payment, extra: 0 };
-  const usedYtd = loan.fixedExtraYear === year ? (loan.fixedExtraYtd ?? 0) : 0;
+  const usedYtd = loan.fixedExtraYear === capYear(state, loan, clock) ? (loan.fixedExtraYtd ?? 0) : 0;
   const allowed = Math.max(0, Math.min(extra, cap - usedYtd));
   return { payment: scheduled + allowed, extra: allowed };
 }
@@ -458,10 +486,10 @@ export function capFixedExtraRepayment(loan, payment, balance, rate, year, date,
 export function loanBreakCost(state, loan, date) {
   const none = { amount: 0, months: 0, drop: 0 };
   if (!loan?.breakCostOnPayoff) return none;
-  const year = loanYear(state, loan);
-  const end  = fixedWindowEndYear(loan);
-  if (year == null || end == null || !inFixedWindow(loan, year)) return none;
-  const months = monthsUntilPeriodYear(state, loan, date, year, end);
+  const clock = loanClock(state, loan, date);
+  const end   = fixedWindowEndMonth(loan);
+  if (clock == null || end == null || !inFixedWindow(loan, clock)) return none;
+  const months = monthsUntil(state, loan, date, clock, end);
   const primeNow = primeFor(state, loan);
   const primeAtFix = loan.fixedAtPrimeRate ?? primeNow;
   if (!(months > 0) || primeNow == null || primeAtFix == null) return none;
@@ -499,13 +527,13 @@ export function propertyLoanPayoffs(state, propStateKey, date) {
  * interest-only has assumed away the main risk of the strategy, so the reversion has
  * to be expressible.
  *
- * Precedence, given the current year:
+ * Precedence, given the loan's clock (its month index):
  *   1. **past maturity** — the whole balance plus this month's interest, so the loan
  *      is discharged. Funding it is the cash pool's problem, and a shortfall runs
  *      through the existing replenish/insufficient-funds path rather than a new one.
  *   2. **inside the IO period** (or `interestOnly` with no term) — exactly the
  *      accrued interest; the balance is flat by construction.
- *   3. **after IO expiry, with a maturity year** — the amortising payment, ANCHORED on
+ *   3. **after IO expiry, with a maturity date** — the amortising payment, ANCHORED on
  *      `postIoPrincipal` (the balance at IO expiry) over the FULL post-IO term, and
  *      recomputed at the live rate. See below for why the anchor matters.
  *   4. **otherwise** — the authored fixed `monthlyPayment`, capped at payoff. This is
@@ -555,37 +583,38 @@ export function propertyLoanPayoffs(state, propStateKey, date) {
  * @param {number} balance   outstanding principal (loan currency)
  * @param {number} interest  interest accrued this month on the EFFECTIVE principal
  * @param {number} rate      the loan's live annual rate
- * @param {?number} year     current calendar year, or null when unknown
+ * @param {?number} clock    the loan clock (`loanClock`: a month index), or null when unknown
  * @param {?object} [schedule] this month's payment schedule from
  *                  {@link resolvePaymentSchedule}; null keeps the branches below
  */
-export function scheduledLoanPayment(loan, balance, interest, rate, year, schedule = null) {
-  const { interestOnlyUntilYear = null, maturityYear = null } = loan ?? {};
+export function scheduledLoanPayment(loan, balance, interest, rate, clock, schedule = null) {
+  const ioUntil  = boundaryMonth(loan?.interestOnlyUntil);
+  const maturity = boundaryMonth(loan?.maturityDate);
 
-  if (year != null && maturityYear != null && year >= maturityYear) {
+  if (clock != null && maturity != null && clock >= maturity) {
     return balance + interest;
   }
 
   const inIoWindow = loan?.interestOnly
-    && (interestOnlyUntilYear == null || year == null || year < interestOnlyUntilYear);
+    && (ioUntil == null || clock == null || clock < ioUntil);
   if (inIoWindow) return interest;
 
   // Design 113 §6.1 — a loan whose rate follows Prime pays its payment schedule, which is
   // re-amortised when the rate moves. At a constant rate it is the payment the branches
   // below compute, so this changes nothing until Prime moves.
-  if (schedule && schedule.phase === paymentSchedulePhase(loan, year)) {
+  if (schedule && schedule.phase === paymentSchedulePhase(loan, clock)) {
     return Math.min(schedule.payment, balance + interest);
   }
 
   // Reverted from IO to P&I.
-  if (loan?.interestOnly && maturityYear != null && year != null) {
+  if (loan?.interestOnly && maturity != null && clock != null) {
     const anchor = loan.postIoPrincipal;
     // Anchored: fixed schedule from the IO-expiry principal over the full post-IO term.
     // Unanchored (legacy): the pre-correction live-balance / months-remaining path.
     const base   = anchor ?? balance;
-    const months = anchor != null && interestOnlyUntilYear != null
-      ? Math.max(1, (maturityYear - interestOnlyUntilYear) * 12)
-      : Math.max(1, (maturityYear - year) * 12);
+    const months = anchor != null && ioUntil != null
+      ? Math.max(1, maturity - ioUntil)
+      : Math.max(1, maturity - clock);
     const i = rate / 12;
     const payment = i > 0
       ? base * i / (1 - Math.pow(1 + i, -months))
@@ -596,12 +625,12 @@ export function scheduledLoanPayment(loan, balance, interest, rate, year, schedu
   // Design 113 §6 — a fixed period has ended: re-amortise over the rest of the term at the
   // (revert) rate. Anchored on the balance at expiry for the reason branch 3 is, and that
   // balance is only knowable at expiry because a P&I loan amortises inside its window, so
-  // the first payment after expiry stamps it (`postFixedPrincipal` / `postFixedFromYear`).
-  if (postFixedReamortises(loan, year)) {
-    const anchored = loan.postFixedPrincipal != null && loan.postFixedFromYear != null;
+  // the first payment after expiry stamps it (`postFixedPrincipal` / `postFixedFromMonth`).
+  if (postFixedReamortises(loan, clock)) {
+    const anchored = loan.postFixedPrincipal != null && loan.postFixedFromMonth != null;
     const base   = anchored ? loan.postFixedPrincipal : balance;
-    const from   = anchored ? loan.postFixedFromYear  : year;
-    const payment = amortisingPayment(base, rate, (maturityYear - from) * 12);
+    const from   = anchored ? loan.postFixedFromMonth : clock;
+    const payment = amortisingPayment(base, rate, maturity - from);
     return Math.min(payment, balance + interest);
   }
 
@@ -612,10 +641,11 @@ export function scheduledLoanPayment(loan, balance, interest, rate, year, schedu
  * Does this P&I loan re-amortise because its fixed period has ended (design 113 §6)? Needs
  * a maturity to amortise against; without one the authored payment simply continues.
  */
-export function postFixedReamortises(loan, year) {
+export function postFixedReamortises(loan, clock) {
+  const until = boundaryMonth(loan?.fixedRateUntil), maturity = boundaryMonth(loan?.maturityDate);
   return loan?.rateType === LOAN_RATE_TYPE.FIXED_PERIOD
-    && loan.fixedRateUntilYear != null && loan.maturityYear != null
-    && year != null && year >= loan.fixedRateUntilYear && year < loan.maturityYear
+    && until != null && maturity != null
+    && clock != null && clock >= until && clock < maturity
     && !loan.interestOnly;
 }
 
@@ -629,41 +659,43 @@ export const PAYMENT_SCHEDULE_PHASE = Object.freeze({
 });
 
 /**
- * Which amortising phase the loan is in at `year`, or null when its payment is not an
+ * Which amortising phase the loan is in at `clock`, or null when its payment is not an
  * amortising schedule (in the IO window, inside a fixed window, at or past maturity, no
  * maturity, or a legacy IO loan with no `postIoPrincipal`, which keeps its live-balance
  * path). Mirrors the precedence of {@link scheduledLoanPayment}.
  */
-export function paymentSchedulePhase(loan, year) {
-  if (year == null || loan?.maturityYear == null || year >= loan.maturityYear) return null;
+export function paymentSchedulePhase(loan, clock) {
+  const maturity = boundaryMonth(loan?.maturityDate);
+  if (clock == null || maturity == null || clock >= maturity) return null;
   if (loan.interestOnly) {
-    if (loan.interestOnlyUntilYear == null || year < loan.interestOnlyUntilYear) return null;
+    const ioUntil = boundaryMonth(loan.interestOnlyUntil);
+    if (ioUntil == null || clock < ioUntil) return null;
     return loan.postIoPrincipal != null ? PAYMENT_SCHEDULE_PHASE.POST_IO : null;
   }
-  if (postFixedReamortises(loan, year)) return PAYMENT_SCHEDULE_PHASE.POST_FIXED;
-  if (inFixedWindow(loan, year)) return null;
+  if (postFixedReamortises(loan, clock)) return PAYMENT_SCHEDULE_PHASE.POST_FIXED;
+  if (inFixedWindow(loan, clock)) return null;
   return (loan.monthlyPayment ?? 0) > 0 ? PAYMENT_SCHEDULE_PHASE.PLAIN : null;
 }
 
 /**
- * Does the loan's rate follow Prime at `year`? The same cases as {@link resolveLoanRate}:
+ * Does the loan's rate follow Prime at `clock`? The same cases as {@link resolveLoanRate}:
  * a spread over a Prime the state carries, outside any fixed window.
  */
-function rateFollowsPrime(state, loan, year) {
+function rateFollowsPrime(state, loan, clock) {
   if (loan?.rateType === LOAN_RATE_TYPE.FIXED) return false;
-  if (loan?.rateType === LOAN_RATE_TYPE.FIXED_PERIOD && inFixedWindow(loan, year)) return false;
+  if (loan?.rateType === LOAN_RATE_TYPE.FIXED_PERIOD && inFixedWindow(loan, clock)) return false;
   return loan?.primeSpread != null && primeFor(state, loan) != null;
 }
 
 /**
  * A month counter (year × 12 + month) for the payment on `date`. The event's calendar
  * month, not the tax period's: the AU period starts in July, so its year is six months
- * behind a January payment. Without a date the period's start is assumed.
+ * behind a January payment. Without a date, the clock (the period's start month).
  */
-function paymentMonth(state, loan, date, year) {
+function paymentMonth(state, loan, date, clock) {
   const d = date != null ? new Date(date) : null;
   if (d && !Number.isNaN(d.getTime())) return d.getUTCFullYear() * 12 + d.getUTCMonth();
-  return year * 12 + periodStartMonth(state, loan);
+  return clock;
 }
 
 /** The calendar month (0–11) the loan country's tax period starts in; 0 when unknown. */
@@ -701,10 +733,10 @@ function scheduledBalanceAfter(principal, rate, payment, k) {
  *
  * @returns {?object} the schedule, the loan's own `paymentSchedule` object when unchanged
  */
-export function resolvePaymentSchedule(state, loan, balance, rate, year, date) {
-  const phase = paymentSchedulePhase(loan, year);
-  if (!phase || !rateFollowsPrime(state, loan, year)) return null;
-  const now = paymentMonth(state, loan, date, year);
+export function resolvePaymentSchedule(state, loan, balance, rate, clock, date) {
+  const phase = paymentSchedulePhase(loan, clock);
+  if (!phase || !rateFollowsPrime(state, loan, clock)) return null;
+  const now = paymentMonth(state, loan, date, clock);
   const prior = loan.paymentSchedule;
 
   if (prior?.phase === phase) {
@@ -717,23 +749,23 @@ export function resolvePaymentSchedule(state, loan, balance, rate, year, date) {
     return { phase, principal, fromMonth: now, months, rate, payment, extra: prior.extra };
   }
 
-  const { maturityYear } = loan;
+  const maturity = boundaryMonth(loan.maturityDate);
   if (phase === PAYMENT_SCHEDULE_PHASE.POST_IO) {
-    const months = Math.max(1, (maturityYear - loan.interestOnlyUntilYear) * 12);
+    const months = Math.max(1, maturity - boundaryMonth(loan.interestOnlyUntil));
     const principal = loan.postIoPrincipal;
     return { phase, principal, fromMonth: now, months, rate,
              payment: amortisingPayment(principal, rate, months), extra: 0 };
   }
   if (phase === PAYMENT_SCHEDULE_PHASE.POST_FIXED) {
-    const anchored = loan.postFixedPrincipal != null && loan.postFixedFromYear != null;
+    const anchored = loan.postFixedPrincipal != null && loan.postFixedFromMonth != null;
     const principal = anchored ? loan.postFixedPrincipal : balance;
-    const months = Math.max(1, (maturityYear - (anchored ? loan.postFixedFromYear : year)) * 12);
+    const months = Math.max(1, maturity - (anchored ? loan.postFixedFromMonth : clock));
     return { phase, principal, fromMonth: now, months, rate,
              payment: amortisingPayment(principal, rate, months), extra: 0 };
   }
   // PLAIN — the authored payment is kept; what it pays above or below the schedule that
   // retires today's balance by maturity is carried as `extra` through every reset.
-  const months = Math.max(1, monthsUntilPeriodYear(state, loan, date, year, maturityYear));
+  const months = Math.max(1, monthsUntil(state, loan, date, clock, maturity));
   const payment = loan.monthlyPayment;
   return { phase, principal: balance, fromMonth: now, months, rate, payment,
            extra: payment - amortisingPayment(balance, rate, months) };
@@ -945,23 +977,23 @@ export function investmentInterestAction(loan, loanKey, interest, payment, resid
  * What a payment stamps on a loan with an explicit rate type (design 113), or null:
  *   · `fixedAtPrimeRate` — Prime when the rate was fixed, the break cost's reference. Taken
  *     at the first payment inside the window unless the author stated it.
- *   · `postFixedPrincipal` / `postFixedFromYear` — the balance the post-fixed P&I payment
- *     amortises from, taken at the first payment after the window ends (§6).
+ *   · `postFixedPrincipal` / `postFixedFromMonth` — the balance the post-fixed P&I payment
+ *     amortises from, and the month index of the first payment after the window ends (§6).
  *   · `extra` / `year` — the extra repayment this payment carries toward the year's cap
  *     (§7.2); the reducer counts only the part actually funded.
  */
-function fixedRateStamps(state, loan, balance, year, extra) {
+function fixedRateStamps(state, loan, balance, clock, extra) {
   if (!loan?.rateType) return null;
   const stamps = {};
   const prime = primeFor(state, loan);
-  if (inFixedWindow(loan, year) && loan.fixedAtPrimeRate == null && prime != null) {
+  if (inFixedWindow(loan, clock) && loan.fixedAtPrimeRate == null && prime != null) {
     stamps.fixedAtPrimeRate = prime;
   }
-  if (postFixedReamortises(loan, year) && loan.postFixedPrincipal == null) {
+  if (postFixedReamortises(loan, clock) && loan.postFixedPrincipal == null) {
     stamps.postFixedPrincipal = balance;
-    stamps.postFixedFromYear  = year;
+    stamps.postFixedFromMonth = clock;
   }
-  if (extra > 0) { stamps.extra = extra; stamps.year = year; }
+  if (extra > 0) { stamps.extra = extra; stamps.year = capYear(state, loan, clock); }
   return Object.keys(stamps).length ? stamps : null;
 }
 
@@ -976,7 +1008,7 @@ function applyFixedStamps(loan, stamps, payment, delivered) {
   if (stamps.fixedAtPrimeRate != null) patch.fixedAtPrimeRate = stamps.fixedAtPrimeRate;
   if (stamps.postFixedPrincipal != null) {
     patch.postFixedPrincipal = stamps.postFixedPrincipal;
-    patch.postFixedFromYear  = stamps.postFixedFromYear;
+    patch.postFixedFromMonth = stamps.postFixedFromMonth;
   }
   if (stamps.extra > 0) {
     const paidExtra = Math.max(0, Math.min(stamps.extra, delivered - (payment - stamps.extra)));
@@ -1031,9 +1063,10 @@ export class LoanPaymentHandler extends HandlerEntry {
 
       const cashKey   = resolveLoanCashKey(this.stateRegistry, state, loan);
       const cash      = state[cashKey];
-      const year      = periodYear(state, loan.country);
-      const rate      = resolveLoanRate(state, loan, year);
-      const interest  = Math.max(0, effectivePrincipal(state, loanKey, loan) * rate / 12);
+      // The loan's clock: this payment's month (design 117 phase 5).
+      const clock     = loanClock(state, loan, date);
+      const rate      = resolveLoanRate(state, loan, clock);
+      const interest  = Math.max(0, effectivePrincipal(state, loanKey, loan, date) * rate / 12);
       // The scheduled payment for this point in the loan's life (design 86 G2 + G6):
       // interest-only inside the IO window, re-amortised P&I after it expires, the
       // whole balance at maturity, and the authored fixed payment for a term-less
@@ -1043,15 +1076,15 @@ export class LoanPaymentHandler extends HandlerEntry {
       // Design 113 §6.1 — a Prime-following loan's schedule, re-amortised when the rate
       // moved. Stamped by the reducer only when it changed, so a loan with no schedule (a
       // fixed rate, no maturity, the IO window) carries nothing new.
-      const schedule  = resolvePaymentSchedule(state, loan, balance, rate, year, date);
-      const scheduled = scheduledLoanPayment(loan, balance, interest, rate, year, schedule);
+      const schedule  = resolvePaymentSchedule(state, loan, balance, rate, clock, date);
+      const scheduled = scheduledLoanPayment(loan, balance, interest, rate, clock, schedule);
       // Design 113 §7.2 — an extra repayment inside a fixed window is capped per year.
       const { payment, extra: fixedExtra } =
-        capFixedExtraRepayment(loan, scheduled, balance, rate, year, date, state);
+        capFixedExtraRepayment(loan, scheduled, balance, rate, clock, date, state);
       if (payment <= 0) continue;
       // Design 113 stamps, all written by the reducer and all absent unless the loan has an
       // explicit rate type, so a legacy loan's action is byte-identical.
-      const fixedStamps = fixedRateStamps(state, loan, balance, year, fixedExtra);
+      const fixedStamps = fixedRateStamps(state, loan, balance, clock, fixedExtra);
 
       // FX (design 54 P4): the payment is denominated in the loan's currency, but the
       // debit lands in the cash account's currency. When they differ, convert — an

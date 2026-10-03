@@ -164,7 +164,7 @@ export function buildScenario({ params = {}, plan = {} } = {}) {
     r.mortgageBalance         = P.facility;
     r.mortgageInterestRate    = P.loanRate;
     r.mortgageInterestOnly    = true;
-    // No `mortgageInterestOnlyUntilYear` and no `mortgageMaturityYear`: branch 2 of
+    // No `mortgageInterestOnlyUntil` and no `mortgageMaturityDate`: branch 2 of
     // `scheduledLoanPayment` then holds for the whole run and the balance is flat by
     // construction. That is what keeps the facility alive to the end (§20.4).
     r.mortgagePaymentSourceKey = CASH;

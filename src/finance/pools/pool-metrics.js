@@ -11,7 +11,7 @@
 import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
 import { POOL_TARGET_MODE, POOL_CAPACITY_MODE, POOL_SPEND_BASIS } from './liquidity-graph.js';
 import { ACCOUNT_TYPE }           from '../assets/account.js';
-import { findLoansForProperty, offsetApplies, loanYear } from '../account-rules/loan-classes.js';
+import { findLoansForProperty, offsetApplies, loanClock } from '../account-rules/loan-classes.js';
 import { getResidency, primaryPersonKey, getBirthDate } from '../residency-utils.js';
 import { hasAgeGate, isAgeEligible, penaltyFreeSliceOf, penaltyBearingSliceOf,
   decimalAgeAt, unlocksAt as gateOpensAt } from '../account-rules/penalty-free-availability.js';
@@ -221,7 +221,7 @@ export function loansForOffset(state, offset) {
   const ccy = offset?.currency?.code ?? offset?.currency ?? null;
   return findLoansForProperty(state, propKey).filter(l =>
     (ccy == null || (l.currency?.code ?? l.currency) === ccy)
-    && offsetApplies(l, loanYear(state, l)));
+    && offsetApplies(l, loanClock(state, l)));
 }
 
 /**

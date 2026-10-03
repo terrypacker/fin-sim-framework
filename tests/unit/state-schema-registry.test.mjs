@@ -97,8 +97,11 @@ test('R-5: ordinals and counts render as integers, years without a separator', (
   assert.equal(reg.format('usStockAccount.drawdownPriority', 8), '8');
   assert.equal(reg.format('usStockAccount.holdings[id=b1].couponFrequency', 2), '2');
   assert.equal(reg.format('usStockAccount.holdings[id=b1].units', 12.5), '12.5000');
-  assert.equal(reg.format('usHousePropertyLoan.maturityYear', 2045), '2045');
-  assert.equal(reg.isChartable('usHousePropertyLoan.maturityYear'), false);
+  assert.equal(reg.format('usHousePropertyLoan.fixedExtraYear', 2045), '2045');
+  assert.equal(reg.isChartable('usHousePropertyLoan.fixedExtraYear'), false);
+  // A loan's term is a date since design 117.
+  assert.equal(reg.format('usHousePropertyLoan.maturityDate', '2045-01-01'), '2045-01-01');
+  assert.equal(reg.isChartable('usHousePropertyLoan.maturityDate'), false);
   assert.equal(reg.format('securities.sec-core.beta', 1.1), '1.10');
 });
 

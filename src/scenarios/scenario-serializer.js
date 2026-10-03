@@ -234,7 +234,7 @@ import {
   HoldingTransactReducer, HoldingRevalueReducer, HoldingSetBasisReducer,
   HoldingSplitReducer, HoldingRetitleReducer,
 } from '../finance/holdings/holding-reducers.js';
-import { toSaleDate, yearToIsoDate } from './year-date-migration.js';
+import { toSaleDate, yearToIsoDate, migrateYearFieldsToDates } from './year-date-migration.js';
 
 /**
  * All known handler / reducer / action classes.
@@ -590,6 +590,9 @@ export class ScenarioSerializer {
    * @param {object} services - ServiceRegistry instance
    */
   static deserializePersonsAccounts(config, services) {
+    // Records saved with a year field (design 117) are converted here too, so a caller that
+    // deserializes without the loader cannot drop a sale, a move or a loan term silently.
+    migrateYearFieldsToDates(config);
     const { personService, accountService, realPropertyService, collectibleService, companyEquityService, bequestService } = services;
     if (personService) {
       for (const d of (config.persons ?? [])) {
@@ -797,8 +800,8 @@ export class ScenarioSerializer {
       d.paymentSourceKey  = account.paymentSourceKey  ?? null;
       d.interestOnly      = account.interestOnly      ?? false;
       d.deductibleFraction = account.deductibleFraction ?? null;
-      d.interestOnlyUntilYear = account.interestOnlyUntilYear ?? null;
-      d.maturityYear          = account.maturityYear          ?? null;
+      d.interestOnlyUntil     = account.interestOnlyUntil     ?? null;
+      d.maturityDate          = account.maturityDate          ?? null;
       // The anchor the post-IO payment amortises from. Omitting it would drop a saved
       // IO loan back onto the legacy self-damping schedule on the next load, which is
       // the exact failure this field exists to prevent.
@@ -912,8 +915,8 @@ export class ScenarioSerializer {
       mortgagePrimeSpread:        p.mortgagePrimeSpread        ?? null,
       mortgageInterestOnly:       p.mortgageInterestOnly       ?? false,
       mortgageDeductibleFraction: p.mortgageDeductibleFraction ?? null,
-      mortgageInterestOnlyUntilYear: p.mortgageInterestOnlyUntilYear ?? null,
-      mortgageMaturityYear:          p.mortgageMaturityYear          ?? null,
+      mortgageInterestOnlyUntil:     p.mortgageInterestOnlyUntil     ?? null,
+      mortgageMaturityDate:          p.mortgageMaturityDate          ?? null,
       mortgageBookingFxRate:         p.mortgageBookingFxRate         ?? null,
       mortgagePaymentSourceKey:      p.mortgagePaymentSourceKey      ?? null,
       // Design 113 — the mortgage's rate type and fixed-period terms, only when set.
@@ -989,8 +992,8 @@ export class ScenarioSerializer {
       mortgagePrimeSpread:        d.mortgagePrimeSpread        ?? null,
       mortgageInterestOnly:       d.mortgageInterestOnly       ?? false,
       mortgageDeductibleFraction: d.mortgageDeductibleFraction ?? null,
-      mortgageInterestOnlyUntilYear: d.mortgageInterestOnlyUntilYear ?? null,
-      mortgageMaturityYear:          d.mortgageMaturityYear          ?? null,
+      mortgageInterestOnlyUntil:     d.mortgageInterestOnlyUntil     ?? null,
+      mortgageMaturityDate:          d.mortgageMaturityDate          ?? null,
       mortgageBookingFxRate:         d.mortgageBookingFxRate         ?? null,
       mortgagePaymentSourceKey:      d.mortgagePaymentSourceKey      ?? null,
       // Design 113 — the mortgage's rate type and fixed-period terms, only when set.
@@ -1358,8 +1361,8 @@ export class ScenarioSerializer {
       // renting property" rule, unchanged.
       opts.deductibleFraction = d.deductibleFraction ?? null;
       // design 86 G6 — absent ⇒ null ⇒ no term, the pre-86 behaviour.
-      opts.interestOnlyUntilYear = d.interestOnlyUntilYear ?? null;
-      opts.maturityYear          = d.maturityYear          ?? null;
+      opts.interestOnlyUntil     = d.interestOnlyUntil     ?? null;
+      opts.maturityDate          = d.maturityDate          ?? null;
       // absent ⇒ the ctor defaults it from the opening balance for an IO loan.
       opts.postIoPrincipal       = d.postIoPrincipal       ?? null;
       // design 86 G7 — absent ⇒ null ⇒ stamped at the first payment, as before.

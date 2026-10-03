@@ -51,15 +51,25 @@ export class Asset extends SimGraphNode {
 }
 
 /**
- * Design 117 phase 2: the sale and purchase YEARS became dates (`plannedSaleDate`,
- * `purchaseDate`). Every saved plan is converted on load (year-date-migration.js), so a
+ * Design 117 phases 2 and 5: the sale, purchase and loan-term YEARS became dates
+ * (`plannedSaleDate`, `purchaseDate`, `maturityDate`, …). Every saved plan is converted on load (year-date-migration.js), so a
  * year reaching a constructor is a path that skipped the migration. Throw: an ignored
  * `plannedSaleYear` would be a sale that silently never happens.
  *
  * @throws {Error} when `opts` still carries a retired year field
  */
+const RETIRED_YEAR_FIELDS = [
+  ['plannedSaleYear', 'plannedSaleDate'], ['purchaseYear', 'purchaseDate'],
+  // Loan terms (design 117 phase 5) — a loan account's, and a property's mortgage mirror.
+  ['fixedRateUntilYear', 'fixedRateUntil'], ['interestOnlyUntilYear', 'interestOnlyUntil'],
+  ['maturityYear', 'maturityDate'],
+  ['mortgageFixedRateUntilYear', 'mortgageFixedRateUntil'],
+  ['mortgageInterestOnlyUntilYear', 'mortgageInterestOnlyUntil'],
+  ['mortgageMaturityYear', 'mortgageMaturityDate'],
+];
+
 export function rejectRetiredYearFields(opts, name = '') {
-  for (const [old, now] of [['plannedSaleYear', 'plannedSaleDate'], ['purchaseYear', 'purchaseDate']]) {
+  for (const [old, now] of RETIRED_YEAR_FIELDS) {
     if (opts?.[old] !== undefined) {
       throw new Error(`Asset "${name || opts?.stateKey || '?'}": \`${old}\` is retired (design 117); `
         + `use \`${now}\` ('YYYY-MM-DD'). A saved plan is converted on load by migrateYearFieldsToDates.`);

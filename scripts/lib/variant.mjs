@@ -71,7 +71,7 @@
 // only equity rates, so the shift below has to know them; restating the list here would
 // be a copy of the table docs/market-returns/SOURCES.md is the authority for.
 import { MARKET_GROWTH_PARAMS } from '../../src/finance/economic-regimes/market-returns.js';
-import { toSaleDate, yearOfDate, dateFromYearFor } from '../../src/scenarios/year-date-migration.js';
+import { toSaleDate, yearOfDate, dateFromYearFor, loanTermDateFromYear } from '../../src/scenarios/year-date-migration.js';
 
 /**
  * @param {object} cfg    base cfg (not mutated)
@@ -452,9 +452,9 @@ export function applyLoan(cfg, set, loanKey, o = {}) {
     // design 86 G3 — income-producing share of the loan's purpose. `null` (default)
     // keeps the pre-86 rule: fully deductible while the property rents.
     deductibleFraction: ['mortgageDeductibleFraction', 'deductibleFraction'],
-    // design 86 G6 — absolute calendar years, not durations.
-    interestOnlyUntilYear: ['mortgageInterestOnlyUntilYear', 'interestOnlyUntilYear'],
-    maturityYear:          ['mortgageMaturityYear',          'maturityYear'],
+    // design 86 G6 — dates since design 117. The year levers below stay as a shorthand.
+    interestOnlyUntil: ['mortgageInterestOnlyUntil', 'interestOnlyUntil'],
+    maturityDate:      ['mortgageMaturityDate',      'maturityDate'],
     // design 86 G7/P8 — foreign units per USD when the debt was INCURRED. §988 gain on
     // every principal repayment is measured from it, so a lever that moves `balance`
     // and leaves this alone prices newly-borrowed dollars against a rate that never
@@ -471,6 +471,16 @@ export function applyLoan(cfg, set, loanKey, o = {}) {
     // loan out of the portfolio instead, which is not free. Sweep it as an arm.
     paymentSourceKey: ['mortgagePaymentSourceKey', 'paymentSourceKey'],
   };
+
+  // A term given as a YEAR (`interestOnlyUntilYear`, `maturityYear`) is the date the
+  // engine always ended it on: 1 Jan, or 1 Jul for an AU loan (design 117 phase 5).
+  const country = prop?.country ?? acct?.country ?? st?.country ?? 'US';
+  o = { ...o };
+  for (const [yearKey, dateKey] of [['interestOnlyUntilYear', 'interestOnlyUntil'], ['maturityYear', 'maturityDate']]) {
+    if (!(yearKey in o)) continue;
+    if (!(dateKey in o)) o[dateKey] = o[yearKey] == null ? null : loanTermDateFromYear(o[yearKey], country);
+    delete o[yearKey];
+  }
 
   for (const [field, [propField, loanField]] of Object.entries(MAP)) {
     if (!(field in o)) continue;          // `in`, not != null: primeSpread null is meaningful
@@ -1072,7 +1082,7 @@ function monthlyDebtService(cfg, prop) {
  */
 function _isServicedMortgage(p) {
   if (!((p?.mortgageBalance ?? 0) > 0)) return false;
-  return (p.monthlyMortgage ?? 0) > 0 || !!p.mortgageInterestOnly || p.mortgageMaturityYear != null;
+  return (p.monthlyMortgage ?? 0) > 0 || !!p.mortgageInterestOnly || p.mortgageMaturityDate != null;
 }
 
 export function applySpendTotal(cfg, set, total, propertyKey, { ownStrategy = true } = {}) {

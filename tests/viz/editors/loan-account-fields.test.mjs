@@ -85,13 +85,13 @@ describe('account editor — loan (liability) type', () => {
     const editor = render(loanNode());
     const el = editor._rootEl;
     expect(el.querySelector('[data-id="interestOnly"]').checked).toBe(false);
-    for (const id of ['interestOnlyUntilYear', 'maturityYear', 'deductibleFraction', 'bookingFxRate']) {
+    for (const id of ['interestOnlyUntil', 'maturityDate', 'deductibleFraction', 'bookingFxRate']) {
       expect(el.querySelector(`[data-id="${id}"]`).value).toBe('');
     }
     const data = editor._readForm(el);
     expect(data.interestOnly).toBe(false);
-    expect(data.interestOnlyUntilYear).toBeNull();
-    expect(data.maturityYear).toBeNull();
+    expect(data.interestOnlyUntil).toBeNull();
+    expect(data.maturityDate).toBeNull();
     expect(data.deductibleFraction).toBeNull();
     expect(data.bookingFxRate).toBeNull();
     expect(data.linkedPropertyKey).toBeNull();
@@ -102,7 +102,7 @@ describe('account editor — loan (liability) type', () => {
   test('populates from the node and round-trips through _readForm', () => {
     const editor = render(loanNode({
       monthlyPayment: 3_400, interestOnly: true,
-      interestOnlyUntilYear: 2031, maturityYear: 2051,
+      interestOnlyUntil: '2031-07-01', maturityDate: '2051-07-01',
       deductibleFraction: 0.6, bookingFxRate: 1.42,
       linkedPropertyKey: 'shackProperty', paymentSourceKey: 'auOffsetAccount',
     }));
@@ -115,8 +115,8 @@ describe('account editor — loan (liability) type', () => {
     const data = editor._readForm(el);
     expect(data.monthlyPayment).toBe(3400);
     expect(data.interestOnly).toBe(true);
-    expect(data.interestOnlyUntilYear).toBe(2031);
-    expect(data.maturityYear).toBe(2051);
+    expect(data.interestOnlyUntil).toBe('2031-07-01');
+    expect(data.maturityDate).toBe('2051-07-01');
     expect(data.deductibleFraction).toBe(0.6);
     expect(data.bookingFxRate).toBe(1.42);
     expect(data.linkedPropertyKey).toBe('shackProperty');
@@ -183,15 +183,15 @@ describe('account editor — loan (liability) type', () => {
   });
 
   test('the term hint flags an IO expiry with no maturity year', () => {
-    const editor = render(loanNode({ interestOnly: true, interestOnlyUntilYear: 2031 }));
+    const editor = render(loanNode({ interestOnly: true, interestOnlyUntil: '2031-07-01' }));
     expect(editor._rootEl.querySelector('[data-id="loanTermHint"]').textContent)
-      .toMatch(/set a Maturity Year/i);
+      .toMatch(/set a Maturity Date/i);
   });
 
   test('a non-loan account emits no loan fields in its payload', () => {
     const editor = render({ id: 'ac1', name: 'Cash', type: 'savings', country: 'US', stateKey: 'usSavingsAccount' });
     const data = editor._readForm(editor._rootEl);
-    for (const f of ['monthlyPayment', 'interestOnly', 'maturityYear', 'linkedPropertyKey', 'bookingFxRate']) {
+    for (const f of ['monthlyPayment', 'interestOnly', 'maturityDate', 'linkedPropertyKey', 'bookingFxRate']) {
       expect(f in data).toBe(false);
     }
   });
@@ -232,13 +232,13 @@ describe('account editor — loan rate type (design 113)', () => {
     const el = editor._rootEl;
     q(el, 'rateType').value = 'FIXED_PERIOD';
     q(el, 'loanRate').value = '0.059';
-    q(el, 'fixedRateUntilYear').value = '2029';
+    q(el, 'fixedRateUntil').value = '2029-07-01';
     q(el, 'revertRate').value = '0.0735';
     q(el, 'fixedExtraRepaymentCap').value = '';
     const data = editor._readForm(el);
     expect(data.rateType).toBe('FIXED_PERIOD');
     expect(data.interestRate).toBeCloseTo(0.059, 9);
-    expect(data.fixedRateUntilYear).toBe(2029);
+    expect(data.fixedRateUntil).toBe('2029-07-01');
     expect(data.primeSpread).toBeCloseTo(0.0735 - PRIME.AU, 9);
     expect(data.fixedExtraRepaymentCap).toBeNull();
   });

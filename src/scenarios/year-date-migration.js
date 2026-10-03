@@ -40,6 +40,15 @@
  * `DATE_ANCHORS` is the one table of pinned dates: the schema, this migration, the MC and
  * Opt rows, the param editor and the scripts all read it.
  *
+ * Phase 5 adds the loan terms (design 117 D6). The engine compared each term year with
+ * the loan country's TAX-PERIOD year, so a US term ended on 1 Jan and an AU term on 1 Jul
+ * (design 113 Q6) — and that is the date each migrates to:
+ *
+ *   fixedRateUntilYear    → fixedRateUntil     (+ property mirror mortgageFixedRateUntil)
+ *   interestOnlyUntilYear → interestOnlyUntil  (+ mortgageInterestOnlyUntil)
+ *   maturityYear          → maturityDate       (+ mortgageMaturityDate)
+ *   postFixedFromYear Y   → postFixedFromMonth Y × 12 + (AU ? 6 : 0)   (a saved state stamp)
+ *
  * Every function here is IDEMPOTENT and cheap, because a cfg reaches the engine by more
  * than one road and each one calls it: `ScenarioLoader.load`, `applyParamBagToConfig` (a
  * MC iteration or an optimizer candidate is applied BEFORE the loader runs),
@@ -357,6 +366,43 @@ function _migrateRecord(rec, { normalize = true } = {}) {
   }
 }
 
+/** Loan-term field renames: an account / loan state entry, and a property's mortgage mirror. */
+export const LOAN_TERM_RENAMES = Object.freeze({
+  fixedRateUntilYear:    'fixedRateUntil',
+  interestOnlyUntilYear: 'interestOnlyUntil',
+  maturityYear:          'maturityDate',
+});
+export const MORTGAGE_TERM_RENAMES = Object.freeze({
+  mortgageFixedRateUntilYear:    'mortgageFixedRateUntil',
+  mortgageInterestOnlyUntilYear: 'mortgageInterestOnlyUntil',
+  mortgageMaturityYear:          'mortgageMaturityDate',
+});
+
+/** A loan-term year as the date the engine ended it on: 1 Jul for AU, 1 Jan otherwise. */
+export function loanTermDateFromYear(year, country) {
+  return yearToIsoDate(year, country === 'AU' ? 6 : 0, 1);
+}
+
+/** Rename a record's (or state entry's) loan-term years in place, by its country. */
+function _migrateLoanTerms(rec, renames) {
+  if (!rec || typeof rec !== 'object') return;
+  for (const [oldField, newField] of Object.entries(renames)) {
+    if (!Object.hasOwn(rec, oldField)) continue;
+    if (rec[newField] === undefined) {
+      const v = rec[oldField];
+      rec[newField] = typeof v === 'number' ? loanTermDateFromYear(v, rec.country) : toSaleDate(v);
+    }
+    delete rec[oldField];
+  }
+  if (Object.hasOwn(rec, 'postFixedFromYear')) {
+    const y = rec.postFixedFromYear;
+    if (rec.postFixedFromMonth === undefined) {
+      rec.postFixedFromMonth = y == null ? null : y * 12 + (rec.country === 'AU' ? 6 : 0);
+    }
+    delete rec.postFixedFromYear;
+  }
+}
+
 /** The state-entry kinds that carry a sale or purchase year. */
 const ASSET_STATE_KINDS = new Set(['real-property', 'collectible', 'company']);
 
@@ -415,6 +461,8 @@ export function migrateYearFieldsToDates(cfg) {
   }
 
   for (const b of (Array.isArray(cfg.bequests) ? cfg.bequests : [])) _migrateBequest(b);
+  for (const a of (Array.isArray(cfg.accounts) ? cfg.accounts : [])) _migrateLoanTerms(a, LOAN_TERM_RENAMES);
+  for (const r of (Array.isArray(cfg.realProperties) ? cfg.realProperties : [])) _migrateLoanTerms(r, MORTGAGE_TERM_RENAMES);
   for (const list of [cfg.realProperties, cfg.collectibles, cfg.companyEquities]) {
     for (const rec of (Array.isArray(list) ? list : [])) _migrateRecord(rec);
   }
@@ -424,6 +472,7 @@ export function migrateYearFieldsToDates(cfg) {
   if (cfg.initialState && typeof cfg.initialState === 'object') {
     for (const entry of Object.values(cfg.initialState)) {
       if (ASSET_STATE_KINDS.has(entry?.kind)) _migrateRecord(entry, { normalize: false });
+      if (entry?.type === 'loan') _migrateLoanTerms(entry, LOAN_TERM_RENAMES);
     }
   }
 

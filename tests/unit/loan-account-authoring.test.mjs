@@ -47,7 +47,7 @@ const LOAN_FORM = {
   type: 'loan', name: 'AU Mortgage', balance: 500_000, country: 'AU',
   currency: 'AUD', ownerId: 'primary', drawdownPriority: '',
   interestRate: 0, primeSpread: 0.02, monthlyPayment: 0,
-  interestOnly: true, interestOnlyUntilYear: 2031, maturityYear: 2051,
+  interestOnly: true, interestOnlyUntil: '2031-07-01', maturityDate: '2051-07-01',
   deductibleFraction: 0.6, bookingFxRate: 1.42,
   linkedPropertyKey: 'auHouseProperty', paymentSourceKey: 'auOffsetAccount',
 };
@@ -70,8 +70,8 @@ describe('AccountsController — loan (liability) creation', () => {
     assert.equal(a.currency.code, 'AUD');
     assert.equal(a.primeSpread, 0.02);
     assert.equal(a.interestOnly, true);
-    assert.equal(a.interestOnlyUntilYear, 2031);
-    assert.equal(a.maturityYear, 2051);
+    assert.equal(a.interestOnlyUntil, '2031-07-01');
+    assert.equal(a.maturityDate, '2051-07-01');
     assert.equal(a.deductibleFraction, 0.6);
     assert.equal(a.bookingFxRate, 1.42);
     assert.equal(a.linkedPropertyKey, 'auHouseProperty');
@@ -83,8 +83,8 @@ describe('AccountsController — loan (liability) creation', () => {
   test('an omitted term is null, not 0 — 0 is a real maturity year and a real 0% fraction', () => {
     const ctl = new AccountsController({ accountService: makeService() });
     const a = ctl.create({ type: 'loan', name: 'Bare', balance: 1_000, country: 'US', ownerId: 'primary' });
-    assert.equal(a.interestOnlyUntilYear, null);
-    assert.equal(a.maturityYear, null);
+    assert.equal(a.interestOnlyUntil, null);
+    assert.equal(a.maturityDate, null);
     assert.equal(a.deductibleFraction, null);
     assert.equal(a.bookingFxRate, null);
     assert.equal(a.interestOnly, false);
@@ -93,13 +93,13 @@ describe('AccountsController — loan (liability) creation', () => {
 
   test('update: a cleared term becomes null, and a cleared cash rate is still nullable', () => {
     const svc = makeService();
-    const acct = { id: 'ac1', stateKey: 'auLoanAccount', maturityYear: 2051, deductibleFraction: 0.6 };
+    const acct = { id: 'ac1', stateKey: 'auLoanAccount', maturityDate: '2051-07-01', deductibleFraction: 0.6 };
     svc.accounts.push(acct);
     svc.updateAccount = (id, changes) => { Object.assign(acct, changes); return acct; };
     const ctl = new AccountsController({ accountService: svc });
 
-    const out = ctl.update('ac1', { maturityYear: '', deductibleFraction: '', monthlyPayment: '3400', interestOnly: 'on' });
-    assert.equal(out.maturityYear, null);
+    const out = ctl.update('ac1', { maturityDate: '', deductibleFraction: '', monthlyPayment: '3400', interestOnly: 'on' });
+    assert.equal(out.maturityDate, null);
     assert.equal(out.deductibleFraction, null);
     assert.equal(out.monthlyPayment, 3400);
     assert.equal(out.interestOnly, true);
@@ -118,7 +118,7 @@ describe('ScenarioSerializer — LoanAccount round-trip', () => {
       interestRate: 0.06, monthlyPayment: 3_400,
       linkedPropertyKey: 'auHouseProperty', paymentSourceKey: 'auOffsetAccount',
       interestOnly: true, deductibleFraction: 0.6,
-      interestOnlyUntilYear: 2031, maturityYear: 2051, bookingFxRate: 1.42,
+      interestOnlyUntil: '2031-07-01', maturityDate: '2051-07-01', bookingFxRate: 1.42,
     });
     loan.stateKey = 'auLoanAccount';
 
@@ -126,8 +126,8 @@ describe('ScenarioSerializer — LoanAccount round-trip', () => {
     const round = ScenarioSerializer._makeAccount(json);
 
     for (const f of ['interestRate', 'monthlyPayment', 'linkedPropertyKey', 'paymentSourceKey',
-                     'interestOnly', 'deductibleFraction', 'interestOnlyUntilYear',
-                     'maturityYear', 'bookingFxRate']) {
+                     'interestOnly', 'deductibleFraction', 'interestOnlyUntil',
+                     'maturityDate', 'bookingFxRate']) {
       assert.deepEqual(round[f], loan[f], `${f} did not round-trip`);
     }
   });
@@ -138,8 +138,8 @@ describe('ScenarioSerializer — LoanAccount round-trip', () => {
       interestRate: 0.05, monthlyPayment: 800,
     });
     assert.equal(round.interestOnly, false);
-    assert.equal(round.interestOnlyUntilYear, null);
-    assert.equal(round.maturityYear, null);
+    assert.equal(round.interestOnlyUntil, null);
+    assert.equal(round.maturityDate, null);
     assert.equal(round.deductibleFraction, null);
     assert.equal(round.bookingFxRate, null);
   });
@@ -152,7 +152,7 @@ describe('state projection — a loan record reaches runtime state with its term
       interestRate: 0, primeSpread: 0.02, monthlyPayment: 0,
       linkedPropertyKey: 'auHouseProperty', paymentSourceKey: 'auOffsetAccount',
       interestOnly: true, deductibleFraction: 0.6,
-      interestOnlyUntilYear: 2031, maturityYear: 2051, bookingFxRate: 1.42,
+      interestOnlyUntil: '2031-07-01', maturityDate: '2051-07-01', bookingFxRate: 1.42,
     });
     loan.stateKey = 'auLoanAccount';
 
@@ -165,8 +165,8 @@ describe('state projection — a loan record reaches runtime state with its term
     assert.equal(entry.type, 'loan');
     assert.equal(entry.primeSpread, 0.02);
     assert.equal(entry.interestOnly, true);
-    assert.equal(entry.interestOnlyUntilYear, 2031);
-    assert.equal(entry.maturityYear, 2051);
+    assert.equal(entry.interestOnlyUntil, '2031-07-01');
+    assert.equal(entry.maturityDate, '2051-07-01');
     assert.equal(entry.deductibleFraction, 0.6);
     assert.equal(entry.bookingFxRate, 1.42);
     assert.equal(entry.linkedPropertyKey, 'auHouseProperty');
@@ -179,7 +179,7 @@ describe('LOAN_PAYMENT scheduling gate (design 86 G6)', () => {
     assert.equal(propertyNeedsLoanPayment({ mortgageBalance: 500_000, monthlyMortgage: 2_000 }), true);
     assert.equal(propertyNeedsLoanPayment({ mortgageBalance: 500_000, monthlyMortgage: 0 }), false);
     assert.equal(propertyNeedsLoanPayment({ mortgageBalance: 500_000, monthlyMortgage: 0, mortgageInterestOnly: true }), true);
-    assert.equal(propertyNeedsLoanPayment({ mortgageBalance: 500_000, monthlyMortgage: 0, mortgageMaturityYear: 2051 }), true);
+    assert.equal(propertyNeedsLoanPayment({ mortgageBalance: 500_000, monthlyMortgage: 0, mortgageMaturityDate: '2051-07-01' }), true);
     // No debt ⇒ nothing to pay, whatever the terms say.
     assert.equal(propertyNeedsLoanPayment({ mortgageBalance: 0, mortgageInterestOnly: true }), false);
   });

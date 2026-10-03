@@ -786,8 +786,8 @@
             <div class="field-hint" data-id="loanRateHint" style="font-size:0.8em;opacity:0.7"></div>
           </div>
           <div class="node-field" data-rate-group="period">
-            <label>Fixed Until Year</label>
-            <input type="number" data-id="fixedRateUntilYear" placeholder="blank = fixed for life"/>
+            <label>Fixed Until</label>
+            <input type="date" data-id="fixedRateUntil"/>
           </div>
           <div class="node-field" data-rate-group="period">
             <label>Revert Rate</label>
@@ -803,12 +803,12 @@
             <input type="checkbox" data-id="interestOnly"/>
           </div>
           <div class="node-field">
-            <label>IO Until Year</label>
-            <input type="number" data-id="interestOnlyUntilYear" placeholder="blank = IO for life"/>
+            <label>IO Until</label>
+            <input type="date" data-id="interestOnlyUntil"/>
           </div>
           <div class="node-field">
-            <label>Maturity Year</label>
-            <input type="number" data-id="maturityYear" placeholder="blank = no term"/>
+            <label>Maturity Date</label>
+            <input type="date" data-id="maturityDate"/>
             <div class="field-hint" data-id="loanTermHint" style="font-size:0.8em;opacity:0.7"></div>
           </div>
           <div class="node-field" data-rate-group="fixed">
@@ -1055,8 +1055,8 @@
           <div class="field-hint" data-id="mortgageRateHint" style="font-size:0.8em;opacity:0.7"></div>
         </div>
         <div class="node-field" data-rate-group="mortgagePeriod">
-          <label>Fixed Until Year</label>
-          <input type="number" data-id="mortgageFixedRateUntilYear" placeholder="blank = fixed for life"/>
+          <label>Fixed Until</label>
+          <input type="date" data-id="mortgageFixedRateUntil"/>
         </div>
         <div class="node-field" data-rate-group="mortgagePeriod">
           <label>Revert Rate</label>
@@ -1068,12 +1068,12 @@
           <input type="checkbox" data-id="mortgageInterestOnly"/>
         </div>
         <div class="node-field">
-          <label>IO Until Year</label>
-          <input type="number" data-id="mortgageInterestOnlyUntilYear" placeholder="blank = IO for life"/>
+          <label>IO Until</label>
+          <input type="date" data-id="mortgageInterestOnlyUntil"/>
         </div>
         <div class="node-field">
-          <label>Maturity Year</label>
-          <input type="number" data-id="mortgageMaturityYear" placeholder="blank = no term"/>
+          <label>Maturity Date</label>
+          <input type="date" data-id="mortgageMaturityDate"/>
           <div class="field-hint" data-id="mortgageTermHint" style="font-size:0.8em;opacity:0.7"></div>
         </div>
         <div class="node-field" data-rate-group="mortgageFixed">

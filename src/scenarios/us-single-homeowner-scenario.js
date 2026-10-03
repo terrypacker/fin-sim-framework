@@ -30,7 +30,7 @@ import { US_EARLY_WITHDRAWAL } from './toolsets/us-early-withdrawal-toolset.js';
 import { INHERITANCE }         from './toolsets/inheritance-toolset.js';
 import { ECONOMIC_REGIMES }    from './toolsets/economic-regimes-toolset.js';
 import { toolsetParamKeys, forwardToolsetOverrides } from './toolset-param-forwarding.js';
-import { yearToIsoDate } from './year-date-migration.js';
+import { yearToIsoDate, loanTermDateFromYear } from './year-date-migration.js';
 
 /**
  * UsSingleHomeownerScenario — one person, one country, a mortgage and a job.
@@ -139,7 +139,8 @@ export const US_SINGLE_HOMEOWNER_DEFAULTS = {
   mortgageBalance:       320_000,
   mortgageInterestRate:    0.065,
   monthlyMortgage:        2_385.66,
-  mortgageMaturityYear:    2046,
+  // The day the engine always ended a 2046 term on (1 Jan; design 117).
+  mortgageMaturityDate:    '2046-01-01',
 
   // ── Collectible ────────────────────────────────────────────────────────────
   // Art, explicitly NOT gold: `isGold` is what separates investment bullion (an
@@ -414,7 +415,10 @@ export class UsSingleHomeownerScenario extends BaseScenario {
           mortgageBalance:      p.mortgageBalance,
           mortgageInterestRate: p.mortgageInterestRate,
           monthlyMortgage:      p.monthlyMortgage,
-          mortgageMaturityYear: p.mortgageMaturityYear,
+          // A legacy `mortgageMaturityYear` override is that year's term end (design 117).
+          mortgageMaturityDate: Object.hasOwn(params, 'mortgageMaturityYear') && !Object.hasOwn(params, 'mortgageMaturityDate')
+            ? (params.mortgageMaturityYear == null ? null : loanTermDateFromYear(params.mortgageMaturityYear, 'US'))
+            : p.mortgageMaturityDate,
         },
       ],
 

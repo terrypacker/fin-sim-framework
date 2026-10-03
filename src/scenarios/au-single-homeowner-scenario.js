@@ -27,7 +27,7 @@ import { US_BROKERAGE }        from './toolsets/us-brokerage-toolset.js';
 import { INHERITANCE }         from './toolsets/inheritance-toolset.js';
 import { ECONOMIC_REGIMES }    from './toolsets/economic-regimes-toolset.js';
 import { toolsetParamKeys, forwardToolsetOverrides } from './toolset-param-forwarding.js';
-import { yearToIsoDate } from './year-date-migration.js';
+import { yearToIsoDate, loanTermDateFromYear } from './year-date-migration.js';
 
 /**
  * AuSingleHomeownerScenario — the Australian sibling of UsSingleHomeownerScenario.
@@ -117,7 +117,8 @@ export const AU_SINGLE_HOMEOWNER_DEFAULTS = {
   mortgageBalance:       320_000,
   mortgagePrimeSpread:     0.0200,
   monthlyMortgage:        2_360.44,
-  mortgageMaturityYear:    2046,
+  // The day the engine always ended a 2046 term on (1 Jul for an AU loan; design 117).
+  mortgageMaturityDate:    '2046-07-01',
 
   // ── Collectible ────────────────────────────────────────────────────────────
   // A classic car, and it SELLS inside the run — the disposal is the point. Not
@@ -354,7 +355,10 @@ export class AuSingleHomeownerScenario extends BaseScenario {
           // reads RBA cash + spread every payment (design 56 Phase 3).
           mortgagePrimeSpread:  p.mortgagePrimeSpread,
           monthlyMortgage:      p.monthlyMortgage,
-          mortgageMaturityYear: p.mortgageMaturityYear,
+          // A legacy `mortgageMaturityYear` override is that year's term end (design 117).
+          mortgageMaturityDate: Object.hasOwn(params, 'mortgageMaturityYear') && !Object.hasOwn(params, 'mortgageMaturityDate')
+            ? (params.mortgageMaturityYear == null ? null : loanTermDateFromYear(params.mortgageMaturityYear, 'AU'))
+            : p.mortgageMaturityDate,
         },
       ],
 

@@ -1,8 +1,8 @@
 # 117 — Year fields become Dates
 
 **Status:** ACCEPTED, 2 Oct 2026. The decisions in §3 were taken with the author, and Q1–Q3
-(§11) are answered as proposed (D8–D10). **Phases 1–4 BUILT** 2 Oct 2026 (§12–§15);
-phases 5–7 not started.
+(§11) are answered as proposed (D8–D10). **Phases 1–5 BUILT** 2 Oct 2026 (§12–§16);
+phases 6–7 not started.
 Scope is groups A and B of the 2 Oct inventory (§2): fields where a year stands for one
 moment, and loan-term boundaries. Annual windows and year-keyed schedules stay years (§2.3).
 Design 116 (employment spells) phase 4 waits on §5, the optimizer's Date type.
@@ -483,3 +483,52 @@ The reasoning as proposed:
   migration tests and a Scenario panel test for the year-only editor. A smoke run on a
   pre-117 export swept `--param moveYear` across 2029 to 2033 (all on 1 Jul) and ran a
   `variant-grid` `moveYear` axis; both moved the result.
+
+## 16. As built — phase 5 (2 Oct 2026)
+
+- **The month clock.** `loan-classes.js` compares and counts in month indexes
+  (`year × 12 + month0`). `boundaryMonth(date)` gives a term date's month. Payments fire at
+  month-end, so a boundary anywhere in a month takes effect with that month's payment.
+  `loanClock(state, loan, date)` is the payment's month, or the tax-period start without
+  a date. Every `year >= …Year` test became `clock >= boundaryMonth`, and every
+  `(a − b) × 12` became a difference of months. `fixedWindowEndYear` became
+  `fixedWindowEndMonth`, `loanYear` became `loanClock`, and `monthsUntilPeriodYear` became
+  `monthsUntil`.
+- **The fields.** `fixedRateUntilYear`, `interestOnlyUntilYear` and `maturityYear` became
+  `fixedRateUntil`, `interestOnlyUntil` and `maturityDate`. The property mirrors
+  (`mortgage…`) did the same, through `LOAN_RATE_TERM_FIELDS`. The `postFixedFromYear`
+  stamp became `postFixedFromMonth`, the month of the first payment after expiry, which
+  for a migrated term is the period start. `fixedExtraYear` still counts the cap's tax
+  year (`capYear`).
+- **Migration (D6).** A term year converts by its LOAN's country: `Y-01-01` for US and
+  `Y-07-01` for AU. Those are the days the period-year engine ended terms on (design 113
+  Q6). A saved `postFixedFromYear` becomes `Y × 12 + (AU ? 6 : 0)`. Accounts, property
+  mirrors and saved loan state entries are all converted. `deserializePersonsAccounts` now
+  runs the migration too, so a caller that deserializes without the loader cannot drop a
+  term. Assets throw on the six retired fields.
+- **Dates reach every path.** The payment handler passes its date. The offset allocation
+  (`effectivePrincipal` → `offsetBalanceForLoan`) and the rental interest deduction
+  (`computeRentalMonth`) now take the event date as well, so a mid-period boundary flips
+  offset eligibility and the deductible rate in the same month as the payment.
+  `pool-metrics` reads the period clock.
+- **Goldens.** 3 fixtures were regolded: 6 loan fields, all `maturityYear 2046` and
+  `interestOnlyUntilYear null`. The check mapped each by its loan's country: the US loan to
+  `2046-01-01`, the two AU loans to `2046-07-01`. Nothing else differed. Separately, each
+  homeowner golden rebuilt from a cfg converted back to the old year form runs to an
+  identical end state, so an AU term that migrated to the wrong day would fail.
+- **Behaviour the year could not express (tests).** FRL-16: a US IO period ending on
+  20 May steps up with the May payment and re-amortises over 240 months. FRL-17: an AU
+  fixed period can end on 1 Jan, and a migrated AU year still ends on 1 Jul. FRL-15's
+  stateless case has no hidden calendar convention any more; the date says when the term
+  ends. FRL-7's "window over" case now uses a sale date inside the over-window year,
+  because the sale's own date decides.
+- **The legacy unanchored IO path** (a saved loan with no `postIoPrincipal`, which the
+  compiler always defaults now) counts its remaining months from the payment's month, not
+  the period start. TERM-8 still passes, and no golden reaches that path.
+- **UI and help.** The account and property editors, the loan rate-terms form and the
+  accounts controller author dates; a date field is kept out of the numeric
+  normalization. `variant.mjs` keeps `interestOnlyUntilYear` / `maturityYear` as year
+  shorthand levers, converted by the loan's country, and accepts the date names. The
+  `account` and `real-property` node topics no longer say "1 January". Design 113 Q6 is
+  closed: the author states the day.
+
