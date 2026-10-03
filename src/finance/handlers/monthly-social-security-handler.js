@@ -16,8 +16,11 @@ import { ACCOUNT_ROLES } from '../state/account-roles.js';
  * Handles the MONTHLY_SS_INCOME event.
  *
  * Iterates over all people in state.people and dispatches SS_INCOME_APPLY
- * for each person whose socialSecurityMonthly > 0 and whose retirementDate
- * has been reached (or is null, meaning SS is always active).
+ * for each person whose socialSecurityMonthly > 0 and who has reached the
+ * claiming age. Work does not gate the benefit (design 118 §5.1, was design 116
+ * D6): someone still employed past the claiming age draws a wage and a benefit
+ * in the same month, which is the law from full retirement age on. Before it the
+ * retirement earnings test applies, which is not modelled (design 118 §10).
  *
  * Eligibility age (minAge) is read from the AccountRulesEngine so that the rule
  * lives in the account module rather than being baked into this handler.
@@ -30,7 +33,7 @@ import { ACCOUNT_ROLES } from '../state/account-roles.js';
  * @param {import('../account-rules/account-rules-engine.js').AccountRulesEngine} [opts.accountRulesEngine]
  */
 export class MonthlySocialSecurityHandler extends HandlerEntry {
-  static description = 'Credits the US cash pool with Social Security income for each eligible person; starts at their retirementDate.';
+  static description = 'Credits the US cash pool with Social Security income for each eligible person from their claiming age, whether or not they are still working.';
   static type        = 'MonthlySocialSecurityHandler';
   static eventType   = 'MONTHLY_SS_INCOME';
 
@@ -63,9 +66,6 @@ export class MonthlySocialSecurityHandler extends HandlerEntry {
 
       const age = getAge(person.birthDate, date);
       if (age < minAge) continue;
-
-      const retDate = person.retirementDate;
-      if (retDate && date < new Date(retDate)) continue;
 
       actions.push(
         // Design 76 Gap B: stamp WHOSE benefit this is — Social Security is

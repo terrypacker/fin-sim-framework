@@ -1,7 +1,7 @@
 # 118 — Social Security claiming: claim age, spousal and survivor benefits
 
-**Status:** PROPOSED, 2 Oct 2026. D1–D3 in §3 were taken with the author; D4–D11 are
-proposals. Not built. Resolves issue #292 (`MonthlySocialSecurityHandler` is FRA-only), and
+**Status:** ACCEPTED, 2 Oct 2026. D1–D3 in §3 were taken with the author; D4–D11 are
+proposals. **Phase 1 BUILT** 2 Oct 2026 (§12); phases 2–5 not started. Resolves issue #292 (`MonthlySocialSecurityHandler` is FRA-only), and
 takes over design 116's D6, Social Security decoupled from work (§5.1, D4).
 Every rule below is cited to a source saved in `docs/us-social-security/` (§4).
 
@@ -289,3 +289,23 @@ Design 116 then starts without its D6 commit; its §5.1a points here.
   whole-years lever (D1) does not reach 60, and D10's rule already covers the common case.
 - **Q2 — the earnings test's home.** Design 116 (it owns the wage on a date) or a short
   follow-up design. **Proposal: a phase at the end of design 116.**
+
+## 12. As built — phase 1 (2 Oct 2026)
+
+`MonthlySocialSecurityHandler` no longer reads `retirementDate`: a person is paid from the
+claiming age (`minAge`, still 67) whether or not they are working. Its static description
+and doc comment say so. (`help/REFERENCE.md` does not carry handler descriptions, so it did
+not change.)
+
+- **Goldens: none changed.** Every golden person retires at 65 or earlier (the latest is a
+  2046-07-01 retirement for a 1981 birth), so the gate never bound past 67 in any fixture.
+  This was checked against each fixture's people before accepting the unchanged run, rather
+  than inferred from it.
+- **Tests.** `tests/unit/monthly-social-security-handler.test.mjs`: a person past 67 with a
+  future `retirementDate` is paid; a person under 67 is not, whatever `retirementDate`
+  says; in one household each person is gated on their own age. Two of the three fail
+  against the old handler. `toolset-us-retirement.test.mjs` EVT-37 pinned the old gate (a
+  1958 birth, 67 in 2026, working to 2028, asserted zero benefit); it now asserts three
+  months of benefit in Q1 2026, through the full toolset.
+- **Help.** No topic tied the benefit to `retirementDate`, so no prose changed.
+

@@ -397,7 +397,7 @@ function makeSsConfig({ socialSecurityMonthly, retirementDate, monthlyWage = 0 }
   };
 }
 
-test('EVT-37: SS income credited to savings when person has reached retirementDate', () => {
+test('EVT-37: SS income credited to savings when person has reached the claiming age', () => {
   const config = makeSsConfig({ socialSecurityMonthly: 2_800, retirementDate: '2025-01-01' });
   const { sim } = loadToolsetScenario(config);
   const before = sim.state.usSavingsAccount.balance;
@@ -424,13 +424,14 @@ test('EVT-37: SS income from 3 months accumulates correctly', () => {
     `3 months of SS at 85% taxable should yield ${expected} in usOrdinaryIncomeYTD`);
 });
 
-test('EVT-37: SS payments do not fire before retirementDate', () => {
-  // Person retires 2028-01-01 — no SS payments during Q1 2026
+test('EVT-37: SS payments fire past the claiming age while still working (design 118 §5.1)', () => {
+  // Born 1958, so 67 throughout Q1 2026, and works until 2028-01-01. Work no longer gates
+  // the benefit (was design 116 D6): three months of SS accrue at 85% taxable.
   const config = makeSsConfig({ socialSecurityMonthly: 2_800, retirementDate: '2028-01-01' });
   const { sim } = loadToolsetScenario(config);
   sim.stepTo(Q1_2026);
-  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 0,
-    'no SS income should accrue before retirementDate');
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 3 * 2_800 * 0.85,
+    'SS income should accrue from the claiming age, before retirementDate');
 });
 
 test('EVT-37: person with socialSecurityMonthly=0 emits no SS actions', () => {
