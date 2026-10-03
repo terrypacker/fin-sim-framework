@@ -43,9 +43,6 @@ export function mcRowFor(kind, center, entry) {
       // An UNSET year (a sale that does not happen) has nothing to sample around: the row
       // carries its spread and no mean, and cannot run enabled until the user types one.
       if (center === null) return { type: DISTRIBUTION_TYPES.NORMAL, stdDev: 1.5, integer: true };
-      // A date-backed year writes a date, not Date.UTC(year, …), so its draw keeps the
-      // fraction — rounding it would erase the sub-year position of §121's 730-day cliff.
-      if (entry?.fractionalYear) return { type: DISTRIBUTION_TYPES.NORMAL, mean: center, stdDev: 1 };
       return { type: DISTRIBUTION_TYPES.NORMAL, mean: center, stdDev: 1.5, integer: true };
     case 'rate':
       return { type: DISTRIBUTION_TYPES.NORMAL, mean: center,

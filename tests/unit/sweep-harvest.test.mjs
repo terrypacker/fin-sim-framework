@@ -173,9 +173,9 @@ test('W3-10: only a `sweepUnset` null is offered — a null meaning "use the def
   const { cfg, base } = unsetPlan();
   const generated = ScenarioParamGenerator.generate(cfg);
   assert.ok(generated.find(e => e.key === 'prop.cabin.plannedSaleDate').sweepUnset);
-  // A blank move-in date is a null year without the flag: still no row (design 83 G7).
-  const withBlankMoveIn = { ...base, 'prop.cabin.mainResidenceFromYear': null };
-  assert.equal(byKey(mcVars(withBlankMoveIn, { cfg }), 'prop.cabin.mainResidenceFromYear'), undefined);
+  // A blank move-in date is a null date without the flag: still no row (design 83 G7).
+  const withBlankMoveIn = { ...base, 'prop.cabin.mainResidenceFrom': null };
+  assert.equal(byKey(mcVars(withBlankMoveIn, { cfg }), 'prop.cabin.mainResidenceFrom'), undefined);
   // And the flag does not open the harvest to a key whose value is simply ABSENT.
   const absent = { ...base };
   delete absent['prop.cabin.plannedSaleDate'];
