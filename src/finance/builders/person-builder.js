@@ -33,6 +33,7 @@ class PersonBuilderInstance {
     this._citizen               = ['US'];
     this._lifeExpectancy        = 90;
     this._socialSecurityMonthly = 2800;
+    this._ssClaimAge            = null;
     this._monthlyWage           = 0;
     this._selfEmployed          = false;
     this._retirementDate        = new Date(Date.UTC(2040, 0, 1));
@@ -50,6 +51,8 @@ class PersonBuilderInstance {
   citizen(v)               { this._citizen = v;               return this; }
   lifeExpectancy(v)        { this._lifeExpectancy = v;        return this; }
   socialSecurityMonthly(v) { this._socialSecurityMonthly = v; return this; }
+  /** @param {?number} v - whole years 62–70; null = at full retirement age (design 118) */
+  ssClaimAge(v)            { this._ssClaimAge = v;            return this; }
   monthlyWage(v)           { this._monthlyWage = v;           return this; }
   /** @param {boolean} v - true = monthlyWage is self-employment income (design 69) */
   selfEmployed(v)          { this._selfEmployed = v;          return this; }
@@ -81,6 +84,7 @@ class PersonBuilderInstance {
       citizen:               this._citizen,
       lifeExpectancy:        this._lifeExpectancy,
       socialSecurityMonthly: this._socialSecurityMonthly,
+      ssClaimAge:            this._ssClaimAge,
       monthlyWage:           this._monthlyWage,
       selfEmployed:          this._selfEmployed,
       retirementDate:        this._retirementDate,

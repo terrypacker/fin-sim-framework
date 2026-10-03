@@ -36,7 +36,10 @@
  *                  is the what-if "and if it did, when?". Opt searches a default range
  *                  over the plan window; MC has no center until the user types one. Not
  *                  for a null that means "use the default" (`lumpYear`, `fillCeiling`),
- *                  which has no event to switch on (design 98 W3.2 rule 3 amendment).
+ *                  which has no event to switch on (design 98 W3.2 rule 3 amendment) —
+ *                  EXCEPT an Enum whose options are every alternative to the blank
+ *                  default (`ssClaimAge`, design 118): its row is the option list, so it
+ *                  needs no center, and without the flag a blank plan has no lever.
  *
  * Phase 1 (design 55 §12) covered balances/basis, person wage/retirementDate, and
  * property value/appreciation/sale-year; Phase 2 added the per-account rates; Phase 3
@@ -46,6 +49,7 @@
  */
 import { ACCOUNT_TYPE } from '../../finance/assets/account.js';
 import { DIVIDEND_ELECTION_ROLES } from '../../finance/state/account-roles.js';
+import { SS_CLAIM_AGES } from '../../finance/account-rules/us/us-social-security-rules.js';
 
 // Retirement-account ledger scalar exposed as a param (design 53 §2 / account-basis
 // two-concepts). Per-lot holdings and cost basis stay in the account editor (design 25).
@@ -164,6 +168,15 @@ export const PERSON_PARAM_TEMPLATE = [
   // The 401(k)→IRA rollover (design 117 D9). It was three scenario params shared by every
   // owner, each blank part filled from that owner's retirement date — so one setting meant
   // a different day per person. Per person, it is one date. Swept by Opt, as its year was.
+  // Social Security claim age (design 118 D1/D5): whole years, so the optimizer and the
+  // decision graph see nine values. Blank claims at full retirement age, which the
+  // option list does not name, so the row is offered while blank (`sweepUnset`).
+  { field: 'ssClaimAge', label: 'SS Claim Age', type: 'Enum', options: SS_CLAIM_AGES,
+    mc: false, opt: true, nullable: true, sweepUnset: true,
+    description: 'Age this person claims Social Security, in whole years from 62 to 70. '
+      + 'Blank claims at full retirement age (67 for anyone born from 2 Jan 1960). An '
+      + 'earlier claim is reduced for life, about 30% at 62 for a full retirement age of '
+      + '67; each year of delay past it adds 8%, to 124% at 70.' },
   { field: 'k401ToIraConversionDate', label: '401(k)→IRA Rollover Date', type: 'Date',
     mc: false, opt: true, nullable: true,
     description: 'The day this person\'s 401(k) rolls into their first IRA. Blank means on '

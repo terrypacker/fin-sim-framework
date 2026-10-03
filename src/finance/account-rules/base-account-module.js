@@ -39,16 +39,6 @@ export class BaseAccountModule {
   }
 
   /**
-   * Returns Social Security eligibility rules for this country and year.
-   * Returns null for countries where SS does not apply.
-   *
-   * @returns {{ minAge: number } | null}
-   */
-  getSsEligibilityRules() {
-    return null;
-  }
-
-  /**
    * Returns IRA Required Minimum Distribution rules for this country and year.
    * Returns null for countries where IRA RMDs do not apply.
    *

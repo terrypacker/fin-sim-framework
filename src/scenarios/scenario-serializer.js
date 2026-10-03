@@ -96,6 +96,7 @@ import { ChangeResidencyApplyReducer }    from '../finance/reducers/change-resid
 import { ChangeStateResidencyApplyReducer } from '../finance/reducers/change-state-residency-apply-reducer.js';
 import { PersonDiedApplyReducer }        from '../finance/reducers/person-died-apply-reducer.js';
 import { SocialSecuritySurvivorApplyReducer } from '../finance/reducers/social-security-survivor-apply-reducer.js';
+import { SsEntitlementApplyReducer } from '../finance/reducers/ss-entitlement-apply-reducer.js';
 import { AccountRetitleApplyReducer }    from '../finance/reducers/account-retitle-apply-reducer.js';
 import { SuperDeathBenefitApplyReducer } from '../finance/reducers/super-death-benefit-apply-reducer.js';
 import { ScenarioCompleteReducer }       from '../finance/reducers/scenario-complete-reducer.js';
@@ -301,7 +302,7 @@ const _ALL_CLASSES = [
   IntlTransferApplyReducer, IntlTransferRecordReducer, FxTransferApplyReducer, FxRefreshReducer,
   FxProcessReducer, FxStepApplyReducer,
   StockDividendCashApplyReducer, BondCouponCashApplyReducer, CashSleeveInterestApplyReducer, BondSleeveCouponApplyReducer, BondAccretionApplyReducer, ChangeResidencyApplyReducer, ChangeStateResidencyApplyReducer,
-  PersonDiedApplyReducer, SocialSecuritySurvivorApplyReducer, AccountRetitleApplyReducer, SuperDeathBenefitApplyReducer, ScenarioCompleteReducer,
+  PersonDiedApplyReducer, SocialSecuritySurvivorApplyReducer, SsEntitlementApplyReducer, AccountRetitleApplyReducer, SuperDeathBenefitApplyReducer, ScenarioCompleteReducer,
   LateLifeCareApplyReducer,
   SetOutOfFundsDateReducer, AccumulateDeficitReducer, AccumulateTaxesPaidReducer, AccumulateConsumptionReducer,
   AccumulateConsumptionUtilityReducer,
@@ -1222,6 +1223,7 @@ export class ScenarioSerializer {
       residencyState:        person.residencyState ?? null,
       lifeExpectancy:        person.lifeExpectancy ?? 90,
       socialSecurityMonthly: person.socialSecurityMonthly ?? 2800,
+      ssClaimAge:            person.ssClaimAge ?? null,   // design 118; null = at FRA
       monthlyWage:           person.monthlyWage ?? 0,
       selfEmployed:          person.selfEmployed ?? false,
       retirementDate:        ScenarioSerializer.toDateStr(person.retirementDate)
@@ -1458,6 +1460,7 @@ export class ScenarioSerializer {
       residencyState:        d.residencyState ?? null,
       lifeExpectancy:        d.lifeExpectancy ?? 90,
       socialSecurityMonthly: d.socialSecurityMonthly ?? 2800,
+      ssClaimAge:            d.ssClaimAge ?? null,
       monthlyWage:           d.monthlyWage ?? 0,
       selfEmployed:          d.selfEmployed ?? false,
       retirementDate:        d.retirementDate ? new Date(d.retirementDate) : new Date(Date.UTC(2040, 0, 1)),

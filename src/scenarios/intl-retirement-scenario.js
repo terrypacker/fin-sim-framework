@@ -342,8 +342,9 @@ export const INTL_RETIREMENT_DEFAULTS = {
   rothConversionMonth:      12,        // month of policy evaluation (1–12)
   rothConversionDay:        1,         // day of policy evaluation
 
-  // US Retirement — Social Security
-  primarySsClaimAge: 67,  // FRA; varying has no effect until TODO #292 is resolved
+  // US Retirement — Social Security. An alias of the generated person.primary.ssClaimAge
+  // (design 118 D5): whole years 62–70, null = at full retirement age.
+  primarySsClaimAge: null,
 
   // Sale dates (design 117 phase 2), keyed by the generated param that carries each one, so
   // a buildDefaultConfig override and a saved plan name a sale the same way. A legacy
@@ -418,15 +419,8 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
   // INTL_RETIREMENT_PARAM_ALIASES. A genuinely per-person return is a holdings question
   // — give that person's account a different market mix or security — not a param.
 
-  // ── US Retirement ─────────────────────────────────────────────────────────
-  {
-    key: 'primarySsClaimAge', label: 'Primary SS Claim Age',
-    // opt: false until TODO #292 — only FRA (67) is modelled, so an optimizer axis here
-    // would spend budget on a lever that moves nothing (design 98 W3 follow-up).
-    type: 'Number', group: 'US Retirement', mc: false, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.primarySsClaimAge,
-    description: 'Age at which primary claims Social Security (62–70). Note: only age 67 (FRA) is modelled until TODO #292 is resolved.',
-  },
+  // US Retirement: the Social Security claim age is a per-person field now, the generated
+  // person.<id>.ssClaimAge (design 118 D5); `primarySsClaimAge` aliases the primary's.
 
   // Min-balance (cash floor) params are generated per-account from the
   // SAVINGS/CHECKING template (design 55 §7/§13) so the floor travels with the
@@ -718,6 +712,7 @@ export const INTL_RETIREMENT_PARAM_ALIASES = Object.freeze({
   primaryRetirementDate: 'person.primary.retirementDate',
   spouseRetirementDate:  'person.spouse.retirementDate',
   primaryMonthlyWage:    'person.primary.monthlyWage',
+  primarySsClaimAge:     'person.primary.ssClaimAge',   // design 118 D5
   spouseMonthlyWage:     'person.spouse.monthlyWage',
   // Account balances (design 55 §13). Every account bootstraps a holding at compile time,
   // so its `balance` is derived from Σ holdings and is never a plain generated param. These
@@ -1015,6 +1010,7 @@ export class IntlRetirementScenario extends BaseScenario {
           monthlyWage:    p.primaryMonthlyWage,
           retirementDate: isoDate(p.primaryRetirementDate),
           lifeExpectancy: 90, socialSecurityMonthly: 2000,
+          ssClaimAge:     p.primarySsClaimAge ?? null,   // design 118; null = at FRA
         },
         {
           __type: 'Person', id: 'spouse', name: 'Spouse',

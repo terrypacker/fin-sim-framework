@@ -26,11 +26,6 @@ export class UsAccountModule2026 extends BaseAccountModule {
     return getUsEarlyWithdrawalRules(accountType, this.year);
   }
 
-  /** Full Retirement Age for those born 1960+ (SECURE 2.0 did not change SS FRA). */
-  getSsEligibilityRules() {
-    return { minAge: 67 };
-  }
-
   /** SECURE 2.0 Act raised the RMD starting age from 72 to 73 (effective 2023). */
   getIraRmdRules() {
     return { rmdAge: 73 };

@@ -13,6 +13,7 @@ import { bindParamLinkedField } from '../scenario/param-linked-field.js';
 import { PayrollSection } from './payroll-section.js';
 import { defaultCurrencyForCountry } from '../../finance/country-codes.js';
 import { usStateOptionPairs } from '../../finance/tax/state/us-states.js';
+import { SS_CLAIM_AGES, fullRetirementAge } from '../../finance/account-rules/us/us-social-security-rules.js';
 
 /**
  * PersonEditor — renders the person edit form from tpl-person-editor into a
@@ -85,6 +86,7 @@ export class PersonEditor extends BaseComponent {
 
     el.querySelector('[data-id="lifeExpectancy"]').value        = this._node?.lifeExpectancy        ?? 90;
     el.querySelector('[data-id="socialSecurityMonthly"]').value = this._node?.socialSecurityMonthly ?? 2800;
+    this._renderClaimAge(el);
     el.querySelector('[data-id="monthlyWage"]').value           = this._node?.monthlyWage           ?? 0;
     el.querySelector('[data-id="selfEmployed"]').checked         = this._node?.selfEmployed          ?? false;
 
@@ -147,6 +149,25 @@ export class PersonEditor extends BaseComponent {
     this._rootEl = el;
   }
 
+  /**
+   * The Social Security claim age (design 118): blank is full retirement age, labelled
+   * with the FRA this birth date gets, so the form and the sim read the same table.
+   */
+  _renderClaimAge(el) {
+    const sel = el.querySelector('[data-id="ssClaimAge"]');
+    sel.innerHTML = '';
+    const bd  = this._node?.birthDate;
+    const fra = bd ? fullRetirementAge(bd) : null;
+    const fraLabel = fra ? `At full retirement age (${fra.years}y ${fra.months}m)` : 'At full retirement age';
+    for (const [value, label] of [['', fraLabel], ...SS_CLAIM_AGES.map(a => [String(a), String(a)])]) {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = label;
+      sel.appendChild(opt);
+    }
+    sel.value = this._node?.ssClaimAge == null ? '' : String(this._node.ssClaimAge);
+  }
+
   /** Route param-backed person fields through their param (design/32). */
   _bindParamLinks(el) {
     this._linkedFields = new Set();
@@ -157,6 +178,7 @@ export class PersonEditor extends BaseComponent {
       { dataId: 'monthlyWage',    field: 'monthlyWage',    coerce: (raw) => Number(raw) || 0 },
       { dataId: 'retirementDate', field: 'retirementDate', coerce: (raw) => raw },
       { dataId: 'k401ToIraConversionDate', field: 'k401ToIraConversionDate', coerce: (raw) => raw || null },
+      { dataId: 'ssClaimAge', field: 'ssClaimAge', coerce: (raw) => (raw === '' ? null : Number(raw)) },
       // The scenario's `residencyState` param links to the PRIMARY person only
       // (its Enum options are '' plus US_STATE_CODES, so blank stays '' rather
       // than null here). A person with no such param — the spouse — edits the
@@ -189,6 +211,8 @@ export class PersonEditor extends BaseComponent {
       residencyState:        el.querySelector('[data-id="residencyState"]').value || null,
       lifeExpectancy:        Number(el.querySelector('[data-id="lifeExpectancy"]').value),
       socialSecurityMonthly: Number(el.querySelector('[data-id="socialSecurityMonthly"]').value),
+      ssClaimAge:            el.querySelector('[data-id="ssClaimAge"]').value === ''
+                               ? null : Number(el.querySelector('[data-id="ssClaimAge"]').value),
       monthlyWage:           Number(el.querySelector('[data-id="monthlyWage"]').value),
       selfEmployed:          el.querySelector('[data-id="selfEmployed"]').checked,
       retirementDate:        el.querySelector('[data-id="retirementDate"]').value,

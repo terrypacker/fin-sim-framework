@@ -46,6 +46,7 @@ import { ChangeStateResidencyApplyReducer } from '../../src/finance/reducers/cha
 import { AccountRetitleApplyReducer } from '../../src/finance/reducers/account-retitle-apply-reducer.js';
 import { PersonDiedApplyReducer } from '../../src/finance/reducers/person-died-apply-reducer.js';
 import { SocialSecuritySurvivorApplyReducer } from '../../src/finance/reducers/social-security-survivor-apply-reducer.js';
+import { SsEntitlementApplyReducer } from '../../src/finance/reducers/ss-entitlement-apply-reducer.js';
 import { ScenarioCompleteReducer } from '../../src/finance/reducers/scenario-complete-reducer.js';
 
 const DATE = new Date('2030-06-15');
@@ -387,6 +388,28 @@ test('PersonDiedApplyReducer: absent person does not throw, people map unchanged
   const state = { people: { p2: { residency: 'US' } } };
   const next = runReducer(r, state, makeAction('PERSON_DIED_APPLY', { personId: 'p1', date: DATE, taxJurisdiction: 'US' }), DATE, {});
   assert.deepEqual(Object.keys(next.people), ['p2']);
+});
+
+// ─── SsEntitlementApplyReducer (pure; design 118 D7) ───────────────────────────
+
+test('SsEntitlementApplyReducer: stamps the entitlement month on the person', () => {
+  const r = new SsEntitlementApplyReducer();
+  const ms = Date.UTC(2040, 4, 1);
+  const next = runReducer(r, { people: { p1: { ssEntitledMs: null, socialSecurityMonthly: 2000 } } },
+    makeAction('SS_ENTITLEMENT_APPLY', { personKey: 'p1', entitledMs: ms }), DATE, {});
+  assert.equal(next.people.p1.ssEntitledMs, ms);
+  assert.equal(next.people.p1.socialSecurityMonthly, 2000, 'nothing else on the person moves');
+});
+
+test('SsEntitlementApplyReducer: a claim once stamped is never re-timed; absent person is a no-op', () => {
+  const r = new SsEntitlementApplyReducer();
+  const prev = { people: { p1: { ssEntitledMs: Date.UTC(2040, 4, 1) } } };
+  const kept = runReducer(r, structuredClone(prev),
+    makeAction('SS_ENTITLEMENT_APPLY', { personKey: 'p1', entitledMs: Date.UTC(2045, 3, 1) }), DATE, {});
+  assertStateUnchanged(prev, kept);
+  const missing = runReducer(r, structuredClone(prev),
+    makeAction('SS_ENTITLEMENT_APPLY', { personKey: 'pX', entitledMs: Date.UTC(2045, 3, 1) }), DATE, {});
+  assertStateUnchanged(prev, missing);
 });
 
 // ─── SocialSecuritySurvivorApplyReducer (pure; I1/I7) ──────────────────────────

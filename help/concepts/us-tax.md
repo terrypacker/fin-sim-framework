@@ -3,7 +3,7 @@ id: us-tax
 kind: concept
 title: US Tax
 panels: [journal-report]
-params: [residencyState, usFilingSingle, usFederalBracketIndexSpread, usStateBracketIndexSpread, usFicaWageBaseIndexSpread, usFeieCapIndexSpread, stateMoveDate, stateMoveDestination, primarySsClaimAge]
+params: [residencyState, usFilingSingle, usFederalBracketIndexSpread, usStateBracketIndexSpread, usFicaWageBaseIndexSpread, usFeieCapIndexSpread, stateMoveDate, stateMoveDestination]
 design: [71-tax-worksheet-csv-export.md]
 stamps:
   param:residencyState: 188c33
@@ -14,7 +14,6 @@ stamps:
   param:usFeieCapIndexSpread: 277ceb
   param:stateMoveDate: ef6579
   param:stateMoveDestination: 2f214c
-  param:primarySsClaimAge: b186dd
   panel:journal-report: e88448
 ---
 
@@ -42,6 +41,6 @@ terminal outcomes by amounts worth checking.
 Filing status changes the bracket widths and standard deduction, and survivorship
 changes it mid-plan — see [Mortality](mortality.md).
 
-The Social Security claim age is here because it decides when that income starts,
-which shapes the bracket room available for [Roth conversions](roth-conversions.md).
-Only full retirement age is currently modelled.
+Each person's Social Security claim age decides when that income starts, and so the
+bracket room left for [Roth conversions](roth-conversions.md) in the years between
+stopping work and claiming. It is set on the [Person](../nodes/person.md).

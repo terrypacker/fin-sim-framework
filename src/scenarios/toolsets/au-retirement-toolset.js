@@ -53,6 +53,7 @@ import {
 import { MortalityHandler }                      from '../../finance/handlers/mortality-handler.js';
 import { PersonDiedApplyReducer }                from '../../finance/reducers/person-died-apply-reducer.js';
 import { SocialSecuritySurvivorApplyReducer }    from '../../finance/reducers/social-security-survivor-apply-reducer.js';
+import { SsEntitlementApplyReducer }             from '../../finance/reducers/ss-entitlement-apply-reducer.js';
 import { AccountRetitleApplyReducer }            from '../../finance/reducers/account-retitle-apply-reducer.js';
 import { SuperDeathBenefitApplyReducer }         from '../../finance/reducers/super-death-benefit-apply-reducer.js';
 import { ScenarioCompleteReducer }               from '../../finance/reducers/scenario-complete-reducer.js';
@@ -101,6 +102,7 @@ export const AU_RETIREMENT = {
   SuperNonConcessionalApplyReducer, AuSuperCapsAccumulateReducer,
   SuperWithdrawalContribApplyReducer,
       SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperCapitalGainApplyReducer,
+      SsEntitlementApplyReducer,
     ],
     actions: [
       // `section988` — design 87 §14.4 item 2, the §988 character declaration the currency
@@ -206,6 +208,9 @@ export const AU_RETIREMENT = {
       { type: 'PERSON_DIED_APPLY',          fields: { personId: ValueType.text(), personName: ValueType.text(), date: ValueType.any(), taxJurisdiction: ValueType.text(), deceasedSocialSecurityMonthly: ValueType.number(), incomeSupportRecipient: ValueType.boolean() } },
       { type: 'ACCOUNT_RETITLE_APPLY',      fields: { deceasedId: ValueType.text(), survivorId: ValueType.text() } },
       { type: 'SOCIAL_SECURITY_SURVIVOR_APPLY', fields: { survivorId: ValueType.text(), deceasedSocialSecurityMonthly: ValueType.number() } },
+      // The month a person's own Social Security entitlement began (design 118 D7).
+      // Declared identically in both retirement toolsets, as the SS handler is.
+      { type: 'SS_ENTITLEMENT_APPLY',       fields: { personKey: ValueType.text(), entitledMs: ValueType.number() } },
       // `slice` + `reason` are what make a spending change explainable: without them
       // a guardrail cut and a survivor adjustment are the same anonymous delta.
       { type: 'SPENDING_STRATEGY_APPLY',    fields: { slice: ValueType.text(), delta: ValueType.number(), reason: ValueType.text() } },
@@ -890,6 +895,12 @@ export const AU_RETIREMENT = {
       new SuperEarningsApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
       new SuperCapitalGainApplyReducer(),
     );
+
+    // Social Security entitlement stamp (design 118 D7), under the same guard as the
+    // handler that emits it: in a cross-border plan US_RETIREMENT registers both.
+    if (!context._auSharedDelegated && context.people.some(pe => (pe.socialSecurityMonthly ?? 0) > 0)) {
+      reducers.push(new SsEntitlementApplyReducer());
+    }
 
     // Mortality reducers (only if not already registered by US_RETIREMENT).
     if (!context._auSharedDelegated) {

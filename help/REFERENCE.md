@@ -9,11 +9,11 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-224 parameters · 33 panels · 11 node types (180 fields) · 172 action types · 86 tools · 284 state field types · 74 topics · 126 design docs
+223 parameters · 33 panels · 11 node types (181 fields) · 173 action types · 86 tools · 286 state field types · 74 topics · 126 design docs
 
 ---
 
-## Parameters (224)
+## Parameters (223)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
@@ -500,7 +500,7 @@ scenario's own schema), which is where to go to change it.
 - **`usSavingsInterestRate`** — US Savings Interest Rate · `Number` · default `0.03` · via US_BANKING
   Annual interest rate for US savings accounts (seed / fallback baseline; rate sweeps go through US Prime — design 56).
 
-### US Retirement (6)
+### US Retirement (5)
 
 - **`dividendReinvest`** — Reinvest Dividends (default) · `Boolean` · default `false` · sweep: opt · via US_RETIREMENT
   Household DEFAULT for US brokerage dividends and bond coupons: if true they are reinvested, otherwise paid out as cash. A real DRIP election is made per broker, so any brokerage account can override this on its own record (design 106); this value applies to every account that has not.
@@ -512,8 +512,6 @@ scenario's own schema), which is where to go to change it.
   Annual inflation rate applied to expenses
 - **`k401ToIraConversionEnabled`** — 401(k)→IRA Conversion Enabled · `Boolean` · default `true` · via US_RETIREMENT
   If true, each 401(k) is rolled into the owner's first IRA, on the date set on that person (blank = the day they stop work)
-- **`primarySsClaimAge`** — Primary SS Claim Age · `Number` · default `67` · via SCENARIO
-  Age at which primary claims Social Security (62–70). Note: only age 67 (FRA) is modelled until TODO #292 is resolved.
 
 ### US Tax (8)
 
@@ -581,7 +579,7 @@ true statement about the registry, not a gap in this file.
 
 ---
 
-## Node types (11 kinds · 180 fields)
+## Node types (11 kinds · 181 fields)
 
 Every kind of record the Nodes panel can open, and every control its edit form offers.
 The inventory is read from the FORM — the `<template>` in `index.html` the editor
@@ -593,9 +591,9 @@ scenario parameter and tier 1 emits its description verbatim; `topic` means the 
 tier-2 topic under `help/nodes/` says it. Exactly one of the two, never both — a field
 described twice is the copy that drifts.
 
-### People — `person` (26 fields)
+### People — `person` (27 fields)
 
-Explained in [`help/nodes`](nodes/person.md). 11 field(s) described by a record parameter.
+Explained in [`help/nodes`](nodes/person.md). 12 field(s) described by a record parameter.
 
 - **`name`** — Name · `text` · topic
   What this person is called throughout the app. Free text, but it is also how you will pick them out in every owner dropdown and every per-person chart.
@@ -608,7 +606,9 @@ Explained in [`help/nodes`](nodes/person.md). 11 field(s) described by a record 
 - **`lifeExpectancy`** — Life Exp. · `number` · topic
   The age this person is assumed to die at, in the deterministic run. Under stochastic mortality it is the anchor a draw is taken around rather than a fixed date. It ends wages and Social Security, triggers any bequest, and sets the horizon the plan is judged over.
 - **`socialSecurityMonthly`** — SS /mo · `number` · topic
-  The monthly benefit this person receives once claiming begins, in today's money. Modelled as an authored amount rather than derived from an earnings record, so it is an input to check rather than an output to trust; claiming age and the spousal rules live in the scenario parameters.
+  The primary insurance amount: the monthly benefit at full retirement age, in today's money, as an SSA statement quotes it. What is actually paid is scaled from it by the claim age below. Authored rather than derived from an earnings record, so it is an input to check rather than an output to trust.
+- **`ssClaimAge`** — SS Claim Age · `select` · param
+  Age this person claims Social Security, in whole years from 62 to 70. Blank claims at full retirement age (67 for anyone born from 2 Jan 1960). An earlier claim is reduced for life, about 30% at 62 for a full retirement age of 67; each year of delay past it adds 8%, to 124% at 70.
 - **`ssCurrency`** — SS Currency · `select` · topic
   The currency the Social Security benefit is paid in. It follows the paying country, not where the person lives, so an AU-resident US retiree collects USD and takes the exchange-rate risk that comes with it.
 - **`monthlyWage`** — Wage /mo · `number` · param
@@ -1601,7 +1601,7 @@ docblock, not re-authored here. Arguments come from each script's declarative
 
 ---
 
-## Journal action types (172)
+## Journal action types (173)
 
 Every action a toolset declares, with its payload shape. A type declared by more than
 one toolset is one row: the toolsets compose into a single run, so it is one action in
@@ -1739,6 +1739,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `SOCIAL_SECURITY_SURVIVOR_APPLY` | survivorId: text, deceasedSocialSecurityMonthly: number | AU_RETIREMENT, US_RETIREMENT |
 | `SPENDING_REFILL` | date: any | ECONOMIC_REGIMES |
 | `SPENDING_STRATEGY_APPLY` | slice: text, delta: number, reason: text | AU_RETIREMENT, US_RETIREMENT |
+| `SS_ENTITLEMENT_APPLY` | personKey: text, entitledMs: number | AU_RETIREMENT, US_RETIREMENT |
 | `SS_INCOME_APPLY` | amount: currency(USD), residency: text, personKey: text | US_INCOME |
 | `SS_INCOME_TAX` | amount: currency(USD), residency: text, personKey: text | US_INCOME |
 | `STATE_TAX_PAYMENT_DEBIT` | amount: currency(USD), escalated: boolean | US_STATE_TAX |
@@ -1785,7 +1786,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 
 ---
 
-## State field types (284)
+## State field types (286)
 
 The scenario-INDEPENDENT half of `StateSchemaRegistry`: the globs and exact paths it
 installs in its own constructor, with the value type that decides how each formats.
@@ -2000,6 +2001,8 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `people.*.residency` | text |
 | `people.*.residencySinceMs` | date |
 | `people.*.residencyState` | text |
+| `people.*.ssClaimAge` | integer |
+| `people.*.ssEntitledMs` | date |
 | `primeDev.*` | rate |
 | `primeFloor.*` | rate |
 | `primeLinks.*.spread` | rate |
@@ -2142,7 +2145,7 @@ what the in-app panel keys on.
 | [Parameters](panels/parameters.md) | panel | 188 | 1 panel · design 98 |
 | [Paycheque](panels/paycheque.md) | panel | 197 | 1 panel · design 95, 107 |
 | [Performance](panels/perf.md) | panel | 201 | 1 panel · design 78 |
-| [Person](nodes/person.md) | node | 221 | 3 panels · design 34, 95, 83 |
+| [Person](nodes/person.md) | node | 248 | 3 panels · design 34, 95, 83 |
 | [Pool Shapes Over Time](concepts/pool-shapes-over-time.md) | concept | 395 | 3 params · design 109, 114, 112, 97 |
 | [Liquidity Pools](panels/pools.md) | panel | 236 | 1 panel · design 97 |
 | [Randomness and Seeds](concepts/randomness-and-seeds.md) | concept | 251 | 2 panels · 2 params · design 74 |
@@ -2163,7 +2166,7 @@ what the in-app panel keys on.
 | [Stochastic Return Paths](concepts/stochastic-return-paths.md) | concept | 268 | 2 panels · 15 params · design 74, 90, 102 |
 | [Tax Harvesting and Asset Location](concepts/tax-harvesting.md) | concept | 235 | 2 panels · 3 params · design 29, 94 |
 | [Timeline](panels/timeline.md) | panel | 203 | 1 panel |
-| [US Tax](concepts/us-tax.md) | concept | 256 | 1 panel · 9 params · design 71 |
+| [US Tax](concepts/us-tax.md) | concept | 260 | 1 panel · 8 params · design 71 |
 | [Watchlist](panels/watchlist.md) | panel | 209 | 1 panel · design 101 |
 
 ---

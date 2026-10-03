@@ -277,6 +277,7 @@ import { ReplenishSavingsReducer } from './finance/reducers/replenish-savings-re
 import { ScenarioCompleteReducer } from './finance/reducers/scenario-complete-reducer.js';
 import { SetOutOfFundsDateReducer } from './finance/reducers/set-out-of-funds-date-reducer.js';
 import { SocialSecuritySurvivorApplyReducer } from './finance/reducers/social-security-survivor-apply-reducer.js';
+import { SsEntitlementApplyReducer } from './finance/reducers/ss-entitlement-apply-reducer.js';
 import { StockDividendCashApplyReducer } from './finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { SuperDeathBenefitApplyReducer } from './finance/reducers/super-death-benefit-apply-reducer.js';
 import { UsSavingsInterestCreditReducer } from './finance/reducers/us-savings-interest-credit-reducer.js';
@@ -1669,6 +1670,7 @@ export const Finance = {
   ScenarioCompleteReducer,
   SetOutOfFundsDateReducer,
   SocialSecuritySurvivorApplyReducer,
+  SsEntitlementApplyReducer,
   StockDividendCashApplyReducer,
   SuperDeathBenefitApplyReducer,
   UsSavingsInterestCreditReducer,

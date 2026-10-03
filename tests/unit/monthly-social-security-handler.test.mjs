@@ -59,3 +59,35 @@ test('SS-WORK-3: each person is gated on their own age, not on work', () => {
   const paid = payments(h.call({ date: new Date(Date.UTC(2028, 0, 1)), state }));
   assert.deepEqual(paid.map(a => a.personKey), ['primary']);
 });
+
+// ── Design 118 phase 2: the claim age, the factor and the stamp ──────────────────
+
+const stamps = (actions) => actions.filter(a => a.type === 'SS_ENTITLEMENT_APPLY');
+
+test('SS-CLAIM-1: an early claim is paid from the entitlement month at the reduced factor, and stamped', () => {
+  const h = new MonthlySocialSecurityHandler();
+  // Born 2 Jul 1964: attains 62 on 1 Jul 2026, so entitled in July 2026 at 70% (FRA 67).
+  const p = person({ birthDate: '1964-07-02', ssClaimAge: 62, ssEntitledMs: null });
+  assert.equal(payments(h.call({ date: new Date(Date.UTC(2026, 5, 30)), state: { people: { primary: p } } })).length, 0);
+  const actions = h.call({ date: new Date(Date.UTC(2026, 6, 31)), state: { people: { primary: p } } });
+  assert.deepEqual(stamps(actions).map(a => [a.personKey, a.entitledMs]), [['primary', Date.UTC(2026, 6, 1)]]);
+  assert.ok(Math.abs(payments(actions)[0].amount - 3000 * 0.70) < 1e-9);
+});
+
+test('SS-CLAIM-2: once stamped, the stamp decides — a later claim-age change does not re-time it', () => {
+  const h = new MonthlySocialSecurityHandler();
+  const p = person({ birthDate: '1964-07-02', ssClaimAge: 70, ssEntitledMs: Date.UTC(2026, 6, 1) });
+  const actions = h.call({ date: new Date(Date.UTC(2027, 0, 31)), state: { people: { primary: p } } });
+  assert.equal(stamps(actions).length, 0, 'never re-stamped');
+  assert.ok(Math.abs(payments(actions)[0].amount - 3000 * 0.70) < 1e-9);
+});
+
+test('SS-CLAIM-3: someone already collecting at sim start is stamped with their past claim month', () => {
+  const h = new MonthlySocialSecurityHandler();
+  // Born 2 Jul 1958 (FRA 66y8m, so Mar 2025), claimed at 62: entitled Jul 2020, 56 months early.
+  const p = person({ birthDate: '1958-07-02', ssClaimAge: 62, ssEntitledMs: null });
+  const actions = h.call({ date: new Date(Date.UTC(2026, 0, 31)), state: { people: { primary: p } } });
+  assert.equal(stamps(actions)[0].entitledMs, Date.UTC(2020, 6, 1));
+  const factor = 1 - (36 * 5 / 9 + 20 * 5 / 12) / 100;
+  assert.ok(Math.abs(payments(actions)[0].amount - 3000 * factor) < 1e-9);
+});

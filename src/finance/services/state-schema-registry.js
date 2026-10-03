@@ -648,6 +648,9 @@ export class StateSchemaRegistry {
 
     // Plan-level scalars.
     this.registerPattern('people.*.lifeExpectancy',     ParameterValueType.integer());
+    // Design 118: Social Security claim age (null = FRA) and the stamped claim month.
+    this.registerPattern('people.*.ssClaimAge',         ParameterValueType.integer());
+    this.registerPattern('people.*.ssEntitledMs',       ParameterValueType.date());
     this.register('deficitMonths',                      ParameterValueType.integer());
     this.register('discretionarySharePct',              ParameterValueType.percentage());
     this.register('drawdownRebalanceWeight',            ParameterValueType.decimal(2));

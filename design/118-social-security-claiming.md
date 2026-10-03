@@ -1,7 +1,7 @@
 # 118 — Social Security claiming: claim age, spousal and survivor benefits
 
 **Status:** ACCEPTED, 2 Oct 2026. D1–D3 in §3 were taken with the author; D4–D11 are
-proposals. **Phase 1 BUILT** 2 Oct 2026 (§12); phases 2–5 not started. Resolves issue #292 (`MonthlySocialSecurityHandler` is FRA-only), and
+proposals. **Phases 1–2 BUILT** 2 Oct 2026 (§12–§13); phases 3–5 not started. Resolves issue #292 (`MonthlySocialSecurityHandler` is FRA-only), and
 takes over design 116's D6, Social Security decoupled from work (§5.1, D4).
 Every rule below is cited to a source saved in `docs/us-social-security/` (§4).
 
@@ -308,4 +308,72 @@ not change.)
   1958 birth, 67 in 2026, working to 2028, asserted zero benefit); it now asserts three
   months of benefit in Q1 2026, through the full toolset.
 - **Help.** No topic tied the benefit to `retirementDate`, so no prose changed.
+
+## 13. As built — phase 2 (2 Oct 2026)
+
+**Rules.** `src/finance/account-rules/us/us-social-security-rules.js`: the three tables
+(404.409(a), 404.409(b), 404.313(b)(2)) as data, `attainDate` / `attainMonth` (404.102),
+`fullRetirementAge`, `entitlementMonth`, `earlyReduction`, `ownFactor`,
+`normalizeClaimAge`. `tests/unit/us-social-security-rules.test.mjs` parses each table out
+of the saved CFR text and compares it to the module, so the transcription is checked
+against the authority, not retyped. It also reproduces the 404.410(a) and 404.313(b)
+worked examples. Two more sources were fetched for this phase: 20 CFR 404.102 (age is
+attained the day before the birthday) and 404.310/.311 (when entitlement begins).
+
+**Two rules the design did not spell out, both now modelled:**
+
+- **Entitlement before FRA starts in the first month the person is that age throughout**
+  (404.311(a)(2)). That is the month after the attain month, unless the age is attained
+  on the 1st (a birthday on the 2nd). From FRA on it is the attain month (404.311(a)(1)).
+- **Credits earned in the year of filing are added the following January**, unless the
+  filing is at 70 (404.313(c)(2)–(3)). `ownFactor(birth, entitledMonth, asOfMonth)`
+  therefore steps up once, the January after a late claim.
+
+**Departures from §5.**
+
+- **No `AccountRulesEngine` indirection (§5.2).** `getSsEligibilityRules()` returned one
+  constant, and only the US toolset passed the engine to the handler; the AU toolset
+  never did and always fell back to 67. The handler now imports the pure module, and the
+  method is removed from `BaseAccountModule` and `UsAccountModule2026`.
+- **Harvest of an unset enum (§5.3).** A blank claim age means FRA, which is not one of
+  the nine options. `sweepUnset` documented itself as never for "null means the
+  default", but without it a plan with blank claim ages has no lever. The template row
+  sets `sweepUnset`, its doc now carves out an Enum whose options are every alternative
+  to the blank default, and `harvestSweepVariables` accepts an unset `enum` (its row is
+  the option list) and a numeric enum value.
+- **`primarySsClaimAge`** stays in `INTL_RETIREMENT_DEFAULTS` as `null`, the primary's
+  person record reads it, and the alias maps it to `person.primary.ssClaimAge`. That is
+  the `primaryMonthlyWage` pattern.
+
+**Wiring.** `Person.ssClaimAge` (normalized in the constructor, so a bad save fails at
+load), `PersonBuilder.ssClaimAge`, `projectPerson` (`ssClaimAge` normalized, and
+`ssEntitledMs: null`), the serializer both ways, the state schema
+(`people.*.ssClaimAge` integer, `people.*.ssEntitledMs` date), the person form (a select
+whose blank option names this birth date's FRA), and the people controller.
+`SsEntitlementApplyReducer` writes the stamp and never overwrites one.
+`SS_ENTITLEMENT_APPLY` is declared identically in both retirement toolsets, and the
+reducer is registered beside the handler under the same guards.
+
+**Goldens: 15 regolded.** Each was checked mechanically against the pre-phase fixture
+with `ssClaimAge` and `ssEntitledMs` stripped. Fourteen are byte-identical. In
+`us-single-homeowner` the numbers move: the primary, born 1 Jul 1981, attains 67 on
+30 Jun 2048 and is entitled from June (404.102, 404.409(a)). The old whole-years
+birthday test paid from July. Counting `SS_INCOME_APPLY` entries in both runs gives 211
+against 210, first month 2048-06 against 2048-07, and nothing else. §7's prediction of
+no number moving missed this born-on-the-1st case.
+
+**Liveness.** `tests/unit/ss-claim-age-liveness.test.mjs` loads the reference plan:
+- the Opt harvest offers `person.primary.ssClaimAge` and `person.spouse.ssClaimAge` as
+  nine-value ENUM rows;
+- optimizer rollouts at 62, 67 and 70 differ;
+- `primarySsClaimAge` matches the generated key and moves the run;
+- a claim at 62 stamps May 2040 and pays 70.4% of the PIA;
+- the serializer round-trips the field.
+
+Against a handler that ignores the claim age, the 62/67/70 test and the May 2040 test
+fail.
+
+**Help.** `help/nodes/person.md` documents the PIA meaning and the claim-once rule, and
+says what is not modelled yet. The field itself is described only by its template
+(tier 1). `help/concepts/us-tax.md` drops the retired param and points at the person.
 

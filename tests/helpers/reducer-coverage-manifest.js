@@ -114,6 +114,7 @@ export const COVERED = [
   'ChangeResidencyApplyReducer', 'ChangeStateResidencyApplyReducer', 'IntlTransferApplyReducer',
   'IntlTransferRecordReducer',
   'AccountRetitleApplyReducer', 'PersonDiedApplyReducer', 'SocialSecuritySurvivorApplyReducer',
+  'SsEntitlementApplyReducer',
   'StockDividendCashApplyReducer', 'UsSavingsInterestCreditReducer', 'ScenarioCompleteReducer',
   // design/68 Gap 4 — YOD-6 in mortality-year-of-death-tax.test.mjs
   'SuperDeathBenefitApplyReducer',

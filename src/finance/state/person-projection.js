@@ -9,6 +9,7 @@
  */
 
 import { PAYROLL_ELECTION_FIELDS } from '../person.js';
+import { normalizeClaimAge } from '../account-rules/us/us-social-security-rules.js';
 
 /**
  * person-projection.js — the ONE projection of a `Person` record into `state.people`.
@@ -81,6 +82,11 @@ export function projectPerson(person, {
     workCountry:           person.workCountry           ?? null,
     retirementDate:        person.retirementDate        ?? null,
     socialSecurityMonthly: person.socialSecurityMonthly ?? 0,
+    // Design 118 D5/D7: the claim age (null = FRA) and the month the claim was made,
+    // stamped by SsEntitlementApplyReducer at the first payment. Both are read by
+    // MonthlySocialSecurityHandler from state.people, so both must be projected.
+    ssClaimAge:            normalizeClaimAge(person.ssClaimAge),
+    ssEntitledMs:          null,
     lifeExpectancy:        person.lifeExpectancy        ?? 90,
     citizen,
     residency:             residency ?? person.residency ?? citizen[0] ?? 'US',

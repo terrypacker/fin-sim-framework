@@ -329,7 +329,9 @@ export function sweepKindOf(entry, flag, center) {
 function _isScalarFor(kind, v) {
   switch (kind) {
     case 'year': case 'rate': case 'amount': return typeof v === 'number' && Number.isFinite(v);
-    case 'enum': return typeof v === 'string' || typeof v === 'boolean';
+    // A numeric option (a claim age) is an enum value too.
+    case 'enum': return typeof v === 'string' || typeof v === 'boolean'
+      || (typeof v === 'number' && Number.isFinite(v));
     case 'date': return v instanceof Date ? !Number.isNaN(v.getTime())
       : typeof v === 'string' && !Number.isNaN(Date.parse(v));
     default:     return false;
@@ -387,7 +389,8 @@ export function harvestSweepVariables(entries, schema, baseParams, { flag, alias
     const unset  = center === null && s.sweepUnset === true;
     if (center == null && !unset) continue;
     const kind = sweepKindOf(s, flag, center);
-    if (unset ? (kind !== 'year' && kind !== 'date') : (!kind || !_isScalarFor(kind, center))) continue;
+    // An unset ENUM (design 118 `ssClaimAge`) sweeps its option list, which needs no center.
+    if (unset ? (kind !== 'year' && kind !== 'date' && kind !== 'enum') : (!kind || !_isScalarFor(kind, center))) continue;
     const sweep = rowFor(kind, unset ? null : center, s);
     if (!sweep) continue;
     covered.add(s.key);

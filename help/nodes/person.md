@@ -9,7 +9,7 @@ stamps:
   panel:config-list: 786f94
   panel:config-graph: bbebb1
   panel:paycheque: f8d503
-  node:person: 7194f3
+  node:person: 357ff1
 ---
 
 A member of the household: who they are, what they earn, when they stop, and what
@@ -25,9 +25,12 @@ lives, because an election is gated on the currency the wage is paid in rather t
 on residency, and a cross-border household needs both editable in one place.
 
 **Blank is not zero in the elections.** An empty box inherits the household default,
-shown greyed behind it; a typed 0 elects nothing. That distinction is the difference
-between "use the plan's rate" and "this person contributes nothing", and the two
-produce very different runs.
+shown greyed behind it; a typed 0 elects nothing, and the two produce very different
+runs.
+
+**A Social Security claim is made once.** A run records the month of the first payment
+and keeps that factor for life. Not yet modelled: the earnings test on an early claim
+while working, which it overstates, and spousal and survivor benefits.
 
 Several fields here are also scenario parameters — they carry a link badge, edits
 write the parameter rather than the record, and their full description lives with the
@@ -41,7 +44,7 @@ and the record would otherwise be overwritten by the cascade on the next rebuild
 - `citizen` — Citizenship, and more than one may be selected. It is not residency: a US citizen is taxed by the US on worldwide income wherever they live, which is the whole reason a cross-border plan is hard. Residency is a scenario parameter that changes over the run; this does not.
 - `residencyState` — US state of residency, for state income tax. Blank means no state of residency — a military base, or a person living outside the US — and so no state tax. The household's active state is the primary person's.
 - `lifeExpectancy` — The age this person is assumed to die at, in the deterministic run. Under stochastic mortality it is the anchor a draw is taken around rather than a fixed date. It ends wages and Social Security, triggers any bequest, and sets the horizon the plan is judged over.
-- `socialSecurityMonthly` — The monthly benefit this person receives once claiming begins, in today's money. Modelled as an authored amount rather than derived from an earnings record, so it is an input to check rather than an output to trust; claiming age and the spousal rules live in the scenario parameters.
+- `socialSecurityMonthly` — The primary insurance amount: the monthly benefit at full retirement age, in today's money, as an SSA statement quotes it. What is actually paid is scaled from it by the claim age below. Authored rather than derived from an earnings record, so it is an input to check rather than an output to trust.
 - `ssCurrency` — The currency the Social Security benefit is paid in. It follows the paying country, not where the person lives, so an AU-resident US retiree collects USD and takes the exchange-rate risk that comes with it.
 - `selfEmployed` — Treat this person's wage as self-employment income — a sole trader, or 1099 work. It incurs US self-employment tax, which is both halves of FICA rather than the employee half, and that is a materially different number from the same wage as an employee.
 - `wageCurrency` — The currency this person is paid in. It gates the payroll elections: a 401(k) deferral out of an AUD wage would debit dollars this person was never paid, so the elections that apply are chosen by this field rather than by residency.

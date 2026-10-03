@@ -10,6 +10,7 @@
 
 import {SimGraphNode} from "../graph/sim-graph-node.js";
 import {defaultCurrencyForCountry} from "./country-codes.js";
+import {normalizeClaimAge} from "./account-rules/us/us-social-security-rules.js";
 
 /**
  * Person — plain data class representing a simulation participant.
@@ -28,7 +29,9 @@ export class Person extends SimGraphNode {
    *                                                   e.g. 'NE'|'HI'|'SD'. null = no US state configured.
    *                                                   Household active state is derived from the primary (design 34).
    * @param {number}      [opts.lifeExpectancy=90]         - Expected years to live
-   * @param {number}      [opts.socialSecurityMonthly=2800] - USD/month of SS at full retirement age
+   * @param {number}      [opts.socialSecurityMonthly=2800] - USD/month of SS at full retirement age (the PIA)
+   * @param {number|null} [opts.ssClaimAge=null]          - Whole years 62–70 at which this person claims SS;
+   *                                                         null = at full retirement age (design 118 D5)
    * @param {number}      [opts.monthlyWage=0]             - gross wages/month in wageCurrency (0 = not employed)
    * @param {boolean}     [opts.selfEmployed=false]        - When true, monthlyWage is self-employment income
    *                                                         (sole trader / 1099) routed through the SE path
@@ -55,6 +58,8 @@ export class Person extends SimGraphNode {
     this.residencyState        = opts.residencyState        ?? null;
     this.lifeExpectancy        = opts.lifeExpectancy        ?? 90;
     this.socialSecurityMonthly = opts.socialSecurityMonthly ?? 2800;
+    // Design 118: the claim age. Validated here so a bad save fails at load, not mid-run.
+    this.ssClaimAge            = normalizeClaimAge(opts.ssClaimAge);
     this.monthlyWage           = opts.monthlyWage           ?? 0;
     // Self-employment flag (design 69): when true, monthlyWage is treated as
     // self-employment income (sole trader / 1099) — routed through the SE path

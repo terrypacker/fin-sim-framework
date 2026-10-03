@@ -56,6 +56,7 @@ export class PeopleController {
       residencyState:        data.residencyState ?? null,   // US state of residency (design 34); null = none
       lifeExpectancy:        Number(data.lifeExpectancy),
       socialSecurityMonthly: Number(data.socialSecurityMonthly),
+      ssClaimAge:            data.ssClaimAge ?? null,   // design 118; null = at FRA
       monthlyWage:           Number(data.monthlyWage ?? 0),
       selfEmployed:          Boolean(data.selfEmployed),
       retirementDate:        data.retirementDate ? new Date(data.retirementDate) : new Date(Date.UTC(2040, 0, 1)),
