@@ -9,8 +9,8 @@ stamps:
   param:paycheckEnabled: e5c315
   param:paycheckCadence: b40249
   param:taxInstalmentsEnabled: 28dcb9
-  panel:paycheque: f8d503
-  panel:pools: b2d1aa
+  panel:paycheque: d4e25c
+  panel:pools: 78458e
 ---
 
 *When* money is raised, as opposed to where it is raised from. Two switches, both off

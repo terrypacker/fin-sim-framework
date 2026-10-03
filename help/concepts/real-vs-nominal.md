@@ -9,18 +9,18 @@ tools: []
 design: [79-real-vs-nominal-display.md, 89-spending-over-time-reporting.md]
 sources: [src/visualization/app-display-settings.js, src/finance/services/state-schema-registry.js]
 stamps:
-  panel:state-panel: 6b89e2
-  panel:holdings: 359688
-  panel:securities: 80facb
-  panel:watchlist: 8af97c
-  panel:chart: c05af4
-  panel:journal-report: e88448
-  panel:allocation: fc1993
-  panel:pools: b2d1aa
-  panel:paycheque: f8d503
-  panel:spending: f9f5c7
-  panel:mc-results: 315796
-  panel:opt-results: 36a150
+  panel:state-panel: f560a0
+  panel:holdings: 962055
+  panel:securities: b9f2ef
+  panel:watchlist: fb2d25
+  panel:chart: db45f8
+  panel:journal-report: b2eedb
+  panel:allocation: 762dd9
+  panel:pools: 78458e
+  panel:paycheque: d4e25c
+  panel:spending: 157a8d
+  panel:mc-results: cc2f55
+  panel:opt-results: 154951
   src/visualization/app-display-settings.js: ec6c02
   src/finance/services/state-schema-registry.js: 8020a5
 ---

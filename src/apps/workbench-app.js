@@ -18,6 +18,7 @@
  */
 
 import { WorkbenchShell }              from '../visualization/workbench/workbench-shell.js';
+import { PanelMenu }                   from '../visualization/workbench/panel-menu.js';
 import { BaseComponent }               from '../visualization/components/base-component.js';
 import { $, fmtUTC }                   from '../visualization/ui-utils.js';
 import { AppDisplaySettings, APP_EVENTS } from '../visualization/app-display-settings.js';
@@ -81,6 +82,8 @@ import { GraphNodeLineage }           from '../visualization/graph-builder/graph
 import {
   FINANCE_PLUGINS,
   FINANCE_DEFAULT_LAYOUT,
+  FINANCE_VIEW_TEMPLATES,
+  FINANCE_INITIAL_VIEW,
 } from '../visualization/workbench/plugins/finance/finance-plugin-package.js';
 import { WB_EVENTS } from '../visualization/workbench/workbench-runtime.js';
 import { createAllocationSampler }   from '../finance/allocation-reporting/allocation-sampler.js';
@@ -108,47 +111,6 @@ function _assetCurrency(code) {
 function _primeRates(registry) {
   return primeRatesOf(registry?.scenarioService?.getActive?.());
 }
-
-// ── Built-in workspace templates ────────────────────────────────────────────
-
-const CENTER_SPLIT_DEFAULTS = {
-  centerSplit: false, centerSplitDir: 'h', centerInnerSizes: [1, 1],
-  'center-a': { tabs: [], active: null }, 'center-b': { tabs: [], active: null },
-};
-
-const ANALYSIS_LAYOUT = {
-  sizes: [1, 2, 1],
-  left:   { tabs: ['scenario', 'mc-config', 'opt-config'],                    active: 'mc-config'     },
-  center: { tabs: ['chart', 'mc-results', 'opt-results', 'timeline'],         active: 'chart'         },
-  right:  { tabs: ['mc-runs', 'opt-runs', 'state-panel', 'watchlist', 'action-detail'], active: 'mc-runs' },
-  bottom: { tabs: ['journal-report', 'dashboard', 'perf'],                    active: 'dashboard'     },
-  bottomSize: 110, bottomCollapsed: false, ...CENTER_SPLIT_DEFAULTS,
-};
-
-const DEBUGGING_LAYOUT = {
-  sizes: [1, 3, 1],
-  left:   { tabs: ['config-list', 'scenario'],                                        active: 'config-list'  },
-  center: { tabs: ['config-graph', 'timeline'],                                       active: 'config-graph' },
-  right:  { tabs: ['inspector', 'exec-history', 'lineage', 'state-panel', 'action-detail'], active: 'exec-history' },
-  bottom: { tabs: ['perf', 'dashboard'],                                              active: 'perf'         },
-  bottomSize: 110, bottomCollapsed: false, ...CENTER_SPLIT_DEFAULTS,
-};
-
-const REVIEW_LAYOUT = {
-  sizes: [1, 3, 1],
-  left:   { tabs: ['scenario', 'config-list'],                                        active: 'scenario'     },
-  center: { tabs: ['timeline', 'chart'],                                              active: 'timeline'     },
-  right:  { tabs: ['state-panel', 'watchlist', 'action-detail', 'inspector', 'exec-history', 'lineage'], active: 'state-panel' },
-  bottom: { tabs: ['journal-report', 'dashboard'],                                    active: 'journal-report' },
-  bottomSize: 110, bottomCollapsed: false, ...CENTER_SPLIT_DEFAULTS,
-};
-
-const BUILTIN_TEMPLATES = {
-  Default:   FINANCE_DEFAULT_LAYOUT,
-  Analysis:  ANALYSIS_LAYOUT,
-  Debugging: DEBUGGING_LAYOUT,
-  Review:    REVIEW_LAYOUT,
-};
 
 /**
  * WorkbenchApp — composition root for the workbench UI.
@@ -236,12 +198,18 @@ export class WorkbenchApp extends BaseComponent {
       return;
     }
 
+    let firstVisit = false;
+    try { firstVisit = localStorage.getItem(STORAGE_KEY) == null; } catch { /* private mode */ }
+
     this._wbShell = new WorkbenchShell({
       defaultLayout: FINANCE_DEFAULT_LAYOUT,
       plugins:       FINANCE_PLUGINS,
       storageKey:    STORAGE_KEY,
     });
     this._wbShell.init(container);
+    // The default layout is EVERY panel — the universe the views close panels out of, not
+    // somewhere to start. A first visit opens in a task view instead.
+    if (firstVisit) this._applyTemplateKey(`builtin:${FINANCE_INITIAL_VIEW}`);
 
     // Give the tax modal access to the workbench runtime so drill-down buttons work.
     this._taxDocModal.runtime = this._wbShell.runtime;
@@ -290,13 +258,22 @@ export class WorkbenchApp extends BaseComponent {
     // SERVICE bus, and this is a workbench-UI event; the view stays ignorant of both.
     this._scenarioTabView.onOpenHelp = (ref) => this._openHelp(ref);
 
-    // The toolbar's `? HELP` button, which until now was wired to nothing at all — it
+    // The toolbar's `?` help button, which until now was wired to nothing at all — it
     // has sat in the markup since before the workbench, pointing at the five-line
     // `public/help/main.htm` that nothing ever referenced (design 108 §2). It opens the
     // Help panel on the active tab.
     document.getElementById('btnHelp')?.addEventListener('click', () => {
       this._wbShell.activatePlugin('help');
     });
+
+    // The header's Panels menu — the way back to a closed tab short of resetting the
+    // whole layout.
+    const panelsBtn = document.getElementById('btnPanels');
+    if (panelsBtn) {
+      this._panelMenu = new PanelMenu({
+        shell: this._wbShell, button: panelsBtn, footerActions: () => this._templateMenuActions(),
+      });
+    }
 
     // Bind scenario tab view now that ScenarioPlugin DOM exists
     this._scenarioTabView.bind();
@@ -1296,22 +1273,35 @@ export class WorkbenchApp extends BaseComponent {
     window.addEventListener('resize', () => this.resizeCanvases());
   }
 
+  /**
+   * The header's template picker. It shows the template the layout CAME from — read back
+   * from the layout, so it survives a reload instead of falling back to the first option
+   * — and marks it "(modified)" once panels are opened, closed or moved (the shell's
+   * LAYOUT_CHANGED). Picking the same template again cannot fire `change`, so reverting a
+   * modified one lives in the Panels menu (`_templateMenuActions`).
+   */
   _wireTemplates() {
     const select  = document.getElementById('workbenchTemplate');
     const saveBtn = document.getElementById('btnSaveTemplate');
     const delBtn  = document.getElementById('btnDeleteTemplate');
     if (!select) return;
 
+    const option = (value, name, current, modified) => {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = value === current && modified ? `${name} (modified)` : name;
+      return opt;
+    };
+
     const refresh = () => {
+      const current  = this._currentTemplateKey();
+      const modified = this._wbShell.layout.getTemplateState().modified;
       select.innerHTML = '';
 
       const builtinGroup = document.createElement('optgroup');
       builtinGroup.label = 'Built-in';
-      for (const name of Object.keys(BUILTIN_TEMPLATES)) {
-        const opt = document.createElement('option');
-        opt.value = `builtin:${name}`;
-        opt.textContent = name;
-        builtinGroup.appendChild(opt);
+      for (const name of Object.keys(FINANCE_VIEW_TEMPLATES)) {
+        builtinGroup.appendChild(option(`builtin:${name}`, name, current, modified));
       }
       select.appendChild(builtinGroup);
 
@@ -1320,38 +1310,37 @@ export class WorkbenchApp extends BaseComponent {
         const savedGroup = document.createElement('optgroup');
         savedGroup.label = 'Saved';
         for (const name of saved) {
-          const opt = document.createElement('option');
-          opt.value = `saved:${name}`;
-          opt.textContent = name;
-          savedGroup.appendChild(opt);
+          savedGroup.appendChild(option(`saved:${name}`, name, current, modified));
         }
         select.appendChild(savedGroup);
       }
 
+      // A view that no longer exists — a retired built-in, a deleted saved one — leaves the
+      // layout as it was; say so rather than claim a view it is not.
+      if (![...select.options].some(o => o.value === current)) {
+        const custom = document.createElement('option');
+        custom.value = current;
+        custom.textContent = 'Custom layout';
+        custom.disabled = true;
+        select.prepend(custom);
+      }
+      select.value = current;
+      select.title = modified
+        ? 'Workspace layout — panels changed since this template was applied (Panels ▾ to revert)'
+        : 'Workspace layout template';
       delBtn.disabled = !select.value.startsWith('saved:');
     };
 
     refresh();
+    this._wbShell.runtime.bus.subscribe(WB_EVENTS.LAYOUT_CHANGED, refresh);
 
-    select.addEventListener('change', () => {
-      const val = select.value;
-      let layoutObj;
-      if (val.startsWith('builtin:')) {
-        layoutObj = BUILTIN_TEMPLATES[val.slice(8)];
-      } else if (val.startsWith('saved:')) {
-        layoutObj = this._wbShell.layout.loadTemplate(val.slice(6));
-      }
-      if (layoutObj) this._wbShell.applyLayout(layoutObj);
-      delBtn.disabled = !val.startsWith('saved:');
-    });
+    select.addEventListener('change', () => this._applyTemplateKey(select.value));
 
     saveBtn?.addEventListener('click', () => {
       const name = prompt('Template name:');
       if (!name?.trim()) return;
       this._wbShell.layout.saveTemplate(name.trim());
       refresh();
-      const opt = [...select.options].find(o => o.value === `saved:${name.trim()}`);
-      if (opt) { select.value = opt.value; delBtn.disabled = false; }
     });
 
     delBtn?.addEventListener('click', () => {
@@ -1363,6 +1352,40 @@ export class WorkbenchApp extends BaseComponent {
         refresh();
       }
     });
+  }
+
+  /** The template the current layout came from; a layout predating the record is Everything's. */
+  _currentTemplateKey() {
+    return this._wbShell.layout.getTemplateState().template ?? 'builtin:Everything';
+  }
+
+  /**
+   * Apply a template by its picker key. A built-in is EXHAUSTIVE — the panels it lists are
+   * the only ones open (see `WorkbenchLayoutModel.applyTemplate`); a saved one restores its
+   * own closed set.
+   */
+  _applyTemplateKey(key) {
+    if (key.startsWith('builtin:')) {
+      const layoutObj = FINANCE_VIEW_TEMPLATES[key.slice(8)];
+      if (layoutObj) this._wbShell.applyLayout(layoutObj, { exhaustive: true, template: key });
+    } else if (key.startsWith('saved:')) {
+      const layoutObj = this._wbShell.layout.loadTemplate(key.slice(6));
+      if (layoutObj) this._wbShell.applyLayout(layoutObj, { template: key });
+    }
+  }
+
+  /** The Panels menu's footer: revert a modified view, and show all panels. */
+  _templateMenuActions() {
+    const key = this._currentTemplateKey();
+    const { modified } = this._wbShell.layout.getTemplateState();
+    const actions = [];
+    if (modified) {
+      actions.push({ label: `Revert to “${key.replace(/^\w+:/, '')}”`, run: () => this._applyTemplateKey(key) });
+    }
+    if (key !== 'builtin:Everything' || modified) {
+      actions.push({ label: 'Show all panels (Everything)', run: () => this._applyTemplateKey('builtin:Everything') });
+    }
+    return actions;
   }
 
   // ── MC / Opt replay ───────────────────────────────────────────────────────

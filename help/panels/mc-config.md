@@ -5,7 +5,7 @@ title: Monte Carlo
 panels: [mc-config]
 design: [100-mc-analysis-surface.md]
 stamps:
-  panel:mc-config: 2c8dce
+  panel:mc-config: ad4956
 ---
 
 The Monte Carlo run controls: how many iterations, which variables are random, and

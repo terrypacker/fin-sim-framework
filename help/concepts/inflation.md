@@ -24,8 +24,8 @@ stamps:
   param:inflationGlobalShareJoint: 8ac4a0
   param:mcInflationPath: d1d79d
   param:mcInflationModel: b804e9
-  panel:chart: c05af4
-  panel:mc-config: 2c8dce
+  panel:chart: db45f8
+  panel:mc-config: ad4956
 ---
 
 Two anchors — one per country — and, optionally, a path that wanders around them.

@@ -21,8 +21,8 @@ stamps:
   param:propertyReturnIdioScale: 9b7140
   param:mcSequenceRisk: b1d187
   param:mcEquityReturnModel: 012b08
-  panel:mc-config: 2c8dce
-  panel:mc-results: 315796
+  panel:mc-config: ad4956
+  panel:mc-results: cc2f55
 ---
 
 A plan that earns exactly 7% every year for forty years is not a plan anyone lives

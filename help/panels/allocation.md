@@ -5,7 +5,7 @@ title: Allocation
 panels: [allocation]
 design: [82-allocation-over-time-reporting.md]
 stamps:
-  panel:allocation: fc1993
+  panel:allocation: 762dd9
 ---
 
 The realised asset mix across the whole plan, over time.

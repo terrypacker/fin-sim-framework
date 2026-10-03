@@ -11,8 +11,8 @@ stamps:
   param:contributionSuspensionMinSeverity: ca955b
   param:downturnConversionAmount: 592c49
   param:cashBucketDrawdownMinSeverity: b361c8
-  panel:chart: c05af4
-  panel:journal-report: e88448
+  panel:chart: db45f8
+  panel:journal-report: b2eedb
 ---
 
 What the household *does* when conditions change — as opposed to what the plan says

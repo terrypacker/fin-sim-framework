@@ -4,7 +4,7 @@ kind: panel
 title: Timeline
 panels: [timeline]
 stamps:
-  panel:timeline: a6af45
+  panel:timeline: 6001ee
 ---
 
 The run as a scrollable calendar: every date something happened, the events that

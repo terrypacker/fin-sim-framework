@@ -19,7 +19,7 @@ stamps:
   param:superPersonalDeductibleContribution: d0d910
   param:superNonConcessionalContribution: 7ef963
   param:withholdingMethod: ab93c2
-  panel:paycheque: f8d503
+  panel:paycheque: d4e25c
 ---
 
 Money going *into* retirement wrappers while someone is still earning, on both sides

@@ -4,7 +4,7 @@ kind: panel
 title: OPT Runs
 panels: [opt-runs]
 stamps:
-  panel:opt-runs: 5eb969
+  panel:opt-runs: 1a9356
 ---
 
 The top candidates from a search, each with an Apply button that replays the scenario

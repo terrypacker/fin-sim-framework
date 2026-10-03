@@ -14,7 +14,7 @@ stamps:
   param:usFeieCapIndexSpread: 277ceb
   param:stateMoveDate: ef6579
   param:stateMoveDestination: 2f214c
-  panel:journal-report: e88448
+  panel:journal-report: b2eedb
 ---
 
 Filing status, state residency, and how the federal thresholds are projected forward.

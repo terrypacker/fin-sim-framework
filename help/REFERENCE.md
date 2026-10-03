@@ -536,46 +536,45 @@ scenario's own schema), which is where to go to change it.
 
 ## Workbench panels (33)
 
-From `FINANCE_PLUGINS`. **Pane** is where the default layout opens the tab.
-Every `category` is empty because these descriptors are plain object literals that
-never pass through `definePlugin()`, so the SDK defaults are never applied — that is a
-true statement about the registry, not a gap in this file.
+From `FINANCE_PLUGINS`. **Pane** is where the default layout opens the tab, and where
+the header's Panels menu re-opens it after a close. **Category** is the heading that
+menu files it under.
 
-| id | title | pane | source |
-|---|---|---|---|
-| `scenario` | Scenario | left | `src/visualization/workbench/plugins/finance/scenario-plugin.js` |
-| `parameters` | Parameters | center | `src/visualization/workbench/plugins/finance/parameters-plugin.js` |
-| `mc-config` | Monte Carlo | left | `src/visualization/workbench/plugins/finance/mc-config-plugin.js` |
-| `opt-config` | Optimize | left | `src/visualization/workbench/plugins/finance/opt-config-plugin.js` |
-| `config-list` | Nodes | left | `src/visualization/workbench/plugins/finance/config-list-plugin.js` |
-| `inspector` | Edit | left | `src/visualization/workbench/plugins/finance/inspector-plugin.js` |
-| `config-graph` | Graph | center | `src/visualization/workbench/plugins/finance/config-graph-plugin.js` |
-| `timeline` | Timeline | center | `src/visualization/workbench/plugins/finance/timeline-plugin.js` |
-| `chart` | Chart | center | `src/visualization/workbench/plugins/finance/chart-plugin.js` |
-| `mc-results` | MC Results | center | `src/visualization/workbench/plugins/finance/mc-results-plugin.js` |
-| `opt-results` | OPT Results | center | `src/visualization/workbench/plugins/finance/opt-results-plugin.js` |
-| `state-panel` | State | right | `src/visualization/workbench/plugins/finance/state-panel-plugin.js` |
-| `watchlist` | Watchlist | right | `src/visualization/workbench/plugins/finance/watchlist-plugin.js` |
-| `holdings` | Holdings | center | `src/visualization/workbench/plugins/finance/holdings-plugin.js` |
-| `allocation` | Allocation | center | `src/visualization/workbench/plugins/finance/allocation-plugin.js` |
-| `securities` | Securities | center | `src/visualization/workbench/plugins/finance/securities-plugin.js` |
-| `spending` | Spending | center | `src/visualization/workbench/plugins/finance/spending-plugin.js` |
-| `pools` | Liquidity Pools | center | `src/visualization/workbench/plugins/finance/liquidity-pools-plugin.js` |
-| `paycheque` | Paycheque | center | `src/visualization/workbench/plugins/finance/paycheque-plugin.js` |
-| `mc-runs` | MC Runs | right | `src/visualization/workbench/plugins/finance/mc-runs-plugin.js` |
-| `opt-runs` | OPT Runs | right | `src/visualization/workbench/plugins/finance/opt-runs-plugin.js` |
-| `exec-history` | Node History | right | `src/visualization/workbench/plugins/finance/exec-history-plugin.js` |
-| `lineage` | Lineage | right | `src/visualization/workbench/plugins/finance/lineage-plugin.js` |
-| `action-detail` | Action Detail | right | `src/visualization/workbench/plugins/finance/action-detail-plugin.js` |
-| `journal-report` | Journal Report | bottom | `src/visualization/workbench/plugins/finance/journal-report-plugin.js` |
-| `cross-action-query` | Field × Action | bottom | `src/visualization/workbench/plugins/finance/cross-action-query-plugin.js` |
-| `scenario-compare` | Scenario Compare | bottom | `src/visualization/workbench/plugins/finance/scenario-compare-plugin.js` |
-| `dg-config` | Decision Graph | left | `src/visualization/workbench/plugins/finance/dg-config-plugin.js` |
-| `dg-results` | DG Results | center | `src/visualization/workbench/plugins/finance/dg-results-plugin.js` |
-| `mpc-cockpit` | MPC Cockpit | center | `src/visualization/workbench/plugins/finance/mpc-cockpit-plugin.js` |
-| `dashboard` | Dashboard | bottom | `src/visualization/workbench/plugins/finance/dashboard-plugin.js` |
-| `perf` | Performance | bottom | `src/visualization/workbench/plugins/finance/perf-plugin.js` |
-| `help` | Help | right | `src/visualization/workbench/plugins/finance/help-plugin.js` |
+| id | title | category | pane | source |
+|---|---|---|---|---|
+| `scenario` | Scenario | configuration | left | `src/visualization/workbench/plugins/finance/scenario-plugin.js` |
+| `parameters` | Parameters | configuration | center | `src/visualization/workbench/plugins/finance/parameters-plugin.js` |
+| `mc-config` | Monte Carlo | studies | left | `src/visualization/workbench/plugins/finance/mc-config-plugin.js` |
+| `opt-config` | Optimize | studies | left | `src/visualization/workbench/plugins/finance/opt-config-plugin.js` |
+| `config-list` | Nodes | configuration | left | `src/visualization/workbench/plugins/finance/config-list-plugin.js` |
+| `inspector` | Edit | configuration | left | `src/visualization/workbench/plugins/finance/inspector-plugin.js` |
+| `config-graph` | Graph | configuration | center | `src/visualization/workbench/plugins/finance/config-graph-plugin.js` |
+| `timeline` | Timeline | simulation | center | `src/visualization/workbench/plugins/finance/timeline-plugin.js` |
+| `chart` | Chart | simulation | center | `src/visualization/workbench/plugins/finance/chart-plugin.js` |
+| `mc-results` | MC Results | studies | center | `src/visualization/workbench/plugins/finance/mc-results-plugin.js` |
+| `opt-results` | OPT Results | studies | center | `src/visualization/workbench/plugins/finance/opt-results-plugin.js` |
+| `state-panel` | State | simulation | right | `src/visualization/workbench/plugins/finance/state-panel-plugin.js` |
+| `watchlist` | Watchlist | simulation | right | `src/visualization/workbench/plugins/finance/watchlist-plugin.js` |
+| `holdings` | Holdings | portfolio | center | `src/visualization/workbench/plugins/finance/holdings-plugin.js` |
+| `allocation` | Allocation | portfolio | center | `src/visualization/workbench/plugins/finance/allocation-plugin.js` |
+| `securities` | Securities | portfolio | center | `src/visualization/workbench/plugins/finance/securities-plugin.js` |
+| `spending` | Spending | portfolio | center | `src/visualization/workbench/plugins/finance/spending-plugin.js` |
+| `pools` | Liquidity Pools | portfolio | center | `src/visualization/workbench/plugins/finance/liquidity-pools-plugin.js` |
+| `paycheque` | Paycheque | portfolio | center | `src/visualization/workbench/plugins/finance/paycheque-plugin.js` |
+| `mc-runs` | MC Runs | studies | right | `src/visualization/workbench/plugins/finance/mc-runs-plugin.js` |
+| `opt-runs` | OPT Runs | studies | right | `src/visualization/workbench/plugins/finance/opt-runs-plugin.js` |
+| `exec-history` | Node History | debug | right | `src/visualization/workbench/plugins/finance/exec-history-plugin.js` |
+| `lineage` | Lineage | debug | right | `src/visualization/workbench/plugins/finance/lineage-plugin.js` |
+| `action-detail` | Action Detail | debug | right | `src/visualization/workbench/plugins/finance/action-detail-plugin.js` |
+| `journal-report` | Journal Report | debug | bottom | `src/visualization/workbench/plugins/finance/journal-report-plugin.js` |
+| `cross-action-query` | Field × Action | debug | bottom | `src/visualization/workbench/plugins/finance/cross-action-query-plugin.js` |
+| `scenario-compare` | Scenario Compare | studies | bottom | `src/visualization/workbench/plugins/finance/scenario-compare-plugin.js` |
+| `dg-config` | Decision Graph | studies | left | `src/visualization/workbench/plugins/finance/dg-config-plugin.js` |
+| `dg-results` | DG Results | studies | center | `src/visualization/workbench/plugins/finance/dg-results-plugin.js` |
+| `mpc-cockpit` | MPC Cockpit | studies | center | `src/visualization/workbench/plugins/finance/mpc-cockpit-plugin.js` |
+| `dashboard` | Dashboard | simulation | bottom | `src/visualization/workbench/plugins/finance/dashboard-plugin.js` |
+| `perf` | Performance | debug | bottom | `src/visualization/workbench/plugins/finance/perf-plugin.js` |
+| `help` | Help | system | right | `src/visualization/workbench/plugins/finance/help-plugin.js` |
 
 ---
 

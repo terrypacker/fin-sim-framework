@@ -4,7 +4,7 @@ kind: panel
 title: Field × Action
 panels: [cross-action-query]
 stamps:
-  panel:cross-action-query: d845d4
+  panel:cross-action-query: 3fe89c
 ---
 
 One state field, every action type that has ever changed it, across the whole run.

@@ -5,7 +5,7 @@ title: MC Runs
 panels: [mc-runs]
 design: [100-mc-analysis-surface.md]
 stamps:
-  panel:mc-runs: aca7d2
+  panel:mc-runs: dc440d
 ---
 
 The individual iterations behind a batch, in two sections: a handful of

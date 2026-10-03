@@ -83,10 +83,10 @@ export async function collectParams() {
 /**
  * The workbench panels, from `FINANCE_PLUGINS` itself.
  *
- * `category` and `defaultPane` come back null for every entry today: the descriptors in
- * `finance-plugin-package.js` are plain `{id, title, component}` literals that never go
- * through `definePlugin()`, so the SDK's defaults are never applied. That is reported,
- * not papered over — an empty column here is a true statement about the registry.
+ * `category` is set on every entry (it groups the header's Panels menu). `defaultPane`
+ * comes back null: the descriptors in `finance-plugin-package.js` are plain literals that
+ * never go through `definePlugin()`, and the pane a panel re-opens in is read from
+ * `FINANCE_DEFAULT_LAYOUT` instead.
  *
  * The source file is recovered from the package's own import statements rather than
  * guessed from the class name, so a renamed file is followed automatically.

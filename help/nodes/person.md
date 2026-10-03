@@ -6,9 +6,9 @@ node: person
 panels: [config-list, config-graph, paycheque]
 design: [116-employment-spells.md, 34-us-state-income-tax.md, 95-wage-logic-and-payroll-contributions.md, 83-us-au-tax-treaty-intricacies.md]
 stamps:
-  panel:config-list: 786f94
-  panel:config-graph: bbebb1
-  panel:paycheque: f8d503
+  panel:config-list: c29391
+  panel:config-graph: 82a0c7
+  panel:paycheque: d4e25c
   node:person: 357ff1
 ---
 

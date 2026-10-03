@@ -5,7 +5,7 @@ title: Journal Report
 panels: [journal-report]
 design: [16-journal-reporting-plugin.md]
 stamps:
-  panel:journal-report: e88448
+  panel:journal-report: b2eedb
 ---
 
 Named aggregate reports built over the journal: pick a report, narrow it with the

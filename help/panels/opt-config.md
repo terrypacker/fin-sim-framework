@@ -4,7 +4,7 @@ kind: panel
 title: Optimize
 panels: [opt-config]
 stamps:
-  panel:opt-config: e04ce5
+  panel:opt-config: baaee0
 ---
 
 The optimizer's setup: what it is trying to maximise, which parameters it may move

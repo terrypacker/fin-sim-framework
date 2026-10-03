@@ -7,9 +7,9 @@ panels: [config-list, securities, holdings]
 design: [94-equity-as-security-positions.md, 66-bond-fidelity.md, 93-holding-units-substrate.md]
 sources: [src/visualization/assets/security-editor.js]
 stamps:
-  panel:config-list: 786f94
-  panel:securities: 80facb
-  panel:holdings: 359688
+  panel:config-list: c29391
+  panel:securities: b9f2ef
+  panel:holdings: 962055
   node:security: 644d74
   src/visualization/assets/security-editor.js: e79b48
 ---

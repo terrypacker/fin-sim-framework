@@ -4,7 +4,7 @@ kind: panel
 title: Scenario
 panels: [scenario]
 stamps:
-  panel:scenario: 38d131
+  panel:scenario: be9b99
 ---
 
 Which plan you are looking at, and the facts that are true of the whole run: its

@@ -72,13 +72,12 @@ function renderParams(params) {
 
 function renderPanels(panels) {
   const out = [`## Workbench panels (${panels.length})`, '',
-    'From `FINANCE_PLUGINS`. **Pane** is where the default layout opens the tab.',
-    'Every `category` is empty because these descriptors are plain object literals that',
-    'never pass through `definePlugin()`, so the SDK defaults are never applied — that is a',
-    'true statement about the registry, not a gap in this file.', '',
-    '| id | title | pane | source |', '|---|---|---|---|'];
+    'From `FINANCE_PLUGINS`. **Pane** is where the default layout opens the tab, and where',
+    'the header\'s Panels menu re-opens it after a close. **Category** is the heading that',
+    'menu files it under.', '',
+    '| id | title | category | pane | source |', '|---|---|---|---|---|'];
   for (const p of panels) {
-    out.push(`| \`${p.id}\` | ${cell(p.title)} | ${p.layoutPane ?? '—'} | ${p.source ? `\`${p.source}\`` : '—'} |`);
+    out.push(`| \`${p.id}\` | ${cell(p.title)} | ${p.category ?? '—'} | ${p.layoutPane ?? '—'} | ${p.source ? `\`${p.source}\`` : '—'} |`);
   }
   out.push('');
   return out;

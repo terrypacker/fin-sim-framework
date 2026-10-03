@@ -6,8 +6,8 @@ node: handler
 panels: [config-list, config-graph]
 design: [2-unified-event-schema.md]
 stamps:
-  panel:config-list: 786f94
-  panel:config-graph: bbebb1
+  panel:config-list: c29391
+  panel:config-graph: 82a0c7
   node:handler: 9709a1
 ---
 

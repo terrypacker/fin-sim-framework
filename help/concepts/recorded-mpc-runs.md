@@ -9,7 +9,7 @@ stamps:
   param:mpcRuns: ee13fc
   param:mpcActiveRun: 85cd45
   param:mpcRunEnabled: 25cbb4
-  panel:mpc-cockpit: f4a842
+  panel:mpc-cockpit: 12aa12
 ---
 
 The cockpit re-solves your plan every year or so from wherever the portfolio actually

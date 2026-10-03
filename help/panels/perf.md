@@ -5,7 +5,7 @@ title: Performance
 panels: [perf]
 design: [78-simulation-telemetry-cost.md]
 stamps:
-  panel:perf: 2caa26
+  panel:perf: db209c
 ---
 
 Where the time goes during a run: frame timing, average event and handler cost, and a

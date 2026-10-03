@@ -4,7 +4,7 @@ kind: panel
 title: Nodes
 panels: [config-list]
 stamps:
-  panel:config-list: 786f94
+  panel:config-list: c29391
 ---
 
 The scenario's structural records, filtered by kind: people, accounts, properties,

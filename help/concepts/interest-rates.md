@@ -29,8 +29,8 @@ stamps:
   param:auSavingsInterestRate: 513d33
   param:fixedIncomeInterestRate: 7d74cd
   param:auFixedIncomeInterestRate: 14f6cd
-  panel:chart: c05af4
-  panel:holdings: 359688
+  panel:chart: db45f8
+  panel:holdings: 962055
 ---
 
 Two layers that are easy to confuse: the **policy rate** each central bank sets, and

@@ -6,10 +6,10 @@ node: account
 panels: [config-list, config-graph, holdings, pools]
 design: [54-loan-liability-accounts.md, 56-prime-relative-rates.md, 86-leveraged-property-fidelity.md, 87-foreign-currency-basis-pools.md, 113-fixed-rate-loans.md]
 stamps:
-  panel:config-list: 786f94
-  panel:config-graph: bbebb1
-  panel:holdings: 359688
-  panel:pools: b2d1aa
+  panel:config-list: c29391
+  panel:config-graph: 82a0c7
+  panel:holdings: 962055
+  panel:pools: 78458e
   node:account: 4bd3bf
 ---
 

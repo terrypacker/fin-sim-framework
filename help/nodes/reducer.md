@@ -7,9 +7,9 @@ panels: [config-list, config-graph, journal-report]
 design: [2-unified-event-schema.md, 16-journal-reporting-plugin.md]
 sources: [src/simulation-framework/reducers.js]
 stamps:
-  panel:config-list: 786f94
-  panel:config-graph: bbebb1
-  panel:journal-report: e88448
+  panel:config-list: c29391
+  panel:config-graph: 82a0c7
+  panel:journal-report: b2eedb
   node:reducer: 445aa6
   src/simulation-framework/reducers.js: fcfeea
 ---

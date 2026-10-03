@@ -12,7 +12,7 @@ stamps:
   param:poolCashYears: 92629a
   param:poolBondYears: 13afb2
   param:cashBucketDrawdownMinSeverity: b361c8
-  panel:pools: b2d1aa
+  panel:pools: 78458e
 ---
 
 A bucket strategy, modelled explicitly: named pools that hold claims on real

@@ -5,7 +5,7 @@ title: Spending
 panels: [spending]
 design: [89-spending-over-time-reporting.md]
 stamps:
-  panel:spending: f9f5c7
+  panel:spending: 157a8d
 ---
 
 What the plan actually costs, year by year, classified by what the money was for.

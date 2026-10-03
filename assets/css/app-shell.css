@@ -41,9 +41,14 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   overflow-y: auto;
 }
 
-/* ── HEADER ── */
+/* ── HEADER ──
+   The left and right groups keep their natural width; only the centre may give
+   way. Without min-width:0 the centre refused to shrink, so a narrow window
+   squeezed the brand (its subtitle wrapped past the bar's height) and pushed
+   the right group off the edge. */
 #header { padding: 0 20px; height: 52px; }
-.header-left { display: flex; align-items: center; gap: 12px; }
+.header-left { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.app-brand { white-space: nowrap; line-height: 1.2; }
 .logo-mark { font-size: 24px; filter: drop-shadow(0 0 8px var(--accent-primary)); }
 
 .header-center {
@@ -51,6 +56,7 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   align-items: center;
   gap: 20px;
   flex: 1;
+  min-width: 0;
   justify-content: center;
 }
 
@@ -58,6 +64,7 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0;
 }
 
 .header-templates {
@@ -86,7 +93,8 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   font-weight: 600;
   letter-spacing: 0.12em;
   color: var(--text-dim);
-  width: 150px;
+  width: 110px;
+  flex-shrink: 0;
 }
 
 .sim-gen-display {
@@ -96,8 +104,11 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   letter-spacing: 0.05em;
 }
 
-.time-controls { display: flex; align-items: center; gap: 8px; }
-.time-control-label { width: 300px; }
+.time-controls { display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* Always a YYYY-MM-DD date: size to it, with tabular digits so playback doesn't jitter. */
+.time-control-label { min-width: 10ch; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* The selects' own margin-left doubled the flex gap here. */
+.time-controls .toolbar-select { margin-left: 0; }
 
 .time-controls-slider-wrapper {
   position: relative;
@@ -297,3 +308,77 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 
 .sle-save   { margin-top: 6px; }
 .sle-others { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ── PANELS MENU (header) ── */
+.panel-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 260px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-hi);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  padding: 6px 0;
+  font-size: 12px;
+}
+.panel-menu-head {
+  padding: 4px 12px 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+.panel-menu-cols {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(170px, 1fr));
+  gap: 4px 8px;
+  padding: 6px 6px 4px;
+}
+@media (max-width: 640px) { .panel-menu-cols { grid-template-columns: 1fr; } }
+.panel-menu-label {
+  padding: 6px 6px 2px;
+  font-family: var(--font-head);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-primary);
+}
+.panel-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 6px;
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.panel-menu-item:hover, .panel-menu-item:focus-visible {
+  background: var(--accent-primary-bg);
+  color: var(--text-primary);
+  outline: none;
+}
+.panel-menu-item[aria-checked="true"] { color: var(--text-primary); }
+.panel-menu-check {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-hi);
+  border-radius: 2px;
+  font-size: 10px;
+  color: var(--accent-primary);
+}
+.panel-menu-item[aria-checked="true"] .panel-menu-check { border-color: var(--accent-primary); }
+.panel-menu-foot { border-top: 1px solid var(--border); margin-top: 4px; padding: 4px 6px 0; }

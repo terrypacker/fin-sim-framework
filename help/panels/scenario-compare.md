@@ -4,7 +4,7 @@ kind: panel
 title: Scenario Compare
 panels: [scenario-compare]
 stamps:
-  panel:scenario-compare: b960fb
+  panel:scenario-compare: 25eee7
 ---
 
 Two scenarios side by side: a KPI strip, a table of state fields that differ, and an

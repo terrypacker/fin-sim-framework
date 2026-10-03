@@ -13,9 +13,9 @@ stamps:
   param:afterTaxCapGainsRate: 8e584d
   param:assumedGainFraction: 53881b
   param:afterTaxRateMethod: da77e9
-  panel:opt-config: e04ce5
-  panel:opt-results: 36a150
-  panel:mpc-cockpit: f4a842
+  panel:opt-config: baaee0
+  panel:opt-results: 154951
+  panel:mpc-cockpit: 12aa12
 ---
 
 What "better" means when something is searching for a better plan.

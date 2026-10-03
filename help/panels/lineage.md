@@ -5,7 +5,7 @@ title: Lineage
 panels: [lineage]
 design: [30-decision-graph-analysis.md]
 stamps:
-  panel:lineage: 87213c
+  panel:lineage: 75ef58
 ---
 
 The causal chain behind one node's most recent execution: every step that led to it,

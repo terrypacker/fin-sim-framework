@@ -4,7 +4,7 @@ kind: panel
 title: Dashboard
 panels: [dashboard]
 stamps:
-  panel:dashboard: 7928b7
+  panel:dashboard: d7e741
 ---
 
 Five counters across the bottom of the workbench: the date the run has reached, and

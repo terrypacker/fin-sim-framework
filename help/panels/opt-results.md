@@ -4,7 +4,7 @@ kind: panel
 title: OPT Results
 panels: [opt-results]
 stamps:
-  panel:opt-results: 36a150
+  panel:opt-results: 154951
 ---
 
 How the search went: badges for the best score, the number of candidates run and how

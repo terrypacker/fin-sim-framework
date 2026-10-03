@@ -5,7 +5,7 @@ title: Help
 panels: [help]
 design: [108-help-system.md]
 stamps:
-  panel:help: b35a2b
+  panel:help: 46578d
 ---
 
 This panel. It follows whichever tab you are on and shows that panel's page, so help

@@ -5,7 +5,7 @@ title: Holdings
 panels: [holdings]
 design: [82-allocation-over-time-reporting.md]
 stamps:
-  panel:holdings: 359688
+  panel:holdings: 962055
 ---
 
 What one account holds right now, in three stacked views scoped to the account you

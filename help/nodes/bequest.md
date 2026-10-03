@@ -7,8 +7,8 @@ panels: [config-list, config-graph]
 design: [63-inheritance.md]
 sources: [src/finance/assets/bequest.js]
 stamps:
-  panel:config-list: 786f94
-  panel:config-graph: bbebb1
+  panel:config-list: c29391
+  panel:config-graph: 82a0c7
   node:bequest: 56b4df
   src/finance/assets/bequest.js: 2f49e3
 ---

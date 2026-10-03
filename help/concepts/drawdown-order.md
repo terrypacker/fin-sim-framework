@@ -28,8 +28,8 @@ stamps:
   param:sleeveWeight::BOND: 2b17c9
   param:sleeveWeight::EQUITY: 955442
   param:sleeveWeight::GOLD: 2093fd
-  panel:pools: b2d1aa
-  panel:holdings: 359688
+  panel:pools: 78458e
+  panel:holdings: 962055
 ---
 
 When the plan needs cash and no account is nominated, something has to decide where

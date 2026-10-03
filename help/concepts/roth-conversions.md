@@ -16,8 +16,8 @@ stamps:
   param:rothConversionSchedule: b17ede
   param:rothConversionScheduleMode: ab7ce6
   param:k401ToIraConversionEnabled: 7a93d4
-  panel:paycheque: f8d503
-  panel:journal-report: e88448
+  panel:paycheque: d4e25c
+  panel:journal-report: b2eedb
 ---
 
 Moving money from tax-deferred to Roth, paying the tax now so that it and its growth

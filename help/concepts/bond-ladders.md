@@ -13,7 +13,7 @@ stamps:
   param:bondLadderRole: 95dbbc
   param:bondLadderInflationLinked: 1150a8
   param:bondLadderCouponRate: 134598
-  panel:holdings: 359688
+  panel:holdings: 962055
 ---
 
 Bonds held as individual dated rungs rather than as a single balance earning a rate.

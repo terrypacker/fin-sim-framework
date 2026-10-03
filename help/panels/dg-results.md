@@ -5,7 +5,7 @@ title: DG Results
 panels: [dg-results]
 design: [30-decision-graph-analysis.md]
 stamps:
-  panel:dg-results: d0b251
+  panel:dg-results: f4272a
 ---
 
 The outcome of every leaf of a decision-graph run, arranged by the branch structure

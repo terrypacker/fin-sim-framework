@@ -5,7 +5,7 @@ title: Securities
 panels: [securities]
 design: [94-equity-as-security-positions.md]
 stamps:
-  panel:securities: 80facb
+  panel:securities: b9f2ef
 ---
 
 What the plan owns by instrument, across every account.

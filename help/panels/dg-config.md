@@ -5,7 +5,7 @@ title: Decision Graph
 panels: [dg-config]
 design: [30-decision-graph-analysis.md]
 stamps:
-  panel:dg-config: 5c40a2
+  panel:dg-config: 5927ca
 ---
 
 The setup for a decision-graph run: the branching choices to explore and the shape of

@@ -6,9 +6,9 @@ panels: [journal-report, action-detail, lineage]
 design: [2-unified-event-schema.md, 16-journal-reporting-plugin.md, 91-journal-payload-manifest.md]
 sources: [src/simulation-framework/journal.js]
 stamps:
-  panel:journal-report: e88448
-  panel:action-detail: 863051
-  panel:lineage: 87213c
+  panel:journal-report: b2eedb
+  panel:action-detail: a26fb2
+  panel:lineage: 75ef58
   src/simulation-framework/journal.js: c6d854
 ---
 

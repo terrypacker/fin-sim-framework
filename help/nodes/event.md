@@ -7,8 +7,8 @@ panels: [config-list, config-graph]
 design: [2-unified-event-schema.md]
 sources: [src/simulation-framework/events/event-series.js]
 stamps:
-  panel:config-list: 786f94
-  panel:config-graph: bbebb1
+  panel:config-list: c29391
+  panel:config-graph: 82a0c7
   node:event: 7c3ccb
   src/simulation-framework/events/event-series.js: 456eeb
 ---

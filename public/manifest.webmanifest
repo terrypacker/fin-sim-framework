@@ -1,5 +1,5 @@
 {
-  "name": "FinSim — Event Driven Financial Simulation",
+  "name": "FinSim Financial Simulator",
   "short_name": "FinSim",
   "description": "Deterministic, event-driven simulation of cross-border retirement plans, with Monte Carlo and optimization.",
   "id": "/",

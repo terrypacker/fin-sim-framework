@@ -9,8 +9,8 @@ stamps:
   param:taxLossHarvestCap: b55c85
   param:taxLossHarvestOnRegimeEntry: 2f55b6
   param:taxGainHarvestBracketCeiling: ba4590
-  panel:journal-report: e88448
-  panel:holdings: 359688
+  panel:journal-report: b2eedb
+  panel:holdings: 962055
 ---
 
 Realising a gain or a loss on purpose, because of what it does to the tax bill rather

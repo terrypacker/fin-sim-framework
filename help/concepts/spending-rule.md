@@ -23,7 +23,7 @@ stamps:
   param:ageBandDeclineRate: 8017cb
   param:spendingExpenseBands: 52e666
   param:crraGamma: af8fb9
-  panel:spending: f9f5c7
+  panel:spending: 157a8d
 ---
 
 How much the household intends to spend each month, and what happens to that

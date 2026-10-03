@@ -4,7 +4,7 @@ kind: panel
 title: Chart
 panels: [chart]
 stamps:
-  panel:chart: c05af4
+  panel:chart: db45f8
 ---
 
 The run plotted over time: pick fields with the chip strip above the plot and they

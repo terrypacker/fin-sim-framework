@@ -19,8 +19,8 @@ stamps:
   param:dividendReinvest: 9db9f3
   param:auDividendReinvest: 551114
   param:superFrankedPercent: 07a227
-  panel:allocation: fc1993
-  panel:holdings: 359688
+  panel:allocation: 762dd9
+  panel:holdings: 962055
 ---
 
 What each market is assumed to earn, before any year-to-year variation is layered on

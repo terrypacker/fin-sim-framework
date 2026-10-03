@@ -5,7 +5,7 @@ title: MPC Cockpit
 panels: [mpc-cockpit]
 design: [39-mpc-financial-controller.md, 80-feasibility-preserving-harvest.md]
 stamps:
-  panel:mpc-cockpit: f4a842
+  panel:mpc-cockpit: 12aa12
 ---
 
 The closed-loop advisor. It stands at the run's "now", snapshots what has actually

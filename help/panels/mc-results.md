@@ -5,7 +5,7 @@ title: MC Results
 panels: [mc-results]
 design: [100-mc-analysis-surface.md, 89-spending-over-time-reporting.md]
 stamps:
-  panel:mc-results: 315796
+  panel:mc-results: cc2f55
 ---
 
 The batch as a distribution: success rate and percentile badges, a fan chart of the

@@ -5,7 +5,7 @@ title: Parameters
 panels: [parameters]
 design: [98-sweepable-parameter-surface.md]
 stamps:
-  panel:parameters: b4df31
+  panel:parameters: 671185
 ---
 
 Every lever the scenario exposes, with its current value, plus the filter and the

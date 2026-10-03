@@ -11,8 +11,8 @@ stamps:
   param:fxVolatility: ff6e43
   param:fxReversionSpeed: 6f045e
   param:fxBasisMethod: 116d2c
-  panel:chart: c05af4
-  panel:watchlist: 8af97c
+  panel:chart: db45f8
+  panel:watchlist: fb2d25
 ---
 
 The exchange rate between the plan's two currencies, and what the tax code makes of

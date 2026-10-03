@@ -20,7 +20,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Event Driven Financial Simulation</title>
+  <title>FinSim Financial Simulator</title>
   <link rel="icon" type="image/x-icon" href="/img/favicon.ico">
   <link rel="icon" type="image/png" sizes="16x16" href="/img/favicon-16x16.png">
   <link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32x32.png">
@@ -39,9 +39,9 @@
   <header id="header">
     <div class="header-left">
       <div class="logo-mark">⬡</div>
-      <div>
+      <div class="app-brand">
         <div class="app-title">FinSim</div>
-        <div class="app-subtitle">Event Driven Financial Simulation</div>
+        <div class="app-subtitle">Financial Simulator</div>
       </div>
     </div>
     <div class="header-center">
@@ -80,13 +80,13 @@
       </div>
     </div>
     <div class="header-right">
+      <button class="btn btn-sm" id="btnPanels" title="Show or hide panels">Panels ▾</button>
       <div class="header-templates">
         <select id="workbenchTemplate" class="wb-select" title="Workspace layout template"></select>
         <button class="btn btn-sm" id="btnSaveTemplate"   title="Save current layout as template">Save</button>
         <button class="btn btn-sm" id="btnDeleteTemplate" title="Delete selected template">Del</button>
       </div>
-      <span class="panel-tag">v1.0</span>
-      <button class="btn btn-sm" id="btnHelp" title="Open help documentation">? HELP</button>
+      <button class="btn btn-sm" id="btnHelp" title="Open the Help panel">?</button>
     </div>
   </header>
   <div id="workbench-root" style="flex:1;min-height:0;overflow:hidden"></div>

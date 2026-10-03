@@ -13,7 +13,7 @@ stamps:
   param:earlyWithdrawalStartYear: 5049e5
   param:earlyWithdrawalEndYear: 89f1d7
   param:earlyWithdrawalSchedule: 0267f3
-  panel:journal-report: e88448
+  panel:journal-report: b2eedb
 ---
 
 Taking money out of a retirement wrapper before the age at which that is free, and

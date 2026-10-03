@@ -5,7 +5,7 @@ title: Action Detail
 panels: [action-detail]
 design: [91-journal-payload-manifest.md]
 stamps:
-  panel:action-detail: 863051
+  panel:action-detail: a26fb2
 ---
 
 One action, in full: its payload fields and the state changes its reducer made.

@@ -10,8 +10,8 @@ stamps:
   param:survivorDiscretionaryMultiplier: 30744f
   param:lateLifeCareMonths: bb7df9
   param:lateLifeCareFactor: 18b1b6
-  panel:chart: c05af4
-  panel:spending: f9f5c7
+  panel:chart: db45f8
+  panel:spending: 157a8d
 ---
 
 Whether people in the plan die, and what happens to the household's finances when

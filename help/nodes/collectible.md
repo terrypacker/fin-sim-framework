@@ -7,8 +7,8 @@ panels: [config-list, config-graph]
 design: [57-au-cgt-reform-2027.md, 88-speculative-assets.md]
 sources: [src/finance/assets/collectible.js]
 stamps:
-  panel:config-list: 786f94
-  panel:config-graph: bbebb1
+  panel:config-list: c29391
+  panel:config-graph: 82a0c7
   node:collectible: dd905c
   src/finance/assets/collectible.js: 2b5b45
 ---

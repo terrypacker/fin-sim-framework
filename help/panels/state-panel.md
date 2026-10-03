@@ -4,7 +4,7 @@ kind: panel
 title: State
 panels: [state-panel]
 stamps:
-  panel:state-panel: 6b89e2
+  panel:state-panel: f560a0
 ---
 
 Every field of the simulation's current state, filtered, at the date the run has

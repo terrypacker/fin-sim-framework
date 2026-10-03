@@ -8,8 +8,8 @@ stamps:
   param:shocks: a0799f
   param:repairSeverityScale: f1741c
   param:repairFreqScale: 74df07
-  panel:mc-config: 2c8dce
-  panel:chart: c05af4
+  panel:mc-config: ad4956
+  panel:chart: db45f8
 ---
 
 A named, dated disturbance applied to the run: a market crash, a rate spike, a

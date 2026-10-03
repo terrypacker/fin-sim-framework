@@ -5,7 +5,7 @@ title: Watchlist
 panels: [watchlist]
 design: [101-watchlists.md]
 stamps:
-  panel:watchlist: 8af97c
+  panel:watchlist: fb2d25
 ---
 
 A named set of state fields you care about, with their current values, sparklines and

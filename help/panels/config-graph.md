@@ -4,7 +4,7 @@ kind: panel
 title: Graph
 panels: [config-graph]
 stamps:
-  panel:config-graph: bbebb1
+  panel:config-graph: 82a0c7
 ---
 
 The scenario's records as a graph: every node the plan registered, and the edges

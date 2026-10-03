@@ -20,8 +20,8 @@ stamps:
   param:rebalanceDriftBandTaxable: 102a66
   param:rebalanceDriftBandSheltered: 960cb2
   param:allocationClassRestrictions: 4c97ef
-  panel:allocation: fc1993
-  panel:holdings: 359688
+  panel:allocation: 762dd9
+  panel:holdings: 962055
 ---
 
 Three separate questions that the phrase "asset allocation" runs together.

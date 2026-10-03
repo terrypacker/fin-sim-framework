@@ -6,9 +6,9 @@ node: action
 panels: [config-list, config-graph, action-detail]
 design: [2-unified-event-schema.md, 91-journal-payload-manifest.md]
 stamps:
-  panel:config-list: 786f94
-  panel:config-graph: bbebb1
-  panel:action-detail: 863051
+  panel:config-list: c29391
+  panel:config-graph: 82a0c7
+  panel:action-detail: a26fb2
   node:action: 74d46b
 ---
 

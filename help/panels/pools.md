@@ -5,7 +5,7 @@ title: Liquidity Pools
 panels: [pools]
 design: [97-liquidity-pools-and-drawdown-sequence.md]
 stamps:
-  panel:pools: b2d1aa
+  panel:pools: 78458e
 ---
 
 What the liquidity-pool graph actually did, period by period: each pool's balance

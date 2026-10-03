@@ -16,6 +16,8 @@
  *     'center-a':       { tabs: string[], active: string | null },
  *     'center-b':       { tabs: string[], active: string | null },
  *     closedTabs:       string[],  // tabs the user closed on purpose — see _adoptNewDefaultTabs
+ *     template:         string|null, // 'builtin:<name>' | 'saved:<name>' this layout came from
+ *     modified:         boolean,     // panels opened, closed or moved since that template
  *   }
  */
 export class WorkbenchLayoutModel {
@@ -126,6 +128,7 @@ export class WorkbenchLayoutModel {
 
     to.tabs.push(tab);
     to.active = tab;
+    this._layout.modified = true;
   }
 
   /**
@@ -137,6 +140,7 @@ export class WorkbenchLayoutModel {
     if (!cfg || cfg.tabs.includes(tab)) return;
     cfg.tabs.push(tab);
     cfg.active = tab;
+    this._layout.modified = true;
     // Re-opening revokes the "don't put this back" record from closeTab().
     if (Array.isArray(this._layout.closedTabs)) {
       this._layout.closedTabs = this._layout.closedTabs.filter(t => t !== tab);
@@ -158,6 +162,7 @@ export class WorkbenchLayoutModel {
     const closed = Array.isArray(this._layout.closedTabs) ? this._layout.closedTabs : [];
     if (!closed.includes(tab)) closed.push(tab);
     this._layout.closedTabs = closed;
+    this._layout.modified = true;
   }
 
   /** Set the active tab in a pane. */
@@ -233,6 +238,7 @@ export class WorkbenchLayoutModel {
       };
     }
     this._layout.centerSplit = enabled;
+    this._layout.modified = true;
   }
 
   /** @returns {[number, number]} */
@@ -269,10 +275,28 @@ export class WorkbenchLayoutModel {
   static get _TEMPLATE_PREFIX() { return 'workbench-tpl-'; }
 
   /**
-   * Save the current layout as a named user template in localStorage.
+   * Which template the current layout came from, and whether its panels have changed
+   * since. Only the panel SET and placement count — resizing or collapsing a pane is
+   * adjusting the view, not leaving it.
+   * @returns {{ template: string|null, modified: boolean }}
+   */
+  getTemplateState() {
+    return { template: this._layout.template ?? null, modified: !!this._layout.modified };
+  }
+
+  /**
+   * Save the current layout as a named user template in localStorage. The current layout
+   * becomes that template, unmodified.
+   *
+   * `closedTabs` goes into the template with everything else, and that is what makes a
+   * saved view keep its panels: applying it records the same panels as closed, so they
+   * stay out of both the tabs and the Panels menu's ticks.
    * @param {string} name
    */
   saveTemplate(name) {
+    this._layout.template = `saved:${name}`;
+    this._layout.modified = false;
+    this.save();
     try {
       localStorage.setItem(
         WorkbenchLayoutModel._TEMPLATE_PREFIX + name,
@@ -319,11 +343,35 @@ export class WorkbenchLayoutModel {
   /**
    * Replace the current layout with the given layout object and persist it.
    * Backfills any keys present in the default but absent in the template.
+   *
+   * `exhaustive` is for a template authored in code (the built-ins): the panels it lists
+   * are the ONLY ones it opens, so every other default panel is recorded as closed. Without
+   * it the backfill — there so a panel added since a layout was SAVED still turns up — put
+   * every omitted panel straight back, and all four built-ins opened all 33 panels. A
+   * saved template is not exhaustive: it carries its own `closedTabs`, and a panel that
+   * did not exist when it was saved should still appear.
+   *
    * @param {object} layoutObj
+   * @param {object} [opts]
+   * @param {boolean} [opts.exhaustive=false]
+   * @param {string}  [opts.template]  — the key it is applied under ('builtin:…' | 'saved:…')
    */
-  applyTemplate(layoutObj) {
+  applyTemplate(layoutObj, { exhaustive = false, template } = {}) {
     this._layout = structuredClone(layoutObj);
+    if (exhaustive) {
+      const listed = new Set();
+      for (const cfg of Object.values(this._layout)) {
+        if (Array.isArray(cfg?.tabs)) cfg.tabs.forEach(t => listed.add(t));
+      }
+      const closed = new Set();
+      for (const cfg of Object.values(this._default)) {
+        if (Array.isArray(cfg?.tabs)) cfg.tabs.forEach(t => { if (!listed.has(t)) closed.add(t); });
+      }
+      this._layout.closedTabs = [...closed];
+    }
     this._fillMissingFromDefault();
+    if (template !== undefined) this._layout.template = template;
+    this._layout.modified = false;
     this.save();
   }
 }

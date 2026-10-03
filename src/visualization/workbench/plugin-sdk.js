@@ -18,9 +18,23 @@ export const PLUGIN_CATEGORIES = /** @type {const} */ ({
   SIMULATION:    'simulation',
   CONFIGURATION: 'configuration',
   ANALYSIS:      'analysis',
+  PORTFOLIO:     'portfolio',
+  STUDIES:       'studies',
   DEBUG:         'debug',
   SYSTEM:        'system',
   GENERAL:       'general',
+});
+
+/** Heading for each category in the header's Panels menu, in the order it lists them. */
+export const PLUGIN_CATEGORY_LABELS = /** @type {const} */ ({
+  configuration: 'Setup',
+  simulation:    'Simulation',
+  portfolio:     'Portfolio',
+  analysis:      'Analysis',
+  studies:       'Monte Carlo & Optimize',
+  debug:         'Journal & Debug',
+  system:        'System',
+  general:       'Other',
 });
 
 export const PLUGIN_PANES = /** @type {const} */ ({

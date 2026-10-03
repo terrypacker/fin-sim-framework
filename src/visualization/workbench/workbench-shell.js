@@ -226,6 +226,7 @@ export class WorkbenchShell {
     this.layout.setCenterSplit(!this.layout.isCenterSplit());
     this.layout.save();
     this._remountCenter();
+    this._layoutChanged();
   }
 
   _toggleCenterDir() {
@@ -318,6 +319,11 @@ export class WorkbenchShell {
     this.runtime.bus.publish({ type: WB_EVENTS.TAB_ACTIVATED, tab, pane });
   }
 
+  /**
+   * Saved immediately: a close is an instruction (see `closeTab`), and it used to sit
+   * unsaved until some unrelated layout change happened to persist it — so a closed tab
+   * came back on reload or stayed gone, depending on what you did in between.
+   */
   _onClose(tab, pane) {
     this.layout.closeTab(pane, tab);
     const tg = this._tabGroups.get(pane);
@@ -325,6 +331,8 @@ export class WorkbenchShell {
     tg?.closePlugin(tab);
     const newActive = this.layout.layout[pane]?.active;
     if (newActive) tg?.setActive(newActive);
+    this.layout.save();
+    this._layoutChanged();
   }
 
   _onDragStart(e, tabId, fromPane) {
@@ -365,6 +373,7 @@ export class WorkbenchShell {
     if (fromActive) fromTg?.setActive(fromActive);
     toTg?.setActive(this.layout.layout[toPane]?.active);
     this.layout.save();
+    this._layoutChanged();
   }
 
   _onReorder(tabId, insertBefore, pane) {
@@ -380,19 +389,81 @@ export class WorkbenchShell {
   }
 
   /**
-   * Activate a plugin by id — makes it the active tab in whichever pane contains it.
+   * Activate a plugin by id — makes it the active tab in whichever pane contains it,
+   * re-opening it first if the user had closed it.
+   *
+   * It used to return false for a closed panel and do nothing, which made every route
+   * INTO a panel — the toolbar's `?`, a journal drill-down, an MC replay landing on the
+   * Timeline — silently dead the moment that panel's tab had been closed.
+   *
    * @param {string} id
-   * @returns {boolean} true if found and activated
+   * @returns {boolean} false only for an id no plugin is registered under
    */
   activatePlugin(id) {
-    for (const pane of this._activePanes) {
-      const cfg = this.layout.layout[pane];
-      if (cfg?.tabs.includes(id)) {
-        this._onActivate(id, pane);
-        return true;
-      }
-    }
-    return false;
+    if (!this.registry.getPlugin(id)) return false;
+    const pane = this.paneOf(id) ?? this._reopen(id);
+    this._onActivate(id, pane);
+    return true;
+  }
+
+  /** Alias of `activatePlugin`, named for the panel menu's "show". */
+  openPlugin(id) {
+    return this.activatePlugin(id);
+  }
+
+  /**
+   * Close a panel exactly as its tab's × does. The instance survives (see
+   * `TabGroup.closePlugin`), so `openPlugin` brings it back with its state intact.
+   * @param {string} id
+   * @returns {boolean} true if it was open
+   */
+  closePlugin(id) {
+    const pane = this.paneOf(id);
+    if (!pane) return false;
+    this._onClose(id, pane);
+    return true;
+  }
+
+  /** @returns {string|null} the pane holding the panel's tab, or null when it is closed */
+  paneOf(id) {
+    return this._activePanes.find(p => this.layout.layout[p]?.tabs.includes(id)) ?? null;
+  }
+
+  /**
+   * Every registered panel with where it is — the panel menu's model.
+   * @returns {Array<{ id: string, title: string, category: string, pane: string|null }>}
+   */
+  listPanels() {
+    return this.registry.getAllPlugins().map(({ id, title, category }) =>
+      ({ id, title, category, pane: this.paneOf(id) }));
+  }
+
+  /**
+   * Put a closed panel back, in the pane the DEFAULT layout gives it — not wherever it
+   * was last, which the layout does not record and which may no longer exist (a center
+   * split that has since been undone).
+   * @returns {string} the pane it now lives in
+   */
+  _reopen(id) {
+    const pane = this._homePaneFor(id);
+    this.layout.addTab(pane, id);
+    this._instantiatePlugins();   // a panel closed since boot was never constructed
+    const tg = this._tabGroups.get(pane);
+    tg?.addTabButton(id);
+    tg?.adoptPlugin(id);
+    if (pane === 'bottom' && this.layout.isBottomCollapsed()) this._toggleBottomCollapse();
+    this.layout.save();
+    this._layoutChanged();
+    return pane;
+  }
+
+  _homePaneFor(id) {
+    const panes = ['left', 'center', 'right', 'bottom'];
+    let pane = panes.find(p => this.layout._default?.[p]?.tabs?.includes(id))
+      ?? this.registry.getPlugin(id)?.defaultPane
+      ?? 'center';
+    if (pane === 'center' && this.layout.isCenterSplit()) pane = 'center-a';
+    return pane;
   }
 
   _teardownLayout() {
@@ -407,19 +478,32 @@ export class WorkbenchShell {
   resetLayout() {
     this._teardownLayout();
     this.layout.reset();
+    this._instantiatePlugins();   // panels closed since boot were never constructed
     this._render();
+    this._layoutChanged();
   }
 
   /**
    * Apply an arbitrary layout object (e.g. from a workspace template).
    * Existing plugin instances are preserved; new ones are created as needed.
    * @param {object} layoutObj
+   * @param {object} [opts]  — passed to `WorkbenchLayoutModel.applyTemplate`
    */
-  applyLayout(layoutObj) {
+  applyLayout(layoutObj, opts) {
     this._teardownLayout();
-    this.layout.applyTemplate(layoutObj);
+    this.layout.applyTemplate(layoutObj, opts);
     this._instantiatePlugins();
     this._render();
+    this._layoutChanged();
+  }
+
+  /**
+   * The panel set or its placement changed — a close, a re-open, a move between panes, a
+   * split, or a whole template. The header's template picker listens, to show which
+   * template this is and whether it has been modified.
+   */
+  _layoutChanged() {
+    this.runtime.bus.publish({ type: WB_EVENTS.LAYOUT_CHANGED, ...this.layout.getTemplateState() });
   }
 
   // ── Drag ghost ──────────────────────────────────────────────────────────────

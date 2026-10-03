@@ -7,8 +7,8 @@ panels: [config-list, paycheque]
 design: [116-employment-spells.md, 50-au-source-wages.md, 73-tax-export-validation-fixes.md]
 sources: [src/finance/payroll/employment.js, src/visualization/people/jobs-section.js]
 stamps:
-  panel:config-list: 786f94
-  panel:paycheque: f8d503
+  panel:config-list: c29391
+  panel:paycheque: d4e25c
   node:job: 3cd594
   src/finance/payroll/employment.js: 4265c8
   src/visualization/people/jobs-section.js: 73fb9a

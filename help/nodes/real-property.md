@@ -6,8 +6,8 @@ node: real-property
 panels: [config-list, config-graph]
 design: [75-house-costs-and-property-return-path.md, 83-us-au-tax-treaty-intricacies.md, 86-leveraged-property-fidelity.md, 48-rental-income.md, 113-fixed-rate-loans.md]
 stamps:
-  panel:config-list: 786f94
-  panel:config-graph: bbebb1
+  panel:config-list: c29391
+  panel:config-graph: 82a0c7
   node:real-property: de7599
 ---
 

@@ -5,7 +5,7 @@ title: Paycheque
 panels: [paycheque]
 design: [95-wage-logic-and-payroll-contributions.md, 107-retirement-paycheck-and-tax-instalments.md]
 stamps:
-  panel:paycheque: f8d503
+  panel:paycheque: d4e25c
 ---
 
 One earner, one month, gross down to net — plus the two yearly tables that explain

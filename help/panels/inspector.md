@@ -4,7 +4,7 @@ kind: panel
 title: Edit
 panels: [inspector]
 stamps:
-  panel:inspector: 79c913
+  panel:inspector: 3947a0
 ---
 
 The editor for one record, rendered in place in the left column rather than in a

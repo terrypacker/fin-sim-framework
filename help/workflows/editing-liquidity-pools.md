@@ -12,7 +12,7 @@ stamps:
   param:liquidityGraph: c86d6c
   param:liquidityShapes: eddce3
   param:liquidityTargetSchedule: 6c32a4
-  panel:parameters: b4df31
+  panel:parameters: 671185
 ---
 
 Everything about the pools lives in one group of the [Parameters](../panels/parameters.md)

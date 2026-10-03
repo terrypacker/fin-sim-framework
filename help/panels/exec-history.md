@@ -4,7 +4,7 @@ kind: panel
 title: Node History
 panels: [exec-history]
 stamps:
-  panel:exec-history: cc5517
+  panel:exec-history: 4a7988
 ---
 
 What one config node has actually been doing during the run: whether it is firing or

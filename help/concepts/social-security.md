@@ -9,8 +9,8 @@ tools: []
 design: [118-social-security-claiming.md, 30-decision-graph-analysis.md]
 sources: [src/finance/account-rules/us/us-social-security-rules.js, src/finance/handlers/monthly-social-security-handler.js]
 stamps:
-  panel:config-list: 786f94
-  panel:dg-config: 5c40a2
+  panel:config-list: c29391
+  panel:dg-config: 5927ca
   src/finance/account-rules/us/us-social-security-rules.js: 8f3b34
   src/finance/handlers/monthly-social-security-handler.js: 35cf71
 ---

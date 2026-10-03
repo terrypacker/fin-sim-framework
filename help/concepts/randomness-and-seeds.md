@@ -8,8 +8,8 @@ design: [74-stochastic-return-paths.md]
 stamps:
   param:randomSeed: 7a100c
   param:rngStreams: 85e3c6
-  panel:mc-config: 2c8dce
-  panel:mc-runs: aca7d2
+  panel:mc-config: ad4956
+  panel:mc-runs: dc440d
 ---
 
 Every stochastic process in the simulation draws from one seeded generator, so a run

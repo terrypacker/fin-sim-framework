@@ -12,8 +12,8 @@ stamps:
   param:auNotionalTaxRate: 7f3e30
   param:auDeferredBasPayer: 7e44a4
   param:taxInstalmentsEnabled: 28dcb9
-  panel:journal-report: e88448
-  panel:paycheque: f8d503
+  panel:journal-report: b2eedb
+  panel:paycheque: d4e25c
 ---
 
 The Australian side of a cross-border plan's tax, and the machinery of paying it

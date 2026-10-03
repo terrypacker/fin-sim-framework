@@ -10,8 +10,8 @@ stamps:
   param:startingResidency: 598a5f
   param:usFeieElected: 00dd02
   param:intlTransferFeeUsd: e53b1e
-  panel:journal-report: e88448
-  panel:scenario-compare: b960fb
+  panel:journal-report: b2eedb
+  panel:scenario-compare: 25eee7
 ---
 
 Where the household is tax-resident, and when that changes.

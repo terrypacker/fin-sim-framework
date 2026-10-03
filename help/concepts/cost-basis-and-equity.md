@@ -9,8 +9,8 @@ stamps:
   param:stockBasisUS: 8496f4
   param:stockBasisIntl: b32aae
   param:stockSplitRatio: 1c3adb
-  panel:securities: 80facb
-  panel:holdings: 359688
+  panel:securities: b9f2ef
+  panel:holdings: 962055
 ---
 
 The opening facts about what a position cost, and the date a private stake turns into
