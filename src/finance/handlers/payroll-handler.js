@@ -19,6 +19,7 @@ import { bracketIndexationFactor, BRACKET_INDEX_SERIES }
   from '../tax/inflation-adjusted-tax-rates.js';
 import { monthlyAuSuper, auFinancialYearOf }      from '../payroll/au-super-caps.js';
 import { earnerView, everEarns, anySpellTerm }    from '../payroll/employment.js';
+import { auSuperKeyFor }                          from '../account-rules/au/super-fund-key.js';
 
 /**
  * payroll-handler.js — design 95 phase 0. One pipeline, two queue positions.
@@ -414,9 +415,12 @@ export function computePayroll({ date, state, stateRegistry, us = {}, au = {},
         elect(person, 'rothAnnualContribution', us.rothAnnualContribution ?? 0) / 12);
       if (rothKey && roth > 0) entry.roth = { stateKey: rothKey, amount: roth };
     } else {
-      const superKey = stateRegistry?.getStateKey?.(ACCOUNT_ROLES.SUPER, personKey)
-                    ?? stateRegistry?.getStateKey?.(ACCOUNT_ROLES.SUPER);
-      if (superKey != null && state[superKey] != null) {
+      // Design 119 §6.3: the fund the in-force job names, else the person's first.
+      // Never another person's fund — the owner-less `getStateKey(SUPER)` fallback that
+      // stood here sent a fundless spouse's SG into their partner's account.
+      const superKey = auSuperKeyFor({ state, stateRegistry, personKey,
+                                       preferredKey: person.superAccountKey ?? null });
+      if (superKey != null) {
         // Does THIS instance own the AU stream? Two `PayrollHandler`s sit on the
         // PAYROLL_CONTRIBUTIONS event — one per country's toolset — and each computes
         // the WHOLE pipeline while carrying only its own country's elections. So the

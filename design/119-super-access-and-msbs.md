@@ -1,7 +1,7 @@
 # 119 — Super access dates, multiple funds and MSBS
 
 **Status:** ACCEPTED, rev 5, 5 Oct 2026. Q1–Q5 (§9) are answered by the author, and
-§3 records the decisions. Nothing is built. Rev 4 adds the CSC documents and the
+§3 records the decisions. **Phase 1 BUILT** 5 Oct 2026 (multiple funds, §6.3); phases 2–6 not started. Rev 4 adds the CSC documents and the
 valuation law (§5.6), which settle the tax and total-super-balance questions. Rev 5
 closes the last two points (§5.7). No source questions remain open.
 
@@ -400,7 +400,7 @@ spending-classification tests.
 | Phase | Scope | Golden impact |
 |---|---|---|
 | 0 | Sources: **DONE** 5 Oct 2026 (§5.6, §5.7) | none |
-| 1 | Multiple funds: job `superAccountKey`, remove the fallback, sum caps across funds | none expected; a plan with one fund per person is unchanged |
+| 1 | **BUILT.** Multiple funds: job `superAccountKey`, remove the fallback, sum caps across funds. `super-fund-key.js`; the downsizer uses the same resolver; tests `super-fund-routing.test.mjs` | none expected; a plan with one fund per person is unchanged |
 | 2 | Lawful release date and the preservation-age table | moves any golden with an AU person still working past 60 |
 | 3 | `drawStartDate` on ordinary accounts, pension phase from the effective start, the date sweep | moves goldens where super is untouched past 60 (the earnings tax changes) |
 | 4 | `MsbsAccount` from a statement: the fields, the member sleeve, the Balanced funded sleeve, the unfunded benefit with r 61A indexation, preserved before the draw; total super balance value from Table 1 | none (new account type) |
