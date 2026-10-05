@@ -29,11 +29,11 @@ export const WHOLE_NUMBER_RECORD_FIELDS = new Set([
 ]);
 
 /**
- * Asset-record DATE fields (design 117): the cascade writes them as 'YYYY-MM-DD', so a
+ * Record DATE fields (design 117; a super draw date, design 119): the cascade writes them as 'YYYY-MM-DD', so a
  * swept value that arrives as a Date or a full ISO string lands in the record's own form.
  */
 export const DATE_RECORD_FIELDS = new Set(['plannedSaleDate', 'purchaseDate', 'inheritanceDate',
-  'k401ToIraConversionDate', 'mainResidenceFrom']);
+  'k401ToIraConversionDate', 'mainResidenceFrom', 'drawStartDate']);
 
 /**
  * @param {string} field - the record property being written

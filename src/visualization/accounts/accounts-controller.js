@@ -204,6 +204,8 @@ export class AccountsController {
       const m = data.reinvestDividendsBySecurity;
       account.reinvestDividendsBySecurity = (m && Object.keys(m).length) ? { ...m } : null;
     }
+    // Super draw date (design 119 §6.1). Blank ⇒ null ⇒ from the release date.
+    if ('drawStartDate' in data) account.drawStartDate = data.drawStartDate || null;
     // Prime-relative cash rate (design 56). The editor sends the derived spread (or a
     // legacy absolute when no Prime is configured); the builder has no setter, so stamp
     // them directly. null → not Prime-linked / unset (global default).
@@ -269,6 +271,7 @@ export class AccountsController {
       const m = n.reinvestDividendsBySecurity;
       n.reinvestDividendsBySecurity = (m && Object.keys(m).length) ? { ...m } : null;
     }
+    if ('drawStartDate' in n) n.drawStartDate = n.drawStartDate || null;
     // Prime-relative cash rate (design 56) — spread (or legacy absolute), null clears.
     if ('primeSpread'  in n) n.primeSpread  = (n.primeSpread  == null) ? null : Number(n.primeSpread);
     if ('interestRate' in n) n.interestRate = (n.interestRate == null) ? null : Number(n.interestRate);

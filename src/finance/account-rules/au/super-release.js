@@ -104,3 +104,54 @@ export function auSuperReleaseMs(person, birthDate = person?.birthDate) {
   for (const s of spans) if (s.endMs != null && s.endMs >= at60) candidates.push(s.endMs);
   return Math.min(...candidates);
 }
+
+/**
+ * The instant this super account starts paying, in ms, or null without a birth date
+ * (design 119 §6.1). Its `drawStartDate` is the household's choice of when to start
+ * drawing; blank means as soon as the law allows. A date before the release date moves
+ * to it, since nothing can be drawn earlier.
+ *
+ * It is also when pension phase starts: from this instant the fund's earnings on the
+ * account are exempt (0%), and before it they are taxed at 15% (design 119 D2).
+ *
+ * @param {object} account               the super account (state entry or record)
+ * @param {object} person                the member's state record
+ * @param {Date|string|number} [birthDate]  overrides `person.birthDate`
+ * @returns {number|null}
+ */
+export function auSuperDrawStartMs(account, person, birthDate = person?.birthDate) {
+  const release = auSuperReleaseMs(person, birthDate);
+  if (release == null) return null;
+  const chosen = toMs(account?.drawStartDate);
+  return chosen != null && chosen > release ? chosen : release;
+}
+
+/**
+ * The state key of the member who owns a super account: the person whose `id` is the
+ * account's owner, else the person keyed by it, else the first person.
+ *
+ * @param {object} state
+ * @param {string|null} ownerId
+ * @returns {string|null}
+ */
+export function superMemberKey(state, ownerId) {
+  const people = state?.people ?? {};
+  const keys   = Object.keys(people);
+  return keys.find(k => people[k]?.id != null && people[k].id === ownerId)
+    ?? (ownerId != null && people[ownerId] ? ownerId : (keys[0] ?? null));
+}
+
+/**
+ * {@link auSuperDrawStartMs} for an account in sim state, its member found by
+ * {@link superMemberKey}. Null when the member has no birth date.
+ *
+ * @param {object} state
+ * @param {object} account   the account's state entry
+ * @param {string|null} [ownerId]  the owner, when the entry does not carry one
+ * @returns {number|null}
+ */
+export function superDrawStartIn(state, account, ownerId = account?.ownerId ?? null) {
+  const key = superMemberKey(state, ownerId);
+  const person = key != null ? state.people[key] : null;
+  return person ? auSuperDrawStartMs(account, person) : null;
+}

@@ -42,14 +42,19 @@
 export const SUPER_TAX_RATE = 0.15;
 
 /**
- * Fund tax rate on earnings for a member of the given age.
+ * Fund tax rate on an account's earnings on `asOf`.
  *
- * Age 60 is the model's proxy for "has met a condition of release and commenced a
- * retirement-phase income stream", at which point the fund's earnings on the
- * supporting assets are exempt current pension income (ECPI) and taxed at 0%.
- * See design 77 §4.2 for what this proxy elides (the cap, and the fact that
- * commencing a pension is a choice, not automatic at 60).
+ * `drawStartMs` is when the account starts paying (`auSuperDrawStartMs`, design 119
+ * §6.1): the later of its lawful release and the household's chosen draw date. From then
+ * the member is taken to be drawing a retirement-phase income stream, so the fund's
+ * earnings on it are exempt current pension income (ECPI) and taxed at 0%. Before it, or
+ * with no date (no birth date to work from), they are taxed at 15%. Design 77 §4.2 lists
+ * what this elides: the transfer balance cap and the minimum drawdown.
+ *
+ * @param {number|null} drawStartMs
+ * @param {Date|number|null} asOf
+ * @returns {number}
  */
-export function superEarningsTaxRate(age) {
-  return age >= 60 ? 0 : SUPER_TAX_RATE;
+export function superEarningsTaxRate(drawStartMs, asOf) {
+  return drawStartMs != null && asOf != null && +asOf >= drawStartMs ? 0 : SUPER_TAX_RATE;
 }

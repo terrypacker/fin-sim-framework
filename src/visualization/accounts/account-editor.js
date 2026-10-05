@@ -226,6 +226,9 @@ export class AccountEditor extends BaseComponent {
     // default). An existing account shows its stored contributions. earningsBasis is
     // computed read-only from balance − contributionBasis; _syncEarningsBasis owns it.
     el.querySelector('[data-id="contributionBasis"]').value = this._node?.contributionBasis ?? '';
+    // Super draw date (design 119 §6.1): blank = from the lawful release date.
+    const ds = this._node?.drawStartDate;
+    el.querySelector('[data-id="drawStartDate"]').value = ds ? String(ds).slice(0, 10) : '';
 
     // Owner dropdown
     this._populateOwnerSelect(el, this._people, this._node?.ownerId ?? null);
@@ -305,6 +308,7 @@ export class AccountEditor extends BaseComponent {
       // to false, which is a different election.
       { dataId: 'reinvestDividends', field: 'reinvestDividends',
         coerce: (raw) => (raw === '' || raw == null ? null : raw === 'true' || raw === true) },
+      { dataId: 'drawStartDate', field: 'drawStartDate', coerce: (raw) => raw || null },
     ];
     // `balance` is param-linked only when it is a free scalar. When holdings drive the
     // balance it is computed (and no balance param is generated), so linking would
@@ -1112,6 +1116,9 @@ export class AccountEditor extends BaseComponent {
     if (RETIREMENT_TYPES.has(type)) {
       data.contributionBasis = el.querySelector('[data-id="contributionBasis"]').value;
     }
+    if (type === 'super') {
+      data.drawStartDate = el.querySelector('[data-id="drawStartDate"]').value || null;
+    }
     // Transaction-account flag (design 55 §7) — cash accounts only. When param-linked
     // it is dropped below (owned by the scenario param); a brand-new account has no
     // param yet, so the flag rides the create payload.
@@ -1399,6 +1406,7 @@ export class AccountEditor extends BaseComponent {
   _applyTypeVisibility(el, type) {
     el.querySelector('[data-id="countryRow"]').style.display      = FIXED_COUNTRY.has(type)    ? 'none' : '';
     el.querySelector('[data-id="investmentFields"]').style.display = RETIREMENT_TYPES.has(type) ? ''    : 'none';
+    el.querySelector('[data-id="drawStartDateRow"]').style.display  = type === 'super'            ? ''    : 'none';
     // The transaction-account flag only applies to cash accounts (§7).
     const txnRow = el.querySelector('[data-id="transactionAccountRow"]');
     if (txnRow) txnRow.style.display = CASH_TYPES.has(type) ? '' : 'none';

@@ -48,18 +48,8 @@ import { RecordBalanceAction } from '../../simulation-framework/actions.js';
 import { RATE_KEYS } from '../economic-regimes/rate-keys.js';
 import { computeHoldingsGrowth, computeHoldingsDividends, computeFundIncome } from '../holdings/holdings-earnings.js';
 import { HoldingTransactAction, VALUE_KIND } from '../holdings/holding-actions.js';
-import { getBirthDate } from '../residency-utils.js';
 import { superEarningsTaxRate } from '../tax/au/super-tax-rate.js';
-
-/** Whole years of age as of asOfDate (matches the super withdrawal handlers' getAge). */
-function getAge(birthDate, asOfDate) {
-  const years = asOfDate.getUTCFullYear() - birthDate.getUTCFullYear();
-  const hadBirthday =
-    asOfDate.getUTCMonth() > birthDate.getUTCMonth() ||
-    (asOfDate.getUTCMonth() === birthDate.getUTCMonth() &&
-     asOfDate.getUTCDate() >= birthDate.getUTCDate());
-  return hadBirthday ? years : years - 1;
-}
+import { superDrawStartIn } from '../account-rules/au/super-release.js';
 
 /**
  * Handles INTL_ROTH_EARNINGS events.
@@ -755,13 +745,12 @@ export class SuperEarningsHandler extends HandlerEntry {
       return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     }
 
-    // Pension/retirement phase (member ≥ 60, condition-of-release proxy — same
-    // gate the super withdrawal handlers use): fund earnings are tax-free (0%).
-    // Accumulation phase (< 60): earnings taxed at the flat 15% super rate.
-    const personKey = this.ownerId ?? Object.keys(state.people ?? {})[0];
-    const birthDate = getBirthDate(state, personKey);
-    const age       = birthDate && date ? getAge(birthDate, date) : 0;
-    const taxRate   = superEarningsTaxRate(age);
+    // Pension phase from the day the account starts paying (design 119 §6.1: its
+    // release date, or the household's later draw date): fund earnings are tax-free
+    // (0%). Accumulation phase before it: taxed at the flat 15% super rate.
+    const account   = state?.[stateKey];
+    const drawStart = date ? superDrawStartIn(state, account, account?.ownerId ?? this.ownerId) : null;
+    const taxRate   = superEarningsTaxRate(drawStart, date);
 
     // Design 105 — a fund is taxed on INCOME as it is derived, and on capital growth
     // only when a gain is realised (ITAA 1997 s295-85). Realisation belongs to
