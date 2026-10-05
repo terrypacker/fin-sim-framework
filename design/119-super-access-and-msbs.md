@@ -1,7 +1,7 @@
 # 119 — Super access dates, multiple funds and MSBS
 
 **Status:** ACCEPTED, rev 5, 5 Oct 2026. Q1–Q5 (§9) are answered by the author, and
-§3 records the decisions. **Phase 1 BUILT** 5 Oct 2026 (multiple funds, §6.3); phases 2–6 not started. Rev 4 adds the CSC documents and the
+§3 records the decisions. **Phases 1–2 BUILT** 5 Oct 2026 (multiple funds §6.3; release date §6.2); phases 3–6 not started. Rev 4 adds the CSC documents and the
 valuation law (§5.6), which settle the tax and total-super-balance questions. Rev 5
 closes the last two points (§5.7). No source questions remain open.
 
@@ -302,8 +302,12 @@ A pure function in the AU account module:
 ```
 releaseDate(person, jobs) =
   min( date of 65th birthday,
-       max( preservation-age birthday, end of the last job ) )
+       max( preservation-age birthday, end of the last job ),     reg 6.01(7)(a), (b)(ii)
+       end of any job that ends on or after the 60th birthday )   reg 6.01(7)(b)(i)
 ```
+
+The third term was added when building phase 2. Reg 6.01(7)(b)(i) releases a member aged
+60 or over when any employment arrangement ends, even if another job follows.
 
 Preservation age comes from the reg 6.01(2) table by birth date, which replaces the
 hardcoded 60. A person with no jobs gets preservation age. The same table gives the
@@ -401,7 +405,7 @@ spending-classification tests.
 |---|---|---|
 | 0 | Sources: **DONE** 5 Oct 2026 (§5.6, §5.7) | none |
 | 1 | **BUILT.** Multiple funds: job `superAccountKey`, remove the fallback, sum caps across funds. `super-fund-key.js`; the downsizer uses the same resolver; tests `super-fund-routing.test.mjs` | none expected; a plan with one fund per person is unchanged |
-| 2 | Lawful release date and the preservation-age table | moves any golden with an AU person still working past 60 |
+| 2 | **BUILT.** Lawful release date and the preservation-age table (`super-release.js`), read by the drawdown walk, pool metrics, net liquidity and the unlock date. Also releases at the end of any job held at 60+ (reg 6.01(7)(b)(i)), which §6.2's formula left out. Tests `super-release.test.mjs` | none moved: every golden run ends before its AU members reach 60 |
 | 3 | `drawStartDate` on ordinary accounts, pension phase from the effective start, the date sweep | moves goldens where super is untouched past 60 (the earnings tax changes) |
 | 4 | `MsbsAccount` from a statement: the fields, the member sleeve, the Balanced funded sleeve, the unfunded benefit with r 61A indexation, preserved before the draw; total super balance value from Table 1 | none (new account type) |
 | 5 | MSBS draw: the window, `MSBS_ELECTION`, the Sch 5 pension and r 56 indexation, the lump-sum routing, `pensionShare`; pension tax with the taxed/untaxed split and the defined benefit income cap; total super balance from Table 4A; survivor pension at 67% after checking Part 4 Div 2 | none (new account type) |

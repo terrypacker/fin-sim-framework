@@ -11,6 +11,7 @@
 import { ACCOUNT_TYPE } from '../assets/account.js';
 import { cashFloorOf } from './cash-floor.js';
 import { getUsEarlyWithdrawalRules, supportsEarlyWithdrawal } from './us/us-early-withdrawal-rules.js';
+import { auSuperReleaseMs } from './au/super-release.js';
 
 /**
  * DESIGN 97 §24.2 — the ONE authority for "what would a penalty-free draw find here, now".
@@ -103,15 +104,29 @@ export function hasAgeGate(account) {
  * account whose `ownerId` matches nobody. It is fixed there, with a test, as a behaviour
  * change on its own — not silently, inside a move. §24.2 Q1.
  *
+ * **Super** (design 119 §6.2): given the `owner`'s state record, the gate is the lawful
+ * release date — preservation age and retirement, or 65 — not `minimumAge`. Without an
+ * owner record it stays the age test, so a caller that has only a birth date is unchanged.
+ *
  * @param {object}                  account
  * @param {Date|string|number|null} birthDate - the OWNER's birth date, not the household's
  * @param {Date|string|number}      asOfDate
+ * @param {object|null}             [owner]   - the OWNER's state record (jobs, retirement)
  * @returns {boolean}
  */
-export function isAgeEligible(account, birthDate, asOfDate) {
+export function isAgeEligible(account, birthDate, asOfDate, owner = null) {
   if (!hasAgeGate(account)) return true;
+  const release = superReleaseMs(account, birthDate, owner);
+  if (release != null) return +asOfDate >= release;
   const ageDecimal = (asOfDate - birthDate) / MS_PER_YEAR;
   return ageDecimal >= account.minimumAge;
+}
+
+/** The super release instant for this owner, or null when the account is not super or
+ *  the owner is unknown (then the age test applies). */
+function superReleaseMs(account, birthDate, owner) {
+  if (owner == null || account?.type !== ACCOUNT_TYPE.SUPER || birthDate == null) return null;
+  return auSuperReleaseMs(owner, birthDate);
 }
 
 /**
@@ -226,11 +241,15 @@ export function penaltyFreeAvailable(account, { birthDate, asOf } = {}) {
  *
  * @param {object}                  account
  * @param {Date|string|number|null} birthDate - the OWNER's birth date
+ * @param {object|null}             [owner]   - the OWNER's state record; for super, the
+ *                                              release date is returned (design 119)
  * @returns {Date|null}
  */
-export function unlocksAt(account, birthDate) {
+export function unlocksAt(account, birthDate, owner = null) {
   if (!hasAgeGate(account)) return null;
   if (birthDate == null) return null;
+  const release = superReleaseMs(account, birthDate, owner);
+  if (release != null) return new Date(release);
   const born = birthDate instanceof Date ? birthDate.getTime() : new Date(birthDate).getTime();
   if (!Number.isFinite(born)) return null;
   // The INVERSE of `isAgeEligible`'s comparison on the same year length, so the date this

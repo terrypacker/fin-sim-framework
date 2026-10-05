@@ -159,6 +159,11 @@ function ownerBirthDate(state, account) {
   return getBirthDate(state, account?.ownerId) ?? getBirthDate(state, primaryPersonKey(state));
 }
 
+/** The owner's state record, resolved as `ownerBirthDate` resolves the date. */
+function ownerRecord(state, account) {
+  return state.people?.[account?.ownerId] ?? state.people?.[primaryPersonKey(state)] ?? null;
+}
+
 function claimAccess(state, account, sleeves, value, asOf, accessMode) {
   if (!hasAgeGate(account)) return { accessible: value, opensAt: null };
 
@@ -166,7 +171,7 @@ function claimAccess(state, account, sleeves, value, asOf, accessMode) {
   // Nobody to ask about, or no date to ask on ⇒ unprovable ⇒ locked. See (3) above.
   if (birthDate == null || asOf == null) return { accessible: 0, opensAt: null };
 
-  const eligible = isAgeEligible(account, birthDate, asOf);
+  const eligible = isAgeEligible(account, birthDate, asOf, ownerRecord(state, account));
   let accessible = penaltyFreeSliceOf(account, eligible, value);
 
   // §24.5 — an ALLOW_PENALTY pool may be raided early, so its cover counts the penalised
@@ -183,7 +188,7 @@ function claimAccess(state, account, sleeves, value, asOf, accessMode) {
     // stops being gated. Under ALLOW_PENALTY the gate no longer decides whether the money can
     // be reached, only what it COSTS — so the date is when the penalty slice stops being a
     // penalty, which is exactly the `locked` figure beside it becoming zero.
-    opensAt: eligible ? null : gateOpensAt(account, birthDate),
+    opensAt: eligible ? null : gateOpensAt(account, birthDate, ownerRecord(state, account)),
   };
 }
 

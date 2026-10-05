@@ -2125,7 +2125,7 @@ what the in-app panel keys on.
 
 | topic | kind | words | cites |
 |---|---|---|---|
-| [Account](nodes/account.md) | node | 210 | 4 panels · design 54, 56, 86, 87, 113 |
+| [Account](nodes/account.md) | node | 233 | 4 panels · design 54, 56, 86, 87, 113, 119 |
 | [Action](nodes/action.md) | node | 200 | 3 panels · design 2, 91 |
 | [Action Detail](panels/action-detail.md) | panel | 172 | 1 panel · design 91 |
 | [Allocation](panels/allocation.md) | panel | 185 | 1 panel · design 82 |

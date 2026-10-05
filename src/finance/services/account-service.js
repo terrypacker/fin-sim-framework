@@ -797,12 +797,14 @@ export class AccountService extends AssetService {
    * would have been the defect again.
    *
    * @param {import('../account.js').Account} account
-   * @param {import('../person.js').Person} person
+   * @param {import('../person.js').Person} person  `{ birthDate, owner }`; `owner` is the
+   *        account owner's state record, which super needs for its release date
+   *        (design 119 §6.2)
    * @param {Date}    asOfDate
    * @returns {boolean}
    */
   isWithdrawalEligible(account, person, asOfDate) {
-    return isAgeEligible(account, person?.birthDate, asOfDate);
+    return isAgeEligible(account, person?.birthDate, asOfDate, person?.owner ?? null);
   }
 
   /**
@@ -1084,7 +1086,8 @@ export class AccountService extends AssetService {
       const acctBirthDate = (account.ownerId && account.ownerId !== personKey)
         ? (getBirthDate(state, account.ownerId) ?? birthDate)
         : birthDate;
-      return this.isWithdrawalEligible(account, { birthDate: acctBirthDate }, date);
+      return this.isWithdrawalEligible(account,
+        { birthDate: acctBirthDate, owner: state.people?.[account.ownerId ?? personKey] }, date);
     };
 
     // A sequence IS an ordering, so it takes the ordered walk. `assertDrawdownSequence`
@@ -1223,7 +1226,8 @@ export class AccountService extends AssetService {
         ? (getBirthDate(state, account.ownerId) ?? birthDate)
         : birthDate;
       const acctAgeDecimal = acctBirthDate2 ? (date - acctBirthDate2) / msPerYear : ageDecimal;
-      if (this.isWithdrawalEligible(account, { birthDate: acctBirthDate2 }, date)) continue;
+      if (this.isWithdrawalEligible(account,
+        { birthDate: acctBirthDate2, owner: state.people?.[account.ownerId ?? personKey] }, date)) continue;
 
       const rules = earlyWithdrawalRulesFn(account.type);
       if (!rules) continue;
