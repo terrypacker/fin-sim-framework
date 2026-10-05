@@ -10,9 +10,9 @@
 
 import { getBirthDate } from '../residency-utils.js';
 import { supportsEarlyWithdrawal } from '../account-rules/us/us-early-withdrawal-rules.js';
+import { isAgeEligible } from '../account-rules/penalty-free-availability.js';
 import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
 
-const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
 
 /**
  * Determine whether an account's balance is accessible on `date`.
@@ -52,8 +52,9 @@ function isAccessible(account, state, date) {
   const birthDate = getBirthDate(state, ownerId);
   if (!birthDate) return false;
 
-  const age = (date - birthDate) / MS_PER_YEAR;
-  return age >= account.minimumAge;
+  // The shared gate (design 119 §6.2): for super, the lawful release date rather than
+  // a fixed age; for everything else the same `minimumAge` test as before.
+  return isAgeEligible(account, birthDate, date, state.people?.[ownerId] ?? null);
 }
 
 /**

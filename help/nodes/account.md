@@ -4,7 +4,7 @@ kind: node
 title: Account
 node: account
 panels: [config-list, config-graph, holdings, pools]
-design: [54-loan-liability-accounts.md, 56-prime-relative-rates.md, 86-leveraged-property-fidelity.md, 87-foreign-currency-basis-pools.md, 113-fixed-rate-loans.md]
+design: [54-loan-liability-accounts.md, 56-prime-relative-rates.md, 86-leveraged-property-fidelity.md, 87-foreign-currency-basis-pools.md, 113-fixed-rate-loans.md, 119-super-access-and-msbs.md]
 stamps:
   panel:config-list: c29391
   panel:config-graph: 82a0c7
@@ -32,6 +32,9 @@ foreign-currency pool, the **§988 basis** is what a disposition of that cash is
 measured against: currency is property to a US person, and spending it realises
 ordinary gain or loss. See [Liquidity Pools](../concepts/liquidity-pools.md) and
 [Drawdown Order](../concepts/drawdown-order.md).
+
+**Super** opens at its owner's preservation age once they stop working, when any job
+held at 60 or later ends, or at 65.
 
 ## Fields
 
