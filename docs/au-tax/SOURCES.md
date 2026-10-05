@@ -90,6 +90,55 @@ trustee's directors), **s62A** (the collectables head of power), SIS Regs **reg 
 (the collectables list — coins are on it, bullion is not), and ITAA 1997 **s295-95(2)–(4)**
 (already on disk: central management and control ordinarily in Australia, 2-year absence).
 
+## `MSBA-1991/` and `MSB-Trust-Deed/` — added 5 Oct 2026 (design 119)
+
+| directory | instrument | compilation |
+|---|---|---|
+| `MSBA-1991/C2022C00261.txt` | *Military Superannuation and Benefits Act 1991*, titleId `C2004A04210` | No. 27, compilation date 28 Sep 2022 |
+| `MSB-Trust-Deed/F2022C00514.txt` | *Military Superannuation and Benefits Trust Deed*, titleId `F2005B00244` (the MSBS Rules are its Schedule) | No. 19, compilation date 8 Apr 2022 |
+
+Both by the scripted route above, single volume, `original`. Both were `isCurrent` on
+5 Oct 2026. The Trust Deed is the instrument that holds the benefit rules: contributions
+(rr 4, 10), benefits on retirement (rr 12–14), preserved benefits (rr 49–53), pension
+indexation (r 56), unfunded preserved benefit indexation (r 61A), and the formulas in
+Schedules 3, 5, 7 and 8.
+
+## `csc-msbs/` — CSC's MilitarySuper documents, added 5 Oct 2026 (design 119)
+
+`www.csc.gov.au` returns **403** to scripted fetches. CSC's PDFs, however, are served from
+a separate content host, `csc.sitecorecontenthub.cloud/api/public/content/<id>?v=<ver>`,
+which downloads with a browser User-Agent. The ids were found by web search; the site's own
+pages could not be crawled. All of these have a text layer (`pdftotext -layout`).
+
+| File | Document | Source id |
+|---|---|---|
+| `MSBS-PDS-ed10-2025-10-31.txt` | MilitarySuper Product Disclosure Statement, tenth edition, 31 Oct 2025 | `769dc68630a14a798542ed40e444849b` |
+| `Tax-and-your-MilitarySuper-2026-07-01.txt` | *Tax and your MilitarySuper*, part of the PDS, issued 1 Jul 2026 | `99d2d36f16e742f09cb77eec0af865f4` |
+| `MS08-Tax-and-your-MilitarySuper-pension-05-22.txt` | MS08 fact sheet, 05/22 | `dcf49317088b4fb98be9df9fd6c0712e` |
+| `MB13-The-productivity-benefit-07-13.txt` | MB13 fact sheet, 07/13 | `www.csc.gov.au/-/media/Files/MilitarySuper/Factsheets/MB13-the-productivity-benefit.pdf` (this one path on the main domain did download) |
+| `MSC02-Preserved-benefits-summary-02-22.txt` | MSC02 preserved benefits summary (a flow chart; the text extract is laid out in columns) | `b17802e9a6fd421082e870e0a4ec4cfb` |
+| `M65-Claim-preserved-benefit-after-55-05-26.txt` | M65 claim form, 05/26, with its options summary | `f7930891628c4f7dbd84b428c96f3d8c` |
+| `Death-and-invalidity-benefits-2025-10-31.txt` | *Death and invalidity benefits* booklet, part of the PDS | `0911e72c78694e17bdc20a8786c54b7c` |
+| `militarysuper-book-2011-06-30.txt` | *militarysuper book*, ComSuper, 30 June 2011 (the scheme's member handbook at the time). **Superseded**; kept only for its "Preserved benefits" chapter, which describes what a preserved member's statement shows. | `archive.dfwa.org.au/files/original/b427fcaf97452a621f882c660240a865.pdf` (Defence Force Welfare Association archive) |
+
+These are the trustee's statements, not law. Where one states a rule, the Trust Deed above
+is the authority. Where one states a tax figure (a cap or threshold for 2026–27), it is
+CSC's restatement, and the Act decides.
+
+## `ITAR-2021/` and `FLSR-2025/` — valuation of a defined benefit interest, added 5 Oct 2026 (design 119)
+
+| file | instrument | compilation |
+|---|---|---|
+| `ITAR-2021/F2026C00602.txt` | *Income Tax Assessment (1997 Act) Regulations 2021*, titleId `F2021L00206` | No. 16, 27 Jun 2026 |
+| `FLSR-2025/F2026C00775.txt` | *Family Law (Superannuation) Regulations 2025*, titleId `F2025L00178` | 23 Jul 2026 |
+| `FLSR-2025/F2026C00100VOL03.txt` | *Family Law (Superannuation) (Methods and Factors for Valuing Particular Superannuation Interests) Approval 2025*, titleId `F2025L00281`, **volume 3 of 8 only** (it holds Sch 1 Part 4, MSBS) | No. 1, 10 Jan 2026 |
+
+All by the scripted route above. Why they are here: ITAA 1997 s307-205 leaves the value of a
+super interest to the regulations. ITAR reg 307-230A.01 makes a defined benefit interest's
+total super balance value its **family law value**. Reg 307-230A.04 points that at the
+Approval, read as if the member were male and had no reversionary beneficiary. The Approval's
+Sch 1 Part 4 gives the MSBS formulas and factor tables.
+
 ## `ato-rates/` additions, 16 Sep 2026 (design 107)
 
 | File | Source | Route |
