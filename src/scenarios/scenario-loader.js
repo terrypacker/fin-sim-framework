@@ -168,10 +168,11 @@ export class ScenarioLoader {
     // Design 116 §4.6 — job records that cannot run are an error, not a warning: an
     // overlapping or orphaned spell would otherwise be a silently wrong wage. Before
     // anything is built, so a bad scenario never half-loads.
-    const jobErrors = validateJobs(cfg.jobs, cfg.persons);
+    const jobErrors = validateJobs(cfg.jobs, cfg.persons, cfg.accounts);
     if (jobErrors.length > 0) {
       throw new Error(`Scenario jobs are invalid:\n  ${jobErrors.join('\n  ')}`);
     }
+    this._warnAuJobsWithoutFund(cfg);
 
     ScenarioSerializer.deserializePersonsAccounts(cfg, services);
 
@@ -197,6 +198,30 @@ export class ScenarioLoader {
 
     this._seedIndexLevels(cfg, services);
     this._applyRandomSeed(cfg, services);
+  }
+
+  /**
+   * Warn about an Australian job whose person owns no super fund (design 119 §6.3). Its
+   * SG, sacrifice and personal contributions go nowhere: payroll no longer borrows
+   * another person's fund. A warning, not an error, because a plan may model the wage
+   * alone on purpose.
+   *
+   * @private
+   */
+  _warnAuJobsWithoutFund(cfg) {
+    const accounts = cfg.accounts ?? [];
+    const onePerson = (cfg.persons ?? []).length <= 1;
+    const hasFund = personId => accounts.some(a =>
+      (a?.role === ACCOUNT_ROLES.SUPER || a?.__type === 'SuperannuationAccount')
+      && (a.ownerId === personId || (a.ownerId == null && onePerson)));
+    const warned = new Set();
+    for (const j of cfg.jobs ?? []) {
+      const au = j?.workCountry === 'AU' || (j?.workCountry == null && j?.wageCurrency === 'AUD');
+      if (!au || warned.has(j.personId) || hasFund(j.personId)) continue;
+      warned.add(j.personId);
+      console.warn(`Person "${j.personId}" has an Australian job ("${j.id}") but no super `
+        + 'fund of their own; no AU super contributions will be made for them.');
+    }
   }
 
   /**

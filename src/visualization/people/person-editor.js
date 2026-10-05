@@ -11,7 +11,7 @@
 import { BaseComponent } from '../components/base-component.js';
 import { bindParamLinkedField } from '../scenario/param-linked-field.js';
 import { PayrollSection } from './payroll-section.js';
-import { JobsSection } from './jobs-section.js';
+import { JobsSection, superFundOptions } from './jobs-section.js';
 import { defaultCurrencyForCountry } from '../../finance/country-codes.js';
 import { usStateOptionPairs } from '../../finance/tax/state/us-states.js';
 import { SS_CLAIM_AGES, fullRetirementAge } from '../../finance/account-rules/us/us-social-security-rules.js';
@@ -152,6 +152,7 @@ export class PersonEditor extends BaseComponent {
         retirementDate: flat('retirementDate').value,
       }),
       onChange: () => this._syncJobLock(el),
+      superFunds: () => superFundOptions(this._accounts, this._node?.id),
     });
     this._jobs.render();
     if (this._jobsIn.length > 0) el.querySelector('[data-id="jobsSection"]').open = true;

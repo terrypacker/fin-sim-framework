@@ -123,7 +123,7 @@ export function downsizerContributions({ prop, proceeds, exemptFraction, acquisi
 import { AccountServiceReducer, PRIORITY } from '../../../simulation-framework/reducers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { resolveCashKey } from '../cash-routing.js';
-import { ACCOUNT_ROLES } from '../../state/account-roles.js';
+import { auSuperKeyFor } from './super-fund-key.js';
 
 /**
  * Moves a downsizer contribution from the AU cash pool into the member's super fund.
@@ -156,9 +156,9 @@ export class SuperDownsizerContributionApplyReducer extends AccountServiceReduce
     const { amount, personKey } = action;
     if (!(amount > 0)) return this.newState(state);
 
+    // Design 119 §6.3: the member's own fund, never a default that may be the spouse's.
     const superKey = action.stateKey
-      ?? this.stateRegistry?.getStateKey?.(ACCOUNT_ROLES.SUPER, personKey)
-      ?? 'superAccount';
+      ?? auSuperKeyFor({ state, stateRegistry: this.stateRegistry, personKey });
     const sa = state[superKey];
     if (!sa) return this.newState(state);
 

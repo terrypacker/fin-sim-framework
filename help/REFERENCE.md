@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-223 parameters · 33 panels · 12 node types (191 fields) · 173 action types · 86 tools · 291 state field types · 76 topics · 127 design docs
+223 parameters · 33 panels · 12 node types (192 fields) · 173 action types · 86 tools · 291 state field types · 76 topics · 127 design docs
 
 ---
 
@@ -578,7 +578,7 @@ menu files it under.
 
 ---
 
-## Node types (12 kinds · 191 fields)
+## Node types (12 kinds · 192 fields)
 
 Every kind of record the Nodes panel can open, and every control its edit form offers.
 The inventory is read from the FORM — the `<template>` in `index.html` the editor
@@ -649,7 +649,7 @@ Explained in [`help/nodes`](nodes/person.md). 12 field(s) described by a record 
 - **`superNonConcessionalContribution`** — Non-Concessional · `MONEY` · topic
   An annual after-tax contribution with no deduction and no 15% fund tax. It buys a tax-sheltered location rather than a deduction, and is bound by the non-concessional cap and its bring-forward rule.
 
-### Jobs — `job` (10 fields)
+### Jobs — `job` (11 fields)
 
 Explained in [`help/nodes`](nodes/job.md). 4 field(s) described by a record parameter.
 
@@ -673,6 +673,8 @@ Explained in [`help/nodes`](nodes/job.md). 4 field(s) described by a record para
   A contribution this employer makes whether or not the person defers anything, as a share of pay. Blank inherits; 0 means none.
 - **`superGuaranteePct`** — Super Guarantee · `number` · topic
   The Super Guarantee rate this employer pays on AUD wages. Blank inherits the person's rate, then the household's. Each employer has its own maximum contributions base, so a new job in the same year starts its base again.
+- **`superAccountKey`** — Super Fund · `select` · topic
+  The super fund this job's Super Guarantee, salary sacrifice and personal contributions go into, picked from the person's own funds. "First fund" uses the first one they own. Only that person's funds are offered, and a scenario that names someone else's fund refuses to load. A person with an Australian job and no fund of their own gets no AU contributions, and loading warns about it.
 
 ### Accounts — `account` (33 fields)
 
@@ -2159,7 +2161,7 @@ what the in-app panel keys on.
 | [Inflation](concepts/inflation.md) | concept | 261 | 2 panels · 18 params · design 103 |
 | [Edit](panels/inspector.md) | panel | 182 | 1 panel |
 | [Interest Rates and the Yield Curve](concepts/interest-rates.md) | concept | 350 | 2 panels · 23 params · design 56, 67 |
-| [Job](nodes/job.md) | node | 217 | 2 panels · design 116, 50, 73 |
+| [Job](nodes/job.md) | node | 230 | 2 panels · design 116, 50, 73, 119 |
 | [Journal Report](panels/journal-report.md) | panel | 193 | 1 panel · design 16 |
 | [Lineage](panels/lineage.md) | panel | 196 | 1 panel · design 30 |
 | [Liquidity Pools](concepts/liquidity-pools.md) | concept | 294 | 1 panel · 6 params · design 97 |

@@ -44,6 +44,8 @@ export const JOB_FORM_FIELDS = Object.freeze([
   { field: 'k401EmployerMatchPct', label: '401(k) Match',   kind: 'number' },
   { field: 'k401NonElectivePct',   label: 'Non-Elective',   kind: 'number' },
   { field: 'superGuaranteePct',    label: 'Super Guarantee', kind: 'number' },
+  // Design 119 §6.3 — which of the person's super funds this job pays into.
+  { field: 'superAccountKey',      label: 'Super Fund',      kind: 'select' },
 ]);
 
 /** The employer-term columns: nullable fractions, where blank means "inherit". */
@@ -64,11 +66,20 @@ const COLUMN_EXTRAS = {
                   options: [['', 'Residency'], ['US', 'US'], ['AU', 'AU']],
                   badge: r => (r.workCountry ? `works in ${r.workCountry}` : null) },
   selfEmployed: { width: '0.6fr', optional: true, badge: r => (r.selfEmployed ? 'self-employed' : null) },
+  superAccountKey: { type: 'select', width: '1.1fr', optional: true,
+                     badge: r => (r.superAccountKey ? `super → ${r.superAccountKey}` : null) },
   ...Object.fromEntries(TERM_FIELDS.map(f => [f, {
     step: '0.005', min: '0', max: '1', width: '0.8fr', placeholder: 'inherit', optional: true,
     badge: r => (r[f] != null ? `${JOB_FORM_FIELDS.find(x => x.field === f).label} ${(r[f] * 100).toFixed(1)}%` : null),
   }])),
 };
+
+/** `[stateKey, name]` for each super fund `personId` owns, blank first ("first fund"). */
+export function superFundOptions(accounts, personId) {
+  const own = (accounts ?? []).filter(a => a?.stateKey && a.role === 'super'
+    && (a.ownerId === personId || a.ownerId == null));
+  return [['', 'First fund'], ...own.map(a => [a.stateKey, a.name || a.stateKey])];
+}
 
 const dateStr = v => (v == null || v === '' ? null
   : String(v instanceof Date ? v.toISOString() : v).slice(0, 10));
@@ -82,12 +93,15 @@ export class JobsSection {
    *        `{ monthlyWage, wageCurrency, workCountry, selfEmployed, retirementDate }`,
    *        which seed the first row
    * @param {function(): void} [o.onChange]  after every add, remove or edit
+   * @param {function(): Array<[string, string]>} [o.superFunds]  the person's super
+   *        funds as select options; read live so a fund added since opening appears
    */
-  constructor({ container, jobs = [], readFlat, onChange = null }) {
+  constructor({ container, jobs = [], readFlat, onChange = null, superFunds = null }) {
     this._container = container;
     this._rows      = (jobs ?? []).map(j => ({ ...j }));
     this._readFlat  = readFlat;
     this._onChange  = onChange;
+    this._superFunds = superFunds ?? (() => [['', 'First fund']]);
     // The edit pane is narrow: growth, work country and self-employed are drawn only on
     // request, and a non-default value in a hidden column still shows as a badge.
     this._showAll   = false;
@@ -103,6 +117,7 @@ export class JobsSection {
       type:   f.kind === 'number' ? undefined : f.kind,
       dataId: `${JOB_ID_PREFIX}${f.field}`,
       ...COLUMN_EXTRAS[f.field],
+      ...(f.field === 'superAccountKey' && { options: () => this._superFunds() }),
     }));
     const toggle = document.createElement('label');
     toggle.className = 'row-list-toggle';
@@ -172,6 +187,7 @@ export class JobsSection {
       wageCurrency: r.wageCurrency ?? 'USD',
       workCountry:  r.workCountry || null,
       selfEmployed: !!r.selfEmployed,
+      ...(r.superAccountKey && { superAccountKey: r.superAccountKey }),
       // Blank stays null — "inherit" — and never becomes 0, which would opt the job out
       // of the household's rate (design 95 §13.2's rule, applied per job).
       ...Object.fromEntries(TERM_FIELDS

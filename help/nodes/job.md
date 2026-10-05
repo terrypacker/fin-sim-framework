@@ -4,14 +4,14 @@ kind: node
 title: Job
 node: job
 panels: [config-list, paycheque]
-design: [116-employment-spells.md, 50-au-source-wages.md, 73-tax-export-validation-fixes.md]
+design: [116-employment-spells.md, 50-au-source-wages.md, 73-tax-export-validation-fixes.md, 119-super-access-and-msbs.md]
 sources: [src/finance/payroll/employment.js, src/visualization/people/jobs-section.js]
 stamps:
   panel:config-list: c29391
   panel:paycheque: d4e25c
-  node:job: 3cd594
-  src/finance/payroll/employment.js: 4265c8
-  src/visualization/people/jobs-section.js: 73fb9a
+  node:job: ded547
+  src/finance/payroll/employment.js: c220c1
+  src/visualization/people/jobs-section.js: dec79e
 ---
 
 One stretch of employment for one person: a raise, a pay cut, part-time work before
@@ -29,7 +29,7 @@ The wage is entered in **today's money** and inflates with the CPI of its own cu
 country from the start of the run, before any move. A job starting in 2035 at 9,000 means
 a job paying what 9,000 buys now. The person's payroll elections (deferrals, salary
 sacrifice, splits) apply to whichever job is current; a USD job feeds the 401(k) and an
-AUD one feeds super. Employer terms (match, non-elective, Super Guarantee) can differ by
+AUD one feeds super, the fund the job names or else the first one the person owns. Employer terms (match, non-elective, Super Guarantee) can differ by
 job; blank inherits. The Nodes panel lists every job; selecting one opens its person.
 
 ## Fields
@@ -40,3 +40,4 @@ job; blank inherits. The Nodes panel lists every job; selecting one opens its pe
 - `k401EmployerMatchPct` — This employer's 401(k) match, read as a full match on the first share of pay; 0.04 matches up to 4%. Blank uses the person's own setting, then the household's. A typed 0 means this employer matches nothing.
 - `k401NonElectivePct` — A contribution this employer makes whether or not the person defers anything, as a share of pay. Blank inherits; 0 means none.
 - `superGuaranteePct` — The Super Guarantee rate this employer pays on AUD wages. Blank inherits the person's rate, then the household's. Each employer has its own maximum contributions base, so a new job in the same year starts its base again.
+- `superAccountKey` — The super fund this job's Super Guarantee, salary sacrifice and personal contributions go into, picked from the person's own funds. "First fund" uses the first one they own. Only that person's funds are offered, and a scenario that names someone else's fund refuses to load. A person with an Australian job and no fund of their own gets no AU contributions, and loading warns about it.

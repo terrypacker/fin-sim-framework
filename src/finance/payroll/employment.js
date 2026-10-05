@@ -156,6 +156,9 @@ export function earnerView(person, date, state, spellsByPerson = null) {
     workCountry:  s.workCountry,
     selfEmployed: !!s.selfEmployed,
     spellId:      s.id,
+    // Design 119 §6.3 — the super fund this job pays into. Absent means the person's
+    // first fund, so it is laid over only when named.
+    ...(s.superAccountKey != null && { superAccountKey: s.superAccountKey }),
     // The job's employer terms win over the person's own; an empty one leaves the
     // person's value (and through it the household default) in force.
     ...Object.fromEntries(JOB_EMPLOYER_TERMS
@@ -223,6 +226,8 @@ export function buildSpells(jobs, person, simStart) {
       wageCurrency:    j.wageCurrency ?? person.wageCurrency ?? null,
       workCountry:     j.workCountry  ?? null,
       selfEmployed:    !!j.selfEmployed,
+      // Only when named, so a plan without one keeps its state (and goldens) unchanged.
+      ...(j.superAccountKey && { superAccountKey: j.superAccountKey }),
       ...Object.fromEntries(JOB_EMPLOYER_TERMS.map(f => [f, j[f] ?? null])),
     }))
     .sort((a, b) => (a.startMs ?? -Infinity) - (b.startMs ?? -Infinity));
@@ -341,9 +346,13 @@ export function jobDateRangeConflicts(rows, jobs) {
  *
  * @param {Array<object>} jobs
  * @param {Array<object>} persons  cfg person records (only `id` is read)
+ * @param {Array<object>} [accounts]  cfg account records. When given, a job's
+ *        `superAccountKey` must name one of ITS person's super funds (design 119 §6.3):
+ *        a key naming a spouse's fund would pay one member's SG into another's account.
+ *        Omitted by the editor's per-person check, which offers only valid funds.
  * @returns {string[]} empty when the records are valid
  */
-export function validateJobs(jobs, persons) {
+export function validateJobs(jobs, persons, accounts = null) {
   const errors = [];
   if (!Array.isArray(jobs) || jobs.length === 0) return errors;
   const personIds = new Set((persons ?? []).map(p => p?.id));
@@ -361,6 +370,18 @@ export function validateJobs(jobs, persons) {
     for (const f of JOB_DATE_FIELDS) {
       if (j[f] != null && j[f] !== '' && toMs(j[f]) == null) {
         errors.push(`${label}: ${f} "${j[f]}" is not a date.`);
+      }
+    }
+    if (accounts != null && j.superAccountKey) {
+      const fund = accounts.find(a => a?.stateKey === j.superAccountKey);
+      if (fund == null) {
+        errors.push(`${label}: superAccountKey "${j.superAccountKey}" names no account.`);
+      } else if (fund.role !== 'super' && fund.__type !== 'SuperannuationAccount') {
+        // 'super' is ACCOUNT_ROLES.SUPER, spelled out because this module stays a leaf.
+        errors.push(`${label}: superAccountKey "${j.superAccountKey}" is not a super account.`);
+      } else if (fund.ownerId != null && fund.ownerId !== j.personId) {
+        errors.push(`${label}: superAccountKey "${j.superAccountKey}" belongs to `
+          + `"${fund.ownerId}", not "${j.personId}".`);
       }
     }
     const s = toMs(j.startDate);

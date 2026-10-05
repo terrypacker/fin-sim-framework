@@ -12,6 +12,7 @@ import { Reducer, PRIORITY }  from '../../simulation-framework/reducers.js';
 import { HandlerEntry }        from '../../simulation-framework/handlers.js';
 import { TaxSettleService }    from '../tax-settle-service.js';
 import { ACCOUNT_ROLES } from '../state/account-roles.js';
+import { auSuperKeysOf } from '../account-rules/au/super-fund-key.js';
 import { toUSD, toAUD, taxFxRate } from './tax-fx.js';
 import { rollUnusedConcessionalCap, concessionalCapWithCarryForward, nonConcessionalCap }
   from './au/au-super-limits.js';
@@ -909,10 +910,13 @@ function _auSuperCapsRoll(state, action) {
     const concessional = Math.max(0, rec.concessionalYTD ?? 0);
 
     // The member's balance at this instant IS "just before the start" of the year
-    // about to begin, which is what s291-20(3)(b) and s292-85(2)(b) both test.
-    const superKey = _auSuperKeyFor(state, key, rec);
-    const tsb = superKey != null ? Math.max(0, state[superKey]?.balance ?? 0)
-                                 : (rec.tsbAtFyStart ?? 0);
+    // about to begin, which is what s291-20(3)(b) and s292-85(2)(b) both test. Summed
+    // over EVERY fund the member owns (s307-230(1)(a), design 119 §6.3): reading one
+    // fund understated the balance of anyone with two and opened caps it should close.
+    const superKeys = auSuperKeysOf(state, key, rec?.superKey ?? null);
+    const tsb = superKeys.length > 0
+      ? superKeys.reduce((sum, k) => sum + Math.max(0, state[k]?.balance ?? 0), 0)
+      : (rec.tsbAtFyStart ?? 0);
 
     // ── The Div 292 bring-forward arrangement (s292-85(3)-(7)) ───────────────
     //
@@ -995,39 +999,6 @@ function _ageAtFyEnd(state, personKey, fyStartYear) {
   const birth = state.people?.[personKey]?.birthDate;
   if (birth == null) return null;
   return ageAt(birth, new Date(Date.UTC(fyStartYear + 1, 5, 30)));
-}
-
-/**
- * The SUPER account stateKey for one person, or null when they have no fund.
- *
- * Prefers the key the payroll handler actually resolved and the caps accumulator
- * recorded — this reducer has no StateRegistry of its own, so that record is the only
- * exact answer available to it. The convention fallbacks below are for a person who
- * has a fund but has never contributed to it (a seeded balance in a run that starts
- * at retirement), and the household `superAccount` is used ONLY in a single-person
- * household: attributing one shared key to each of two people would snapshot the same
- * balance as both of their total superannuation balances and mis-gate both.
- */
-function _auSuperKeyFor(state, personKey, rec = null) {
-  // 1. The key the payroll handler actually resolved, recorded by the caps
-  //    accumulator. Exact, and the only answer that survives a renamed account.
-  if (rec?.superKey != null && state[rec.superKey] != null) return rec.superKey;
-  // 2. The person-prefixed convention — for someone with a seeded balance who has
-  //    never contributed, so step 1 has nothing recorded.
-  const direct = `${personKey}SuperAccount`;
-  if (state[direct] != null) return direct;
-  // 3. The household account, but ONLY when it is theirs. `ownerId` is carried on the
-  //    account in state, so ownership is a fact here rather than an inference: in a
-  //    two-person household `superAccount` belongs to one of them and
-  //    `spouseSuperAccount` to the other, and handing the same key to both would
-  //    snapshot one balance as BOTH their total superannuation balances and mis-gate
-  //    the carry-forward and the transfer-balance stop for both.
-  const shared = state.superAccount;
-  if (shared != null) {
-    if (shared.ownerId === personKey) return 'superAccount';
-    if (shared.ownerId == null && Object.keys(state.people ?? {}).length <= 1) return 'superAccount';
-  }
-  return null;
 }
 
 /**
