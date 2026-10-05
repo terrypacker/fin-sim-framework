@@ -85,7 +85,9 @@ export const AU_RETIREMENT = {
 
   // Design 39 §14.9.4 — the per-account order the loader's cascade bakes from params. Also
   // declared by US_RETIREMENT; the manifest is a union, and an AU-only plan still needs it.
-  derivedState: ['*.drawdownPriority'],
+  // The super draw date (design 119 §6.1) is a param-driven account field the release gate
+  // and the earnings tax read from state, so a rollout takes it from the candidate's plan.
+  derivedState: ['*.drawdownPriority', '*.drawStartDate'],
 
   types: {
     handlers: [

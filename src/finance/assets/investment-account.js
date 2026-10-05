@@ -471,13 +471,17 @@ export class TraditionalIRAAccount extends RetirementAccount {
 
 /**
  * SuperannuationAccount — AU compulsory retirement savings account.
- * AU only. Penalty-free access from age 60 (preservation age in AU).
+ * AU only. Released by the SIS conditions of release (`super-release.js`, design 119);
+ * `minimumAge` 60 is the gate only where the owner's record is not to hand.
  * Does NOT track balance at residency change (AR-10).
  */
 export class SuperannuationAccount extends RetirementAccount {
   /**
    * @param {number} balance
    * @param {object} [opts] - All RetirementAccount opts; type, country, currency, minimumAge set automatically
+   * @param {string|null} [opts.drawStartDate=null] - 'YYYY-MM-DD' the household starts
+   *        drawing this account, which also starts pension phase (design 119 §6.1). Null
+   *        means from its lawful release date; an earlier date moves to it.
    */
   constructor(balance = 0, opts = {}) {
     super(balance, {
@@ -487,5 +491,6 @@ export class SuperannuationAccount extends RetirementAccount {
       ...opts,
       type: ACCOUNT_TYPE.SUPER,
     });
+    this.drawStartDate = opts.drawStartDate ?? null;
   }
 }

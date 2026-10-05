@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-223 parameters · 33 panels · 12 node types (192 fields) · 173 action types · 86 tools · 291 state field types · 76 topics · 127 design docs
+223 parameters · 33 panels · 12 node types (193 fields) · 173 action types · 86 tools · 291 state field types · 76 topics · 127 design docs
 
 ---
 
@@ -578,7 +578,7 @@ menu files it under.
 
 ---
 
-## Node types (12 kinds · 192 fields)
+## Node types (12 kinds · 193 fields)
 
 Every kind of record the Nodes panel can open, and every control its edit form offers.
 The inventory is read from the FORM — the `<template>` in `index.html` the editor
@@ -676,9 +676,9 @@ Explained in [`help/nodes`](nodes/job.md). 4 field(s) described by a record para
 - **`superAccountKey`** — Super Fund · `select` · topic
   The super fund this job's Super Guarantee, salary sacrifice and personal contributions go into, picked from the person's own funds. "First fund" uses the first one they own. Only that person's funds are offered, and a scenario that names someone else's fund refuses to load. A person with an Australian job and no fund of their own gets no AU contributions, and loading warns about it.
 
-### Accounts — `account` (33 fields)
+### Accounts — `account` (34 fields)
 
-Explained in [`help/nodes`](nodes/account.md). 5 field(s) described by a record parameter.
+Explained in [`help/nodes`](nodes/account.md). 6 field(s) described by a record parameter.
 
 - **`name`** — Name · `text` · topic
   What this account is called throughout the app, and the label on every chart that breaks the portfolio down. Free text.
@@ -712,6 +712,8 @@ Explained in [`help/nodes`](nodes/account.md). 5 field(s) described by a record 
   After-tax contribution basis for this retirement account — the portion already taxed. Withdrawals of basis come out tax-free; the balance above it is the taxable earnings.
 - **`earningsBasis`** — Earnings Basis · `number` · topic
   The earnings half of a retirement account's balance, computed as the balance less the contribution basis. Read-only: it is derived, and the two halves matter because a withdrawal takes basis out tax-free and earnings out taxable.
+- **`drawStartDate`** — Draw Start Date · `date` · param
+  The day this super account starts paying, which also starts pension phase: its earnings are taxed at 0% from then, and at 15% before. Blank means as soon as the law releases it. A date before that is moved to it.
 - **`offsetsPropertyKey`** — Offsets Property · `select` · topic
   The property whose mortgage this offset account reduces. An offset does not earn interest; it lowers the interest-bearing principal of the linked loan instead, dollar for dollar, which is why draining one costs more than the cash it releases.
 - **`rateType`** — Rate Type · `select` · topic
@@ -2125,7 +2127,7 @@ what the in-app panel keys on.
 
 | topic | kind | words | cites |
 |---|---|---|---|
-| [Account](nodes/account.md) | node | 233 | 4 panels · design 54, 56, 86, 87, 113, 119 |
+| [Account](nodes/account.md) | node | 249 | 4 panels · design 54, 56, 86, 87, 113, 119 |
 | [Action](nodes/action.md) | node | 200 | 3 panels · design 2, 91 |
 | [Action Detail](panels/action-detail.md) | panel | 172 | 1 panel · design 91 |
 | [Allocation](panels/allocation.md) | panel | 185 | 1 panel · design 82 |

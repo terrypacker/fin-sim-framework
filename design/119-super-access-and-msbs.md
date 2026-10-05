@@ -1,7 +1,7 @@
 # 119 — Super access dates, multiple funds and MSBS
 
 **Status:** ACCEPTED, rev 5, 5 Oct 2026. Q1–Q5 (§9) are answered by the author, and
-§3 records the decisions. **Phases 1–2 BUILT** 5 Oct 2026 (multiple funds §6.3; release date §6.2); phases 3–6 not started. Rev 4 adds the CSC documents and the
+§3 records the decisions. **Phases 1–3 BUILT** 5 Oct 2026 (multiple funds §6.3; release date §6.2; draw date and pension phase §6.1); phases 4–6 not started. Rev 4 adds the CSC documents and the
 valuation law (§5.6), which settle the tax and total-super-balance questions. Rev 5
 closes the last two points (§5.7). No source questions remain open.
 
@@ -406,7 +406,7 @@ spending-classification tests.
 | 0 | Sources: **DONE** 5 Oct 2026 (§5.6, §5.7) | none |
 | 1 | **BUILT.** Multiple funds: job `superAccountKey`, remove the fallback, sum caps across funds. `super-fund-key.js`; the downsizer uses the same resolver; tests `super-fund-routing.test.mjs` | none expected; a plan with one fund per person is unchanged |
 | 2 | **BUILT.** Lawful release date and the preservation-age table (`super-release.js`), read by the drawdown walk, pool metrics, net liquidity and the unlock date. Also releases at the end of any job held at 60+ (reg 6.01(7)(b)(i)), which §6.2's formula left out. Tests `super-release.test.mjs` | none moved: every golden run ends before its AU members reach 60 |
-| 3 | `drawStartDate` on ordinary accounts, pension phase from the effective start, the date sweep | moves goldens where super is untouched past 60 (the earnings tax changes) |
+| 3 | **BUILT.** `drawStartDate` on ordinary accounts, pension phase from the effective start, the date sweep. `auSuperDrawStartMs` (`super-release.js`) is the one effective start: the gate and `superEarningsTaxRate(drawStartMs, asOf)` both read it, so the bond-income and capital-gain reducers follow. Lever `acct.<key>.drawStartDate` (Opt only, no `sweepUnset`: blank is a default, not an absent event), declared in `AU_RETIREMENT.derivedState` so a rollout takes it from the candidate. Tests `super-draw-start.test.mjs` | two moved, both by fund tax a member now pays from 60 until their job ends: au-single-homeowner (works to 65) ends with \$206k less super, \$45k at retirement compounded over 20 years of drawdown; cross-border-reference (works to 61¾) \$11.6k less |
 | 4 | `MsbsAccount` from a statement: the fields, the member sleeve, the Balanced funded sleeve, the unfunded benefit with r 61A indexation, preserved before the draw; total super balance value from Table 1 | none (new account type) |
 | 5 | MSBS draw: the window, `MSBS_ELECTION`, the Sch 5 pension and r 56 indexation, the lump-sum routing, `pensionShare`; pension tax with the taxed/untaxed split and the defined benefit income cap; total super balance from Table 4A; survivor pension at 67% after checking Part 4 Div 2 | none (new account type) |
 | 6 | Help topics (`help/nodes/account.md`, `job.md`), editors, restamp | none |

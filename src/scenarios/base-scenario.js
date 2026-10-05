@@ -207,7 +207,9 @@ export class BaseScenario extends SimGraphNode {
       } else if (node.type === 'account') {
         const account = accountService.getAll().find(a => a.stateKey === node.stateKey);
         if (account) {
-          accountService.updateAccount(account, { [node.field]: val });
+          accountService.updateAccount(account, {
+            [node.field]: DATE_RECORD_FIELDS.has(node.field) ? roundRecordField(node.field, val) : val,
+          });
         }
         // Keep initialState in sync for opening-balance params so buildSim()
         // starts the Simulation with the updated balance.

@@ -143,6 +143,17 @@ const REINVEST_DIVIDENDS = {
     'follow the plan-wide Reinvest Dividends default.',
 };
 
+// Super draw date (design 119 §6.1). A household choice, so `opt: true`; a free date,
+// searched as a month count like the 401(k) rollover. Blank means "from the release date",
+// a default rather than an event that does not happen, so there is no `sweepUnset`.
+const DRAW_START_DATE = {
+  field: 'drawStartDate', label: 'Draw Start Date', type: 'Date',
+  mc: false, opt: true, nullable: true,
+  description: 'The day this super account starts paying, which also starts pension phase: '
+    + 'its earnings are taxed at 0% from then, and at 15% before. Blank means as soon as the '
+    + 'law releases it. A date before that is moved to it.',
+};
+
 export const ACCOUNT_PARAM_TEMPLATES = {
   [ACCOUNT_TYPE.CHECKING]:        [BALANCE, MINIMUM_BALANCE, INTEREST_RATE, IS_TRANSACTION_ACCOUNT],
   [ACCOUNT_TYPE.SAVINGS]:         [BALANCE, MINIMUM_BALANCE, INTEREST_RATE, IS_TRANSACTION_ACCOUNT],
@@ -150,7 +161,7 @@ export const ACCOUNT_PARAM_TEMPLATES = {
   [ACCOUNT_TYPE.ROTH]:            [BALANCE, CONTRIBUTION_BASIS],
   [ACCOUNT_TYPE.TRADITIONAL_IRA]: [BALANCE, CONTRIBUTION_BASIS],
   [ACCOUNT_TYPE.FOUR_OH_ONE_K]:   [BALANCE, CONTRIBUTION_BASIS],
-  [ACCOUNT_TYPE.SUPER]:           [BALANCE, CONTRIBUTION_BASIS],
+  [ACCOUNT_TYPE.SUPER]:           [BALANCE, CONTRIBUTION_BASIS, DRAW_START_DATE],
   // Liability / linked-cash accounts (design 54) expose their balance too. The
   // loan's own interestRate is its *loan* rate (design 54), not an earnings rate,
   // so it stays out of this earnings-rate template.

@@ -16,6 +16,7 @@ import { resolveCashKey } from '../cash-routing.js';
 import { restoreFloorActions } from '../cash-floor.js';
 import { debitLedgerForLoss } from '../../assets/investment-account.js';
 import { SUPER_TAX_RATE, superEarningsTaxRate } from '../../tax/au/super-tax-rate.js';
+import { superDrawStartIn } from './super-release.js';
 import { scaleHoldings, lotVintage } from '../../holdings/holding-utils.js';
 import { auFinancialYearOf } from '../../payroll/au-super-caps.js';
 
@@ -497,28 +498,13 @@ function _lossCarriedOutOf(ytd) {
 
 /**
  * The fund's tax rate on INCOME derived on `date` for the member of `account`: 15% in
- * accumulation, 0% in pension phase (the age-60 proxy, `superEarningsTaxRate`). Shared by
- * the reducers that tax fund income they did not compute in a super handler: bond
- * coupons and accretion (design 105 §8).
+ * accumulation, 0% once the account starts paying (`superDrawStartIn`, design 119 §6.1).
+ * Shared by the reducers that tax fund income they did not compute in a super handler:
+ * bond coupons and accretion (design 105 §8).
  */
 export function superFundTaxRateOn(state, account, date) {
   const asOf = date instanceof Date ? date : (date != null ? new Date(date) : null);
-  return superEarningsTaxRate(_memberAgeOn(state, account, asOf));
-}
-
-/** The fund member's whole years of age on `asOf`; 0 when unknown (accumulation). */
-function _memberAgeOn(state, account, asOf) {
-  if (!asOf) return 0;
-  const people    = state.people ?? {};
-  const keys      = Object.keys(people);
-  const personKey = keys.find(k => people[k]?.id != null && people[k].id === account?.ownerId)
-    ?? (account?.ownerId != null && people[account.ownerId] ? account.ownerId : keys[0]);
-  const bd = personKey != null ? getBirthDate(state, personKey) : null;
-  if (!bd) return 0;
-  const years = asOf.getUTCFullYear() - bd.getUTCFullYear();
-  const hadBirthday = asOf.getUTCMonth() > bd.getUTCMonth()
-    || (asOf.getUTCMonth() === bd.getUTCMonth() && asOf.getUTCDate() >= bd.getUTCDate());
-  return hadBirthday ? years : years - 1;
+  return superEarningsTaxRate(asOf ? superDrawStartIn(state, account) : null, asOf);
 }
 
 /**
@@ -543,8 +529,8 @@ function _memberAgeOn(state, account, asOf) {
  * it reaches `auPersonSuperTaxYTD`, `fundTax` and `cumulativeTaxesPaid` with the rest of
  * the fund's tax.
  *
- * Pension phase (member ≥ 60, the model's proxy): the gain AND the loss are disregarded
- * (s118-320), so nothing is recorded.
+ * Pension phase (from the account's draw start, design 119 §6.1): the gain AND the loss
+ * are disregarded (s118-320), so nothing is recorded.
  *
  * The tally rolls over lazily, on the first disposal in a new AU income year, carrying
  * forward whatever loss the old year did not use.
@@ -565,7 +551,7 @@ export class SuperCapitalGainApplyReducer extends Reducer {
     const sa  = state[key];
     if (!sa) return this.newState(state);
     const asOf = date instanceof Date ? date : (date != null ? new Date(date) : null);
-    if (superEarningsTaxRate(_memberAgeOn(state, sa, asOf)) === 0) return this.newState(state);
+    if (superFundTaxRateOn(state, sa, asOf) === 0) return this.newState(state);
 
     const prev = sa.capitalGainsYTD ?? null;
     const fy   = asOf ? auFinancialYearOf(asOf) : (prev?.fy ?? null);
@@ -696,10 +682,7 @@ export class SuperEarningsDirectHandler extends HandlerEntry {
    */
   call({ data, state, date }) {
     const gross     = data.amount;
-    const personKey = Object.keys(state?.people ?? {})[0];
-    const birthDate = getBirthDate(state, personKey);
-    const age       = birthDate && date ? getAge(birthDate, date) : 0;
-    const taxRate   = superEarningsTaxRate(age);
+    const taxRate   = superFundTaxRateOn(state, state?.superAccount, date);
     const net       = +(gross * (1 - taxRate)).toFixed(2);
     return [
       { type: 'SUPER_EARNINGS_APPLY', amount: net, grossAmount: gross, taxRate },

@@ -846,7 +846,8 @@ export class ScenarioLoader {
             rec.balance = val;
           }
         } else {
-          rec[node.field] = val;
+          // A date field (the super draw date) lands as 'YYYY-MM-DD'.
+          rec[node.field] = roundRecordField(node.field, val);
         }
       }
     } else if (node.type === 'realProperty') {

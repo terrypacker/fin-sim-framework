@@ -46,7 +46,7 @@ const coupon = (amount) => ({
 
 const sumMv = acct => acct.holdings.reduce((s, h) => s + (h.marketValue ?? 0), 0);
 
-test('superFundTaxRateOn: 15% in accumulation, 0% from 60', () => {
+test('superFundTaxRateOn: 15% in accumulation, 0% once released', () => {
   assert.strictEqual(superFundTaxRateOn(fund('1990-01-01'), fund('1990-01-01').superAccount, DATE), 0.15);
   assert.strictEqual(superFundTaxRateOn(fund('1960-01-01'), fund('1960-01-01').superAccount, DATE), 0);
 });

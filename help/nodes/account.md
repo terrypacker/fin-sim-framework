@@ -10,7 +10,7 @@ stamps:
   panel:config-graph: 82a0c7
   panel:holdings: 962055
   panel:pools: 78458e
-  node:account: 4bd3bf
+  node:account: 104ea5
 ---
 
 Every pot of money in the plan, and every debt: cash, brokerage, the four retirement
@@ -34,7 +34,8 @@ ordinary gain or loss. See [Liquidity Pools](../concepts/liquidity-pools.md) and
 [Drawdown Order](../concepts/drawdown-order.md).
 
 **Super** opens at its owner's preservation age once they stop working, when any job
-held at 60 or later ends, or at 65.
+held at 60 or later ends, or at 65. **Draw Start Date** waits longer, at the cost of
+fund tax until then; Opt searches it.
 
 ## Fields
 

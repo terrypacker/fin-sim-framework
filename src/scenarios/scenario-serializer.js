@@ -851,6 +851,9 @@ export class ScenarioSerializer {
     // be the `minimumAge` mistake — persisting a value nobody chose, which then stops
     // tracking the thing it was copied from.
     if (account.reinvestDividends != null) d.reinvestDividends = account.reinvestDividends;
+    // Super draw date (design 119 §6.1) — a household choice, so it is saved, unlike
+    // `minimumAge`. Emitted only when set: blank means "from the release date".
+    if (account.drawStartDate != null) d.drawStartDate = account.drawStartDate;
     // Per-security DRIP overrides (design 106 §5). Emitted only when it actually holds an
     // entry: an empty map is the same statement as no map, and writing `{}` would be a
     // fixture-moving no-op on every account that has never been asked.
@@ -1398,6 +1401,7 @@ export class ScenarioSerializer {
     // i.e. inherit the household default, which is what every saved scenario did before
     // the field existed.
     if (d.reinvestDividends !== undefined) opts.reinvestDividends = d.reinvestDividends;
+    if (d.drawStartDate !== undefined) opts.drawStartDate = d.drawStartDate;
     if (d.reinvestDividendsBySecurity !== undefined) {
       opts.reinvestDividendsBySecurity = d.reinvestDividendsBySecurity;
     }
