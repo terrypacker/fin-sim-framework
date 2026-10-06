@@ -46,6 +46,13 @@
  *            between price and distribution moves.
  * EVT-HDG-14 In a run: a hedge loss bigger than the yield pays nothing and carries forward;
  *            a hedge gain reaches the AU tax computation as unfranked ordinary income.
+ *
+ * Phase 5 (§5.1, Q6) — defaults and the prebuilt scenario:
+ * EVT-HDG-15 Once re-based, a silent super lot is 25.5% hedged (APRA) and any other silent
+ *            lot unhedged; a stated ratio wins; before the re-base silence is still silence.
+ * EVT-HDG-16 AU Single Homeowner states REST OS Index and VGS unhedged and offers VGAD
+ *            (fully hedged, ALIGNED); with FX on it runs re-based, and at NONE every
+ *            balance is what the silent plan gives.
  */
 
 import { test } from 'node:test';
@@ -62,7 +69,7 @@ import { FX_PROCESS_MODELS }         from '../../src/finance/fx/fx-process-model
 import { EquityReturnTickHandler }   from '../../src/finance/economic-regimes/equity-return-tick-handler.js';
 import { DEFAULT_EQUITY_IDIO_LOCAL } from '../../src/finance/economic-regimes/rate-keys.js';
 import { computeHoldingsDividends }  from '../../src/finance/holdings/holdings-earnings.js';
-import { incomeHedgeSplit, nextCarriedLoss } from '../../src/finance/holdings/currency-overlay.js';
+import { incomeHedgeSplit, nextCarriedLoss, hedgeRatioOf, DEFAULT_HEDGE_RATIO_BY_ROLE } from '../../src/finance/holdings/currency-overlay.js';
 
 const AU_SPEC = {
   name: 'hdg-au', cls: AuSingleHomeownerScenario,
@@ -71,6 +78,19 @@ const AU_SPEC = {
 
 const withParams = (spec, params) => ({
   ...spec, mutateCfg: cfg => Object.assign(cfg.parameters, params),
+});
+
+/**
+ * AU Single Homeowner as it was before phase 5 stated its hedge ratios: every security
+ * silent and no VGAD, so no overlay runs at all.
+ */
+const silentAu = (spec, params = {}) => ({
+  ...spec,
+  mutateCfg: cfg => {
+    cfg.securities = cfg.securities.filter(s => s.id !== 'sec-vgad')
+      .map(({ hedgeRatio, hedgeTaxTreatment, ...rest }) => rest);
+    Object.assign(cfg.parameters, params);
+  },
 });
 
 test('EVT-HDG-1: an AU-only plan with FX at NONE carries no FX state and no FX tick', () => {
@@ -172,7 +192,7 @@ const vgsValue = state => state.auStockAccount.holdings
   .filter(h => h.securityId === 'sec-vgs').reduce((a, h) => a + h.marketValue, 0);
 
 test('EVT-HDG-5: VGS unhedged at FX off is today; hedged gains carry − cost a year', () => {
-  const silent = runGolden(AU_SPEC).state;
+  const silent = runGolden(silentAu(AU_SPEC)).state;
   const h0     = runGolden(withVgs(AU_SPEC, { hedgeRatio: 0 })).state;
   const h1     = runGolden(withVgs(AU_SPEC, { hedgeRatio: 1 })).state;
 
@@ -218,7 +238,7 @@ test('EVT-HDG-6: the year-end FX mark', () => {
   // takes it. (The plan sells its VGS early, so a terminal balance would not show it.)
   const vgsGrowth2026 = r => r.sim.journal.journal.find(e => e.action?.type === 'HOLDING_TRANSACT'
     && e.action.data?.holdingId === 'h-vgs' && e.event?.type === 'INTL_AU_STOCK_EARNINGS').action.data.marketValueDelta;
-  const silentFx = runGolden(withParams(AU_SPEC, fxOn));
+  const silentFx = runGolden(silentAu(AU_SPEC, fxOn));
   assert.notEqual(vgsGrowth2026(run), vgsGrowth2026(silentFx), 'an unhedged lot now carries the AUD move');
 });
 
@@ -339,7 +359,7 @@ test('EVT-HDG-10: the local-currency re-base and the unhedged default it brings'
   assert.equal(idio(rebased).EQUITY_INTL_EX_AU, 0.04);
   assert.equal(rebased.state.hedgeOverlay.rebased, true);
   // No hedged security, or FX at NONE: the AUD calibration stays and nothing is re-based.
-  assert.equal(idio(runGolden(withParams(AU_SPEC, { ...STOCH, randomSeed: 1 }))).EQUITY_INTL_EX_AU, undefined);
+  assert.equal(idio(runGolden(silentAu(AU_SPEC, { ...STOCH, randomSeed: 1 }))).EQUITY_INTL_EX_AU, undefined);
   const flat = runGolden(withVgs(AU_SPEC, { hedgeRatio: 1 }, { equityReturnStochastic: true, randomSeed: 1 }));
   assert.equal(idio(flat).EQUITY_INTL_EX_AU, undefined);
   assert.equal(flat.state.hedgeOverlay.rebased, undefined);
@@ -470,4 +490,43 @@ test('EVT-HDG-14: INCOME in a run — nil distributions carry forward; gains are
   const expected = (yld + carry) / yld / (1 + carry);
   assert.ok(Math.abs(ratio / expected - 1) < 0.005,
     `INCOME distributes yield + hedge gain (ratio ${ratio.toFixed(3)} vs ${expected.toFixed(3)})`);
+});
+
+// ── Phase 5 ──────────────────────────────────────────────────────────────────────────
+
+test('EVT-HDG-15: role defaults for a silent lot once the sleeve is re-based', () => {
+  const rebased = { hedgeOverlay: { rebased: true } };
+  assert.equal(DEFAULT_HEDGE_RATIO_BY_ROLE.super, 0.255);
+  assert.equal(hedgeRatioOf({}, rebased, { role: 'super' }), 0.255);
+  assert.equal(hedgeRatioOf({}, rebased, { role: 'au-stock' }), 0);
+  assert.equal(hedgeRatioOf({ hedgeRatio: 0 }, rebased, { role: 'super' }), 0, 'a stated ratio wins');
+  assert.equal(hedgeRatioOf({}, { hedgeOverlay: {} }, { role: 'super' }), null, 'not re-based: silent');
+
+  // On a lot: a silent super lot grows as a stated 0.255 one does.
+  const superLot = sec => {
+    const st = lotState({ security: sec, rate: 1.65 });
+    st.acct.role = 'super';
+    st.hedgeOverlay.rebased = true;
+    return computeHoldingsGrowth({ state: st, stateKey: 'acct', fallbackRateKey: 'EQUITY_AU' }).amount;
+  };
+  assert.equal(superLot({}), superLot({ hedgeRatio: 0.255 }));
+  assert.notEqual(superLot({}), superLot({ hedgeRatio: 0 }));
+});
+
+test('EVT-HDG-16: AU Single Homeowner states its hedges and offers VGAD', () => {
+  const run = runGolden(AU_SPEC);
+  const sec = run.state.securities;
+  assert.equal(sec['sec-rest-os-index'].hedgeRatio, 0);
+  assert.equal(sec['sec-vgs'].hedgeRatio, 0);
+  assert.deepEqual([sec['sec-vgad'].hedgeRatio, sec['sec-vgad'].hedgeTaxTreatment], [1, 'ALIGNED']);
+  assert.equal(sec['sec-vgad'].rateKey, 'EQUITY_INTL_EX_AU');
+
+  // At NONE nothing the stated ratios do can move money.
+  const silent = runGolden(silentAu(AU_SPEC)).state;
+  for (const [k, v] of Object.entries(run.state)) {
+    if (v && typeof v === 'object' && 'balance' in v) assert.equal(v.balance, silent[k].balance, k);
+  }
+  // With FX on, the plan runs re-based: its silent super lots take super's default.
+  const fx = runGolden(withParams(AU_SPEC, { fxProcessModel: 'MEAN_REVERTING', randomSeed: 2 }));
+  assert.equal(fx.state.hedgeOverlay.rebased, true);
 });

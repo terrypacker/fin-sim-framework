@@ -169,23 +169,31 @@ export const AU_SINGLE_HOMEOWNER_DEFAULTS = {
  * no source for.
  */
 export const AU_SINGLE_HOMEOWNER_SECURITIES = Object.freeze([
+  // REST Overseas Shares – Indexed tracks MSCI World ex-Australia ex-Tobacco "(unhedged in
+  // AUD)" (Rest Investment Guide, 31 Aug 2026, p.17): hedge ratio 0, stated (design 120 §3.1).
   Object.freeze({ id: 'sec-rest-os-index', symbol: 'REST OS Index',
                   name: 'REST Overseas Shares – Indexed',
-                  rateKey: RATE_KEYS.EQUITY_INTL_EX_AU }),
+                  rateKey: RATE_KEYS.EQUITY_INTL_EX_AU, hedgeRatio: 0 }),
   Object.freeze({ id: 'sec-rest-au-index', symbol: 'REST AU Index',
                   name: 'REST Australian Shares – Indexed',
                   rateKey: RATE_KEYS.EQUITY_AU }),
-  // The brokerage's two ETFs, both AU-domiciled. Same rule as the REST options: identity
-  // and market only. VGS is UNHEDGED, which is what EQUITY_INTL_EX_AU prices — its total,
-  // vol and beta are sourced on an unhedged AUD basis (docs/market-returns/SOURCES.md),
-  // so the currency risk is inside that sleeve's distribution rather than modelled apart.
-  // Its distribution is foreign income and is paid unfranked; VAS's is franked.
+  // The brokerage's ETFs, all AU-domiciled. Same rule as the REST options: identity and
+  // market only. VGS is UNHEDGED, which is what EQUITY_INTL_EX_AU prices on its own — its
+  // total is sourced on an unhedged AUD basis (docs/market-returns/SOURCES.md). It states
+  // hedge ratio 0, so once the FX process is on its currency risk is modelled apart
+  // (design 120). Its distribution is foreign income and is paid unfranked; VAS's is franked.
   Object.freeze({ id: 'sec-vas', symbol: 'VAS',
                   name: 'Vanguard Australian Shares Index ETF',
                   rateKey: RATE_KEYS.EQUITY_AU }),
   Object.freeze({ id: 'sec-vgs', symbol: 'VGS',
                   name: 'Vanguard MSCI Index International Shares ETF',
-                  rateKey: RATE_KEYS.EQUITY_INTL_EX_AU }),
+                  rateKey: RATE_KEYS.EQUITY_INTL_EX_AU, hedgeRatio: 0 }),
+  // VGS's hedged twin, held by nothing: here so a VGS lot can be switched to it. Fully
+  // hedged, and on the TOFA hedging election since 1 July 2024 (Vanguard's notice to
+  // holders, 28 Jun 2024), so its hedge result stays in the price (design 120 §3.7).
+  Object.freeze({ id: 'sec-vgad', symbol: 'VGAD',
+                  name: 'Vanguard MSCI Index International Shares (Hedged) ETF',
+                  rateKey: RATE_KEYS.EQUITY_INTL_EX_AU, hedgeRatio: 1, hedgeTaxTreatment: 'ALIGNED' }),
 ]);
 
 /**

@@ -55,6 +55,17 @@ export const FX_EXPOSURE_BY_MARKET = Object.freeze({
   }),
 });
 
+/**
+ * §5.1, Q6 — the hedge ratio a silent lot runs at once the sleeve is re-based, by account
+ * role. Super hedges about a quarter of its foreign equity: APRA Table 9a, June 2026, gives
+ * 110,764 hedged of 434,406 (\$m), 0.255, and the RBA puts it at "around 25 per cent"
+ * (2023) and "around one-fifth" (2025). Every other role is unhedged (0), which is what an
+ * AUD market return already assumed.
+ */
+export const DEFAULT_HEDGE_RATIO_BY_ROLE = Object.freeze({
+  super: 0.255,
+});
+
 /** §5.7 — whether the fund's hedge result stays in the price (TOFA election) or moves the distribution. */
 export const HEDGE_TAX_TREATMENTS = Object.freeze(['ALIGNED', 'INCOME']);
 
@@ -74,14 +85,17 @@ const PRIME_KEY = { US: RATE_KEYS.PRIME_US, AU: RATE_KEYS.PRIME_AU };
  *
  * @param {object} inst - the lot's instrument view (`instrumentOf`)
  * @param {object} [state] - reads `hedgeOverlay.rebased`
+ * @param {object} [account] - the account's state record, for its role's default
  * @returns {number|null}
  */
-export function hedgeRatioOf(inst, state = null) {
+export function hedgeRatioOf(inst, state = null, account = null) {
   const h = inst?.hedgeRatio;
   if (h != null) return h;
-  // §5.5 — once the sleeve runs on the local-currency basis, a silent lot is unhedged: the
-  // overlay is now where its currency risk comes from.
-  return state?.hedgeOverlay?.rebased ? 0 : null;
+  // §5.5 — once the sleeve runs on the local-currency basis, a silent lot takes its
+  // account's default (super 0.255, otherwise unhedged): the overlay is now where its
+  // currency risk comes from.
+  if (!state?.hedgeOverlay?.rebased) return null;
+  return DEFAULT_HEDGE_RATIO_BY_ROLE[account?.role] ?? 0;
 }
 
 /**
@@ -145,7 +159,7 @@ export function hedgeCarryFor(state, exposure) {
  * @returns {{ delta: number, hedgeResult: number, f: number, carry: number, h: number }|null}
  */
 export function currencyOverlay({ state, account, inst, rateKey, g }) {
-  const h = hedgeRatioOf(inst, state);
+  const h = hedgeRatioOf(inst, state, account);
   if (h == null) return null;
   const exposure = fxExposureOf(rateKey, account);
   if (!exposure) return null;

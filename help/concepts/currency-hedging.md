@@ -12,7 +12,7 @@ stamps:
   param:hedgeForeignCashRate: b900f1
   param:hedgeCost: 25d37a
   param:fxEquityCorrelation: 3f56d7
-  src/finance/holdings/currency-overlay.js: 6d7de1
+  src/finance/holdings/currency-overlay.js: cc2513
 ---
 
 An Australian investor in world shares holds two things at once: the shares, and the
@@ -40,7 +40,7 @@ worth sweeping: there, hedging was the lower-risk choice.
 
 **Once the currency is modelled, the world-ex-Australia market is re-based** to its
 local-currency volatility, so the currency is not counted twice. From then on a lot whose
-security says nothing is treated as unhedged, which is what it was all along.
+security says nothing is unhedged, or a quarter hedged in super, as funds actually are.
 
 **Tax** depends on one election. A fund that has made the TOFA hedging election (VGAD
 since July 2024, and the default) keeps hedge results in the unit price, taxed when you
