@@ -1,0 +1,2278 @@
+                                                    Print whole section
+
+
+
+Personal investors guide to capital
+gains tax 2025
+A guide to your tax obligations if you made a capital gain or
+loss from shares, units or managed funds.
+
+Published 29 May 2025
+
+
+
+
+   How to get the personal investors guide to
+   capital gains tax
+   How to get a copy of the personal investors guide to capital
+   gains tax.
+
+
+
+
+   About the personal investors guide to
+   capital gains tax
+   Check when and when not to use this guide and your tax
+   obligations.
+
+
+
+
+   General guidance
+   Explains what you need to complete in your tax return and things
+   that need to be taken into consideration.
+
+
+
+
+   Part A: How capital gains tax applies to
+   you
+   How to meet your capital gains tax (CGT) obligations, and what
+   exemptions and rollovers might be available to you.
+
+
+
+
+   Part B: Sale of shares or units
+   Explains how to work out your capital gain from the sale of
+   shares, or units in a unit trust.
+
+
+
+
+   Part C: Distributions from managed funds
+   Explains legislative changes impacting capital gains of managed
+   investment trusts and how to work out your capital gain.
+
+
+
+
+QC 104651
+
+
+
+How to get the personal investors
+guide to capital gains tax
+How to get a copy of the personal investors guide to
+capital gains tax.
+
+Last updated 29 May 2025
+
+
+
+Get the personal investors guide to capital
+gains tax instructions
+The Personal investors guide to capital gains tax 2025 isn't available in
+print.
+
+To get a copy download this guide:
+
+   Personal investors guide to capital gains tax 2025 (NAT 4152, PDF
+   461KB).
+
+   Personal investors guide to capital gains tax 2025 (NAT 4152,
+   DOCX 2.7MB).
+
+Continue to: About the personal investors guide to capital gains tax
+Return to: Personal investors guide to capital gains tax 2025
+
+
+
+
+QC 104651
+
+
+
+About the personal investors guide
+to capital gains tax
+Check when and when not to use this guide and your tax
+obligations.
+
+Published 29 May 2025
+
+
+
+
+Who should use this guide?
+Personal investors guide to capital gains tax 2025 explains the capital
+gains tax (CGT) consequences of:
+
+   the sale or gift (or other disposal) of shares or units
+
+   the receipt of distributions of capital gains from managed funds
+
+   the receipt of non-assessable payments from companies or
+   managed funds.
+
+This guide only covers capital gains or capital losses from CGT assets
+that are shares, units or other interests in managed funds. Use this
+guide if you're a personal investor who has made a capital gain or
+capital loss from these assets in 2024–25.
+
+
+Who shouldn't use this guide?
+Don't use this guide if you:
+
+   are an investor who is a foreign resident of Australia
+
+   have gains or losses included as part of your income under other
+   provisions of the tax law – for example, if you're carrying on a
+   business of share trading, see Share investing versus share trading
+
+   are a resident investor who had
+
+      a period of non-residency after 8 May 2012
+      a CGT event that happened after 8 May 2012
+
+      a discount capital gain.
+
+For more information, see CGT discount for foreign residents.
+
+This guide doesn't explain more complex issues relating to shares
+(including employee shares), convertible notes and units. Nor does it
+apply to shares and units owned by companies, trusts and
+superannuation funds.
+
+This guide doesn't cover your CGT consequences when you sell other
+assets such as:
+
+   a rental property
+
+   collectables (for example, jewellery, art, antiques and collections)
+
+   assets for personal use (for example, a boat you use for recreation).
+
+For more information, see Guide to capital gains tax 2025
+
+Continue to: General guidance
+
+Return to: How to get the personal investors guide to capital gains tax
+
+
+
+
+QC 104651
+
+
+
+General guidance
+Explains what you need to complete in your tax return and
+things that need to be taken into consideration.
+
+Published 29 May 2025
+
+
+
+Completing your tax return
+This guide will help you complete your tax return.
+
+If you sold or otherwise disposed of shares, or units in a unit trust
+(including a managed fund) in 2024–25, read Part A of this guide, then
+work through Part B.
+If you receive a distribution of a capital gain from a managed fund in
+2024–25, read Part A of this guide, then work through Part C.
+
+Managed funds include property trusts, share trusts, equity trusts,
+growth trusts, imputation trusts and balanced trusts.
+
+
+Small business CGT concessions
+If you're involved in the sale of shares or units for a small business and
+you would like more information, see Small business CGT concessions.
+
+
+Investments in foreign hybrids
+A foreign hybrid is an entity that is taxed in Australia as a company but
+taxed overseas as a partnership. This can include a limited
+partnership, a limited liability partnership and a United States limited
+liability company.
+
+If you have an investment in a foreign hybrid (referred to as being a
+member of a foreign hybrid), you're now treated as having an interest
+in each asset of the partnership for Australian tax purposes.
+
+As a consequence, any capital gain or capital loss made about a
+foreign hybrid or its assets is considered to be made by the member.
+
+
+General value shifting regime
+You may be affected by value shifting rules if you own shares in a
+company or units (or other fixed interests) in a trust and value has
+been shifted in or out of your shares or units. Generally, the rules only
+affect individuals who control the company or trust, or individuals who
+are related to individuals or entities that control the company or trust.
+
+
+Forestry managed investment schemes
+There are specific CGT rules where secondary investors or subsequent
+participants hold forestry managed investment scheme (FMIS)
+interests on capital account. These rules apply to FMIS interests sold
+or disposed of in 2007–08 and later income years.
+
+For more information, see Guide to capital gains tax 2025.
+
+Continue to: Part A: How capital gains tax applies to you
+Return to: About the personal investors guide to capital gains tax
+
+
+
+
+QC 104651
+
+
+
+Part A: How capital gains tax
+applies to you
+How to meet your capital gains tax (CGT) obligations, and
+what exemptions and rollovers might be available to you.
+
+Published 29 May 2025
+
+
+
+A1: What is capital gains tax and what rate
+of tax do you pay?
+CGT is the tax you pay on any capital gain you include in your tax
+return. It isn't a separate tax, merely a component of your income tax.
+You are taxed on your net capital gain at your marginal tax rate.
+
+To work out your net capital gain:
+
+   take your total capital gains for the year
+
+   subtract your total capital losses for the year and any unapplied
+   net capital losses from earlier years
+
+   subtract any CGT discount and small business CGT concessions to
+   which you're entitled.
+
+If your total capital losses for the year are more than your total capital
+gains, the difference is your net capital loss for the year. It can be
+carried forward to later income years to be deducted from future
+capital gains. You can't deduct capital losses or a net capital loss from
+your income. There is no time limit on how long you can carry forward
+a net capital loss. You apply your net capital losses in the order that
+you made them. For more information on how to apply your capital
+losses, see Step 8 of Part B Sale of shares or units, and Step 4 of
+Part C Distributions from managed funds.
+You make a capital gain or a capital loss if a CGT event happens. The
+disposal of an asset is an example of a CGT event. You can also make
+a capital gain if a managed fund or other trust distributes a capital gain
+to you.
+
+You write the total of your current income year capital gains in your tax
+return and your net capital gain in your tax return.
+
+
+A2: Worldwide obligations
+Australian residents can make a capital gain or capital loss if a CGT
+event happens to any of their assets anywhere in the world.
+
+
+A3: How to meet your CGT obligations
+To meet your CGT obligations, follow these 3 main steps:
+
+  Step 1 Decide whether a CGT event has happened
+
+  Step 2 Work out the time of the CGT event
+
+  Step 3 Calculate your capital gain or capital loss
+
+
+Keep your records
+You need to keep good records of any assets you have bought or sold.
+This will help you to correctly work out the amount of capital gain or
+capital loss you have made when a CGT event happens. You must keep
+these records for 5 years after the CGT event has happened.
+
+You should also keep records relevant to a net capital loss that you
+carry forward as part of unapplied net capital losses. You may be able
+to apply this net capital loss against a capital gain in a later income
+year.
+
+
+Step 1 Decide whether a CGT event has happened
+CGT events are the different types of transactions or events that may
+result in a capital gain or capital loss. A CGT event happens if you sell
+(or otherwise disposed of) your shares or units or other assets during
+2024–25.
+
+Examples of other CGT events that can happen to shares or units
+include:
+  when a company makes a payment other than a dividend to you as
+  a shareholder when a trust or fund makes a non-assessable
+  payment to you as a unit holder
+
+  where you have an annual cost base reduction that exceeds the
+  cost base of your interest in an attribution managed investment
+  trust (AMIT)
+
+  when a liquidator or administrator declares that shares or financial
+  instruments relating to a company are worthless
+
+  when shares in a company are cancelled because the company is
+  wound up.
+
+In some cases, although CGT events may happen to certain assets,
+any capital gains or capital losses from them are generally disregarded
+(for example, assets acquired before 20 September 1985).
+
+For more information on CGT events, see Guide to capital gains tax
+2025.
+
+If a managed fund makes a capital gain and distributes part of that
+gain to you, you're treated as if you make a capital gain from a CGT
+event.
+
+If you don't make a capital gain or capital loss from a CGT event during
+2024–25, you don't need to include anything in your tax return.
+
+If you did make a capital gain or capital loss from a CGT event during
+2024–25, you need to complete the relevant section in your tax return.
+If the CGT event happens to your shares or units and the event is
+covered in this guide (see About the personal investors guide to
+capital gains tax), read on. Otherwise, see Guide to capital gains tax
+2025.
+
+
+Step 2 Work out the time of the CGT event
+The timing of a CGT event is important because it determines which
+income year you show your capital gain or capital loss in. If you sell or
+otherwise dispose of an asset to someone else, the CGT event
+happens when you enter into the contract of sale. If there is no
+contract, the CGT event happens when you stop being the asset’s
+owner.
+
+If you receive a distribution of a capital gain from a managed fund, you
+are considered to have made the capital gain in the income year
+shown on your statement from the managed fund.
+
+
+Step 3 Calculate your capital gain or capital loss
+There are 3 ways of calculating your capital gain or capital loss from
+the sale of your shares or units:
+
+  the indexation method
+
+  the discount method
+
+  the ‘other’ method.
+
+The indexation method allows you to increase the amount that your
+asset cost (the cost base) by applying an indexation factor that is
+based on increases in CPI up to September 1999.
+
+The indexation method can only be applied to assets that you acquire
+before 11:45 am AEST on 21 September 1999.
+
+If you own the shares or units for at least 12 months, use the discount
+method. The discount method allows you to reduce the discount
+capital gains by 50%. For more information on when to apply the
+discount, see Table 1.
+
+For assets that qualify for both the indexation and discount methods,
+you can choose the method that gives you the better result. You don't
+have to choose the same method for all your shares or units even if
+they are in the same company or fund. You must offset capital losses
+against capital gains before you apply the CGT discount, so your
+choice may also depend on the amount of capital losses that you have
+available, see example 18.
+
+You must use the ‘other’ method for any shares or units you buy and
+sell within 12 months.
+
+To calculate your capital gain, you subtract your cost base from what
+you receive (your capital proceeds).
+
+You make a capital loss from the sale of your shares or units if their
+reduced cost base is greater than your capital proceeds. You can't
+index amounts included in your reduced cost base.
+
+If your capital proceeds are less than your cost base but more than
+your reduced cost base there is neither a capital gain or loss.
+
+If you receive a distribution of a capital gain from a managed fund,
+Part C of this guide explains how you calculate the amount of that
+capital gain. You must use the same method as that chosen by the
+fund.
+
+Table 1 explains and compares the 3 methods of calculating your
+capital gain.
+
+
+Table 1: Capital gain calculation methods
+
+                   Indexation        Discount         ‘Other’
+  Method
+                   method            method           method
+
+
+  Description      Use to            Use to halve     A basic
+                   increase the      your capital     method to
+  of the
+                   cost base by      gain.            subtract the
+  method
+                   applying an                        cost base
+                   indexation                         from the
+                   factor based                       capital
+                   on CPI.                            proceeds.
+
+
+  When to          Use for           Use for          Use for
+                   shares or         shares or        shares or
+  use the
+                   units held for    units held       units if you
+  method
+                   12 months or      for              have bought
+                   more,             12 months        and sold
+                   if this method    or more, if      them within
+                   produces a        this method      12 months
+                   better result     produces a       (that is,
+                   for you than      better result    when the
+                   the discount      for you than     indexation
+                   method. Use       the              and
+                   only with         indexation       discount
+                   assets            method.          methods
+                   acquired                           don't apply).
+                   before
+                   11:45 am
+                   AEST on
+                   21 September
+                   1999.
+
+
+  How to           Apply the         Subtract the     Subtract the
+                   relevant          cost base        cost base
+  calculate
+                   indexation        from the         from the
+  your             factors (see      capital          capital
+  capital gain     CPI table),       proceeds,        proceeds
+  using the        then subtract     deduct any       (see the
+  method           the indexed       capital          worked
+                   cost base         losses, then     examples in
+                   from the          divide by 2      Chapter B2).
+                     capital            (see the
+                     proceeds           worked
+                     (see the           examples in
+                     worked             Chapter B2).
+                     examples in
+                     Chapter B2).
+
+
+
+A4: Exemptions and rollovers
+There may be an exemption that allows you to disregard your capital
+gain or capital loss. For example, generally you disregard any capital
+gain or capital loss associated with any pre-CGT assets (assets you
+acquire before 20 September 1985).
+
+There may be a rollover that allows you to defer your capital gain. For
+example, if a company in which you hold shares is taken over or
+merges with another company, and you're required to sell your shares
+for cash, you have either a capital gain or capital loss. If you exchange
+your existing shares for shares in the acquiring company, you may be
+able to defer or roll over some or all of your capital gain (but not a
+capital loss) until a later CGT event happens to your replacement
+shares. This is known as scrip-for-scrip rollover.
+
+Another example of a rollover is when you transfer a CGT asset to your
+former spouse (married or de facto) because of a court order after a
+marriage or relationship breakdown. In this case, you don't make a
+capital gain or capital loss on the transfer. Your former spouse may
+make a capital gain or capital loss when a later CGT event happens to
+the asset. For more information, see Relationship breakdown and
+capital gains tax.
+
+A rollover is also available for some demergers of corporate or trust
+groups.
+
+
+Assets you didn't buy and assets other than shares
+and units
+If you sell assets other than shares and units or sell assets from a
+deceased estate this income year, see Guide to capital gains tax
+2025 to find out how to calculate and report your CGT obligations.
+
+
+A5: Records you need to keep
+Most of the records needed to calculate your capital gain or capital
+loss when you dispose of shares in companies or units in unit trusts
+(including managed funds) is given to you by the company. The unit
+trust manager or your stockbroker may also supply these records. It is
+important that you keep everything they give you about your shares
+and units.
+
+These records will generally provide the following important
+information:
+
+   the date you bought the shares or units
+
+   the amount paid to buy the shares or units
+
+   details of any non-assessable payments made to you during the
+   time you owned the shares or units
+
+   the date and amount of any calls if shares were partly paid
+
+   the sale price if you sold them
+
+   any commissions paid to brokers when you bought or sold them
+
+   any merger or demerger of your share and unit trust.
+
+Continue to: Part B: Sale of shares or units
+
+Return to: General guidance
+
+
+
+
+QC 104651
+
+
+
+Part B: Sale of shares or units
+Explains how to work out your capital gain from the sale of
+shares, or units in a unit trust.
+
+Published 29 May 2025
+
+
+
+B1: How to work out your capital gain or
+capital loss
+To calculate your capital gain from the sale of shares, or units in a unit
+trust (for example, a managed fund), the 3 main steps are:
+
+  Step 1 Work out your capital proceeds from the CGT event
+
+  Step 2 Work out the cost base of your asset
+
+  Step 3 Did you make a capital gain?
+
+If your capital proceeds are greater than your cost base, the difference
+is your capital gain. The 3 methods of calculating your capital gain are
+described in Part A – step 3.
+
+If your capital proceeds are less than the cost base, you then need to
+work out the reduced cost base. Your asset will have a reduced cost
+base different to your cost base if you are required to deduct from the
+cost base amounts you receive that are non-assessable amount like a
+distribution that isn't a dividend. Generally, for shares, the cost base
+and reduced cost base are the same.
+
+If the reduced cost base, is greater than the capital proceeds the
+difference is a capital loss.
+
+If the capital proceeds are less than the cost base but more than the
+reduced cost base, you haven't made a capital gain or a capital loss.
+
+The following steps (1–11) show you the calculations required to work
+out your CGT obligation using the ‘other’ and 'discount' methods. If you
+want to use the indexation method (by indexing your cost base for
+inflation), you do this at Step 2. You may find it easier to follow the
+worked examples in Chapter B2.
+
+You may find it useful to use notepaper to do your calculations while
+you work through the following steps so you can transfer the relevant
+amounts to question 18 in your supplementary tax return.
+
+Step 1 Work out your capital proceeds from the CGT
+event
+The capital proceeds are what you receive, or are taken to receive,
+when you sell or otherwise dispose of your shares or units.
+
+For example, with shares the capital proceeds can be:
+
+  the amount you receive from the purchaser
+
+  the amount or value of shares or other property you receive on a
+  merger or takeover
+  the market value if you give shares away.
+
+
+
+  Example 1: capital proceeds
+  Fred sold his parcel of 1,000 shares for $6,000. Fred’s capital
+  proceeds are $6,000.
+
+
+
+Step 2 Work out the cost base of your asset
+In certain circumstances a cost base may be indexed up to
+30 September 1999 in line with changes in the CPI; this is called the
+indexation method and the cost base would then become an ‘indexed’
+cost base. For more information, see the worked examples in
+Chapter B2.
+
+The cost base of your asset is the total of:
+
+  what your asset cost you
+
+  certain incidental costs of buying and selling it – brokerage or
+  agent’s fees, legal fees, and investment advisers’ fees (but not
+  investment seminar costs)
+
+  the costs of owning the asset, such as interest on monies borrowed
+  to acquire the asset (generally, this won't apply to shares or units
+  because you usually will claim or are entitled to claim these costs as
+  tax deductions)
+
+  any costs you incur in establishing, maintaining and defending your
+  ownership of it.
+
+You may also need to reduce the cost base for an asset such as a
+share or unit by the amount of any non-assessable payment you
+receive from the company or fund during the ownership of the share or
+unit. This is explained in Chapter B3 (shares) and Chapter C2 (units).
+
+For more information on how to determine your cost base and reduced
+cost base, see Guide to capital gains tax 2025.
+
+
+
+  Example 2: calculating the cost base
+  Fred bought the 1,000 shares that he sold in example 1 for $5
+  each ($5,000). When he bought them he was charged $50 for
+  brokerage When he sold the shares he paid $50 brokerage.
+
+  The cost base of his shares is:
+
+       $5,000 + $50 + $50 = $5,100.
+
+
+
+Step 3 Did you make a capital gain?
+Subtract the amount in step 2 from the amount in step 1.
+
+If the capital proceeds are greater than the cost base, the difference is
+your capital gain.
+
+
+
+  Example 3: calculating capital gain
+  As Fred sold his shares for $6,000, he subtracts his shares’ cost
+  base of $5,100 from the capital proceeds of $6,000 to arrive at
+  his capital gain, which is $900.
+
+
+
+Step 4 If you didn't make a capital gain, work out the
+reduced cost base of the asset
+If you didn't make a capital gain, you need to calculate a reduced cost
+base of your asset before you can work out any capital loss.
+
+The reduced cost base is the cost base less any amounts you need to
+exclude from it.
+
+
+
+  Example 4: reduced cost base
+  In our example, Fred had no amounts to exclude, so the cost
+  base and the reduced cost base for his shares are the same
+  ($5,100).
+
+
+For units in an AMIT, you may need to make upwards or downwards
+adjustments to the cost base and reduced cost base of your units,
+depending on your AMIT cost base net amount. Your fund should
+advise you of your AMIT cost base net amount (and other relevant
+amounts) in your AMMA statement.
+
+For units in other funds, you may need to make downwards
+adjustments to the cost base and reduced cost base depending on the
+types of amounts distributed. Your fund should advise you of these
+amounts in its statements:
+
+  tax-deferred amount; this reduces the cost base and the reduced
+  cost base
+
+  CGT-concession amount; if received before 1 July 2001, this
+  reduces the cost base and reduced cost base (if received on or
+  after 1 July 2001, it doesn't affect your cost base or your reduced
+  cost base)
+
+  tax-free amount; this reduces your reduced cost base only
+
+  tax-exempted amount; this doesn't affect your cost base or
+  reduced cost base.
+
+Step 5 Did you make a capital loss?
+If the capital proceeds are less than the reduced cost base, the
+difference is your capital loss.
+
+
+
+  Example 5: capital loss
+  If Fred had sold his shares for $4,000 instead of $6,000, he
+  would have made a capital loss of $1,100 (that is, his reduced
+  cost base of $5,100 less his capital proceeds of $4,000).
+
+
+
+Step 6 Did you make neither a capital gain nor a
+capital loss?
+If the capital proceeds are less than the cost base but more than the
+reduced cost base, you have neither a capital gain nor a capital loss.
+
+
+
+  Example 6: neither capital gain nor capital loss
+  If Fred had sold his shares for$5,100, he wouldn't have made a
+  capital gain or a capital loss.
+
+
+
+Step 7 Work out your total current income year
+capital gains
+Write the total of the capital gains for all your assets for the current
+income year at question 18 – label H in your supplementary tax return.
+
+If you have a distribution of capital gains from a managed fund, include
+this in your total capital gains. See Step 3 in Chapter C1.
+
+If you have any capital losses, don't subtract them from the capital
+gains before writing the total amount at label H.
+
+
+
+  Example 7: capital gains
+  Fred doesn't have any other capital gains. Therefore, from step 3,
+  he writes $900 at question 18 – label H in his supplementary tax
+  return.
+
+
+
+Step 8 Applying capital losses against capital gains
+If you don't have capital losses from assets you disposed of this year
+or unapplied net capital losses from earlier years, go to Step 9.
+
+If you made capital losses this year, subtract them from the amount
+you wrote at label H. If you have unapplied net capital losses from
+earlier years, subtract them from the amount remaining after you
+subtract the capital losses made this year. Subtract both types of
+losses in the manner that gives you the greatest benefit.
+
+Subtracting your losses
+You will probably get the greatest benefit if you subtract capital losses
+from capital gains in the following order:
+
+1. capital gains for which neither the indexation method nor the
+   discount method applies (that is, if you bought and sold your shares
+   within 12 months)
+
+2. capital gains calculated using the indexation method, and then
+
+3. capital gains to which the CGT discount can apply.
+
+Losses from collectables and personal use assets
+Capital losses from collectables can't be used to reduce capital gains
+from shares or units. Capital losses from collectables can be carried
+forward and applied to capital gains from collectables in future years.
+Jewellery, art and antiques are examples of collectables.
+Losses from personal use assets are disregarded. Personal use assets
+are assets mainly used for personal use that aren't collectables, such
+as a boat you use for recreation. For more information, see Guide to
+capital gains tax 2025.
+
+If the total of your capital losses for the year and unapplied net capital
+losses from earlier years is greater than your capital gains, go to
+Step 11.
+
+
+
+  Example 8: applying a net capital loss
+  Fred had a net capital loss of $75 from some shares that he sold
+  last income year. Apart from his capital gain of $900 (see
+  example 7) he had no other capital gains or capital losses this
+  income year. Fred can reduce this income year’s capital gain of
+  $900 by $75. Fred’s remaining capital gain is $825.
+
+
+
+Step 9 Applying the CGT discount
+If you have any remaining capital gains, you can now apply the CGT
+discount, if it is applicable, and reduce them by 50%.
+
+Remember, you can't apply the CGT discount to:
+
+  capital gains calculated using the indexation method
+
+  capital gains from CGT assets you bought and sold within
+  12 months.
+
+
+
+  Example 9: applying the CGT discount
+  As Fred owned his shares for at least 12 months, he can reduce
+  his $800 gain by the CGT discount of 50% to arrive at a net
+  capital gain of $400:
+
+       $800 × 50% = $400
+
+
+
+Step 10 What is your net capital gain?
+The amount now remaining is your net capital gain (cents aren't
+shown). Write this amount at question 18 – label A in your
+supplementary tax return.
+  Example 10: net capital gain
+  Fred writes his net capital gain of $400 at question 18 – label A in
+  his supplementary tax return.
+
+
+Go to Chapter B2.
+
+Step 11 doesn't apply if you have a net capital gain.
+
+
+Step 11 Work out and show your carry-forward
+losses
+If the total of your capital losses for the year and unapplied net capital
+losses from earlier income years is greater than your capital gains, you
+were directed to this step from step 8.
+
+Don't write anything at question 18 – label A in your supplementary tax
+return.
+
+At question 18 – label V in your supplementary tax return write the
+amount by which the total of your capital losses for the year and
+unapplied net capital losses from earlier income years is greater than
+your capital gains for the year. You carry this amount forward to be
+applied against later income year capital gains.
+
+
+
+  Example 11: carry-forward losses
+  Continuing the example from step 5, if Fred had no other capital
+  gains or losses, he would write $1,100 at question 18 – label V in
+  his supplementary tax return. He would leave blank at
+  question 18 – labels A and H in his supplementary tax return.
+
+
+
+
+B2: Worked examples for shares and units
+The following examples show how CGT works in various situations
+where people have bought and sold shares and units. They may help
+you meet your CGT obligations and complete question 18 in your
+supplementary tax return.
+Example 12: a capital gain from one parcel of
+shares that was bought and sold less than
+12 months later.
+Sonya bought 1,000 shares in Tulip Ltd for $1,500 including
+brokerage and sold them less than 12 months later for $2,350.
+She paid $50 brokerage on the sale. The sale is a CGT event.
+
+As Sonya bought and sold the shares within 12 months, she uses
+the ‘other’ method to calculate her capital gain. She can't use the
+indexation or discount method. Her capital gain is:
+
+    $2,350 − ($1,500 + $50) = $800.
+
+As she has no other CGT event and doesn't have any capital
+losses, Sonya writes the following at question 18 in her
+supplementary tax return:
+
+  $800 at label H
+
+  $800 at label A.
+
+
+
+
+Example 13: a capital gain from the sale of units
+which was bought before 11:45 am AEST on
+21 September 1999 and gave to a sibling more
+than 12 months later.
+In May 1999, Andrew bought 1,200 units in a Share Trust for
+$1,275 including brokerage. He gave the units to his brother more
+than 12 months later. At that time they were worth $1,595.
+
+The gift is a CGT event. As Andrew bought the units before
+21 September 1999 and he owned them for more than
+12 months, he can use the indexation or discount method to
+calculate his capital gain, whichever method gives him the better
+result.
+
+Indexation method
+
+If Andrew calculates his capital gain or capital loss using the
+indexation method, he indexes the cost of his units and the
+incidental costs of buying them as follows:
+
+   CPI for September 1999 quarter = 68.7
+
+   CPI for June 1999 quarter = 68.1
+
+   Indexation factor = 68.7 ÷ 68.1 = 1.009
+
+His indexed cost base is worked out as follows:
+
+   His cost ($1,275) × 1.009 = $1,286
+
+So his capital gain is:
+
+   Capital proceeds $1,595
+
+   minus Indexed cost base $1,286
+
+   Capital gain $309
+
+Discount method
+
+If Andrew uses the discount method, his capital gain is calculated
+as:
+
+   Capital proceeds
+   $1,595
+
+   minus Cost base
+   $1,275
+
+   Total capital gain
+   $320
+
+   subtract CGT discount (see note)
+   $160
+
+   Capital gain
+   $160
+
+Andrew doesn't have any capital losses. If he did, he would
+deduct any capital losses before applying the CGT discount.
+
+Andrew chooses the discount method because it gives him a
+smaller capital gain.
+
+As he has no other CGT event and doesn't have any capital
+losses, Andrew writes the following at question 18 in his
+supplementary tax return:
+
+   $320 at label H
+  $160 at label A.
+
+If Andrew had received a non-assessable payment from the
+fund, his cost base may have been reduced and the capital gain
+may have been greater. If the fund was an AMIT, Andrew's cost
+base may have been increased or decreased, and the capital
+gain should be calculated to reflect his adjusted cost base. For
+more information, see Chapter C2.
+
+
+
+
+Example 14: a capital gain from one parcel of
+shares which was given before 11:45 am AEST
+on 21 September 1999 and sold more than 12
+months later.
+In October 1986, Fatima was given 500 shares in FJM Ltd with a
+market value of $2,500. She sold the shares last March for
+$4,500.
+
+The sale is a CGT event. As Fatima acquired the shares before
+21 September 1999 and owned them for more than 12 months,
+she can use the indexation or discount method to calculate her
+capital gain, whichever method gives her the better result.
+
+Indexation method
+
+If Fatima calculates her capital gain using the indexation method,
+the indexation factor is:
+
+  CPI for September 1999 quarter = 68.7
+
+  CPI for December 1986 quarter = 44.4
+
+  Indexation factor = 68.7 ÷ 44.4 = 1.547
+
+Her indexed cost base is:
+
+  $2,500 × 1.547 = $3,868.00
+
+So her capital gain is calculated as follows:
+
+  Capital proceeds
+  $4,500
+  minus Indexed cost base
+  $3,868
+
+  Capital gain
+  $632
+
+Discount method
+
+If Fatima uses the discount method, her capital gain is calculated
+as:
+
+  Capital proceeds
+  $4,500
+
+  minus Cost base
+  $2,500
+
+  Total capital gain
+  $2,000
+
+  minus CGT discount (see note)
+  $1,000
+
+  Capital gain
+  $1,000
+
+Fatima doesn't have any capital losses. If she did, she would
+deduct any capital losses before applying the CGT discount.
+
+Fatima chooses the indexation method because it gives her a
+smaller capital gain.
+
+As she has no other CGT event and doesn't have any capital
+losses, Fatima writes the following at question 18 in her
+supplementary tax return:
+
+  $632 at label H
+
+  $632 at label A.
+
+
+
+
+Example 15: a capital gain from some units
+bought after 11:45 am AEST on 21 September
+1999 and redeemed less than 12 months later.
+Colin bought 500 units in Equity Trust for $3,500 in October and
+redeemed them less than 12 months later in June for $5,000 by
+switching, or transferring his units from a share fund to a
+property fund. The redeeming of units is a CGT event.
+
+As Colin owned the units for less than 12 months, he calculates
+his capital gain using the ‘other’ method.
+
+Colin’s capital gain is:
+
+
+
+   Capital proceeds
+   $5,000
+
+   minus Cost base
+   $3,500
+
+   Capital gain
+   $1,500
+
+As he had no other CGT event and doesn't have any capital
+losses, Colin writes the following at question 18 in his
+supplementary tax return:
+
+   $1,500 at label H
+
+   $1,500 at label A.
+
+If Colin had received a non-assessable payment from the fund,
+his cost base may have been adjusted and the capital gain may
+have been greater. If the fund was an AMIT, Colin's base may
+have been increased or decreased, and the capital gain should
+be calculated to reflect his adjusted cost base. For more
+information, see Chapter C2.
+
+
+
+
+Example 16: a capital gain from some shares
+bought after 11:45 am AEST on 21 September
+1999 and sold more than 12 months later. They
+also have a net capital loss from an earlier
+income year.
+Mei-Ling bought 400 shares in TKY Ltd for $15,000 in October
+1999 and sold them for $23,000 last February. The sale is a CGT
+event. She also has a net capital loss of $1,000 from an earlier
+income year that has not been applied against later income year
+capital gains.
+
+As she bought the shares after 21 September 1999, Mei-Ling
+can't use the indexation method. However, as she owned the
+shares for more than 12 months, she can use the discount
+method. Her capital gain is:
+
+  Capital proceeds
+  $23,000
+
+  minus Cost base
+  $15,000
+
+  Total capital gain
+  $8,000
+
+  minus net capital loss
+  $1,000
+
+  Capital gain (before applying the CGT discount)
+  $7,000
+
+  minus CGT discount
+  $3,500
+
+  Capital gain
+  $3,500
+
+As she has no other CGT event, Mei-Ling writes the following at
+question 18 in her supplementary tax return:
+
+  $8,000 at label H
+
+  $3,500 at label A.
+
+
+
+
+Example 17: a capital loss from one parcel of
+shares bought before 11:45 am AEST on
+21 September 1999 and sold more than 12
+months later.
+In October 1986, Mario purchased 2,500 shares in Machinery
+Manufacturers Ltd for $2,650 including brokerage. He sold the
+shares last March for $2,300 and paid $50 brokerage costs.
+Mario also made a capital loss of $350 on some shares he sold in
+1999–2000 but had not made any capital gain since then that he
+could use to offset his capital losses.
+
+The sale is a CGT event. Mario purchased the Machinery
+Manufacturers Ltd shares before 11:45 am AEST on
+21 September 1999 but he made a capital loss, so neither the
+indexation nor the discount method applies.
+
+Mario calculates his capital loss for the current income year as
+follows:
+
+  Reduced cost base ($2,650 + $50) = $2,700
+
+  minus capital proceeds = $2,300
+
+  Capital loss = $400
+
+The net capital losses that Mario can carry forward to reduce
+capital gains he may make in later income years are:
+
+  Net capital loss for 2024–25 = $400
+
+  plus net capital loss for 2023–2024 = $350
+
+  Net capital losses carried forward to later income years =
+  $750
+
+As he has no other capital gains or capital losses, Mario writes
+$750 at question 18 – label V in his supplementary tax return He
+doesn't write anything at question 18 – label A.
+
+
+
+
+Example 18: capital gains from shares bought
+before 11.45am AEST on 21 September 1999
+and had capital losses carried forward from a
+previous income year.
+Clare sold a parcel of 500 shares last March for $12,500 ($25
+each). She had acquired the shares in March 1995 for $7,500
+($15 each), including stamp duty and brokerage costs. There
+were no brokerage costs on sale. Clare had no other capital gains
+or capital losses for the current income year, although she has
+$3,500 unapplied net capital losses carried forward from earlier
+income years.
+
+Because Clare owned the shares for more than 12 months, and
+because she acquired the shares before September 1999, she
+can use the discount method or the indexation method to work
+out her capital gain, whichever gives her a better result. Clare
+firstly works out her net capital gain by applying both the
+indexation method and the discount method to the whole parcel
+of shares:
+
+
+Calculation of net capital gain using indexation and
+discount methods
+
+                              Using               Using
+  Calculation              indexation            discount
+  element                    method              method
+                                $                    $
+
+
+  Capital                          12,500               12,500
+  proceeds
+
+  Cost base                         8,078                7,500
+                              (see Note 1
+                                  below)
+
+  Capital gain                      4,422                5,000
+
+  subtract capital                  3,500                3,500
+  losses
+
+  Equals                             922                 1,500
+
+  50% CGT                  Not applicable                  750
+  discount
+
+  Net capital gain                   922                  750
+Note 1: (68.7 ÷ 63.8 = 1.077) ($7,500 × 1.077 = $8,078)
+
+However, because each share is a separate asset, Clare can use
+different methods to work out her capital gains for shares within
+the parcel. The lowest net capital gain would result from her
+applying the indexation method to sufficient shares to absorb the
+capital loss (or as much of the capital loss as she can) and apply
+the discount method to any remaining shares. Clare therefore
+applies the indexation method to the sale of 396 (see Note 2)
+shares and the discount method to the remaining 104.
+
+Note 2: To calculate this, Clare worked out the capital gain made
+on each share using the indexation method
+($4,422 ÷ 500 = 8.84) and divided the capital loss by this
+amount ($3,500 ÷ 8.84 = 396).
+
+She works out her net capital gain as follows:
+
+Indexation method (396 shares)
+
+  Capital proceeds ($25 each)
+  $9,900
+
+  Cost base (396 × $15 × 1.077)
+  $6,397
+
+  Capital gain
+  $3,503
+
+  minus Capital losses
+  $3,500
+
+  Net capital gain
+  $3
+
+Discount method (104 shares)
+
+  Capital proceeds ($25 each)
+  $2,600
+
+  Cost base (104 × $15)
+  $1,560
+
+  Capital gain
+  $1,040
+
+  minus 50% CGT discount
+  $520
+     Net capital gain
+     $520
+
+  As she has no other capital gains or capital losses, Clare writes
+  the following at question 18 in her supplementary tax return:
+
+     $4,543 at label H
+
+     $523 at label A.
+
+  Clare doesn't write anything at question 18 – label V.
+
+
+
+
+B3: Additional information for shares and
+units
+This section briefly explains less common situations for personal
+investors, including those arising from:
+
+  rights or options
+
+  stapled securities
+
+  non-assessable payments
+
+  share buy-backs
+
+  takeovers and mergers
+
+  demergers
+
+  dividend reinvestment plans
+
+  bonus shares and bonus units
+
+  dividends paid by listed investment companies (LIC) that include a
+  LIC capital gain.
+
+Rights or options to acquire shares or units
+If you hold shares or units, you may be issued rights or options to
+acquire more shares or units at a specified price.
+
+Rights or options issued directly to you from a
+company or trust for no cost
+You are considered to have acquired the rights or options at the same
+time you acquired the original shares or units. Therefore, if you acquire
+the original shares or units before 20 September 1985, any capital gain
+or capital loss you make when the rights or options expire or are sold is
+disregarded as they are pre-CGT assets.
+
+If you acquire the original shares or units on or after 20 September
+1985, you make a capital gain if the capital proceeds on the sale or
+expiry of the rights or options are more than their cost base. You make
+a capital loss if the reduced cost base of the rights or options is more
+than those capital proceeds.
+
+
+Rights and options you paid to acquire from a
+company or trust, or that you acquired from another
+person
+If you acquire your rights or options on or after 20 September 1985,
+they are treated much like any other CGT asset and are subject to
+CGT.
+
+Special rules apply if you exercise the rights or options. For more
+information, or if you acquire rights or options under an employee
+share scheme, see Guide to capital gains tax 2025.
+
+Stapled securities
+Stapled securities are created when 2 or more different securities are
+legally bound together so that they can't be sold separately. Many
+different types of securities can be stapled together, for example,
+many property trusts have their units stapled to the shares of
+companies with which they are closely associated.
+
+The effect of stapling depends upon the specific terms of the stapling
+arrangement. The issuer of the stapled security will be able to provide
+you with detailed information on their particular stapling arrangement.
+However, in general the effect of stapling is that each individual
+security retains its character and there is no variation to the rights or
+obligations attached to the individual securities.
+
+Although a stapled security must be dealt with as a whole, the
+individual securities that are stapled are treated separately for tax
+purposes. For example, if a share in a company and a unit in a unit trust
+are stapled, you:
+
+  continue to include separately in your tax return dividends from the
+  company and trust distributions from the trust
+  work out any capital gain or capital loss separately for the unit and
+  the share.
+
+Because each security that makes up your stapled security is a
+separate CGT asset, you must work out a cost base and reduced cost
+base for each separately.
+
+If you acquire stapled securities (for example, you bought the stapled
+securities on the ASX), you apportion, on a reasonable basis, the
+amount you pay to acquire the stapled security (and any other relevant
+costs) among the various securities (share and unit trust) that are
+stapled. One reasonable basis of apportionment is to have regard to
+the portion of the value of the stapled security that each security
+represented. The issuer of the stapled security may provide assistance
+in determining these amounts.
+
+If you acquire your stapled securities as part of a corporate restructure
+you will, during the restructure, own individual securities that aren't
+stapled. The way you work out the cost base and reduced cost base of
+each security depends on the terms of the stapling arrangement. The
+issuer of the stapled security may provide information to help you
+determine these amounts.
+
+When you dispose of your stapled securities, you must divide the
+capital proceeds (on a reasonable basis) between the securities that
+make up the stapled security and then work out whether you have
+made a capital gain or capital loss on each security. The issuer of the
+stapled security may provide information to help you determine these
+amounts.
+
+For examples covering stapled securities, see Guide to capital gains
+tax 2025.
+
+Non-assessable payments
+There can be non-assessable payments for both shares and units.
+
+Non-assessable payments from a company to a
+shareholder
+Non-assessable payments to shareholders are usually called a return
+of capital. If you receive a payment from a company on your shares
+and it isn't a dividend, you deduct the amount of the payment from
+both the cost base and the reduced cost base of your shares.
+If the non-assessable payment is greater than the cost base or
+reduced cost base of your shares, you include the excess as a capital
+gain. The capital gain is discounted if you hold the shares for at least
+12 months.
+
+Non-assessable payments from a managed fund to
+a unit holder
+The treatment of these payments is similar to non-assessable
+payments from a company to a shareholder. For more information, see
+Chapter C2.
+
+
+Non-assessable payments under a demerger
+If you receive a demerger dividend under an eligible demerger, the
+dividend is non assessable and non-exempt income You need to
+recalculate your cost base and reduced cost base of the two
+demerged entities under the demerger rules.
+
+An eligible demerger is one that happens on or after 1 July 2002 and
+satisfies certain tests. The head entity will normally advise
+shareholders or unit holders if this is the case.
+
+For more information, see Guide to capital gains tax 2025.
+
+Share buy-backs
+If you dispose of shares back to a company under an on-market buy-
+back arrangement, you make either a capital gain or capital loss.
+
+For an off-market share buy-back no part of the buy-back price will be
+treated as a dividend. Instead, the entire buy-back price is treated as
+capital proceeds. For more information, see Capital proceeds from an
+off-market share buy-back.
+
+Takeovers and mergers
+If a company in which you hold shares is taken over and you receive
+new shares in the takeover company (the offeror), you may be entitled
+to a scrip-for-scrip rollover for any capital gain you make. This means
+you can defer the capital gain you make on the disposal of your old
+shares until a later CGT event happens to your new shares. Usually,
+the takeover company would advise you if the scrip-for-scrip rollover
+conditions are satisfied.
+If you also receive some cash from the takeover company, you only get
+rollover on the proportion of the original shares for which you receive
+shares in the takeover company. You'll need to apportion the cost base
+of the original shares between the replacement shares and the cash.
+
+If the scrip-for-scrip conditions aren't satisfied, your capital proceeds
+for your original shares will be the total of any cash and the market
+value of the new shares you receive.
+
+Scrip-for-scrip rollover may also be available to the extent that units in
+a managed fund are exchanged for units in another managed fund.
+
+For more information on takeovers and mergers, see Guide to capital
+gains tax 2025.
+
+
+Demergers
+A demerger involves the restructuring of a corporate or fixed trust
+group by splitting its operations into 2 or more entities or groups.
+Under a demerger, the owners of the head entity of the group (that is,
+the shareholders of the company or unit holders of the trust) acquire a
+direct interest (shares or units) in an entity that was formerly part of
+the group.
+
+If you own interests in a company or fixed trust that is the head entity
+of a demerger group and you receive new interests in the demerged
+company or trust, you may be entitled to a demerger rollover.
+
+Generally, the head entity undertaking the demerger will advise
+whether you are entitled to rollover, but you should seek our advice if
+you are in any doubt. We may have provided advice in the form of a
+class ruling on a specific demerger confirming that a rollover is
+available. Even if you don't choose a rollover, you must recalculate the
+cost base and reduced cost base of each of your original interests in
+the head entity and your new interests in the demerged entity.
+
+For more information, see:
+
+  Demergers calculator
+
+  Taxation Determination TD 2020/6 Income tax: what is a
+  'restructuring' for the purposes of subsection 125-70(1) of the
+  Income Tax Assessment Act 1997?
+
+Dividend reinvestment plans
+Under these plans, shareholders can choose to use their dividend to
+acquire more shares in the company instead of receiving a cash
+payment. For CGT purposes, you're treated as if you receive a cash
+dividend and then use it to buy more shares. Each share (or parcel of
+shares) received in this way is treated as a separate asset and you
+must make a separate calculation when you sell them.
+
+For more information on the topics covered, including demergers, see
+Guide to capital gains tax 2025 and You and your shares 2025.
+
+Bonus shares and bonus units
+Bonus shares are additional shares received by a shareholder for
+shares already owned. These shares may be received by a shareholder
+wholly or partly as a dividend. The shareholder may also pay an
+amount to get them.
+
+Bonus units may also be received in a similar way.
+
+The CGT rules for bonus shares and bonus units are very similar. If you
+sell bonus shares or bonus units, see Guide to capital gains tax 2025.
+
+Dividends paid by listed investment companies
+(LIC) that include a LIC capital gain
+If a LIC pays a dividend to you that includes a LIC capital gain amount,
+you are entitled to a tax deduction.
+
+You can claim a deduction if:
+
+  you're an individual
+
+  you are an Australian resident when a LIC pays you a dividend
+
+  the dividend includes a LIC capital gain amount.
+
+The amount of the deduction is 50% of the LIC capital gain amount.
+The LIC capital gain amount is shown separately on your dividend
+statement.
+
+You don't write the LIC capital gain amount at question 18 in your
+supplementary tax return.
+
+
+
+  Example 20: LIC capital gains
+   Ben, an Australian resident, was a shareholder in XYZ Ltd, a LIC.
+   Last March, Ben received a dividend from XYZ Ltd of $70,000
+   including a LIC capital gain amount of $50,000. Ben can claim a
+   $30,000 franking credit relating to the dividend.
+
+
+   Amounts Ben includes in his tax return
+
+     Tax return label                                     Amount
+
+
+     Franked amount                                       $70,000
+     (at question 11 – label T in his tax return)
+
+     Franking credit                                      $30,000
+     (at question 11 – label U in his tax return)
+
+     Amount included in total income                      $100,000
+
+     Deduction for LIC capital gain                       $25,000
+     (claimed at question D8 in his tax return)
+
+
+
+
+Continue to: Part C: Distributions from managed funds
+
+Return to: Part A: How capital gains tax applies to you
+
+
+
+
+QC 104651
+
+
+
+Part C: Distributions from managed
+funds
+Explains legislative changes impacting capital gains of
+managed investment trusts and how to work out your
+capital gain.
+
+Published 29 May 2025
+Legislative changes impacting capital
+gains of managed investment trusts
+The changes include:
+
+  Attribution managed investment trusts
+
+  Streaming
+
+  Stapled structures
+
+
+Attribution managed investment trusts
+A managed investment trust (MIT) may be able to choose to apply the
+attribution rules contained within a specific tax system for MITs as set
+out in Division 276 of the Income Tax Assessment Act 1997. Where
+that choice is made, the MIT becomes an attribution managed
+investment trust (AMIT).
+
+Generally, these rules apply to 'attribute' amounts for tax purposes to
+each member based on their interest in the AMIT, rather than the
+member being taxed based on their 'present entitlement' to the income
+of the trust.
+
+The attribution rules ensure that, for tax purposes, amounts attributed
+to you by the trust:
+
+  keep their tax character
+
+  flow through to you
+
+  are treated as if you receive the amount directly in your own right
+  (though in the same circumstances as received by the AMIT).
+
+For capital gains, these rules mean you'll treat the capital gains
+component of your trust income as being a capital gain that you make.
+
+The share of trust amounts attributed to you is shown on your member
+statement, which for an AMIT is called an AMIT member annual
+statement (AMMA statement) (similar to the standard distribution
+statement provided by a managed fund).
+
+Otherwise, for members (unitholders) of an AMIT, there should be little
+practical difference to the way trust capital gains are included in your
+tax return.
+In addition, the cost base of your units in an AMIT may also be subject
+to annual upward or downward adjustments (see Cost base
+adjustments for AMIT members).
+
+For more information, see Managed investment trusts – overview.
+
+Streaming
+In June 2011, amendments were enacted that allow the streaming of
+capital gains and franked dividends to beneficiaries, subject to
+relevant integrity provisions.
+
+The amendments apply from 2017–18 to MITs which have not
+previously made an election to apply the amendments. For MITs which
+have previously made an election to apply the amendments, the
+amendments continue to apply in 2017–18 and onwards.
+
+The amendments don't apply to AMITs, which are subject to the
+separate attribution rules that enable capital gains and franked
+distributions to be attributed to members for tax purposes.
+
+Stapled structures
+Since 1 July 2019, laws:
+
+  address risks posed by arrangements involving stapled structures
+
+  limit access to concessions available to foreign investors for passive
+  income.
+
+A stapled structure is an arrangement where 2 or more entities that are
+commonly owned (at least one of which is a trust) are bound together,
+such that interests in them (for example, shares or units) can't be
+bought or sold separately. The measures may change the rate of MIT
+withholding tax that is applied to trading income that is converted to
+passive income via a stapled structure or distributed by a trading trust.
+
+For more information, see Stapled structures.
+
+
+C1: How to work out your capital gains tax
+for a managed fund distribution
+Some terms in this section may be new to you, we explain these terms
+in Tax time definitions.
+If your managed fund distribution (as advised by the fund) includes a
+capital gain amount, you include this amount at question 18 Capital
+gains in your supplementary tax return. You don't include capital gains
+at question 13 Partnerships and trusts.
+
+Examples of managed funds include property trusts, share trusts,
+equity trusts, growth trusts, imputation trusts and balanced trusts.
+
+Distributions from managed funds can include 2 types of amounts that
+affect your CGT obligation:
+
+  capital gains
+
+  non-assessable payments.
+
+The following steps in this section show you how to record a capital
+gain distributed from a managed fund. Chapter C2 covers non-
+assessable amounts which mostly affect the cost base of units but can
+create a capital gain.
+
+Step 1 Work out the capital gain you have received
+from the managed fund
+You need to know whether you have received any capital gain in your
+distribution; to find out, check the statement from your managed fund.
+
+This statement should also show which method the fund has used to
+calculate the gain; the indexation, discount or ‘other’ method. You must
+use the same methods as the fund to calculate your capital gain. (We
+explain these methods in Part A and Part B, and in Tax time
+definitions).
+
+Fund managers may use different terms to describe the calculation
+methods and other terms used in this guide. For example, they may
+refer to capital gains calculated using the indexation method and the
+‘other’ method as non-discount gains.
+
+Step 2 Gross up any discounted capital gain you
+have received
+If the fund applies the CGT discount to your distribution, this is known
+as a discounted capital gain.
+
+You need to gross up any discounted capital gain distributed to you by
+multiplying the gain by 2. This grossed-up amount is your capital gain
+from the fund. If the managed fund shows the grossed-up amount of
+the discounted capital gain on your distribution statement, you can use
+that amount.
+
+
+
+  Example 21: grossing up a capital gain
+  Tim receives a distribution from a fund that includes a
+  discounted capital gain of $400. Tim’s statement shows that the
+  fund has used the discount method to calculate the gain.
+
+  Tim grosses up the capital gain to $800 (that is, $400 × 2).
+
+
+
+Step 3 Work out your total current income year
+capital gains
+Add up all the capital gains you received from funds (grossed up
+where necessary) together with any capital gains from other assets.
+Write the total of all your capital gains for the current year at
+question 18 – label H in your supplementary tax return.
+
+If you have any capital losses, don't deduct them from the capital gains
+before showing the total amount at label H.
+
+
+
+  Example 22: ‘other’ method
+  Tim’s fund also distributes a capital gain of $100 calculated using
+  the ‘other’ method. Tim includes $900 ($800 + $100) at
+  question 18 – label H in his supplementary tax return.
+
+
+
+Step 4 Applying capital losses against capital gains
+If you have no capital losses from assets you disposed of this year and
+no unapplied net capital losses from earlier income years, go to Step 5.
+
+If you make capital losses this year, deduct them from the amount you
+wrote at label H. If you have unapplied net capital losses from earlier
+income years, deduct them from the amount remaining after you
+deduct capital losses made this year. Deduct both types of losses in
+the manner that gives you the greatest benefit.
+
+Subtracting your losses
+You'll probably get the greatest benefit if you subtract capital losses
+from capital gains distributed from the fund in the following order:
+
+1. capital gains calculated using the ‘other’ method
+
+2. capital gains calculated using the indexation method or the discount
+   method.
+
+If the total of your capital losses for the current year and unapplied net
+capital losses from earlier income years is greater than your capital
+gains for the current year, go to Step 7.
+
+
+
+  Example 23: subtracting capital loss
+  If Tim has a capital loss of $200 when he sells another CGT
+  asset, he subtracts his capital loss ($200) from his capital gain
+  ($900) and arrives at $700. As he applied the loss first against
+  the capital gain calculated using the ‘other’ method and then
+  against the capital gain calculated using the discount method
+  (after grossing it up), Tim can apply the CGT discount to the
+  remaining $700.
+
+
+Losses from collectables and personal use assets
+You can only use capital losses from collectables this year and
+unapplied net capital losses from collectables from earlier income
+years to reduce capital gains from collectables. Jewellery, art and
+antiques are examples of collectables.
+
+Losses from personal use assets are disregarded. Personal use assets
+are assets mainly used for personal use that aren't collectables, such
+as a boat you use for recreation. For more information, see Guide to
+capital gains tax 2025.
+
+Step 5 Applying the CGT discount
+If you have any remaining grossed-up discount capital gains you can
+now apply the CGT discount, if applicable, and reduce them by 50%.
+
+Remember, you can't apply the CGT discount to capital gains
+distributed from the fund calculated using the indexation or ‘other’
+method.
+  Example 24: applying the CGT discount
+  Following on from Example 23, Tim has a discounted capital
+  gains of $700. He now reduces the amount remaining by 50%:
+
+       $700 × 50% = $350
+
+  Tim has a net capital gain of $350.
+
+
+
+Step 6 Write your net capital gain in your tax return
+The amount remaining after completing steps 1–5 is your net capital
+gain for the income year. Write this at question 18 – label A in your
+supplementary tax return.
+
+
+
+  Example 25: writing your net capital gain in your tax
+  return
+  Tim writes $350 at question 18 – label A in his supplementary tax
+  return.
+
+
+
+Step 7 Work out your carry-forward losses
+If the total of your capital losses for the year and unapplied net capital
+losses from earlier income years is greater than your capital gains for
+the year, you were directed to this step from step 4.
+
+Don't write anything at question 18 – label A in your supplementary tax
+return.
+
+At question 18 – label V in your supplementary tax return, write the
+amount by which the total of your capital losses for the year and net
+capital losses from earlier income years exceeds your capital gains for
+the year. You carry this amount forward to be applied against later
+income year capital gains.
+
+For more information on CGT and managed fund distributions, see
+Guide to capital gains tax 2025.
+
+
+C2: Non-assessable payments from a
+managed fund
+Non-assessable payments from a managed fund to a unit holder are
+common and may be shown on your statement from the fund as:
+
+  tax-free amounts
+
+  CGT-concession amounts
+
+  tax-exempted amounts
+
+  tax-deferred amounts.
+
+You may need to adjust the cost base and reduced cost base of your
+units depending on the kind of non-assessable payment you received.
+Slightly different rules apply to AMITs.
+
+Tax-free amounts relate to certain tax concessions received by the
+fund which enable it to pay greater distributions to its unit holders. If
+your statement shows any tax-free amounts, you adjust the reduced
+cost base (but not your cost base) of your units by these amounts.
+Payments of amounts associated with building allowances which were
+made before 1 July 2001 were treated as tax-free amounts.
+
+CGT-concession amounts relate to the CGT discount component of
+any actual distribution. Such amounts don't affect your cost base and
+reduced cost base if they are received after 30 June 2001. A CGT-
+concession amount received before 1 July 2001 is taken off the cost
+base and reduced cost base.
+
+Tax-exempted amounts are generally made up of non-assessable non-
+exempt income of the fund, amounts on which the fund has already
+paid tax or income you had to repay to the fund. Such amounts don't
+affect your cost base and reduced cost base.
+
+Tax-deferred amounts are other non-assessable amounts, including
+indexation received by the fund on its capital gains and accounting
+differences in income. You adjust the cost base and reduced cost base
+of your units by these amounts. Payments associated with building
+allowances which are made on or after 1 July 2001 are treated as tax-
+deferred amounts.
+
+If the tax-deferred amount is greater than the cost base of your units,
+you include the excess as a capital gain. You can use the indexation
+method if you bought your units before 11:45 am AEST on
+21 September 1999.
+
+You can't make a capital loss from a non-assessable payment.
+As a result of some stapling arrangements, investors in some managed
+funds have received units which have a very low cost base. The
+payment of certain non-assessable amounts in excess of the cost
+base of the units will result in these investors making a capital gain.
+
+Cost-base adjustments for AMIT members
+You may need to make an upwards or a downwards adjustment to the
+cost base of your units (or other membership interests) in an AMIT.
+Upwards adjustments are only available for units in trusts that are
+AMITs. For more information on the rules for AMITs, see Attribution
+managed investment trusts.
+
+The amount of any annual upwards or downwards cost base
+adjustment to your units is determined by your AMIT cost base net
+amount. The AMIT will calculate your AMIT cost base net amount,
+which is the balance of your AMIT cost base reduction amount and
+your AMIT cost base increase amount. You won't need to refer
+separately to tax-free or tax-deferred amounts to determine the cost
+base adjustment for your units in an AMIT, however these amounts
+should broadly be reflected in the AMIT cost base net amount
+calculated by the AMIT.
+
+Effectively, the cost base adjustment rules for AMITs apply to:
+
+  increase the cost base of your units by your AMIT cost base
+  increase amount, being
+
+     amounts attributed to you by the AMIT that are to be included in
+     your assessable income or your non-assessable non-exempt
+     income for the income year, plus
+
+     amounts attributed to you by the AMIT for the income year that
+     relate to trust capital gains
+
+  reduce the cost base amount of your units by your AMIT cost base
+  reduction amount, being
+
+     the actual cash payments you received (or have a right to
+     receive) for your units, plus
+
+     amounts of any tax offsets that you have for the income year on
+     amounts attributed to you by the AMIT.
+
+If your AMIT cost base reduction amount exceeds your AMIT cost base
+increase amount, the excess is your AMIT cost base net amount and
+this amount is used to reduce the cost base of your units. If the AMIT
+cost base net amount is greater than your cost base, it will reduce your
+cost base to nil, and any remaining amount will result in a capital gain.
+If the AMIT cost base net amount is less than your cost base, your cost
+base amount will be decreased, which could result in a greater capital
+gain or reduced capital loss on the disposal of your units in the AMIT.
+The same adjustments are also made to your reduced cost base.
+
+If your AMIT cost base reduction amount falls short of your AMIT cost
+base increase amount, the shortfall is your AMIT cost base net amount
+and this amount is used to increase the cost base and reduced cost
+base of your units. This could result in a reduced capital gain or
+increased capital loss on disposal of your units.
+
+Your statement of distribution (called an AMMA statement) from the
+AMIT should show the AMIT cost base net amount and other
+information relevant to your cost base and reduced cost base.
+
+For more information, see Law Companion Ruling LCR 2015/11
+Attribution Managed Investment Trusts: annual cost base adjustments
+for units in an AMIT and associated transitional rules.
+
+
+C3: Worked examples for managed fund
+distributions
+The following worked examples take the steps explained in Chapter C1
+and put them into different scenarios to demonstrate how they work.
+
+If you receive a distribution from a managed fund, you may be able to
+apply one or more of these examples to your circumstances to help
+you work out your CGT obligations for 2024–25 and complete the
+Capital gains question in your tax return.
+
+
+
+  Example 26: receiving a non-assessable
+  amount from a managed fund
+  Bob owns units in OZ Investments Fund, which distributed
+  income to him last May. The fund gave him a statement showing
+  his distribution included the following capital gains:
+
+     $100 calculated using the discount method (grossed-up
+     amount $200)
+
+     $75 calculated using the indexation method
+  $28 calculated using the ‘other’ method.
+
+These capital gains add up to $203.
+
+The statement shows Bob’s distribution included a $105 tax-
+deferred amount.
+
+From his records, Bob knows that the cost base and reduced
+cost base of his units are $1,200 and $1,050 respectively.
+
+Bob has no other capital gains or capital losses for the income
+year.
+
+Bob follows these steps to work out the amounts to write in his
+tax return.
+
+As Bob has a capital gain which the fund reduced by 50% under
+the discount method ($100), he includes the grossed-up amount
+($200) in his total current income year capital gains.
+
+To work out his total 2024–25 capital gains Bob adds the
+grossed-up amount to his capital gains calculated using the
+indexation method and ‘other’ method:
+
+    $200 + $75 + $28 = $303
+
+As Bob has no other capital gains or capital losses and he must
+use the discount method for the discounted capital gain from the
+trust, his net capital gain is equal to the amount of capital gain
+included in his distribution from the fund ($203).
+
+Bob writes the following at question 18 in his supplementary tax
+return:
+
+  $303 at label H
+
+  $203 at label A.
+
+Other CGT consequences for Bob (where OZ Investments Fund
+isn't an AMIT)
+
+The tax-deferred amount Bob received isn't included in his
+income or capital gains, but it affects the cost base and reduced
+cost base of his units in OZ Investments Fund for future income
+years.
+
+Bob deducts the tax-deferred amount from both the cost base
+and reduced cost base of his units as follows:
+Overall cost base
+
+  Element                                         Amount ($)
+
+
+  Cost base                                                 1,200
+
+  minus tax-deferred amount                                   105
+
+  New cost base                                             1,095
+
+  Reduced cost base                                         1,050
+
+  minus tax-deferred amount                                   105
+
+  New reduced cost base                                       945
+
+
+A CGT-concession amount is only taken off the cost base and
+reduced cost base if it was received before 1 July 2001.
+
+If OZ Investments Fund is an AMIT, Bob should instead refer to
+the AMIT cost base net amount to determine any cost base
+adjustment.
+
+
+
+
+Example 27: a capital loss that is greater than
+the capital gains calculated under the
+indexation method and ‘other’ method
+Ilena invested in XYZ Managed Fund. The fund makes a
+distribution to Ilena last April and gives her a statement that
+shows her distribution included:
+
+  $65 discounted capital gain
+
+  $50 capital gain calculated using the ‘other’ method
+
+  $40 capital gain calculated using the indexation method.
+
+The statement shows Ilena’s distribution also included:
+
+  $30 tax-deferred amount
+   $35 tax-free amount.
+
+Ilena has no other capital gain but made a capital loss of $100
+when she sold some shares during the income year.
+
+From her records, Ilena knows the cost base of her units is
+$5,000 and their reduced cost base is $4,700.
+
+Ilena has to treat the capital gain component of her fund
+distribution as if she made the capital gain. To complete her tax
+return, Ilena must identify the capital gain component of her fund
+distribution and work out her net capital gain.
+
+Ilena follows these steps to work out the amounts to show at
+question 18 – label H in her supplementary tax return.
+
+As Ilena has a $65 capital gain which the fund reduced by the
+CGT discount of 50%, she must gross up the capital gain. She
+does this by multiplying the amount of the discounted capital
+gain by 2:
+
+    $65 × 2 = $130
+
+To work out her total current income year capital gains, Ilena
+adds her grossed-up capital gain to her capital gains calculated
+under the indexation method and ‘other’ method:
+
+    $130 + $50 + $40 = $220
+
+She shows her total current income year capital gains ($220) at
+question 18 – label H in her supplementary tax return.
+
+Now Ilena subtracts her capital losses from her capital gains.
+
+Ilena can choose which capital gains she subtracts her capital
+losses from first. In her case, she will receive a better result if
+she:
+
+1. subtracts as much as possible of her capital losses (which
+   were $100) against her indexed and ‘other’ method capital
+   gains. Her gains under these methods were $40 and $50
+   respectively (a total of $90), so she subtracts $90 of her
+   capital losses from these capital gains
+
+   $90 − $90 = $0 (indexed and ‘other’ method capital gains)
+2. subtracts her remaining capital losses after step 1 ($10)
+   against her discounted capital gains ($130)
+
+  $130 − $10 = $120 (discounted capital gains)
+
+3. applies the CGT discount to her remaining discounted capital
+   gains
+
+  ($120 × 50%) = $60 (discounted capital gains).
+
+Finally, Ilena adds up the capital gains remaining to arrive at her
+net capital gain:
+
+    $0 (indexed and ‘other’) + $60 (discounted) = $60 net
+    capital gain
+
+Ilena writes the following at question 18 in her supplementary tax
+return:
+
+  $220 at label H
+
+  $60 at label A.
+
+Other CGT consequences for Ilena (where XYZ Managed Fund
+isn't an AMIT)
+
+The tax-deferred and tax-free amounts Ilena received are not
+included in her income or her capital gain but the tax-deferred
+amount affects the cost base and reduced cost base of her units
+in XYZ Managed Fund for future income years. The tax-free
+amount affects her reduced cost base.
+
+Ilena reduces the cost base and reduced cost base of her units
+as follows:
+
+
+Overall cost base
+
+  Element                                         Amount ($)
+
+
+  Cost base                                                 5,000
+
+  minus tax-deferred amount                                    30
+
+  New cost base                                             4,970
+Overall reduced cost base
+
+                                                     Amount
+  Element
+                                                       ($)
+
+
+  Reduced cost base                                      4,700
+
+  subtract (tax-deferred amount + tax-free                   65
+  amount) ($30 + $35)
+
+  New reduced cost base                                  4,635
+
+
+If XYZ Managed Fund is an AMIT, Ilena should instead refer to the
+AMIT cost base net amount to determine any cost base
+adjustment.
+
+
+
+
+Example 28: notified of an AMIT cost base net
+adjustment
+Miriam owns units in the Exponential Growth Fund, which has
+elected to the new tax system for managed investment trusts in
+2024–25, and is therefore an AMIT. Her units have a cost base of
+$55 each.
+
+The fund attributes $13 of assessable income per unit to Miriam
+for 2024–25 but only pays a cash dividend amount of $3 per unit.
+Exponential Growth Fund retains the balance of $10 per unit for
+reinvestment rather than paying it as a cash distribution. The $13
+attributed amount is included in Miriam's assessable income.
+
+Cost base consequences
+
+The $13 attributed to Miriam that is included in her assessable
+income is her AMIT cost base increase amount. The actual
+payment of $3 she received is her AMIT cost base reduction
+amount. The AMIT cost base increase amount is netted off
+against the AMIT cost base reduction amount, resulting in a
+shortfall AMIT cost base net amount of $10 per unit. Miriam's
+AMMA statement shows the AMIT cost base net amount of $10.
+  The $10 (shortfall) AMIT cost base net amount is used to
+  increase the cost base (and reduced cost base) of her units in
+  Exponential Growth Fund. She will need to include it in her cost
+  base (and reduced cost base) calculations when she eventually
+  sells her units in the fund, to ensure that the undistributed
+  amount already attributed to her isn't double taxed as a capital
+  gain.
+
+
+  New cost base
+
+     Element                                         Amount ($)
+
+
+     Cost base per unit                                        55
+
+     add AMIT cost base net amount (shortfall)                  10
+
+     New cost base per unit                                    65
+
+  Alternatively, the fund attributes $3 of assessable income per
+  unit to Miriam for 2024–25 but paid a cash dividend amount of
+  $13 per unit. Exponential Growth Fund paid $10 as a cash
+  distribution rather than retaining that amount for reinvestment.
+  The $13 paid is included in Miriam's assessable income.
+
+  As Miriam’s cash distribution is greater than the attribution
+  amount, the excess of $10 reduces the tax cost base of her units
+  in the AMIT by $10
+
+  New cost base
+
+
+     Element                                          Amount ($)
+
+     Cost base per unit                               55
+
+     minus AMIT cost base net amount (shortfall)      10
+
+     New cost base per unit                           45
+
+
+
+
+Return to: Part B: Sale of shares or units
+  QC 104651
+
+
+
+
+Our commitment to you
+We are committed to providing you with accurate, consistent and clear
+information to help you understand your rights and entitlements and meet
+your obligations.
+
+If you follow our information and it turns out to be incorrect, or it is
+misleading and you make a mistake as a result, we will take that into
+account when determining what action, if any, we should take.
+
+Some of the information on this website applies to a specific financial year.
+This is clearly marked. Make sure you have the information for the right year
+before making decisions based on that information.
+
+If you feel that our information does not fully cover your circumstances, or
+you are unsure how it applies to you, contact us or seek professional
+advice.
+
+Copyright notice
+© Australian Taxation Office for the Commonwealth of Australia
+
+You are free to copy, adapt, modify, transmit and distribute this material as
+you wish (but not in any way that suggests the ATO or the Commonwealth
+endorses you or any of your services or products).
+

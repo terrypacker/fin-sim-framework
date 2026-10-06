@@ -1,0 +1,354 @@
+Businesses and organisations > Trusts > ...   > Managed investment trusts
+
+> Capital treatment elections
+
+
+
+Managed investment trusts: election into
+capital treatment
+An overview of the MIT capital treatment election rules, including
+eligibility requirements and how to make an election.
+
+Last updated 24 July 2025
+
+
+
+
+      On this page
+
+      Eligibility for making a capital treatment election
+
+      Eligible CGT assets
+
+      Making a capital treatment election
+
+      Request for an extension of time to make a capital election
+
+      Amendments to previous years
+
+      Tax consequences of capital elections
+
+
+Managed investment trust capital treatment election rules, including eligibility
+requirements and making an election.
+
+If you're the trustee of a managed investment trust (MIT), this information will help
+you work out whether you're eligible to make a capital treatment election and how to
+make an election.
+The MIT capital treatment rules allow the trustee of an eligible MIT to choose to apply
+the capital gains tax (CGT) provisions for the taxation of gains and losses on disposal
+of certain eligible assets, rather than on revenue account. For the purposes of the MIT
+capital treatment rules, a disposal also includes ceasing to own, or otherwise
+realising, the asset.
+
+You must make the election in the first year the trust qualifies as a MIT, and it is
+irrevocable as long as the MIT remains eligible. If a MIT does not make a capital
+treatment election in the first year, it will be taxed on revenue account under general
+tax law principles.
+
+These rules apply to CGT events that happen on or after the start of the 2008–09
+income year.
+
+
+
+Eligibility for making a capital treatment election
+A trust will be eligible to make a capital treatment election if it meets the definition of
+a MIT. The election must be made in the first year the trust is a MIT.
+
+The definition of a MIT has changed since the start of the capital treatment rules in
+2008–09. There were extensive amendments in 2010, and further amendments in
+2016. You should consider the definition of a MIT at the relevant time in determining
+whether the MIT is eligible (/businesses-and-organisations/trusts/specific-rules-for-
+some-trusts/managed-investment-trusts/managed-investment-trusts-
+overview/eligibility-requirements#Eligibilityrequirements) to make a capital treatment
+election in a specific year.
+
+
+When the eligibility of the trust changes
+
+Capital treatment by reason of having made an election will not apply in any year in
+which the trust ceases to be a MIT. Disposals of eligible assets in these years are
+subject to tax by reference to general tax law principles.
+
+If the trust again meets the definition of a MIT in a later income year, the capital
+treatment election will apply because the election, once made, is irrevocable.
+  Example: capital treatment election for non-eligible MIT
+  Bayley Trust is a MIT that has made an election into capital treatment, which is in
+  force for 2008–09 and later income years.
+
+  In the 2010–11 income year, Bayley Trust fails to meet the definition of a MIT, so
+  the capital treatment election does not apply in that year. Bayley Trust disposes
+  of units in a unit trust during the year. Because the capital treatment election
+  does not apply, the character of the gain from the disposal of the units will be
+  determined in accordance with general tax law principles.
+
+
+
+
+Eligible CGT assets
+Assets eligible for capital treatment are:
+
+  shares in a company (including a foreign hybrid company)
+
+  non-share equity interests in a company
+
+  units in a unit trust
+
+  land (including an interest in land)
+
+  a right or option to acquire or dispose of any assets listed above.
+
+However, an asset is not an eligible asset if it is a debt interest, or a financial
+arrangement to which Taxation of Financial Arrangements (TOFA) applies.
+
+
+Special rules
+
+Some assets will not be eligible for capital treatment, even where the trustee has
+made an election for capital treatment. Generally, these will be assets purchased
+and/or held as trading stock, and include:
+
+  land, an interest in land, or a right or option to acquire or dispose of such an asset,
+  which is held as trading stock or which was acquired before 20 September 1985
+  and is part of a profit-making undertaking or plan
+  an asset acquired in an income year in which the capital treatment election was not
+  in force, and the asset was treated as trading stock in the MIT's financial report
+  and income tax return for
+
+     the most recent income year ending before the income year in which the
+     election first came into force
+
+     the most recent income year ending before the time of the CGT event.
+
+
+
+  Example: ineligible for capital treatment
+  Griffin Trust is a MIT and has made an election which is in force for the 2008–09
+  and later income years.
+
+  In the 2009–10 income year, Griffin Trust disposes of units in a unit trust which it
+  had been treating as trading stock in both its financial report and income tax
+  return for the 2007–08 and 2008–09 income years. The units were acquired
+  in 2007.
+
+  Although Griffin Trust has made an election for capital treatment, any gain or
+  loss from the disposal of the units will not be assessed under the CGT
+  provisions.
+
+  This is because the units were acquired before the election was in force, and the
+  asset had previously been treated as trading stock in the Griffin Trust financial
+  report and income tax return for both the:
+
+     2007–08 income year (being the most recent income year prior to the income
+     year in which the election was made)
+
+     2008–09 income year (being the most recent income year ending before the
+     time of the CGT event).
+
+
+
+
+Making a capital treatment election
+The trustee of an eligible MIT can make an election for capital treatment.
+Trusts that became a MIT prior to the 2009–10 income year
+
+When must you make an election?
+
+You must make an election on or before the latest of the following days:
+
+  2 September 2010
+
+  a later date, if we allow it.
+
+When will an election take effect?
+
+Once you make the election, it will have effect for the 2008–09 and later income
+years.
+
+How can you make an election?
+
+The period in which a trustee can make an election for a trust that became a MIT prior
+to the 2009–10 income year has now expired.
+
+However, we may allow a trustee to make the election upon request.
+
+Next steps:
+
+  Request for an extension of time to make an election
+  (#Requestforanextensionoftimetomake)
+
+
+Trusts that became a MIT in 2009–10 or a later income year
+
+When must you make an election?
+
+You must make an election on or before the latest of the following days:
+
+  the day the trust is required to lodge its income tax return for the income year in
+  which it became a MIT
+
+  a later date, if we allow it.
+
+When will an election take effect?
+
+Once you make the election, it will have effect for the income year in which the trust
+becomes a MIT and later income years.
+How can you make an election?
+
+If you are the trustee of a MIT, you can make an election by answering 'Yes' to the
+following question on the Trust tax return:
+
+  If the trust is a managed investment trust, has the trustee made an election for
+  capital account treatment?
+
+If you are the trustee of an AMIT, you can make an election by answering 'Yes' to the
+following question on the AMIT tax return:
+
+  Has the trustee made an election into managed investment trust capital account
+  treatment?
+
+You must make the election within the relevant timeframe.
+
+If you are the trustee of a trust that became a MIT prior to the 2009–10 income year,
+and you have previously made an election for capital treatment, you still need to
+answer 'Yes' to this question for each year you are required to complete a Trust tax
+return or AMIT tax return.
+
+
+
+Request for an extension of time to make a capital
+election
+The Commissioner has discretion to grant a MIT an extension of time to make an
+election into capital treatment.
+
+
+Who can make a request for an extension of time?
+
+Generally, the trustee of a MIT must apply to the Commissioner to request for an
+extension of time to make an election into capital treatment.
+
+
+How can a request be made?
+The application should be in writing and include sufficient information to demonstrate
+why discretion would be reasonable.
+
+The written request should:
+  provide details of the circumstances giving rise to why the election was not made
+  on time
+
+  propose a date by which the election will be made
+
+  give assurance future obligations will be met on time once the stated
+  circumstances are resolved.
+
+Note: There is no prescribed application form.
+
+
+What factors will the Commissioner consider in exercising the
+discretion?
+We follow these guidelines when making our decision:
+
+  Where an extension is granted, it will generally be on a short-term basis to allow
+  the trustee to overcome the problems preventing them from making the election.
+  The extension will generally only be provided for a short period after the date the
+  election should have been made.
+
+  Consideration will be given to how soon steps were taken to make an election and
+  whether a timely request was made to the Commissioner to seek an extension of
+  time.
+
+  Each case will be considered on its merits based on all the relevant facts and
+  circumstances.
+
+  The Commissioner will have regard to the subject matter, scope and purpose of
+  subsection 275-115(3) of the ITAA 1997 which establishes a deadline for making an
+  election into capital treatment.
+
+  The Commissioner may consider whether the entity has acted in a manner
+  consistent with the proposed election, based on the way it has prepared its
+  accounts and returns.
+
+  The Commissioner will consider whether there were circumstances beyond the
+  control of the trustee that contributed to the delay in making the election, whether
+  reasonable steps were taken to mitigate the effect of those circumstances, and
+  whether the trustee will be able to make the election at a particular time in future.
+
+  Consequences of the proposed extension of time for making the election may be
+  considered, including any impact on distribution statements or on ATO lodgment
+  obligations of the MIT.
+
+  The Commissioner must ensure he does not confer an advantage on a taxpayer or
+  group of taxpayers.
+
+  The Commissioner will have regard to whether the request for an extension of time
+  is for an improper purpose or in bad faith.
+
+
+How will I be informed of the exercise of the Commissioner's
+discretion?
+If the discretion is exercised following your request, you will receive written advice of
+a new date by which the election must be made.
+
+If the discretion is not exercised, you will be advised in writing, and given the reasons
+for that decision.
+
+
+
+Amendments to previous years
+There are rules that limit the Commissioner's ability to amend an assessment for a
+year prior to the 2008–09 income year. This relates to amendments to treat a gain or
+loss from an asset as being on revenue account or on capital account.
+
+However, these rules only apply if:
+
+  there is a capital treatment election in force for the 2008–09 income year, and
+
+  the gain or loss that arose in the previous income year would have been subject to
+  capital treatment had the election been in force for that previous year.
+
+The rules do not apply if an entity gives the Commissioner a written consent to the
+amendment.
+
+
+
+Tax consequences of capital elections
+Once a MIT makes an election, it is permanent and cannot be reversed.
+For a MIT that makes an election for capital treatment, gains and losses on disposal of
+eligible assets will be assessed only under the CGT provisions for each year that the
+MIT is an eligible MIT.
+
+However, the capital election will not apply where the trust does not meet the
+definition of a MIT for the relevant income year.
+
+For more information, see Capital gains tax essentials (/individuals-and-
+families/investments-and-assets/capital-gains-tax).
+
+
+Tax consequences of not making an election
+If a MIT is eligible to make an election, but does not do so by the relevant date, any
+gains or losses on the disposal of eligible assets will be treated on revenue account
+under general tax law principles.
+
+
+
+
+QC 23181
+
+
+
+
+Our commitment to you
+We are committed to providing you with accurate, consistent and clear information to
+help you understand your rights and entitlements and meet your obligations.
+
+If you follow our information and it turns out to be incorrect, or it is misleading and you
+make a mistake as a result, we will take that into account when determining what
+action, if any, we should take.
+
+Some of the information on this website applies to a specific financial year. This is
+clearly marked. Make sure you have the information for the right year before making
+decisions based on that information.
+
+If you feel that our information does not fully cover your circumstances, or you are
+unsure how it applies to you, contact us or seek professional advice.
+

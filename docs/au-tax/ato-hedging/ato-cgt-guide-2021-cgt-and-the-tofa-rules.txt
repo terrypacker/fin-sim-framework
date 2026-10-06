@@ -1,0 +1,165 @@
+CGT and the TOFA rules
+Last updated 26 May 2022
+
+
+
+
+     On this page
+
+     When will the TOFA rules affect an entity's tax return?
+
+     Which entities are affected?
+
+     Key impacts on CGT
+
+     TOFA and capital proceeds and cost base rules
+
+     TOFA rules apply instead of CGT rules
+
+     Hedging financial arrangements
+
+
+Explains the key provisions of the TOFA rules are found in Division 230 of the ITAA
+1997.
+
+
+
+When will the TOFA rules affect an entity's tax return?
+The TOFA rules apply to financial arrangements that an affected entity starts to have
+in its first income year commencing on or after 1 July 2010 (unless it elected for the
+rules to apply a year earlier).
+Which entities are affected?
+The TOFA rules will apply to you if you are:
+
+  an authorised deposit-taking institution, securitisation vehicle or financial sector
+  entity with an aggregated annual turnover of $20 million or more
+
+  a superannuation entity, approved deposit fund, pooled superannuation trust,
+  managed investment scheme or entity with a similar status under foreign law
+  relating to foreign regulation, with assets of $100 million or more
+
+  any other entity (other than an individual) which satisfies one or more of the
+  following
+
+       an aggregated turnover of $100 million or more
+
+       assets of $300 million or more
+
+       financial assets of $100 million or more.
+
+
+If you do not meet these requirements you can elect to have the TOFA rules apply to
+you.
+
+
+
+Key impacts on CGT
+Where the TOFA rules apply, they will have the following key impacts on CGT:
+
+  They may operate to modify the cost base of, or capital proceeds from, a CGT
+  asset.
+
+  A capital gain or capital loss made from a CGT asset that is a financial arrangement
+  may be disregarded.
+
+  Certain gains and losses from hedging financial arrangements may be taxed under
+  the CGT rules.
+
+
+
+TOFA and capital proceeds and cost base rules
+If the TOFA rules apply to you and you start or cease to have a financial arrangement
+as consideration for the disposal of a CGT asset, the TOFA rules will operate to
+determine the capital proceeds from the CGT asset. In general, the rules operate to
+ensure your capital proceeds are the market value of the CGT asset at the time of its
+disposal.
+
+In the same way, the TOFA rules may determine that the first element of the cost base
+and reduced cost base of your CGT asset is the market value of the CGT asset at the
+time of its acquisition.
+
+The TOFA rules can also affect other elements of the cost base and reduced cost
+base if the financial arrangement represents consideration for something obtained
+which is relevant to the other elements of the cost base and reduced cost base.
+
+
+
+  Example 52: TOFA and capital proceeds and cost base rules
+
+  Both ABC Co and Aus Co are subject to the TOFA rules.
+
+  On 1 July 2021, ABC Co enters into a contract to sell land to Aus Co for
+  $250,000. Under the terms of the contract, title to the land passes in 6 months'
+  time on 1 January 2022, and payment is to be made on 1 July 2023 (that is,
+  18 months after title to the land passes). The market value of the land on
+  1 January 2022 is $200,000.
+
+  On 1 January 2022 when ABC Co passes the title to the land to Aus Co it will
+  start to have a financial arrangement as consideration for the disposal of its
+  land. The TOFA rules will operate so that ABC Co is taken to have received an
+  amount equal to the market value of the land when it is provided. Therefore, ABC
+  Co’s capital proceeds are $200,000. Similarly, Aus Co’s first element of its cost
+  base is $200,000. For both ABC Co and Aus Co, the additional $50,000 relates
+  to a financial arrangement which is taxed under the TOFA rules and is not
+  subject to the CGT rules.
+
+
+
+
+TOFA rules apply instead of CGT rules
+Where the application of the TOFA rules results in you making a gain or loss from your
+financial arrangement that is a CGT asset, a capital gain or capital loss that is made
+from a CGT event that happens to the CGT asset is disregarded. In general, this does
+not apply for superannuation entities, where CGT remains the primary code for
+calculating gains and losses from financial arrangements.
+
+
+
+Hedging financial arrangements
+The TOFA rules (/Business/Taxation-of-financial-arrangements-(TOFA)/In-
+detail/Guide-to-the-taxation-of-financial-arrangements-(TOFA)/) provide for a
+hedging tax-timing method that allows gains and losses from certain hedging financial
+arrangements to be characterised and taxed in accordance with the tax treatment of
+the underlying item being hedged. For example, if a valid hedging tax-timing method
+election is in effect, gains or losses from a hedging financial arrangement used to
+hedge against risks associated with a CGT asset will be treated as a capital gain or
+capital loss on the same basis as the capital gain or capital loss on the underlying
+CGT asset that is being hedged. If this applies to you, specify the amount of the gains
+or losses from the relevant hedging financial arrangements on your Capital gains tax
+schedule 2022 (/forms-and-instructions/capital-gains-tax-schedule-2022).
+
+Continue to: Real estate and main residence (/forms-and-instructions/capital-gains-
+tax-guide-2022/part-a-about-capital-gains-tax/real-estate-and-main-residence?
+anchor=Real_estate_and_main_residence#Real_estate_and_main_residence)
+
+
+
+
+QC 67993
+
+
+
+
+Our commitment to you
+We are committed to providing you with accurate, consistent and clear information to
+help you understand your rights and entitlements and meet your obligations.
+
+If you follow our information and it turns out to be incorrect, or it is misleading and you
+make a mistake as a result, we will take that into account when determining what
+action, if any, we should take.
+Some of the information on this website applies to a specific financial year. This is
+clearly marked. Make sure you have the information for the right year before making
+decisions based on that information.
+
+If you feel that our information does not fully cover your circumstances, or you are
+unsure how it applies to you, contact us or seek professional advice.
+
+
+Copyright notice
+
+© Australian Taxation Office for the Commonwealth of Australia
+
+You are free to copy, adapt, modify, transmit and distribute this material as you wish
+(but not in any way that suggests the ATO or the Commonwealth endorses you or any
+of your services or products).
+

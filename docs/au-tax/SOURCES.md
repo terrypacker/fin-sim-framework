@@ -5,7 +5,8 @@ compilations and carry their own compilation number and date in the text. `ato-f
 its own `SOURCES.md`, and it explains the routes ATO material has to take: **`ato.gov.au`
 returns 403 to every automated fetch**, so anything from the ATO arrives by hand.
 
-This file covers the loose files at this level.
+This file covers the loose files at this level. `ato-hedging/` (TOFA hedging election,
+MIT capital treatment, forex; design 120) has its own `SOURCES.md`.
 
 | File | Source | Route |
 |---|---|---|

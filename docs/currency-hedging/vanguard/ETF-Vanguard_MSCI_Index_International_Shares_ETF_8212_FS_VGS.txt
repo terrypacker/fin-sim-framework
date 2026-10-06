@@ -1,0 +1,155 @@
+                                                                                                                                                                                  ®
+                                                                                                                                                        Vanguard
+Fact sheet | 31 August 2026
+
+Vanguard MSCI International Shares Index ETF | VGS
+
+
+    Key ETF facts                                                                         Investment objective
+
+    Management fee
+                      E
+                                                                          0.18% p.a.      Vanguard MSCI International Shares Index ETF seeks to track the return of the MSCI
+    Inception date                                               18 November 2014         World ex-Australia Index (with net dividends reinvested) in Australian dollars before
+                                                                                          taking into account fees, expenses and tax.
+    Income distribution                                                   Quarterly
+    Distribution reinvestment plan                                               Yes
+                                                                                          ETF overview
+    ETF size                                                       $17,792.6 million
+    Total fund size                                                $58,837.6 million      The ETF provides exposure to many of the world’s largest companies listed in major
+    Number of holdings                                                         1,220
+                                                                                          developed countries. It offers low-cost access to a broadly diversified range of
+                                                                                          securities that allows investors to participate in the long-term growth potential of
+                                                                                          international economies outside Australia. The ETF is exposed to the fluctuating values
+    Trading information                                                                   of foreign currencies, as there will not be any hedging of foreign currencies to the
+                                                                                          Australian dollar.
+    ASX code                                                                    VGS
+    ISIN                                                          AU000000VGS8
+    ETF listed on ASX                                            20 November 2014
+
+                                                                                          Performance return A,B,C (%)
+    Benchmark information                                                                                    ETF gross            Bmk       ETF total    Distb'n        Growth
+                                                MSCI World ex-Australia (with net         1 month                0.54             0.53          0.53       0.00           0.53
+    Benchmark (Bmk)                             dividends reinvested) in Australian       3 months               2.78             2.74          2.74       0.52           2.22
+                                                                      dollars Index
+                                                                                          6 months               9.47             9.36          9.37       0.85           8.52
+    Number of holdings                                                          1,233
+                                                                                          1 year                10.24            10.02         10.04       1.46           8.58
+                                                                                          3 years (p.a.)        16.46            16.22         16.25       2.97          13.28
+                                                                                          5 years (p.a.)        11.96            11.71         11.76       2.55           9.21
+                                                                                          10 years (p.a.)       13.90            13.63         13.70       2.74          10.96
+                                                                                          Inception (p.a.)      13.51            13.21         13.30       2.94          10.36
+
+
+                                                                                          Year to year gross return A,B,C (%)
+
+                                                                                                                            Dec - Dec                     June - June
+                                                                                                                          ETF                Bmk          ETF             Bmk
+                                                                                          YTD                             5.33               5.19        -0.37           -0.39
+                                                                                          2026                            N/A                N/A         15.17           14.95
+                                                                                          2025                           12.78              12.53        18.84           18.58
+                                                                                          2024                           31.46              31.18        20.19           19.92
+                                                                                          2023                           23.53              23.23        22.90           22.59
+
+
+                                                                                          Income distributionD
+                                                                                          Quarter ended                    Amount (CPU)                     Reinvestment price
+                                                                                          30 June 2026                            81.5432                          $160.4677
+
+
+
+
+Notes
+A     Past performance is not an indication of future performance.
+B     Returns assume reinvestment of all distributions. Returns for periods longer than
+      1 year are annualised. ETF gross returns are before management fees and taxes,
+      but after transaction and operational costs. ETF total return is the ETF gross
+      return less management fees. Index returns do not allow for taxes,
+      management, transaction and operational costs.
+C     Returns assume that an investor purchased units at Net Asset Value (NAV) and
+      does not reflect the transaction costs imposed on the creation and redemptions
+      of ETF units, brokerage or the bid ask spread that investors pay to buy and sell
+      ETF securities on the Australian Securities Exchange.
+D     Past distributions are not an indication of future distributions.
+E     For a full breakdown of the management fees and costs, please refer to the
+      "Fees and costs summary" section of the PDS.
+
+
+
+Connect with Vanguard™ • vanguard.com.au
+   Fact sheet | 31 August 2026
+
+
+Vanguard MSCI International Shares Index ETF | VGS
+Characteristics                                                                                                       Market allocation (%)
+                                                                                               ETF           Bmk                                 ETF    Bmk                                    ETF     Bmk
+Number of holdings                                                                           1,220          1,233     United States             73.5    73.3    Italy                          0.8      0.8
+Weighted Median market cap                                                               $314.9B        $308.1B       Japan                      5.9     5.9    Singapore                       0.5     0.5
+Price/Earnings ratio                                                                          22.9x         22.9x     United Kingdom             3.6     3.6    Hong Kong                       0.5     0.5
+Price/Book ratio                                                                               4.0x           4.0x    Canada                     3.5     3.5    Denmark                         0.4     0.4
+Return on equity ratio                                                                      19.7%          19.6%      France                     2.4     2.4    Finland                         0.3     0.3
+Earnings growth rate                                                                        20.7%          20.6%      Switzerland                2.3     2.3    Israel                          0.3     0.3
+Equity yield (dividend)                                                                       1.4%          1.4%      Germany                    2.2     2.2    Belgium                         0.3     0.3
+                                                                                                                      Netherlands                1.4     1.4    Norway                          0.2     0.2
+                                                                                                                      Spain                      1.0     1.0    Ireland                         0.1     0.1
+Top 10 holdings                                                                                                       Sweden                                    Other
+                                                                                                                                                 0.9     0.9                                    0.2     0.2
+
+1. NVIDIA Corp.
+2. Apple Inc.                                                                                                         Glossary
+3. Microsoft Corp.                                                                                                    Weighted Median market cap is calculated by first ranking all
+4. Alphabet Inc.                                                                                                      companies in the specified universe in ascending order based on their
+5. Amazon.com Inc.                                                                                                    market capitalisation. The weights of all companies are then summed,
+6. Broadcom Inc.                                                                                                      and the function steps through the sorted list while keeping a running
+7. Meta Platforms Inc.                                                                                                total of the weights. The value returned by the function as the weighted
+8. Micron Technology Inc.                                                                                             median value is that belonging to the company straddling the 50%
+9. Tesla Inc.                                                                                                         barrier.
+10. JPMorgan Chase & Co.                                                                                              Price/Earnings ratio (P/E ratio) is a measure of the market value of a
+The top 10 holdings represent 28.2% of the total ETF. Holdings include only the physical securities held in the       share compared to the earnings of the company. A share with a price of
+fund. They exclude cash and derivatives such as total return swaps which may be used to manage exposure levels        $10, and earnings last year of $1 a share, would have a P/E ratio of 10.
+to certain securities by Vanguard Group globally, or where Vanguard considered it to be in the fund’s best
+interest.                                                                                                             For a fund, the ratio is the weighted average P/E ratio of the shares it
+                                                                                                                      holds. In general, a high P/E suggests that investors are expecting higher
+Sector allocation (%)                                                                                                 earnings growth in the future compared to companies with a lower P/E.
+                                                                                                ETF          Bmk      Companies with negative earnings are excluded from the calculation.
+Information Technology                                                                         30.5          30.3     Price/Book ratio is calculated by dividing the current market price of
+Financials                                                                                     16.1          16.2     the share by the book value per share of the company.
+Industrials                                                                                    11.2          11.2     Return on equity ratio is a measure of how much profit a company
+Health Care                                                                                     9.3            9.3    generates relative to its shareholders’ equity. For a fund, the ratio is the
+Consumer Discretionary                                                                          8.8            8.9    weighted average return on equity ratio of the shares it holds.
+Communication Services                                                                          8.0            8.0    Earnings growth rate is a measure of the trailing Earnings Per Share
+Consumer Staples                                                                                4.9            4.9    growth for a given company and share. For a fund, the rate is the
+                                                                                                                      weighted average earnings growth of the shares it holds.
+Energy                                                                                          4.1            4.1
+                                                                                                                      Equity yield (dividend) is the dividend income earned by shares,
+Materials                                                                                       3.0            3.1
+                                                                                                                      expressed as a percentage of the market price of those shares. For a
+Utilities                                                                                       2.4            2.4
+                                                                                                                      fund, the yield is the weighted average equity yield of the shares it holds.
+Real Estate                                                                                     1.5            1.6
+Other                                                                                           0.0            0.0
+Sector categories are based on the Global Industry Classification Standard system (“GICS”), except for the
+“Other” category (if applicable), which includes securities that have not been provided a GICS classification as of
+the effective reporting period.
+
+
+
+
+For more information:
+Personal investors can transact in Vanguard ETFs through Vanguard Personal Investor, or their financial adviser or stockbroker.
+Our telephone service is available from 8am to 6pm, Monday-Friday AEST.
+For personal investors:                                                   For advisers:                                                 For institutional investors:
+Call 1300 655 101                                                         Call 1300 655 205                                             Call 1300 655 888
+Email clientservices@vanguard.com.au                                      Email adviserservices@vanguard.com.au                         Email institutional@vanguard.com.au
+In preparing the above information, individual circumstances, for example tax implications, have not been taken into account and it may therefore not be applicable to an individual's situation. Before
+making an investment decision, you should consider your or your clients' circumstances and whether the above information is applicable to your or your clients' situation. Vanguard Investments Australia
+Ltd (ABN 72072 881 086 / AFS Licence 227263) (Vanguard) is the issuer of the Vanguard® Australian ETFs. Vanguard ETFs will only be issued to Authorised Participants, that is persons who have been
+authorised as trading participants under the ASX Operating Rules ('Eligible Investors'). Retail investors can transact in Vanguard ETFs through Vanguard Personal Investor, or their financial adviser or
+stockbroker on the secondary market. Investors should consider the Prospectus and Product Disclosure Statement in deciding whether to acquire Vanguard ETFs. Retail investors can only use the
+Prospectus and Product Disclosure Statement for informational purposes. Distributors of our products must consider our Target Market Determinations (“TMDs”) which describe the investors for
+whom the product would likely be appropriate and consistent with their objectives, financial situation and needs. You can access the Product Disclosure Statement, Prospectuses and TMDs, free of
+charge, at vanguard.com.au. Unless otherwise stated, all currencies shown in this document are in Australian dollars.
+The funds or securities referred to herein are not sponsored, endorsed, or promoted by MSCI, and MSCI bears no liability with respect to any such funds or securities. The PDS contains a more detailed
+description of the limited relationship MSCI has with Vanguard and any related funds.
+© 2026 Vanguard Investments Australia, All rights reserved.                                                                                                                               8212_082026
+
