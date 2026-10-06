@@ -69,6 +69,8 @@ export const SECURITY_FIELDS = Object.freeze([
   'dividendYield', 'qualifiedDividends', 'frankingCredit',
   // where it lives, for source and currency rules (design 73 / design 87)
   'currency', 'country',
+  // the currency hedge on a foreign-equity fund (design 120 §5.1, §5.7)
+  'hedgeRatio', 'hedgeTaxTreatment',
   // tax attributes
   'taxExemption', 'issuingState', 'isGold',
   // §1091 "substantially identical" — design 94 §8.1c
@@ -88,6 +90,15 @@ export const SECURITY_FIELDS = Object.freeze([
 export function makeSecurity(spec = {}) {
   if (spec.id == null || spec.id === '') {
     throw new Error('Security: `id` is required and is what Holding.securityId names.');
+  }
+  // Design 120 — a hedge ratio is a fraction of the exposure hedged, and the treatment
+  // one of the two the tax law gives a fund (§3.7). Checked at the one birth site, so a
+  // typo cannot reach the overlay as a silent unhedged or an unknown treatment.
+  if (spec.hedgeRatio != null && !(spec.hedgeRatio >= 0 && spec.hedgeRatio <= 1)) {
+    throw new Error(`Security '${spec.id}': hedgeRatio must be between 0 and 1, got ${spec.hedgeRatio}.`);
+  }
+  if (spec.hedgeTaxTreatment != null && !['ALIGNED', 'INCOME'].includes(spec.hedgeTaxTreatment)) {
+    throw new Error(`Security '${spec.id}': hedgeTaxTreatment must be ALIGNED or INCOME, got '${spec.hedgeTaxTreatment}'.`);
   }
   const out = { id: spec.id };
   for (const f of SECURITY_FIELDS) {

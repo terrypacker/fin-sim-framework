@@ -17,6 +17,7 @@ import { couponlessYield }          from '../economic-regimes/couponless-yield.j
 import { addValue, isUnitised } from './holding-utils.js';
 import { RATE_KEYS }                from '../economic-regimes/rate-keys.js';
 import { frankingCreditOn }         from '../tax/au/franking.js';
+import { currencyOverlay }          from './currency-overlay.js';
 
 /**
  * Whether a BOND holding's coupon is EXEMPT from US FEDERAL income tax
@@ -306,9 +307,18 @@ export function computeHoldingsGrowth({
       ? (secOverlayMap[h.securityId] ?? 0)
       : 0;
     const rate    = secOverlay !== 0 ? priceRate + secOverlay : priceRate;
-    const hRate   = (currentDate && h.appreciationSchedule)
+    const schedRate = (currentDate && h.appreciationSchedule)
       ? resolveScheduledRate(h.appreciationSchedule, currentDate, rate)
       : rate;
+    // Design 120 §5.6 — the currency overlay, on a lot whose instrument declares a hedge
+    // ratio and whose market is foreign to the account. Silent instruments (every lot
+    // today unless an author says otherwise) get null and an unchanged rate. Applied last,
+    // to the rate the lot would otherwise earn, because FX moves the whole foreign price.
+    // ALIGNED treatment (§5.7) keeps the hedge result in this price slice.
+    const fx      = useCoupon ? null : currencyOverlay({
+      state, account, inst, rateKey: inst.rateKey ?? fallbackRateKey, g: schedRate,
+    });
+    const hRate   = fx && fx.delta !== 0 ? schedRate + fx.delta : schedRate;
     const growth  = +(mv * hRate * factor).toFixed(2);
     total += growth;
     // Design 84 G2 — carve the DERIVED slice out of the same return, without

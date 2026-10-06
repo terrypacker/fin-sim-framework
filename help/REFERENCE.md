@@ -9,11 +9,11 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-223 parameters · 33 panels · 12 node types (203 fields) · 178 action types · 87 tools · 310 state field types · 77 topics · 128 design docs
+225 parameters · 33 panels · 12 node types (203 fields) · 179 action types · 87 tools · 310 state field types · 78 topics · 128 design docs
 
 ---
 
-## Parameters (223)
+## Parameters (225)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
@@ -281,7 +281,7 @@ scenario's own schema), which is where to go to change it.
 - **`yieldCurveVol`** — Yield Curve Volatility · `Number` · default `0.01` · via ECONOMIC_REGIMES
   Annualized standard deviation (in rate units, e.g. 0.01 = 100 bps) of the stochastic level walk. Only used when Stochastic Yield Curve is on.
 
-### FX (4)
+### FX (6)
 
 - **`fxBasisMethod`** — §988 Lot Consumption Method · `Enum` · default `pro-rata` · one of `pro-rata`, `fifo` · via US_AU_CROSS_BORDER
   Reg. §1.988-2(a)(2)(iii)(B)(1) lets a taxpayer use "any reasonable method consistently applied … to all accounts" and names FIFO, LIFO and pro rata. Pro-rata is the default because it is exactly what a single fxBasisRate scalar implements. FIFO additionally supplies a HOLDING PERIOD, which the personal capital branch needs and pro-rata cannot supply — at the cost of publishing a lot array on every pool. The choice is locked at adoption and binds all future years (design 87 G6).
@@ -291,6 +291,10 @@ scenario's own schema), which is where to go to change it.
   Mean-reversion speed toward the anchor for the MEAN_REVERTING model — a half-life of about 6.1 years. Fitted to the observed TERM STRUCTURE of FX dispersion over the post-float window, not to the lag-1 autocorrelation: the lag-1 AR(1) estimate on the same data is 0.296, which reproduces 1-year moves and then flattens, understating 10-year dispersion by a third. Still the more window-sensitive of the two knobs (whole series 0.072, post-2000 0.104), so it is worth running as a sensitivity axis rather than trusted as a constant.
 - **`fxVolatility`** — FX Volatility (annualized) · `Number` · default `0.1142` · sweep: mc · conditional · via ECONOMIC_REGIMES
   Annualized log-volatility of the FX rate when a process model is active. Default is calibrated from the published USD/AUD series over the post-float window 1984-01 onward (design 92 §8.1), not assumed — reproduce it with scripts/lab/calibrate-fx.mjs. The whole series and the post-2000 era give 0.111 and 0.120, so this is not sensitive to the window; the original 0.06 default was.
+- **`hedgeCost`** — Hedge: Annual Cost · `Number` · default `0.00025` · via ECONOMIC_REGIMES
+  Annual cost of rolling a currency hedge, as a fraction of the hedged value: 0.025%, the midpoint of the 0.02–0.03% quoted for major developed-market currencies. The fee gap between a hedged fund and its unhedged twin is not included, because no security in the model carries a fee.
+- **`hedgeForeignCashRate`** — Hedge: Foreign Cash Rate · `Number` · default `0.045` · via ECONOMIC_REGIMES
+  The foreign central-bank rate a currency-hedged fund pays away when the plan does not model that country's Prime (an AU-only plan has no US prime). A hedge earns the home policy rate less this one each year. Defaults to the US Prime default. Ignored where the foreign Prime is loaded.
 
 ### Liquidity Pools (6)
 
@@ -1652,7 +1656,7 @@ docblock, not re-authored here. Arguments come from each script's declarative
 
 ---
 
-## Journal action types (178)
+## Journal action types (179)
 
 Every action a toolset declares, with its payload shape. A type declared by more than
 one toolset is one row: the toolsets compose into a single run, so it is one action in
@@ -1727,6 +1731,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `FX_TRANSFER_APPLY` | from: text, to: text, fromAmount: number, toAmount: number, rate: number, fee: currency(USD), section988: any | US_AU_CROSS_BORDER |
 | `GUARDRAIL_ADJUST_APPLY` | multiplier: number, cause: text, date: any | AU_RETIREMENT, US_RETIREMENT |
 | `GUARDRAIL_BASELINE_APPLY` | initialWithdrawalRate: number, portfolioValue: number, annualSpending: number, date: any | AU_RETIREMENT, US_RETIREMENT |
+| `HEDGE_FX_MARK_APPLY` | rates: any | ECONOMIC_REGIMES |
 | `HOUSE_REPAIR_APPLY` | stateKey: text, amount: number, capitalize: number | US_RETIREMENT |
 | `INFLATION_STEP_APPLY` | deviation: any, latent: any, floor: number, historicalYear: number, passThrough: any, primeDeviation: any, primeFloor: any | ECONOMIC_REGIMES |
 | `INHERIT_APPLY` | stateKey: text, name: text, category: text, country: text, inheritedValue: number, usCitizen: text, auResident: text, inheritanceDateMs: number | INHERITANCE |
@@ -2164,7 +2169,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 
 ---
 
-## Topics (77)
+## Topics (78)
 
 Tier 2 — the hand-written prose under `help/`, listed by what it CITES rather than
 summarised. A topic may not restate a param description (design 108 §3), so there is
@@ -2192,6 +2197,7 @@ what the in-app panel keys on.
 | [Cost Basis and Company Equity](concepts/cost-basis-and-equity.md) | concept | 247 | 2 panels · 3 params · design 94, 72 |
 | [Field × Action](panels/cross-action-query.md) | panel | 196 | 1 panel |
 | [Cross-Border Residency](concepts/cross-border-residency.md) | concept | 265 | 2 panels · 4 params · design 36, 52 |
+| [Currency Hedging](concepts/currency-hedging.md) | concept | 336 | 2 params · 1 action · design 120 |
 | [Dashboard](panels/dashboard.md) | panel | 183 | 1 panel |
 | [Decision Graph](panels/dg-config.md) | panel | 168 | 1 panel · design 30 |
 | [DG Results](panels/dg-results.md) | panel | 162 | 1 panel · design 30 |
