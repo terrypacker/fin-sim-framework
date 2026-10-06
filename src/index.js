@@ -91,7 +91,7 @@ import { DecisionGraphStorage } from './finance/decision-graph/decision-graph-st
 import { makeLeafEntry, resolveLeafEntry } from './finance/decision-graph/leaf-entry.js';
 import { TAX_CLASS, taxClassForRole, defaultRateProvider, afterTaxOptionsFromParams, liquidationRateProvider, computeAfterTaxValue, computeAfterTaxNetWorth, computeAfterTaxNetLiquidity, deriveAfterTaxNetWorth, deriveAfterTaxNetLiquidity } from './finance/derived-metrics/after-tax.js';
 import { isDrawdownAccessible, computeNetLiquidity, deriveNetLiquidity } from './finance/derived-metrics/net-liquidity.js';
-import { computeNetWorth, computeNetWorthInclSpeculative, deriveNetWorth } from './finance/derived-metrics/net-worth.js';
+import { computeNetWorth, computeNetWorthInclSpeculative, computeMsbsUnfundedBenefit, deriveNetWorth } from './finance/derived-metrics/net-worth.js';
 import { computeOffsetCapacity, deriveOffsetCapacity } from './finance/derived-metrics/offset-capacity.js';
 import { AddRegimeReducer } from './finance/economic-regimes/add-regime-reducer.js';
 import { BondMaturityReducer } from './finance/economic-regimes/bond-maturity-reducer.js';
@@ -1014,6 +1014,7 @@ export const Finance = {
   computeNetWorth,
   computeNetWorthInclSpeculative,
   deriveNetWorth,
+  computeMsbsUnfundedBenefit,
   computeOffsetCapacity,
   deriveOffsetCapacity,
   AddRegimeReducer,

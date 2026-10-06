@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-223 parameters · 33 panels · 12 node types (203 fields) · 177 action types · 86 tools · 309 state field types · 76 topics · 127 design docs
+223 parameters · 33 panels · 12 node types (203 fields) · 177 action types · 86 tools · 310 state field types · 77 topics · 127 design docs
 
 ---
 
@@ -1838,7 +1838,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 
 ---
 
-## State field types (309)
+## State field types (310)
 
 The scenario-INDEPENDENT half of `StateSchemaRegistry`: the globs and exact paths it
 installs in its own constructor, with the value type that decides how each formats.
@@ -2050,6 +2050,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `metrics.*` | metric |
 | `metrics.afterTaxNetLiquidity` | currency(USD) |
 | `metrics.afterTaxNetWorth` | currency(USD) |
+| `metrics.msbsUnfundedBenefit` | currency(USD) |
 | `metrics.netLiquidity` | currency(USD) |
 | `metrics.netWorth` | currency(USD) |
 | `metrics.netWorthInclSpeculative` | currency(USD) |
@@ -2159,7 +2160,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 
 ---
 
-## Topics (76)
+## Topics (77)
 
 Tier 2 — the hand-written prose under `help/`, listed by what it CITES rather than
 summarised. A topic may not restate a param description (design 108 §3), so there is
@@ -2169,7 +2170,7 @@ what the in-app panel keys on.
 
 | topic | kind | words | cites |
 |---|---|---|---|
-| [Account](nodes/account.md) | node | 249 | 4 panels · design 54, 56, 86, 87, 113, 119 |
+| [Account](nodes/account.md) | node | 247 | 4 panels · design 54, 56, 86, 87, 113, 119 |
 | [Action](nodes/action.md) | node | 200 | 3 panels · design 2, 91 |
 | [Action Detail](panels/action-detail.md) | panel | 172 | 1 panel · design 91 |
 | [Allocation](panels/allocation.md) | panel | 185 | 1 panel · design 82 |
@@ -2241,6 +2242,7 @@ what the in-app panel keys on.
 | [The Spending Rule](concepts/spending-rule.md) | concept | 296 | 1 panel · 17 params · design 89 |
 | [State](panels/state-panel.md) | panel | 181 | 1 panel |
 | [Stochastic Return Paths](concepts/stochastic-return-paths.md) | concept | 268 | 2 panels · 15 params · design 74, 90, 102 |
+| [Superannuation Access](concepts/superannuation.md) | concept | 399 | 1 panel · 4 actions · design 119, 77 |
 | [Tax Harvesting and Asset Location](concepts/tax-harvesting.md) | concept | 235 | 2 panels · 3 params · design 29, 94 |
 | [Timeline](panels/timeline.md) | panel | 203 | 1 panel |
 | [US Tax](concepts/us-tax.md) | concept | 260 | 1 panel · 8 params · design 71 |

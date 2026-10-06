@@ -10,6 +10,7 @@
 
 import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
 import { isSpeculative } from '../assets/asset.js';
+import { isMsbs } from '../account-rules/au/msbs.js';
 
 /**
  * Compute total net worth from simulation state.
@@ -110,6 +111,20 @@ function _sumNetWorth(state, baseCurrency, { includeSpeculative }) {
  * @param {object} state
  * @param {string} [baseCurrency='USD']
  */
+/**
+ * The unfunded part of every preserved MSBS employer benefit, in `baseCurrency` (design
+ * 119 §6.4). A side figure, never part of net worth: nothing backs it until the election
+ * converts it, and from then the pension is income, as Social Security is.
+ */
+export function computeMsbsUnfundedBenefit(state, baseCurrency = 'USD') {
+  let total = 0;
+  for (const val of Object.values(state)) {
+    if (!isMsbs(val) || !(val.employerBenefit?.unfunded > 0)) continue;
+    total += toBaseCurrency(val.employerBenefit.unfunded, currencyOf(val, baseCurrency), baseCurrency, state);
+  }
+  return total;
+}
+
 export function deriveNetWorth(state, baseCurrency = 'USD') {
   if (typeof baseCurrency !== 'string') baseCurrency = 'USD'; // registry passes date as 2nd arg
   if (!state.metrics || typeof state.metrics !== 'object') state.metrics = {};
@@ -122,5 +137,11 @@ export function deriveNetWorth(state, baseCurrency = 'USD') {
   const incl = computeNetWorthInclSpeculative(state, baseCurrency);
   if (incl !== worth || 'netWorthInclSpeculative' in state.metrics) {
     state.metrics.netWorthInclSpeculative = +incl.toFixed(2);
+  }
+  // Same rule: written once there is a benefit, then kept fresh, so it falls to 0 at the
+  // election rather than freezing at its last preserved value.
+  const unfunded = computeMsbsUnfundedBenefit(state, baseCurrency);
+  if (unfunded > 0 || 'msbsUnfundedBenefit' in state.metrics) {
+    state.metrics.msbsUnfundedBenefit = +unfunded.toFixed(2);
   }
 }
