@@ -1043,7 +1043,11 @@ export class IntlRetirementScenario extends BaseScenario {
           __type: 'BrokerageAccount',              stateKey: 'fixedIncomeAccount',
           name: 'Fixed Income',           role: ACCOUNT_ROLES.FIXED_INCOME,
           balance: p.fixedIncomeBalance, ownerId: 'primary',
-          drawdownPriority: 1,            contributionBasis: 0,
+          drawdownPriority: 1,
+          // No basis stated: a bond fund's lot opens at market (design 66 §5.3.4). The
+          // `contributionBasis: 0` that stood here predated the design 53 ledger split and
+          // was never read; once a brokerage's basis became live it would have said the
+          // whole balance is gain.
           country: 'US', currency: USD,
         },
         {
@@ -1094,7 +1098,11 @@ export class IntlRetirementScenario extends BaseScenario {
           __type: 'BrokerageAccount',     stateKey: 'auFixedIncomeAccount',
           name: 'AU Fixed Income',        role: ACCOUNT_ROLES.AU_FIXED_INCOME,
           balance: p.auFixedIncomeBalance, ownerId: 'primary',
-          drawdownPriority: 1,            contributionBasis: 0,
+          drawdownPriority: 1,
+          // No basis stated: a bond fund's lot opens at market (design 66 §5.3.4). The
+          // `contributionBasis: 0` that stood here predated the design 53 ledger split and
+          // was never read; once a brokerage's basis became live it would have said the
+          // whole balance is gain.
           country: 'AU', currency: AUD,
         },
         {

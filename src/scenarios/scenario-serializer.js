@@ -1452,7 +1452,14 @@ export class ScenarioSerializer {
     // Holdings (design 25 §8) — restored via Holding.fromJSON. When absent
     // the account's empty holdings array triggers AccountService.register()'s
     // default-holding bootstrap, preserving legacy single-sleeve behavior.
-    if (Array.isArray(d.holdings) && d.holdings.length > 0) {
+    // A holdings-only brokerage has no basis field, so the record's `contributionBasis`
+    // would reach nothing. With no lots authored, hand it to the bootstrap as the lots'
+    // opening cost basis; `_bootstrapBasis` consumes and deletes it.
+    const hasHoldings = Array.isArray(d.holdings) && d.holdings.length > 0;
+    if (!hasHoldings && account instanceof BrokerageAccount && Number.isFinite(d.contributionBasis)) {
+      account._openingCostBasis = d.contributionBasis;
+    }
+    if (hasHoldings) {
       account.holdings = d.holdings.map(h => Holding.fromJSON(h));
       // Auto-heal the §4.4 invariant on load: scenarios saved before balance
       // edits kept holdings in sync (holdings-balance desync) can carry a

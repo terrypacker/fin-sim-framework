@@ -74,6 +74,22 @@ function _drawDerived(account, fromEarnings, preDrawEarnings) {
 }
 
 /**
+ * The total cost basis a bootstrapped account's lots open with: the authored opening basis
+ * when the loader handed one over, the balance otherwise.
+ *
+ * `_openingCostBasis` is a one-shot hand-off, consumed here and deleted. A brokerage is
+ * holdings-only (design 53 §2): its basis lives on its lots and the account has no field
+ * for it, so the plan's `contributionBasis` on a brokerage record reaches nothing else.
+ * Before this the lot opened at `costBasis = balance` and the embedded gain the plan
+ * stated was never taxed.
+ */
+function _bootstrapBasis(account, balance) {
+  const authored = account._openingCostBasis;
+  delete account._openingCostBasis;
+  return Number.isFinite(authored) ? Math.max(0, authored) : balance;
+}
+
+/**
  * Design 97 §3.1 — order the drawdown sources by an authored pool sequence.
  *
  * `sources` is the priority-sorted `[key, account]` list; `sequence` is the authored
@@ -227,8 +243,11 @@ export class AccountService extends AssetService {
 
   /**
    * Bootstrap one default Holding when an account has none. Matches the
-   * scalar balance as marketValue/costBasis so the §4.4 invariant
+   * scalar balance as marketValue so the §4.4 invariant
    * (account.balance === Σ holdings[i].marketValue) holds at boot.
+   *
+   * The lots' cost basis is the authored opening basis when there is one
+   * (`_bootstrapBasis`), and the balance otherwise.
    *
    * Idempotent: a non-empty holdings array is left untouched.
    *
@@ -240,6 +259,7 @@ export class AccountService extends AssetService {
     if (account.holdings.length > 0) return;
     // Loans are scalar liabilities (design 54) — no asset allocation / holdings.
     if (account.type === ACCOUNT_TYPE.LOAN) return;
+    const basis      = _bootstrapBasis(account, account.balance ?? 0);
     const allocation = resolveDefaultAllocation(account);
     const rateKey    = resolveRateKey(account.country, allocation, account.role);
     const balance    = account.balance ?? 0;
@@ -258,17 +278,19 @@ export class AccountService extends AssetService {
     const markets = mix ? Object.entries(mix).filter(([, w]) => w > 0) : [];
     if (markets.length > 1) {
       const holdings = [];
-      let allocated = 0;
+      let allocated = 0, allocatedBasis = 0;
       markets.forEach(([mk, weight], i) => {
-        const value = (i === markets.length - 1)
-          ? +(balance - allocated).toFixed(2)
-          : +(balance * weight).toFixed(2);
-        allocated = +(allocated + value).toFixed(2);
+        const last  = i === markets.length - 1;
+        const value = last ? +(balance - allocated).toFixed(2) : +(balance * weight).toFixed(2);
+        // Basis splits in the same ratio as value, the last sleeve taking the remainder.
+        const lotBasis = last ? +(basis - allocatedBasis).toFixed(2) : +(basis * weight).toFixed(2);
+        allocated      = +(allocated + value).toFixed(2);
+        allocatedBasis = +(allocatedBasis + lotBasis).toFixed(2);
         holdings.push(new Holding({
           id:           this._generateHoldingId(),
           allocation,
           marketValue:  value,
-          costBasis:    value,
+          costBasis:    lotBasis,
           rateKey:      mk,
           purchaseDate: null,
           label:        '',
@@ -284,7 +306,7 @@ export class AccountService extends AssetService {
       // A single-entry mix still names the market explicitly; `rateKey` is the fallback
       // for allocations that have no market axis at all (BOND, CASH, GOLD).
       marketValue:  balance,
-      costBasis:    balance,
+      costBasis:    basis,
       rateKey:      markets.length === 1 ? markets[0][0] : rateKey,
       purchaseDate: null,
       label:        '',
