@@ -39,6 +39,14 @@ const DEFAULT_FX_VOLATILITY = 0.1142;
  * value gives 0.634, and the AR(1) value gives 0.370. See `fitFxTermStructure`.
  */
 const DEFAULT_FX_REVERSION  = 0.114;
+/**
+ * Default ANNUAL correlation of the USD/AUD move with the equity market shock (design 120
+ * §3.6, Q7): the 2004–2023 measurement on the model's own pair and horizon, −0.54. It
+ * agrees with J.P. Morgan's implied −0.635 and puts the minimum-variance hedge ratio
+ * (≈0.19) where Australian super funds hold theirs. Reproduce with
+ * `npm run fx:equity-correlation`.
+ */
+export const DEFAULT_FX_EQUITY_CORRELATION = -0.54;
 /** Default FX tick interval in years (monthly). */
 const FX_TICK_DT            = 1 / 12;
 
@@ -147,6 +155,10 @@ export class FxService {
     const fxActive   = model !== 'NONE';
     const volatility = parameters?.fxVolatility     ?? DEFAULT_FX_VOLATILITY;
     const reversion  = parameters?.fxReversionSpeed ?? DEFAULT_FX_REVERSION;
+    const correlation = parameters?.fxEquityCorrelation ?? DEFAULT_FX_EQUITY_CORRELATION;
+    if (!(correlation >= -1 && correlation <= 1)) {
+      throw new Error(`fxEquityCorrelation must be between -1 and 1, got ${correlation}.`);
+    }
 
     const baseRates  = {};
     const baseFees   = {};
@@ -203,6 +215,7 @@ export class FxService {
       // stochastic model is active so default scenarios draw no randomness.
       handlers.push(new FxTickHandler({
         model, reversionSpeed: reversion, dt: FX_TICK_DT, pairs: pairIds,
+        equityCorrelation: correlation,
       }));
       events.push(this._buildFxTickSeries());
     }

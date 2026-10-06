@@ -9,11 +9,11 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-225 parameters · 33 panels · 12 node types (203 fields) · 179 action types · 87 tools · 310 state field types · 78 topics · 128 design docs
+226 parameters · 33 panels · 12 node types (203 fields) · 179 action types · 87 tools · 310 state field types · 78 topics · 128 design docs
 
 ---
 
-## Parameters (225)
+## Parameters (226)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
@@ -281,10 +281,12 @@ scenario's own schema), which is where to go to change it.
 - **`yieldCurveVol`** — Yield Curve Volatility · `Number` · default `0.01` · via ECONOMIC_REGIMES
   Annualized standard deviation (in rate units, e.g. 0.01 = 100 bps) of the stochastic level walk. Only used when Stochastic Yield Curve is on.
 
-### FX (6)
+### FX (7)
 
 - **`fxBasisMethod`** — §988 Lot Consumption Method · `Enum` · default `pro-rata` · one of `pro-rata`, `fifo` · via US_AU_CROSS_BORDER
   Reg. §1.988-2(a)(2)(iii)(B)(1) lets a taxpayer use "any reasonable method consistently applied … to all accounts" and names FIFO, LIFO and pro rata. Pro-rata is the default because it is exactly what a single fxBasisRate scalar implements. FIFO additionally supplies a HOLDING PERIOD, which the personal capital branch needs and pro-rata cannot supply — at the cost of publishing a lot array on every pool. The choice is locked at adoption and binds all future years (design 87 G6).
+- **`fxEquityCorrelation`** — FX–Equity Correlation (annual) · `Number` · default `-0.54` · sweep: mc · conditional · via ECONOMIC_REGIMES
+  Annual correlation between the year's move in the AUD price of a US dollar and the year's equity market shock, used when the FX process and stochastic equity returns are both on. Negative means the Australian dollar falls when world shares fall, which cushions an unhedged holder. The default is the 2004–2023 annual measurement on the model's own pair (design 120 §3.6, `npm run fx:equity-correlation`); 1984–2003 measured +0.16, so sweep it rather than trust one era. 0 leaves the FX path independent.
 - **`fxProcessModel`** — FX Rate Process · `Enum` · default `NONE` · one of `NONE`, `WHITE_NOISE`, `RANDOM_WALK`, `MEAN_REVERTING` · via ECONOMIC_REGIMES
   Time-varying FX model (design 47). NONE = flat (today). MEAN_REVERTING/RANDOM_WALK/WHITE_NOISE vary the rate over time via the seeded RNG.
 - **`fxReversionSpeed`** — FX Reversion Speed (per year) · `Number` · default `0.114` · sweep: mc · conditional · via ECONOMIC_REGIMES
@@ -1720,7 +1722,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `COMPANY_SALE_APPLY` | salePrice: currency(USD), costBasis: currency(USD), residency: text, stateKey: text, destinationKey: text | US_INCOME |
 | `COMPANY_SALE_TAX` | gain: currency(USD), auGain: currency(USD), auIndexedGain: currency(USD), usShortTermGain: currency(USD), usLongTermGain: currency(USD), auShortTermGain: currency(USD), auLongTermGain: currency(USD), residency: text, ownershipType: text, ownerId: text, owners: any, proceeds: currency(USD), costBasis: currency(USD), description: text | US_INCOME |
 | `CORPORATE_ACTION_APPLY` | kind: text, securityId: text, stateKeys: any, residency: text, spec: any | CORPORATE_ACTIONS |
-| `EQUITY_RETURN_STEP_APPLY` | marketDev: number, deviation: any, driftComp: any, bootstrap: any | ECONOMIC_REGIMES |
+| `EQUITY_RETURN_STEP_APPLY` | marketDev: number, deviation: any, driftComp: any, bootstrap: any, marketShock: any | ECONOMIC_REGIMES |
 | `EXPENSE_DEBIT` | amount: number, realizedAmount: number, priceLevel: number, spendCategory: text, capitalFraction: number, targetKey: text, section988: any | AU_RETIREMENT, US_RETIREMENT |
 | `EXPENSE_EVENT_APPLY` | amount: number, category: text, currency: text, propertyKey: text, capitalizeAmount: number, personId: text | AU_RETIREMENT, US_RETIREMENT |
 | `FIXED_INCOME_CONTRIBUTION_APPLY` | amount: currency(USD) | US_BROKERAGE |
@@ -2197,7 +2199,7 @@ what the in-app panel keys on.
 | [Cost Basis and Company Equity](concepts/cost-basis-and-equity.md) | concept | 247 | 2 panels · 3 params · design 94, 72 |
 | [Field × Action](panels/cross-action-query.md) | panel | 196 | 1 panel |
 | [Cross-Border Residency](concepts/cross-border-residency.md) | concept | 265 | 2 panels · 4 params · design 36, 52 |
-| [Currency Hedging](concepts/currency-hedging.md) | concept | 336 | 2 params · 1 action · design 120 |
+| [Currency Hedging](concepts/currency-hedging.md) | concept | 474 | 3 params · 1 action · design 120 |
 | [Dashboard](panels/dashboard.md) | panel | 183 | 1 panel |
 | [Decision Graph](panels/dg-config.md) | panel | 168 | 1 panel · design 30 |
 | [DG Results](panels/dg-results.md) | panel | 162 | 1 panel · design 30 |

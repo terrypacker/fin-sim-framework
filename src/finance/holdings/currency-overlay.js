@@ -72,11 +72,15 @@ const PRIME_KEY = { US: RATE_KEYS.PRIME_US, AU: RATE_KEYS.PRIME_AU };
  * The hedge ratio a lot runs at, or null when its instrument is silent (no overlay).
  *
  * @param {object} inst - the lot's instrument view (`instrumentOf`)
+ * @param {object} [state] - reads `hedgeOverlay.rebased`
  * @returns {number|null}
  */
-export function hedgeRatioOf(inst) {
+export function hedgeRatioOf(inst, state = null) {
   const h = inst?.hedgeRatio;
-  return h == null ? null : h;
+  if (h != null) return h;
+  // §5.5 — once the sleeve runs on the local-currency basis, a silent lot is unhedged: the
+  // overlay is now where its currency risk comes from.
+  return state?.hedgeOverlay?.rebased ? 0 : null;
 }
 
 /**
@@ -140,7 +144,7 @@ export function hedgeCarryFor(state, exposure) {
  * @returns {{ delta: number, hedgeResult: number, f: number, carry: number, h: number }|null}
  */
 export function currencyOverlay({ state, account, inst, rateKey, g }) {
-  const h = hedgeRatioOf(inst);
+  const h = hedgeRatioOf(inst, state);
   if (h == null) return null;
   const exposure = fxExposureOf(rateKey, account);
   if (!exposure) return null;

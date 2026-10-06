@@ -175,6 +175,18 @@ export const DEFAULT_EQUITY_IDIO = Object.freeze({
 });
 
 /**
+ * The ex-AU sleeve's idiosyncratic vol on the LOCAL-currency basis (design 120 §5.5), used
+ * in place of DEFAULT_EQUITY_IDIO's AUD figure when the currency overlay supplies the FX
+ * part of the return. J.P. Morgan's Developed World Equity hedged vol 15.19% with its USD
+ * AC World ~ U.S. Large Cap correlation 0.965: σ_idio = 15.19·√(1 − 0.965²) = 3.98%, and
+ * β = 0.965·15.19/18 = 0.81, which leaves DEFAULT_EQUITY_BETA as it is. The draw count is
+ * unchanged (the AUD entry is non-zero too), so switching bases moves no other draw.
+ */
+export const DEFAULT_EQUITY_IDIO_LOCAL = Object.freeze({
+  [RATE_KEYS.EQUITY_INTL_EX_AU]: 0.040,
+});
+
+/**
  * Real-property return-path sleeves (design 75 §4). Each real property loads on the shared
  * market factor through one of these keys, selected by country. Frozen in **stable, sorted**
  * order for the same RNG-cursor reason as EQUITY_SLEEVES: PropertyReturnTickHandler iterates

@@ -28,6 +28,31 @@ recommendations by asking for the build.
     market, and a hedged security's index would need its own step.
   - `hedgeForeignCashRate` and `hedgeCost` are not Monte Carlo axes, since they would be
     dead levers on every plan without a hedged security.
+- **Phase 3 BUILT** (6 Oct). `fxEquityCorrelation`, default −0.54 (Q7a), and the
+  conditional ex-AU re-base (σ_idio 4.0%, `DEFAULT_EQUITY_IDIO_LOCAL`).
+  - **§5.4's timing premise was wrong, and the fix is simpler.** The equity tick on
+    31 Dec of Y draws the shock that is folded in at the next period advance and applied
+    by the 31 Dec growth of Y + 1 (measured: drawn 2027-12-31, in force all of 2028). So
+    every FX tick of Y + 1 runs after it. The tick stamps `state.equityMarketShock =
+    { year: Y + 1, z }` and the FX tick reads it. There is no keyed stream and no peeking.
+  - **So Q9 and Q10 no longer apply.** A correlated FX path needs neither `rngStreams` nor
+    a refusal under `HISTORICAL_BOOTSTRAP`, whose replayed year is stamped as
+    `marketDev / vol`. That is what made Q7(a) safe: the Intl plan (FX on by default) and
+    every Monte Carlo load unchanged. The FX tick still takes one draw per step, so the
+    equity path is identical draw for draw with ρ on or off, with or without `rngStreams`.
+  - **Silent lots once re-based (author's answer, 6 Oct):** while the sleeve is
+    local-currency, an ex-AU lot in an AUD account with no stated ratio runs at h = 0, so
+    no lot loses its currency risk. The re-base needs a security that declares a ratio and
+    an FX model other than NONE. A flat rate supplies no currency risk to replace the AUD
+    calibration's.
+  - **Measured on the engine's own handlers** (EVT-HDG-11, 4,000 years): at ρ = −0.54,
+    unhedged σ 13.4% against hedged 15.2%, ρ with the AU sleeve 0.36 against 0.50, and
+    h* 0.19. At −0.17, h* is 0.73. At +0.16, unhedged σ is 19.7% and h* 1.24. These are
+    §4's predictions (0.19 and 0.74). Mean reversion dilutes the annual correlation only
+    to −0.537.
+  - **Not done:** the paired VGS-against-VGAD Monte Carlo A/B on AU Single Homeowner
+    (§6 phase 3). It is a study, so its results belong in `scenarios/`. It runs once phase 5
+    adds VGAD.
 
 - **Rev 2** (5 Oct) added the Rest, RBA, MSCI and cost sources (§3.1–3.5) and Q7, the
   FX–equity correlation.
