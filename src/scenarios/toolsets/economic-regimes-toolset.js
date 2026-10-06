@@ -38,6 +38,11 @@ import { shapeDelta }                     from '../../finance/economic-regimes/y
 import { EconomicShockHandler }           from '../../finance/economic-regimes/economic-shock-handler.js';
 import { EconomicRecoveryTickHandler }    from '../../finance/economic-regimes/economic-recovery-tick-handler.js';
 import { FX_PROCESS_MODEL_IDS }           from '../../finance/fx/fx-process-models.js';
+import { FxService, regimesContributesFxProcess } from '../../finance/fx/fx-service.js';
+import { FxTickHandler }                  from '../../finance/fx/fx-tick-handler.js';
+import { FxRefreshReducer }               from '../../finance/fx/fx-refresh-reducer.js';
+import { FxProcessReducer }               from '../../finance/fx/fx-process-reducer.js';
+import { FxStepApplyReducer }             from '../../finance/fx/fx-step-apply-reducer.js';
 import { SHOCK_LIBRARY, SHOCK_PRESET_OPTIONS } from '../../finance/economic-shocks/shock-library.js';
 import { BEHAVIORAL_STRATEGY_REGISTRY }       from '../../finance/behavioral/behavioral-strategy-registry.js';
 
@@ -483,14 +488,32 @@ function scheduleYieldCurveSteps(schedule, p, endDate, events) {
  * Capabilities: economic-regimes
  * Dependencies: (none; regime layer sits beneath everything)
  */
+/**
+ * The FX process layer (design 120 §5.3): the USD_AUD rate, its stochastic walk, the FX tick
+ * and the reducers that compose the rate. Owned here, not by US_AU_CROSS_BORDER, so a plan
+ * with no cross-border toolset can switch it on. Null when nothing reads it, which keeps an
+ * AU-only plan with the model at NONE free of FX state. Shares the compile's FxService with
+ * the cross-border toolset (`context._fxService`), which keeps the transfer layer.
+ *
+ * @param {object} context — compile context
+ * @returns {{ statePatches: object, events: [], handlers: [], reducers: [] } | null}
+ */
+function _fxProcess(context) {
+  if (!regimesContributesFxProcess(context)) return null;
+  if (!context._fxService) context._fxService = new FxService();
+  return context._fxService.getContributions(
+    ['USD', 'AUD'], context.accountService, context.stateRegistry, context.parameters,
+    { process: true, transfers: false });
+}
+
 export const ECONOMIC_REGIMES = {
   id: 'ECONOMIC_REGIMES',
   capabilities: ['economic-regimes'],
   dependencies: [],
 
   types: {
-    handlers: [EconomicShockHandler, EconomicRecoveryTickHandler, YieldCurveTickHandler, EquityReturnTickHandler, PropertyReturnTickHandler, InflationTickHandler],
-    reducers: [RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer, YieldCurveReducer, YieldCurveStepReducer, EquityReturnReducer, EquityReturnStepReducer, PropertyReturnStepReducer, InflationStepReducer, InflationPathReducer, BondPriceAdjustReducer, BondMaturityReducer],
+    handlers: [EconomicShockHandler, EconomicRecoveryTickHandler, YieldCurveTickHandler, EquityReturnTickHandler, PropertyReturnTickHandler, InflationTickHandler, FxTickHandler],
+    reducers: [FxRefreshReducer, FxProcessReducer, FxStepApplyReducer, RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer, YieldCurveReducer, YieldCurveStepReducer, EquityReturnReducer, EquityReturnStepReducer, PropertyReturnStepReducer, InflationStepReducer, InflationPathReducer, BondPriceAdjustReducer, BondMaturityReducer],
     actions: [
       { type: 'ADD_REGIME_APPLY',    fields: { regime: ValueType.any() } },
       { type: 'REMOVE_REGIME_APPLY', fields: { regimeId: ValueType.text() } },
@@ -512,6 +535,10 @@ export const ECONOMIC_REGIMES = {
         },
       },
       { type: 'RECOMPUTE_REGIMES', fields: {} },
+      // Time-varying FX walk step (design 47), owned here since design 120 §5.3. Declared in
+      // US_AU_CROSS_BORDER too, with the same fields, for a cross-border plan without this
+      // toolset.
+      { type: 'FX_STEP_APPLY', fields: { pair: ValueType.text(), deviation: ValueType.number() } },
       // ── Behavioral strategy action types (design/29) ──────────────────────
       {
         type: 'STOCK_HARVEST_APPLY',
@@ -1214,6 +1241,47 @@ export const ECONOMIC_REGIMES = {
         defaultValue: 1.0,
         description:  'Monte Carlo multiplier on the annual probability (Bernoulli) or rate (Poisson) of a stochastic house repair (design 75 §5.2/§6.4). 1.0 = each property\'s configured repairProb/repairLambda; sweeping it varies how OFTEN the lump lands. Only bites when a property has a repair model; inert (1.0) otherwise.',
       },
+      // FX rate process (design 47, calibrated design 92 §8.1). Moved here from
+      // US_AU_CROSS_BORDER by design 120 §5.3 so an AU-only plan can switch it on: a hedged
+      // or unhedged foreign-equity lot needs the AUD's moves whether or not money ever
+      // crosses the border. The anchor level (`exchangeRateUsdToAud`) stays with the transfers.
+      {
+        key: 'fxProcessModel', label: 'FX Rate Process',
+        type: 'Enum', group: 'FX', mc: false, opt: false,
+        options: FX_PROCESS_MODEL_IDS,
+        defaultValue: 'NONE',
+        description: 'Time-varying FX model (design 47). NONE = flat (today). '
+          + 'MEAN_REVERTING/RANDOM_WALK/WHITE_NOISE vary the rate over time via the seeded RNG.',
+      },
+      {
+        key: 'fxVolatility', label: 'FX Volatility (annualized)',
+        type: 'Number', group: 'FX', mc: true, opt: false,
+        defaultValue: 0.1142,
+        // Read only when a process model runs (FxService seeds no vol under NONE), so
+        // it is hidden — in the editor and as an MC row — until one is chosen (design
+        // 98 W3 follow-up). An explicit `in` list, not `notEquals: 'NONE'`: an unset
+        // fxProcessModel means NONE, and `notEquals` would count unset as visible.
+        visibleWhen: { param: 'fxProcessModel', in: FX_PROCESS_MODEL_IDS.filter(id => id !== 'NONE') },
+        description: 'Annualized log-volatility of the FX rate when a process model is active. '
+          + 'Default is calibrated from the published USD/AUD series over the post-float window '
+          + '1984-01 onward (design 92 §8.1), not assumed — reproduce it with '
+          + 'scripts/lab/calibrate-fx.mjs. The whole series and the post-2000 era give 0.111 and '
+          + '0.120, so this is not sensitive to the window; the original 0.06 default was.',
+      },
+      {
+        key: 'fxReversionSpeed', label: 'FX Reversion Speed (per year)',
+        type: 'Number', group: 'FX', mc: true, opt: false,
+        defaultValue: 0.114,
+        // Only the MEAN_REVERTING step reads k (fx-process-models.js).
+        visibleWhen: { param: 'fxProcessModel', equals: 'MEAN_REVERTING' },
+        description: 'Mean-reversion speed toward the anchor for the MEAN_REVERTING model — '
+          + 'a half-life of about 6.1 years. Fitted to the observed TERM STRUCTURE of FX '
+          + 'dispersion over the post-float window, not to the lag-1 autocorrelation: the lag-1 '
+          + 'AR(1) estimate on the same data is 0.296, which reproduces 1-year moves and then '
+          + 'flattens, understating 10-year dispersion by a third. Still the more '
+          + 'window-sensitive of the two knobs (whole series 0.072, post-2000 0.104), so it is '
+          + 'worth running as a sensitivity axis rather than trusted as a constant.',
+      },
       {
         key:          'behavioralStrategies',
         label:        'Behavioral Strategies',
@@ -1323,6 +1391,7 @@ export const ECONOMIC_REGIMES = {
       propertyReturnMarketDev:     0,
       priorMarkRates:              {},
       priorMarkCurve:              {},
+      ...(_fxProcess(context)?.statePatches ?? {}),
     };
   },
 
@@ -1482,6 +1551,9 @@ export const ECONOMIC_REGIMES = {
       }
     }
 
+    // FX tick series (design 47) — only with a stochastic FX model (design 120 §5.3).
+    events.push(...(_fxProcess(context)?.events ?? []));
+
     return events;
   },
 
@@ -1574,6 +1646,8 @@ export const ECONOMIC_REGIMES = {
             shareMarketFactor: !!p.equityReturnStochastic,
           })]
         : []),
+      // FX tick (design 47) — only with a stochastic FX model (design 120 §5.3).
+      ...(_fxProcess(context)?.handlers ?? []),
       ...behavioralHandlers,
     ];
   },
@@ -1597,6 +1671,8 @@ export const ECONOMIC_REGIMES = {
       new InflationStepReducer(),   // design 103 §4.2 — stores the inflation deviation, floor and equity pass-through
       new BondPriceAdjustReducer(),
       new BondMaturityReducer(),
+      // FX rate composition (design 47): refresh, process, step — when the FX layer is here.
+      ...(_fxProcess(context)?.reducers ?? []),
       ...behavioralReducers,
     ];
   },

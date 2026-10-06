@@ -90,6 +90,10 @@ export class ScenarioCompiler {
     const parameters = foldQueueLeverRuns(authored);
     const paramSchema = resolved.flatMap(t => t.paramSchema?.({}) ?? []);
     const context    = this._buildContext(definition, services, parameters, paramSchema);
+    // Which toolsets this compile resolved, for a contribution two toolsets can own: the FX
+    // process layer belongs to ECONOMIC_REGIMES when it is loaded and to US_AU_CROSS_BORDER
+    // otherwise (design 120 §5.3), and each needs to know whether the other is here.
+    context.toolsetIds = resolved.map(t => t.id);
 
     const statePatches = {};
     const schedules    = [];

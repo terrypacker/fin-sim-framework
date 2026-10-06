@@ -16,14 +16,13 @@ import { ChangeResidencyApplyReducer }
   from '../../finance/reducers/change-residency-apply-reducer.js';
 import { IntlTransferApplyReducer, IntlTransferRecordReducer }   from '../../finance/reducers/intl-transfer-apply-reducer.js';
 import { ValueType }                  from '../../simulation-framework/type-registry.js';
-import { FxService }                  from '../../finance/fx/fx-service.js';
+import { FxService, crossBorderContributesFxProcess } from '../../finance/fx/fx-service.js';
 import { FxTransferToHandler }        from '../../finance/fx/fx-transfer-handler.js';
 import { FxTransferApplyReducer }     from '../../finance/fx/fx-transfer-apply-reducer.js';
 import { FxRefreshReducer }           from '../../finance/fx/fx-refresh-reducer.js';
 import { FxTickHandler }              from '../../finance/fx/fx-tick-handler.js';
 import { FxStepApplyReducer }         from '../../finance/fx/fx-step-apply-reducer.js';
 import { FxProcessReducer }           from '../../finance/fx/fx-process-reducer.js';
-import { FX_PROCESS_MODEL_IDS }       from '../../finance/fx/fx-process-models.js';
 import { DATE_ANCHORS, assertOnAnchor, saleDateToUtc } from '../year-date-migration.js';
 
 /**
@@ -34,6 +33,18 @@ import { DATE_ANCHORS, assertOnAnchor, saleDateToUtc } from '../year-date-migrat
 function _getFxService(context) {
   if (!context._fxService) context._fxService = new FxService();
   return context._fxService;
+}
+
+/**
+ * This toolset's FX contributions: always the transfer layer, and the process layer (the
+ * rate, its walk and the FX tick) only when ECONOMIC_REGIMES is not loaded to own it
+ * (design 120 §5.3).
+ * @param {object} context
+ */
+function _fxContributions(context) {
+  return _getFxService(context).getContributions(
+    ['USD', 'AUD'], context.accountService, context.stateRegistry, context.parameters,
+    { process: crossBorderContributesFxProcess(context), transfers: true });
 }
 
 /**
@@ -165,6 +176,11 @@ export const US_AU_CROSS_BORDER = {
         description: 'AU inflation rate when running combined US+AU scenario',
       },
       {
+        // Stays here rather than moving with the FX process to ECONOMIC_REGIMES (design 120
+        // §5.3): a transfer converts at this level, while the process layer an AU-only plan
+        // runs needs only the rate's MOVES (the hedge overlay reads R_end / R_start), which
+        // do not depend on the anchor. Moving it would put a live-looking rate on every
+        // AU-only plan that nothing there reads.
         key: 'exchangeRateUsdToAud', label: 'Exchange Rate USD→AUD',
         type: 'Number', group: 'Cross Border', mc: true, opt: false,
         defaultValue: 1.55,
@@ -177,14 +193,6 @@ export const US_AU_CROSS_BORDER = {
         description: 'Fixed fee per international wire transfer in USD',
       },
       {
-        key: 'fxProcessModel', label: 'FX Rate Process',
-        type: 'Enum', group: 'FX', mc: false, opt: false,
-        options: FX_PROCESS_MODEL_IDS,
-        defaultValue: 'NONE',
-        description: 'Time-varying FX model (design 47). NONE = flat (today). '
-          + 'MEAN_REVERTING/RANDOM_WALK/WHITE_NOISE vary the rate over time via the seeded RNG.',
-      },
-      {
         key: 'fxBasisMethod', label: '§988 Lot Consumption Method',
         type: 'Enum', group: 'FX', mc: false, opt: false,
         options: ['pro-rata', 'fifo'],
@@ -195,35 +203,6 @@ export const US_AU_CROSS_BORDER = {
           + 'FIFO additionally supplies a HOLDING PERIOD, which the personal capital branch needs '
           + 'and pro-rata cannot supply — at the cost of publishing a lot array on every pool. '
           + 'The choice is locked at adoption and binds all future years (design 87 G6).',
-      },
-      {
-        key: 'fxVolatility', label: 'FX Volatility (annualized)',
-        type: 'Number', group: 'FX', mc: true, opt: false,
-        defaultValue: 0.1142,
-        // Read only when a process model runs (FxService seeds no vol under NONE), so
-        // it is hidden — in the editor and as an MC row — until one is chosen (design
-        // 98 W3 follow-up). An explicit `in` list, not `notEquals: 'NONE'`: an unset
-        // fxProcessModel means NONE, and `notEquals` would count unset as visible.
-        visibleWhen: { param: 'fxProcessModel', in: FX_PROCESS_MODEL_IDS.filter(id => id !== 'NONE') },
-        description: 'Annualized log-volatility of the FX rate when a process model is active. '
-          + 'Default is calibrated from the published USD/AUD series over the post-float window '
-          + '1984-01 onward (design 92 §8.1), not assumed — reproduce it with '
-          + 'scripts/lab/calibrate-fx.mjs. The whole series and the post-2000 era give 0.111 and '
-          + '0.120, so this is not sensitive to the window; the original 0.06 default was.',
-      },
-      {
-        key: 'fxReversionSpeed', label: 'FX Reversion Speed (per year)',
-        type: 'Number', group: 'FX', mc: true, opt: false,
-        defaultValue: 0.114,
-        // Only the MEAN_REVERTING step reads k (fx-process-models.js).
-        visibleWhen: { param: 'fxProcessModel', equals: 'MEAN_REVERTING' },
-        description: 'Mean-reversion speed toward the anchor for the MEAN_REVERTING model — '
-          + 'a half-life of about 6.1 years. Fitted to the observed TERM STRUCTURE of FX '
-          + 'dispersion over the post-float window, not to the lag-1 autocorrelation: the lag-1 '
-          + 'AR(1) estimate on the same data is 0.296, which reproduces 1-year moves and then '
-          + 'flattens, understating 10-year dispersion by a third. Still the more '
-          + 'window-sensitive of the two knobs (whole series 0.072, post-2000 0.104), so it is '
-          + 'worth running as a sensitivity axis rather than trusted as a constant.',
       },
     ];
   },
@@ -242,9 +221,7 @@ export const US_AU_CROSS_BORDER = {
     });
 
     // FX state patches: initialise base and effective rate/fee maps plus legacy flat fields.
-    const fxPatches = _getFxService(context)
-      .getContributions(['USD', 'AUD'], context.accountService, context.stateRegistry, p)
-      .statePatches;
+    const fxPatches = _fxContributions(context).statePatches;
 
     const patches = {
       usFeieElected:        p.usFeieElected ?? false,
@@ -272,12 +249,8 @@ export const US_AU_CROSS_BORDER = {
     const events = [];
 
     // FX tick series (design 47) — present only when a stochastic FX model is
-    // selected. getContributions returns the pre-built EventSeries.
-    events.push(...(
-      _getFxService(context)
-        .getContributions(['USD', 'AUD'], context.accountService, context.stateRegistry, context.parameters)
-        .events
-    ));
+    // selected and ECONOMIC_REGIMES is not here to schedule it (design 120 §5.3).
+    events.push(..._fxContributions(context).events);
 
     // CHANGE_RESIDENCY fires on the move date, which must be a 1 Jul (design 117 D5).
     const moveDay = assertOnAnchor('moveDate', context.parameters.moveDate);
@@ -316,9 +289,7 @@ export const US_AU_CROSS_BORDER = {
       fx.registerSettlement('AUD', sr.getStateKey(ACCOUNT_ROLES.AU_SAVINGS, primaryId));
 
       // Direction-agnostic FX_TRANSFER handler.
-      const fxHandlers = fx.getContributions(
-        ['USD', 'AUD'], context.accountService, sr, p,
-      ).handlers;
+      const fxHandlers = _fxContributions(context).handlers;
       handlers.push(...fxHandlers);
     }
 
@@ -337,10 +308,9 @@ export const US_AU_CROSS_BORDER = {
     const accountSvc = context.accountService;
     const sr         = context.stateRegistry;
 
-    // FX reducers from FxService (FxRefreshReducer + FxTransferApplyReducer).
-    const fxReducers = _getFxService(context)
-      .getContributions(['USD', 'AUD'], accountSvc, sr, context.parameters)
-      .reducers;
+    // FX reducers from FxService: FxTransferApplyReducer, plus the process reducers when this
+    // toolset owns the process layer (design 120 §5.3).
+    const fxReducers = _fxContributions(context).reducers;
 
     return [
       new ChangeResidencyApplyReducer({ accountService: accountSvc, stateRegistry: sr, collectibleService: context.collectibleService, realPropertyService: context.realPropertyService, companyEquityService: context.companyEquityService }),

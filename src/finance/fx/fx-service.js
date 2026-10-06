@@ -43,6 +43,35 @@ const DEFAULT_FX_REVERSION  = 0.114;
 const FX_TICK_DT            = 1 / 12;
 
 /**
+ * Whether ECONOMIC_REGIMES contributes the FX process layer (design 120 §5.3).
+ *
+ * The rate and its walk used to live in US_AU_CROSS_BORDER, so an AU-only plan could not
+ * switch them on. ECONOMIC_REGIMES now owns them, but contributes them only when something
+ * reads them: a stochastic process model is selected, or the cross-border toolset is loaded
+ * (its transfers convert at the rate). An AU-only plan with the model at NONE gets no FX state
+ * at all, exactly as before.
+ *
+ * @param {object} context — compile context (`parameters`, `toolsetIds`)
+ * @returns {boolean}
+ */
+export function regimesContributesFxProcess(context) {
+  return (context.parameters?.fxProcessModel ?? 'NONE') !== 'NONE'
+    || (context.toolsetIds ?? []).includes('US_AU_CROSS_BORDER');
+}
+
+/**
+ * Whether US_AU_CROSS_BORDER still contributes the FX process layer itself: only when
+ * ECONOMIC_REGIMES is not in the compile, so a cross-border plan without the regime layer
+ * keeps its rate.
+ *
+ * @param {object} context
+ * @returns {boolean}
+ */
+export function crossBorderContributesFxProcess(context) {
+  return !(context.toolsetIds ?? []).includes('ECONOMIC_REGIMES');
+}
+
+/**
  * FxService — coordinator for currency-pair registration, rate/fee state
  * initialisation, settlement-account registry, and declarative contributions.
  *
@@ -103,9 +132,15 @@ export class FxService {
    * @param {object}   accountService
    * @param {object}   _stateRegistry     — reserved for future use
    * @param {object}   parameters         — scenario parameters (exchangeRateUsdToAud, intlTransferFeeUsd)
+   * @param {object}   [layers]           — which of the two layers to contribute (design 120 §5.3):
+   *   `process` is the rate and its stochastic walk (anchors, volatility, deviation, the FX tick
+   *   and the reducers that compose the rate), which ECONOMIC_REGIMES owns so an AU-only plan
+   *   can run it; `transfers` is the transfer fee, the FX_TRANSFER handler and its reducer,
+   *   which US_AU_CROSS_BORDER keeps. Both by default.
    * @returns {{ statePatches: object, events: [], handlers: object[], reducers: object[] }}
    */
-  getContributions(currencies, accountService, _stateRegistry, parameters) {
+  getContributions(currencies, accountService, _stateRegistry, parameters,
+                   { process = true, transfers = true } = {}) {
     const pairs = this._collectPairs(currencies);
 
     const model      = parameters?.fxProcessModel ?? 'NONE';
@@ -132,32 +167,38 @@ export class FxService {
       deviation[pairId] = 0;
     }
 
-    const statePatches = {
-      baseExchangeRates:      baseRates,
-      baseFxFees:             baseFees,
-      effectiveExchangeRates: { ...baseRates },
-      effectiveFxFees:        { ...baseFees },
-      // Time-varying FX layer (design 47).
-      baseFxVol:      baseVol,
-      effectiveFxVol: { ...baseVol },
-      fxDeviation:    deviation,
-      fxAnchorRates:  { ...baseRates },
-    };
+    const statePatches = {};
+    if (process) {
+      Object.assign(statePatches, {
+        baseExchangeRates:      baseRates,
+        effectiveExchangeRates: { ...baseRates },
+        // Time-varying FX layer (design 47).
+        baseFxVol:      baseVol,
+        effectiveFxVol: { ...baseVol },
+        fxDeviation:    deviation,
+        fxAnchorRates:  { ...baseRates },
+      });
+    }
+    if (transfers) {
+      Object.assign(statePatches, {
+        baseFxFees:      baseFees,
+        effectiveFxFees: { ...baseFees },
+      });
+    }
 
-    const handlers = [
-      new FxTransferToHandler({ fxService: this, accountService }),
-    ];
+    const handlers = transfers
+      ? [new FxTransferToHandler({ fxService: this, accountService })]
+      : [];
 
     const reducers = [
-      new FxRefreshReducer(),
-      new FxTransferApplyReducer({ accountService }),
-      // Always registered — no-ops when fxDeviation stays 0 (NONE model).
-      new FxProcessReducer(),
-      new FxStepApplyReducer(),
+      ...(process   ? [new FxRefreshReducer()] : []),
+      ...(transfers ? [new FxTransferApplyReducer({ accountService })] : []),
+      // Always registered with the process layer — no-ops when fxDeviation stays 0 (NONE model).
+      ...(process   ? [new FxProcessReducer(), new FxStepApplyReducer()] : []),
     ];
 
     const events = [];
-    if (fxActive) {
+    if (process && fxActive) {
       // The FX tick is the only in-loop RNG consumer; scheduled only when a
       // stochastic model is active so default scenarios draw no randomness.
       handlers.push(new FxTickHandler({

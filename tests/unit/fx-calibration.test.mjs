@@ -150,10 +150,11 @@ test('FXC-6 shipped defaults match the post-float calibration of the packaged se
   assert.ok(r.term, 'post-float window should support a term-structure fit');
   assert.equal(r.reversionSpeed, r.term.reversionSpeed);
 
-  const { US_AU_CROSS_BORDER } = await import(
-    '../../src/scenarios/toolsets/us-au-cross-border-toolset.js'
+  // The FX process params live in ECONOMIC_REGIMES since design 120 §5.3.
+  const { ECONOMIC_REGIMES } = await import(
+    '../../src/scenarios/toolsets/economic-regimes-toolset.js'
   );
-  const params = US_AU_CROSS_BORDER.paramSchema({ parameters: {} });
+  const params = ECONOMIC_REGIMES.paramSchema({ parameters: {} });
   const byKey  = Object.fromEntries(params.map((p) => [p.key, p]));
 
   // Tolerances absorb a routine FRED revision without absorbing a real shift. If this
