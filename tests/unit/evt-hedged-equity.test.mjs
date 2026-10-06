@@ -38,6 +38,14 @@
  * EVT-HDG-11 The §3 shape, on the engine's own handlers: at ρ = −0.54 unhedged ex-AU is the
  *            lower-volatility and better-diversifying holding and h* is low; at ρ = +0.16
  *            the volatility ordering reverses.
+ *
+ * Phase 4 (§5.7 INCOME) — a fund without the TOFA election:
+ * EVT-HDG-12 The split: a year with H < −D distributes nil and carries the excess; a later
+ *            year with H > 0 absorbs the carried loss first; the carry is per unit.
+ * EVT-HDG-13 ALIGNED and INCOME lots hold the same value at every year end: only the split
+ *            between price and distribution moves.
+ * EVT-HDG-14 In a run: a hedge loss bigger than the yield pays nothing and carries forward;
+ *            a hedge gain reaches the AU tax computation as unfranked ordinary income.
  */
 
 import { test } from 'node:test';
@@ -48,11 +56,13 @@ import { AuSingleHomeownerScenario } from '../../src/scenarios/au-single-homeown
 import { IntlRetirementScenario }    from '../../src/scenarios/intl-retirement-scenario.js';
 import { computeHoldingsGrowth }     from '../../src/finance/holdings/holdings-earnings.js';
 import { buildSecurityRegistry, makeSecurity } from '../../src/finance/holdings/security.js';
-import { HedgeFxMarkReducer }        from '../../src/finance/fx/hedge-fx-mark.js';
+import { HedgeYearEndReducer }        from '../../src/finance/fx/hedge-year-end.js';
 import { FxTickHandler }             from '../../src/finance/fx/fx-tick-handler.js';
 import { FX_PROCESS_MODELS }         from '../../src/finance/fx/fx-process-models.js';
 import { EquityReturnTickHandler }   from '../../src/finance/economic-regimes/equity-return-tick-handler.js';
 import { DEFAULT_EQUITY_IDIO_LOCAL } from '../../src/finance/economic-regimes/rate-keys.js';
+import { computeHoldingsDividends }  from '../../src/finance/holdings/holdings-earnings.js';
+import { incomeHedgeSplit, nextCarriedLoss } from '../../src/finance/holdings/currency-overlay.js';
 
 const AU_SPEC = {
   name: 'hdg-au', cls: AuSingleHomeownerScenario,
@@ -186,7 +196,7 @@ test('EVT-HDG-5: VGS unhedged at FX off is today; hedged gains carry − cost a 
 test('EVT-HDG-6: the year-end FX mark', () => {
   // Isolated: a pure write, input untouched.
   const before = Object.freeze({ hedgeOverlay: Object.freeze({ cost: 0.1, fxMark: { USD_AUD: 1 } }) });
-  const after  = new HedgeFxMarkReducer().reduce(before, { type: 'HEDGE_FX_MARK_APPLY', rates: { USD_AUD: 1.7 } });
+  const after  = new HedgeYearEndReducer().reduce(before, { type: 'HEDGE_YEAR_END_APPLY', rates: { USD_AUD: 1.7 } });
   assert.equal(after.hedgeOverlay.fxMark.USD_AUD, 1.7);
   assert.equal(after.hedgeOverlay.cost, 0.1);
   assert.equal(before.hedgeOverlay.fxMark.USD_AUD, 1);
@@ -194,8 +204,8 @@ test('EVT-HDG-6: the year-end FX mark', () => {
   // In a run: the mark is the rate as of the last 31 Dec, and FX moves VGS.
   const fxOn = { fxProcessModel: 'MEAN_REVERTING', randomSeed: 11 };
   const run  = runGolden(withVgs(AU_SPEC, { hedgeRatio: 0 }, fxOn));
-  assert.ok(run.firedActionTypes.has('HEDGE_FX_MARK_APPLY'));
-  const marks = run.sim.journal.journal.filter(e => e.action?.type === 'HEDGE_FX_MARK_APPLY');
+  assert.ok(run.firedActionTypes.has('HEDGE_YEAR_END_APPLY'));
+  const marks = run.sim.journal.journal.filter(e => e.action?.type === 'HEDGE_YEAR_END_APPLY');
   assert.equal(marks.length, 5, 'one mark per year-end');
   for (const e of marks) {
     const d = new Date(e.date);
@@ -300,7 +310,7 @@ test('EVT-HDG-9: in a run the 31 Dec shock steers the next year; equity is unmov
     const run = runGolden(withVgs(LONG_AU, { hedgeRatio: 0 }, { ...STOCH, randomSeed: seed }));
     const shocks = new Map(journalOf(run, 'EQUITY_RETURN_STEP_APPLY')
       .map(e => [e.action.data.marketShock.year, e.action.data.marketShock.z]));
-    const marks  = journalOf(run, 'HEDGE_FX_MARK_APPLY')
+    const marks  = journalOf(run, 'HEDGE_YEAR_END_APPLY')
       .map(e => [new Date(e.date).getUTCFullYear(), e.action.data.rates.USD_AUD]);
     for (let i = 1; i < marks.length; i++) {
       const [year, rate] = marks[i];
@@ -370,4 +380,94 @@ test('EVT-HDG-11: the §3 shape on the engine\'s own handlers', () => {
   const early = stats(0.16);
   assert.ok(early.unh > early.hed, `at +0.16 hedged is the lower-vol holding (${early.hed.toFixed(3)} < ${early.unh.toFixed(3)})`);
   assert.ok(early.hStar > 1, `h* above 1 at +0.16 (${early.hStar.toFixed(2)})`);
+});
+
+// ── Phase 4 ──────────────────────────────────────────────────────────────────────────
+
+const INCOME_SEC = { hedgeRatio: 1, hedgeTaxTreatment: 'INCOME' };
+const secOf = st => st.securities.s;
+
+test('EVT-HDG-12: the INCOME split and the carried loss', () => {
+  // d = 0.02, carry = 0.05 − 0.03 − 0.00025 = 0.01975 on a flat rate.
+  const gain = incomeHedgeSplit(lotState({ security: INCOME_SEC }), secOf(lotState({ security: INCOME_SEC })), 'EQUITY_INTL_EX_AU');
+  assert.ok(Math.abs(gain.distributed - (0.02 + 0.01975)) < 1e-12);
+  assert.equal(gain.carriedOut, 0);
+
+  // The AUD falls (a US dollar costs 10% more): the forward sold USD, so the hedge loses,
+  // H = 0.01975 − f·(1 + p) < −D. Nothing is distributed — VGAD's FY2022 and FY2023.
+  const lossState = lotState({ security: INCOME_SEC, rate: 1.65 });
+  const loss = incomeHedgeSplit(lossState, secOf(lossState), 'EQUITY_INTL_EX_AU');
+  assert.ok(loss.hedge < -loss.d);
+  assert.equal(loss.distributed, 0);
+  assert.ok(Math.abs(loss.carriedOut - (-loss.hedge - loss.d)) < 1e-12);
+  // Carried per unit: deflated by the unit price's move over the year.
+  const l1 = nextCarriedLoss(lossState, secOf(lossState), 'EQUITY_INTL_EX_AU');
+  assert.ok(l1 > 0 && l1 !== loss.carriedOut);
+
+  // Next year the hedge gains: the carried loss is absorbed before anything is paid.
+  const next = lotState({ security: INCOME_SEC });
+  next.hedgeOverlay.carriedLoss = { s: 0.03 };
+  const absorbed = incomeHedgeSplit(next, secOf(next), 'EQUITY_INTL_EX_AU');
+  assert.ok(Math.abs(absorbed.distributed - (0.02 + 0.01975 - 0.03)) < 1e-12);
+  next.hedgeOverlay.carriedLoss = { s: 0.05 };
+  const still = incomeHedgeSplit(next, secOf(next), 'EQUITY_INTL_EX_AU');
+  assert.equal(still.distributed, 0);
+  assert.ok(Math.abs(still.carriedOut - (0.05 - 0.02 - 0.01975)) < 1e-12);
+
+  // ALIGNED (or a silent treatment) never splits.
+  const al = lotState({ security: { hedgeRatio: 1 } });
+  assert.equal(incomeHedgeSplit(al, secOf(al), 'EQUITY_INTL_EX_AU'), null);
+});
+
+// Measured on one lot's year, before the 31 Dec events compound into each other: the
+// dividend event runs after the growth event and pays on the post-growth value, which moves
+// the two treatments apart by a second-order term (see EVT-HDG-14).
+test('EVT-HDG-13: ALIGNED and INCOME lots hold the same value at every year end', () => {
+  const totalOf = st => grow(st)
+    + computeHoldingsDividends({ state: st, stateKey: 'acct', fallbackRateKey: 'EQUITY_AU' }).amount;
+  for (const rate of [1.35, 1.5, 1.65]) {
+    for (const carried of [0, 0.01, 0.08]) {
+      const al = lotState({ security: { hedgeRatio: 1, hedgeTaxTreatment: 'ALIGNED' }, rate });
+      const inc = lotState({ security: INCOME_SEC, rate });
+      inc.hedgeOverlay.carriedLoss = { s: carried };
+      assert.ok(Math.abs(totalOf(al) - totalOf(inc)) <= 0.01,
+        `rate ${rate}, L ${carried}: ${totalOf(al)} vs ${totalOf(inc)}`);
+    }
+  }
+  // And the split really moves: an INCOME loss year (the AUD falls) pays no dividend.
+  const inc = lotState({ security: INCOME_SEC, rate: 1.65 });
+  assert.equal(computeHoldingsDividends({ state: inc, stateKey: 'acct', fallbackRateKey: 'EQUITY_AU' }).amount, 0);
+});
+
+test('EVT-HDG-14: INCOME in a run — nil distributions carry forward; gains are ordinary income', () => {
+  const unfranked = run => journalOf(run, 'AU_DIVIDEND_UNFRANKED_RESIDENT_APPLY')
+    .concat(journalOf(run, 'AU_DIVIDEND_UNFRANKED_RESIDENT_CASH_APPLY'))
+    .filter(e => new Date(e.date).getUTCFullYear() === 2026)
+    .reduce((a, e) => a + e.action.data.amount, 0);
+
+  // A US policy rate far above the AU one: the hedge loses ~3.7% a year, more than the
+  // yield. (AU Single Homeowner loads US_BANKING through US_BROKERAGE, so its carry runs
+  // off the US Prime rather than `hedgeForeignCashRate`.)
+  const lossy = { usPrimeRate: 0.08 };
+  const al  = runGolden(withVgs(AU_SPEC, { hedgeRatio: 1 }, lossy));
+  const inc = runGolden(withVgs(AU_SPEC, INCOME_SEC, lossy));
+  assert.ok(unfranked(al) > 0, 'ALIGNED pays the yield');
+  assert.equal(unfranked(inc), 0, 'INCOME pays nothing in a year its hedge lost more than the yield');
+  assert.ok(inc.state.hedgeOverlay.carriedLoss['sec-vgs'] > 0, 'the excess is carried');
+  assert.ok(inc.firedActionTypes.has('HEDGE_YEAR_END_APPLY'), 'a flat rate still needs the year end');
+
+  // A US rate of zero: the hedge gains ~4.3% a year, paid on top of the yield and
+  // assessed through the unfranked branch, i.e. as ordinary income with no discount.
+  const gainy = { usPrimeRate: 0 };
+  const alG  = runGolden(withVgs(AU_SPEC, { hedgeRatio: 1 }, gainy));
+  const incG = runGolden(withVgs(AU_SPEC, INCOME_SEC, gainy));
+  const carry = 0.0435 - 0 - 0.00025;
+  const ratio = unfranked(incG) / unfranked(alG);
+  const yld   = alG.state.marketDividendYields.EQUITY_INTL_EX_AU;
+  // The dividend event runs after the growth event on 31 Dec, so it pays on the lot's
+  // post-growth value, and an INCOME lot's is lower by H (the gain went to the dividend
+  // instead): (d + H)/d scaled by 1/(1 + H). Second order, and the same for every dividend.
+  const expected = (yld + carry) / yld / (1 + carry);
+  assert.ok(Math.abs(ratio / expected - 1) < 0.005,
+    `INCOME distributes yield + hedge gain (ratio ${ratio.toFixed(3)} vs ${expected.toFixed(3)})`);
 });

@@ -173,7 +173,7 @@ export const COVERED = [
   // Time-varying FX (design 47) — evt-fx-process.test.mjs
   'FxProcessReducer', 'FxStepApplyReducer',
   // Currency-hedge FX mark (design 120 §5.6) — evt-hedged-equity.test.mjs
-  'HedgeFxMarkReducer',
+  'HedgeYearEndReducer',
 
   // H — spending (reducer-postconditions-spending.test.mjs)
   'SpendingStrategyApplyReducer', 'AgeBandedSpendingReducer', 'GuardrailBaselineApplyReducer',

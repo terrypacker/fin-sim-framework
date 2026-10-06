@@ -1733,7 +1733,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `FX_TRANSFER_APPLY` | from: text, to: text, fromAmount: number, toAmount: number, rate: number, fee: currency(USD), section988: any | US_AU_CROSS_BORDER |
 | `GUARDRAIL_ADJUST_APPLY` | multiplier: number, cause: text, date: any | AU_RETIREMENT, US_RETIREMENT |
 | `GUARDRAIL_BASELINE_APPLY` | initialWithdrawalRate: number, portfolioValue: number, annualSpending: number, date: any | AU_RETIREMENT, US_RETIREMENT |
-| `HEDGE_FX_MARK_APPLY` | rates: any | ECONOMIC_REGIMES |
+| `HEDGE_YEAR_END_APPLY` | rates: any, carriedLoss: any | ECONOMIC_REGIMES |
 | `HOUSE_REPAIR_APPLY` | stateKey: text, amount: number, capitalize: number | US_RETIREMENT |
 | `INFLATION_STEP_APPLY` | deviation: any, latent: any, floor: number, historicalYear: number, passThrough: any, primeDeviation: any, primeFloor: any | ECONOMIC_REGIMES |
 | `INHERIT_APPLY` | stateKey: text, name: text, category: text, country: text, inheritedValue: number, usCitizen: text, auResident: text, inheritanceDateMs: number | INHERITANCE |
@@ -2199,7 +2199,7 @@ what the in-app panel keys on.
 | [Cost Basis and Company Equity](concepts/cost-basis-and-equity.md) | concept | 247 | 2 panels · 3 params · design 94, 72 |
 | [Field × Action](panels/cross-action-query.md) | panel | 196 | 1 panel |
 | [Cross-Border Residency](concepts/cross-border-residency.md) | concept | 265 | 2 panels · 4 params · design 36, 52 |
-| [Currency Hedging](concepts/currency-hedging.md) | concept | 474 | 3 params · 1 action · design 120 |
+| [Currency Hedging](concepts/currency-hedging.md) | concept | 411 | 3 params · 1 action · design 120 |
 | [Dashboard](panels/dashboard.md) | panel | 183 | 1 panel |
 | [Decision Graph](panels/dg-config.md) | panel | 168 | 1 panel · design 30 |
 | [DG Results](panels/dg-results.md) | panel | 162 | 1 panel · design 30 |

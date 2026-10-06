@@ -15,7 +15,7 @@ recommendations by asking for the build.
 - **Phase 2 BUILT** (6 Oct). `hedgeRatio` and `hedgeTaxTreatment` are security fields,
   validated where a security is built. The overlay is `currency-overlay.js`, applied in
   `computeHoldingsGrowth` as an additive Δ so that h = 0 on a flat rate is today to the bit.
-  - **R_start is a year-end mark of its own:** `HEDGE_FX_MARK` at order 0.5 on 31 Dec,
+  - **R_start is a year-end mark of its own:** `HEDGE_YEAR_END` at order 0.5 on 31 Dec,
     after every order-0 earnings event and before an order-1 FX tick. A per-account mark
     would let the first account marked on a 31 Dec move R_start under the others. The
     event and `state.hedgeOverlay` exist only once a security declares a ratio (and the
@@ -53,6 +53,26 @@ recommendations by asking for the build.
   - **Not done:** the paired VGS-against-VGAD Monte Carlo A/B on AU Single Homeowner
     (§6 phase 3). It is a study, so its results belong in `scenarios/`. It runs once phase 5
     adds VGAD.
+- **Phase 4 BUILT** (6 Oct). `INCOME` is `incomeHedgeSplit` in `currency-overlay.js`.
+  The dividend path pays D′ and the price path keeps D − D′. Both read the same
+  security-level split, built from the market's shared rate rather than any account's
+  seeded rate, because L belongs to the fund.
+  - **The year-end event became `HEDGE_YEAR_END`** (it was `HEDGE_FX_MARK` in phase 2). It
+    stamps `carriedLoss` beside the FX mark. It runs for an `INCOME` security even with FX
+    at NONE, because a negative carry is a hedge loss every year.
+  - **L is held per dollar and deflated by the unit price's move each year,** so it stays a
+    per-unit amount without needing unitised lots.
+  - **Character:** D′ goes out through the AU brokerage's existing unfranked-resident
+    branch, which already treats an ex-AU distribution as ordinary assessable income with
+    no gross-up, offset or discount. A positive H needs nothing more. The positive-H part is
+    not tagged separately in the journal.
+  - **A second-order gap, older than this design:** on 31 Dec the dividend event runs after
+    the growth event and pays on the post-growth value. So `ALIGNED` and `INCOME` lots match
+    exactly over one year's split (EVT-HDG-13) and drift apart by about H·D a year in a run.
+    The same ordering already makes every dividend (1 + p)·d rather than d.
+  - **§2 was wrong about AU Single Homeowner:** it loads US_BANKING through US_BROKERAGE,
+    so `PRIME_US` is in state and the carry uses it. `hedgeForeignCashRate` is for a plan
+    that truly has no US prime.
 
 - **Rev 2** (5 Oct) added the Rest, RBA, MSCI and cost sources (§3.1–3.5) and Q7, the
   FX–equity correlation.

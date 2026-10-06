@@ -17,7 +17,7 @@ import { couponlessYield }          from '../economic-regimes/couponless-yield.j
 import { addValue, isUnitised } from './holding-utils.js';
 import { RATE_KEYS }                from '../economic-regimes/rate-keys.js';
 import { frankingCreditOn }         from '../tax/au/franking.js';
-import { currencyOverlay }          from './currency-overlay.js';
+import { currencyOverlay, incomeHedgeSplit, fxExposureOf } from './currency-overlay.js';
 
 /**
  * Whether a BOND holding's coupon is EXEMPT from US FEDERAL income tax
@@ -318,7 +318,12 @@ export function computeHoldingsGrowth({
     const fx      = useCoupon ? null : currencyOverlay({
       state, account, inst, rateKey: inst.rateKey ?? fallbackRateKey, g: schedRate,
     });
-    const hRate   = fx && fx.delta !== 0 ? schedRate + fx.delta : schedRate;
+    // §5.7 INCOME — where the yield is paid out beside this price, the hedge result moves
+    // the distribution instead: the price keeps D − D′ of what the dividend no longer pays.
+    const split   = fx && yieldPaidSeparately
+      ? incomeHedgeSplit(state, inst, inst.rateKey ?? fallbackRateKey) : null;
+    const fxDelta = (fx?.delta ?? 0) + (split ? split.d - split.distributed : 0);
+    const hRate   = fxDelta !== 0 ? schedRate + fxDelta : schedRate;
     const growth  = +(mv * hRate * factor).toFixed(2);
     total += growth;
     // Design 84 G2 — carve the DERIVED slice out of the same return, without
@@ -436,7 +441,10 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
     // taxable lot's price growth and its dividend always sum to the market's total.
     const yld = baseDividendYield(h, inst, state, fallbackRateKey, fallbackYield);
     const rk  = inst.rateKey ?? fallbackRateKey;
-    const div = +(mv * effYield(yld, rk)).toFixed(2);
+    // Design 120 §5.7 INCOME — a hedged fund without the TOFA election distributes
+    // D′ = max(0, D + H − L) rather than its yield, on a lot held in the fund's currency.
+    const split = fxExposureOf(rk, account) ? incomeHedgeSplit(state, inst, rk) : null;
+    const div = +(mv * (split ? split.distributed : effYield(yld, rk))).toFixed(2);
     total += div;
     if (div !== 0) {
       // `securityId ?? null` — an un-securitised lot is its own instrument (design 94
