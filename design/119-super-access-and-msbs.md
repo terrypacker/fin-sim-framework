@@ -1,7 +1,7 @@
 # 119 — Super access dates, multiple funds and MSBS
 
 **Status:** ACCEPTED, rev 5, 5 Oct 2026. Q1–Q5 (§9) are answered by the author, and
-§3 records the decisions. **Phases 1–5 BUILT** 5 Oct 2026 (multiple funds §6.3; release date §6.2; draw date and pension phase §6.1; the MSBS account §6.4, preserved and drawn, built as §6.4.1–6.4.2 record); phase 6 not started. Rev 4 adds the CSC documents and the
+§3 records the decisions. **COMPLETE: phases 1–6 BUILT** 5 Oct 2026 (multiple funds §6.3; release date §6.2; draw date and pension phase §6.1; the MSBS account §6.4, preserved and drawn, built as §6.4.1–6.4.2 record; help and the side figure, phase 6). §6.5 was never phased and stays open. Rev 4 adds the CSC documents and the
 valuation law (§5.6), which settle the tax and total-super-balance questions. Rev 5
 closes the last two points (§5.7). No source questions remain open.
 
@@ -427,7 +427,8 @@ summed total super balance then includes the MSBS account.
   current one pays the existing fund until 1 Jul 2036, and the next one pays a second fund
   opened for it. The two static wage and retirement params went with the flat salary;
   the jobs' generated `job.` levers sweep them now.
-- **Not yet**: the unfunded part as a side figure in the panels (phase 6).
+- **The unfunded part as a side figure**: `metrics.msbsUnfundedBenefit` (phase 6), which any
+  chart or watchlist can plot beside net worth.
 
 ### 6.4.2 As built (phase 5)
 
@@ -470,6 +471,9 @@ summed total super balance then includes the MSBS account.
 
 ### 6.5 Retire the dormant handlers
 
+*Not phased, and still open after phase 6.* Their tests are load-bearing (see below), so
+retiring them is a change of its own.
+
 Delete `SuperWithdrawal*Handler` and the `*_APPLY` reducers that read `state.superAccount`,
 or key them to `stateKey`. Check `tests/` first: they back reducer-postcondition and
 spending-classification tests.
@@ -484,7 +488,7 @@ spending-classification tests.
 | 3 | **BUILT.** `drawStartDate` on ordinary accounts, pension phase from the effective start, the date sweep. `auSuperDrawStartMs` (`super-release.js`) is the one effective start: the gate and `superEarningsTaxRate(drawStartMs, asOf)` both read it, so the bond-income and capital-gain reducers follow. Lever `acct.<key>.drawStartDate` (Opt only, no `sweepUnset`: blank is a default, not an absent event), declared in `AU_RETIREMENT.derivedState` so a rollout takes it from the candidate. Tests `super-draw-start.test.mjs` | two moved, both by fund tax a member now pays from 60 until their job ends: au-single-homeowner (works to 65) ends with \$206k less super, \$45k at retirement compounded over 20 years of drawdown; cross-border-reference (works to 61¾) \$11.6k less |
 | 4 | **BUILT.** `MsbsAccount` from a statement: the fields, the member sleeve, the Balanced funded sleeve, the unfunded benefit with r 61A indexation, preserved before the draw; total super balance value from Table 1. `msbs.js`, `msbs-classes.js`, `msbs-valuation-factors.js` (parsed from the Approval text). The AU Single Homeowner plan is the worked example (§6.4.1). Tests `msbs-preserved.test.mjs` | au-single-homeowner moved: the plan gained two jobs, a second fund and the MSBS account |
 | 5 | **BUILT.** MSBS draw: the window, `MSBS_ELECTION_APPLY`, the Sch 5 pension and r 56 indexation, the lump-sum routing, `pensionShare`; pension tax with the taxed/untaxed split and the defined benefit income cap; total super balance from Table 4A; survivor pension at 67% (r 42, Sch 4 Table 1, checked). §6.4.2. Tests `msbs-pension.test.mjs` | au-single-homeowner and au-super-streams moved: the example elects a full pension at 60 |
-| 6 | Help topics (`help/nodes/account.md`, `job.md`), editors, restamp | none |
+| 6 | **BUILT.** Help topics (`help/nodes/account.md`, `job.md`, and a new concept topic, `help/concepts/superannuation.md`), editors, restamp. The side figure: `metrics.msbsUnfundedBenefit`, the unfunded employer benefit in base currency, beside net worth and never in it, falling to 0 at the election. The account editor gained its MSBS fields in phases 3–5, as each field arrived | the new metric only (au-single-homeowner, au-super-streams) |
 
 ## 8. Not in this design
 

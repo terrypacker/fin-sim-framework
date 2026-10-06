@@ -35,7 +35,7 @@ ordinary gain or loss. See [Liquidity Pools](../concepts/liquidity-pools.md) and
 
 **Super** opens at its owner's preservation age once they stop working, when any job
 held at 60 or later ends, or at 65. **Draw Start Date** waits longer, at the cost of
-fund tax until then; Opt searches it.
+fund tax; see [Superannuation Access](../concepts/superannuation.md).
 
 ## Fields
 

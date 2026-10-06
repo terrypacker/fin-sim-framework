@@ -255,6 +255,8 @@ export class StateSchemaRegistry {
     // hold a speculative asset, but registered unconditionally so it formats as money
     // the moment it appears rather than rendering as a bare number.
     this.register('metrics.netWorthInclSpeculative', ParameterValueType.currency('USD'));
+    // Design 119 §6.4 — the MSBS unfunded employer benefit, beside net worth, not in it.
+    this.register('metrics.msbsUnfundedBenefit', ParameterValueType.currency('USD'));
     // After-tax re-priced aggregates (design/40) — USD-normalized like the above.
     this.register('metrics.afterTaxNetWorth',     ParameterValueType.currency('USD'));
     this.register('metrics.afterTaxNetLiquidity', ParameterValueType.currency('USD'));

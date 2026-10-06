@@ -847,6 +847,7 @@
  },
  "marketIndexAsOfMs": 3029443200000,
  "metrics": {
+  "msbsUnfundedBenefit": 0,
   "netLiquidity": 4826462.24,
   "netWorth": 7616941.45,
   "offsetAppliedCapacity": 0,

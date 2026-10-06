@@ -19,7 +19,7 @@
  *   MSB-5: the family law value interpolates Table 1 by month (Approval Sch 1 Pt 4 item 2.1)
  *   MSB-6: contributions never reach an MSBS account
  *   MSB-7: the account survives save/load and projects its employer benefit into state
- *   MSB-8: net worth counts the funded part, and the allocation cube ties to it
+ *   MSB-8: net worth counts the funded part, the cube ties to it, and the unfunded part is a side metric
  *   MSB-9: in the AU Single Homeowner plan, the benefit is indexed and grown, then paid as a pension
  *   MSB-10: the two reducers are pure, ignore a missing target, and stop at the election
  *
@@ -39,7 +39,7 @@ import { superFundOptions }     from '../../src/visualization/people/jobs-sectio
 import { MsbsAccount }          from '../../src/finance/assets/investment-account.js';
 import { ScenarioSerializer }   from '../../src/scenarios/scenario-serializer.js';
 import { accountToStatePlain }  from '../../src/scenarios/toolsets/account-state-projection.js';
-import { computeNetWorth }      from '../../src/finance/derived-metrics/net-worth.js';
+import { computeNetWorth, deriveNetWorth } from '../../src/finance/derived-metrics/net-worth.js';
 import { buildAllocationCube }  from '../../src/finance/allocation-reporting/allocation-cube.js';
 import { MsbsFundedEarningsApplyReducer, MsbsUnfundedIndexReducer }
   from '../../src/finance/account-rules/au/msbs-classes.js';
@@ -164,6 +164,17 @@ test('MSB-8 net worth counts the funded part, and the allocation cube ties to it
   assert.deepEqual(parts.map(p => p.allocation), ['EQUITY', 'EQUITY', 'BOND', 'CASH']);
   const cube = buildAllocationCube(state, { baseCurrency: 'AUD' });
   assert.equal(+cube.reduce((s, r) => s + r.marketValue, 0).toFixed(2), 85_000.01);
+
+  // The unfunded part is a side figure (design 119 §6.4, phase 6), kept fresh to 0.
+  deriveNetWorth(state, 'AUD');
+  assert.equal(state.metrics.msbsUnfundedBenefit, 140_000);
+  assert.equal(state.metrics.netWorth, 85_000.01, 'and still not in net worth');
+  state.msbsAccount.employerBenefit.unfunded = 0;
+  deriveNetWorth(state, 'AUD');
+  assert.equal(state.metrics.msbsUnfundedBenefit, 0, 'falls to 0 at the election, not frozen');
+  const plain = { checking: { balance: 1 } };
+  deriveNetWorth(plain, 'AUD');
+  assert.ok(!('msbsUnfundedBenefit' in plain.metrics), 'absent from a plan with no MSBS');
 });
 
 test('MSB-9 in the AU Single Homeowner plan, the benefit is indexed and grown, then paid as a pension', () => {
