@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-226 parameters · 33 panels · 12 node types (203 fields) · 179 action types · 87 tools · 310 state field types · 78 topics · 128 design docs
+226 parameters · 33 panels · 12 node types (205 fields) · 179 action types · 87 tools · 317 state field types · 78 topics · 128 design docs
 
 ---
 
@@ -584,7 +584,7 @@ menu files it under.
 
 ---
 
-## Node types (12 kinds · 203 fields)
+## Node types (12 kinds · 205 fields)
 
 Every kind of record the Nodes panel can open, and every control its edit form offers.
 The inventory is read from the FORM — the `<template>` in `index.html` the editor
@@ -959,7 +959,7 @@ Explained in [`help/nodes`](nodes/bequest.md). 1 field(s) described by a record 
 - **`paidViaEstate`** — AU super paid via estate (no +2% Medicare) · `check` · topic
   Tick when an Australian super death benefit is paid to the estate rather than directly to the beneficiary. It avoids the additional 2% Medicare levy on the taxable component, which is the whole of the difference; the 15% (or 30%) tax on the taxable component paid to a non-dependant applies either way.
 
-### Securities — `security` (17 fields)
+### Securities — `security` (19 fields)
 
 Explained in [`help/nodes`](nodes/security.md). 0 field(s) described by a record parameter.
 
@@ -979,6 +979,10 @@ Explained in [`help/nodes`](nodes/security.md). 0 field(s) described by a record
   Overrides the lot's own yield; the account rate remains the floor beneath both.
 - **`identityGroup`** — Identity group · `text` · topic
   Marks two different securities as substantially identical for the wash-sale rule, which only relates them when an author says so. Give both the same group. Silent means identical to itself and nothing else.
+- **`hedgeRatio`** — Hedge ratio · `number` · topic
+  The fraction of a foreign-market fund's currency exposure it hedges, 0 to 1. Declaring one — even 0 — opts the security's lots into the currency overlay wherever their market is foreign to their account: the unhedged part takes the exchange rate's yearly move, the hedged part earns the policy-rate gap less a small cost. Silent keeps today's behaviour until the plan models the currency, when a silent lot is treated as unhedged (super: a quarter hedged).
+- **`hedgeTaxTreatment`** — Hedge tax treatment · `select` · topic
+  Whether the fund has made the TOFA hedging election. With it (the default), hedge gains and losses stay in the unit price and are taxed when you sell. Without it they move the distribution: a gain is paid out as ordinary income, and a loss shrinks the distribution, to nothing when it is larger, with the rest carried inside the fund against later years.
 - **`taxExemption`** — Coupon tax treatment · `select` · topic
   How this instrument's bond coupons are taxed: fully taxable, Treasury (state-exempt), municipal (federal-exempt), or exempt everywhere. A declared value overrides the lot's.
 - **`issuingState`** — Issuing state · `text` · topic
@@ -1849,7 +1853,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 
 ---
 
-## State field types (310)
+## State field types (317)
 
 The scenario-INDEPENDENT half of `StateSchemaRegistry`: the globs and exact paths it
 installs in its own constructor, with the value type that decides how each formats.
@@ -2023,6 +2027,8 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `effectiveInflationRates.*` | rate |
 | `effectiveInterestRates.*` | rate |
 | `equityInflationPassThrough.*` | rate |
+| `equityMarketShock.year` | integer |
+| `equityMarketShock.z` | decimal |
 | `equityReturnBootstrap.index` | integer |
 | `equityReturnBootstrap.remaining` | integer |
 | `equityReturnBootstrap.year` | integer |
@@ -2045,6 +2051,10 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `ftcYTD` | currency(USD) |
 | `fxAnchorRates.*` | fxRate |
 | `fxDeviation.*` | decimal |
+| `hedgeOverlay.carriedLoss.*` | rate |
+| `hedgeOverlay.cost` | rate |
+| `hedgeOverlay.foreignCashRate` | rate |
+| `hedgeOverlay.fxMark.*` | fxRate |
 | `inflationAccumulator` | decimal |
 | `inflationAccumulator.*` | decimal |
 | `inflationDev.*` | rate |
@@ -2103,6 +2113,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `scenarioFailed` | boolean |
 | `securities.*.beta` | decimal |
 | `securities.*.dividendYield` | rate |
+| `securities.*.hedgeRatio` | percentage |
 | `securities.*.idioVol` | decimal |
 | `securityIndex.*.price` | index |
 | `securityIndex.*.total` | index |
@@ -2199,7 +2210,7 @@ what the in-app panel keys on.
 | [Cost Basis and Company Equity](concepts/cost-basis-and-equity.md) | concept | 247 | 2 panels · 3 params · design 94, 72 |
 | [Field × Action](panels/cross-action-query.md) | panel | 196 | 1 panel |
 | [Cross-Border Residency](concepts/cross-border-residency.md) | concept | 265 | 2 panels · 4 params · design 36, 52 |
-| [Currency Hedging](concepts/currency-hedging.md) | concept | 411 | 3 params · 1 action · design 120 |
+| [Currency Hedging](concepts/currency-hedging.md) | concept | 400 | 3 params · 1 action · design 120 |
 | [Dashboard](panels/dashboard.md) | panel | 183 | 1 panel |
 | [Decision Graph](panels/dg-config.md) | panel | 168 | 1 panel · design 30 |
 | [DG Results](panels/dg-results.md) | panel | 162 | 1 panel · design 30 |

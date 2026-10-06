@@ -645,6 +645,17 @@ export class StateSchemaRegistry {
     this.registerPattern('securities.*.beta',          ParameterValueType.decimal(2));
     this.registerPattern('securities.*.idioVol',       ParameterValueType.decimal(2));
     this.registerPattern('securities.*.dividendYield', ParameterValueType.rate());
+    this.registerPattern('securities.*.hedgeRatio',    ParameterValueType.percentage());
+
+    // The currency hedge overlay (design 120): its rates, the year-end FX mark and the
+    // losses INCOME-treated funds carry (per dollar of value), and the equity market shock
+    // the FX tick correlates with.
+    this.register('hedgeOverlay.cost',                 ParameterValueType.rate());
+    this.register('hedgeOverlay.foreignCashRate',      ParameterValueType.rate());
+    this.registerPattern('hedgeOverlay.fxMark.*',      ParameterValueType.fxRate());
+    this.registerPattern('hedgeOverlay.carriedLoss.*', ParameterValueType.rate());
+    this.register('equityMarketShock.year',            ParameterValueType.integer());
+    this.register('equityMarketShock.z',               ParameterValueType.decimal(4));
 
     // US payroll, withholding, §988 and 401(k) accumulators — the US return is in USD.
     this.register('usSeEarningsYTD',               ParameterValueType.currency('USD'));

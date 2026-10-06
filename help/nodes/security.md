@@ -10,8 +10,8 @@ stamps:
   panel:config-list: c29391
   panel:securities: b9f2ef
   panel:holdings: 962055
-  node:security: 644d74
-  src/visualization/assets/security-editor.js: e79b48
+  node:security: 353b8a
+  src/visualization/assets/security-editor.js: 665041
 ---
 
 An instrument definition: what a position is a position *in*. A lot in an account
@@ -46,6 +46,8 @@ rather than an edit here.
 - `idioVol` — Idiosyncratic volatility. A security declaring more than zero takes a random draw every tick whether or not any position holds it, because the draw set is the registry rather than the portfolio — so declaring one perturbs the whole run. Zero, or silent, draws nothing.
 - `dividendYield` — Overrides the lot's own yield; the account rate remains the floor beneath both.
 - `identityGroup` — Marks two different securities as substantially identical for the wash-sale rule, which only relates them when an author says so. Give both the same group. Silent means identical to itself and nothing else.
+- `hedgeRatio` — The fraction of a foreign-market fund's currency exposure it hedges, 0 to 1. Declaring one — even 0 — opts the security's lots into the currency overlay wherever their market is foreign to their account: the unhedged part takes the exchange rate's yearly move, the hedged part earns the policy-rate gap less a small cost. Silent keeps today's behaviour until the plan models the currency, when a silent lot is treated as unhedged (super: a quarter hedged).
+- `hedgeTaxTreatment` — Whether the fund has made the TOFA hedging election. With it (the default), hedge gains and losses stay in the unit price and are taxed when you sell. Without it they move the distribution: a gain is paid out as ordinary income, and a loss shrinks the distribution, to nothing when it is larger, with the rest carried inside the fund against later years.
 - `taxExemption` — How this instrument's bond coupons are taxed: fully taxable, Treasury (state-exempt), municipal (federal-exempt), or exempt everywhere. A declared value overrides the lot's.
 - `issuingState` — The municipal issuer's state. The coupon is state-exempt only when it matches the resident's own state, which is the whole reason this is a field and not a flag.
 - `parPerUnit` — Face value of one unit. The units substrate checks its par walk against it.

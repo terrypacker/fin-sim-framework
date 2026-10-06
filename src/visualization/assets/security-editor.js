@@ -68,6 +68,12 @@ export const FIELD_SPECS = Object.freeze([
   { field: 'dividendYield', label: 'Dividend yield', kind: 'number', step: '0.001', section: 'equity' },
   { field: 'identityGroup', label: 'Identity group', kind: 'text', section: 'equity' },
 
+  // Design 120 — read by the currency overlay (`currency-overlay.js`) on a lot whose market
+  // is foreign to its account, and by the dividend and price split for INCOME.
+  { field: 'hedgeRatio', label: 'Hedge ratio', kind: 'number', step: '0.05', section: 'hedge' },
+  { field: 'hedgeTaxTreatment', label: 'Hedge tax treatment', kind: 'select', section: 'hedge',
+    options: [['ALIGNED', 'Hedging election (in the price)'], ['INCOME', 'No election (in the distribution)']] },
+
   { field: 'taxExemption', label: 'Coupon tax treatment', kind: 'select', section: 'bond',
     options: [['none', 'Taxable'], ['state', 'Treasury (state-exempt)'],
               ['federal', 'Municipal (federal-exempt)'], ['both', 'Muni (all-state)']] },
@@ -99,6 +105,7 @@ export const SECURITY_FORM_FIELDS = Object.freeze([ID_FIELD_SPEC, ...FIELD_SPECS
 const SECTIONS = Object.freeze([
   { key: 'id',     label: 'Identity' },
   { key: 'equity', label: 'Instrument' },
+  { key: 'hedge',  label: 'Currency hedge' },
   { key: 'bond',   label: 'Fixed income' },
 ]);
 

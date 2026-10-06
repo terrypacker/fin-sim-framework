@@ -633,6 +633,11 @@
  "ftcPoolGeneral": {},
  "ftcPoolPassive": {},
  "ftcPoolResourced": {},
+ "hedgeOverlay": {
+  "cost": 0.00025,
+  "foreignCashRate": 0.045,
+  "fxMark": {}
+ },
  "inflationAccumulator": {
   "AU": 1.22987386542,
   "US": 1.22987386542
@@ -1065,6 +1070,7 @@
    "symbol": "REST AU Index"
   },
   "sec-rest-os-index": {
+   "hedgeRatio": 0,
    "id": "sec-rest-os-index",
    "name": "REST Overseas Shares – Indexed",
    "rateKey": "EQUITY_INTL_EX_AU",
@@ -1076,7 +1082,16 @@
    "rateKey": "EQUITY_AU",
    "symbol": "VAS"
   },
+  "sec-vgad": {
+   "hedgeRatio": 1,
+   "hedgeTaxTreatment": "ALIGNED",
+   "id": "sec-vgad",
+   "name": "Vanguard MSCI Index International Shares (Hedged) ETF",
+   "rateKey": "EQUITY_INTL_EX_AU",
+   "symbol": "VGAD"
+  },
   "sec-vgs": {
+   "hedgeRatio": 0,
    "id": "sec-vgs",
    "name": "Vanguard MSCI Index International Shares ETF",
    "rateKey": "EQUITY_INTL_EX_AU",
@@ -1111,6 +1126,10 @@
   "sec-vas": {
    "price": 125.26197045,
    "total": 157.452998613
+  },
+  "sec-vgad": {
+   "price": 150.661167957,
+   "total": 165.904914006
   },
   "sec-vgs": {
    "price": 150.661167957,

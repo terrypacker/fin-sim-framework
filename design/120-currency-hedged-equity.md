@@ -1,6 +1,6 @@
 # 120 — Currency-hedged and unhedged foreign equity
 
-**Status:** ACCEPTED, rev 3, 6 Oct 2026; building (§6). The author accepted the §8
+**Status:** BUILT, phases 1–5 (6 Oct 2026); rev 3. The author accepted the §8
 recommendations by asking for the build.
 
 - **Phase 1 BUILT** (6 Oct). The FX process (`fxProcessModel`, `fxVolatility`,
@@ -73,6 +73,23 @@ recommendations by asking for the build.
   - **§2 was wrong about AU Single Homeowner:** it loads US_BANKING through US_BROKERAGE,
     so `PRIME_US` is in state and the carry uses it. `hedgeForeignCashRate` is for a plan
     that truly has no US prime.
+- **Phase 5 BUILT** (6 Oct).
+  - **Super role default 0.255** (`DEFAULT_HEDGE_RATIO_BY_ROLE`). It applies to a silent
+    lot only once the sleeve is re-based (Q6), so FX at NONE still moves nothing.
+  - **Security editor:** a "Currency hedge" section with `hedgeRatio` and
+    `hedgeTaxTreatment`, validated by `makeSecurity`. The prose is in
+    `help/nodes/security.md`. Checked in the browser on VGAD.
+  - **AU Single Homeowner:** REST OS Index and VGS state `hedgeRatio: 0`. VGAD
+    (`hedgeRatio: 1`, `ALIGNED`) is in the registry with no lots, ready to switch a VGS lot
+    to.
+  - **Goldens:** au-single-homeowner and au-super-streams were regolded. Only fields were
+    added (`hedgeOverlay`, the stated ratios, VGAD's record and its index level). No balance
+    or tax figure moved.
+  - **Still open:**
+    - The paired VGS-against-VGAD Monte Carlo A/B (a study for `scenarios/`).
+    - The §6 Later items: FX replay in the bootstrap, and a parity switch.
+    - VGAD's `securityIndex` (design 101) tracks the unhedged market, as every index does
+      today.
 
 - **Rev 2** (5 Oct) added the Rest, RBA, MSCI and cost sources (§3.1–3.5) and Q7, the
   FX–equity correlation.
