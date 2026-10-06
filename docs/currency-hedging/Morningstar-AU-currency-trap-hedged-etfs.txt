@@ -1,0 +1,244 @@
+
+Young & Invested: The currency trap catching ETF investors off guard 
+Skip to Content
+Search
+Home
+Markets
+Investments
+News and Insights
+Learn
+Products
+Solutions
+About
+Market Centre
+Australia
+United States
+Europe
+Asia
+Market Report
+ASX Market Report
+Roundup of ASX market movements
+Market Calendar
+Upcoming Dividends
+Dividend payments in the coming 90 days
+Discover Investments
+Investment Ideas
+ Read the latest investing news and insights 
+Top Stories
+Markets
+Personal Finance
+Retirement
+Stocks
+ETFs
+Funds
+Fixed Income
+Industry Insights
+Adviser Spotlight
+Manager Spotlight
+Firstlinks
+Investing content
+Investing guides
+Webinars
+Podcasts
+Articles
+Learn to invest in...
+Stocks
+Bonds
+ETFs/Funds
+How to invest
+Getting started
+Goals based portfolio construction
+Portfolio maintenance
+Retirement strategies
+Our research
+Morningstar equity research methodology
+Morningstar manager research methodology
+Our Solutions
+For Advisers
+For Licensees & Self-Licensed Practices
+For Asset Managers
+For Individual Investors
+ Featured Products and Services 
+AdviserLogic
+Adviser Research Centre
+FinaMetrica
+Morningstar Direct
+Morningstar Investment Management
+Licensee Dashboard & CRM
+Morningstar Essentials
+Morningstar Indexes
+Morningstar Data
+PayLogic
+Morningstar Investor
+Sustainalytics
+The Company
+Our Story
+Our Methodology
+Morningstar Investment Conference for Financial Professionals
+Subscribe to our newsletters
+Advertise with Us
+Careers
+Contact Us
+ETFs
+Young & Invested: The currency trap catching ETF investors off guard 
+Why your fund’s currency exposure matters more than you think. 
+Simonelle Mody
+25 February 2026
+ Article Page URL has been copied to clipboard for sharing. 
+Mentioned
+: 
+iShares S&P 500 ETF (
+IVV
+)
+, 
+Vanguard MSCI Intl (Hdg) ETF (
+VGAD
+)
+, 
+iShares S&P 500 AUD Hedged ETF (
+IHVV
+)
+, 
+VanEck MSCI Intl Quality (AUD Hdg) ETF (
+QHAL
+)
+, 
+Betashares Global Shares Ccy Hdg ETF (
+HGBL
+)
+, 
+iShares Core MSCI Wld ex Aus ESG AUHDETF (
+IHWL
+)
+, 
+Betashares Nasdaq 100 Currency H ETF (
+HNDQ
+)
+, 
+Vanguard MSCI Intl ETF (
+VGS
+)
+Welcome to my column, 
+Young & Invested
+, where I discuss personal finance and investing for Gen Z and Millennials. 
+This column aims to be a resource for young investors navigating an ever changing financial, political and social landscape as they try to build wealth. Tune in every Thursday for the latest edition. 
+Edition 52 
+When was the last time you checked your portfolio? I’ve recently managed to break the habit of logging in every week – although mostly by replacing it with some high-quality viewing in my downtime (Married at First Sight). 
+Curiosity got the better of me this weekend, so I opened my portfolio and something caught my eye. My US equity ETF had a negative return year to date. A quick look at the S&P 500 showed minimal signs of a slump. So, what gives? 
+Source: Morningstar. Year to date performance of IVV ETF vs S&P 500. 
+Investing in global ETFs is one of the easiest ways for Aussies to tap into overseas markets. But we’re not just buying exposure to international companies, we’re also taking on the currency those companies are priced in. Most of the time we focus on the first and forget the second. But as my portfolio reminded me, the exchange rate can have just as much impact on your returns as the market itself. 
+Why you’re probably exposed to this risk 
+When we discuss investment risk, most people assume market volatility, company earnings or maybe even interest rates. It can feel like a never-ending list. Unfortunately, I’m going to add another layer that often gets overlooked. For Aussie investors putting money into the global market, currency risk plays a key role. 
+Anytime you invest overseas, you’re not just exposed to the performance of the underlying asset, but also to the movements in the Australian dollar (AUD) and the foreign currency. That means your total return is dependent on both of those things. 
+If the AUD weakens, your foreign investment becomes more valuable when converted back. If it strengthens, the opposite occurs, even if the underlying shares performed well. This is what we’re seeing in the US right now. 
+Hedged ETFs 
+To manage this risk, many fund providers offer two versions of the same fund – an unhedged and hedged version. Hedging is simply the process of removing a particular risk from a portfolio. In this case we’re hedging against exchange rate fluctuations. 
+Issuers typically use forward exchange contracts to lock in exchange rates over a period. This acts as a form of insurance against movements between the fund’s base currency and the investor’s local currency. 
+A simple way we can think about this is to look at how movement can affect your return. Say I invest in an ETF tracking the S&P 500 and over the course of the year, the fund returns 10% in USD. However during that same period, the US dollar (USD) has fallen 8% relative to the AUD. 
+With a hedged ETF, the currency movement is neutralised, so my return would be close to 10%. In the unhedged fund, the weaker USD reduces my return by roughly the same amount, leaving my AUD return around 2%. The reverse also applies. If the USD had instead strengthened by 8%, the unhedged return would be higher than the hedged counterpart. 
+The hedged version theoretically gives investors a ‘pure’ market return, whilst the unhedged offers the market return plus or minus whatever the currency has done along the way. For the sake of simplicity, this example excludes other costs like fund fees, hedging costs, spreads, brokerage etc. 
+A shifting investor preference 
+Aussie appetite for global equity ETFs has never been higher, with most flows going to unhedged strategies. Global X estimates that historically only 10-15% of allocations go into currency-hedged strategies. But this dynamic shifted in 2025. Around one in every five dollars invested flowed into hedged exposures. Below is a snapshot of some of the most popular hedged equity ETFs on the ASX. 
+Source: ASX investment products monthly report. Morningstar data. 2026. 
+This move isn’t particularly surprising given the USD has been under pressure since the second Trump Presidency began. Investor sentiment has shown up across markets, from a softer USD to a noticeable flight toward ‘safe’ assets like gold and silver. 
+Equity investors are becoming much more conscious of how currency swings can distort their returns. Before deciding to follow the herd, it’s worth looking at some key considerations behind a hedged ETF. 
+Costs 
+Currency-hedged ETFs help smooth out the impact of exchange-rate movement, but their mechanics introduce several additional costs that may erode long-term returns. The most visible cost in the fund’s expense ratio. Hedged versions of broad, passive funds typically charge more than their unhedged counterparts because of the additional cost of maintaining a hedge. 
+In large markets, this fee difference is often minimal.
+ Vanguard’s International Hedged ETF VGAD
+ lists a management fee of 0.21% p.a. and indirect costs of 0.01% p.a. In comparison, it’s unhedged counterpart 
+VGS 
+lists a management fee of 0.18% p.a. In more niche or less liquid markets, the gap can widen. 
+There’s also the direct cost of maintaining the hedge. Most hedged ETFs use forward exchange contracts, which lock in a future exchange rate and remove currency uncertainty. Rotating these contracts periodically incurs trading costs. 
+A study
+ estimated this to be around 0.02 – 0.03% per year for major developed‑market currencies, where interest rates are similar and FX markets are deep and liquid. This cost can increase dramatically in more niche sectors e.g. emerging market currencies. 
+Performance 
+It’s important to note that hedging is a risk management tool as opposed to a return maximisation strategy. In saying that, performance will naturally differ across the hedged and un-hedged version of each strategy. 
+Looking at 
+iShares S&P 500 AUD ETF IVV
+ and its hedged counterpart 
+IHVV
+, we see there is a clear divergence in performance across multiple periods. 
+IVV returned around 2.5% in the last 12 months whilst IHVV returned 14.5%. This stark variance can be explained by the US dollar weakening over that period. In this case, hedged investors have clearly been benefitting from this tailwind. Over the longer term, the historical relative strength of the USD has benefitted the unhedged strategy. 
+Vanguard studies have shown that currency movements tend to be neutral over the long term. There are certainly sceptics but much of the disagreement stems from which period you choose to examine. If you torture data long enough, it’ll likely tell you exactly what you want to hear. The real question is whether your time horizon and objectives can comfortably absorb the currency volatility that comes with unhedged exposure. 
+It might be tempting to rotate in and out of ETFs based on where you think the AUD is headed. This is essentially making a directional bet on currency movements. It sounds simple in theory but in practice, it’s incredibly difficult to consistently get these calls right. Currency markets can be influenced by a myriad of unpredictable factors. 
+Source: Global X December ETF Market Scoop. 2025.
+Switching back and forth between hedged and unhedged ETFs based on short‑term views also introduces transaction costs, tax consequences and the very real risk of being wrong on both the market and the currency. More importantly, it can pull you away from the long-term consistency that actually drives returns. 
+Additionally, currency movements not only affect investment returns but also the underlying companies themselves. A stronger or weaker USD can help or hurt US businesses in ways that aren’t always intuitive. 
+Concluding thoughts 
+When I logged into my portfolio and saw my US equity ETF in the red, it wasn’t because the S&P 500 had suddenly fallen off a cliff, it was the currency doing the heavy moving. 
+The presence of hedging doesn’t automatically deem an investment better or worse, it simply removes currency fluctuation as a source of gains or losses. The choice depends on whether you want exchange‑rate fluctuations to influence part of your returns. 
+Personally, I lean towards unhedged ETFs. With a long investment horizon, I’m comfortable riding out currency swings and I don’t think anyone can reliably forecast where the Australian dollar will be in a decade. Additionally, the idea of constructing a dynamic hedging strategy doesn’t appeal to the type of investor I am. Of course, each approach comes with trade-offs. 
+That being said, it also doesn’t have to be an all or nothing decision. I don’t mean constantly rotating between un-hedged and hedged versions every time the dollar moves. Some may find value in holding both hedged and unhedged versions of the same fund to manage their exposure. If the USD falls sharply relative to the AUD, hedged investors get a tailwind. But if it subsequently rebounds, they forfeit some of that. A blended approach would theoretically narrow both extremes of that equation. 
+For long term investors, it’s less about finding the 
+correct 
+answer and more about choosing the approach you can stick with through every market cycle. 
+What topics would you like to see from Young & Invested in 2026? Have your say in this survey 
+here
+.
+Get Morningstar’s insights in your inbox
+ Newsletter
+apple news
+investing
+asx
+etfs
+young and invested
+funds
+currency risk
+us dollar
+trump
+inflation
+interest rates
+us etfs
+australian dollar
+us equities
+s&p 500
+etf performance
+hedging
+investment risk
+hedged etfs
+AUTHOR
+Simonelle Mody
+Simonelle Mody is an Associate Investment Specialist, Morningstar Australia.
+SHARE THIS ARTICLE
+ Article Page URL has been copied to clipboard for sharing. 
+Securities mentioned
+Last
+$ Change
+% Change
+iShares S&P 500 ETF
+ IVV
+$74.15
+ 0.23
++0.31% 
+Vanguard MSCI Intl (Hdg) ETF
+ VGAD
+$132.91
+ 1.01
++0.77% 
+iShares S&P 500 AUD Hedged ETF
+ IHVV
+$68.15
+ 0.58
++0.86% 
+View more
+Latest prices where available.
+More from Morningstar
+ETFs
+Best-in-class property ETFs
+2 property ETFs awarded Gold Medalist ratings from Morningstar’s Manager Research analysts.
+ETFs
+Young & Invested: Are you investing in the wrong US ETF?
+Historic levels of concentration and faltering confidence in the AI trade is leading some investors to look at another strategy for US equities.
+ETFs
+Don't let taxes ruin your investment plan
+Capital gains tax changes have sparked a wave of discussion among Australian investors, but are investors making better decisions, or simply reacting...
+ETFs
+Future Focus: Your Aussie shares ETF isn’t very Aussie
+Is your exposure actually a bet on Australia?
+ETFs
+Young & Invested: Why this popular ETF might not be the best way to access the market
+Investors often assume the cheapest ETF is the best option, but that may not be the case in one corner of the Australian market.
+ETFs
+Young & Invested: Do you need both IVV and NDQ in your portfolio?
+A closer look at the illusion of choice in a concentrated market.

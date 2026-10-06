@@ -1,6 +1,9 @@
 # 120 — Currency-hedged and unhedged foreign equity
 
-**Status:** DRAFT, rev 1, 5 Oct 2026. Nothing built. The questions in §8 are for the author.
+**Status:** DRAFT, rev 2, 5 Oct 2026. Nothing built. Rev 2 adds the Rest, RBA, MSCI and cost
+sources (§3.1–3.5, all on disk in `docs/currency-hedging/` and `docs/market-returns/data/`) and
+turns each §8 question into a recommendation for the author to confirm. It also adds Q7, the
+FX–equity correlation, which the new data shows depends on the horizon.
 
 ## 1. The ask
 
@@ -86,6 +89,96 @@ international listed equity hedged at 110,764 and unhedged at 323,642 (\$m). The
 share is 110,764 / 434,406 = **0.255** (OUR division). D99 pooled the two; this design
 can separate them.
 
+### 3.1 How Australian super actually hedges
+
+- **Super hedges about a quarter of its foreign equity.** Three sources agree: RBA Bulletin
+  Mar 2023 (citing APRA, "around 25 per cent of their international equity investments",
+  against about 70% of international debt), the RBA Deputy Governor's Sep 2025 speech
+  ("around one-fifth"), and APRA Table 9a, June 2026 (0.255).
+- **Rest Overseas Shares – Indexed is unhedged.** Its objective is the MSCI World
+  ex-Australia ex-Tobacco index "(unhedged in AUD)" (Rest Investment Guide, effective 31 Aug
+  2026, p.17). So the scenario's existing `sec-rest-os-index` is hedge ratio 0. For its
+  diversified options Rest sets a currency-exposure target "at least annually" and does not
+  publish it (p.12).
+- **Why so low:** the RBA's reason is the natural hedge. The AUD is a "risk on" currency that
+  falls when world equities fall, so "the minimum variance equity hedge ratio has been pretty
+  low. Indeed on some measures it comes quite close to the average levels actually chosen by
+  Australian industry super funds." The correlation "remained close to its historical
+  average" through the 2025 turmoil. Footnote 9 gives the minimum-variance ratio as one minus
+  correlation × the ratio of volatilities, which in this design's terms is h* = 1 + ρ·σ_L/σ_F.
+
+### 3.2 What history shows, and the horizon problem
+
+MSCI publishes the three bases of the same index side by side (World ex Australia, net, AUD;
+factsheet Sep 30, 2026):
+
+| since Jan 2001, annualized | return | std dev, 10 yr (monthly data) | max drawdown |
+|---|---|---|---|
+| 100% hedged to AUD | 8.14% | 14.06% | 55.04% (2007–09) |
+| local currency | 7.16% | 13.99% | 55.02% |
+| AUD, unhedged | 6.39% | 10.84% | 47.68% (2001–03) |
+
+On **monthly** data the cushion is plain: unhedged is the low-volatility basis, and in the
+GFC its drawdown was smaller than the hedged one. On the factsheet's 14 **calendar-year**
+returns (2012–2025; OUR computation) it is much weaker:
+
+| year | hedged | local | AUD | FX effect f | hedged − local |
+|---|---|---|---|---|---|
+| 2012 | 18.71 | 15.51 | 14.14 | −1.19 | +2.77 |
+| 2013 | 32.26 | 29.18 | 48.03 | +14.59 | +2.38 |
+| 2014 | 12.55 | 9.95 | 15.01 | +4.60 | +2.36 |
+| 2015 | 3.83 | 2.10 | 11.80 | +9.50 | +1.69 |
+| 2016 | 10.34 | 8.91 | 7.92 | −0.91 | +1.31 |
+| 2017 | 20.02 | 18.69 | 13.38 | −4.47 | +1.12 |
+| 2018 | −7.58 | −7.50 | 1.52 | +9.75 | −0.09 |
+| 2019 | 26.81 | 27.43 | 27.97 | +0.42 | −0.49 |
+| 2020 | 10.57 | 13.77 | 5.73 | −7.07 | −2.81 |
+| 2021 | 23.88 | 24.33 | 29.58 | +4.22 | −0.36 |
+| 2022 | −18.06 | −16.40 | −12.52 | +4.64 | −1.99 |
+| 2023 | 21.66 | 23.32 | 23.23 | −0.07 | −1.35 |
+| 2024 | 20.66 | 21.22 | 31.18 | +8.22 | −0.46 |
+| 2025 | 18.65 | 18.65 | 12.53 | −5.16 | 0.00 |
+
+f = (1+AUD)/(1+local) − 1; hedged − local = (1+hedged)/(1+local) − 1. Over these years
+corr(f, local) = **−0.16**, sd(f) = 6.37%, and unhedged (14.86%) is *more* volatile than
+hedged (13.59%). The AUD falls in a crash and recovers within the year, so a calendar-year
+view sees little of the cushion. Fourteen points is a small sample, and 2012–2025 contains
+a long AUD decline from about parity, which is also why unhedged led over the period.
+
+This matters because the model's equity draw is **annual** (§2). See Q7.
+
+### 3.3 Mean returns: parity or carry
+
+The RBA's 2009 Bulletin (Baker & Wong) states both halves:
+- **Theory (uncovered interest parity):** the currency moves to offset the rate gap, so
+  "hedged mean returns (excluding transaction costs) should be reasonably similar to unhedged
+  mean returns" over long horizons.
+- **Practice:** over the prior two decades the best return for its volatility came from a
+  hedge ratio "between 60 and 100 per cent for most investment horizons", "consistent with the
+  Australian dollar having depreciated by less than implied by interest rate differentials".
+
+That is the forward-premium puzzle. A hedge earns the carry, and the currency has not given it
+back in full. J.P. Morgan's AUD matrix (hedged 0.7 points ahead of unhedged, §3) is a
+forward-looking statement of the same thing. The hedged − local column in §3.2 has the sign
+of the AU–foreign cash-rate gap of those years: positive while AU rates were the higher ones
+(2012–17), negative after (the rate series themselves are not on disk). 2020's −2.81 is too
+large to be carry. A hedge reset monthly against a market that fell and recovered within the
+year leaves slippage too.
+
+### 3.4 What hedging costs
+
+RBA 2025 footnote 10: an FX swap costs the interest-rate differential "plus execution costs
+and the liquidity/opportunity cost of meeting any variation margin or collateral". Morningstar
+(secondary, quoting the issuer): VGAD's management fee is 0.21% plus 0.01% indirect costs,
+against VGS's 0.18%. Rolling forwards costs "around 0.02 – 0.03% per year for major
+developed-market currencies".
+
+### 3.5 The basket's currencies
+
+MSCI World ex Australia by country, Sep 30 2026: United States 74.07%, Japan 6%, United
+Kingdom 3.47%, Canada 3.34%. The factsheet gives country weights, not currency weights. For
+this index they are near enough the same thing.
+
 ## 4. The model
 
 For an AUD holder of a foreign market whose local-currency return is `r_L`, write `f` for
@@ -117,10 +210,16 @@ annual FX shock  = ρ_FX·σ_F·z_market  +  √(1 − ρ_FX²)·σ_F·z_fx
 
 **What the anchor means.** With the FX path centred on its anchor (the process's existing
 contract), E[f] ≈ 0. An unhedged lot then expects the local total, and a hedged lot the
-local total plus carry. That is the no-currency-view reading, and it is what a deterministic
-run shows: hedged and unhedged differ by the carry only. The **risk** difference (§3 points
-1 and 2) appears only when the FX process and stochastic equity are both on, which means
-Monte Carlo.
+local total plus carry. That is the forward-premium reading of §3.3, and it is what a
+deterministic run shows: hedged and unhedged differ by the carry only. The **risk** difference
+(§3 points 1 and 2, §3.1–3.2) appears only when the FX process and stochastic equity are both
+on, which means Monte Carlo.
+
+**A check the model must pass.** Under the calibration, the minimum-variance hedge ratio
+h* = 1 + ρ·σ_L/σ_F (§3.1) should come out low, as the RBA says history's has. With ρ = −0.64,
+σ_L = 15.19% and the model's USD/AUD σ_F = 11.42%, h* = 0.15. Super funds actually choose
+0.20–0.26. With ρ = −0.16 (§3.2's annual figure) it is 0.67, which no evidence supports as
+what funds do.
 
 ## 5. Engine changes
 
@@ -133,9 +232,9 @@ default, the way `DEFAULT_EQUITY_MARKET_MIX_BY_ROLE` does.
 
 ### 5.2 The currency an ex-AU basket is exposed to
 `EQUITY_INTL_EX_AU` is about 70% US (shock-library comment), plus EUR, JPY, GBP and others.
-The model has one pair. Proposal: use **USD_AUD as the basket's proxy pair**, with its
-volatility scaled to the basket's (§3 implies 9.86% against USD/AUD's 11.42%) through a
-per-market `fxExposureVol` factor. This is stated as a simplification, not hidden. A real
+The model has one pair. Proposal: use **USD_AUD as the basket's proxy pair** (the US is 74.07% of
+the index, §3.5), with its volatility scaled to the basket's (§3 implies 9.86% against
+USD/AUD's 11.42%, a factor of 0.86) through a per-market `fxExposureVol` factor. This is stated as a simplification, not hidden. A real
 basket would need more currency pairs, which no other feature needs (Q3).
 
 ### 5.3 FX available to an AU-only plan
@@ -161,10 +260,16 @@ describe the local-currency return. The inputs on disk:
 - **Volatility:** J.P. Morgan "Developed World Equity hedged", 15.19% (§3). This is the
   only local-basis figure for a developed-world basket an AUD investor holds. Hedged ≈
   local plus a near-constant carry, so the variance is the local variance.
-- **Correlation with the US factor:** J.P. Morgan's AUD matrix gives Developed World
-  Equity hedged ~ U.S. Large Cap = 0.646. But that U.S. Large Cap is the *unhedged-in-AUD*
-  row, so it is the wrong pair. The USD matrix needs reading for a local-to-local figure
-  (Q4).
+  MSCI's own local-currency series gives 13.99% (10-year, monthly data; §3.2), a
+  cross-check.
+- **Correlation with the US factor:** J.P. Morgan's AUD matrix pairs Developed World Equity
+  hedged with an *unhedged-in-AUD* U.S. Large Cap (0.646), which is the wrong pair. Its USD
+  matrix gives AC World Equity ~ U.S. Large Cap = **0.965**. In USD, that basket is close to a
+  local view of a 74%-US index.
+- **Result:** β = 0.965 × 15.19 / 18 = **0.81** (unchanged from today) and σ_idio =
+  15.19 × √(1 − 0.965²) = **4.0%** (from 2.0%). Re-basing keeps the sleeve's co-movement with
+  the US and doubles its own dispersion. The FX path then supplies what the AUD volatility
+  used to imply.
 
 When the overlay is off, the sleeve keeps today's AUD calibration exactly. So the re-base
 is conditional, and both calibrations live side by side in `rate-keys.js`.
@@ -182,14 +287,19 @@ to the account's currency:
   market's AUD yield.
 - `carry = Prime(AU) − Prime(foreign)` when both are in state. When they are not (an
   AU-only plan has no US prime), it is `hedgeCarry`, a new ECONOMIC_REGIMES param (Q5).
-- `cost` is `hedgeCost`, default 0, with no source on disk for a value (Q5).
+- `cost` is `hedgeCost`, default **0.025%**, the midpoint of the forward-roll estimate
+  (§3.4). The fee gap between a hedged fund and its unhedged twin (0.03% plus 0.01% indirect for
+  VGAD) is left out, because no other security in the model carries a fee: the market totals
+  are gross of fees (D99 §6.6).
 
 ### 5.7 Tax of the hedge
 A hedged fund's forward contracts realise gains and losses inside the fund, and they reach
 the investor in some character through the fund's distributions. **No primary source for
 the Australian treatment is on disk**, so this design makes no claim about it. Phase 1 books
 the carry and the hedge result in the price slice, which defers them to disposal. That is a
-known gap, recorded here and not hidden. Closing it requires fetching the governing law
+known gap, recorded here and not hidden. Rev 2's search turned up only secondary statements
+that hedging profits appear in a fund's attribution amounts. None was fetched, because the
+ATO site blocks scripted fetches, so none is relied on here. Closing it requires fetching the governing law
 first (memory: never quote tax law not on disk).
 
 ## 6. Phases
@@ -203,8 +313,9 @@ first (memory: never quote tax law not on disk).
    the hedging choice changes risk. Monte Carlo A/B on AU Single Homeowner: VGS against
    VGAD over the same seeds, paired (`rngStreams` on in both arms; memory: seed-matching
    is not CRN).
-4. **Super hedge default** 0.255 from APRA (§3), plus the editor field and a
-   `kind: node` help update for Security.
+4. **Super hedge default** 0.255 from APRA (§3.1), plus the editor field and a
+   `kind: node` help update for Security. The AU Single Homeowner REST lots state their hedge
+   ratio explicitly: OS Index 0 (§3.1), AU Index not applicable.
 
 ## 7. Tests
 
@@ -217,26 +328,39 @@ first (memory: never quote tax law not on disk).
 - The §3 shape on the model: with phases 1–3 on, the simulated unhedged ex-AU AUD return
   has lower volatility than hedged, and lower correlation with `EQUITY_AU`. This is the
   test that the design delivers its point.
+- The §4 check: the minimum-variance hedge ratio measured on simulated paths falls in the low
+  range history and funds point to (§3.1).
 
 ## 8. Questions for the author
 
-- **Q1 — Expected FX drift.** Should the anchor stay a no-view centre (E[f] ≈ 0, so hedged
-  beats unhedged by the carry in expectation)? Or should the market total stay anchored on
-  the sourced *unhedged* AUD figure, with the local total derived from it? The second keeps
-  D99's 7.5% for VGS and makes VGAD = 7.5% − E[f] + carry. Recommendation: the first, which is
-  the process's existing contract and needs no FX forecast.
-- **Q2 — Scope of the overlay.** Only `EQUITY_INTL_EX_AU` (the AUD investor's case), or
-  every market foreign to its account? That would include US lots held in an AU account
-  in the intl plan, and `EQUITY_INTL_EX_US` in USD accounts against AUD. Recommendation:
-  ex-AU in AUD accounts first. The others need pairs and sources this design does not have.
-- **Q3 — Basket currency.** Is USD_AUD with a vol scale (§5.2) an acceptable proxy, or does
-  this need a trade-weighted pair?
-- **Q4 — Local-basis correlation source.** Should we read J.P. Morgan's USD matrix for a
-  developed-world local ~ U.S. Large Cap correlation (§5.5), or accept BlackRock's USD block
-  if it has a world-ex-Australia row? Neither has been checked yet.
-- **Q5 — Carry and cost in an AU-only plan.** Should there be a `hedgeCarry` param, or
-  should AU-only plans gain `usPrimeRate` so the carry follows both central banks? Is there
-  any source for a hedge cost, or does it stay 0?
-- **Q6 — Default for super.** Should we apply APRA's 0.255 hedge ratio to un-authored super
-  (moves every super golden once phase 3 is on in MC), or leave super unhedged until a
-  plan authors it?
+Rev 2 recommends an answer to each, from the §3 sources. None is decided until the author
+confirms.
+
+- **Q1 — Expected FX drift.** *Recommend:* keep the anchor driftless (E[f] ≈ 0), so a hedged
+  lot expects local + carry and an unhedged lot local. This is the forward-premium evidence
+  (RBA 2009, §3.3) and J.P. Morgan's forward view, and it is the FX process's existing
+  contract. Parity (E[f] = carry, equal means) can come later as a switch if the author wants
+  to run that view. The rejected alternative was anchoring VGS at D99's sourced 7.5% unhedged
+  total. That would bake in an FX forecast the sources do not agree on.
+- **Q2 — Scope of the overlay.** *Recommend:* unchanged. Ex-AU lots in AUD accounts first;
+  every source in §3 is about the AUD investor's world-ex-Australia exposure.
+- **Q3 — Basket currency.** *Recommend:* USD_AUD as the proxy with a 0.86 volatility scale.
+  The US is 74.07% of the index (§3.5), and J.P. Morgan's numbers imply the basket's FX
+  volatility is 9.86% against USD/AUD's 11.42% (§3).
+- **Q4 — Local-basis correlation.** *Answered by the sources:* ρ = 0.965 (J.P. Morgan USD AC
+  World ~ U.S. Large Cap) and σ = 15.19%, giving β 0.81 / σ_idio 4.0% (§5.5).
+- **Q5 — Carry and cost in an AU-only plan.** *Recommend:* carry = `auPrimeRate` − a foreign
+  cash rate, so an RBA regime or a Prime sweep moves the carry as it does in reality (§3.3).
+  An AU-only plan does not load US_BANKING, so ECONOMIC_REGIMES gains `hedgeForeignCashRate`,
+  defaulting to the `usPrimeRate` default. A plan that has `usPrimeRate` uses it directly.
+  Cost `hedgeCost` 0.025% (§3.4).
+- **Q6 — Default for super.** *Recommend:* 0.255 for un-authored super. Three sources agree
+  (§3.1), and the authored REST OS Index lot overrides it with 0. This moves no golden until
+  phase 3, because with the overlay off a hedge ratio does nothing.
+- **Q7 — The FX–equity correlation (new in rev 2).** On monthly data, and in J.P. Morgan's
+  forward-looking matrix, the AUD's cushion is strong (ρ ≈ −0.64). On 14 calendar years it
+  is weak (−0.16, §3.2). The model draws equity once a year, so which horizon is right is a
+  real choice. *Recommend:* default ρ_FX = −0.64, as a parameter Monte Carlo can sweep, with
+  −0.16 as the documented low end. −0.64 reproduces what the RBA and the funds' own behaviour
+  say: a low minimum-variance hedge ratio (0.15 against funds' 0.20–0.26, §4). −0.16 gives
+  0.67, and nothing in §3 supports that.

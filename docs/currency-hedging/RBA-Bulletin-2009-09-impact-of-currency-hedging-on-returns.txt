@@ -1,0 +1,429 @@
+    The Impact of Currency Hedging on
+    Investment Returns
+
+
+
+    Introduction
+    This article examines the level of currency hedging by Australian managed funds over recent
+    years. Overall, managed funds have hedged an average of around half of their total offshore
+    assets, with the proportion much higher for foreign bonds than foreign equities. The hedged
+    and unhedged returns of two hypothetical Australian managed fund portfolios (one comprised
+    entirely of foreign equities, and the other a diversified portfolio of domestic and foreign assets)
+    are also estimated, showing a trade-off between the mean and the variance of investment returns
+    for different levels of hedging and investment horizons. Based on data over the past two decades,
+    which may not necessarily reflect future movements in exchange rates and asset prices and hence
+    the relevant hedging ratios for funds, it is estimated that the hedging ratio yielding the highest
+    returns for a given level of volatility would have been between 60 and 100 per cent for most
+    investment horizons. This is consistent with the Australian dollar having depreciated by less
+    than implied by interest rate differentials over this period.
+
+    Theoretical Impact of Hedging on Investment Returns
+    Managed funds’ decision to hedge the foreign currency exposure on their offshore assets will
+    depend on the expected impact of hedging on both the mean and the variance of investment
+    returns on their entire investment portfolio. The impact of hedging on investment returns will
+    depend on a range of factors, such as the investment horizon, the cost of hedging, and the type of
+    offshore asset (and hence the expected correlations between movements in the underlying return
+    on the offshore asset, the Australian dollar exchange rate and other assets in the portfolio). The
+    relevant hedging ratio will also likely vary across individual investors.
+        Australian managed funds, on average, allocate about 20 per cent of their funds under
+    management to offshore assets, a share that has been broadly stable for the past decade
+    after having increased noticeably over the 1990s (Graph 1). As offshore assets are typically
+    denominated in foreign currency, their value is affected by changes in Australian dollar exchange
+    rates in addition to movements in foreign asset prices. As movements in the exchange rate can be
+    substantial over investment horizons, the decision whether to hedge against currency fluctuations
+    can have a significant impact on investment returns. Investors can hedge the currency risk on
+
+
+
+
+    	 This article was prepared by Alexandra Baker and Arlene Wong of Domestic Markets Department.
+     The variance of returns is not the only relevant measure of risk for an investment portfolio, but it is one that is reasonably easy
+      to measure and interpret, and is widely used in the investment industry.
+
+
+
+
+   R e s e r v e   b a n k   o f   A u s t r a l i a
+their   offshore      assets   using                                                     Graph 1
+instruments such as forward foreign                       Managed Fund Institutions’ Asset Allocations
+                                                                         Share of total funds under management
+exchange contracts and cross-                             %                                                                          %
+currency interest rate swaps.                                    Australian equities
+                                                                   and units in trust
+                                                          40                                                                         40
+Impact on mean returns
+On entering an unhedged investment         30                                                        30
+in foreign assets, the investor initially                         Loans and
+                                                                 placements Bonds   Overseas assets
+converts Australian dollars into the       20                                                        20
+foreign currency at the prevailing                      Short-term debt               Currency and
+                                                                                         deposits
+exchange rate (the spot rate). The         10                                                        10
+                                                         Property
+foreign currency is invested in
+                                                                              Other
+foreign assets (which generates a           0                                                        0
+                                                    1993        2001      2009 1993    2001       2009
+positive or negative return), and             Source: ABS
+
+at the end of the period, the final
+amount of foreign currency is converted back to Australian dollars. This unhedged return will
+therefore be equal to the product of the return on the foreign assets and movements in the
+foreign currency (relative to the Australian dollar) over the investment period.
+    In comparison, if the investment is fully hedged, the investor enters into a forward contract at
+the start of the investment period to lock in an agreed forward exchange rate to convert foreign
+currency back into Australian dollars at the end of the investment period. Since the forward
+rate is agreed upon entering the contract, there is no uncertainty about subsequent exchange
+rate movements. The unhedged portfolio return will be greater than the hedged portfolio return
+if the realised spot exchange rate is higher than the forward exchange rate at the end of the
+investment period. 
+    Under the assumption of uncovered interest parity, movements in the bilateral exchange rate
+should roughly offset returns from the interest rate differentials that exist between countries.
+The forward exchange rate should be close to the realised spot exchange rate over the investment
+horizon, which in turn, implies that foreign currency exposure should not affect the mean return
+on offshore investments. Hence, over very long investment horizons, the hedged mean returns
+(excluding transaction costs) should be reasonably similar to unhedged mean returns. In this
+case, the hedging decision will be based solely on whether it reduces volatility, and if so, whether
+the effect is large enough to compensate for the cost of entering into the hedges. However,
+over shorter investment horizons, uncovered interest parity generally does not hold and realised
+exchange rates can differ substantially from forward exchange rates. This means that movements
+
+
+� A forward foreign exchange contract commits an investor to the outright sale (or purchase) of currency at a specified future date
+   and predetermined price, thereby reducing exposure to exchange rate movements. A cross-currency interest rate swap involves
+   the exchange of a stream of interest payments in one currency for a stream of interest receipts in another, over a given period
+   of time. At maturity, there is typically also an exchange of principal. For more information, see Becker C and D Fabbro (2006),
+   ‘Limiting Foreign Exchange Exposure through Hedging: The Australian Experience’, RBA Research Discussion Paper
+   No 2006-09.
+ In this article, the exchange rate is measured as the number of Australian dollars per unit of foreign currency – in other words,
+  the inverse of how it is typically quoted. A fall (rise) in the exchange rate represents an appreciation (depreciation) of the
+  Australian dollar.
+
+
+
+
+                                                                    BULLETIN         |    s e p t e m b e r�   2009
+                                                                                                               � � � ���   |   A r t i c l e   
+     in exchange rates may not fully offset the impact of interest rate differentials on the returns
+     obtained from the underlying offshore investment, and can affect both the mean and variance
+     of the overall portfolio returns. Hence, the relevant level of hedging is an empirical matter that
+     may vary over time, across currencies and with the risk tolerance of investors.
+
+     Impact on the volatility of returns
+     In addition to affecting the expected mean return over shorter horizons, hedging will affect the
+     overall variance of returns. The variance of returns on an unhedged portfolio that is invested in
+     foreign assets is comprised of three components: the underlying volatility of the foreign asset
+     returns; the volatility of the spot exchange rate; and the correlations between the exchange rate
+     and returns on the assets in the portfolio (both foreign and domestic).
+         The volatility in the foreign assets and the spot exchange rate always add to the volatility
+     of the portfolio’s overall returns, while the correlations between the exchange rate and the asset
+     returns (the covariance component) can be positive or negative, and so increase or decrease the
+     volatility of returns. Hedging eliminates the volatility in the spot exchange rate and the covariance
+     component. Whether hedging will result in higher or lower volatility than an unhedged portfolio
+     depends on the net effect of these two components. If there is a positive covariance between the
+     exchange rate and the underlying asset returns, the hedged portfolio returns will always be less
+     volatile than unhedged portfolio returns. This is because, with positive covariance, a rise in
+     the exchange rate (a depreciation of the Australian dollar) will tend to occur at the same time
+     when there are positive returns on the underlying assets. As a consequence, unhedged currency
+     movements will amplify the magnitude of any gains or losses on the underlying assets.
+         However, if a negative covariance exists, the impact of hedging on the total portfolio
+     volatility will depend on the size of the covariance. If the negative covariance more than offsets
+     the volatility in the exchange rate, then total volatility on hedged returns will be higher than for
+     unhedged returns. On the other hand, if the negative covariance is relatively weak (such that it
+     does not fully offset the volatility in the exchange rate), then the volatility of the overall portfolio
+     can be reduced by engaging in some degree of hedging.
+
+     Actual Hedging Levels
+     The most comprehensive source of data on the hedging practices of Australian investors and
+     firms is the ABS Foreign Currency Exposure survey, with the surveyed firms accounting for over
+     90 per cent of Australia’s foreign currency assets and liabilities. The 2005 survey suggests that
+     around one-half of the total foreign assets of ‘other financials’ (which includes superannuation
+     and other managed funds, and non-bank intermediaries) were hedged. For around two-thirds of
+
+
+     � In reality, the impact of hedging on the volatility of the portfolio return is complicated by the fact that the underlying asset
+        returns may not be perfectly predicted and therefore fully hedged. Thus, there is an extra element of volatility, which comes from
+        the interaction of the forward exchange rates and the unpredicted asset return, although this term is likely to be small.
+     	 For more information, see Becker C, G Debelle and D Fabbro (2005), ‘Australia’s Foreign Currency Exposure and Hedging
+        Practices’, RBA Bulletin, December, pp 1–8. The ABS has undertaken another survey in 2009, the results of which will be
+        available in late 2009.
+      The 2005 ABS survey did not provide details of the value of hedged debt split by assets and liabilities. We assume that the
+       same hedging ratio applies for the debt assets and liabilities, but have made an adjustment for securitisation vehicles, which are
+       known to have higher hedging ratios than the other institutions.
+
+
+
+
+10   R e s e r v e   b a n k   o f   A u s t r a l i a
+the foreign assets that were hedged, the hedging ratio was constant through time, while for the
+remaining one-third, the hedging ratios varied with economic and financial market conditions.
+    More recent and disaggregated data on the hedging practices of Australian investors are
+available from the nabCapital Superannuation FX Survey, which was most recently conducted
+in July 2009. The survey collects data on the hedging practices of major Australian corporate,
+public sector and industry superannuation funds, and includes information on the hedging
+practices of superannuation funds by asset class (Table 1). The data show that superannuation
+funds hedged almost all of their foreign bond portfolios back into Australian dollars, but hedged
+only a little under half of their foreign equity portfolios. The higher hedging ratio for bonds
+compared with equities may reflect the types of investors in the asset classes. Investors in bonds
+are likely to have a preference for lower volatility on returns (as bonds are generally viewed as
+a defensive asset class), whereas investors in equities may be more tolerant of higher levels of
+volatility in return for the potential diversification benefits of foreign currency exposure. It is
+also more difficult to hedge equities than bonds owing to the greater uncertainty about dividend
+payments and the end value of the equity investment. In contrast, currency interest rate swaps
+are well suited to hedging bonds. Furthermore, equity returns already have an implicit exchange
+rate component, as most large companies’ profits, and hence their share prices, are affected
+by changes in the value of their home currency against other major currencies, including the
+Australian dollar. Positions in less liquid alternative asset classes (such as property, infrastructure,
+private equity and hedge funds) tend to be well hedged, with average hedge ratios above 65 per
+cent. The nabCapital survey indicates that the hedging ratios for equities and bonds increased by
+about 10 percentage points between 2002 and 2007, and have been little changed since then.
+
+                               Table 1: Australian Superannuation Funds
+                                   Per cent of foreign assets hedged, by asset class
+
+                                                         2009                  2007                   2005                  2002
+    Equities                                               45                    47                     35                    38
+    Bonds                                                  89                    93                     92                    85
+    Property                                               76                    80                     71                     ..
+    Infrastructure                                         79                    83                     81                     ..
+    Private equity                                         66                    59                     41                     ..
+    Hedge funds                                            86                    69                     72                     ..
+    Source: ����������
+            nabCapital
+
+
+
+The Impact of Hedging on Returns for Two Hypothetical
+Managed Funds
+In this section, the impact of currency movements on the mean and standard deviation of
+returns for two stylised investment portfolios is estimated using data on the actual asset and
+currency returns over the past 20 years. The first investment portfolio consists entirely of foreign
+equities, which for presentational simplicity is denominated in US dollars (Table 2). The impact
+of currency hedging on returns is estimated using changes in the MSCI World Index (excluding
+Australia) as a proxy for price movements in foreign equities, and (again for simplicity) assumes
+
+ In total, the funds surveyed by nabCapital in 2009 managed about $279 billion of assets, or around 30 per cent of total
+  unconsolidated superannuation assets.
+
+
+
+
+                                                                  BULLETIN         |   s e p t e m b e r�   2009
+                                                                                                            � � � ���   |   A r t i c l e   11
+     that the investor enters into a hedge at the start of the investment period and remains fully
+     hedged throughout the investment horizon. The second investment portfolio is a hypothetical
+     managed fund (with 40 per cent of assets in domestic equities and 20 per cent each in foreign
+     equities, domestic fixed interest and cash). This portfolio allocation is based on the average asset
+     allocations of superannuation funds as at December 2008, but is not intended to be representative
+     of all Australian managed funds. For this portfolio, the mean and standard deviation of the
+     returns are estimated for different (but constant) hedging levels.
+
+                     Table 2: Asset Allocations for the Stylised Investment Portfolios
+                                                               Per cent of total assets
+                                                 Offshore                Domestic         Domestic fixed
+                                                  equities                equities              interest   Cash
+          Portfolio 1                                    100                      0                   0      0
+          Portfolio 2                                     20                     40                  20     20
+          Source: RBA
+
+
+                                                                           For the hypothetical Australian
+                                        Graph 2                        fund investing solely in foreign
+                  Difference Between Hedged and                        equities, the impact of hedging on the
+                        Unhedged Equity Returns                        mean return is closely related to the
+                           Distribution, monthly 1988–2008
+       No                                                           No relative performance of the spot and
+                 Unhedged returns <              Unhedged returns >
+                    hedged returns                 hedged returns      forward Australian dollar exchange
+        40                                                          40 rates (both relative to the US dollar).
+                                                                       On a monthly basis, the effect of
+        30                                                          30 currency movements on returns
+                                                                       are generally less than 3 percentage
+        20                                                          20 points (Graph 2). While the monthly
+                                                                       currency effects are reasonably
+        10                                                          10 evenly distributed around zero,
+                                                                       they have averaged 0.13 percentage
+         0       -10+
+            -10 to -9                                               0  points a month during 1988–2008,
+             -9 to -8
+                                                                       thereby adding about 1½ percentage
+             -8 to -7
+             -7 to -6
+             -6 to -5
+             -5 to -4
+             -4 to -3
+             -3 to -2
+             -2 to -1
+              -1 to 0
+               0 to 1
+               1 to 2
+               2 to 3
+                                                                       points a year to the return on the
+               3 to 4
+               4 to 5
+               5 to 6
+               6 to 7
+               7 to 8
+               8 to 9
+              9 to 10
+                  10+
+                                         % pts
+           Sources: Bloomberg; RBA                                     hedged portfolio, relative to the
+                                                                       unhedged portfolio. There are also
+     a few sizeable monthly effects, including a 15 per cent depreciation of the Australian dollar in
+     October 2008, which increased unhedged returns relative to hedged returns.
+         The relatively even distribution of the average currency effects around zero suggests that
+     the impact of foreign currency exposure on mean returns largely nets out over long investment
+     horizons. However, for shorter investment horizons, this is not the case. For instance, the hedged
+     1-year return on the stylised equity portfolio was 35 percentage points lower than the unhedged
+     return in 1998 (when the Australian dollar depreciated against the US dollar), but 25 percentage
+     points higher than the unhedged return in 2003 (when the Australian dollar appreciated against
+     the US dollar; Graph 3). The relative performance of hedged and unhedged portfolios also varies
+
+
+
+
+12   R e s e r v e   b a n k   o f   A u s t r a l i a
+over time for investors with 3- and                                                      Graph 3
+5-year horizons, although to a lesser                                Difference Between Hedged and
+extent. As expected, currency effects                                    Unhedged Equity Returns
+                                                                                          Annualised
+have a smaller impact on returns for                       %                                                                          %
+                                                           pts                                                                        pts
+a 10-year investment horizon.
+    Between 1988 and 2008, the               20                                                          20
+                                                             5-year
+Australian dollar exchange rate (the                         horizon
+
+number of Australian dollars per
+                                              0                                                          0
+US dollar) has been negatively
+correlated with the underlying                                                             10-year
+                                                       3-year horizon                       horizon
+monthly returns on foreign equities,        -20                                                          -20
+with a correlation coefficient of
+                                                                                1-year horizon
+0.4. This coefficient has varied
+                                            -40                                                          -40
+through this period, and has been                1989          1993        1997      2001       2005 2009
+                                                                     End date of investment
+more negative in recent years. One              Sources: Bloomberg; MSCI; RBA
+explanation for this relationship
+could be that rising global equity prices generally reflect stronger global economic growth, and
+hence increased demand for commodities. Since exports of commodities are an important part
+of Australia’s economy, an increase in demand for commodities is likely to be associated with
+an appreciation of the Australian dollar. Another possible explanation stems from the positive
+relationship between global equity prices and the perceived risk appetite of investors. Falls in
+foreign equity prices can be associated with an increase in perceived risk aversion, and thus lower
+investor appetite for high-yielding currencies such as the Australian dollar.
+    Nonetheless, despite the negative correlation between the exchange rate and foreign equity
+returns, returns on the hedged equity portfolio had a lower variance than the unhedged equity
+portfolio. This suggests that between 1988 and 2008, the negative correlation between the exchange
+rate and underlying equity returns was not large enough to offset the additional volatility from
+the currency movements. Hence, in this particular example, hedging reduced the volatility in the
+overall equity investment return. It is worth noting that while this result held over the past two
+decades, it may differ for a longer horizon or a different time period.
+    For the stylised managed fund portfolio, the trade-off between the mean and standard deviation
+of the portfolio returns is depicted in Graph 4 (as noted earlier, the portfolio comprises 40 per cent
+domestic equities and 20 per cent each of US dollar-denominated foreign equities, domestic fixed
+interest and cash).10 The difference in mean returns across the various investment horizons, despite
+being calculated based on the same two decades of data, reflects the different weight put on each
+period in the rolling calculations. The years in the middle of the sample period have a greater
+relative representation in the 10-year average than the 1-year average.
+   Between 1988 and 2008, for investments with a 1-year horizon, hedging ratios below 60 per
+cent were associated with portfolio returns that were lower on average and more variable than
+
+� For more detailed discussion about the fundamental drivers of the Australian dollar, see D’Arcy P and E Poole (2009),
+   ‘Fundamentals, Portfolio Adjustments and the Australian Dollar’, RBA Bulletin, May, pp 1–9.
+10 For simplicity, we assume hedging costs are negligible. Including hedging costs will reduce the overall expected return on the
+   fully or partially hedged portfolios, but will not change the standard deviation of returns.
+
+
+
+
+                                                                    BULLETIN         |    s e p t e m b e r�   2009
+                                                                                                               � � � ���   |   A r t i c l e   13
+                                        Graph 4                                           higher hedging ratios. The specific
+                  Estimated Mean and Standard Deviation                                   position on the curve above 60 per
+                           of Portfolio Returns*                                          cent would depend on investor risk
+                                   For varying hedging ratios
+               1-year horizon 3-year horizon 5-year horizon 10-year horizon               appetite, with conservative investors
+                                  100%                                                    preferring the lower mean returns
+          9.6
+                                    ●
+                                    ●●●
+                                       ●●
+                                         ●●    0%                                         and lower volatility offered by a
+                       100%                 ●●
+                                               ●
+
+          9.4      ●●
+                   ●
+                   ●●
+                     ●●
+                                                                                          60 per cent hedged portfolio, and
+                     ●●
+                                                                                          risk-seeking investors preferring
+
+       Mean – %
+                        ●●
+
+                           0%                              100%
+          9.2
+                                                        ●
+                                                        ●
+                                                        ●
+                                                         ●●                               the higher mean returns and higher
+                                                         ●●
+                                                           ●●
+                                                             ●●
+                                                                0%                        volatility of the 100 per cent hedged
+          9.0
+                                                                                  0%      portfolio. For 3-year horizons,
+                                                                                    ●
+
+          8.8                                                             ● ● ●●
+                                                                                 ●●
+                                                                                          a fully hedged portfolio would
+                                                                       ●●
+                                                                    ●●
+                                                                    100%
+                                                                                          have produced the highest average
+          8.6                                                                             return, with the least volatility.
+            8.5       8.7      8.9       4.6     4.8      2.9     3.1       1.5       1.7
+                                      Standard deviation – %                              For 5-year horizons, hedging ratios
+              * Each observation represents a hedging ratio between 0 and 100 per cent,
+                in decile increments                                                      below 70 per cent reduced returns
+              Source: RBA
+                                                                                          without lowering volatility. For the
+     10-year horizon, the mean and volatility of returns increased steadily as the hedging ratio was
+     reduced. It is important to note, however, that these results are portfolio-specific and hence may
+     differ if the asset mix was changed.
+         Higher levels of hedging generally led to a higher overall mean return in our stylised portfolio for
+     most investment horizons, as uncovered interest parity failed to hold between 1988 and 2008 – the
+     Australian dollar depreciated by about 4 per cent against the US dollar over this period, compared
+     with the 35 per cent depreciation implied by uncovered interest parity. However, even during this
+     period, high hedging levels did not necessarily generate higher returns for all investment horizons.
+     Mean returns over 10-year horizons were generally lower for hedged portfolios, reflecting the
+     significant depreciation of the Australian dollar through the middle of the sample period, which as
+     noted earlier had a relatively high weight in these horizons. This highlights the fact that the impact
+     of hedging on returns can vary significantly over different investment horizons and over different
+     time periods, both in the past and future.
+
+     Summary
+     The latest ABS survey suggests that managed funds hedged about half of their total foreign
+     assets in 2005. The nabCapital survey shows that within this portfolio, superannuation funds
+     hedged a much higher proportion of their bonds than equities. Our stylised examples suggest that
+     between 1988 and 2008, currency hedging ratios of between 60 and 100 per cent of total overseas
+     assets would have yielded the highest returns for a given level of volatility for most investment
+     horizons. However, there are practical considerations, such as the cost of hedging and difficulties
+     in accurately hedging volatile asset classes (such as equities), that may constrain fund managers’
+     actual hedging levels. Furthermore, it is important to note that these results reflect the currency
+     and asset movements over the past two decades, and may change for different time periods, both
+     in the past and future. R
+
+
+
+
+14   R e s e r v e   b a n k   o f   A u s t r a l i a
+

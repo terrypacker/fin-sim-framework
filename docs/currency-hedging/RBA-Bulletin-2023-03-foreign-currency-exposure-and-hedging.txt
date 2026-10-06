@@ -1,0 +1,624 @@
+     Foreign Currency Exposure and Hedging
+     in Australia
+     Tim Atkin and Jacob Harris[*]
+
+
+
+
+     Photo: Busakorn Pongparnit – Getty Images
+
+     Abstract
+     The 2022 Survey of Foreign Currency Exposure confirms that Australian entities’ financial
+     positions, in aggregate, are well protected against a depreciation of the Australian dollar. The
+     composition of Australia’s foreign currency denominated assets and liabilities means that, overall,
+     Australian entities have a net foreign currency asset position. This has increased over a number of
+     years, largely reflecting an increase in the value of foreign currency equity assets associated with
+     superannuation funds. Meanwhile, the banking sector accounts for a large share of Australia’s
+     foreign currency liabilities because of their offshore funding activities. However, the bulk of the
+     banking sector’s foreign currency debt liabilities have been hedged. After hedging, the sector has
+     a net foreign currency asset position and no significant currency mismatches, both of which
+     reduce the risks associated with a large depreciation of the Australian dollar.
+
+
+     Introduction                                           depreciation of the exchange rate would increase
+     Australia benefits from strong trade and financial     the Australian dollar value of unhedged foreign
+     linkages with the rest of the world, as well as a      currency liabilities or contractual payments, which
+     flexible exchange rate.[1] Against this background,    could have broader implications for
+     many Australian businesses have foreign currency       macroeconomic and financial stability. It is therefore
+     denominated assets, liabilities and cash flows. Such   important to understand the size and distribution of
+     exposures facilitate trade but may also be             foreign currency exposures as well as the ways that
+     vulnerable to movements in the exchange rate if        businesses manage exchange rate risks.
+     they are not well managed. For example, a sharp
+
+
+
+86   R E S E R V E B A N K O F AU S T R A L I A
+                                                                      F O R E I G N C U R R E N C Y E X P O S U R E A N D H E D G I N G I N AU S T R A L I A
+
+
+
+
+Given the importance of hedging activities for            Australia’s foreign assets are largely denominated in
+managing exchange rate risks, the Reserve Bank            foreign currency terms (Graph 2).[3] As a result,
+initiated and provides funding for the Australian         Australia has a net foreign currency asset position
+Bureau of Statistics (ABS) Survey of Foreign Currency     with the rest of the world. This means that a
+Exposure (SFCE). The SFCE measures Australian             significant depreciation of the Australian dollar
+businesses’ foreign currency exposures and the            actually increases the Australian dollar value of
+extent to which they are hedged. The first survey         foreign assets relative to foreign liabilities. In other
+was conducted in 2001, with subsequent surveys            words, the net foreign liability position declines
+conducted every four years.[2] This article sets out      when there is a depreciation of the Australian dollar.
+the key results of the 2022 survey. It examines the       This is true even before hedging of exchange rate
+effect of hedging activities across different sectors     risk is taken into account.
+in the economy and highlights the extent to which         Australia’s net foreign currency asset position was
+businesses have managed risks associated with             equivalent to a touch above 85 per cent of GDP as
+exchange rate movements.                                  at 31 March 2022 (ABS 2022b). Around three-
+The SFCE captures two key ways that businesses            quarters of Australia’s foreign liabilities were
+hedge against exchange rate movements. First,             denominated in Australian dollars, compared with
+there is the use of derivatives – financial               around 15 per cent of Australia’s foreign assets.
+instruments that insure against movements in the
+exchange rate. Second, there are ‘natural’ hedges.
+                                                                                               Graph 1
+Natural hedges occur when foreign currency
+                                                                             Net Foreign Liability Position
+exposures are offset by positions or cash flows in                                            Per cent of GDP
+                                                             %                                                                                    %
+the same foreign currency. For example, a resources
+                                                                                                                   Total
+firm that receives US dollars for the commodities it
+                                                             50                                                                                   50
+produces can use these cash flows to pay costs
+                                                                                             Long-term debt
+charged in US dollars.
+                                                             25                                                                                   25
+                                                                                                                     Short-term debt
+
+Australia’s net foreign liability position
+translates to a net foreign currency asset                    0                                                                                   0
+                                                                                                                Equity
+position
+Australia has a net foreign liability position with the     -25                                                                                   -25
+                                                                        1992         1998         2004         2010         2016           2022
+rest of the world because, for much of its history,               Sources: ABS; RBA
+
+investment opportunities in Australia have been
+greater than the domestic pool of savings available
+to fund that investment. Australia’s net foreign                                               Graph 2
+liability position averaged around 50 per cent of                             Currency Composition
+GDP over the past couple of decades; however, this                        of Australia’s External Position*
+                                                                                              Per cent of GDP
+has declined over recent years to be around                  %
+                                                                                       Foreign currency
+                                                                                                                                                  %
+                                                                      Assets
+35 per cent of GDP alongside the significant shift to
+                                                            100                                                                                   100
+a current account surplus (Graph 1). The key factors
+behind this shift were the decline in foreign direct          0                                                                                   0
+investment following the end of the mining boom
+as well as an increase in purchases of foreign             -100                                                                                   -100
+
+equities by Australian superannuation and                                            Australian dollars
+                                                           -200                                                                                   -200
+investment funds (Adams and Atkin 2022).                                                              Net foreign
+                                                                      Liabilities
+                                                                                                 currency asset position
+One key feature of Australia’s net foreign liability       -300                                                                                   -300
+                                                                      2005            2009           2013            2017           2022
+position is that Australia’s foreign liabilities are              *   Assets are shown with a positive sign, while liabilities are shown
+                                                                      with a negative sign.
+largely denominated in Australian dollars, while                  Sources: ABS; RBA
+
+
+
+
+                                                                                                                    BULLE TIN – MARCH 2023               87
+     F O R E I G N C U R R E N C Y E X P O S U R E A N D H E D G I N G I N AU S T R A L I A
+
+
+
+
+     Between 2017 and 2022, foreign currency assets                                           Hedging policies and practices
+     increased as a share of GDP, largely reflecting an                                       Aversion to risk and exposure minimisation were
+     increase in the value of foreign equity assets. This                                     cited in the ABS survey as common reasons for
+     was associated with the accumulation of foreign                                          hedging, and that hedging policies and practices
+     equities by Australian funds over this period as well                                    have been little changed over recent years. The ABS
+     as valuation effects associated with these                                               reported that the appetite for risk was low among
+     investments, such as increases in the prices of                                          respondents, particularly within the banking sector.
+     foreign equities and the depreciation of the                                             Some respondents reported that foreign exchange
+     Australian dollar. Meanwhile, foreign currency                                           exposure was managed at the enterprise or
+     liabilities declined as a share of GDP, largely                                          Australian subsidiary level, and in some instances
+     reflecting activities in the banking and non-financial                                   hedging strategies were also employed on a
+     sectors.                                                                                 security-by-security basis. However, larger
+                                                                                              organisations tended to apply a broader approach
+     What share of foreign currency exposures                                                 whereby securities were collectively hedged to
+     are hedged?                                                                              manage risk. The ABS also noted that, in most cases,
+     The share of foreign currency exposures hedged by                                        there is limited warehousing of foreign exchange
+     Australian entities (the hedge ratio) has been little                                    risk – that is, taking on foreign currency exposure
+     changed since the previous survey at around                                              and leaving it unhedged for a period.
+     35 per cent. This can be broken down into a hedge                                        Most sectors of the Australian economy had a net
+     ratio of around 55 per cent for foreign currency                                         foreign currency asset position as at 31 March 2022
+     liabilities and slightly less than 30 per cent for                                       – even before accounting for hedging activities
+     foreign currency assets.                                                                 (Graph 4; Appendix A, Table A1). The banking sector
+     By identifying the unhedged component of                                                 was the main exception. The following sections
+     Australia’s foreign currency exposures, the net                                          analyse foreign currency exposures and hedging
+     foreign currency asset position can be translated                                        activities across different sectors of the economy.
+     into a net effective foreign currency asset position.[4]
+     Hedging via derivatives resulted in a net effective                                      Banks
+     foreign currency asset position equivalent to                                            Given the significant role of the banking sector in
+     around 75 per cent of GDP as at the end of March                                         Australia’s financial system, it is important to
+     2022, up from around 50 per cent of GDP at the                                           understand how the sector’s foreign currency
+     previous survey (Graph 3).                                                               exposures are hedged.[5] Australian banks account
+                                                                                              for around 60 per cent of Australia’s foreign currency
+                                                                                              liabilities, reflecting their use of offshore markets to
+
+                                          Graph 3
+                                                                                                                                Graph 4
+                          Foreign Currency Exposure
+                                        Per cent of GDP                                                 Foreign Currency Exposure by Sector
+           %                             Before hedging                               %                           Per cent of GDP, as at 31 March 2022
+                                                                                                 %                    Gross foreign currency exposure                %
+        200                                                                           200
+                   Net foreign currency asset position                Assets                     60                                                                  60
+        100                                                                           100        30                                                                  30
+                                                                                                                                                         Assets
+           0                                                                          0           0                                                                  0
+                                            Liabilities
+                                                                    Liabilities                 -30                                                                  -30
+           %                              After hedging*                              %                                   Liabilities
+                      Net effective foreign currency                                             %                     Net foreign currency exposure                 %
+        200                                                                           200
+                              asset position                                                     60                                                                  60
+        100                                                                           100
+                                                                                                 30                                                                  30
+           0                                                                          0               After hedging
+                                                                                                  0                                                                  0
+        -100                                                                          -100                             Before hedging
+                        2013                   2017                   2022
+                                                                                                -30                                                                  -30
+               *   Lighter shaded bars indicate hedged component.
+                                                                                                          Banks        Other financial Non-financial Public sector
+               Sources: ABS; RBA                                                                      Sources: ABS; RBA
+
+
+
+
+88    R E S E R V E B A N K O F AU S T R A L I A
+                                                                                              F O R E I G N C U R R E N C Y E X P O S U R E A N D H E D G I N G I N AU S T R A L I A
+
+
+
+
+fund both domestic and international operations.                                   foreign currency liability position has been fully
+Access to these markets enables banks to diversify                                 hedged, in net terms, against the risk of an
+their funding sources, access deeper and more                                      exchange rate depreciation.
+liquid markets, and borrow for longer terms than                                   Debt security liabilities – banks issuing bonds
+are generally available in the domestic market                                     offshore – are the main source of foreign currency
+(Bellrose and Norman 2019). Offshore funding is                                    exposure for the sector, accounting for slightly more
+typically denominated in foreign currency, which                                   than half of the sector’s foreign currency liabilities.
+requires hedging to manage the associated risks.                                   Similar to the previous survey, the 2022 SFCE
+In 2022, slightly less than 15 per cent of bank                                    showed that around 90 per cent of these liabilities
+funding was sourced from offshore wholesale debt                                   were hedged using derivatives. A breakdown by
+markets, with the vast bulk of this debt                                           maturity shows that around 95 per cent of banks’
+denominated in foreign currency. Since the                                         longer term debt securities (those with a residual
+previous survey in 2017, the value of foreign                                      maturity greater than one year) were hedged with
+currency denominated liabilities related to the                                    derivatives against foreign currency risk, while
+banking sector has decreased, resulting in a                                       around 80 per cent of securities with a residual
+narrowing in the sector’s net foreign currency                                     maturity of less than one year were hedged with
+liability position before hedging (Graph 5, top                                    derivatives (Graph 6).
+panel).[6] This partly reflects a decline in the share of                          The SFCE also indicated that a majority of the
+funding sourced from offshore wholesale debt                                       derivatives used to hedge against foreign currency
+markets by banks over this period because they                                     risk were matched to the maturities of the
+were able to access low-cost funding domestically,                                 underlying debt securities. (Maturity matched
+including through the Reserve Bank’s Term Funding                                  hedging of liabilities mitigates the exposure to
+Facility.                                                                          foreign currency risk for the duration of the
+The 2022 SFCE confirmed that the banking sector                                    underlying security, which reduces rollover risk –
+had a small net effective foreign currency asset                                   that is, the risk that a derivative will expire and a loss
+position after accounting for hedging via                                          will be incurred when replacing it, or that a
+derivatives. Around 70 per cent of foreign currency                                derivative will not be able to be replaced during
+liabilities were hedged with derivatives in the                                    periods of stress in financial markets.) The share of
+banking sector, compared with around 50 per cent                                   foreign currency debt security liabilities that are
+of foreign currency assets. Given total foreign                                    both hedged and maturity matched declined from
+currency assets and liabilities are around the same                                around 85 per cent at the time of the previous
+size before hedging, this means that the sector’s net
+
+                                                                                                                      Graph 6
+                                   Graph 5                                                        Banks’ Hedging of Foreign
+  Foreign Currency Exposure – Banking Sector                                                    Currency Debt Security Liabilities
+                                 Per cent of GDP                                                                 As at 31 March 2022
+   %                                                                         %       A$b                   By residual maturity                         Total     A$b
+                                  Before hedging
+                                                             Equity assets                                         (LHS)                               (RHS)
+   30          Debt assets                                                   30              Unhedged
+                                                                                             Hedged – not maturity matched
+    0                                                                        0       225                                                                          450
+                                                                                             Hedged – maturity matched
+
+  -30                                                                        -30
+                                                              Liabilities
+                                                                                     150                                                                          300
+   %                               After hedging*                            %
+            Net asset position
+                                                             Total assets
+   30                                                                        30
+
+    0                                                                        0        75                                                                          150
+
+  -30                                                                        -30
+
+  -60                                                                        -60       0                                                                          0
+                  2013                  2017                     2022                       ≤90 days       91 days       1 year        >5 years         All
+                                                                                                           – 1 year     – 5 years                    maturities
+        *   Lighter shaded bars indicate hedged component.
+        Sources: ABS; RBA                                                                  Sources: ABS; RBA
+
+
+
+
+                                                                                                                                        BULLE TIN – MARCH 2023                  89
+     F O R E I G N C U R R E N C Y E X P O S U R E A N D H E D G I N G I N AU S T R A L I A
+
+
+
+
+     survey to slightly below 65 per cent in the                                               45 per cent of their total fixed-income investments
+     2022 survey. However, the ABS suggested there was                                         as at 31 March 2022 (APRA 2022b).
+     not a significant shift in behaviour or an emerging                                       Since the previous survey, foreign currency assets in
+     trend to decrease maturity matching across the                                            this sector have increased significantly, owing to an
+     banking sector.                                                                           increase in the value of foreign equity assets. This
+     The SFCE showed that of those liabilities in the                                          reflects valuation effects as well as the accumulation
+     banking sector that were not hedged with                                                  of foreign equity assets, largely by Australia’s
+     derivatives, over two-thirds had a natural hedge in                                       superannuation funds that have increased the share
+     place – that is, there was a matching asset in the                                        of foreign equities in their investment portfolios.
+     same foreign currency. Also, the vast majority of                                         Superannuation funds have also increased their
+     unhedged foreign currency liabilities were                                                holdings of international fixed-income and infras­
+     denominated in US dollars; however, this was offset                                       tructure investments since the previous survey. At
+     by a large amount of US dollar denominated assets,                                        the end of March 2022, other financial corporations
+     such as loans made to non-residents. As a result,                                         had a net foreign currency asset position equivalent
+     after both derivative and natural hedging were                                            to around 65 per cent of GDP before hedging.
+     taken into account, there were only very small net                                        These non-bank financial corporations used
+     foreign currency exposures by currency and for the                                        derivatives to hedge just over one-third of their
+     sector as a whole (Graph 7).                                                              foreign currency assets. After accounting for
+                                                                                               hedging via derivatives, the net effective foreign
+     Other financial corporations
+                                                                                               currency asset position of other financial
+     Other financial corporations include non-bank                                             corporations decreased to be equivalent to almost
+     financial corporations such as superannuation                                             45 per cent of GDP. The further internationalisation
+     funds, fund managers and insurance                                                        of investment portfolios in this sector has increased
+     corporations.[7] This sector had the largest net                                          the focus on managing foreign exchange-related
+     foreign currency asset position, largely reflecting                                       risks (NAB 2021). While the SFCE does not provide a
+     holdings of foreign equity assets, particularly by                                        breakdown of hedging by type of foreign currency
+     Australia’s superannuation funds, as well as fixed-                                       asset, data from the Australian Prudential Regulation
+     income assets such as government and corporate                                            Authority show that superannuation funds hedge
+     bonds (Graph 8). Indeed, foreign equities                                                 around 70 per cent of their international debt and
+     represented nearly half of Australian                                                     unlisted infrastructure investments, but only around
+     superannuation funds’ total equity holdings, and                                          25 per cent of their international equity investments
+     foreign fixed-income assets represented around
+
+                                                                                                                                  Graph 8
+                                          Graph 7                                                                  Foreign Currency
+         Composition of Foreign Currency Exposures*                                                          Exposure – Other-financial Sector
+                                  Banks, as at 31 March 2022                                                                    Per cent of GDP
+        A$b                            By currency                            Total A$b           %                              Before hedging                    %
+                                           (LHS)                              (RHS)                         Debt assets
+                                                                                                  50                                                               50
+                         Assets                                                                             Equity assets
+        300                                                                           600         25                                                               25
+                                                    Net foreign currency
+                                                   position after hedging                          0                                                               0
+                                                                                                                                    Liabilities
+           0                                                                          0           %                                                                %
+                                                                                                                                  After hedging*
+                                                                                                           Net asset position
+                                                                                                  50                                                               50
+                                                                                                                                   Total assets
+        -300                                                                          -600        25                                                               25
+
+                         Liabilities                                                               0                                                               0
+
+        -600                                                                          -1,200     -25                                                               -25
+                   USD   GBP       JPY     EUR      NZD     RMB     Other      All                              2013                   2017                 2022
+               *   Lighter shaded bars indicate hedged component.                                      *   Lighter shaded bars indicate hedged component.
+               Sources: ABS; RBA                                                                       Sources: ABS; RBA
+
+
+
+
+90    R E S E R V E B A N K O F AU S T R A L I A
+                                                                       F O R E I G N C U R R E N C Y E X P O S U R E A N D H E D G I N G I N AU S T R A L I A
+
+
+
+
+(APRA 2022b). Periods of increased risk aversion in      The degree of hedging via derivatives in the non-
+global markets are typically associated with declines    financial sector has generally been less than in the
+in foreign equity prices and a depreciation of the       financial sectors. The 2022 SFCE showed that
+Australian dollar (Jacobs 2019). To the extent that      derivatives were used to hedge only around one-
+these developments coincide, losses on the value of      third of their foreign currency liabilities, compared
+unhedged foreign equity assets are somewhat              with more than two-thirds in the banking sector,
+mitigated because a depreciation of the exchange         and that only a negligible amount of their foreign
+rate increases the value of these assets in Australian   currency assets were hedged.
+dollar terms, all else being equal.                      This difference is related to the composition of the
+Risks to the broader financial system from large         sectors’ assets and liabilities. The foreign currency
+asset price movements associated with                    equity assets of the sector include the foreign
+superannuation funds’ assets, including from the         operations of multinational corporations, which are
+growing portfolio of hedged and unhedged foreign         partly matched by foreign currency borrowing in
+assets, are not substantial because of the               the form of loans and debt securities. In addition, for
+predominance of defined contribution schemes in          some non-financial corporations a large share of
+Australia’s superannuation sector.[8] However,           their revenue is denominated in foreign currency,
+superannuation funds are still exposed to liquidity      particularly US dollars – given this is the currency
+risks associated with margin calls on derivatives        through which they conduct much of their trade –
+used to hedge foreign exchange risks. For example,       so foreign currency borrowing is matched to these
+when the Australian dollar depreciates, the value of     trade payments and revenue streams. For example,
+these derivatives declines, and superannuation           a large share of Australia’s resource exports are
+funds are required to make a payment to their            invoiced in US dollars (ABS 2021). Given this, mining
+counterparties to mitigate risks arising from mark-      companies generally borrow in US dollars so that
+to-market losses. However, liquidity risks associated    US dollar payment obligations on their outstanding
+with hedging foreign currency assets are at least        debt are matched to their US dollar trade receipts.
+partly mitigated by the depreciation of the              In addition to the exchange rate risk associated with
+Australian dollar also lifting the Australian dollar     an entity’s balance sheet, exchange rate
+value of these underlying assets (RBA 2021). This        movements can also affect foreign currency trade
+supports a fund’s ability to sell foreign assets to      payments and receipts. With more than 80 per cent
+meet margin calls associated with hedging                of Australia’s exports invoiced in US dollars, it is
+contracts.                                               important to understand the extent to which these
+
+Non-financial corporations
+Non-financial corporations had a net foreign                                                  Graph 9
+currency asset position equivalent to 15 per cent of                            Foreign Currency
+                                                                          Exposure – Non-financial Sector
+GDP at the end of March 2022 (Graph 9).[9] The net                                           Per cent of GDP
+                                                            %                                 Before hedging                               %
+position consisted of a sizable amount of foreign
+                                                                                                                       Equity assets
+currency assets, over two-thirds of which were              30
+                                                                         Debt assets
+                                                                                                                                           30
+
+foreign equity assets.[10] However, the sector also
+                                                             0                                                                             0
+had a notable amount of foreign currency liabilities,
+                                                                         Liabilities
+of which around 85 per cent were either longer              %                                 After hedging*                               %
+                                                                     Net asset position
+term debt securities or loans. After hedging, the           30
+                                                                                                                       Total assets
+                                                                                                                                           30
+non-financial sector had a net foreign currency
+                                                             0                                                                             0
+asset position equivalent to 20 per cent of GDP at
+the end of March 2022, which is similar in size to the     -30                                                                             -30
+                                                                            2013                    2017                    2022
+previous survey.                                                 *   Lighter shaded bars indicate hedged component.
+                                                                 Sources: ABS; RBA
+
+
+
+
+                                                                                                                 BULLE TIN – MARCH 2023                  91
+     F O R E I G N C U R R E N C Y E X P O S U R E A N D H E D G I N G I N AU S T R A L I A
+
+
+
+
+     cash flows are exposed to exchange rate risk. Non-                                       Bank’s holdings of foreign exchange reserves. These
+     financial corporations represent almost all of                                           are in the form of debt instruments issued by
+     Australia’s foreign currency trade receipts and                                          sovereign and supranational entities and foreign
+     payments.[11] At the end of March 2022, non-                                             currency deposits at other official institutions, such
+     financial corporations used derivatives to hedge                                         as foreign central banks. The Reserve Bank does not
+     around one-third of their expected foreign currency                                      seek to fully eliminate or hedge the foreign
+     trade payments and around 4 per cent of their trade                                      exchange exposure associated with these holdings
+     receipts (Graph 10). These shares approximately                                          of official reserve assets (RBA 2022).
+     match the hedge ratios for assets and liabilities on
+     the balance sheets of non-financial corporations.                                        Derivative holdings
+                                                                                              As well as providing information about foreign
+     Public sector
+                                                                                              currency exposures and hedging, the SFCE also
+     The public sector’s foreign currency assets and                                          contained detailed information on Australian
+     liabilities are relatively small (Appendix A, Table A2).                                 entities’ derivative holdings as at the end of March
+     Before hedging, the general government sector –                                          2022. These are recorded on a notional basis – that
+     which includes federal, state and local governments                                      is, the total value of the exposure the derivative is
+     – had a net foreign currency asset position                                              covering. Some of these derivatives are used to
+     equivalent to 9 per cent of GDP. This is up from                                         hedge foreign currency exposures, which have
+     around 6 per cent of GDP in the previous survey                                          been the focus of much of this article, but the
+     and was mainly driven by an increase in foreign                                          survey also captures derivatives used to gain
+     currency assets. Foreign currency equity assets                                          exposure to particular foreign exchange markets.
+     account for around three-quarters of the general                                         The survey indicated that Australian entities were
+     government’s total foreign currency assets, with the                                     positioned such that they had a net long foreign
+     Australian Government’s Future Fund holding a                                            currency position or equivalently a net short
+     sizable share of the general government sector’s                                         Australian dollar position with non-residents on
+     foreign currency assets. The Future Fund had a net                                       derivative holdings (Graph 11). This means that in
+     foreign currency asset position, after hedging, of                                       net terms Australian residents would profit from a
+     around $80 billion at the end of the 2022 financial                                      depreciation of the Australian dollar.
+     year (Future Fund 2022).
+                                                                                              By instrument type, swaps (including foreign
+     The Reserve Bank had a net foreign currency asset                                        exchange swaps and cross-currency basis swaps)
+     position equivalent to 3 per cent of GDP as at                                           and foreign exchange forwards continued to
+     31 March 2022. This exposure reflects the Reserve
+
+
+                                        Graph 10                                                                                   Graph 11
+                                                                                                           Foreign Currency Derivative Positions*
+                       Expected Trade Receipts                                                                        Notional amount held by residents
+                   and Payments in Foreign Currency                                                         with non-resident counterparties, as at 31 March 2022
+                      Non-financial corporations, as at 31 March 2022                           A$b                                                                 A$b
+          $b                                                                          $b
+                                                                                               2,000                                                                2,000
+                                                   Unhedged
+                                                   Hedged into Australian dollars
+                                                                                               1,000                                                                1,000
+                                                                                                                                     Net position
+        400                                                                           400
+
+                                                                                                  0                                                                 0
+
+
+                                                                                              -1,000                                                                -1,000
+        200                                                                           200
+
+                                                                                              -2,000                                                                -2,000
+                                                                                                                                  Long foreign currency
+                                                                                                                                  Short foreign currency
+                                                                                              -3,000                                                                -3,000
+           0                                                                          0
+                       Trade receipts                     Trade payments                               *   Derivatives involving the Australian dollar.
+               Sources: ABS; RBA                                                                       Sources: ABS; RBA
+
+
+
+
+92    R E S E R V E B A N K O F AU S T R A L I A
+                                                                        F O R E I G N C U R R E N C Y E X P O S U R E A N D H E D G I N G I N AU S T R A L I A
+
+
+
+
+account for the vast bulk of the total notional value           hedging activities are taken into account. As a
+of foreign exchange derivatives, while futures and              result, a depreciation of the Australian dollar actually
+options accounted for most of the remaining share.              results in a decline in the value of Australia’s net
+By sector, derivative holdings remain concentrated              foreign liability position.
+in the banking sector, which accounted for around               Hedging activities also reduce the exchange rate
+70 per cent of the total value of foreign exchange              risk that comes from borrowing offshore. The
+derivatives involving the Australian dollar and more            banking sector was the only sector that had a net
+than 90 per cent of the value of derivatives not                foreign currency liability position before hedging.
+involving the Australian dollar as at March 2022.               Banks’ debt security liabilities account for more than
+                                                                half of the sector’s total foreign currency liabilities,
+Summary                                                         but the vast bulk of these exposures are hedged. In
+Australia has a net foreign liability position,                 addition, the majority of the derivatives used to
+reflecting funds flowing from the rest of the world             hedge exchange rate risk are matched to the
+to Australia over a long period of time because of its          maturities of the underlying debt securities. After
+high levels of domestic investment relative to                  hedging, the sector had a small net effective foreign
+savings. There are potential risks associated with              currency asset position. Moreover, there are no
+foreign liabilities, including exchange rate risk, but          significant currency mismatches either for the
+these can be managed with various hedging                       banking sector or for the country as a whole. The
+strategies. Australia’s foreign liabilities are largely         2022 SFCE confirms that the Australian economy
+denominated in Australian dollars, and foreign                  overall is well protected from vulnerabilities
+assets are largely denominated in foreign currency,             associated with a depreciation of the exchange rate,
+which means that the net liability position translates          despite its net foreign liability position.
+to a net foreign currency asset position, even before
+
+Appendix A
+
+
+                         Table A1: Private Sector Foreign Currency Exposure
+                                                  As at 31 March 2022
+
+                                                                Other financial
+                                      Banks                      corporations         Non-financial corporations
+                                   Before          After          Before        After        Before         After
+                                 hedging        hedging         hedging      hedging       hedging      hedging
+A$ billion
+Assets                                726            369            1,534                   997                       748                     729
+Liabilities                           764            238                65                    42                      424                     288
+Net balance sheet                     −38            131            1,469                   956                       324                     441
+exposure
+Per cent of GDP
+Assets                                  33              17              69                    45                        34                      33
+Liabilities                             34              11               3                      2                       19                      13
+Net balance sheet                      −2                 6             66                    43                        15                      20
+exposure
+Sources: ABS; RBA
+
+
+
+
+                                                                                                                  BULLE TIN – MARCH 2023                  93
+     F O R E I G N C U R R E N C Y E X P O S U R E A N D H E D G I N G I N AU S T R A L I A
+
+
+
+
+                                              Table A2: Public Sector Foreign Currency Exposure
+                                                                                       As at 31 March 2022
+
+                                                                            General government                               Reserve Bank of Australia
+                                                                        Before hedging    After hedging                     Before hedging    After hedging
+     A$ billion
+     Assets                                                                                   217                217                       62                      62
+     Liabilities                                                                                7                   1                        4                        4
+     Net balance sheet exposure                                                               210                216                       58                      58
+     Per cent of GDP
+     Assets                                                                                    10                 10                         3                        3
+     Liabilities                                                                                0                   0                        0                        0
+     Net balance sheet exposure                                                                 9                 10                         3                        3
+     Sources: ABS; RBA
+
+
+
+
+     Endnotes
+     [*]      The authors are from International Department, and                                    [6]   For a discussion of developments in Australian banks’
+              would like to thank the ABS for the preparation and                                         offshore funding over recent years, see Bellrose and
+              distribution of the SFCE on which this article draws                                        Norman (2019); Fitzpatrick, Shaw and Suthakar (2022);
+              heavily.                                                                                    Johnson (2022); Carse, Faferko and Fitzpatrick (2023).
+     [1]      For a broader discussion of the benefits of a floating                                [7]   A rough calculation using different data sources suggests
+              exchange rate in promoting macroeconomic stability in                                       superannuation funds account for somewhere around
+              small open economies, see Stevens (2013); Schembri                                          half of the sector’s foreign currency assets.
+              (2019).                                                                               [8]   Under a defined contribution structure, superannuation
+     [2]      For the primary source of information and available data,                                   funds are liable to pay members’ accumulated balances
+              see ABS (2022a). The results of the previous survey are                                     (rather than guaranteeing fixed payments), which means
+              discussed in Berger-Thomson and Chapman (2017). There                                       investment losses are passed on to members. This also
+              was a five-year gap between the 2022 survey and the                                         means that movements in the funds’ assets and liabilities
+              previous survey, reflecting a delay to the survey being                                     are more closely linked than those that have a defined
+              conducted because of the COVID-19 pandemic.                                                 benefit structure.
+     [3]      Australia’s foreign equity liabilities are recorded by the ABS                        [9]   The SFCE reports the foreign currency exposures and
+              as Australian dollar denominated liabilities, as the entity is                              hedging of ‘other resident sectors’. However, financial
+              domiciled in Australia and its valuation (market or book) is                                accounts data (ABS 2022c) suggest that non-financial
+              in Australian dollars.                                                                      corporations account for most of these sectors’ exposures
+     [4]      The net effective foreign currency asset position is                                        and hedging.
+              estimated by taking the net position of unhedged foreign                              [10] The bulk of these assets reflect direct equity holdings of
+              currency assets and liabilities.                                                           non-financial corporations, which consist of foreign
+     [5]      APRA’s regulation of the Australian banking system covers                                  operations and subsidiaries.
+              activities that give rise to foreign exchange risks. APRA’s                           [11] Only foreign currency denominated trade receipts and
+              prudential standards require that banks operating in                                       payments expected over the next four years are included
+              foreign exchange markets have appropriate risk                                             in the survey; those denominated in Australian dollars are
+              measurement systems in place, and that they hold capital                                   not included. Around one-third of Australia’s imports are
+              against foreign exchange risks. For more information, see                                  denominated in Australian dollars, as opposed to only
+              APRA (2022a).                                                                              10 per cent of Australia’s exports (ABS 2021).
+
+
+
+
+94    R E S E R V E B A N K O F AU S T R A L I A
+                                                                       F O R E I G N C U R R E N C Y E X P O S U R E A N D H E D G I N G I N AU S T R A L I A
+
+
+
+
+References
+ABS (Australian Bureau of Statistics) (2021), ‘Export and Import Invoice Currencies, 2020–21’, 4 November.
+Available at <https://www.abs.gov.au/articles/export-and-import-invoice-currencies-2020-21>.
+ABS (2022a), ‘Foreign Currency Exposure, Australia’, 5308.0, 31 October. Available at <https://www.abs.gov.au/
+statistics/economy/international-trade/foreign-currency-exposure-australia/latest-release>.
+ABS (2022b), ‘Balance of Payments and International Investment Position, Australia’, 5302.0, 6 December. Available
+at <https://www.abs.gov.au/statistics/economy/international-trade/balance-payments-and-international-
+investment-position-australia/latest-release>.
+ABS (2022c), ‘Australian National Accounts: Finance and Wealth’, 5232.0, 29 September. Available at
+<https://www.abs.gov.au/statistics/economy/national-accounts/australian-national-accounts-finance-and-
+wealth/jun-2022>.
+Adams N and T Atkin (2022), ‘The Significant Shift in Australia’s Balance of Payments’, RBA Bulletin, March.
+APRA (Australian Prudential Regulation Authority) (2022a), ‘Banking (Prudential Standard) Determination No. 9 of
+2022’, Prudential Standard APS 116 Capital Adequacy: Market Risk, 1 December.
+APRA (2022b), ‘Quarterly Superannuation Performance Statistics’, June.
+Bellrose K and D Norman (2019), ‘The Nature of Australian Banks’ Offshore Funding’, RBA Bulletin, December.
+Berger-Thomson L and B Chapman (2017), ‘Foreign Currency Exposure and Hedging in Australia’, RBA Bulletin,
+December, pp 67–75.
+Carse V, A Faferko and R Fitzpatrick (2023), ‘Developments in Banks’ Funding Costs and Lending Rates’, RBA
+Bulletin, March.
+Fitzpatrick R, C Shaw and A Suthakar (2022), ‘Developments in Banks’ Funding Costs and Lending Rates’, RBA
+Bulletin, March.
+Future Fund (2022), ‘Future Fund Annual Report 2021–22’.
+Jacobs D (2019), ‘How Do Global Financial Conditions Affect Australia?’, RBA Bulletin, December.
+Johnson C (2022), ‘Trends in Australian Banks’ Bond Issuance’, RBA Bulletin, September.
+NAB (2021), ‘2021 Biennial NAB Superannuation FX Hedging Survey’, November.
+RBA (Reserve Bank of Australia) (2021), ‘Box C: What Did 2020 Reveal About Liquidity Challenges Facing
+Superannuation Funds?’, Financial Stability Review, April.
+RBA (2022), ‘Reserve Bank of Australia Annual Report 2022’.
+Schembri L (2019), ‘Flexible Exchange Rates, Commodity Prices and Price Stability’, Speech at the Economics
+Society of Northern Alberta, Edmonton, 17 June.
+Stevens G (2013), ‘The Australian Dollar: Thirty Years of Floating’, Speech to the Australian Business Economists’
+Annual Dinner, Sydney, 21 November.
+
+
+
+
+                                                                                                                 BULLE TIN – MARCH 2023                  95
+
