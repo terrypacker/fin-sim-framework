@@ -12,6 +12,22 @@ recommendations by asking for the build.
     convert at that level, while the overlay reads only the rate's moves (R_end / R_start),
     which the anchor does not change. Moving it would show an AU-only plan a rate that
     nothing in it reads.
+- **Phase 2 BUILT** (6 Oct). `hedgeRatio` and `hedgeTaxTreatment` are security fields,
+  validated where a security is built. The overlay is `currency-overlay.js`, applied in
+  `computeHoldingsGrowth` as an additive Δ so that h = 0 on a flat rate is today to the bit.
+  - **R_start is a year-end mark of its own:** `HEDGE_FX_MARK` at order 0.5 on 31 Dec,
+    after every order-0 earnings event and before an order-1 FX tick. A per-account mark
+    would let the first account marked on a 31 Dec move R_start under the others. The
+    event and `state.hedgeOverlay` exist only once a security declares a ratio (and the
+    event only with the FX layer on), so no golden moved.
+  - **Change from §5.1:** `currency` stays unread. It means where the security lives (VGS
+    is AUD-listed), not what it is exposed to, and §5.6 already keys the overlay on the
+    lot's market being foreign to the account. The basket scale of §5.2 (0.86) is in the
+    exposure table now, since f is defined with it.
+  - **Not overlaid:** the design 101 market and security index levels. They track the
+    market, and a hedged security's index would need its own step.
+  - `hedgeForeignCashRate` and `hedgeCost` are not Monte Carlo axes, since they would be
+    dead levers on every plan without a hedged security.
 
 - **Rev 2** (5 Oct) added the Rest, RBA, MSCI and cost sources (§3.1–3.5) and Q7, the
   FX–equity correlation.

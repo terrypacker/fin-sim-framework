@@ -43,6 +43,8 @@ import { FxTickHandler }                  from '../../finance/fx/fx-tick-handler
 import { FxRefreshReducer }               from '../../finance/fx/fx-refresh-reducer.js';
 import { FxProcessReducer }               from '../../finance/fx/fx-process-reducer.js';
 import { FxStepApplyReducer }             from '../../finance/fx/fx-step-apply-reducer.js';
+import { HedgeFxMarkHandler, HedgeFxMarkReducer, buildHedgeFxMarkSeries } from '../../finance/fx/hedge-fx-mark.js';
+import { DEFAULT_HEDGE_FOREIGN_CASH_RATE, DEFAULT_HEDGE_COST } from '../../finance/holdings/currency-overlay.js';
 import { SHOCK_LIBRARY, SHOCK_PRESET_OPTIONS } from '../../finance/economic-shocks/shock-library.js';
 import { BEHAVIORAL_STRATEGY_REGISTRY }       from '../../finance/behavioral/behavioral-strategy-registry.js';
 
@@ -506,14 +508,45 @@ function _fxProcess(context) {
     { process: true, transfers: false });
 }
 
+/**
+ * Whether any lot can carry a currency overlay (design 120 §5.1): an authored security
+ * declares a hedge ratio. Until one does, the plan gets no `hedgeOverlay` state and no mark
+ * event, and every lot grows exactly as before.
+ *
+ * @param {object} context
+ * @returns {boolean}
+ */
+function _hedgeOverlayActive(context) {
+  return (context.securities ?? []).some(s => s?.hedgeRatio != null);
+}
+
+/**
+ * `state.hedgeOverlay` (design 120 §5.6): the cash rate standing in for a foreign Prime the
+ * plan does not load, the forward-roll cost, and the year-end FX mark the overlay measures f
+ * from — seeded at the opening rate when the FX layer runs, empty otherwise (f is then 0).
+ */
+function _hedgeOverlayState(context) {
+  const p = context.parameters;
+  return {
+    foreignCashRate: p.hedgeForeignCashRate ?? DEFAULT_HEDGE_FOREIGN_CASH_RATE,
+    cost:            p.hedgeCost ?? DEFAULT_HEDGE_COST,
+    fxMark:          { ...(_fxProcess(context)?.statePatches.effectiveExchangeRates ?? {}) },
+  };
+}
+
+/** The mark event runs only when an overlay can read a moving rate. */
+function _hedgeFxMarkActive(context) {
+  return _hedgeOverlayActive(context) && _fxProcess(context) != null;
+}
+
 export const ECONOMIC_REGIMES = {
   id: 'ECONOMIC_REGIMES',
   capabilities: ['economic-regimes'],
   dependencies: [],
 
   types: {
-    handlers: [EconomicShockHandler, EconomicRecoveryTickHandler, YieldCurveTickHandler, EquityReturnTickHandler, PropertyReturnTickHandler, InflationTickHandler, FxTickHandler],
-    reducers: [FxRefreshReducer, FxProcessReducer, FxStepApplyReducer, RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer, YieldCurveReducer, YieldCurveStepReducer, EquityReturnReducer, EquityReturnStepReducer, PropertyReturnStepReducer, InflationStepReducer, InflationPathReducer, BondPriceAdjustReducer, BondMaturityReducer],
+    handlers: [EconomicShockHandler, EconomicRecoveryTickHandler, YieldCurveTickHandler, EquityReturnTickHandler, PropertyReturnTickHandler, InflationTickHandler, FxTickHandler, HedgeFxMarkHandler],
+    reducers: [HedgeFxMarkReducer, FxRefreshReducer, FxProcessReducer, FxStepApplyReducer, RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer, YieldCurveReducer, YieldCurveStepReducer, EquityReturnReducer, EquityReturnStepReducer, PropertyReturnStepReducer, InflationStepReducer, InflationPathReducer, BondPriceAdjustReducer, BondMaturityReducer],
     actions: [
       { type: 'ADD_REGIME_APPLY',    fields: { regime: ValueType.any() } },
       { type: 'REMOVE_REGIME_APPLY', fields: { regimeId: ValueType.text() } },
@@ -539,6 +572,8 @@ export const ECONOMIC_REGIMES = {
       // US_AU_CROSS_BORDER too, with the same fields, for a cross-border plan without this
       // toolset.
       { type: 'FX_STEP_APPLY', fields: { pair: ValueType.text(), deviation: ValueType.number() } },
+      // Design 120 §5.6 — the year-end exchange rates the currency overlay measures f from.
+      { type: 'HEDGE_FX_MARK_APPLY', fields: { rates: ValueType.any() } },
       // ── Behavioral strategy action types (design/29) ──────────────────────
       {
         type: 'STOCK_HARVEST_APPLY',
@@ -1282,6 +1317,27 @@ export const ECONOMIC_REGIMES = {
           + 'window-sensitive of the two knobs (whole series 0.072, post-2000 0.104), so it is '
           + 'worth running as a sensitivity axis rather than trusted as a constant.',
       },
+      // Currency hedge (design 120 §5.6). Read only by a lot whose security declares a
+      // hedge ratio, so neither is a Monte Carlo axis by default: on every other plan they
+      // would be dead levers.
+      {
+        key: 'hedgeForeignCashRate', label: 'Hedge: Foreign Cash Rate',
+        type: 'Number', group: 'FX', mc: false, opt: false,
+        defaultValue: DEFAULT_HEDGE_FOREIGN_CASH_RATE,
+        description: 'The foreign central-bank rate a currency-hedged fund pays away when the plan does '
+          + 'not model that country\'s Prime (an AU-only plan has no US prime). A hedge earns the home '
+          + 'policy rate less this one each year. Defaults to the US Prime default. Ignored where the '
+          + 'foreign Prime is loaded.',
+      },
+      {
+        key: 'hedgeCost', label: 'Hedge: Annual Cost',
+        type: 'Number', group: 'FX', mc: false, opt: false,
+        defaultValue: DEFAULT_HEDGE_COST,
+        description: 'Annual cost of rolling a currency hedge, as a fraction of the hedged value: '
+          + '0.025%, the midpoint of the 0.02–0.03% quoted for major developed-market currencies. '
+          + 'The fee gap between a hedged fund and its unhedged twin is not included, because no '
+          + 'security in the model carries a fee.',
+      },
       {
         key:          'behavioralStrategies',
         label:        'Behavioral Strategies',
@@ -1392,6 +1448,7 @@ export const ECONOMIC_REGIMES = {
       priorMarkRates:              {},
       priorMarkCurve:              {},
       ...(_fxProcess(context)?.statePatches ?? {}),
+      ...(_hedgeOverlayActive(context) ? { hedgeOverlay: _hedgeOverlayState(context) } : {}),
     };
   },
 
@@ -1553,6 +1610,8 @@ export const ECONOMIC_REGIMES = {
 
     // FX tick series (design 47) — only with a stochastic FX model (design 120 §5.3).
     events.push(...(_fxProcess(context)?.events ?? []));
+    // The year-end FX mark the currency overlay reads (design 120 §5.6).
+    if (_hedgeFxMarkActive(context)) events.push(buildHedgeFxMarkSeries());
 
     return events;
   },
@@ -1648,6 +1707,7 @@ export const ECONOMIC_REGIMES = {
         : []),
       // FX tick (design 47) — only with a stochastic FX model (design 120 §5.3).
       ...(_fxProcess(context)?.handlers ?? []),
+      ...(_hedgeFxMarkActive(context) ? [new HedgeFxMarkHandler()] : []),
       ...behavioralHandlers,
     ];
   },
@@ -1673,6 +1733,7 @@ export const ECONOMIC_REGIMES = {
       new BondMaturityReducer(),
       // FX rate composition (design 47): refresh, process, step — when the FX layer is here.
       ...(_fxProcess(context)?.reducers ?? []),
+      ...(_hedgeFxMarkActive(context) ? [new HedgeFxMarkReducer()] : []),
       ...behavioralReducers,
     ];
   },
