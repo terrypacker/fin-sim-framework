@@ -285,11 +285,11 @@ scenario's own schema), which is where to go to change it.
 
 - **`fxBasisMethod`** — §988 Lot Consumption Method · `Enum` · default `pro-rata` · one of `pro-rata`, `fifo` · via US_AU_CROSS_BORDER
   Reg. §1.988-2(a)(2)(iii)(B)(1) lets a taxpayer use "any reasonable method consistently applied … to all accounts" and names FIFO, LIFO and pro rata. Pro-rata is the default because it is exactly what a single fxBasisRate scalar implements. FIFO additionally supplies a HOLDING PERIOD, which the personal capital branch needs and pro-rata cannot supply — at the cost of publishing a lot array on every pool. The choice is locked at adoption and binds all future years (design 87 G6).
-- **`fxProcessModel`** — FX Rate Process · `Enum` · default `NONE` · one of `NONE`, `WHITE_NOISE`, `RANDOM_WALK`, `MEAN_REVERTING` · via US_AU_CROSS_BORDER
+- **`fxProcessModel`** — FX Rate Process · `Enum` · default `NONE` · one of `NONE`, `WHITE_NOISE`, `RANDOM_WALK`, `MEAN_REVERTING` · via ECONOMIC_REGIMES
   Time-varying FX model (design 47). NONE = flat (today). MEAN_REVERTING/RANDOM_WALK/WHITE_NOISE vary the rate over time via the seeded RNG.
-- **`fxReversionSpeed`** — FX Reversion Speed (per year) · `Number` · default `0.114` · sweep: mc · conditional · via US_AU_CROSS_BORDER
+- **`fxReversionSpeed`** — FX Reversion Speed (per year) · `Number` · default `0.114` · sweep: mc · conditional · via ECONOMIC_REGIMES
   Mean-reversion speed toward the anchor for the MEAN_REVERTING model — a half-life of about 6.1 years. Fitted to the observed TERM STRUCTURE of FX dispersion over the post-float window, not to the lag-1 autocorrelation: the lag-1 AR(1) estimate on the same data is 0.296, which reproduces 1-year moves and then flattens, understating 10-year dispersion by a third. Still the more window-sensitive of the two knobs (whole series 0.072, post-2000 0.104), so it is worth running as a sensitivity axis rather than trusted as a constant.
-- **`fxVolatility`** — FX Volatility (annualized) · `Number` · default `0.1142` · sweep: mc · conditional · via US_AU_CROSS_BORDER
+- **`fxVolatility`** — FX Volatility (annualized) · `Number` · default `0.1142` · sweep: mc · conditional · via ECONOMIC_REGIMES
   Annualized log-volatility of the FX rate when a process model is active. Default is calibrated from the published USD/AUD series over the post-float window 1984-01 onward (design 92 §8.1), not assumed — reproduce it with scripts/lab/calibrate-fx.mjs. The whole series and the post-2000 era give 0.111 and 0.120, so this is not sensitive to the window; the original 0.06 default was.
 
 ### Liquidity Pools (6)
@@ -1723,7 +1723,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `FIXED_INCOME_EARNINGS_APPLY` | amount: currency(USD), stateKey: text, residency: text | US_BROKERAGE |
 | `FIXED_INCOME_EARNINGS_TAX` | amount: currency(USD), residency: text, stateKey: text | US_BROKERAGE |
 | `FIXED_INCOME_WITHDRAWAL_APPLY` | amount: currency(USD) | US_BROKERAGE |
-| `FX_STEP_APPLY` | pair: text, deviation: number | US_AU_CROSS_BORDER |
+| `FX_STEP_APPLY` | pair: text, deviation: number | ECONOMIC_REGIMES, US_AU_CROSS_BORDER |
 | `FX_TRANSFER_APPLY` | from: text, to: text, fromAmount: number, toAmount: number, rate: number, fee: currency(USD), section988: any | US_AU_CROSS_BORDER |
 | `GUARDRAIL_ADJUST_APPLY` | multiplier: number, cause: text, date: any | AU_RETIREMENT, US_RETIREMENT |
 | `GUARDRAIL_BASELINE_APPLY` | initialWithdrawalRate: number, portfolioValue: number, annualSpending: number, date: any | AU_RETIREMENT, US_RETIREMENT |

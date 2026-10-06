@@ -1,7 +1,17 @@
 # 120 — Currency-hedged and unhedged foreign equity
 
-**Status:** DRAFT, rev 3, 6 Oct 2026. Nothing built. Each §8 question carries a
-recommendation for the author to confirm.
+**Status:** ACCEPTED, rev 3, 6 Oct 2026; building (§6). The author accepted the §8
+recommendations by asking for the build.
+
+- **Phase 1 BUILT** (6 Oct). The FX process (`fxProcessModel`, `fxVolatility`,
+  `fxReversionSpeed`, the FX tick and the rate-composing reducers) is in ECONOMIC_REGIMES.
+  - ECONOMIC_REGIMES contributes it only when a process model is on or US_AU_CROSS_BORDER
+    is loaded. An AU-only plan at NONE gets no FX state, so every golden is byte-identical.
+  - US_AU_CROSS_BORDER still contributes it when ECONOMIC_REGIMES is not in the compile.
+  - **Change from §5.3:** `exchangeRateUsdToAud` stays in US_AU_CROSS_BORDER. Transfers
+    convert at that level, while the overlay reads only the rate's moves (R_end / R_start),
+    which the anchor does not change. Moving it would show an AU-only plan a rate that
+    nothing in it reads.
 
 - **Rev 2** (5 Oct) added the Rest, RBA, MSCI and cost sources (§3.1–3.5) and Q7, the
   FX–equity correlation.
