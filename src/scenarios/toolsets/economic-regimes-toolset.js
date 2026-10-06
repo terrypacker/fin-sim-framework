@@ -13,7 +13,7 @@ import { EventSeries }                   from '../../simulation-framework/events
 import { MarketIndexReducer }            from '../../finance/economic-regimes/market-index.js';
 import { DateUtils }                      from '../../simulation-framework/date-utils.js';
 import { ValueType }                      from '../../simulation-framework/type-registry.js';
-import { RATE_KEYS, RATE_KEY_META, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS, CASH_PRIME_KEY_BY_RATE_KEY, SAVINGS_KEY_BY_COUNTRY, EQUITY_SLEEVES, PROPERTY_SLEEVES, DEFAULT_EQUITY_BETA, DEFAULT_EQUITY_IDIO, DEFAULT_RE_BETA, DEFAULT_RE_IDIO } from '../../finance/economic-regimes/rate-keys.js';
+import { RATE_KEYS, RATE_KEY_META, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS, CASH_PRIME_KEY_BY_RATE_KEY, SAVINGS_KEY_BY_COUNTRY, EQUITY_SLEEVES, PROPERTY_SLEEVES, DEFAULT_EQUITY_BETA, DEFAULT_EQUITY_IDIO, DEFAULT_EQUITY_IDIO_LOCAL, DEFAULT_RE_BETA, DEFAULT_RE_IDIO } from '../../finance/economic-regimes/rate-keys.js';
 import { ACCOUNT_ROLES } from '../../finance/state/account-roles.js';
 import { MARKET_GROWTH_PARAMS, marketReturnFor } from '../../finance/economic-regimes/market-returns.js';
 import { RegimeApplyReducer }             from '../../finance/economic-regimes/regime-apply-reducer.js';
@@ -38,7 +38,7 @@ import { shapeDelta }                     from '../../finance/economic-regimes/y
 import { EconomicShockHandler }           from '../../finance/economic-regimes/economic-shock-handler.js';
 import { EconomicRecoveryTickHandler }    from '../../finance/economic-regimes/economic-recovery-tick-handler.js';
 import { FX_PROCESS_MODEL_IDS }           from '../../finance/fx/fx-process-models.js';
-import { FxService, regimesContributesFxProcess } from '../../finance/fx/fx-service.js';
+import { FxService, regimesContributesFxProcess, DEFAULT_FX_EQUITY_CORRELATION } from '../../finance/fx/fx-service.js';
 import { FxTickHandler }                  from '../../finance/fx/fx-tick-handler.js';
 import { FxRefreshReducer }               from '../../finance/fx/fx-refresh-reducer.js';
 import { FxProcessReducer }               from '../../finance/fx/fx-process-reducer.js';
@@ -531,7 +531,30 @@ function _hedgeOverlayState(context) {
     foreignCashRate: p.hedgeForeignCashRate ?? DEFAULT_HEDGE_FOREIGN_CASH_RATE,
     cost:            p.hedgeCost ?? DEFAULT_HEDGE_COST,
     fxMark:          { ...(_fxProcess(context)?.statePatches.effectiveExchangeRates ?? {}) },
+    // §5.5 — once the sleeve is local-currency, a silent ex-AU lot runs unhedged.
+    ...(_sleeveRebased(context) ? { rebased: true } : {}),
   };
+}
+
+/**
+ * Whether the ex-AU sleeve runs on the local-currency basis (design 120 §5.5): an overlay
+ * can run AND a stochastic FX process supplies the currency part of the return. Then every
+ * ex-AU lot in an AUD account takes the overlay — a silent one unhedged — so none loses
+ * the currency risk the AUD calibration used to carry. With FX at NONE the AUD calibration
+ * stays, because a flat rate supplies no currency risk to replace it.
+ */
+function _sleeveRebased(context) {
+  return _hedgeOverlayActive(context) && (context.parameters.fxProcessModel ?? 'NONE') !== 'NONE';
+}
+
+/**
+ * Whether the equity tick stamps its market shock for the FX tick (design 120 §5.4): the
+ * FX process runs here and correlates with equity.
+ */
+function _stampMarketShock(context) {
+  const p = context.parameters;
+  return (p.fxProcessModel ?? 'NONE') !== 'NONE' && _fxProcess(context) != null
+    && (p.fxEquityCorrelation ?? DEFAULT_FX_EQUITY_CORRELATION) !== 0;
 }
 
 /** The mark event runs only when an overlay can read a moving rate. */
@@ -552,7 +575,9 @@ export const ECONOMIC_REGIMES = {
       { type: 'REMOVE_REGIME_APPLY', fields: { regimeId: ValueType.text() } },
       { type: 'YIELD_CURVE_STEP_APPLY', fields: { country: ValueType.text(), deviation: ValueType.number() } },
       // `bootstrap` is the HISTORICAL_BOOTSTRAP block cursor (design 102 §4.3); other models omit it.
-      { type: 'EQUITY_RETURN_STEP_APPLY', fields: { marketDev: ValueType.number(), deviation: ValueType.any(), driftComp: ValueType.any(), bootstrap: ValueType.any() } },
+      // `marketShock` is the next year's standardized market shock (design 120 §5.4), only
+      // when an FX path correlates with it.
+      { type: 'EQUITY_RETURN_STEP_APPLY', fields: { marketDev: ValueType.number(), deviation: ValueType.any(), driftComp: ValueType.any(), bootstrap: ValueType.any(), marketShock: ValueType.any() } },
       { type: 'PROPERTY_RETURN_STEP_APPLY', fields: { marketDev: ValueType.number(), deviation: ValueType.any(), driftComp: ValueType.any() } },
       // Design 103 §4.2. `historicalYear` only in joint mode; `passThrough` only when set.
       // Design 104 adds `primeDeviation` / `primeFloor`, only in "follows inflation" prime mode.
@@ -1289,6 +1314,18 @@ export const ECONOMIC_REGIMES = {
           + 'MEAN_REVERTING/RANDOM_WALK/WHITE_NOISE vary the rate over time via the seeded RNG.',
       },
       {
+        key: 'fxEquityCorrelation', label: 'FX–Equity Correlation (annual)',
+        type: 'Number', group: 'FX', mc: true, opt: false,
+        defaultValue: DEFAULT_FX_EQUITY_CORRELATION,
+        visibleWhen: { param: 'fxProcessModel', in: FX_PROCESS_MODEL_IDS.filter(id => id !== 'NONE') },
+        description: 'Annual correlation between the year\'s move in the AUD price of a US dollar and '
+          + 'the year\'s equity market shock, used when the FX process and stochastic equity returns '
+          + 'are both on. Negative means the Australian dollar falls when world shares fall, which '
+          + 'cushions an unhedged holder. The default is the 2004–2023 annual measurement on the '
+          + 'model\'s own pair (design 120 §3.6, `npm run fx:equity-correlation`); 1984–2003 measured '
+          + '+0.16, so sweep it rather than trust one era. 0 leaves the FX path independent.',
+      },
+      {
         key: 'fxVolatility', label: 'FX Volatility (annualized)',
         type: 'Number', group: 'FX', mc: true, opt: false,
         defaultValue: 0.1142,
@@ -1677,7 +1714,12 @@ export const ECONOMIC_REGIMES = {
             // a hidden constant behind it.
             reversionSpeed: p.equityReturnReversionSpeed ?? 0.3,
             beta:           p.equityReturnBeta      ?? {},
-            idioVol:        p.equityReturnIdioVol   ?? {},
+            // Design 120 §5.5 — the ex-AU sleeve's local-currency idio vol while the currency
+            // overlay supplies the FX part; an authored per-market value still wins.
+            idioVol:        _sleeveRebased(context)
+              ? { ...DEFAULT_EQUITY_IDIO_LOCAL, ...(p.equityReturnIdioVol ?? {}) }
+              : (p.equityReturnIdioVol ?? {}),
+            stampMarketShock: _stampMarketShock(context),
             driftComp:      p.equityReturnDriftComp ?? 'GEOMETRIC',
             blockLength:    p.equityReturnBootstrapBlock ?? 5,
             // Design 103 §5.1: joint mode draws only post-war years, the era the inflation

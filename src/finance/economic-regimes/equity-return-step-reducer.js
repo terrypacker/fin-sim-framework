@@ -57,6 +57,9 @@ export class EquityReturnStepReducer extends Reducer {
     // just replayed and how many years of its block remain. Written only when the handler
     // sent it, so the other models gain no state key.
     if (action.bootstrap != null) next.equityReturnBootstrap = { ...action.bootstrap };
+    // Design 120 §5.4 — the next year's standardized market shock, for the FX tick. Written
+    // only when the handler stamps it (an FX path correlates with it).
+    if (action.marketShock != null) next.equityMarketShock = { ...action.marketShock };
     return this.newState(state, next);
   }
 }

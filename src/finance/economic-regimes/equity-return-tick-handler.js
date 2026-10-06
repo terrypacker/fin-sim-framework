@@ -163,7 +163,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
   static type        = 'EquityReturnTickHandler';
   static eventType   = 'EQUITY_RETURN_TICK';
 
-  constructor({ vol = 0.18, model = 'WHITE_NOISE', reversionSpeed = 0.3, beta = {}, idioVol = {}, driftComp = 'GEOMETRIC', blockLength = 5, window = 'FULL', auReplay = true, dt = 1 } = {}) {
+  constructor({ vol = 0.18, model = 'WHITE_NOISE', reversionSpeed = 0.3, beta = {}, idioVol = {}, driftComp = 'GEOMETRIC', blockLength = 5, window = 'FULL', auReplay = true, dt = 1, stampMarketShock = false } = {}) {
     super(null, 'Equity Return Tick');
     this.vol                  = vol;             // annualized market-factor sd (rate units)
     this.model                = model;           // one of EQUITY_RETURN_MODEL_IDS
@@ -175,6 +175,9 @@ export class EquityReturnTickHandler extends HandlerEntry {
     this.window               = window;          // 'FULL' or 'POSTWAR' (design 103 joint mode) — HISTORICAL_BOOTSTRAP only
     this.auReplay             = auReplay;        // replay the AU market's own year where it has data (HISTORICAL_BOOTSTRAP only)
     this.dt                   = dt;              // tick interval in years (annual)
+    // Design 120 §5.4 — publish the year's standardized market shock for the FX tick to
+    // correlate with. Only when the FX path reads it, so no other run gains a state key.
+    this.stampMarketShock     = stampMarketShock;
     this.generatedActionTypes = ['EQUITY_RETURN_STEP_APPLY'];
   }
 
@@ -182,7 +185,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
     const h = new this({
       vol: d.vol, model: d.model, reversionSpeed: d.reversionSpeed,
       beta: d.beta, idioVol: d.idioVol, driftComp: d.driftComp, blockLength: d.blockLength,
-      window: d.window, auReplay: d.auReplay, dt: d.dt,
+      window: d.window, auReplay: d.auReplay, dt: d.dt, stampMarketShock: d.stampMarketShock ?? false,
     });
     h.id = d.id;
     return h;
@@ -193,7 +196,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
       ...super.toJSON(),
       vol: this.vol, model: this.model, reversionSpeed: this.reversionSpeed,
       beta: this.beta, idioVol: this.idioVol, driftComp: this.driftComp, blockLength: this.blockLength,
-      window: this.window, auReplay: this.auReplay, dt: this.dt,
+      window: this.window, auReplay: this.auReplay, dt: this.dt, stampMarketShock: this.stampMarketShock,
     };
   }
 
@@ -209,7 +212,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
     const rng = sim.rngStream?.('equity', (sim.currentDate ?? new Date()).getUTCFullYear()) ?? sim.rng;
 
     const bootstrapping = this.model === 'HISTORICAL_BOOTSTRAP';
-    let marketDev, marketVar, bootstrap = null;
+    let marketDev, marketVar, bootstrap = null, zMarket = null;
     if (bootstrapping) {
       ({ marketDev, bootstrap } = this._bootstrapStep(sim, state));
       // The drag the rescaled series actually has (design 102 §4.4). Scaling by s scales
@@ -221,7 +224,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
       const step = FX_PROCESS_MODELS[this.model] ?? FX_PROCESS_MODELS.WHITE_NOISE;
       const prev = state.equityReturnMarketDev ?? 0;
       // ONE market draw, shared across all sleeves (design 74 §4).
-      const zMarket = gaussianFrom(rng);
+      zMarket = gaussianFrom(rng);
       marketDev = step(prev, { sigma: this.vol, dt: this.dt, k: this.reversionSpeed, z: zMarket });
       marketVar = this.vol * this.vol;
     }
@@ -333,6 +336,17 @@ export class EquityReturnTickHandler extends HandlerEntry {
     // Only the bootstrap carries a cursor, so every other model's action (and state) keeps
     // its exact pre-design-102 shape.
     if (bootstrap) out.bootstrap = bootstrap;
+    // Design 120 §5.4 — the shock this draw puts on the market, standardized, labelled with
+    // the calendar year it drives. A draw on 31 Dec of Y is folded onto the growth rates at
+    // the next period advance and is what the 31 Dec growth of Y + 1 applies, so every FX
+    // tick of Y + 1 runs AFTER it and can read it from state: no keyed stream, no peeking
+    // ahead, and the bootstrap's year is as readable as a Gaussian draw. The innovation for
+    // the Gaussian models (the persistence of MEAN_REVERTING is not news); the replayed
+    // year's deviation in units of the market vol for the bootstrap.
+    if (this.stampMarketShock) {
+      const year = (sim.currentDate ?? new Date()).getUTCFullYear() + 1;
+      out.marketShock = { year, z: bootstrapping ? marketDev / this.vol : zMarket };
+    }
     return [out];
   }
 
