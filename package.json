@@ -39,6 +39,7 @@
     "section988:ingest": "node scripts/tax/section988-ingest.mjs",
     "fetch:rates": "node scripts/tax/fetch-fx-rates.mjs",
     "calibrate:fx": "node scripts/lab/calibrate-fx.mjs",
+    "fx:equity-correlation": "node scripts/lab/fx-equity-correlation.mjs",
     "probe:residency-cgt": "node scripts/probes/probe-residency-cgt.mjs",
     "probe:foreign-property-cgt": "node scripts/probes/probe-foreign-property-cgt.mjs",
     "probe:tax-payment-leak": "node scripts/probes/probe-tax-payment-tax-leak.mjs",

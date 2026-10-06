@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-223 parameters · 33 panels · 12 node types (203 fields) · 178 action types · 86 tools · 310 state field types · 77 topics · 128 design docs
+223 parameters · 33 panels · 12 node types (203 fields) · 178 action types · 87 tools · 310 state field types · 77 topics · 128 design docs
 
 ---
 
@@ -1058,11 +1058,11 @@ Explained in [`help/nodes`](nodes/reducer.md). 0 field(s) described by a record 
 
 ---
 
-## Headless tools (86)
+## Headless tools (87)
 
 Command-line entry points under `scripts/`. **Purpose** is harvested from each script's
 docblock, not re-authored here. Arguments come from each script's declarative
-`parseFlags` spec: 73 of 73 entry points carry one (design 108 D6 — all of them).
+`parseFlags` spec: 74 of 74 entry points carry one (design 108 D6 — all of them).
 6 scripts carry no docblock naming themselves and show `(undocumented)`.
 
 ### scripts/config-converters/
@@ -1164,6 +1164,9 @@ docblock, not re-authored here. Arguments come from each script's declarative
     - `--levers` (string) — lever bag applied to every case: inline JSON or a file
     - `--scenario` (string) — base scenario export; omitted ⇒ the synthetic default
     - `--index` (number, default `0`) — scenario index in that file
+    - `--json` (flag) — machine-readable output
+- **`scripts/lab/fx-equity-correlation.mjs`** — `npm run fx:equity-correlation`
+  how the AUD moves with the US share market, on the model's
     - `--json` (flag) — machine-readable output
 - **`scripts/lab/glidepath-corners.mjs`**
   audit a baked glidepath for anchors that zero an asset
