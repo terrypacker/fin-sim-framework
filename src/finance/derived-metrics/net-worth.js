@@ -69,6 +69,9 @@ function _sumNetWorth(state, baseCurrency, { includeSpeculative }) {
       // (design 88 D3/OQ2): an account is drawdown-eligible machinery, and
       // excluding one from worth while the engine spends from it is incoherent.
       contribution = val.balance;
+      // A preserved MSBS funded employer benefit (design 119 §6.4): invested, so worth,
+      // though no draw can reach it. The unfunded part is not: nothing backs it yet.
+      contribution += val.employerBenefit?.funded ?? 0;
     } else if (val.kind === 'real-property' && typeof val.value === 'number') {
       // RealProperty: equity only
       if (!includeSpeculative && isSpeculative(val)) continue;

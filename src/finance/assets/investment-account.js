@@ -494,3 +494,37 @@ export class SuperannuationAccount extends RetirementAccount {
     this.drawStartDate = opts.drawStartDate ?? null;
   }
 }
+
+/** The statement fields an `MsbsAccount` adds, saved with the plan when set. */
+export const MSBS_FIELDS = Object.freeze([
+  'unfundedEmployerBenefit', 'fundedEmployerBenefit', 'fundedAllocation',
+  'serviceEndDate', 'officerOnExit',
+]);
+
+/**
+ * MsbsAccount — a PRESERVED Military Superannuation and Benefits Scheme benefit (design 119
+ * §6.4), authored from the member's CSC statement. A super account: its balance and holdings
+ * are the member benefit (ancillary folded in). The employer benefit rides beside it:
+ * `fundedEmployerBenefit` invested at `fundedAllocation` (CSC's Balanced option), and
+ * `unfundedEmployerBenefit` indexed by CPI. See `account-rules/au/msbs.js`.
+ */
+export class MsbsAccount extends SuperannuationAccount {
+  /**
+   * @param {number} balance - the member benefit
+   * @param {object} [opts] - All SuperannuationAccount opts, plus:
+   * @param {number}  [opts.unfundedEmployerBenefit=0] - from the statement (r 61A)
+   * @param {number}  [opts.fundedEmployerBenefit=0]   - from the statement (Sch 1)
+   * @param {object|null} [opts.fundedAllocation=null] - rate key → weight; null = CSC Balanced
+   * @param {string|null} [opts.serviceEndDate=null]   - 'YYYY-MM-DD' the member left the ADF
+   * @param {boolean} [opts.officerOnExit=false]       - an officer when membership ceased
+   */
+  constructor(balance = 0, opts = {}) {
+    super(balance, opts);
+    this.scheme                  = 'MSBS';
+    this.unfundedEmployerBenefit = opts.unfundedEmployerBenefit ?? 0;
+    this.fundedEmployerBenefit   = opts.fundedEmployerBenefit   ?? 0;
+    this.fundedAllocation        = opts.fundedAllocation        ?? null;
+    this.serviceEndDate          = opts.serviceEndDate          ?? null;
+    this.officerOnExit           = opts.officerOnExit           ?? false;
+  }
+}

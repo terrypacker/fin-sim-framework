@@ -69,6 +69,20 @@ export function accountToStatePlain(account) {
   // Super draw date (design 119 §6.1): the release gate and the earnings tax read it from
   // the STATE entry, for the same reason. Projected only when set.
   if (account.drawStartDate != null) plain.drawStartDate = account.drawStartDate;
+  // A preserved MSBS benefit (design 119 §6.4): the election window and the employer
+  // benefit the reducers grow and index. `cpiPeak` is the AU CPI level at the start of the
+  // run (1.0), the "highest earlier index" r 61A measures against.
+  if (account.scheme === 'MSBS' || account.__type === 'MsbsAccount') {
+    plain.scheme         = 'MSBS';
+    plain.serviceEndDate = account.serviceEndDate ?? null;
+    plain.officerOnExit  = !!account.officerOnExit;
+    plain.employerBenefit = {
+      funded:           Number(account.fundedEmployerBenefit)   || 0,
+      unfunded:         Number(account.unfundedEmployerBenefit) || 0,
+      fundedAllocation: account.fundedAllocation ?? null,
+      cpiPeak:          1,
+    };
+  }
   // …and its per-security overrides (design 106 §5). Same rule, same reason: the handler
   // reads the election from the runtime STATE entry, so a field left out here is an
   // authored election the simulation cannot see.

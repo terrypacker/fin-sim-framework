@@ -74,9 +74,11 @@ const COLUMN_EXTRAS = {
   }])),
 };
 
-/** `[stateKey, name]` for each super fund `personId` owns, blank first ("first fund"). */
+/** `[stateKey, name]` for each super fund `personId` owns, blank first ("first fund").
+ *  A preserved MSBS benefit takes no contributions, so it is never offered. */
 export function superFundOptions(accounts, personId) {
   const own = (accounts ?? []).filter(a => a?.stateKey && a.role === 'super'
+    && a.scheme !== 'MSBS' && a.__type !== 'MsbsAccount'
     && (a.ownerId === personId || a.ownerId == null));
   return [['', 'First fund'], ...own.map(a => [a.stateKey, a.name || a.stateKey])];
 }

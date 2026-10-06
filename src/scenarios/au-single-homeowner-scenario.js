@@ -92,6 +92,23 @@ export const AU_SINGLE_HOMEOWNER_DEFAULTS = {
   // Index; basis splits in the same ratio.
   superOverseasIndexWeight:   0.50,
 
+  // ── Two jobs, two funds (design 119 §6.3) ──────────────────────────────────
+  // The salary above is earned in two spells at the same pay: the current employer
+  // until mid-2036, then a new one until the retirement date. Each pays SG into its own
+  // fund — the second into a fund opened for it — so the plan exercises a job naming
+  // its super account.
+  jobChangeDate:          '2036-07-01',
+  secondFundBalance:            0,
+
+  // ── MSBS, preserved (design 119 §6.4) ──────────────────────────────────────
+  // Fourteen years in the ADF (other ranks), left 30 Jun 2014 with a preserved benefit.
+  // Figures as a CSC statement shows them; the draw date is the 60th birthday.
+  msbsMemberBenefit:           60_000,
+  msbsFundedEmployerBenefit:   25_000,
+  msbsUnfundedEmployerBenefit: 140_000,
+  msbsServiceEndDate:          '2014-06-30',
+  msbsDrawStartDate:           '2041-07-01',
+
   // ── Superannuation Guarantee ───────────────────────────────────────────────
   // Employer-paid, on top of the quoted salary. A scenario assumption, NOT a
   // transcription of the legislated SG schedule — this model carries no rate table
@@ -163,22 +180,10 @@ export const AU_SINGLE_HOMEOWNER_SECURITIES = Object.freeze([
  * `ScenarioParamGenerator` (design 55); listing them again here would create the
  * edit duality design 32 closed.
  */
-export const AU_SINGLE_HOMEOWNER_PARAM_SCHEMA = [
-  {
-    key: 'primaryMonthlyWage', label: 'Monthly Salary (AUD)',
-    type: 'Number', group: 'Income', mc: true, opt: true,
-    defaultValue: AU_SINGLE_HOMEOWNER_DEFAULTS.primaryMonthlyWage,
-    description: 'Gross monthly salary in AUD, for work performed in Australia. The Super Guarantee is a fraction of this, paid by the employer on top of it.',
-    node: { type: 'person', id: 'primary', field: 'monthlyWage' },
-  },
-  {
-    key: 'primaryRetirementDate', label: 'Retirement Date',
-    type: 'Date', group: 'Income', mc: false, opt: true,
-    defaultValue: AU_SINGLE_HOMEOWNER_DEFAULTS.primaryRetirementDate,
-    description: 'Wages and the Super Guarantee both stop on this date.',
-    node: { type: 'person', id: 'primary', field: 'retirementDate' },
-  },
-];
+// The salary and the retirement date are the two jobs' wage and last end date now, swept
+// as their generated `job.<id>.*` levers (design 116): a person-level wage would be read by
+// nothing once the person has jobs.
+export const AU_SINGLE_HOMEOWNER_PARAM_SCHEMA = [];
 
 export class AuSingleHomeownerScenario extends BaseScenario {
   static scenarioId()   { return 'au-single-homeowner'; }
@@ -291,13 +296,26 @@ export class AuSingleHomeownerScenario extends BaseScenario {
           birthDate:      isoDate(p.primaryBirthDate),
           citizen:        ['AU'],
           residency:      'AU',
-          monthlyWage:    p.primaryMonthlyWage,
           wageCurrency:   'AUD',
           workCountry:    'AU',
           retirementDate: isoDate(p.primaryRetirementDate),
           lifeExpectancy: 90,
           // See the class comment: the Age Pension is means-tested and unmodelled.
           socialSecurityMonthly: 0,
+        },
+      ],
+
+      jobs: [
+        {
+          id: 'job-current', personId: 'primary', startDate: null, endDate: p.jobChangeDate,
+          monthlyWage: p.primaryMonthlyWage, wageCurrency: 'AUD', workCountry: 'AU',
+          superAccountKey: 'superAccount',
+        },
+        {
+          id: 'job-next', personId: 'primary', startDate: p.jobChangeDate,
+          endDate: isoDate(p.primaryRetirementDate),
+          monthlyWage: p.primaryMonthlyWage, wageCurrency: 'AUD', workCountry: 'AU',
+          superAccountKey: 'secondSuperAccount',
         },
       ],
 
@@ -337,6 +355,28 @@ export class AuSingleHomeownerScenario extends BaseScenario {
           minimumAge: 60,
           country: 'AU', currency: AUD,
           holdings: _superHoldings(p),
+        },
+        {
+          // The second job's fund (design 119 §6.3): opened empty, filled by its SG.
+          __type: 'SuperannuationAccount', stateKey: 'secondSuperAccount',
+          name: 'Second Employer Super',   role: ACCOUNT_ROLES.SUPER,
+          balance: p.secondFundBalance,    contributionBasis: p.secondFundBalance,
+          ownerId: 'primary',              drawdownPriority: 2,
+          country: 'AU', currency: AUD,
+        },
+        {
+          // A preserved MSBS benefit (design 119 §6.4). The balance is the member benefit;
+          // the employer benefit is the statement's two figures beside it.
+          __type: 'MsbsAccount',           stateKey: 'msbsAccount',
+          name: 'MilitarySuper (MSBS)',    role: ACCOUNT_ROLES.SUPER,
+          balance: p.msbsMemberBenefit,    contributionBasis: p.msbsMemberBenefit,
+          ownerId: 'primary',              drawdownPriority: 3,
+          country: 'AU', currency: AUD,
+          fundedEmployerBenefit:   p.msbsFundedEmployerBenefit,
+          unfundedEmployerBenefit: p.msbsUnfundedEmployerBenefit,
+          serviceEndDate:          p.msbsServiceEndDate,
+          officerOnExit:           false,
+          drawStartDate:           p.msbsDrawStartDate,
         },
       ],
 

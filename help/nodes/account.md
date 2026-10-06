@@ -10,7 +10,7 @@ stamps:
   panel:config-graph: 82a0c7
   panel:holdings: 962055
   panel:pools: 78458e
-  node:account: 104ea5
+  node:account: 798eb2
 ---
 
 Every pot of money in the plan, and every debt: cash, brokerage, the four retirement
@@ -50,6 +50,15 @@ fund tax until then; Opt searches it.
 - `cashDeductibleFraction` — The share of this pool put to an income-producing use, 0 to 1. It drives two tests at once: whether §988 applies to the expense at all, and whether a currency loss is deductible as a transaction entered into for profit. Blank means fully personal, which is the safe default — a personal currency loss is disallowed while the matching gain is still taxed. An offset backing a rental should be set explicitly.
 - `drawdownPriority` — Where this account sits in the liquidation order, 1 first. BLANK EXCLUDES IT from the drawdown chain entirely: the balance still earns and still counts in net worth, but no spending shortfall will ever reach it, and it is not counted as reserve. That is the right setting for money that is genuinely not available, and the wrong one for an account you expected to fund retirement.
 - `earningsBasis` — The earnings half of a retirement account's balance, computed as the balance less the contribution basis. Read-only: it is derived, and the two halves matter because a withdrawal takes basis out tax-free and earnings out taxable.
+- `superScheme` — Whether this super account is an ordinary fund or a preserved MSBS (MilitarySuper) benefit, for a member who has left the ADF. Fixed once the account is created. On MSBS, the balance and holdings are the member benefit, with any ancillary benefit added in. Draw Start Date is the election, which the model keeps between age 55 (or leaving the ADF, if later) and 65.
+- `unfundedEmployerBenefit` — The unfunded part of the employer benefit, as the CSC statement shows it. It rises each 1 July with CPI and never falls, but it is not invested and is not in net worth. If the statement shows only an employer benefit total, enter the total less the funded part here. A former DFRDB member's unfunded productivity benefit is indexed the same way, so it goes here too.
+- `fundedEmployerBenefit` — The funded (productivity) part of the employer benefit, from the statement. CSC invests it in its Balanced option whatever you chose for the member benefit, so it earns the mix below. It counts in net worth, but no draw reaches it before the election.
+- `serviceEndDate` — The day the member left the ADF. The MSBS pension cannot start while serving, so a member who served past 55 cannot elect before this date.
+- `officerOnExit` — Whether the member was an officer when they left. It picks the valuation table column used for their total superannuation balance, which in turn sets their contribution caps.
+- `msbsMixEquityAu` — Share of the funded employer benefit in Australian shares. All four blank uses CSC's published Balanced mix. The PDS does not split shares by market, so the default is an even split; change it if CSC's investment booklet says otherwise.
+- `msbsMixEquityIntl` — Share of the funded employer benefit in international shares, the other half of the Balanced option's growth assets by default.
+- `msbsMixBonds` — Share of the funded employer benefit in fixed interest, 12.5% in the Balanced option.
+- `msbsMixCash` — Share of the funded employer benefit in cash, 13% in the Balanced option.
 - `offsetsPropertyKey` — The property whose mortgage this offset account reduces. An offset does not earn interest; it lowers the interest-bearing principal of the linked loan instead, dollar for dollar, which is why draining one costs more than the cash it releases.
 - `rateType` — How the loan's rate is set. Variable pays Prime plus a margin and moves with every Prime step. Fixed for the whole term holds one rate for the life of the loan, the usual US 15- or 30-year mortgage. Fixed period, then variable holds the rate until the Fixed Until date and then reverts, the usual Australian three-to-five-year fix or a US adjustable-rate mortgage. A new US loan starts on fixed and a new Australian loan on variable.
 - `loanRate` — The annual rate the lender quotes, as an absolute decimal (0.06 = 6%). On a variable loan it is stored as a margin over Prime where Prime is configured, so a Prime move re-rates it. On a fixed loan, or during a fixed period, it is the fixed rate itself and no Prime move reaches it.

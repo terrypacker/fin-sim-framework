@@ -16,6 +16,7 @@ import { resolveDefaultAllocation } from '../holdings/default-allocations.js';
 // hold different conventions. It used to be a private copy guarded by a comment.
 import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
 import { isSpeculative } from '../assets/asset.js';
+import { fundedSleeveParts } from '../account-rules/au/msbs.js';
 
 /**
  * allocation-cube.js — reduce one simulation state to a flat table of allocation facts.
@@ -90,6 +91,8 @@ export const CUBE_SOURCE = Object.freeze({
   LIABILITY:      'liability',
   /** `account.balance` minus Σ holdings — the holdings/balance drift made visible. */
   RECONCILIATION: 'reconciliation',
+  /** An MSBS funded employer benefit, split by its mix (design 119 §6.4). */
+  EMPLOYER_BENEFIT: 'employer-benefit',
 });
 
 const DEFAULT_BALANCE_TOLERANCE = 1; // currency units; below this, drift is rounding
@@ -236,6 +239,18 @@ export function buildAllocationCube(state, opts = {}) {
 
     if (_isAccount(entry)) {
       _pushAccountRows(push, stateKey, entry, { reconcileToBalance, balanceTolerance, securities: state.securities ?? null });
+      // An MSBS funded employer benefit, which net worth counts beside the balance
+      // (design 119 §6.4): one row per class of its mix.
+      for (const part of fundedSleeveParts(entry.employerBenefit)) {
+        push({
+          stateKey, entry,
+          source:           CUBE_SOURCE.EMPLOYER_BENEFIT,
+          assetClass:       assetClassForAllocation(part.allocation),
+          allocation:       part.allocation,
+          rateKey:          part.rateKey,
+          marketValueLocal: part.value,
+        });
+      }
       continue;
     }
 

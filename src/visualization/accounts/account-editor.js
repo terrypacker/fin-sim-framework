@@ -36,6 +36,11 @@ const INVESTMENT_TYPES = new Set(['brokerage', '401k', 'roth', 'ira', 'super']);
 // Types carrying the contribution/earnings ledger — the only ones that show (and
 // persist) the basis fields (design 53 §2). Brokerage is holdings-only.
 const RETIREMENT_TYPES = new Set(['401k', 'roth', 'ira', 'super']);
+/** The MSBS funded-benefit mix inputs, `[data-id, rate key]` (design 119 §6.4). */
+const MSBS_MIX_INPUTS = [
+  ['msbsMixEquityAu', 'EQUITY_AU'], ['msbsMixEquityIntl', 'EQUITY_INTL_EX_AU'],
+  ['msbsMixBonds', 'FIXED_INCOME_AU'], ['msbsMixCash', 'SAVINGS_AU'],
+];
 const ALLOCATIONS      = [...ALLOCATION_VALUES];
 
 // Rate Key choices live in `rate-key-options.js` — shared with the securities editor,
@@ -229,6 +234,20 @@ export class AccountEditor extends BaseComponent {
     // Super draw date (design 119 §6.1): blank = from the lawful release date.
     const ds = this._node?.drawStartDate;
     el.querySelector('[data-id="drawStartDate"]').value = ds ? String(ds).slice(0, 10) : '';
+    // MSBS (design 119 §6.4). The scheme is fixed once the account exists, like its type.
+    const schemeSel = el.querySelector('[data-id="superScheme"]');
+    schemeSel.value    = this._node?.scheme === 'MSBS' ? 'MSBS' : '';
+    schemeSel.disabled = !!this._node?.id;
+    this.listen(schemeSel, 'change', () => this._applyTypeVisibility(el, typeSelect.value));
+    el.querySelector('[data-id="unfundedEmployerBenefit"]').value = this._node?.unfundedEmployerBenefit ?? '';
+    el.querySelector('[data-id="fundedEmployerBenefit"]').value   = this._node?.fundedEmployerBenefit ?? '';
+    const se = this._node?.serviceEndDate;
+    el.querySelector('[data-id="serviceEndDate"]').value = se ? String(se).slice(0, 10) : '';
+    el.querySelector('[data-id="officerOnExit"]').checked = !!this._node?.officerOnExit;
+    const mix = this._node?.fundedAllocation ?? {};
+    for (const [id, key] of MSBS_MIX_INPUTS) {
+      el.querySelector(`[data-id="${id}"]`).value = mix[key] ?? '';
+    }
 
     // Owner dropdown
     this._populateOwnerSelect(el, this._people, this._node?.ownerId ?? null);
@@ -1118,6 +1137,21 @@ export class AccountEditor extends BaseComponent {
     }
     if (type === 'super') {
       data.drawStartDate = el.querySelector('[data-id="drawStartDate"]').value || null;
+      if (el.querySelector('[data-id="superScheme"]').value === 'MSBS') {
+        const num = id => {
+          const raw = el.querySelector(`[data-id="${id}"]`).value;
+          return raw === '' ? null : Number(raw);
+        };
+        data.scheme                  = 'MSBS';
+        data.unfundedEmployerBenefit = num('unfundedEmployerBenefit') ?? 0;
+        data.fundedEmployerBenefit   = num('fundedEmployerBenefit') ?? 0;
+        data.serviceEndDate          = el.querySelector('[data-id="serviceEndDate"]').value || null;
+        data.officerOnExit           = el.querySelector('[data-id="officerOnExit"]').checked;
+        // All four blank ⇒ null ⇒ CSC's Balanced mix; otherwise the weights as typed.
+        const mix = Object.fromEntries(MSBS_MIX_INPUTS.map(([id, key]) => [key, num(id)])
+          .filter(([, v]) => v != null));
+        data.fundedAllocation = Object.keys(mix).length ? mix : null;
+      }
     }
     // Transaction-account flag (design 55 §7) — cash accounts only. When param-linked
     // it is dropped below (owned by the scenario param); a brand-new account has no
@@ -1407,6 +1441,9 @@ export class AccountEditor extends BaseComponent {
     el.querySelector('[data-id="countryRow"]').style.display      = FIXED_COUNTRY.has(type)    ? 'none' : '';
     el.querySelector('[data-id="investmentFields"]').style.display = RETIREMENT_TYPES.has(type) ? ''    : 'none';
     el.querySelector('[data-id="drawStartDateRow"]').style.display  = type === 'super'            ? ''    : 'none';
+    el.querySelector('[data-id="superSchemeRow"]').style.display    = type === 'super'            ? ''    : 'none';
+    const msbs = type === 'super' && el.querySelector('[data-id="superScheme"]').value === 'MSBS';
+    el.querySelector('[data-id="msbsFields"]').style.display        = msbs                        ? ''    : 'none';
     // The transaction-account flag only applies to cash accounts (§7).
     const txnRow = el.querySelector('[data-id="transactionAccountRow"]');
     if (txnRow) txnRow.style.display = CASH_TYPES.has(type) ? '' : 'none';

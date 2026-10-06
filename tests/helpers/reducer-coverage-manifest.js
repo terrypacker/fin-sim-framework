@@ -118,6 +118,8 @@ export const COVERED = [
   'StockDividendCashApplyReducer', 'UsSavingsInterestCreditReducer', 'ScenarioCompleteReducer',
   // design/68 Gap 4 — YOD-6 in mortality-year-of-death-tax.test.mjs
   'SuperDeathBenefitApplyReducer',
+  // design 119 §6.4 — MSB-10 in msbs-preserved.test.mjs
+  'MsbsFundedEarningsApplyReducer', 'MsbsUnfundedIndexReducer',
 
   // E — behavioral (reducer-postconditions-behavioral.test.mjs)
   'PanicSellReducer', 'BehavioralPanicSellApplyReducer', 'OpportunisticRebalanceReducer',

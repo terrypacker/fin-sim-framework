@@ -65,7 +65,7 @@ const INHERITED_RA_TYPES = new Set(['TraditionalIRAAccount', 'FourOhOneKAccount'
 const CLASS_TO_ACCOUNT_TYPE = {
   CheckingAccount: 'checking', SavingsAccount: 'savings', BrokerageAccount: 'brokerage',
   FourOhOneKAccount: '401k', RothAccount: 'roth', TraditionalIRAAccount: 'ira',
-  SuperannuationAccount: 'super', LoanAccount: 'loan', OffsetAccount: 'offset',
+  SuperannuationAccount: 'super', MsbsAccount: 'super', LoanAccount: 'loan', OffsetAccount: 'offset',
 };
 const ROLE_TO_ACCOUNT_TYPE = {
   'us-savings': 'savings', 'au-savings': 'savings',
