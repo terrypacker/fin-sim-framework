@@ -91,7 +91,10 @@ const YTD_FIELDS = {
        // design 95 §9.1 phase 6b — s290-150 deductible contributions. Deductible ONLY
        // in the income year the contribution was made (s290-150(3)), so this resets
        // with the FY and never carries: an unused deduction is lost, not banked.
-       'auDeductibleSuperYTD'],
+       'auDeductibleSuperYTD',
+       // design 119 phase 5 — final tax withheld from an MSBS lump sum paid in cash
+       // (reporting bucket, like the death-benefit tax above).
+       'auSuperLumpSumTaxYTD'],
 };
 
 /**
@@ -509,6 +512,8 @@ class TaxSettleApplyReducerBase extends Reducer {
           );
         }
       }
+      // Design 119 phase 5 — a year's MSBS pension tax facts, an object per person.
+      if (state.auPersonSuperStreamYTD) resets.auPersonSuperStreamYTD = {};
     }
     const extra = this._extraStatePatches(state, action);
     // ── design 94 §8.1l — preserve the return's inputs for the April filing ──────

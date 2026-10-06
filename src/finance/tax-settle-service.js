@@ -8,6 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { superIncomeStreamTax, isMsbs } from './account-rules/au/msbs.js';
+import { transferBalanceCap } from './tax/au/au-super-limits.js';
 import { UsTaxRates2024 } from './tax/us/us-tax-rates-2024.js';
 import { UsTaxRates2025 } from './tax/us/us-tax-rates-2025.js';
 import { UsTaxRates2026 } from './tax/us/us-tax-rates-2026.js';
@@ -329,6 +331,10 @@ export class TaxSettleService {
         // forbids a net capital loss from reducing assessable income at all.
         auCapitalLossPool:           state.auPersonCapitalLossPool?.[key] ?? 0,
         auFrankingCreditYTD:         perPersonShare(state.auPersonFrankingCreditYTD,          state.auFrankingCreditYTD),
+        // Design 119 phase 5 — an MSBS pension's assessable amount and its non-refundable
+        // offsets (Div 301), the defined benefit income cap applied (Div 303).
+        auSuperIncomeStream:         superIncomeStreamTax(state.auPersonSuperStreamYTD?.[key],
+          definedBenefitIncomeCap(state, key)),
         // FITO (design 52 §4.5): the US-source removal set — the slice
         // _assessResidentPreFito subtracts for the "without US-source" pass that
         // sizes the FITO limit. Design 76 Gap D migrates it per-person on the same
@@ -548,4 +554,33 @@ export function usRatesForYear(year) {
  */
 export function usBracketGrossIncomeCeiling(rate, year, annualInflation = 0.03) {
   return _shared().usBracketGrossIncomeCeiling(rate, year, annualInflation);
+}
+
+/**
+ * A person's defined benefit income cap for the AU year being settled (ITAA 1997 s303-4):
+ * the general transfer balance cap ÷ 16, rounded up. In the year their defined benefit
+ * income first attracts s301-10 or s301-100 — an MSBS pension at 60 or over — it is pro
+ * rata to the days left in the year after that day, plus one (s303-4(2)).
+ */
+function definedBenefitIncomeCap(state, personKey) {
+  const startMs = state.currentPeriods?.AU?.startMs;
+  if (startMs == null) return Infinity;
+  const fy    = new Date(startMs).getUTCFullYear();
+  const full  = Math.ceil(transferBalanceCap(fy, state.limitIndexAccumulator?.AU ?? 1) / 16);
+  const born  = state.people?.[personKey]?.birthDate;
+  let firstMs = null;
+  for (const a of Object.values(state)) {
+    const p = a?.pension;
+    if (!isMsbs(a) || !p || p.recipientKey !== personKey || born == null) continue;
+    const b = new Date(born);
+    const at60 = Date.UTC(b.getUTCFullYear() + 60, b.getUTCMonth(), b.getUTCDate());
+    const ms = Math.max(p.startMs, at60);
+    if (firstMs == null || ms < firstMs) firstMs = ms;
+  }
+  const endMs = Date.UTC(fy + 1, 6, 1);
+  if (firstMs == null || firstMs < startMs || firstMs >= endMs) return full;
+  const DAY = 86_400_000;
+  const days = Math.round((endMs - startMs) / DAY);
+  const left = Math.round((endMs - firstMs) / DAY) - 1;
+  return Math.ceil(full * (1 + left) / days);
 }

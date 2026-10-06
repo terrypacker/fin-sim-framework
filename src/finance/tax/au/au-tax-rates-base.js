@@ -409,6 +409,9 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
       // the fund and deducts the whole contribution outside it; that gap is where
       // the concession lives for anyone whose marginal rate exceeds 15%.
       auDeductibleSuperYTD = 0,
+      // Design 119 phase 5 — an MSBS pension: `{ assessable, offset }`, already through
+      // the defined benefit income cap (`superIncomeStreamTax`).
+      auSuperIncomeStream = null,
     } = state;
 
     // s102-5 Steps 1–2 FIRST (design 90 §5): capital losses come off the GROSS gain,
@@ -452,7 +455,8 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
     // less income absorbs less loss, which is the true "what would be payable"
     // figure. Hoisting the deduction outside the split would let the counterfactual
     // claim the full deduction against reduced income and overstate the FITO limit.
-    const grossDiscountedIncome = auOrdinaryIncomeYTD + netTaxableGain;
+    const grossDiscountedIncome = auOrdinaryIncomeYTD + netTaxableGain
+      + (auSuperIncomeStream?.assessable ?? 0);
     // s290-150, limited by s26-55 — see `_superDeductionAllowed`. It comes off HERE,
     // between assessable income and the loss pool, because the s26-55(2) limit is
     // measured on income before tax losses and the deduction may not create one.
@@ -524,7 +528,11 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
     // no room for a foreign tax offset) rather than here, keeping the two distinct:
     // "the Commissioner owes you" and "there is no liability left to relieve" are
     // different states that a single Math.max conflated.
-    const netLiabilityPreFito = baseTax + medicareLevy + minTaxTopUp - frankingOffset;
+    // The super income stream offsets (s301-25, s301-100) are NON-refundable, and they
+    // reduce income tax, not the Medicare levy: so they come off base tax first, before
+    // the refundable franking offset, and an unused remainder is lost.
+    const superStreamOffset = Math.min(Math.max(0, auSuperIncomeStream?.offset ?? 0), baseTax);
+    const netLiabilityPreFito = baseTax - superStreamOffset + medicareLevy + minTaxTopUp - frankingOffset;
 
     // Split baseTax into its ordinary-income and capital-gain components for
     // display (design 57 report breakdown). AU has no separate CGT schedule of
@@ -555,6 +563,9 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
       // assessable income, so the two must never be summed.
       capitalLoss: capLoss,
       superTax: auSuperTaxYTD,
+      // Design 119 phase 5 — an MSBS pension's assessable amount and the offset applied.
+      superIncomeStreamAssessable: auSuperIncomeStream?.assessable ?? 0,
+      superIncomeStreamOffset:     superStreamOffset,
       marginalRate: _marginalBracketRate(assessableIncome, this._brackets),
       netLiabilityPreFito,
       brackets: {

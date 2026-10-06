@@ -20,7 +20,7 @@
  *   MSB-6: contributions never reach an MSBS account
  *   MSB-7: the account survives save/load and projects its employer benefit into state
  *   MSB-8: net worth counts the funded part, and the allocation cube ties to it
- *   MSB-9: in the AU Single Homeowner plan, the benefit is indexed and grown until the election
+ *   MSB-9: in the AU Single Homeowner plan, the benefit is indexed and grown, then paid as a pension
  *   MSB-10: the two reducers are pure, ignore a missing target, and stop at the election
  *
  * Run with: node --test tests/unit/msbs-preserved.test.mjs
@@ -166,19 +166,22 @@ test('MSB-8 net worth counts the funded part, and the allocation cube ties to it
   assert.equal(+cube.reduce((s, r) => s + r.marketValue, 0).toFixed(2), 85_000.01);
 });
 
-test('MSB-9 in the AU Single Homeowner plan, the benefit is indexed and grown until the election', () => {
+test('MSB-9 in the AU Single Homeowner plan, the benefit is indexed and grown, then paid as a pension', () => {
   const spec = GOLDEN_SPECS.find(s => s.name === 'au-single-homeowner');
-  const { state, cfg } = runGolden(spec);
+  const { state, cfg, sim } = runGolden(spec);
   const msbs = cfg.accounts.find(a => a.stateKey === 'msbsAccount');
   assert.equal(msbs.drawStartDate, '2041-07-01', 'the example draws at 60');
   assert.deepEqual(cfg.jobs.map(j => j.superAccountKey), ['superAccount', 'secondSuperAccount'],
     'each job pays its own fund');
   assert.ok(state.secondSuperAccount.balance > 0, 'the second job\'s SG reached the second fund');
 
-  const eb = state.msbsAccount.employerBenefit;
-  assert.ok(eb.unfunded > 140_000 && eb.funded > 25_000, 'indexed and grown');
-  // Frozen at the election (phase 5 pays it): the AU CPI kept rising after 2041.
-  assert.ok(eb.cpiPeak < state.cpiAccumulator.AU, 'no indexation after the election');
+  const election = sim.journal.journal.find(e => e.action?.type === 'MSBS_ELECTION_APPLY').action.data;
+  assert.equal(iso(election.electionMs), '2041-07-01');
+  assert.ok(election.converted > 140_000 + 25_000, 'indexed and grown until then');
+  assert.ok(Math.abs(election.annual - election.converted / 11) < 0.01, 'Sch 5: factor 11 at exactly 60');
+  assert.deepEqual([election.lumpTaxed, election.lumpUntaxed], [0, 0], 'a full pension (D7)');
+  assert.deepEqual(state.msbsAccount.employerBenefit.funded + state.msbsAccount.employerBenefit.unfunded, 0);
+  assert.ok(state.msbsAccount.pension.annual > election.annual, 'indexed by CPI since');
 });
 
 test('MSB-10 the two reducers are pure, ignore a missing target, and stop at the election', () => {

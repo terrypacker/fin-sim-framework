@@ -154,6 +154,17 @@ const DRAW_START_DATE = {
     + 'law releases it. A date before that is moved to it.',
 };
 
+// MSBS pension share (design 119 D7). A household choice made once, at the election:
+// opt only. A rate-kind lever, since 1 is its usual centre and a multiplicative sweep of
+// 1 can only overshoot the r 52(1)(c) range the loader enforces.
+const PENSION_SHARE = {
+  field: 'pensionShare', label: 'MSBS Pension Share', type: 'Number',
+  mc: false, opt: 'rate',
+  appliesTo: (a) => a?.__type === 'MsbsAccount' || a?.scheme === 'MSBS',
+  description: 'How much of the MSBS employer benefit becomes a pension at the election, '
+    + 'from 0.5 to 1, or 0 for all of it as a lump sum. Default 1, a full pension.',
+};
+
 export const ACCOUNT_PARAM_TEMPLATES = {
   [ACCOUNT_TYPE.CHECKING]:        [BALANCE, MINIMUM_BALANCE, INTEREST_RATE, IS_TRANSACTION_ACCOUNT],
   [ACCOUNT_TYPE.SAVINGS]:         [BALANCE, MINIMUM_BALANCE, INTEREST_RATE, IS_TRANSACTION_ACCOUNT],
@@ -161,7 +172,7 @@ export const ACCOUNT_PARAM_TEMPLATES = {
   [ACCOUNT_TYPE.ROTH]:            [BALANCE, CONTRIBUTION_BASIS],
   [ACCOUNT_TYPE.TRADITIONAL_IRA]: [BALANCE, CONTRIBUTION_BASIS],
   [ACCOUNT_TYPE.FOUR_OH_ONE_K]:   [BALANCE, CONTRIBUTION_BASIS],
-  [ACCOUNT_TYPE.SUPER]:           [BALANCE, CONTRIBUTION_BASIS, DRAW_START_DATE],
+  [ACCOUNT_TYPE.SUPER]:           [BALANCE, CONTRIBUTION_BASIS, DRAW_START_DATE, PENSION_SHARE],
   // Liability / linked-cash accounts (design 54) expose their balance too. The
   // loan's own interestRate is its *loan* rate (design 54), not an earnings rate,
   // so it stays out of this earnings-rate template.

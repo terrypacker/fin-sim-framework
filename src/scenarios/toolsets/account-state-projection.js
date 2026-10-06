@@ -76,6 +76,7 @@ export function accountToStatePlain(account) {
     plain.scheme         = 'MSBS';
     plain.serviceEndDate = account.serviceEndDate ?? null;
     plain.officerOnExit  = !!account.officerOnExit;
+    plain.pensionShare   = account.pensionShare ?? 1;
     plain.employerBenefit = {
       funded:           Number(account.fundedEmployerBenefit)   || 0,
       unfunded:         Number(account.unfundedEmployerBenefit) || 0,

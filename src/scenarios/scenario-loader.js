@@ -88,6 +88,7 @@ const BUILT_IN_TOOLSETS = [
 import { synthesizeWeightedPriorities, resolveOwnerBanding } from './params/lever-weights.js';
 import { migrateYearFieldsToDates } from './year-date-migration.js';
 import { validateJobs } from '../finance/payroll/employment.js';
+import { validateMsbsAccounts } from '../finance/account-rules/au/msbs.js';
 import { JOB_DATE_PARAM_FIELDS } from './params/record-param-templates.js';
 export { synthesizeWeightedPriorities } from './params/lever-weights.js';
 
@@ -173,6 +174,10 @@ export class ScenarioLoader {
       throw new Error(`Scenario jobs are invalid:\n  ${jobErrors.join('\n  ')}`);
     }
     this._warnAuJobsWithoutFund(cfg);
+    const msbsErrors = validateMsbsAccounts(cfg.accounts);
+    if (msbsErrors.length > 0) {
+      throw new Error(`Scenario MSBS accounts are invalid:\n  ${msbsErrors.join('\n  ')}`);
+    }
 
     ScenarioSerializer.deserializePersonsAccounts(cfg, services);
 

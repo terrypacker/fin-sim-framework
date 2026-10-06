@@ -39,7 +39,8 @@ import { AccumulateConsumptionReducer } from '../../finance/reducers/accumulate-
 import { AccumulateConsumptionUtilityReducer } from '../../finance/reducers/accumulate-consumption-utility-reducer.js';
 import { OutOfFundsReducer }          from '../../finance/reducers/out-of-funds-reducer.js';
 import { InflationAdjustReducer }         from '../../finance/reducers/inflation-adjust-reducer.js';
-import { MsbsFundedEarningsHandler, MsbsFundedEarningsApplyReducer, MsbsUnfundedIndexReducer }
+import { MsbsFundedEarningsHandler, MsbsFundedEarningsApplyReducer, MsbsUnfundedIndexReducer,
+  MsbsPensionHandler, MsbsElectionApplyReducer, MsbsPensionApplyReducer, MsbsPensionRevertReducer }
   from '../../finance/account-rules/au/msbs-classes.js';
 import { isMsbs } from '../../finance/account-rules/au/msbs.js';
 import { SpendingStrategyApplyReducer }   from '../../finance/spending/spending-strategy-apply-reducer.js';
@@ -99,7 +100,7 @@ export const AU_RETIREMENT = {
       SuperContributionHandler, SuperWithdrawalContributionsHandler,
       SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler, SuperEarningsHandler,
       IntlAuStockEarningsHandler, IntlAuStockDividendHandler,
-      PayrollHandler, MsbsFundedEarningsHandler,
+      PayrollHandler, MsbsFundedEarningsHandler, MsbsPensionHandler,
     ],
     reducers: [
       ExpenseDebitReducer, ReplenishSavingsReducer,
@@ -109,6 +110,7 @@ export const AU_RETIREMENT = {
   SuperWithdrawalContribApplyReducer,
       SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperCapitalGainApplyReducer,
       SsEntitlementApplyReducer, MsbsFundedEarningsApplyReducer, MsbsUnfundedIndexReducer,
+      MsbsElectionApplyReducer, MsbsPensionApplyReducer, MsbsPensionRevertReducer,
     ],
     actions: [
       // `section988` — design 87 §14.4 item 2, the §988 character declaration the currency
@@ -197,6 +199,11 @@ export const AU_RETIREMENT = {
       { type: 'SUPER_EARNINGS_APPLY',              fields: { amount: ValueType.currency('AUD'), grossAmount: ValueType.currency('AUD'), frankingCredit: ValueType.currency('AUD'), stateKey: ValueType.text(), taxRate: ValueType.number() } },
       // design 119 §6.4 — a year's net Balanced return on a preserved MSBS funded benefit.
       { type: 'MSBS_FUNDED_EARNINGS_APPLY',       fields: { stateKey: ValueType.text(), amount: ValueType.currency('AUD'), rate: ValueType.number() } },
+      // design 119 phase 5 — the election, each month's pension and its tax facts, and the
+      // reversion to a surviving spouse.
+      { type: 'MSBS_ELECTION_APPLY',              fields: { stateKey: ValueType.text(), personKey: ValueType.text(), electionMs: ValueType.any(), annual: ValueType.currency('AUD'), taxedShare: ValueType.number(), converted: ValueType.currency('AUD'), lumpTaxed: ValueType.currency('AUD'), lumpUntaxed: ValueType.currency('AUD'), lumpTo: ValueType.text(), cpiLevel: ValueType.number() } },
+      { type: 'MSBS_PENSION_APPLY',               fields: { stateKey: ValueType.text(), personKey: ValueType.text(), amount: ValueType.currency('AUD'), taxedShare: ValueType.number(), age: ValueType.number(), preservationAge: ValueType.number(), fullRate: ValueType.boolean() } },
+      { type: 'MSBS_PENSION_REVERT',              fields: { stateKey: ValueType.text(), toPersonKey: ValueType.text() } },
       { type: 'SUPER_EARNINGS_TAX',               fields: { amount: ValueType.currency('AUD'), frankingCredit: ValueType.currency('AUD'), stateKey: ValueType.text(), taxRate: ValueType.number() } },
       // design 105 — a super lot sold by the rebalancer: the realised gain split by the
       // 12-month discount test, and the loss, before the fund's netting.
@@ -469,6 +476,14 @@ export const AU_RETIREMENT = {
           .interval('year-end').startOffset(0).enabled(true).color('#9C27B0').build()
       );
     }
+    // Design 119 phase 5 — an MSBS benefit's election and its monthly pension.
+    if (superAccts.some(isMsbs)) {
+      schedules.push(
+        EventBuilder.eventSeries()
+          .name('MSBS Pension').type('MSBS_PENSION')
+          .interval('month-end').enabled(true).color('#7B1FA2').build()
+      );
+    }
 
     // Employer Super Guarantee. `order(1)`: after wages and expenses on the same
     // month-end, matching the US contribution stream so the two countries' payroll
@@ -703,6 +718,12 @@ export const AU_RETIREMENT = {
           const f = new MsbsFundedEarningsHandler({ stateKey: acct.stateKey });
           f.handledEvents.push(superEvent);
           handlers.push(f);
+          const pensionEvent = context.schedulesById['MSBS_PENSION'];
+          if (pensionEvent) {
+            const ph = new MsbsPensionHandler({ stateKey: acct.stateKey });
+            ph.handledEvents.push(pensionEvent);
+            handlers.push(ph);
+          }
         }
       }
     }
@@ -921,6 +942,9 @@ export const AU_RETIREMENT = {
     if (superAccts.some(isMsbs)) reducers.push(
       new MsbsFundedEarningsApplyReducer(),
       new MsbsUnfundedIndexReducer(),
+      new MsbsElectionApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
+      new MsbsPensionApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
+      new MsbsPensionRevertReducer(),
     );
 
     // Social Security entitlement stamp (design 118 D7), under the same guard as the

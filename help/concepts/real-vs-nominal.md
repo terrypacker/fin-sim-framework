@@ -22,7 +22,7 @@ stamps:
   panel:mc-results: cc2f55
   panel:opt-results: 154951
   src/visualization/app-display-settings.js: ec6c02
-  src/finance/services/state-schema-registry.js: 75d84a
+  src/finance/services/state-schema-registry.js: 1a6cde
 ---
 
 Every balance the simulation books is **nominal**: money in the year it happens.

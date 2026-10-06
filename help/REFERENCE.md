@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-223 parameters · 33 panels · 12 node types (202 fields) · 174 action types · 86 tools · 299 state field types · 76 topics · 127 design docs
+223 parameters · 33 panels · 12 node types (203 fields) · 177 action types · 86 tools · 309 state field types · 76 topics · 127 design docs
 
 ---
 
@@ -578,7 +578,7 @@ menu files it under.
 
 ---
 
-## Node types (12 kinds · 202 fields)
+## Node types (12 kinds · 203 fields)
 
 Every kind of record the Nodes panel can open, and every control its edit form offers.
 The inventory is read from the FORM — the `<template>` in `index.html` the editor
@@ -676,9 +676,9 @@ Explained in [`help/nodes`](nodes/job.md). 4 field(s) described by a record para
 - **`superAccountKey`** — Super Fund · `select` · topic
   The super fund this job's Super Guarantee, salary sacrifice and personal contributions go into, picked from the person's own funds. "First fund" uses the first one they own. A preserved MSBS benefit is never offered. Only that person's funds are offered, and a scenario that names someone else's fund refuses to load. A person with an Australian job and no fund of their own gets no AU contributions, and loading warns about it.
 
-### Accounts — `account` (43 fields)
+### Accounts — `account` (44 fields)
 
-Explained in [`help/nodes`](nodes/account.md). 6 field(s) described by a record parameter.
+Explained in [`help/nodes`](nodes/account.md). 7 field(s) described by a record parameter.
 
 - **`name`** — Name · `text` · topic
   What this account is called throughout the app, and the label on every chart that breaks the portfolio down. Free text.
@@ -715,7 +715,7 @@ Explained in [`help/nodes`](nodes/account.md). 6 field(s) described by a record 
 - **`drawStartDate`** — Draw Start Date · `date` · param
   The day this super account starts paying, which also starts pension phase: its earnings are taxed at 0% from then, and at 15% before. Blank means as soon as the law releases it. A date before that is moved to it.
 - **`superScheme`** — Scheme · `select` · topic
-  Whether this super account is an ordinary fund or a preserved MSBS (MilitarySuper) benefit, for a member who has left the ADF. Fixed once the account is created. On MSBS, the balance and holdings are the member benefit, with any ancillary benefit added in. Draw Start Date is the election, which the model keeps between age 55 (or leaving the ADF, if later) and 65.
+  An ordinary fund, or a preserved MSBS (MilitarySuper) benefit for a member who has left the ADF. Fixed once created. On MSBS, the balance and holdings are the member benefit, ancillary benefit included. Draw Start Date is the election, kept between 55 (or leaving the ADF, if later) and 65. On it, Pension Share of the employer benefit becomes a CPI-indexed pension and the rest a lump sum, rolled into your other fund unless you are already released.
 - **`unfundedEmployerBenefit`** — Unfunded Employer Benefit · `number` · topic
   The unfunded part of the employer benefit, as the CSC statement shows it. It rises each 1 July with CPI and never falls, but it is not invested and is not in net worth. If the statement shows only an employer benefit total, enter the total less the funded part here. A former DFRDB member's unfunded productivity benefit is indexed the same way, so it goes here too.
 - **`fundedEmployerBenefit`** — Funded Employer Benefit · `number` · topic
@@ -724,6 +724,8 @@ Explained in [`help/nodes`](nodes/account.md). 6 field(s) described by a record 
   The day the member left the ADF. The MSBS pension cannot start while serving, so a member who served past 55 cannot elect before this date.
 - **`officerOnExit`** — Officer on Exit · `checkbox` · topic
   Whether the member was an officer when they left. It picks the valuation table column used for their total superannuation balance, which in turn sets their contribution caps.
+- **`pensionShare`** — Pension Share · `number` · param
+  How much of the MSBS employer benefit becomes a pension at the election, from 0.5 to 1, or 0 for all of it as a lump sum. Default 1, a full pension.
 - **`msbsMixEquityAu`** — AU Equity · `number` · topic
   Share of the funded employer benefit in Australian shares. All four blank uses CSC's published Balanced mix. The PDS does not split shares by market, so the default is an even split; change it if CSC's investment booklet says otherwise.
 - **`msbsMixEquityIntl`** — Intl Equity · `number` · topic
@@ -1647,7 +1649,7 @@ docblock, not re-authored here. Arguments come from each script's declarative
 
 ---
 
-## Journal action types (174)
+## Journal action types (177)
 
 Every action a toolset declares, with its payload shape. A type declared by more than
 one toolset is one row: the toolsets compose into a single run, so it is one action in
@@ -1749,7 +1751,10 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `K401_WITHDRAWAL_TAX` | amount: currency(USD), penaltyAmount: number | US_RETIREMENT |
 | `LATE_LIFE_CARE_APPLY` | active: boolean, factor: number, personId: text | AU_RETIREMENT, US_RETIREMENT |
 | `LOAN_PAYMENT_APPLY` | loanKey: text, payment: number, interest: number, cashDue: number, section988: any, fixedStamps: any | AU_REAL_PROPERTY, US_REAL_PROPERTY |
+| `MSBS_ELECTION_APPLY` | stateKey: text, personKey: text, electionMs: any, annual: currency(AUD), taxedShare: number, converted: currency(AUD), lumpTaxed: currency(AUD), lumpUntaxed: currency(AUD), lumpTo: text, cpiLevel: number | AU_RETIREMENT |
 | `MSBS_FUNDED_EARNINGS_APPLY` | stateKey: text, amount: currency(AUD), rate: number | AU_RETIREMENT |
+| `MSBS_PENSION_APPLY` | stateKey: text, personKey: text, amount: currency(AUD), taxedShare: number, age: number, preservationAge: number, fullRate: boolean | AU_RETIREMENT |
+| `MSBS_PENSION_REVERT` | stateKey: text, toPersonKey: text | AU_RETIREMENT |
 | `NE_INHERITANCE_TAX` | amount: currency(USD) | INHERITANCE |
 | `OPPORTUNISTIC_REBALANCE_APPLY` | stateKey: text, legs: any | ECONOMIC_REGIMES |
 | `OUT_OF_FUNDS` | deficit: number, currency: text | AU_RETIREMENT, US_RETIREMENT |
@@ -1833,7 +1838,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 
 ---
 
-## State field types (299)
+## State field types (309)
 
 The scenario-INDEPENDENT half of `StateSchemaRegistry`: the globs and exact paths it
 installs in its own constructor, with the value type that decides how each formats.
@@ -1862,6 +1867,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `*.drawdownPriority` | integer |
 | `*.earningsBasis` | currency |
 | `*.employerBenefit.cpiPeak` | decimal |
+| `*.employerBenefit.electedMs` | date |
 | `*.employerBenefit.funded` | currency |
 | `*.employerBenefit.fundedAllocation.*` | rate |
 | `*.employerBenefit.unfunded` | currency |
@@ -1899,6 +1905,13 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `*.paymentSchedule.fromMonth` | integer |
 | `*.paymentSchedule.months` | integer |
 | `*.paymentSchedule.rate` | rate |
+| `*.pension.annual` | currency |
+| `*.pension.cpiPeak` | decimal |
+| `*.pension.fullRatePaymentsLeft` | integer |
+| `*.pension.reversionAnnual` | currency |
+| `*.pension.startMs` | date |
+| `*.pension.taxedShare` | rate |
+| `*.pensionShare` | rate |
 | `*.plannedSaleDate` | date |
 | `*.postFixedFromMonth` | integer |
 | `*.primeSpread` | rate |
@@ -1948,6 +1961,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `auPersonNrWithholdingUnfrankedDividendYTD.*` | currency(AUD) |
 | `auPersonOrdinaryIncomeYTD.*` | currency(AUD) |
 | `auPersonRealCapitalGainsYTD.*` | currency(AUD) |
+| `auPersonSuperStreamYTD.*.*` | currency(AUD) |
 | `auPersonSuperTaxYTD.*` | currency(AUD) |
 | `auPersonTaxLossPool.*` | currency(AUD) |
 | `auPersonUsSourceCapGainsAudYTD.*` | currency(AUD) |
@@ -1956,6 +1970,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `auRealCapitalGainsYTD` | currency(AUD) |
 | `auSuperCapsByPerson.*.bringForward.firstFy` | year |
 | `auSuperCapsByPerson.**` | currency(AUD) |
+| `auSuperLumpSumTaxYTD` | currency(AUD) |
 | `auSuperTaxYTD` | currency(AUD) |
 | `baseAppreciationRates.*` | rate |
 | `baseExchangeRates.*` | fxRate |

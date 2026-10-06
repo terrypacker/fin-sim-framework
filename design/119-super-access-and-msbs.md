@@ -1,7 +1,7 @@
 # 119 — Super access dates, multiple funds and MSBS
 
 **Status:** ACCEPTED, rev 5, 5 Oct 2026. Q1–Q5 (§9) are answered by the author, and
-§3 records the decisions. **Phases 1–4 BUILT** 5 Oct 2026 (multiple funds §6.3; release date §6.2; draw date and pension phase §6.1; the preserved MSBS account §6.4, built as §6.4.1 records); phases 5–6 not started. Rev 4 adds the CSC documents and the
+§3 records the decisions. **Phases 1–5 BUILT** 5 Oct 2026 (multiple funds §6.3; release date §6.2; draw date and pension phase §6.1; the MSBS account §6.4, preserved and drawn, built as §6.4.1–6.4.2 record); phase 6 not started. Rev 4 adds the CSC documents and the
 valuation law (§5.6), which settle the tax and total-super-balance questions. Rev 5
 closes the last two points (§5.7). No source questions remain open.
 
@@ -429,6 +429,45 @@ summed total super balance then includes the MSBS account.
   the jobs' generated `job.` levers sweep them now.
 - **Not yet**: the unfunded part as a side figure in the panels (phase 6).
 
+### 6.4.2 As built (phase 5)
+
+- **The election** runs at the first month-end on or after its date (a monthly
+  `MSBS_PENSION` series, one `MsbsPensionHandler` per MSBS account). The Sch 5 factor uses
+  the election date itself. Before converting, the unfunded part gets the r 61B part-year
+  increase: the model's CPI is annual, so the months since 1 July are charged at that year's
+  AU inflation rate, rounded to 0.1%.
+- **What converts**: `pensionShare` of the employer benefit, funded part first (r 65A), so
+  the pension's taxed share is the funded part's share of what converted. Below the r 65B
+  \$5,000 minimum all of it is a lump sum (r 52(2)). The loader rejects an authored share
+  outside 0 or 0.5–1; a swept one snaps to the nearest allowed value.
+- **The lump sum** goes to AU cash, less 15% on its untaxed element (s301-95 / s301-105, a
+  final tax recorded in `auSuperLumpSumTaxYTD`), if the member is released (§6.2) that day.
+  Otherwise it rolls into their ordinary fund (r 84), which pays 15% on the untaxed element
+  as fund tax. Neither the low rate cap nor the untaxed plan cap is modelled, so a lump sum
+  above them is under-taxed.
+- **The pension** is paid monthly into the AU transaction account. It rises once a year on
+  1 July by the CPI rise over its highest earlier level. r 56 indexes twice a year, but the
+  model's CPI is annual. A pension under a year old gets the r 58(3) share by whole months,
+  and none if it started in the last fortnight (r 58(2)).
+- **Tax**: each payment accrues per-person facts (`auPersonSuperStreamYTD`) by the
+  recipient's age band, and the AU settle turns them into assessable income and a
+  NON-refundable offset that comes off base tax before franking, never the Medicare levy:
+  under preservation age, all assessable; preservation age to 59, all assessable with 15% off
+  the taxed element (s301-25, s301-110); 60 and over, the untaxed element assessable with
+  10% off (s301-100). The defined benefit income cap is the general transfer balance cap ÷ 16,
+  pro rata in the year it first applies (s303-4). Above it, half the excess taxed element is
+  assessable (s303-2) and the 10% offsets fall by 10% of the excess (s303-3). Resident
+  returns only; the US side of a cross-border MSBS pension is not modelled.
+- **Total super balance** once paid: `P × PF` from Table 4A (age pension, single life, male
+  column), plus the member benefit.
+- **Death**: a surviving spouse gets three more months at the full rate (r 42(2): seven
+  fortnightly paydays), then 67% (Sch 4 Table 1, spouse only). The survivor is taxed by the
+  same age bands, a simplification of the death-benefit income stream rules. With no spouse
+  the pension ends; the r 43 final benefit is not modelled, and neither are children.
+- **The worked example** elects a full pension on 1 Jul 2041. Still working at 60, the member
+  is not yet released, so any lump sum would have rolled over. The pension is untouched by
+  that: CSC says it "is not subject to normal retiring conditions" (§5.6 item 4).
+
 ### 6.5 Retire the dormant handlers
 
 Delete `SuperWithdrawal*Handler` and the `*_APPLY` reducers that read `state.superAccount`,
@@ -444,7 +483,7 @@ spending-classification tests.
 | 2 | **BUILT.** Lawful release date and the preservation-age table (`super-release.js`), read by the drawdown walk, pool metrics, net liquidity and the unlock date. Also releases at the end of any job held at 60+ (reg 6.01(7)(b)(i)), which §6.2's formula left out. Tests `super-release.test.mjs` | none moved: every golden run ends before its AU members reach 60 |
 | 3 | **BUILT.** `drawStartDate` on ordinary accounts, pension phase from the effective start, the date sweep. `auSuperDrawStartMs` (`super-release.js`) is the one effective start: the gate and `superEarningsTaxRate(drawStartMs, asOf)` both read it, so the bond-income and capital-gain reducers follow. Lever `acct.<key>.drawStartDate` (Opt only, no `sweepUnset`: blank is a default, not an absent event), declared in `AU_RETIREMENT.derivedState` so a rollout takes it from the candidate. Tests `super-draw-start.test.mjs` | two moved, both by fund tax a member now pays from 60 until their job ends: au-single-homeowner (works to 65) ends with \$206k less super, \$45k at retirement compounded over 20 years of drawdown; cross-border-reference (works to 61¾) \$11.6k less |
 | 4 | **BUILT.** `MsbsAccount` from a statement: the fields, the member sleeve, the Balanced funded sleeve, the unfunded benefit with r 61A indexation, preserved before the draw; total super balance value from Table 1. `msbs.js`, `msbs-classes.js`, `msbs-valuation-factors.js` (parsed from the Approval text). The AU Single Homeowner plan is the worked example (§6.4.1). Tests `msbs-preserved.test.mjs` | au-single-homeowner moved: the plan gained two jobs, a second fund and the MSBS account |
-| 5 | MSBS draw: the window, `MSBS_ELECTION`, the Sch 5 pension and r 56 indexation, the lump-sum routing, `pensionShare`; pension tax with the taxed/untaxed split and the defined benefit income cap; total super balance from Table 4A; survivor pension at 67% after checking Part 4 Div 2 | none (new account type) |
+| 5 | **BUILT.** MSBS draw: the window, `MSBS_ELECTION_APPLY`, the Sch 5 pension and r 56 indexation, the lump-sum routing, `pensionShare`; pension tax with the taxed/untaxed split and the defined benefit income cap; total super balance from Table 4A; survivor pension at 67% (r 42, Sch 4 Table 1, checked). §6.4.2. Tests `msbs-pension.test.mjs` | au-single-homeowner and au-super-streams moved: the example elects a full pension at 60 |
 | 6 | Help topics (`help/nodes/account.md`, `job.md`), editors, restamp | none |
 
 ## 8. Not in this design

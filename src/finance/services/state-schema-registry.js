@@ -230,6 +230,17 @@ export class StateSchemaRegistry {
     this.registerPattern('*.employerBenefit.unfunded',           ParameterValueType.currency());
     this.registerPattern('*.employerBenefit.cpiPeak',            ParameterValueType.decimal(4));
     this.registerPattern('*.employerBenefit.fundedAllocation.*', ParameterValueType.rate());
+    this.registerPattern('*.employerBenefit.electedMs',          ParameterValueType.date());
+    // …and its pension once elected (phase 5).
+    this.registerPattern('*.pension.annual',               ParameterValueType.currency());
+    this.registerPattern('*.pension.reversionAnnual',      ParameterValueType.currency());
+    this.registerPattern('*.pension.taxedShare',           ParameterValueType.rate());
+    this.registerPattern('*.pension.startMs',              ParameterValueType.date());
+    this.registerPattern('*.pension.cpiPeak',              ParameterValueType.decimal(4));
+    this.registerPattern('*.pension.fullRatePaymentsLeft', ParameterValueType.integer());
+    this.registerPattern('*.pensionShare',                 ParameterValueType.rate());
+    this.registerPattern('auPersonSuperStreamYTD.*.*',     ParameterValueType.currency('AUD'));
+    this.register('auSuperLumpSumTaxYTD',                  ParameterValueType.currency('AUD'));
     // Per-country residency cost-base step-up / per-lot AU cost base (design 36 §12.2).
     this.registerPattern('*.costBaseStepUpByCountry.*',   ParameterValueType.currency());
     this.registerPattern('*.holdings.*.costBaseByCountry.*', ParameterValueType.currency());
