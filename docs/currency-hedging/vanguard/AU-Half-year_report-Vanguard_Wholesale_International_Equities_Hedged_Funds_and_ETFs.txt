@@ -1,0 +1,1453 @@
+Interim Report | 31 December 2025
+
+
+
+
+Vanguard Wholesale
+International Equities
+Funds (Hedged) and ETFs
+
+
+
+
+Vanguard Investments Australia Ltd ABN 72 072 881 086 AFSL 227263
+    Vanguard Wholesale International Equities Funds
+                 (Hedged) and ETFs
+Fund                                                              ASX        ARSN              ABN
+Vanguard Global Infrastructure Index Fund (Hedged)                 —    128 385 197   92 392 829 821
+Vanguard MSCI Index International Shares (Hedged) ETF            VGAD   165 786 989   92 314 430 239
+Vanguard International Property Securities Index Fund (Hedged)     —    115 001 360   52 511 318 838
+Vanguard Ethically Conscious International Shares Index Fund     VESG   626 133 275   89 276 633 202
+Vanguard Global Minimum Volatility Fund                          VMIN   165 787 708   80 259 391 198
+Vanguard International Shares Index Fund (Hedged)                  —    093 254 909   97 123 270 094
+Vanguard International Shares Select Exclusions Index Fund         —    613 045 739   45 215 187 041
+
+
+
+
+Contents
+About Vanguard                                                                                    1
+
+Directors' report                                                                                 2
+
+Auditor’s independence declaration                                                                7
+
+Statements of comprehensive income                                                                8
+
+Balance sheets                                                                                   10
+
+Statements of changes in equity                                                                  11
+
+Statements of cash flows                                                                         12
+
+Notes to the financial statements                                                                14
+
+Directors' declaration                                                                           25
+
+Independent auditor’s review report                                                              26
+About Vanguard
+Since our establishment in 1975, The Vanguard Group, Inc. ("Vanguard") has strived to be the world’s highest-value provider of
+investment products and services. We have an unwavering focus on our clients with a commitment to champion what’s best for
+investors by offering outstanding service, while keeping costs low.
+Over the years Vanguard has built a reputation as a global leader in client advocacy and earned the trust of millions of investors
+along the way. Our sole purpose has been to align our interest with those of our investors to ensure they have the best chance for
+investment success.
+With over AUD $18.04 trillion in assets under management globally as of 31 December 2025, including AUD $6.26 trillion in ETFs,
+Vanguard is one of the world’s largest global investment management companies.
+In Australia, Vanguard has been serving financial advisers, retail clients and institutional investors for nearly 30 years.
+
+Our unique structure – putting investors’ interests first
+What sets Vanguard apart - and allows Vanguard to put investors first around the world - is the ownership structure of The
+Vanguard Group, Inc., in the United States.
+Rather than being publicly traded or owned by a small group of individuals, The Vanguard Group, Inc., is owned by Vanguard’s
+US-domiciled funds and ETFs. Those funds, in turn, are owned by their investors.
+This mutual structure aligns our interests with those of our investors and drives the culture, philosophy and policies throughout the
+Vanguard organisation worldwide. As a result, Australian investors benefit from Vanguard’s stability and experience, low costs and
+client focus.
+
+Our investment expertise
+When you invest with Vanguard, you have 50 years of investing experience behind you. So no matter which investment products
+suit your needs, you can feel confident that Vanguard investments are built on a rigorous investment philosophy that stands
+the test of time.
+
+Low-cost investing
+We know we can’t control the markets, but we can control the costs of investing. To that end, providing low-cost investments isn’t
+a pricing strategy for us. It’s how we do business.
+We can keep costs low because of our unique ownership structure in the United States, which allows us to return profits to
+investors through lower costs.
+
+
+
+
+Vanguard Wholesale International Equities Funds (Hedged) and ETFs                                                                  1
+Directors’ report
+The Responsible Entity of the Vanguard Wholesale International Equities Funds (Hedged) and ETFs (the “Funds”) for the half-
+year ended 31 December 2025 was Vanguard Investments Australia Ltd (the “Responsible Entity”).
+The directors of Vanguard Investments Australia Ltd present their report together with the financial statements for the half-year
+ended 31 December 2025.
+
+Principal activities
+The Funds invest in accordance with the investment policy of the Funds as set out in their respective Product Disclosure
+Statements (PDSs) and in accordance with the Funds’ Constitution. The Funds (with the exception of Vanguard Global Minimum
+Volatility Fund) seek to track the returns of the Funds’ respective indices, before taking into account fees, expenses and tax. The
+Vanguard Global Minimum Volatility Fund seeks to provide long-term capital appreciation with volatility lower than the FTSE
+Global All Cap Index (AUD Hedged), before taking into account fees, expenses and tax.
+The ETF units of the Funds operate as Exchange Traded Funds (ETFs) listed on the Australian Securities Exchange
+(ASX) as detailed in the Product Disclosure Statements (PDSs).
+The Funds did not have any employees during the half-year.
+There were no significant changes in the nature of the activities of the Funds during the half-year.
+
+Directors
+The following persons held office as directors of the Responsible Entity during the half-year and up to the date of this report:
+Daniel Shrimski
+Curt Jacques
+Kim Petersen
+Brian Dvorak
+Nicolas Pesciarelli
+
+Review and results of operations
+The Funds invest in listed equity securities, listed unit trusts, unlisted unit trusts, fixed interest securities, derivatives and cash and
+cash equivalents. The investment policy of the Funds continues to be in accordance with the provisions of the Funds’ Constitution.
+
+Results
+The results of the operations of the Funds were as follows:
+
+                                                    Vanguard Global                   Vanguard MSCI                Vanguard International
+                                                  Infrastructure Index              Index International              Property Securities
+                                                     Fund (Hedged)                Shares (Hedged) ETF               Index Fund (Hedged)
+                                                  31 Dec               31 Dec      31 Dec               31 Dec       31 Dec              31 Dec
+                                                    2025                 2024         2025                2024         2025                2024
+Operating profit/(loss) before finance costs
+attributable to unitholders ($'000)               32,113              87,285      585,111             226,110       28,524              79,306
+Distributions - Wholesale Class
+  Distribution paid and payable ($'000)            9,637               7,428             -                   -      14,527              10,255
+Distributions - ETF Class
+  Distribution paid and payable ($'000)                 -                   -      39,914              45,244             -                   -
+
+
+
+
+2                                                                                                                Vanguard Interim Report
+Directors' report (continued)
+Review and results of operations (continued)
+Results (continued)
+
+                                                     Vanguard Ethically                   Vanguard              Vanguard International    Vanguard International
+                                                   Conscious International            Global Minimum             Shares Index Fund            Shares Select
+                                                     Shares Index Fund                  Volatility Fund              (Hedged)             Exclusions Index Fund
+                                                    31 Dec          31 Dec           31 Dec           31 Dec     31 Dec          31 Dec    31 Dec          31 Dec
+                                                      2025             2024            2025             2024       2025            2024      2025            2024
+Operating profit/(loss) before finance costs
+attributable to unitholders ($'000)                  250,229        313,583            1,024            674    1,183,519       619,866    209,774        214,463
+Distributions - Wholesale Class
+  Distribution paid and payable ($'000)                    -               -             304            257            -              -          -              -
+Distributions - ETF Class
+  Distribution paid and payable ($'000)                5,995           5,626             218            185            -              -          -              -
+Distributions - AUD Class
+  Distribution paid and payable ($'000)                    -               -                -              -     95,608        240,247           -              -
+Distributions - AUD Unhedged Class
+  Distribution paid and payable ($'000)                5,428           7,086                -              -           -              -     8,755          8,901
+Distributions - NZD Hedged Class
+  Distribution paid and payable ($'000)                    -           3,577                -              -           -              -          -        11,021
+Distributions - AUD Hedged Class
+  Distribution paid and payable ($'000)                 343                -                -              -           -              -     8,022          5,223
+
+
+
+Performance
+The tables below detail the performance of the Funds as represented by the total return, net of fees, which is calculated as the
+aggregation of the percentage capital growth and percentage distribution of income. The total return is shown for the half-year and
+assumes that all distributions were re-invested during that period. These are calculated in accordance with FSC Standard 6.0
+Product Performance - calculation and presentation of returns. The directors assess the performance of the Funds by comparing
+each Fund’s total return with the corresponding Index (the “Benchmark”) gross of fees.
+
+
+                                                                                                                                            31 Dec        31 Dec
+                                                                                                                                              2025          2024
+                                                                                                                                                %             %
+Vanguard Global Infrastructure Index Fund (Hedged)
+ Capital growth                                                                                                                               3.06          7.72
+ Distribution of income                                                                                                                       1.29          1.07
+Total return                                                                                                                                  4.35          8.79
+Benchmark
+ FTSE Developed Core Infrastructure (with net dividends reinvested) hedged into AUD                                                           4.38          8.89
+
+
+                                                                                                                                            31 Dec        31 Dec
+                                                                                                                                              2025          2024
+                                                                                                                                                %             %
+Vanguard MSCI Index International Shares (Hedged) ETF
+ Capital growth                                                                                                                              10.58          5.19
+ Distribution of income                                                                                                                       0.72          1.20
+Total return                                                                                                                                 11.30          6.39
+Benchmark
+ MSCI World ex-Australia (with net dividends reinvested), hedged into Australian dollars Index                                               11.32          6.45
+
+
+                                                                                                                                            31 Dec        31 Dec
+                                                                                                                                              2025          2024
+                                                                                                                                                %             %
+Vanguard International Property Securities Index Fund (Hedged)
+ Capital growth                                                                                                                               1.38          4.41
+ Distribution of income                                                                                                                       1.40          0.93
+Total return                                                                                                                                  2.78          5.34
+Benchmark
+ FTSE EPRA/NAREIT Developed ex-Australia Rental index (with net dividends reinvested) hedged into AUD                                         2.71          5.39
+
+
+
+Vanguard Wholesale International Equities Funds (Hedged) and ETFs                                                                                              3
+Directors' report (continued)
+Review and results of operations (continued)
+Performance (continued)
+
+                                                                                                   31 Dec     31 Dec
+                                                                                                     2025       2024
+                                                                                                       %          %
+Vanguard Ethically Conscious International Shares Index Fund - ETF Class
+ Capital growth                                                                                      8.90      13.99
+ Distribution of income                                                                              0.49       0.59
+Total return                                                                                         9.39      14.58
+Benchmark
+ FTSE Developed ex Australia Choice Index (with net dividends reinvested) in AUD                     9.40      14.64
+
+
+                                                                                                   31 Dec     31 Dec
+                                                                                                     2025       2024
+                                                                                                       %          %
+Vanguard Ethically Conscious International Shares Index Fund - AUD Unhedged Class
+ Capital growth                                                                                      8.87      13.78
+ Distribution of income                                                                              0.50       0.78
+Total return                                                                                         9.37      14.56
+Benchmark
+ FTSE Developed ex Australia Choice Index (with net dividends reinvested) in AUD                     9.40      14.64
+
+
+                                                                                                   31 Dec     31 Dec
+                                                                                                     2025       2024
+                                                                                                       %          %
+Vanguard Ethically Conscious International Shares Index Fund - AUD Hedged Class
+ Capital growth                                                                                     11.82       6.30
+ Distribution of income                                                                              0.16          -
+Total return                                                                                        11.98       6.30
+Benchmark
+ FTSE Developed ex Australia Choice Index (with net dividends reinvested) hedged into AUD           12.03       6.41
+
+
+                                                                                                   31 Dec     31 Dec
+                                                                                                     2025       2024
+                                                                                                       %          %
+Vanguard Ethically Conscious International Shares Index Fund - NZD Hedged Class
+ Capital growth                                                                                     11.67       4.97
+ Distribution of income                                                                                 -       1.48
+Total return                                                                                        11.67       6.45
+Benchmark
+ FTSE Developed ex Australia Choice Index (with net dividends reinvested) hedged into NZD           11.73       6.60
+
+
+                                                                                                   31 Dec     31 Dec
+                                                                                                     2025       2024
+                                                                                                       %          %
+Vanguard Global Minimum Volatility Fund - Wholesale Class
+ Capital growth                                                                                      1.56       0.87
+ Distribution of income                                                                              2.34       2.05
+Total return                                                                                         3.90       2.92
+Benchmark
+ FTSE Global All Cap Index (AUD hedged)                                                             11.85       5.94
+
+
+
+
+4                                                                                           Vanguard Interim Report
+Directors' report (continued)
+Review and results of operations (continued)
+Performance (continued)
+
+                                                                                                                                            31 Dec   31 Dec
+                                                                                                                                              2025     2024
+                                                                                                                                                %        %
+Vanguard Global Minimum Volatility Fund - ETF Class
+ Capital growth                                                                                                                               2.24     1.24
+ Distribution of income                                                                                                                       1.70     1.72
+Total return                                                                                                                                  3.94     2.96
+Benchmark
+ FTSE Global All Cap Index (AUD hedged)                                                                                                      11.85     5.94
+
+
+                                                                                                                                            31 Dec   31 Dec
+                                                                                                                                              2025     2024
+                                                                                                                                                %        %
+Vanguard International Shares Index Fund (Hedged) - AUD Class
+ Capital growth                                                                                                                              10.38     3.90
+ Distribution of income                                                                                                                       0.93     2.49
+Total return                                                                                                                                 11.31     6.39
+Benchmark
+ MSCI World ex-Australia (with net dividends reinvested) hedged into Australian dollars Index                                                11.32     6.45
+
+
+                                                                                                                                            31 Dec   31 Dec
+                                                                                                                                              2025     2024
+                                                                                                                                                %        %
+Vanguard International Shares Select Exclusions Index Fund - AUD Unhedged Class
+ Capital growth                                                                                                                               8.44    13.58
+ Distribution of income                                                                                                                       0.54     1.02
+Total return                                                                                                                                  8.98    14.60
+Benchmark
+ MSCI World ex Australia, ex Tobacco, ex Controversial Weapons, ex Nuclear Weapons (with net dividends reinvested) in Australian dollars      8.98    14.64
+ Index
+
+
+                                                                                                                                            31 Dec   31 Dec
+                                                                                                                                              2025     2024
+                                                                                                                                                %        %
+Vanguard International Shares Select Exclusions Index Fund - AUD Hedged Class
+ Capital growth                                                                                                                              10.15     4.74
+ Distribution of income                                                                                                                       1.29     1.58
+Total return                                                                                                                                 11.44     6.32
+Benchmark
+ MSCI World ex Australia, ex Tobacco, ex Controversial Weapons, ex Nuclear Weapons (with net dividends reinvested) hedged into Australian    11.46     6.40
+ dollars Index
+
+
+                                                                                                                                            31 Dec   31 Dec
+                                                                                                                                              2025     2024
+                                                                                                                                                %        %
+Vanguard International Shares Select Exclusions Index Fund - NZD Hedged Class
+ Capital growth                                                                                                                              11.13     5.61
+ Distribution of income                                                                                                                          -     0.88
+Total return                                                                                                                                 11.13     6.49
+Benchmark
+ MSCI World ex Australia, ex Tobacco, ex Controversial Weapons, ex Nuclear Weapons (with net dividends reinvested) hedged into New           11.15     6.60
+ Zealand dollars Index
+
+Investors should be aware that past performance is not necessarily an indicator of future performance.
+
+
+
+
+Vanguard Wholesale International Equities Funds (Hedged) and ETFs                                                                                        5
+Directors' report {continued)
+Significant changes in state of affairs
+Significant market disruptions, such as those caused by pandemics, natural or environmental disasters, war, acts of terrorism,
+political or regulatory conditions or other events, can adversely affect local and global markets and normal market operations. Any
+such disruptions could have an adverse impact on the value of the Funds' investments and Funds' performance.
+In the opinion of the directors, there were no significant changes in the state of affairs of the Funds that occurred during the
+half-year.
+
+Matters subsequent to the end of the half-year
+No matter or circumstance has arisen since 31 December 2025 that has significantly affected, or may significantly affect:
+(i) the operations of the Funds in future financial periods;
+(ii) the results of those operations in future financial periods; or
+(iii) the state of affairs of the Funds in future financial periods.
+
+Rounding of amounts to the nearest thousand dollars
+Amounts in the directors' report have been rounded to the nearest thousand dollars in accordance with Australian Securities and
+Investments Commission (ASIC) Corporations (Rounding in Financial/Directors' Reports) Instrument 2016/191, unless otherwise
+indicated.
+
+Additional disclosure
+The relief available in ASIC Corporations (Related Scheme Reports) Instrument 2025/438 has been applied in the directors'
+report and the financial report, combining information related to multiple Funds. In accordance with that, information related to
+each included Fund has been readily identified and amounts for each included Fund is presented in the adjacent columns in this
+report.
+
+Auditor's independence declaration
+A copy of the auditor's independence declaration as required under Section 307C of the Corporations Act 2001 is set out on page
+7.
+This report is made in accordance with a resolution of the directors.
+
+
+
+
+Daniel Shrimski
+Managing Director, Vanguard Investments Australia Ltd
+Melbourne
+5 March 2026
+
+
+
+
+6                                                                                                         Vanguard Interim Report
+Auditor’s Independence Declaration
+   •   Vanguard Global Infrastructure Index Fund (Hedged)
+   •   Vanguard MSCI Index International Shares (Hedged) ETF*
+   •   Vanguard International Property Securities Index Fund (Hedged)
+   •   Vanguard Ethically Conscious International Shares Index Fund*
+   •   Vanguard Global Minimum Volatility Fund*
+   •   Vanguard International Shares Index Fund (Hedged)
+   •   Vanguard International Shares Select Exclusions Index Fund
+referred to collectively as the Vanguard Wholesale International Equities Fund (Hedged) and ETFs.
+* denotes listed Funds
+
+As lead auditor for the review of Vanguard Wholesale International Equities Funds (Hedged) and ETFs
+financial report for the half-year ended 31 December 2025, I declare that to the best of my knowledge and
+belief, there have been:
+
+a) no contraventions of the auditor independence requirements of the Corporations Act 2001 in relation
+   to the review of the financial report; and
+
+b) no contraventions of any applicable code of professional conduct in relation to the review of the
+   financial report.
+
+
+
+
+Adrian Gut                                                                                                   Melbourne
+Partner                                                                                                   5 March 2026
+PricewaterhouseCoopers
+
+
+
+
+                                             PricewaterhouseCoopers, ABN 52 780 433 757
+                                             2 Riverside Quay, SOUTHBANK VIC 3006,
+                                             GPO Box 1331 MELBOURNE VIC 3001
+                                             T: +61 3 8603 1000, F: +61 3 8603 1999, www.pwc.com.au
+
+ pwc.com.au                                  Liability limited by a scheme approved under Professional Standards Legislation.
+Statements of comprehensive income
+For the half-year ended 31 December 2025
+                                                               Vanguard Global               Vanguard MSCI            Vanguard International
+                                                             Infrastructure Index          Index International          Property Securities
+                                                                Fund (Hedged)             Shares (Hedged) ETF          Index Fund (Hedged)
+                                                              31 Dec          31 Dec        31 Dec        31 Dec        31 Dec          31 Dec
+                                                                2025            2024          2025          2024          2025            2024
+                                                     Notes     $'000           $'000         $'000         $'000         $'000           $'000
+Investment income
+  Interest income                                                    -              100           -          641               -           170
+ Distribution income                                            8,325         12,927        31,536        28,866         14,091         15,616
+ Net gains/(losses) on financial instruments at
+ fair value through profit or loss                            24,187          74,534       554,282       196,928         14,918         63,899
+ Other operating income                                            8               -           467           358             13              1
+Total net investment income/(loss)                            32,520          87,561       586,285       226,793         29,022         79,686
+Expenses
+ Responsible Entity’s fees                                        190               180        953           602            234            254
+ Custody fees                                                      11                16         22               27          14                18
+ Transaction costs                                                  1                 2          5                7           2              5
+ Other operating expenses                                         205                78        194               47         248            103
+Total operating expenses                                          407               276      1,174           683            498            380
+Operating profit/(loss)                                       32,113          87,285       585,111       226,110         28,524         79,306
+Finance costs attributable to unitholders
+ Distributions to unitholders                         5              -                -           -               -            -                -
+ (Increase)/decrease in net assets attributable to
+ unitholders                                          4              -                -           -               -            -                -
+Profit/(loss) for the half-year                               32,113          87,285       585,111       226,110         28,524         79,306
+Other comprehensive income                                           -                -           -               -            -                -
+Total comprehensive income for the half-year                  32,113          87,285       585,111       226,110         28,524         79,306
+
+
+The above statements of comprehensive income should be read in conjunction with the accompanying notes.
+
+
+
+
+8                                                                                                                Vanguard Interim Report
+Statements of comprehensive income (continued)
+For the half-year ended 31 December 2025
+                                                               Vanguard Ethically             Vanguard                 Vanguard International       Vanguard International
+                                                             Conscious International       Global Minimum               Shares Index Fund               Shares Select
+                                                               Shares Index Fund            Volatility Fund                 (Hedged)                Exclusions Index Fund
+                                                                31 Dec         31 Dec      31 Dec         31 Dec          31 Dec         31 Dec       31 Dec            31 Dec
+                                                                  2025           2024        2025           2024            2025           2024         2025              2024
+                                                     Notes       $'000          $'000       $'000          $'000           $'000          $'000        $'000             $'000
+Investment income
+  Interest income                                                  128            249           9               17              -         1,443           116             541
+ Dividend income                                                16,682         15,765         249              238              -               -      16,719           17,373
+ Distribution income                                               970           1,016         34                 -       62,413        115,533           749             840
+ Net gains/(losses) on financial instruments at
+ fair value through profit or loss                             237,621        301,749         813              504     1,123,243        504,772       197,432        201,550
+ Other operating income                                            263            199          19                9           121              -           102            150
+Total net investment income/(loss)                             255,664        318,978       1,124              768     1,185,777        621,748       215,118        220,454
+Expenses
+ Responsible Entity’s fees                                       3,002           2,524         43               38         1,860          1,635         2,870            2,965
+ Custody fees                                                       43              63         10               10            21             23            69              67
+ Transaction costs                                                  83             120          6                9             9             16           192             116
+ Withholding tax expense                                         2,240           2,101         32               26              -               -       2,213            2,301
+ Other operating expenses                                            67           587           9               11           368            208              -            542
+Total operating expenses                                         5,435           5,395        100               94         2,258          1,882         5,344            5,991
+Operating profit/(loss)                                        250,229        313,583       1,024              674     1,183,519        619,866       209,774        214,463
+Finance costs attributable to unitholders
+  Distributions to unitholders                        5        (11,766)       (16,289)      (522)             (442)     (95,608)      (240,247)      (16,777)       (25,145)
+ (Increase)/decrease in net assets attributable to
+ unitholders                                          4       (238,463)      (297,294)      (502)             (232)   (1,087,911)     (379,619)     (192,997)      (189,318)
+Profit/(loss) for the half-year                                       -                -         -                -             -               -            -               -
+Other comprehensive income                                            -                -         -                -             -               -            -               -
+Total comprehensive income for the half-year                          -                -         -                -             -               -            -               -
+
+The above statements of comprehensive income should be read in conjunction with the accompanying notes.
+
+
+
+
+Vanguard Wholesale International Equities Funds (Hedged) and ETFs                                                                                                   9
+Balance sheets
+As at 31 December 2025
+                                                                                                 Vanguard Global               Vanguard MSCI           Vanguard International
+                                                                                               Infrastructure Index          Index International         Property Securities
+                                                                                                  Fund (Hedged)             Shares (Hedged) ETF         Index Fund (Hedged)
+                                                                                                 31 Dec         30 Jun         31 Dec         30 Jun      31 Dec         30 Jun
+                                                                                                   2025          2025            2025          2025         2025          2025
+                                                           Notes                                  $'000          $'000          $'000          $'000       $'000          $'000
+Assets
+ Cash and cash equivalents                                                                          399               666        6,142         8,367         792          1,066
+ Margin accounts                                                                                    486               746      20,168          9,970        1,876         1,902
+ Due from brokers - receivable for securities sold                                               26,900                 -            -        50,000      27,700                -
+ Receivables                                                                                      3,215          3,271             36         21,843          201         1,327
+ Accrued income                                                                                   4,498         10,576         18,169         48,423        7,153         7,151
+ Financial assets at fair value through profit or loss       3                                  783,990        716,653       6,354,258     5,063,875   1,072,577      1,030,321
+Total assets                                                                                    819,488        731,912       6,398,773     5,202,478   1,110,299      1,041,767
+Liabilities
+ Margin accounts                                                                                 14,080            8,510      154,040         54,840      21,620         12,260
+ Due to brokers - payable for securities purchased                                                    -              -         63,500             -            -              -
+ Distribution payable                                        5                                    4,972         14,572         39,914       181,041        7,667          9,473
+ Payables                                                                                        39,881            568            728           458       41,288          3,116
+ Financial liabilities at fair value through profit or
+ loss                                                        3                                    3,201            2,807       35,383         36,674        3,300         5,172
+Total liabilities                                                                                62,134         26,457        293,565       273,013       73,875         30,021
+Net assets attributable to unitholders (equity)              4                                  757,354        705,455       6,105,208     4,929,465   1,036,424      1,011,746
+
+
+                                                                     Vanguard Ethically            Vanguard                 Vanguard International     Vanguard International
+                                                                   Conscious International      Global Minimum               Shares Index Fund             Shares Select
+                                                                     Shares Index Fund           Volatility Fund                 (Hedged)              Exclusions Index Fund
+                                                                      31 Dec         30 Jun      31 Dec         30 Jun         31 Dec         30 Jun      31 Dec         30 Jun
+                                                                        2025          2025         2025          2025            2025          2025         2025          2025
+                                                          Notes         $'000          $'000      $'000            $'000         $'000         $'000        $'000         $'000
+Assets
+ Cash and cash equivalents                                              9,280         4,223         689               699        8,819        14,656        4,354         5,597
+ Margin accounts                                                        2,407         2,117          78            273          28,243       14,910        3,866          3,269
+ Due from brokers - receivable for securities sold                          -         9,955         357            670               -      108,643           17            175
+ Receivables                                                            5,987         6,267          86             49           1,527        7,858        5,326          5,356
+ Accrued income                                                         1,370         1,522          30             47          35,125      121,251        1,276          1,157
+ Financial assets at fair value through profit or loss      3       3,193,872     2,748,922      25,879         23,578      12,005,657   10,706,932    2,961,132      2,256,870
+Total assets                                                        3,212,916     2,773,006      27,119         25,316      12,079,371   10,974,250    2,975,971      2,272,424
+Liabilities
+  Margin accounts                                                       8,098         5,912           -                -      279,060       116,960       17,449          9,834
+  Due to brokers - payable for securities purchased                         -             -           -               15       75,119             -       13,232         14,910
+  Distribution payable                                      5           7,043        20,480         371            1,296       64,963       421,612       11,680         12,972
+  Payables                                                                698         1,490         642               13       85,963       109,625          701            632
+  Collateral for securities on loan                                         -             -           -                1            -             -            -              -
+  Financial liabilities at fair value through profit or
+  loss                                                      3           2,509         2,916          73               100      65,053         79,334        3,665         5,129
+Total liabilities                                                      18,348        30,798       1,086            1,425      570,158       727,531       46,727         43,477
+Net assets attributable to unitholders (liability)          4       3,194,568     2,742,208      26,033         23,891      11,509,213   10,246,719    2,929,244      2,228,947
+
+The above balance sheets should be read in conjunction with the accompanying notes.
+
+
+
+
+10                                                                                                                                              Vanguard Interim Report
+Statements of changes in equity
+For the half-year ended 31 December 2025
+                                                                                            Vanguard Global                    Vanguard MSCI                 Vanguard International
+                                                                                          Infrastructure Index               Index International               Property Securities
+                                                                                             Fund (Hedged)                  Shares (Hedged) ETF               Index Fund (Hedged)
+                                                                                            31 Dec          31 Dec              31 Dec         31 Dec            31 Dec        31 Dec
+                                                                                              2025            2024                2025           2024              2025          2024
+                                                    Notes                                    $'000           $'000               $'000          $'000             $'000         $'000
+Total equity at the beginning of the half-year                                             705,455         876,689            4,929,465      3,134,786        1,011,746     1,225,678
+Comprehensive income for the half-year
+ Profit/(loss) for the half-year                                                            32,113          87,285             585,111        226,110            28,524        79,306
+ Other comprehensive income                                                                       -                 -                    -               -             -               -
+Total comprehensive income for the half-year                                                32,113          87,285             585,111        226,110            28,524        79,306
+Transactions with unitholders
+ Applications                                                                               122,942          90,984            626,696        621,594           127,034       112,594
+ Redemptions                                                                              (100,570)       (381,820)            (34,218)        (1,426)        (122,044)     (370,108)
+ Units issued upon reinvestment of distributions                                             7,051            4,153              38,068        14,178             5,691         5,878
+ Distributions paid and payable                       5                                     (9,637)         (7,428)            (39,914)       (45,244)          (14,527)      (10,255)
+Total transactions with unitholders                                                         19,786        (294,111)            590,632        589,102            (3,846)    (261,891)
+Total equity at the end of the half-year              4                                    757,354         669,863            6,105,208      3,949,998        1,036,424     1,043,093
+
+
+                                                              Vanguard Ethically              Vanguard                      Vanguard International           Vanguard International
+                                                            Conscious International        Global Minimum                    Shares Index Fund                   Shares Select
+                                                              Shares Index Fund             Volatility Fund                      (Hedged)                    Exclusions Index Fund
+                                                               31 Dec         31 Dec         31 Dec           31 Dec           31 Dec         31 Dec             31 Dec        31 Dec
+                                                                 2025           2024           2025             2024             2025           2024               2025          2024
+                                                   Notes         $'000         $'000           $'000             $'000           $'000         $'000              $'000         $'000
+Total equity at the beginning of the half-year                        -               -               -                 -            -               -                 -               -
+Comprehensive income for the half-year
+ Profit/(loss) for the half-year                                      -               -               -                 -            -               -                 -               -
+ Other comprehensive income                                           -               -               -                 -            -               -                 -               -
+Total comprehensive income for the half-year                          -               -               -                 -            -               -                 -               -
+Transactions with unitholders
+ Applications                                                         -               -               -                 -            -               -                 -               -
+ Redemptions                                                          -               -               -                 -            -               -                 -               -
+ Units issued upon reinvestment of distributions                      -               -               -                 -            -               -                 -               -
+ Distributions paid and payable                      5                -               -               -                 -            -               -                 -               -
+Total transactions with unitholders                                   -               -               -                 -            -               -                 -               -
+Total equity at the end of the half-year             4                -               -               -                 -            -               -                 -               -
+
+The above statements of changes in equity should be read in conjunction with the accompanying notes.
+
+
+
+
+Vanguard Wholesale International Equities Funds (Hedged) and ETFs                                                                                                                     11
+Statements of cash flows
+For the half-year ended 31 December 2025
+                                                                  Vanguard Global             Vanguard MSCI             Vanguard International
+                                                                Infrastructure Index        Index International           Property Securities
+                                                                   Fund (Hedged)           Shares (Hedged) ETF           Index Fund (Hedged)
+                                                                   31 Dec        31 Dec         31 Dec        31 Dec        31 Dec        31 Dec
+                                                                     2025          2024           2025          2024          2025          2024
+                                                    Notes           $'000          $'000         $'000          $'000        $'000          $'000
+Cash flows from operating activities
+ Proceeds from sale of financial instruments at
+ fair value through profit or loss                               137,150       383,791         408,429         8,619      181,681       295,814
+ Purchases of financial instruments at fair value
+ through profit or loss                                         (186,576)      (83,979)      (881,489)     (518,580)     (215,109)     (116,659)
+ Transaction costs on purchases of financial
+ instruments at fair value through profit or loss                     (1)           (2)             (5)           (7)          (2)           (5)
+ Interest received                                                      -            49               -          347             -            85
+ Other income received                                                  8             1          2,176         3,161            13             1
+ Responsible Entity's fees paid                                     (186)         (191)          (910)         (587)         (231)         (267)
+ Other operating expenses paid                                      (176)         (152)            (20)          (27)        (213)          (37)
+Net cash inflow/(outflow) from operating
+activities                                                       (49,781)      299,517       (471,819)     (507,074)      (33,861)      178,932
+Cash flows from financing activities
+ Proceeds from applications by unitholders                       123,000         84,478        646,825      634,103       128,161        106,547
+ Payments for redemptions by unitholders                         (61,303)     (382,005)       (34,218)       (1,426)      (83,925)     (282,919)
+ Distributions paid to unitholders                               (12,186)       (3,359)      (142,973)     (135,117)      (10,642)        (6,884)
+Net cash inflow/(outflow) from financing
+activities                                                        49,511      (300,886)        469,634      497,560         33,594     (183,256)
+Net increase/(decrease) in cash and cash
+equivalents                                                         (270)       (1,369)         (2,185)      (9,514)         (267)       (4,324)
+ Cash and cash equivalents at the beginning of
+ the half-year                                                       666            895          8,367         3,607         1,066         1,157
+ Effects of foreign currency exchange rate
+ changes on cash and cash equivalents                                   3            13            (40)          226            (7)           24
+Cash and cash equivalents at the end of the
+half-year                                                            399          (461)          6,142       (5,681)           792       (3,143)
+Non-cash financing activities
+ During the half-year, the distribution payments
+ satisfied by the issue of units under the
+ distribution reinvestment plan                                    7,051          4,153         38,068        14,178         5,691         5,878
+ Non cash redemptions                                                  -              -              -             -             -      (85,440)
+Total non-cash financing activities                                7,051          4,153         38,068        14,178         5,691      (79,562)
+
+
+The above statements of cash flows should be read in conjunction with the accompanying notes.
+
+
+
+
+12                                                                                                             Vanguard Interim Report
+Statements of cash flows (continued)
+For the half-year ended 31 December 2025
+                                                              Vanguard Ethically           Vanguard               Vanguard International      Vanguard International
+                                                            Conscious International     Global Minimum             Shares Index Fund              Shares Select
+                                                              Shares Index Fund          Volatility Fund                (Hedged)              Exclusions Index Fund
+                                                               31 Dec        31 Dec       31 Dec         31 Dec      31 Dec        31 Dec         31 Dec        31 Dec
+                                                                 2025           2024        2025           2024        2025          2024           2025          2024
+                                                    Notes        $'000          $'000       $'000         $'000       $'000          $'000         $'000         $'000
+Cash flows from operating activities
+ Proceeds from sale of financial instruments at
+ fair value through profit or loss                              83,948      291,679       10,558         8,890    1,002,081       714,040         72,124        4,313
+ Purchases of financial instruments at fair value
+ through profit or loss                                      (279,654)     (268,836)     (11,586)       (9,533)    (710,746)    (376,426)      (574,748)    (268,220)
+ Transaction costs on purchases of financial
+ instruments at fair value through profit or loss                  (83)        (120)          (6)           (9)           (9)          (16)         (192)        (116)
+ Interest received                                                  128          217            9            14             -          673            116          410
+ Dividends received                                             14,773       14,292          249           241              -             -       14,506       15,647
+ Distributions received                                             861          847           26             -             -             -           635          712
+ Other income received                                              263          199           27             9        3,514         6,154            261          755
+ Responsible Entity's fees paid                                 (2,911)      (2,463)         (43)          (37)      (1,816)       (1,645)        (2,724)      (2,863)
+ Other operating expenses paid                                    (130)        (425)         (20)          (22)        (369)           (23)          (74)         (67)
+Net cash inflow/(outflow) from operating
+activities                                                   (182,805)        35,390        (786)        (447)      292,655       342,757      (490,096)    (249,429)
+Cash flows from financing activities
+ Proceeds from applications by unitholders                     354,902       395,614        6,080         4,416      752,413      604,249       578,453       409,239
+ Payments for redemptions by unitholders                     (150,133)     (413,691)      (4,188)       (3,874)    (810,649)    (785,327)       (88,572)    (165,476)
+ Distributions paid to unitholders                            (16,844)      (22,092)      (1,123)         (167)    (240,226)    (191,670)          (968)       (4,042)
+Net cash inflow/(outflow) from financing
+activities                                                     187,925      (40,169)         769           375     (298,462)    (372,748)        488,913      239,721
+Net increase/(decrease) in cash and cash
+equivalents                                                      5,120       (4,779)         (17)          (72)      (5,807)     (29,991)         (1,183)      (9,708)
+ Cash and cash equivalents at the beginning of
+ the half-year                                                   4,223         9,242         699           596       14,656         6,353          5,597       16,558
+ Effects of foreign currency exchange rate
+ changes on cash and cash equivalents                              (63)          278            7           10          (30)          409            (60)         269
+Cash and cash equivalents at the end of the
+half-year                                                        9,280         4,741         689           534         8,819     (23,229)          4,354        7,119
+Non-cash financing activities
+ During the half-year, the distribution payments
+ satisfied by the issue of units under the
+ distribution reinvestment plan                                  8,359        18,938         324            49      212,031       181,346         17,101       39,351
+Total non-cash financing activities                              8,359        18,938         324            49      212,031       181,346         17,101       39,351
+
+The above statements of cash flows should be read in conjunction with the accompanying notes.
+
+
+
+
+Vanguard Wholesale International Equities Funds (Hedged) and ETFs                                                                                                 13
+Notes to the financial statements
+For the half-year ended 31 December 2025
+
+1 General information
+These financial statements cover the Vanguard Wholesale International Equities Funds (Hedged) and ETFs (the “Funds”) as
+registered managed investment schemes. The respective constitution dates are as follows:
+•    Vanguard Global Infrastructure Index Fund (Hedged) 26 October 2007
+•    Vanguard MSCI Index International Shares (Hedged) ETF 12 September 2013
+•    Vanguard International Property Securities Index Fund (Hedged) 30 June 2005
+•    Vanguard Ethically Conscious International Shares Index Fund 23 April 2018
+•    Vanguard Global Minimum Volatility Fund 12 September 2013
+•    Vanguard International Shares Index Fund (Hedged) 8 June 2000
+•    Vanguard International Shares Select Exclusions Index Fund 10 June 2016
+The Responsible Entity of the Vanguard Wholesale International Equities Funds (Hedged) and ETFs is Vanguard Investments
+Australia Ltd (the “Responsible Entity”). The Responsible Entity’s registered office is Level 13,130 Lonsdale Street, Melbourne
+VIC 3000.
+The Funds invest in accordance with the investment policy of the Funds as set out in their respective Product Disclosure
+Statements (PDSs) and in accordance with the Funds’ Constitution. The Funds (with the exception of Vanguard Global Minimum
+Volatility Fund) seek to track the returns of the Funds’ respective indices, before taking into account fees, expenses and tax. The
+Vanguard Global Minimum Volatility Fund seeks to provide long-term capital appreciation with volatility lower than the FTSE
+Global All Cap Index (AUD Hedged), before taking into account fees, expenses and tax.
+The ETF units of the Funds operate as Exchange Traded Funds (ETFs) listed on the Australian Securities Exchange (ASX)
+as detailed in the Product Disclosure Statements (PDSs).
+The financial statements were authorised for issue by the directors on 5 March 2026. The directors of the Responsible Entity have
+the power to amend and reissue the financial statements.
+
+2 Basis of preparation of interim financial report
+These interim financial statements for the half-year ended 31 December 2025 have been prepared in accordance with accounting
+standard AASB 134 Interim Financial Reporting and the Corporations Act 2001.
+The Funds are for-profit unit trusts for the purpose of preparing the financial statements.
+This interim financial report does not include all the notes of the type normally included in an annual report. Accordingly, this report
+is to be read in conjunction with the annual report for the year ended 30 June 2025 and any public announcements made in
+respect of the Funds during the interim reporting period in accordance with the continuous disclosure requirements of the
+Corporations Act 2001.
+The accounting policies adopted are consistent with those of the previous financial year and corresponding half-year reporting
+period.
+
+New accounting standards, amendments or interpretations adopted by the Funds
+A number of amendments to standards and interpretations are effective for annual periods beginning after 1 July 2025. The
+amendments did not have any impact on the amounts recognised in prior periods and are not expected to significantly affect the
+Funds current or future periods.
+
+
+
+
+14                                                                                                           Vanguard Interim Report
+Notes to the financial statements (continued)
+For the half-year ended 31 December 2025
+
+2 Basis of preparation of interim financial report (continued)
+New accounting standards, amendments or interpretations not yet adopted by the Funds
+Certain new accounting standards, amendments or interpretations to accounting standards have been published that are not
+mandatory for the half-year reporting period ended 31 December 2025 and have not been early adopted by the Funds. The new
+standard and amendment applicable to the Funds and its assessment is as follows:
+•   Amendments to the Classification and Measurement of Financial Instruments – Amendments to AASB 9 and AASB 7
+    (effective for annual periods beginning on or after 1 January 2026)
+The AASB issued targeted amendments to AASB 9 and AASB 7 to respond to recent questions arising in practice, and to include
+new requirements for all reporting entities. Among other amendments, the AASB clarified the date of recognition and
+derecognition of some financial assets and liabilities, with a new exception for some financial liabilities settled through an
+electronic cash transfer system.
+•   AASB 18 Presentation and Disclosure in Financial Statements (effective for annual periods beginning on or after 1 January
+    2027)
+The AASB issued the new standard on presentation and disclosure in financial statements, which replaces AASB 101, with a
+focus on updates to the statement of profit or loss.
+The key new concepts introduced in AASB 18 relate to:
+− the structure of the statement of profit or loss with defined subtotals;
+− the requirement to determine the most useful structured summary for presenting expenses in the statement of profit or loss;
+ − required disclosures in a single note within the financial statements for certain profit or loss performance measures that are
+reported outside an entity’s financial statements (that is, management-defined performance measures); and
+− enhanced principles on aggregation and disaggregation which apply to the primary financial statements and notes in general.
+The Funds are currently still assessing the effect of the forthcoming standard and amendments.
+No other new standards or amendments to standards are expected to have a material effect on the financial statements of the
+Funds.
+
+Significant related party transactions
+Distribution income and unlisted unit trusts within the financial instruments at fair value for Vanguard Global Infrastructure Index
+Fund (Hedged), Vanguard International Property Securities Index Fund (Hedged), Vanguard International Shares Index Fund
+(Hedged) and Vanguard MSCI Index International Shares (Hedged) ETF are income and investments in Vanguard wholesale
+products. All investment transactions affiliated with Vanguard wholesale products are conducted in the normal course of business.
+There were no other significant related party transactions during the current reporting period.
+
+
+
+
+Vanguard Wholesale International Equities Funds (Hedged) and ETFs                                                                15
+Notes to the financial statements (continued)
+For the half-year ended 31 December 2025
+
+3 Fair value measurement
+The Funds measure and recognise the following assets and liabilities at fair value on a recurring basis:
+•     Financial assets / liabilities at fair value through profit or loss (FVPL)
+•     Derivative financial instruments
+The Funds have no assets or liabilities at fair value on a non-recurring basis in the current reporting period.
+The fair value hierarchy has the following levels:
+(a) quoted prices (unadjusted) in active markets for identical assets or liabilities (level 1);
+(b) inputs other than quoted prices included within level 1 that are observable for the asset or liability, either directly or indirectly
+    (level 2); and
+(c) inputs for the asset or liability that are not based on observable market data (unobservable inputs) (level 3).
+
+(i)    Fair value in an active market (level 1)
+The fair value of financial assets and liabilities traded in active markets is based on their quoted market prices at the end of the
+reporting period without any deduction for estimated future selling costs. The Funds value their investments in accordance with
+the accounting policies set out in note 2 to the financial statements. For the majority of investments, the Funds rely on information
+provided by independent pricing services for the valuation of investments.
+The quoted market price used for financial assets held by the Funds is the current bid price; the appropriate quoted market price
+for financial liabilities is the current asking price. When the Funds hold derivatives with offsetting market risks, they use mid-
+market prices as a basis for establishing fair values for the offsetting risk positions and applies this bid or asking price to the net
+open position, as appropriate.
+A financial instrument is regarded as quoted in an active market if quoted prices are readily and regularly available from an
+exchange, dealer, broker, industry group, pricing service, or regulatory agency, and those prices represent actual and regularly
+occurring market transactions on an arm’s length basis.
+
+(ii) Fair value in an inactive or unquoted market (level 2)
+The fair value of financial assets and liabilities that are not traded in an active market is determined using valuation techniques that
+maximise the use of observable market data and rely as little as possible on entity-specific estimates. If all significant inputs
+required to fair value an instrument are observable, the instrument is included in level 2.
+Financial assets and liabilities that trade in markets that are not considered to be active but are valued based on quoted market
+prices, dealer quotations or alternative pricing sources supported by observable inputs are classified within level 2. These include
+certain fixed interest securities, listed equities and over-the-counter derivatives.
+During the reporting period, certain Funds held investments in unlisted unit trusts recorded at the redemption value per unit as
+reported by the investment managers of such funds. These redemption values are based on observable inputs which are
+executable prices and are therefore classified within level 2.
+
+(iii) Fair value in an inactive or unquoted market (level 3)
+If one or more of the significant inputs is not based on observable market data, the instrument is included in level 3. This is the
+case for unlisted equity securities and for instruments where risk gives rise to a significant unobservable adjustment. The fair
+value of financial assets and liabilities is determined using valuation techniques. These include the use of recent arm’s length
+market transactions, reference to the current fair value of a substantially similar other instrument, discounted cash flow
+techniques, option pricing models or any other valuation technique that provides a reliable estimate of prices obtained in actual
+market transactions. The carrying amounts of the Funds’ assets and liabilities at the balance sheet date approximate their fair
+values.
+Where discounted cash flow techniques are used, estimated future cash flows are based on management’s best estimates and
+the discount rate used is a market rate at the end of the reporting period applicable for an instrument with similar terms and
+conditions.
+For other pricing models, inputs are based on market data at the end of the reporting period. Fair values for unquoted
+equity investments are estimated, if possible, using applicable price/earnings ratios for similar listed companies adjusted to reflect
+the specific circumstances of the issuer.
+
+
+
+
+16                                                                                                            Vanguard Interim Report
+Notes to the financial statements (continued)
+For the half-year ended 31 December 2025
+
+3 Fair value measurement (continued)
+(iii) Fair value in an inactive or unquoted market (level 3) (continued)
+The fair value of derivatives that are not exchange traded is estimated at the amount that the Funds would receive or pay to
+terminate the contract at the balance sheet date taking into account current market conditions (volatility and appropriate yield
+curve) and the current creditworthiness of the counterparties. The fair value of a forward contract is determined as a net present
+value of estimated future cash flows, discounted at appropriate market rates as at the valuation date. The fair value of an option
+contract is determined by applying the Black-Scholes option valuation model.
+Some of the inputs to these models may not be market observable and are therefore estimated based on assumptions. The output
+of a model is always an estimate or approximation of a value that cannot be determined with certainty, and valuation techniques
+employed may not fully reflect all factors relevant to the positions the Funds hold. Valuations are therefore adjusted, where
+appropriate, to allow for additional factors including liquidity risk and counterparty risk.
+
+Recognised fair value measurements
+The following tables present the Funds’ financial assets and liabilities (by asset class) measured at fair value according to the fair
+value hierarchy at 31 December 2025 and 30 June 2025.
+
+
+                                                                                                 Vanguard Global Infrastructure Index Fund (Hedged)
+                                                                                       31 Dec 2025                                               30 Jun 2025
+                                                                   Level 1         Level 2      Level 3            Total         Level 1     Level 2      Level 3      Total
+                                                                       $'000           $'000        $'000             $'000          $'000       $'000        $'000       $'000
+Financial assets at fair value through profit or loss
+  Derivatives                                                                9        13,507                -        13,516            32      12,861             -     12,893
+  Unlisted unit trusts                                                       -       727,815                -       727,815             -     666,995             -    666,995
+ Fixed interest securities*                                                  -        42,659                -        42,659              -     36,765             -     36,765
+Total                                                                        9       783,981                -       783,990            32     716,621             -    716,653
+Financial liabilities at fair value through profit or loss
+ Derivatives                                                                 -         3,201                -          3,201             -      2,807             -      2,807
+Total                                                                        -         3,201                -          3,201             -      2,807             -      2,807
+* Reverse repurchase agreements are used to manage the Funds' liquidity and collateral requirements whilst preserving capital.
+
+
+                                                                                               Vanguard MSCI Index International Shares (Hedged) ETF
+                                                                                       31 Dec 2025                                               30 Jun 2025
+                                                                   Level 1         Level 2      Level 3            Total         Level 1     Level 2      Level 3      Total
+                                                                       $'000           $'000        $'000             $'000          $'000       $'000        $'000       $'000
+Financial assets at fair value through profit or loss
+  Derivatives                                                             477        145,355                -       145,832         1,323      100,474            -     101,797
+  Unlisted unit trusts                                                      -      5,959,457                -     5,959,457             -    4,818,579            -   4,818,579
+  Fixed interest securities*                                                -        248,969                -       248,969             -      143,499            -     143,499
+Total                                                                     477      6,353,781                -     6,354,258         1,323    5,062,552            -   5,063,875
+Financial liabilities at fair value through profit or loss
+  Derivatives                                                                -        35,383                -        35,383            34      36,640             -     36,674
+Total                                                                        -        35,383                -        35,383            34      36,640             -     36,674
+* Reverse repurchase agreements are used to manage the Funds' liquidity and collateral requirements whilst preserving capital.
+
+
+
+
+Vanguard Wholesale International Equities Funds (Hedged) and ETFs                                                                                                          17
+Notes to the financial statements (continued)
+For the half-year ended 31 December 2025
+
+3 Fair value measurement (continued)
+Recognised fair value measurements (continued)
+
+                                                                                           Vanguard International Property Securities Index Fund (Hedged)
+                                                                                        31 Dec 2025                                                30 Jun 2025
+                                                                   Level 1         Level 2        Level 3          Total         Level 1     Level 2        Level 3      Total
+                                                                       $'000           $'000          $'000           $'000          $'000       $'000          $'000       $'000
+Financial assets at fair value through profit or loss
+ Derivatives                                                               35         18,571                -        18,606           102      19,083               -     19,185
+ Unlisted unit trusts                                                       -      1,000,322                -     1,000,322             -     964,588               -    964,588
+ Fixed interest securities*                                                  -        53,649                -        53,649              -        46,548            -     46,548
+Total                                                                      35      1,072,542                -     1,072,577           102    1,030,219              -   1,030,321
+Financial liabilities at fair value through profit or loss
+ Derivatives                                                               14          3,286                -          3,300            4          5,168            -      5,172
+Total                                                                      14          3,286                -          3,300            4          5,168            -      5,172
+* Reverse repurchase agreements are used to manage the Funds' liquidity and collateral requirements whilst preserving capital.
+
+
+                                                                                            Vanguard Ethically Conscious International Shares Index Fund
+                                                                                       31 Dec 2025                                               30 Jun 2025
+                                                                   Level 1         Level 2      Level 3            Total         Level 1     Level 2      Level 3        Total
+                                                                       $'000           $'000        $'000             $'000          $'000       $'000        $'000         $'000
+Financial assets at fair value through profit or loss
+  Derivatives                                                            214           5,126                -         5,340            643         8,256           -        8,899
+  Equity securities                                                3,113,316               -                5     3,113,321      2,673,322             -           6    2,673,328
+ Listed unit trusts                                                    53,896              -                -        53,896        53,471              -            -     53,471
+ Fixed interest securities*                                                 -         21,315                -        21,315             -         13,224            -     13,224
+Total                                                              3,167,426          26,441                5     3,193,872      2,727,436        21,480           6    2,748,922
+Financial liabilities at fair value through profit or loss
+  Derivatives                                                                7         2,502                -          2,509          143          2,773            -      2,916
+Total                                                                        7         2,502                -          2,509          143          2,773            -      2,916
+* Reverse repurchase agreements are used to manage the Funds' liquidity and collateral requirements whilst preserving capital.
+
+
+                                                                                                        Vanguard Global Minimum Volatility Fund
+                                                                                       31 Dec 2025                                               30 Jun 2025
+                                                                   Level 1         Level 2      Level 3            Total         Level 1     Level 2      Level 3        Total
+                                                                       $'000           $'000        $'000             $'000          $'000       $'000        $'000         $'000
+Financial assets at fair value through profit or loss
+  Derivatives                                                               -            111                -           111             5            81             -         86
+  Equity securities                                                    24,141              -                9        24,150        22,757             -             -     22,757
+  Listed unit trusts                                                    1,618              -                -         1,618           734             -             -        734
+  Fixed interest securities*                                                -              -                -             -             -             1             -          1
+Total                                                                  25,759            111                9        25,879        23,496            82             -     23,578
+Financial liabilities at fair value through profit or loss
+  Derivatives                                                                1             72               -             73             -          100             -        100
+Total                                                                        1             72               -             73             -          100             -        100
+* Reverse repurchase agreements are used to manage the Funds' liquidity and collateral requirements whilst preserving capital.
+
+
+
+
+18                                                                                                                                                 Vanguard Interim Report
+Notes to the financial statements (continued)
+For the half-year ended 31 December 2025
+
+3 Fair value measurement (continued)
+Recognised fair value measurements (continued)
+
+                                                                                                  Vanguard International Shares Index Fund (Hedged)
+                                                                                        31 Dec 2025                                                30 Jun 2025
+                                                                   Level 1         Level 2        Level 3          Total         Level 1       Level 2       Level 3       Total
+                                                                       $'000           $'000          $'000           $'000          $'000         $'000         $'000        $'000
+Financial assets at fair value through profit or loss
+ Derivatives                                                              736       269,905                 -      270,641          2,982        216,494             -      219,476
+ Unlisted unit trusts                                                       -    11,298,456                 -   11,298,456              -     10,168,818             -   10,168,818
+ Fixed interest securities*                                                  -       436,560                -       436,560              -      318,638              -      318,638
+Total                                                                     736    12,004,921                 -   12,005,657          2,982     10,703,950             -   10,706,932
+Financial liabilities at fair value through profit or loss
+ Derivatives                                                                 -        65,053                -        65,053            58         79,276             -       79,334
+Total                                                                        -        65,053                -        65,053            58         79,276             -       79,334
+* Reverse repurchase agreements are used to manage the Funds' liquidity and collateral requirements whilst preserving capital.
+
+
+                                                                                             Vanguard International Shares Select Exclusions Index Fund
+                                                                                       31 Dec 2025                                                 30 Jun 2025
+                                                                   Level 1         Level 2      Level 3            Total         Level 1       Level 2      Level 3        Total
+                                                                       $'000           $'000        $'000             $'000          $'000         $'000        $'000         $'000
+Financial assets at fair value through profit or loss
+  Derivatives                                                            133          12,501                -        12,634            493        15,276             -       15,769
+  Equity securities                                                2,855,496               -                -     2,855,496      2,174,495             -             -    2,174,495
+ Listed unit trusts                                                    41,353              -                -        41,353        35,174              -             -       35,174
+ Fixed interest securities*                                                 -         51,649                -        51,649             -         31,432             -       31,432
+Total                                                              2,896,982          64,150                -     2,961,132      2,210,162        46,708             -    2,256,870
+Financial liabilities at fair value through profit or loss
+  Derivatives                                                                4         3,661                -          3,665           11          5,118             -        5,129
+Total                                                                        4         3,661                -          3,665           11          5,118             -        5,129
+* Reverse repurchase agreements are used to manage the Funds' liquidity and collateral requirements whilst preserving capital.
+
+The Funds’ policy is to recognise transfers into and transfers out of fair value hierarchy levels as at the end of the reporting period.
+There were no changes made to any of the valuation techniques applied as of 31 December 2025.
+
+Transfers between levels
+The following table presents the transfers between levels at the end of the reporting periods 31 December 2025 and 30 June
+2025:
+
+
+                                                                                                      Vanguard Ethically Conscious
+                                                                                                     International Shares Index Fund         Vanguard Global Minimum Volatility Fund
+                                                                                                     Level 1         Level 2       Level 3       Level 1       Level 2       Level 3
+31 Dec 2025                                                                                           $'000           $'000         $'000         $'000         $'000         $'000
+Transfers between level 1 and 3:
+  Equity securities                                                                                         -               -            -            (9)            -            9
+30 Jun 2025
+Transfers between level 1 and 3:
+  Equity securities                                                                                       (6)               -           6               -            -             -
+
+Equity securities were classified as level 3 as they are infrequently traded, or have a stale price. There were no transfers
+out of level 3 during the reporting period.
+
+
+
+Vanguard Wholesale International Equities Funds (Hedged) and ETFs                                                                                                               19
+Notes to the financial statements (continued)
+For the half-year ended 31 December 2025
+
+3 Fair value measurement (continued)
+Valuation processes
+Portfolio reviews are undertaken regularly by management to identify securities that potentially may not be actively traded or have
+stale security pricing. This process identifies securities which possibly could be regarded as being level 3 securities.
+Further analysis, should it be required, is undertaken to determine the accounting significance of the identification. For certain
+security types, in selecting the most appropriate valuation model, management performs back testing and considers actual
+market transactions. Changes in allocation to or from level 3 are analysed at the end of each reporting period.
+
+4 Net assets attributable to unitholders
+Under AASB 132 Financial instruments: Presentation, puttable financial instruments meet the definition of a financial liability to be
+classified as equity where certain strict criteria are met. The Funds shall classify a financial instrument as an equity instrument
+from the date when the instrument has all the features and meets the conditions. Otherwise the financial instrument should be
+disclosed as a liability.
+Each unit represents a right to an individual share in the Funds and does not extend to a right to the underlying assets of the
+Funds. The Vanguard Global Infrastructure Index Fund (Hedged), Vanguard MSCI Index International Shares (Hedged) ETF and
+Vanguard International Property Securities Index Fund (Hedged) have no separate classes of units and each unit has the same
+rights attaching to it as all other units of the Funds.
+Movement in number of units and net assets attributable to unitholders during the half-year were as follows:
+
+
+                                                          Vanguard Global Infrastructure                            Vanguard MSCI Index
+                                                              Index Fund (Hedged)                            International Shares (Hedged) ETF
+                                                    31 Dec       31 Dec       31 Dec         31 Dec      31 Dec       31 Dec        31 Dec         31 Dec
+                                                      2025         2024         2025           2024        2025         2024          2025           2024
+                                                   No. '000     No. '000        $'000         $'000     No. '000     No. '000        $'000           $'000
+Balance as at 1 July                               672,231      918,391      705,455        876,689      45,699       31,461     4,929,465       3,134,786
+Applications                                       114,068       86,902      122,942         90,984       5,465        6,075       626,696         621,594
+Redemptions                                        (92,780)   (357,988)     (100,570)      (381,820)       (310)         (15)      (34,218)        (1,426)
+Units issued upon reinvestment of distributions       6,654       4,185         7,051          4,153         353         142         38,068         14,178
+Distributions paid and payable                            -           -       (9,637)        (7,428)           -            -      (39,914)       (45,244)
+Profit/(loss) for the half-year                           -            -       32,113        87,285            -            -      585,111         226,110
+Closing balance as at 31 December                  700,173      651,490      757,354        669,863      51,207       37,663     6,105,208       3,949,998
+
+
+                                                                                                               Vanguard International Property
+                                                                                                               Securities Index Fund (Hedged)
+                                                                                                         31 Dec       31 Dec        31 Dec         31 Dec
+                                                                                                           2025         2024          2025           2024
+                                                                                                        No. '000     No. '000        $'000          $'000
+Balance as at 1 July                                                                                   1,374,276   1,745,002     1,011,746       1,225,678
+Applications                                                                                             169,559     148,664       127,034          112,594
+Redemptions                                                                                            (162,844)   (479,378)     (122,044)       (370,108)
+Units issued upon reinvestment of distributions                                                            7,637       8,036          5,691           5,878
+Distributions paid and payable                                                                                 -           -       (14,527)        (10,255)
+Profit/(loss) for the half-year                                                                                -           -         28,524          79,306
+Closing balance as at 31 December                                                                      1,388,628   1,422,324     1,036,424       1,043,093
+
+
+
+
+20                                                                                                                      Vanguard Interim Report
+Notes to the financial statements (continued)
+For the half-year ended 31 December 2025
+
+4 Net assets attributable to unitholders (continued)
+                                                                                           Vanguard Ethically Conscious International Shares Index Fund
+                                                                                        ETF Class                                             AUD Unhedged Class
+                                                                       31 Dec        31 Dec         31 Dec         31 Dec        31 Dec         31 Dec       31 Dec       31 Dec
+                                                                         2025          2024           2025           2024          2025           2024         2025         2024
+                                                                     No. '000       No. '000          $'000          $'000      No. '000       No. '000        $'000        $'000
+Balance as at 1 July                                                   11,495         10,539     1,185,313        937,767       487,993        542,620     1,059,179    1,021,304
+Applications                                                              765            891        84,000         83,204        76,986        100,885       179,700      198,373
+Redemptions                                                                  -              -              -             -      (45,873)      (175,416)    (105,659)    (357,573)
+Units issued upon reinvestment of distributions                             17            12          1,740          1,113         3,014         6,878        6,619       12,971
+Increase/(decrease) in net assets attributable to unitholders                -              -      107,784        138,759                 -           -      94,266      142,349
+Closing balance as at 31 December                                      12,277         11,442     1,378,837      1,160,843       522,120        474,967     1,234,105    1,017,424
+
+
+                                                                                    AUD Hedged Class                                           NZD Hedged Class
+                                                                      31 Dec         31 Dec         31 Dec         31 Dec        31 Dec         31 Dec       31 Dec       31 Dec
+                                                                        2025           2024           2025           2024          2025           2024         2025         2024
+                                                                     No. '000       No. '000         $'000          $'000       No. '000       No. '000       $'000        $'000
+Balance as at 1 July                                                  125,459         85,755       172,943        104,852       211,081        179,843      324,773      245,472
+Applications                                                           35,192         19,779        51,134         25,287        25,262         61,095       39,955       85,454
+Redemptions                                                            (6,997)       (6,628)       (10,362)        (8,340)      (21,192)       (34,452)     (33,230)     (47,032)
+Units issued upon reinvestment of distributions                              -             -              -              -             -          3,525            -        4,854
+Increase/(decrease) in net assets attributable to unitholders                -              -       23,399          6,754                 -           -      13,014        9,432
+Closing balance as at 31 December                                     153,654         98,906       237,114        128,553       215,151        210,011      344,512      298,180
+
+
+                                                                                                      Vanguard Global Minimum Volatility Fund
+                                                                                    Wholesale Class                                                ETF Class
+                                                                      31 Dec         31 Dec      31 Dec            31 Dec        31 Dec         31 Dec       31 Dec       31 Dec
+                                                                        2025           2024        2025              2024          2025           2024         2025         2024
+                                                                     No. '000       No. '000      $'000             $'000       No. '000       No. '000       $'000        $'000
+Balance as at 1 July                                                    8,959          8,862        12,679         12,273            183           173       11,212       10,325
+Applications                                                             2,530           952          3,642          1,353             40            49        2,492        3,063
+Redemptions                                                            (2,895)       (1,010)        (4,185)        (1,443)           (10)          (40)        (633)      (2,431)
+Units issued upon reinvestment of distributions                            187            29            265             41              1             1           59            8
+Increase/(decrease) in net assets attributable to unitholders                -             -            225            132              -             -          277          100
+Closing balance as at 31 December                                       8,781          8,833        12,626         12,356            214           183       13,407        11,065
+
+
+                                                                                                                             Vanguard International Shares Index Fund (Hedged)*
+                                                                                                                                                  AUD Class
+                                                                                                                                 31 Dec         31 Dec      31 Dec        31 Dec
+                                                                                                                                   2025           2024        2025          2024
+                                                                                                                                No. '000       No. '000      $'000         $'000
+Balance as at 1 July                                                                                                           8,965,305      8,557,427   10,246,719    9,552,657
+Applications                                                                                                                     617,836        521,985      749,475      603,243
+Redemptions                                                                                                                    (648,639)      (570,945)    (786,923)    (661,599)
+Units issued upon reinvestment of distributions                                                                                  184,575        161,182      212,031      181,346
+Increase/(decrease) in net assets attributable to unitholders                                                                          -              -    1,087,911      379,619
+Closing balance as at 31 December                                                                                              9,119,077      8,669,649   11,509,213   10,055,266
+* As at 31 December 2025, Vanguard International Shares Index Fund (Hedged) - NZD Class is dormant in operation and has no unitholders.
+
+
+
+
+Vanguard Wholesale International Equities Funds (Hedged) and ETFs                                                                                                            21
+Notes to the financial statements (continued)
+For the half-year ended 31 December 2025
+
+4 Net assets attributable to unitholders (continued)
+                                                                                  Vanguard International Shares Select Exclusions Index Fund
+                                                                           AUD Unhedged Class                                   AUD Hedged Class
+                                                                 31 Dec      31 Dec      31 Dec        31 Dec       31 Dec        31 Dec        31 Dec      31 Dec
+                                                                   2025        2024        2025          2024         2025          2024          2025        2024
+                                                                No. '000    No. '000       $'000        $'000      No. '000      No. '000        $'000        $'000
+Balance as at 1 July                                            620,288     385,887    1,330,397      719,972      304,787       186,009       503,941     276,553
+Applications                                                    176,423     115,005      400,934      228,672       84,774        72,515       148,820     111,552
+Redemptions                                                     (16,424)    (11,553)    (37,579)      (22,661)      (4,087)      (35,646)       (7,167)    (55,235)
+Units issued upon reinvestment of distributions                   7,107       9,821       15,427       18,364           943        7,719         1,674      11,563
+Increase/(decrease) in net assets attributable to unitholders          -           -    122,265       113,475             -             -       57,358      14,716
+Closing balance as at 31 December                               787,394     499,160    1,831,444    1,057,822      386,417       230,597       704,626     359,149
+
+
+                                                                                                                                NZD Hedged Class
+                                                                                                                    31 Dec        31 Dec        31 Dec      31 Dec
+                                                                                                                      2025          2024          2025        2024
+                                                                                                                   No. '000      No. '000        $'000       $'000
+Balance as at 1 July                                                                                               201,841       740,865       394,609    1,273,429
+Applications                                                                                                        14,355        39,931        28,945       68,691
+Redemptions                                                                                                        (21,842)      (49,582)      (43,754)    (86,619)
+Units issued upon reinvestment of distributions                                                                           -         5,282             -       9,424
+Increase/(decrease) in net assets attributable to unitholders                                                             -             -       13,374      61,127
+Closing balance as at 31 December                                                                                  194,354       736,496       393,174    1,326,052
+
+
+Capital risk management
+The Funds consider their net assets attributable to unitholders as capital, notwithstanding net assets attributable to unitholders
+are classified either as a liability or equity. The amount of net assets attributable to unitholders can change significantly on a daily
+basis as the Funds are subject to daily applications and redemptions at the discretion of unitholders.
+Daily applications and redemptions are reviewed relative to the liquidity of the Funds’ underlying assets on a daily basis by the
+Responsible Entity. Under the terms of the Funds’ Constitution, the Responsible Entity has the discretion to reject an application
+for units and to defer or adjust a redemption of units if the exercise of such discretion is in the best interests of unitholders.
+The Funds’ investment strategy remains unchanged and the Funds continue to hold direct investments which provide exposure to
+liquid assets including equity securities, income securities, interest earnings and cash equivalent securities. As such, the Funds
+will meet any capital requirements from the liquidation of liquid assets, which include cash and cash equivalents.
+
+
+
+
+22                                                                                                                                 Vanguard Interim Report
+Notes to the financial statements (continued)
+For the half-year ended 31 December 2025
+
+5 Distributions to unitholders paid and payable
+The distributions during the half-year were as follows:
+
+
+                                                                Vanguard Global Infrastructure                               Vanguard MSCI Index
+                                                                    Index Fund (Hedged)                               International Shares (Hedged) ETF
+                                                             31 Dec 2025            31 Dec 2024                     31 Dec 2025               31 Dec 2024
+                                                          $'000        CPU       $'000        CPU                $'000          CPU       $'000        CPU
+Distributions paid
+ - 30 September                                           4,665         0.6511       2,535         0.2785              -                -              -              -
+Distributions payable
+ - 31 December                                            4,972         0.7101       4,893         0.7510      39,914           77.9462           45,244       120.1276
+                                                          9,637                      7,428                     39,914                             45,244
+
+
+                                                                                                                           Vanguard International Property
+                                                                                                                           Securities Index Fund (Hedged)
+                                                                                                                        31 Dec 2025              31 Dec 2024
+                                                                                                                      $'000         CPU       $'000        CPU
+Distributions paid
+ - 30 September                                                                                                       6,860         0.4841           4,314       0.2590
+Distributions payable
+ - 31 December                                                                                                        7,667         0.5521           5,941       0.4177
+                                                                                                                     14,527                         10,255
+
+
+                                                                          Vanguard Ethically Conscious International Shares Index Fund
+                                                                            ETF Class                                 AUD Unhedged Class
+                                                                31 Dec 2025           31 Dec 2024              31 Dec 2025            31 Dec 2024
+                                                             $'000      CPU        $'000        CPU         $'000       CPU        $'000      CPU
+Distributions paid
+ - 30 September                                              2,229         20.9813       1,887         18.9530         2,494         0.5105          2,228       0.3950
+Distributions payable
+ - 31 December                                               3,766         28.4781       3,739         30.8150         2,934         0.5620          4,858       1.0227
+                                                             5,995                       5,626                         5,428                         7,086
+
+
+                                                                                 AUD Hedged Class                                   NZD Hedged Class
+                                                                           31 Dec 2025       31 Dec 2024                     31 Dec 2025        31 Dec 2024
+                                                                        $'000      CPU      $'000    CPU                    $'000    CPU     $'000      CPU
+Distributions paid
+ - 30 September                                                             -            -            -          -              -             -      3,577       1.9880
+Distributions payable
+ - 31 December                                                           343     0.2229               -          -              -             -            -          -
+                                                                         343                          -                         -                    3,577
+
+
+                                                                                    Vanguard Global Minimum Volatility Fund
+                                                                         Wholesale Class                                 ETF Class
+                                                                 31 Dec 2025          31 Dec 2024          31 Dec 2025             31 Dec 2024
+                                                              $'000      CPU       $'000      CPU       $'000        CPU        $'000      CPU
+Distributions paid
+ - 30 September                                                   82       0.7781            124      1.3721               69       34.3096           92        53.2389
+Distributions payable
+ - 31 December                                                    222      2.5216            133      1.4960          149           69.4537           93        50.7718
+                                                                  304                        257                      218                            185
+
+
+
+
+Vanguard Wholesale International Equities Funds (Hedged) and ETFs                                                                                                   23
+Notes to the financial statements (continued)
+For the half-year ended 31 December 2025
+
+5 Distributions to unitholders paid and payable (continued)
+                                                                                                   Vanguard International Shares Index Fund (Hedged)
+                                                                                                                       AUD Class
+                                                                                                       31 Dec 2025                  31 Dec 2024
+                                                                                                    $'000         CPU           $'000         CPU
+Distributions paid
+ - 30 September                                                                                      30,645       0.3374              77,724       0.8913
+Distributions payable
+ - 31 December                                                                                       64,963       0.7124             162,523       1.8746
+                                                                                                     95,608                          240,247
+
+
+                                                                               Vanguard International Shares Select Exclusions Index Fund
+                                                                           AUD Unhedged Class                             AUD Hedged Class
+                                                                     31 Dec 2025          31 Dec 2024            31 Dec 2025             31 Dec 2024
+                                                                  $'000      CPU       $'000        CPU       $'000        CPU        $'000      CPU
+Distributions paid
+ - 30 September                                                   3,349     0.4691      2,264     0.5178      1,748         0.5005      2,781      1.2644
+Distributions payable
+ - 31 December                                                    5,406     0.6866      6,637     1.3296      6,274         1.6235      2,442      1.0591
+                                                                  8,755                 8,901                 8,022                     5,223
+
+
+                                                                                                                        NZD Hedged Class
+                                                                                                                31 Dec 2025         31 Dec 2024
+                                                                                                               $'000    CPU      $'000       CPU
+Distributions paid
+ - 30 September                                                                                                       -         -      11,021      1.5048
+Distributions payable
+ - 31 December                                                                                                        -         -              -        -
+                                                                                                                      -                11,021
+
+
+6 Operating segments
+Operating segments are reported in a manner consistent with internal reporting used by the chief operating decision maker. The
+chief operating decision maker, who is responsible for allocating resources and assessing performance of the operating
+segments, has been identified as the Directors of the Responsible Entity. The Funds' investments are managed on a single
+portfolio basis in one operating segment, being investments in listed equity securities, listed unit trusts, unlisted unit trusts, fixed
+interest securities, derivatives and cash and cash equivalents, and performance is reviewed against the Funds' investment
+objective.
+
+7 Events occurring after the reporting period
+There are no significant events that have occurred since balance date which would impact on the financial position of the Funds
+as disclosed in the balance sheets as at 31 December 2025 or on the results and cash flows of the Funds for the half-year ended
+on that date.
+
+8 Contingent assets, contingent liabilities and commitments
+There are no outstanding contingent assets, liabilities or commitments as at 31 December 2025 (30 June 2025: Nil).
+
+
+
+
+24                                                                                                                        Vanguard Interim Report
+Directors' declaration
+In the opinion of the directors of the Responsible Entity:
+
+
+(a) the financial statements and notes set out on pages 8 to 24 are in accordance with the Corporations Act 2001, including:
+    (i) complying with Accounting Standards, the Corporations Regulations 2001 and other mandatory professional reporting
+        requirements; and
+    (ii) giving a true and fair view of the Funds' financial position as at 31 December 2025 and of their performance, as
+         represented by the results of their operations for the half-year ended on that date.
+
+(b) there are reasonable grounds to believe that the Funds will be able to pay their debts as and when they become due and
+    payable.
+
+
+This declaration is made in accordance with a resolution of the directors.
+
+
+
+
+Daniel Shrimski
+Managing Director, Vanguard Investments Australia Ltd
+Melbourne
+5 March 2026
+
+
+
+
+Vanguard Wholesale International Equities Funds (Hedged) and ETFs                                                              25
+Independent auditor's review report
+To the unitholders of:
+
+   •   Vanguard Global Infrastructure Index Fund (Hedged)
+   •   Vanguard MSCI Index International Shares (Hedged) ETF*
+   •   Vanguard International Property Securities Index Fund (Hedged)
+   •   Vanguard Ethically Conscious International Shares Index Fund*
+   •   Vanguard Global Minimum Volatility Fund*
+   •   Vanguard International Shares Index Fund (Hedged)
+   •   Vanguard International Shares Select Exclusions Index Fund
+referred to collectively as the Vanguard Wholesale International Equities Funds (Hedged) and ETFs
+* denotes listed Funds
+
+
+Report on the half-year financial report
+
+Conclusion
+
+We have reviewed the half-year financial report of the Vanguard Wholesale International Equities Funds
+(Hedged) and ETFs (the Funds) which comprises the balance sheets as at 31 December 2025, the
+statements of comprehensive income, statements of changes in equity and statements of cash flows for
+the half-year ended on that date, selected explanatory notes and the directors’ declaration.
+
+Based on our review, which is not an audit, we have not become aware of any matter that makes us
+believe that the accompanying half-year financial report of the Funds does not comply with the
+Corporations Act 2001 including:
+
+1. giving a true and fair view of the Funds’ financial positions as at 31 December 2025 and of their
+   performance for the half-year ended on that date;
+2. complying with Accounting Standard AASB 134 Interim Financial Reporting and the Corporations
+   Regulations 2001.
+
+Basis for conclusion
+
+We conducted our review in accordance with ASRE 2410 Review of a Financial Report Performed by the
+Independent Auditor of the Entity (ASRE 2410). Our responsibilities are further described in the
+Auditor's responsibilities for the review of the half-year financial report section of our report.
+
+                                             PricewaterhouseCoopers, ABN 52 780 433 757
+                                             2 Riverside Quay, SOUTHBANK VIC 3006,
+                                             GPO Box 1331 MELBOURNE VIC 3001
+                                             T: +61 3 8603 1000, F: +61 3 8603 1999, www.pwc.com.au
+
+pwc.com.au                                   Liability limited by a scheme approved under Professional Standards Legislation.
+We are independent of the Funds in accordance with the auditor independence requirements of the
+Corporations Act 2001 and the ethical requirements of the Accounting Professional & Ethical Standards
+Board’s APES 110 Code of Ethics for Professional Accountants (including Independence Standards) (the
+Code) that are relevant to the audit of the annual financial report in Australia. We have also fulfilled our
+other ethical responsibilities in accordance with the Code.
+
+Responsibilities of the directors for the half-year financial report
+
+The directors of the Responsible Entity (Vanguard Investments Australia Ltd) are responsible for the
+preparation of the half-year financial report, in accordance with Australian Accounting Standards and
+the Corporations Act 2001, including giving a true and fair view, and for such internal control as the
+directors determine is necessary to enable the preparation of the half-year financial report that is free
+from material misstatement whether due to fraud or error.
+
+Auditor's responsibilities for the review of the half-year financial report
+
+Our responsibility is to express a conclusion on the half-year financial report based on our review. ASRE
+2410 requires us to conclude whether we have become aware of any matter that makes us believe that the
+half-year financial report is not in accordance with the Corporations Act 2001 including giving a true and
+fair view of the Funds’ financial position as at 31 December 2025 and of their performance for the half-
+year ended on that date, and complying with Accounting Standard AASB 134 Interim Financial
+Reporting and the Corporations Regulations 2001.
+
+A review of a half-year financial report consists of making enquiries, primarily of persons responsible for
+financial and accounting matters, and applying analytical and other review procedures. A review is
+substantially less in scope than an audit conducted in accordance with Australian Auditing Standards and
+consequently does not enable us to obtain assurance that we would become aware of all significant
+matters that might be identified in an audit. Accordingly, we do not express an audit opinion.
+
+
+
+
+PricewaterhouseCoopers
+
+
+
+
+Adrian Gut                                                                                      Melbourne
+Partner                                                                                      5 March 2026
+Vanguard Investments Australia Ltd (ABN 72 072 881 086 / AFSL 227263) (“Vanguard”) is the product issuer and Responsible
+Entity of the interests in the Vanguard Wholesale Funds and Australian ETFs. Interests in the Vanguard Wholesale Funds are
+offered through a Product Disclosure Statement (“PDS”) only. Vanguard ETFs will only be issued to Authorised Participants. That
+is, persons who have entered into an Authorised Participant Agreement with Vanguard (“Eligible Investors”). Retail investors can
+transact in Vanguard ETFs through Vanguard Personal Investor, a stockbroker or financial adviser on the secondary market. You
+can access the relevant PDS at www.vanguard.com.au or by calling 1300 655 102.
+Past performance information is given for illustrative purposes only and should not be relied upon as, and is not, an indication of
+future performance. In preparing this Interim Report, individual circumstances, for example tax implications, have not been taken
+into account and it may, therefore, not be applicable to an individual’s situation. Before making an investment decision, you should
+consider your circumstances and whether the information contained in the Interim Report is applicable to your situation. This
+Interim Report was prepared in good faith and we accept no liability for any errors or omissions. All marks are the exclusive
+property of their respective owners.
+The funds or securities referred to herein are not sponsored, endorsed, or promoted by MSCI, and MSCI bears no liability with
+respect to any such funds or securities. The PDS contains a more detailed description of the limited relationship MSCI has with
+Vanguard and any related funds.
+London Stock Exchange Group companies include FTSE International Limited ("FTSE"), Frank Russell Company ("Russell"),
+MTS Next Limited ("MTS"), and FTSE TMX Global Debt Capital Markets Inc. ("FTSE TMX"). All rights reserved. "FTSE®",
+"Russell®", MTS®", "FTSE TMX®" and "FTSE Russell" and other service marks and trademarks related to the FTSE or Russell
+indexes are trademarks of the London Stock Exchange Group companies and are used by FTSE, MTS, FTSE TMX and Russell
+under license. All information is provided for information purposes only. Every effort is made to ensure that all information given in
+this publication is accurate, but no responsibility or liability can be accepted by the London Stock Exchange Group companies nor
+its licensors for any errors or for any loss from use of this publication. Neither the London Stock Exchange Group companies nor
+any of their licensors make any claim, prediction, warranty or representation whatsoever, expressly or impliedly, either as to the
+results to be obtained from the use of the Indices or the fitness or suitability of the Indices for any particular purpose to which they
+might be put. The London Stock Exchange Group companies do not provide investment advice and nothing in this document
+should be taken as constituting financial or investment advice. The London Stock Exchange Group companies make no
+representation regarding the advisability of investing in any asset. A decision to invest in any such asset should not be made in
+reliance on any information herein. Indexes cannot be invested in directly. Inclusion of an asset in an index is not a
+recommendation to buy, sell or hold that asset. The general information contained in this publication should not be acted upon
+without obtaining specific legal, tax, and investment advice from a licensed professional. No part of this information may be
+reproduced, stored in a retrieval system or transmitted in any form or by any means, electronic, mechanical, photocopying,
+recording or otherwise, without prior written permission of the London Stock Exchange Group companies. Distribution of the
+London Stock Exchange Group companies' index values and the use of their indexes to create financial products require a license
+with FTSE, FTSE TMX, MTS and/or Russell and/or its licensors.
+©2026 Vanguard Investments Australia Ltd. All rights reserved.
+
+
+
+
+Responsible Entity
+Vanguard Investments Australia Ltd
+ABN 72 072 881 086
+AFSL 227263
+
+Level 13
+130 Lonsdale Street
+Melbourne VIC 3000
+
+Telephone: (03) 8888 3888
+Facsimile: 1300 765 712
+
+vanguard.com.au
+
+
+
+
+                                                                                                                                     27
+Connect with VanguardTM
+vanguard.com.au
+1300 655 101
+
+Vanguard Investments Australia Ltd (ABN 72 072 881 086 / AFS Licence 227263) is the product issuer. We have not taken yours or your clients’
+circumstances into account when preparing the information so it may not be applicable to the particular situation you are considering. You
+should consider yours and your clients’ circumstances, and our Product Disclosure Statements (“PDSs”), before making any investment decision
+or recommendation. You can access our PDSs at vanguard.com.au or by calling 1300 655 205. Past performance is not an indication of future
+performance. This publication was prepared in good faith and we accept no liability for any errors or omissions.
+© 2026 Vanguard Investments Australia Ltd. All rights reserved.
+VAR_032026_WT
+

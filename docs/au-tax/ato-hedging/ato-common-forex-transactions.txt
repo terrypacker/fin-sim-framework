@@ -1,0 +1,550 @@
+Businesses and organisations > Corporate tax measures and assurance
+> Foreign exchange gains and losses > Common forex transactions
+
+
+
+Common forex transactions
+Common forex transactions are those made through foreign
+currency denominated accounts, shares and hedging transactions.
+
+Last updated 6 December 2022
+
+
+
+
+      On this page
+
+      Foreign currency denominated accounts
+
+      Foreign currency denominated shares
+
+      Foreign currency hedging transactions
+
+
+
+
+Foreign currency denominated accounts
+This foreign exchange (forex) information relates to certain foreign currency
+denominated accounts. It describes the general application of foreign currency tax
+laws to those accounts, and answers some frequently asked questions.
+
+A foreign currency denominated account (forex account) can be a forex deposit
+account or a forex loan account (including a forex credit card account).
+
+The foreign currency tax laws (forex measures) relevant to this information are
+contained in Division 775 (/law/view/document?DocID=PAC/19970038/775-
+5&PiT=99991231235958) and Subdivision 960-C (/law/view/document?
+DocID=PAC/19970038/960-50&PiT=99991231235958) of the Income Tax
+Assessment Act 1997 (ITAA 1997). The forex measures have broad application to
+transactions denominated in foreign currency.
+
+The forex measures set out rules for expressing the Australian currency values of
+amounts that are denominated in foreign currency, and explain how to calculate gains
+and losses that are attributable to currency exchange rate fluctuations. The measures
+treat many of those gains and losses as assessable income or allowable deductions.
+
+Under the forex measures:
+
+  assessable gains are referred to as 'forex realisation gains'
+
+  deductible losses are referred to as 'forex realisation losses'
+
+  forex realisation gains and losses only arise when 'forex realisation events' happen.
+
+The forex measures apply generally to the realisation of assets, rights, and parts of
+rights acquired, and obligations and parts of obligations assumed, on or after the
+'applicable commencement date'. Accounts are rights or obligations. For example, if
+you have a deposit account, such as a bank savings account, you have a right (a
+'chose in action') that relates to the money deposited in the account. If you have a
+loan account, you have an obligation to repay.
+
+The forex measures apply to all taxpayers except for, broadly speaking, taxpayers that
+are banks or similar financial institutions. However, if you hold a forex account with a
+bank (such as a savings or loan account in foreign currency) you will usually have to
+consider the application of these laws in calculating your assessable income and
+allowable deductions.
+
+The '$250,000 balance election (/businesses-and-organisations/corporate-tax-
+measures-and-assurance/foreign-exchange-gains-and-losses/in-detail/forex-
+elections#The250000balanceelection)' is an important choice that may be helpful to
+taxpayers who do not have large forex account balances. If you satisfy all
+requirements for making this election, and remain eligible to rely on it, you can
+disregard certain gains and losses that you would otherwise have to return.
+
+
+Which forex accounts do the forex measures affect?
+Unless you made a 'transitional election', forex measures do not apply to transactions
+on your forex account if you opened that account:
+
+  after 19 February 1986, and
+
+  before your 'applicable commencement date'.
+
+In general, for transactions on forex accounts opened between 19 February 1986 and
+your applicable commencement date, any taxation consequences attributable to the
+effect of currency exchange rate fluctuations are determined by application of laws
+that were in place before the forex measures applied.
+
+For most taxpayers, the 'applicable commencement date' was the first day of their
+2003-04 income year (which in most cases was 1 July 2003).
+
+Taxpayers on a substituted accounting period (SAP) for taxation purposes, and whose
+first day of their 2003-04 income year was before 1 July 2003, will have an 'applicable
+commencement date' of the first day of their 2004-05 income year.
+
+Forex accounts with a low balance
+
+The '$250,000 balance election (/businesses-and-organisations/corporate-tax-
+measures-and-assurance/foreign-exchange-gains-and-losses/in-detail/forex-
+elections#The250000balanceelection)' may be an attractive option for taxpayers
+who do not have large forex accounts. If you qualify for this election, you should
+consider whether you would like to choose to have it apply. After you make the
+$250,000 balance election, and continue to be eligible to rely on it, you will not realise
+any more assessable forex gains or deductible forex losses on withdrawals from
+relevant forex deposit accounts or repayments on relevant loan accounts.
+
+
+How do I make a gain or loss on my forex accounts?
+Transactions on a forex account often result in forex realisation gains or losses being
+made. Examples of this include withdrawing money from a foreign currency deposit
+account, or paying all, or part, of the balance of a foreign currency loan account.
+
+Forex accounts with a credit balance (that is, deposit or savings account)
+
+A forex realisation gain or loss may arise on a forex account that has a credit balance
+at the time a withdrawal is made. This is due to fluctuations in exchange rates which
+may result in the Australian dollar value of amounts deposited into a forex account
+with a credit balance - measured at the time of the deposit - being more than or less
+than the Australian dollar value of that amount measured at the time of withdrawal.
+
+The difference is usually brought to account under the forex measures as assessable
+income if it is a gain, or an allowable deduction if it is a loss, to the extent that the
+gain or loss is due to currency exchange rate movements between the Australian
+dollar and the foreign currency. The forex realisation gain or loss represents the gain
+or loss in Australian dollar terms made in respect of the right that was acquired
+against the banker, measured between the time the right was acquired (which was at
+the time of deposit) and the time that right ceased (which was at the time of
+withdrawal).
+
+Forex accounts with a debit balance (that is, loan account)
+
+A forex realisation gain or loss may arise on a forex account that has a debit balance
+at the time a repayment on that account is made. A common example of such an
+account is a forex loan account. Due to fluctuations in exchange rates, a forex
+realisation gain or loss would arise if the Australian dollar value of an amount -
+measured at the time you received the funds - is different from the Australian dollar
+value of that amount measured at the time you deposited (repaid) that amount into
+the loan account.
+
+The difference is usually brought to account under the forex measures as income, or
+an allowable deduction, to the extent that it is due to currency exchange rate
+movements between the Australian dollar and the foreign currency. The forex
+realisation gain or loss represents the gain or loss in Australian dollar terms made in
+respect of the obligation owed to the banker, measured between the time that
+obligation was incurred (which was the time the funds were received) and the time
+that obligation ceases (which is at the time of deposit).
+
+How do I work out when I deposited the actual amounts that I am
+withdrawing?
+
+Under the ordinary operations of the forex measures, when a withdrawal is made from
+a forex deposit account, it is essential to identify the Australian dollar value of the
+foreign currency amount initially deposited to the account, and its Australian dollar
+value on withdrawal. Similarly, when an amount on a forex loan account is repaid, it is
+essential to know the value of the amount initially borrowed and the value when it is
+repaid.
+
+Due to one unit of foreign exchange being identical to and interchangeable with
+another unit (a quality referred to as 'fungibility'), a first-in first-out rule (/businesses-
+and-organisations/corporate-tax-measures-and-assurance/foreign-exchange-
+gains-and-losses/in-detail/use-of-first-in-first-out-method-for-fungible-assets-
+rights-and-obligations) usually applies. This rule identifies the time the foreign
+currency amount(s) that are withdrawn from a forex deposit account were originally
+deposited, and the time that the amount of a repayment on a forex loan account was
+originally borrowed. The first-in first-out rule applies under the ordinary operation of
+the forex measures. However, in certain circumstances, you can choose to have the
+forex measures apply differently to transactions on your forex accounts.
+
+The forex measures allow you to choose certain alternative methods that may make it
+easier to calculate any gains and losses on your forex account.
+
+Alternative methods of calculation are available by making the 'retranslation election
+(/businesses-and-organisations/corporate-tax-measures-and-assurance/foreign-
+exchange-gains-and-losses/in-detail/forex-elections?
+anchor=Theretranslationelection#Theretranslationelection)' or the weighted average
+election (/businesses-and-organisations/corporate-tax-measures-and-
+assurance/foreign-exchange-gains-and-losses/in-detail/use-of-weighted-average-
+basis-for-fungible-rights-and-obligations).
+
+
+Are my ordinary accounting calculations relevant to the
+calculation of forex realisation gains or losses for tax purposes?
+If you are in business, you may have to apply generally accepted accounting
+principles to work out the notional foreign exchange gain or loss on your forex
+account at the end of each income year for other purposes (that is, for purposes
+other than taxation). This accounting exercise is generally irrelevant for the purposes
+of applying the forex rules.
+
+The forex rules will generally only bring to account a forex realisation gain or loss on
+your forex account when you have either:
+
+  withdrawn money from your forex savings account, or
+  repaid some, or all, of the balance on your forex loan account.
+
+However, the 'retranslation election' operates in a way that may be similar to the
+practices you adopt for ordinary accounting purposes.
+
+
+All my foreign currency income and expenses go through my forex
+account. Do I have to separately convert the income and expenses
+for tax purposes?
+
+Yes. The rules governing the translation (often called the 'conversion') of foreign
+currency denominated income and expenses are different from the rules relating to
+the calculation of forex gains and losses resulting from the effect of exchange rate
+fluctuations (such as those on forex accounts).
+
+In very general terms, the translation rules in Subdivision 960-C of the ITAA 1997
+specify how and when you should translate (convert) foreign currency denominated
+amounts that are relevant to taxation (including income and expenses) into equivalent
+Australian dollar amounts. The forex measures in Division 775 of the ITAA 1997 apply
+to calculate gains and losses that occur as a result of the effects of currency
+exchange rate fluctuations. They apply to a broad range of foreign currency
+denominated assets and liabilities (foreign currency; and rights, parts of rights,
+obligations and parts of obligations that are denominated in foreign currency such as
+a forex account).
+
+You will need to apply these translation rules (/businesses-and-
+organisations/corporate-tax-measures-and-assurance/foreign-exchange-gains-
+and-losses/translation-conversion-rules) to properly bring those amounts to account
+in your income tax return. The general translation rules will apply whether or not the
+income is paid into, or expenses paid out of, a forex account.
+
+
+
+Foreign currency denominated shares
+This document contains information on the application of the foreign exchange gain
+and loss Income Tax Assessment Act 1997 (the forex measures) to the acquisition
+and/or disposal of ordinary shares denominated in a foreign currency under
+Division 775 of the Income Tax Assessment Act 1997 (/law/view/document?
+Docid=PAC/19970038/775-5) (ITAA 1997).
+
+Generally, the forex measures apply prospectively to the realisation of assets, rights
+and obligations acquired or assumed on, or after, the commencement date. The
+commencement date is usually the first day of the 2003-04 income year, which for
+most taxpayers will be 1 July 2003.
+
+
+Shares acquired or sold under contracts entered into before 1 July
+2003
+As a general rule, former Division 3B of the Income Tax Assessment Act 1936
+(ITAA 1936) continues to apply to currency exchange gains and losses of a capital
+nature arising from 'eligible contracts' entered into on, or after, 18 February 1986, and
+before 1 July 2003. Although Division 3B of the ITAA 1936 has been repealed,
+Taxation Determination TD 94/88 considers its application to ordinary shares
+denominated in a foreign currency in the limited situations where it still has
+application. Therefore, we recommend you read this information in conjunction with
+TD 94/88 (/law/view/document?Docid=TXD/TD9488/NAT/ATO/00001).
+
+
+Shares acquired or sold under contracts entered into from 1 July
+2003
+
+What gains or losses do the forex measures apply to?
+
+The forex measures do not deal with the effect of any change in the exchange rate for
+the period of the ownership of foreign currency denominated ordinary shares (that is,
+between the time of purchase and the sale of the shares). Rather, as an example, if
+the shares are held on capital account, the capital gains tax (CGT) rules in Parts 3-
+1 and 3-3 of the ITAA 1997 will incorporate any foreign currency gain or loss which
+occurs between the time of acquisition and the time of disposal as part of the overall
+capital gain or loss made on the shares.
+
+The forex measures will apply in respect of the acquisition or disposal of foreign
+currency denominated shares for an amount of foreign currency where there is a
+'currency exchange rate effect' between:
+
+  the date or time on which the contract for the acquisition or disposal is made
+
+  (respectively) the date or time payment is made or disposal proceeds are received.
+The forex measures will not give rise to a foreign exchange realisation (forex
+realisation) gain or loss where the payment for the acquisition of the shares, or receipt
+on disposal of the shares, occurs at the same time as the contract. After 26 April
+2005, where under the purchase or disposal contract there is a requirement for
+settlement within two business days, the payment for the acquisition or receipt of the
+disposal proceeds will generally be translated at the exchange rate applicable on the
+date of the contract, so no forex realisation gain or loss will arise - refer to item 8C of
+the table in subsection 960-50(6) of the ITAA 1997 (/law/view/document?
+Docid=PAC/19970038/960-50).
+
+Acquisition of foreign currency denominated shares
+
+A taxpayer has an obligation to pay foreign currency on entering into a contract to
+acquire shares where the consideration is payable in foreign currency. When payment
+is made, the obligation ceases, and a forex realisation event 4 (/businesses-and-
+organisations/corporate-tax-measures-and-assurance/foreign-exchange-gains-
+and-losses/forex-realisation-events#Forexrealisationevent4) (FRE 4) occurs.
+
+Disposal of foreign currency denominated shares
+
+Similarly, a taxpayer will have a right to receive foreign currency on entering into a
+contract to dispose of shares where the amount is receivable in a foreign currency.
+When the amount is received, the right ceases, and a forex realisation event 2
+(/businesses-and-organisations/corporate-tax-measures-and-assurance/foreign-
+exchange-gains-and-losses/forex-realisation-events#Forexrealisationevent2)
+(FRE 2) occurs.
+
+Currency exchange rate effect
+
+A forex realisation gain or loss arises under such a FRE 4 or FRE 2 when there is a
+currency exchange rate effect between entering into the purchase or sale contract,
+and settling that contract. In the context of the purchase or sale of shares
+denominated in a foreign currency, a currency exchange rate effect will commonly
+occur where a taxpayer either:
+
+  incurs an obligation to pay foreign currency under a contract for the acquisition of
+  the shares, and there is a difference in the exchange rate at the time of the
+  contract and the time of payment, or
+  acquires a right to receive foreign currency under a contract for the disposal of the
+  shares, and there is a difference in the exchange rate at the time of the contract
+  and the time of the receipt - refer to section 775-105 of the ITAA 1997
+  (/law/view/document?Docid=PAC/19970038/775-105).
+
+Short-term transactions – the 12 month rule
+
+The 12 month rule (/businesses-and-organisations/corporate-tax-measures-and-
+assurance/foreign-exchange-gains-and-losses/capital-assets-and-the-12-month-
+rule) (also known as the short-term rule) generally provides that the forex measures
+do not apply to forex realisation gains and losses on the acquisition or disposal of
+capital assets where the time between that acquisition or disposal, and the due time
+for payment, is not more than 12 months. Such gains and losses are effectively folded
+into the CGT treatment of the assets.
+
+However, where a taxpayer has made a valid election out of the 12 month rule
+(/businesses-and-organisations/corporate-tax-measures-and-assurance/foreign-
+exchange-gains-and-losses/in-detail/forex-elections) within the required timeframe,
+the 12 month rule will not apply.
+
+
+
+  Example: scenario 1
+
+  All legislative references made in the following example scenario are to the
+  ITAA 1997.
+
+  Tom enters into a contract on 1 July 2005 to acquire 1,000 shares in a US
+  company at US$10.00 per share (market value) when the exchange rate is
+  A$1.00 = US$0.70. Tom intends to hold these shares as an investment. He
+  makes the payment on the 15 August 2005 settlement date when the exchange
+  rate is A$1.00 = US$0.72.
+
+  Tom has previously made a valid election out of the 12 month rule.
+
+  When the contract is entered into on 1 July 2005, Tom incurs an obligation to
+  pay an amount of foreign currency (that being the purchase price of the shares).
+  When Tom pays the purchase price, the obligation ceases and FRE 4 occurs
+  under subsection 775-55(1) (/law/view/document?Docid=PAC/19970038/775-
+  55). Tom makes a forex realisation gain as a result of FRE 4 occurring if the A$
+value of what he pays falls short of the proceeds of assuming that obligation,
+and that gain is attributable to a currency exchange rate effect under
+subsection 775-55(3) (/law/view/document?Docid=PAC/19970038/775-55).
+
+The amount Tom pays, in A$ terms at the time of payment, is A$13,889
+(US$10,000/0.72 = A$13,889).
+
+The proceeds of assuming the obligation is equal to the market value of the
+shares calculated at the time Tom entered into the purchase contract under
+paragraph 775-95(b) (/law/view/document?Docid=PAC/19970038/775-95) and
+item 9 of the table in subsection 775-55(7) (/law/view/document?
+Docid=PAC/19970038/775-55). The market value of the shares at this time is
+US$10 per share. Tom's proceeds of assuming the obligation in respect of the
+1,000 shares is therefore A$14,286 (US$10,000/0.70 = A$14,286).
+
+Tom pays less for the shares in A$ terms ($13,889), than the value of his
+proceeds of assuming the obligation to pay for the shares (A$14,289). The
+difference between these two amounts is $397 ($14,286 - $13,889). As this
+difference is attributable solely to a currency exchange rate effect, it represents
+a forex realisation gain of $397. As Tom has elected for the 12 month rule not to
+apply, he must include the $397 forex realisation gain in his assessable income
+under section 775-15 (/law/view/document?Docid=PAC/19970038/775-15).
+
+
+
+
+Example: scenario 2
+
+All legislative references made in the following example scenario are to the
+ITAA 1997.
+
+Lisa acquires shares in a US company as a capital investment for a cost of
+US$15,000 on 1 July 2004 when the exchange rate is A$1.00 = US$0.50. The
+cost base of the shares to Lisa is A$30,000 (that being the A$ value) at the time
+of acquisition of what Lisa is required to pay for the shares. This falls under item
+5 of the table in subsection 960-50(6) (/law/view/document?
+Docid=PAC/19970038/960-50).
+
+On 1 March 2005 Lisa enters into a contract to sell the shares for US$20,000
+when the exchange rate is A$1.00 = US$0.60. The capital proceeds for the
+disposal of the shares on that date is equivalent to A$33,333 (that being the A$
+value) at the time of sale of the amount Lisa is entitled to receive under item 5 of
+the table in subsection 960-50(6).
+
+Settlement of this contract occurs on 15 March 2005 when Lisa receives the sale
+proceeds at an exchange rate of A$1.00 = US$0.62.
+
+Lisa makes a gain of A$3,333 on the disposal of the shares ($33,333 -
+ $30,000). That gain is attributable to a change in the value of the shares in the
+US company which falls under the CGT rules in Parts 3-1 and 3-3, and not the
+foreign exchange (forex) measures.
+
+Lisa has previously made a valid election out of the 12 month rule.
+
+When Lisa enters into the sale contract on 1 March 2005, she acquires a right to
+receive foreign currency in return for the shares. On receiving these sale
+proceeds for the shares, Lisa's right to receive foreign currency ends, and FRE 2
+occurs under subsection 775-45(1) (/law/view/document?
+Docid=PAC/19970038/775-45). Lisa will make a forex realisation loss if the A$
+value of what she receives falls short of the forex cost base of the right worked
+out at the time of entering into the sale contract under subsection 775-45(4)
+(/law/view/document?Docid=PAC/19970038/775-45) and item 6 of the table in
+subsection 775-45(7) (/law/view/document?Docid=PAC/19970038/775-45).
+The forex cost base will be the market value of the shares sold under
+paragraph 775-85(b) (/law/view/document?Docid=PAC/19970038/775-85).
+
+When Lisa is paid on 15 March 2005 and her right to receive the US$20,000 for
+the shares ceases, the US$20,000 received has a value of A$32,258
+(A$1.00 = US$0.62). When the contract is entered into on 1 March 2005, Lisa's
+forex cost base, or market value of her shares, is equal to A$33,333
+(A$1.00 = US$0.60).
+
+In A$ terms, the amount Lisa receives falls short of her forex cost base by $1,075
+($32,258 - $33,333). As this difference is solely attributable to a currency
+exchange rate effect, Lisa makes a forex realisation loss of $1,075 under FRE 2.
+
+As Lisa has previously elected under section 775-80 (/law/view/document?
+Docid=PAC/19970038/775-80) for the 12 month rule not to apply, this is
+deductible from her assessable income under section 775-30
+  (/law/view/document?Docid=PAC/19970038/775-30)
+
+
+
+
+Foreign currency hedging transactions
+All legislative references made in this document are to the Income Tax Assessment
+Act 1997 (ITAA 1997) unless otherwise specified.
+
+Entities may be exposed to foreign currency fluctuation risk, particularly when a
+transaction is denominated in a foreign currency.
+
+To mitigate this risk, entities often enter into foreign currency hedging transactions.
+The purpose of a foreign currency hedge is to offset all, or part, of any currency
+fluctuation on an underlying transaction. This is generally achieved through the use of
+derivatives such as forwards, futures, options and swaps.
+
+For the purposes of the foreign currency gains and losses rules contained in
+Division 775 (/law/view/document?locid=PAC/19970038/775-5), any forex realisation
+gain or loss on the underlying transaction is calculated separately to any forex
+realisation gain or loss arising on the hedge contract.
+
+
+
+  Example: scenario
+  On 7 July 2003 'A Co' enters into a contract with 'US Co' to sell goods to US Co
+  for an agreed price of US$1,000,000 (the market value of the goods). On
+  entering into the contract, A Co acquires a right to receive foreign currency (the
+  agreed price of US$1,000,000). At the time of entering into the contract, the
+  exchange rate is A$1 = US$0.6845. Delivery and ownership of the goods passes
+  to US Co on 7 January 2004, and A Co receives the consideration in US dollars
+  on that day.
+
+  In order to mitigate the risk of an adverse movement in currency exchange rates
+  between the date of the contract and the date of receipt of the US currency,
+  A Co enters into a forward exchange contract on 7 July 2003 to sell
+  US$1,000,000 to 'B Co' at an exchange rate of A$1 = US$0.6845. At the time of
+  entering into the forward exchange contract, A Co assumes an obligation to pay
+foreign currency (being the US$1,000,000 payable by A Co on settlement).
+Settlement of this contract also occurs on 7 January 2004.
+
+On 7 January 2004 A Co receives US$1,000,000 from US Co. At that time, the
+exchange rate is A$1 = US$0.7677. At the same time, under the forward
+exchange contract, A Co has an obligation to sell US$1,000,000 to B Co at an
+exchange rate of A$1 = US$0.6845.
+
+The forex realisation gain or loss on these transactions is set out below.
+
+Sale of goods
+
+
+  Contract              Date           US$            Exchange         A$
+                                                      rate
+                                                      A$1 = US$
+
+  Sale of goods         7 Jul 2003     1,000,000      0.6845           1,460,920
+
+  Proceeds from         7 Jan          1,000,000      0.7677           1,302,592
+  sale                  2004
+
+  Loss                                                                 158,328
+
+
+When A Co receives the US$1,000,000 on 7 January 2004 from US Co, forex
+realisation event 2 (/businesses-and-organisations/corporate-tax-measures-
+and-assurance/foreign-exchange-gains-and-losses/forex-realisation-
+events#Forexrealisationevent2) (section 775-45) happens as A Co ceases to
+have the right to receive foreign currency. A Co makes a forex realisation loss of
+A$158,328 (subsection 775-45(4)), as the amount received (A$1,302,592) is less
+than the forex cost base of the right (A$1,460,920) and all of the shortfall is
+attributable to a currency exchange rate effect.
+
+The forex realisation loss A Co makes is deductible in the 2003-04 income year
+under section 775-30.
+
+The gain or loss made on the forward exchange contract that A Co entered into
+with B Co is worked out separately to the gain or loss made on the sale of goods
+contract.
+
+Forward exchange contract
+    Contract                      Date        US$           Exchange      A$
+                                                            rate
+                                                            A$1 =
+                                                            US$
+
+    Amount paid by                7 Jan       1,000,000     0.7677        1,302,592
+    A Co under the contract       2004
+
+    AUD value of the US paid      7 Jan       1,000,000     0.6845        1,460,920
+    (sold) by A Co                2004
+
+    Gain                                                                  158,328
+
+
+  When A Co pays US$1,000,000 on 7 January 2004, forex realisation event 4
+  (/businesses-and-organisations/corporate-tax-measures-and-
+  assurance/foreign-exchange-gains-and-losses/forex-realisation-
+  events#Forexrealisationevent4) (section 775-55) happens as A Co ceases to
+  have the obligation to pay foreign currency. A Co makes a forex realisation gain
+  of A$158,328 (subsection 775-55(3)), as the amount paid (A$1,302,592) is less
+  than the amount the US$1,000,000 is sold for under the contract (referred to as
+  'the proceeds of assuming the obligation', which is A$1,460,920), and the entire
+  shortfall is attributable to a currency exchange rate effect.
+
+  The forex realisation gain A Co makes is included in assessable income in the
+  2003-04 income year under section 775-15.
+
+  In this example, in practical terms, the hedge is fully effective in mitigating the
+  risk of any adverse movement in foreign currency exchange rates on the sale of
+  goods contract during the period the sale proceeds remained outstanding. The
+  forex realisation loss on the sale of goods will offset the forex realisation gain
+  made on the forward exchange contract, even though the forex outcomes of
+  each transaction have to be calculated separately.
+
+
+
+
+QC 18322
+
+
+
+
+Our commitment to you
+

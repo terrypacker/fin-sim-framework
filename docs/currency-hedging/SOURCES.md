@@ -71,3 +71,32 @@ for major developed-market currencies".
 **Local-basis correlation (J.P. Morgan 2026 LTCMA USD matrix, on disk in
 `docs/market-returns/data/`).** AC World Equity ~ U.S. Large Cap 0.965 (vol 16.78%); EAFE
 Equity ~ U.S. Large Cap 0.874.
+
+## `vanguard/` — fund documents, added 6 Oct 2026
+
+`fund-docs.vanguard.com` PDFs download directly with `curl` and a browser User-Agent (the
+product *pages* are still JavaScript shells; the PDFs are not). ASX announcement PDFs come
+from the ASX research API's file endpoint
+(`cdn-api.markitdigital.com/apiman-gateway/ASX/asx-research/1.0/file/<documentKey>?access_token=…`),
+but the listing (`asx.api.markitdigital.com/asx-research/1.0/companies/<code>/announcements`)
+returns only the latest five items, and `asx.com.au`'s legacy list, Market Index and
+Listcorp are bot-walled. Older distribution notices therefore arrive by hand. As with the
+files above, the PDFs are git-ignored and each one's `pdftotext -layout` `.txt` is committed.
+
+| file | what it is | as of |
+|---|---|---|
+| `AU-ETFPDS-Vanguard_International_Shares_ETFs-VGS-VGAD-VAE.pdf` | PDS for VGS, VGAD, VAE. Hedge method (MSCI hedged index: each currency sold forward at the one-month rate, month end); "Currency hedging risk" (hedge gains add income, losses reduce or eliminate a distribution); fees incl. TOFA hedging-election expenses | 13 Mar 2026 |
+| `AU-Unitholder_notice-Important_information_regarding_Taxation_of_Financial_Arrangements-VGAD.pdf` | **VGAD adopts the TOFA hedging election from 1 July 2024**, "aligning the character and the timing of realisation of hedge gains and losses" with the hedged assets; cost ≈ 0.01% p.a. | 28 Jun 2024 |
+| `VGAD-Annual-Report-2026.pdf` | Annual report, Vanguard Wholesale International Equities Funds (Hedged) and ETFs, year to 30 Jun 2026. VGAD's 5-year capital growth / distribution split (FY2022 and FY2023 distribution **nil**) | 30 Jun 2026 |
+| `AU-Half-year_report-Vanguard_Wholesale_International_Equities_Hedged_Funds_and_ETFs.pdf` | Half-year report, same funds | half-year |
+| `AU-Unitholder_notice-Changes_to_PDS_for_International_Shares_ETFs_VAE_VGS_VGAD.pdf` | Notice of the Mar 2026 PDS changes | 13 Mar 2026 |
+| `ETF-…_8213_FS_VGAD.pdf`, `ETF-…_8212_FS_VGS.pdf` | Fact sheets | latest |
+| `ASX-2025-07-02-Vanguard-ETF-distribution-tax-estimates.pdf` | Example distribution tax estimate (VDAL, not VGAD) — shows the AMIT component layout | 2 Jul 2025 |
+
+**VGAD, year to 30 June (annual report, %):**
+
+| | FY2026 | FY2025 | FY2024 | FY2023 | FY2022 |
+|---|---|---|---|---|---|
+| capital growth | 19.07 | 8.20 | 14.78 | 16.67 | (12.42) |
+| distribution of income | 3.52 | 5.25 | 5.47 | — | — |
+| total | 22.59 | 13.45 | 20.25 | 16.67 | (12.42) |

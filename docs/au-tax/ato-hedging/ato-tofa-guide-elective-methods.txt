@@ -1,0 +1,1081 @@
+Businesses and organisations > Corporate tax measures and assurance > ...
+
+> Guide to the taxation of financial arrangements (TOFA) > Elective methods
+
+
+
+Elective methods
+If eligible, the elective tax-timing methods.
+
+Last updated 16 June 2023
+
+
+
+
+      On this page
+
+      Common requirements
+
+      Foreign exchange retranslation method
+
+      Fair value method
+
+      Reliance on financial reports method
+
+      Hedging financial arrangements method
+
+
+If eligible, an entity can use one or more of the elective tax-timing methods.
+
+Although more than one elective tax-timing method can apply to a financial arrangement,
+the priority rules in section 230-40 determine which tax-timing method takes priority
+when calculating gains and losses.
+
+The elective tax-timing methods can help reduce compliance costs. This is because the
+fair value, foreign exchange retranslation and reliance on financial reports methods allow
+entities to use their financial reports to work out the amount of gain or loss they made
+from their financial arrangements and how much is attributed to a particular income year
+for income tax purposes.
+
+The 4 elective tax-timing methods are:
+
+   foreign exchange retranslation (#Foreign_exchange_retranslation_method)
+
+   fair value (#Fair_value_method)
+
+   reliance on financial reports (#Reliance_on_financial_reports_method)
+
+   hedging financial arrangements. (#Hedging_financial_arrangements_method)
+See Section 230-40 – Methods for taking gain or loss into account
+(/law/view/document?docid=PAC/19970038/230-40).
+
+
+
+Common requirements
+For an entity to be eligible to elect to apply an elective tax-timing method (except for the
+qualifying forex account election) for an income year, the following common requirements
+must be met:
+
+  The entity must prepare financial reports for the income year, according to the
+  accounting principles or comparable standards for accounting made under a
+  foreign law.
+
+  The financial report must be audited according to the auditing principles or
+  comparable standards for auditing made under a foreign law.
+
+
+Consolidated groups
+
+Where a consolidated financial report deals with the affairs of all entities in the tax
+consolidated group, the consolidated financial report can be used to determine whether
+the group meets eligibility requirements.
+
+Where stand-alone financial reports deal with the affairs of all entities in the tax
+consolidated group, such reports can be used to determine whether the group meets
+eligibility requirements. In such cases, all members of the tax consolidated group must
+prepare stand-alone financial reports to satisfy the requirements.
+
+Where the affairs of the tax consolidated group are reflected in both the consolidated
+financial report and stand-alone financial reports, the group can use either report type to
+determine whether it meets eligibility requirements – however it must make this choice
+consistently.
+
+
+MEC groups
+
+For a multiple entry consolidated (MEC) group, the provisional head company's
+consolidated financial report may not reflect the financial arrangements of the entire MEC
+group. A consolidated report prepared by an eligible tier-1 entity, which is the provisional
+head company, most likely would not reflect the financial arrangements of other eligible
+tier-1 entities or of its wholly-owned subsidiaries.
+
+In such a situation, pursuant to section 230-525, the provisional head company may be
+able to rely on a consolidated financial report prepared by the top company to satisfy the
+eligibility requirement that you prepare a financial report (for example, under
+paragraph 230-210(2)(a)). However, whether the provisional head company can rely on
+the consolidated financial report for these purposes depends on the particular case.
+See Section 230-525 – Consolidated financial reports (/law/view/document?
+docid=PAC/19970038/230-525).
+
+
+Non-consolidated tax entities
+
+Where an entity is not part of a tax consolidated group and does not itself prepare a
+financial report, it may still be able to satisfy the eligibility requirements. To do this, it can
+use a consolidated financial report prepared by another entity that properly reflects the
+first entity's affairs.
+
+
+Financial arrangements subject to elective tax-timing methods
+
+An elective tax-timing method will only apply to financial arrangements that an entity
+starts to have in the income year in which the election is made or later income years.
+
+However, an elective tax-timing method can apply to existing arrangements where the
+entity made both the:
+
+  transitional election for existing financial arrangements
+
+  election to apply the tax-timing method on or before the first lodgment date of the
+  entity's tax return that occurs after TOFA first applies.
+
+
+Gains or losses recognised in financial reports
+
+An elective tax-timing method will only apply to a financial arrangement if the gains or
+losses from the financial arrangement are recognised or recorded in the relevant audited
+financial report.
+
+However, an elective tax-timing method may also apply to transactions that are not
+recognised in the report if they are intra-group transactions of an accounting
+consolidated group. This requirement will be satisfied where both the following apply:
+
+  The entity is a member of an accounting consolidated group.
+
+  The financial arrangement is not recognised in an audited financial report only
+  because it is an intra-group transaction under AASB 127.
+
+Financial arrangements between members of a consolidated group or MEC group are not
+covered by this requirement because the single entity rule in section 701-1 operates to
+treat them as not being financial arrangements for all income tax purposes.
+
+
+When an election ceases to apply
+
+Once made, an elective tax-timing method cannot be revoked.
+
+However, an election to apply an elective tax-timing method will cease to have effect
+from the start of an income year if the entity ceases to meet the eligibility requirements to
+make the election.
+Where the elective tax-timing method ceases to apply, the entity must make certain
+balancing adjustments for the relevant financial arrangements.
+
+Entities can make new elections where they again satisfy the relevant requirements.
+
+
+  Example: ceasing to satisfy the eligibility requirements
+
+  Staples Co is subject to TOFA. Staples Co elected to apply the fair value method to its financial
+  arrangements in its income year ending 30 June 2011.
+
+  For the year ending 30 June 2013, Staples Co did not prepare financial reports according to the
+  relevant accounting principles. As it ceased to meet the eligibility requirements to make the fair
+  value method election in that income year, the fair value method ceased to have effect from 1 July
+  2012 and certain balancing adjustments must be made in respect of Staples Co's relevant financial
+  arrangements.
+
+
+
+
+Foreign exchange retranslation method
+The foreign exchange retranslation method is relevant to entities with arrangements
+denominated in, or determined by, reference to a foreign currency. For an entity that has
+made a functional currency election under Subdivision 960-D, this means a currency that
+is not its applicable functional currency.
+
+Under AASB 121 The Effects of Changes in Foreign Exchange Rates (AASB 121) or a
+comparable accounting standard made under a foreign law, certain gains and losses
+attributable to currency exchange rate movements must be recognised in profit or loss in
+an entity's financial reports.
+
+The foreign exchange retranslation method only applies to these gains and losses.
+
+An entity that meets the common requirements can elect to apply the foreign exchange
+retranslation method to all financial arrangements, and those arrangements subject to
+Subdivision 775-F (general election).
+
+Alternatively, an entity can elect to apply the foreign exchange retranslation method to
+one or more of its qualifying forex accounts (a qualifying forex account election).
+
+The retranslation method will not apply to a financial arrangement if either the fair value
+or reliance on financial reports election applies to that particular arrangement, or to the
+extent that the hedging financial arrangements election applies in relation to that
+arrangement.
+
+The gain or loss recognised in an income year under the retranslation method will
+generally be the same as the amount recognised under AASB 121 or its foreign equivalent
+in the entity's profit or loss. However, an amount will not be recognised if the amount
+recognised in the entity's profit or loss has been previously recognised in equity.
+
+See Subdivision 775-F – Retranslation under foreign exchange translation election under
+Subdivision 230-D (/law/view/document?locid=PAC/19970038/SDiv775-F).
+
+
+General election
+
+Where an entity makes the general retranslation election, the foreign exchange
+retranslation method will apply to financial arrangements that satisfy the following:
+
+  The entity starts to have the financial arrangement in the income year in which it
+  makes the election or in a later income year.
+
+  An amount attributable to changes in currency exchange rates must be recognised
+  in profit or loss in the financial reports as per AASB 121 or a comparable accounting
+  standard made under a foreign law.
+
+Where the general election ceases to apply, certain balancing adjustments must be made.
+However, the balancing adjustments are made only to the extent the balancing
+adjustments are reasonably attributable to currency exchange rate movements.
+
+
+Qualifying forex account election
+
+Where an entity makes a qualifying forex account election, the foreign exchange
+retranslation method will apply to the qualifying forex account for which it made the
+election.
+
+A qualifying forex account is defined in section 995-1 as an account denominated in a
+foreign currency that has the primary purpose of facilitating transactions or is a credit
+card account.
+
+A qualifying forex account election will apply:
+
+  from the time when the entity starts to have the arrangement if the election is
+  made before the entity starts to have the arrangement
+
+  from the start of the income year in which the election is made if the entity makes
+  an election after it starts to have the arrangement.
+
+See Section 995-1 – Definitions (/law/view/document?docid=PAC/19970038/995-1).
+
+Arrangement held prior to making the election
+
+An entity can make this election even if it starts to have the qualifying forex account
+election before making the election.
+
+However, such an election will not apply to an account that was created before the start
+of the first year TOFA began applying to the entity, unless that entity has made an
+election for TOFA to apply to its existing financial arrangements.
+
+For these qualifying forex accounts held prior to making the election to which TOFA
+applies, the entity must make a balancing adjustment according to Subdivision 230-G
+calculated as if the taxpayer had ceased the arrangement for its fair value at the time
+when the election was applied to the arrangement. However, the balancing adjustment
+will only recognise an amount to the extent it is reasonably attributable to a currency
+exchange rate effect.
+
+
+  Example: applying the general retranslation election to a US$
+  loan
+
+  Yee Imports Co (Yee) is a large Australian company that is eligible and makes the foreign exchange
+  retranslation method – general election. Yee has a loan of US$1,000 for which gains and losses
+  attributable to changes in foreign exchange rates must be recognised in profit or loss in
+  accordance with AASB 121. Under the loan agreement, Yee does not have to repay any principal
+  until the end of year 4.
+
+  When Yee entered into the loan, it had a liability in Australian dollars (A$) of $2,000
+  (A$1 = US$0.50). By the end of year one, the Australian dollar had appreciated against the US
+  dollar, such that the A$ value of the loan decreased to $1,333. For accounting purposes, a profit of
+  $667 is recognised. This means for tax purposes, a $667 gain is recognised.
+
+  In year 2, a gain of $83 is recognised as the Australian dollar value of the loan has decreased from
+  $1,333 to $1,250. In year 3, the Australian dollar value of the loan has increased to $1,428 and a
+  loss of $178 is recognised.
+
+  At the end of year 4, when the loan is repaid, Yee performs a balancing adjustment calculation
+  under Subdivision 230-G and works out that it makes a $110 loss.
+
+
+                                        Year 0      Year 1           Year 2      Year 3      Year 4
+
+
+     Amount of debt (US$)               $1,000      $1,000           $1,000      $1,000      0
+
+
+     A$ currency                        0.50        0.75             0.80        0.70        0.65
+
+
+     A$ value of debt                   $2,000      $1,333           $1,250      $1,428      $1,538
+
+
+     Tax treatment under the            0           $667 gain        $83 gain    $178 loss   $110
+                                                    ($2,000 –        ($1,333 –   ($1,250 –   loss*
+     foreign exchange
+                                                    $1,333)          $1,250)     $1,428)
+     retranslation method
+
+
+  * Subdivision 230-G balancing adjustment applies when the financial arrangement ceases.
+The foreign exchange retranslation method only applies to a gain or loss attributable to
+currency exchange rate movements. The accruals and realisation methods may apply to
+the gain or loss not attributable to currency exchange rate movements.
+
+
+
+Fair value method
+The fair value method is a tax-timing method that measures a gain or loss from a financial
+arrangement as the change in its fair value between 2 points in time. The gain or loss for a
+particular period is the increase or decrease in its fair value between the beginning and
+end of the period, adjusted for amounts paid or received during the period.
+
+The term 'fair value' is not a defined term under the tax Acts. However, AASB 139
+Financial Instruments: Recognition and Measurement (AASB 139) defines fair value as 'the
+amount for which an asset could be exchanged or a liability settled, between
+knowledgeable, willing parties in an arm's length transaction'.
+
+The fair value method can give rise to unrealised gains and losses from financial
+arrangements being brought to tax.
+
+To be eligible to make the fair value method election in an income year, an entity must
+meet the common requirements.
+
+
+Financial arrangements subject to this method
+
+If an election to apply the fair value method is made, it will apply to financial
+arrangements that meet both the following requirements:
+
+  The entity starts to have the financial arrangement in the income year in which it
+  makes the election, and in later income years.
+
+  The financial arrangement is either an asset or liability is required (whether or not
+  as a result of a choice made) to be classified or designated or (in whole or in part)
+  otherwise treated in the entity's financial reports as at fair value through profit or
+  loss.
+
+Under AASB 139, the following are generally recognised at fair value through profit or
+loss:
+
+  a financial asset or financial liability held for trading
+
+  a derivative.
+
+AASB 139 states that trading generally reflects active and frequent buying and selling,
+and that financial instruments held for trading are generally used with the objective of
+generating a profit from short-term fluctuations in price or dealer's margin.
+
+
+Equity interests
+The fair value can apply to financial arrangements that are equity interests under
+Division 974, as well as certain rights to receive and obligations to provide equity interests
+(section 230-50 financial arrangements), subject to the satisfaction of the fair value tax-
+timing requirements.
+
+However, an entity that has issued its own equity interests cannot fair value those equity
+interests. This rule is directed at ensuring, for example, that an entity does not obtain a
+tax deduction for dividends paid.
+
+See Division 974 – Debt and equity interests (/law/view/document?
+locid=PAC/19970038/Div974).
+
+
+Splitting financial arrangements into two
+
+Under section 230-235, where only part of a financial arrangement is classified or
+designated at fair value through profit or loss, that part of the arrangement is treated as a
+financial arrangement subject to the fair value method. The remaining part of the financial
+arrangement will be treated as a separate financial arrangement and will be subject to
+another tax-timing method.
+
+See Section 230-235 – Splitting financial arrangements into 2 financial arrangements
+(/law/view/document?docid=PAC/19970038/230-235).
+
+
+Tax treatment
+
+Where a fair value election applies to a financial arrangement, the gains or losses for an
+income year will be determined by the accounting principles.
+
+Where the Australian accounting principles, or comparable standards made under a
+foreign law, require that a fair value measurement through profit or loss be used to
+determine accounting profits or losses on financial arrangements for an income year,
+these gains and losses shall be used to determine the taxpayer's gain or loss for an
+income year from those financial arrangements.
+
+
+Franked distributions
+
+Franked distributions (received either directly by the taxpayer or indirectly through a
+partnership or trust) and rights to receive franked distributions (either directly or
+indirectly) must not be included as a gain or loss that is brought to account according to
+the fair value method.
+
+Excluding franked distributions from the scope of the fair value election ensures these
+distributions will remain assessable according to section 44 of the ITAA 1936. Assessing
+the distribution under section 44 rather than under TOFA will ensure that the imputation
+system works appropriately for distributions such that franking credits allocated to such
+distributions are available to the recipient in the income year in which the distribution is
+taxed to the recipient.
+See Section 44 of the ITAA 1936 – Dividends (/law/view/document?
+docid=PAC/19360027/44).
+
+
+Valuation issues
+
+The term fair value is not defined in the tax acts. The term should take its ordinary
+commercial meaning. In this regard, AASB 139 defines fair value as '… the price that would
+be received to sell an asset or paid to transfer a liability in an orderly transaction between
+market participants at the measurement date'.
+
+The valuation methods used, and the guidance, definitions and requirements for the
+elective fair value method generally should be the same as those used for the fair value
+valuation in relevant accounting principles. As a result, if taxpayers use fair value
+estimates in their profit or loss accounts that accord with commercially acceptable
+valuation techniques, they can generally use the same estimates for the elective fair value
+method.
+
+
+  Example: applying the fair value method to an option
+
+  Apple Co meets the eligibility requirements and makes the fair value method election.
+
+  Apple Co paid $10 to purchase an option to acquire a share in Banana Co.
+
+  The fair value method will apply to Apple Co's option to acquire a share in Banana Co as the option
+  is a derivative recognised at fair value through profit or loss for accounting purposes.
+
+  The fair value of the option at the end of each year is set out in the table below. Apple Co sells the
+  option at the end of year 3 for $20.
+
+  Apple Co makes a fair value gain of $5 in year one ($15 – $10), a fair value gain of $8 ($23 – $15)
+  in year 2. At the end of year 3, when Apple Co disposes of its option for $20, it performs a
+  balancing adjustment calculation under Subdivision 230-G and works out that it makes a $3 loss.
+
+  During the term of the arrangement, Apple Co recognises a net gain of $10, which is brought to
+  account for tax purposes, reflecting the $10 overall economic gain overall; that is, a cost of $10
+  and proceeds of $20.
+
+
+     Type                                           Cost      Year 1           Year 2            Year 3
+
+
+     Acquisition cost                               $10       –                –                 –
+
+
+
+     Fair value of option price at year end         –         $15              $23               –
+
+
+
+     Disposal of option                             –         –                –                 $20
+     Tax treatment under the fair value              –        $5 ($15 –         $8 ($23 –      – $3*
+     method                                                   $10)              $15)
+
+
+  * Subdivision 230-G balancing adjustment applies when the financial arrangement ceases.
+
+
+
+
+Reliance on financial reports method
+Broadly, an entity that makes a valid reliance on financial reports election can rely on its
+financial reports for the purposes of complying with its tax obligations for its financial
+arrangements.
+
+This election aligns the tax treatment of relevant financial arrangements to the accounting
+treatment of those arrangements.
+
+This election reduces the administration and compliance costs of the taxation of financial
+arrangements.
+
+The financial reports election takes precedence over other elective and default tax-timing
+methods, but only to the extent that the hedging financial arrangements method does not
+apply to the financial arrangement.
+
+
+Eligibility requirements
+
+To be eligible to make the reliance on financial reports method election in an income year,
+an entity must satisfy the following requirements:
+
+  The entity must prepare a financial report for that income year according to the
+  accounting principles that is audited according to the auditing principles.
+
+  The entity's auditor has not qualified the auditor's report on the financial report for
+  that income year or any of the last 4 financial years in a way that is relevant to the
+  tax treatment of financial arrangements.
+
+  The entity's accounting systems and controls and internal governance processes
+  are reliable.
+
+  No report of an audit or review conducted in the income year or any of the
+  preceding 4 income years included an adverse assessment of accounting systems
+  relevant to the tax treatment of financial arrangements.
+
+Once made, the election to apply the reliance of financial reports method is irrevocable.
+
+However, the election to apply the reliance on financial reports method will cease to apply
+if any of the eligibility requirements are no longer satisfied. The election will cease to
+apply from the start of the income year in which this occurs. The entity must then make
+balancing adjustments under subsection 230-430(2).
+  Example: qualification in an auditor's report
+
+  The auditor's report on the financial reports of Scruffy Ltd has been qualified in relation to the
+  amount of directors' fees recognised in the books.
+
+  The qualification will not prevent Scruffy Ltd from making a valid election to apply the reliance on
+  financial reports method, as the directors' fees have no impact on the recognition and
+  measurement of gains and losses on the relevant financial arrangements.
+
+
+See Section 230-430 – Balancing adjustment if election ceases to apply
+(/law/view/document?docid=PAC/19970038/230-430).
+
+
+Financial arrangements subject to this method
+
+The reliance on financial reports method applies to financial arrangements that meet the
+following requirements:
+
+  The entity starts to have the financial arrangement in the income year in which it
+  makes the election or later income years.
+
+  The arrangement is recognised in the financial reports relied on.
+
+  It is reasonably expected that the amount of the overall gain or loss the entity
+  makes from the arrangement determined in accordance with the financial reports
+  is, or will be, the same as the amount of the overall gain or loss the entity makes as
+  determined according to TOFA, if the reliance on financial reports method election
+  did not apply (same overall gain or loss test).
+
+  The results of the method used to determine the gain or loss on a financial
+  arrangement for each income year in the financial reports is not substantially
+  different to the results from the methods that would be applied by the rest of TOFA
+  if the reliance on financial reports method election did not apply (results not
+  substantially different test).
+
+However, the election will cease to apply to a particular financial arrangement if any of
+the above requirements are no longer satisfied for that financial arrangement. The
+election will cease to apply to that financial arrangement from the start of the income
+year in which this occurs. When this happens, the entity must make balancing adjustment
+under subsection 230-430(5).
+
+See Subsection 230-430(5) (/law/view/document?docid=PAC/19970038/230-430).
+
+Applying the tests
+
+An entity must assume that both a fair value method election and a foreign exchange
+retranslation general election have been made when determining whether:
+  an entity reasonably expects to make the same overall gain or loss on a financial
+  arrangement
+
+  the results of the financial reports method are not substantially different from the
+  results from the methods that would apply if the financial reports method did not
+  apply.
+
+This prevents taxpayers from needing to have valid elections in place solely to ensure the
+financial reports method applies to certain financial arrangements.
+
+However, in applying these tests, do not assume that an election for portfolio treatment of
+fees, premiums and discounts is made under the accruals method under Subdivision 230-
+B.
+
+If the election for portfolio treatment of fees, premiums and discounts has not been
+made, the relevant comparisons in applying these tests are the accruals/realisation
+methods as if that election was not made.
+
+If the election for portfolio treatment of fees, premiums and discounts has been made,
+the relevant comparisons in applying these tests are with the accruals/realisation
+methods on the basis that election has been made.
+
+See Subdivision 230-B – The accruals/realisation methods (/law/view/document?
+locid=PAC/19970038/SDiv230-B).
+
+Eliminated accounting intra-group transactions
+
+As stated above, for the financial reports method to apply to a financial arrangement, the
+arrangement must be recognised in the financial report.
+
+However, where a financial arrangement is not recognised in the consolidated financial
+report merely because it has been eliminated as an intra-group transaction of the
+accounting consolidated group, paragraph 230-410(1)(c) is taken to be satisfied in
+relation to a financial arrangement.
+
+As a consequence, the financial reports method can be applied to the eliminated
+accounting intra-group transaction.
+
+See Section 230-410 – Financial arrangements to which the election applies
+(/law/view/document?docid=PAC/19970038/230-410).
+
+
+Tax treatment
+
+If an election to rely on financial reports applies to a financial arrangement, the gain or
+loss made from the arrangement for the income year is the gain or loss that the
+accounting principles require the entity to recognise in profit or loss from that
+arrangement for that income year.
+For eliminated accounting intra-group transactions, the gain or loss made from the
+arrangement for the income year is the gain or loss that the accounting principles would
+have required the entity to recognise in profit or loss from that arrangement for that
+income year if the arrangement had not been an intra-group transaction.
+
+Impaired debt arrangements
+
+Where a debt arrangement that is subject to the reliance on financial reports election
+subsequently becomes impaired, the arrangement ceases to be subject to the reliance on
+financial reports method, except where the arrangement is fair valued. This is because
+the arrangement ceases to satisfy the requirement that the differences in the results of
+the accounting method and the compounding accruals method are reasonably expected
+to be not substantial.
+
+The reason for this is that the compounding accruals method does not recognise a
+provision for doubtful debts. Hence, the relevant financial arrangement will become
+subject to the remainder of TOFA, that is, to a tax-timing method other than the reliance
+on financial reports method.
+
+Where a debt arrangement that is subject to the reliance on financial reports method
+becomes impaired, and the financial reports election ceases to apply to it, the
+arrangement is specifically precluded from being subject to a balancing adjustment. The
+reason for this is that if a balancing adjustment were applied at the time the financial
+arrangement becomes impaired, the taxpayer would receive an immediate deduction for
+the impairment of the debt arrangement. Such a result is contrary to the general policy in
+relation to doubtful debts for financial arrangements that are not subject to the fair value
+election.
+
+
+
+Hedging financial arrangements method
+Entities enter into various hedging arrangements to manage their exposure to risks such
+as interest rate and currency exchange rate fluctuations. For example, a foreign currency
+hedge can protect an entity against the foreign currency exchange risk that arises from
+the purchase of machinery in a foreign currency at a future date.
+
+For income tax purposes, gains and losses on arrangements may be taxed on a different
+basis (for example, realisation and accruals). Where a financial arrangement is used to
+hedge the risk in relation to another arrangement, and each are taxed on a different basis,
+the effectiveness of the hedge, in a post-tax sense, is reduced.
+
+Tax mismatches could also occur where gains or losses made on an underlying hedged
+item are taxed on capital account, whereas the gains or losses made on the hedging
+financial arrangement are brought to account on revenue account.
+
+Although the outcomes under the hedging financial arrangements method will not
+necessarily align with accounting principles, this method broadly reduces post-tax
+mismatches ensuring that gains and losses from hedging financial arrangements are
+included in taxable income at the same time as those made from the hedged items are
+recognised for tax purposes. This method also matches the tax classification or status of
+a hedging financial arrangement gain or loss with that of the hedged item.
+
+To be eligible to make the hedging financial arrangements method election in an income
+year, an entity must meet the common requirements. If the hedging method election is
+not made, an entity cannot use the hedging financial arrangements method for tax
+purposes, irrespective of whether a financial arrangement is a hedge for accounting
+purposes.
+
+Once made, the hedging financial arrangements election cannot be revoked.
+
+
+Financial arrangements subject to this method
+
+The hedging financial arrangements method will apply to a financial arrangement if the
+following criteria are satisfied:
+
+  the arrangement is a hedging financial arrangement
+
+  the entity starts to have the arrangement in the income year in which the election
+  is made or later income years.
+
+The hedging financial arrangements method will not apply to a financial arrangement if
+the arrangement is:
+
+  a financial arrangement as defined under section 230-50 unless it is issued by the
+  relevant entity and is a foreign currency hedge
+
+  subject to an exception contained in subsection 230-330(3), (4) or (5).
+
+Hedging financial arrangement
+
+A financial arrangement is defined in section 230-335 to be a hedging financial
+arrangement if:
+
+  it is a derivative financial arrangement or a foreign currency hedge
+
+  the entity creates, acquires or applies the arrangement for the purpose of hedging
+  a risk or risk in relation to a hedged item
+
+  at the time the entity creates, acquires or applies the arrangement, it is a hedging
+  instrument for accounting purposes
+
+  it is recorded as a hedging instrument in the entity's financial reports in the income
+  year in which the rights or obligations are created, acquired or applied.
+
+Derivative financial arrangement
+A derivative financial arrangement is defined in section 230-350 as a financial
+arrangement where:
+
+  its value changes in response to changes in a specified variable or variables
+
+  it requires no net investment, or there is such a requirement, but the net
+  investment is smaller than would be required for other types of financial
+  arrangements that would be expected to have a similar response to changes in
+  market factors.
+
+Foreign currency hedge
+
+A foreign currency hedge is defined in section 230-350 as a financial arrangement where:
+
+  its value changes in response to changes in a specified variable or variables but is
+  not a derivative financial arrangement
+
+  it hedges a risk in relation to movements in currency exchange rates.
+
+Tax extension hedges
+
+Generally, only those hedging arrangements that satisfy the hedge accounting rules will
+satisfy the requirements of the hedging financial arrangements method. However, in
+limited situations, the hedging financial arrangements method will apply to hedging
+financial arrangements that would not ordinarily meet accounting hedging treatment
+(subsection 230-335(3)).
+
+Partial hedges
+
+Generally, the whole financial arrangement must be a hedging financial arrangement.
+However, section 230-340 treats a part of a financial arrangement as a separate financial
+arrangement where it is used for a partial hedge (such as a forward contract or a
+proportionate hedge).
+
+For more information, see:
+
+  Section 230-335 – Hedged financial arrangement and hedged item
+  (/law/view/document?docid=PAC/19970038/230-335)
+
+  Section 230-350 – Derivative financial arrangement and foreign currency hedge
+  (/law/view/document?docid=PAC/19970038/230-350)
+
+  Section 230-340 – Generally whole arrangement must be hedging financial
+  arrangement (/law/view/document?docid=PAC/19970038/230-340)
+
+Hedged item
+
+A hedged item is defined in subsection 230-335(10) to be one of the items listed in that
+subsection (for example, an asset, a liability, a firm commitment), or a part of such an
+item, in which an entity hedges a risk.
+An anticipated dividend is deemed to be a hedged item if it is of the kind referred to in
+subsection 230-335(4).
+
+Where the hedged item is a net investment in a foreign operation that is carried on
+through a company in which an entity holds shares, or through a subsidiary company of
+the entity, the hedged item is deemed for the purposes of tax classification or status
+matching in the table in subsection 230-310(4) to be either the shares or some other
+interest (such as long-term intra-group debt) in that company.
+
+See Subsection 230-335 – Hedged financial arrangement and hedged item
+(/law/view/document?docid=PAC/19970038/230-335).
+
+'One-in, all-in' principle
+
+A fundamental principle underlying the hedging election is that the election applies to all
+accounting hedges and would-be accounting hedges (those where the entity does not
+satisfy the documentation requirements under this method) on a 'one-in, all-in' basis. This
+also applies to anticipated hedges in the same manner.
+
+Under this principle, an entity that makes an election to apply the hedging financial
+arrangements method must apply this method to all of its hedging financial
+arrangements.
+
+
+Failure to comply with method
+
+Failure to comply with the record-keeping requirements in sections 230-355 and 230-
+360, and the requirement in section 230-365 that the effectiveness of the hedge be
+assessed, can have the following implications (pursuant to section 230-385):
+
+  The hedging financial arrangements method election will not apply to hedging
+  financial arrangements the entity starts to have after the time those requirements
+  are not met until such time as determined by the ATO.
+
+  Where section 230-360 has not been satisfied for an existing hedging financial
+  arrangement, we may determine the appropriate basis of allocation for gains and
+  losses from the hedging financial arrangement in a way that satisfies section 230-
+  360.
+
+Where this occurs, pursuant to section 230-380 we may still:
+
+  treat the requirements of section 230-355, 230-360 or 230-365 as having been
+  met
+
+  impose additional record-keeping requirements
+
+  determine the appropriate basis of allocation for gains and losses from the hedging
+  financial arrangement in a way that satisfies section 230-360.
+
+See Section 230-385 – Consequences of failure to meet requirements
+(/law/view/document?docid=PAC/19970038/230-385).
+
+
+Existing hedging financial arrangements
+
+If an entity made a transitional election for TOFA to apply to its existing financial
+arrangements, it can also elect to apply the hedging financial arrangements method to
+those existing hedging financial arrangements if:
+
+  the election to apply the hedging financial arrangements method is made on or
+  before the first lodgment date that occurs after the start of the income year in
+  which TOFA begins to apply
+
+  at or soon after making the election, the entity satisfies the record-keeping
+  requirements in section 230-355 and section 230-360
+
+  the entity satisfies the hedge-effectiveness requirements in section 230-365 at all
+  times from when they created, acquired or applied the arrangement.
+
+However, the tax status matching rules under subsection 230-340(4) cannot apply to
+existing hedging financial arrangements that have been transitioned into TOFA. Instead,
+tax classification or status is determined pursuant to subsection 230-310(3).
+
+
+Documentation requirements
+
+The recording requirements an entity must make under section 230-355 include both:
+
+  details that are required under the accounting principles
+
+  terms of the determinations it makes under section 230-360.
+
+The terms of the determinations that an entity makes under section 230-360 must show
+the basis on which the entity will allocate gains and losses from a hedging financial
+arrangement for tax purposes.
+
+The determinations must be objective and result in a record of both the:
+
+  time at which the gain or loss from the hedging financial arrangement is taken into
+  account for TOFA purposes
+
+  way in which the gain or loss will be dealt with under section 230-310.
+
+To satisfy the requirement of recording the terms of the determinations an entity makes
+under section 230-360, it can do either of the following:
+
+  separately record the details required by that section for each of its hedging
+  financial arrangements
+
+  make a common record, such as a hedge master documentation, for each of
+  several identified classes of hedging financial arrangements that the entity has.
+  This will be sufficient where there is an objective link between the common record
+  and the hedging financial arrangement.
+
+An example of the terms of a determination made under paragraph 230-355(1)(c) is
+provided in Appendix – Sample tax hedging documentation (/businesses-and-
+organisations/corporate-tax-measures-and-assurance/taxation-of-financial-
+arrangements-tofa/guide-to-the-taxation-of-financial-arrangements-tofa/appendix-
+sample-tax-hedging-documentation?
+anchor=Appendix___sample_tax_hedging_documentat#Appendix___sample_tax_hedging_documentat).
+
+For more information, see:
+
+  Section 230-355 – Recording requirements (/law/view/document?
+  docid=PAC/19970038/230-355)
+
+  Section 230-360 – Determining basis for allocating gain or loss
+  (/law/view/document?docid=PAC/19970038/230-360)
+
+  Section 230-365 – Effectiveness of the hedge (/law/view/document?
+  docid=PAC/19970038/230-365).
+
+When the record must be made
+
+The time by which the documentation must be in place differs for existing hedging
+financial arrangements (under a transitional election) and hedging financial arrangements
+starting from the time TOFA begins.
+
+Existing hedging financial arrangements – transitional election
+
+If an entity started to have a hedging financial arrangement before entering into TOFA,
+the entity could have elected to have TOFA apply to that arrangement (sub-item 104(2) of
+Schedule 1 to the TOFA Act).
+
+Pursuant to sub-item 104(9)(c) of Schedule 1 to the TOFA Act, the hedging record must
+be in place:
+
+    … at, or soon after, the time you make the election, you have in place records in
+    relation to the arrangement that satisfy the requirements of section 230-355 and
+    section 230-360 (other than subparagraph 230-360(2)(c)(ii)).
+
+In general, the necessary hedging documentation for existing hedging financial
+arrangements must be in place at, or soon after, the time the hedging election is made.
+
+Hedging financial arrangements from 1 July 2010
+
+For hedging financial arrangements the entity started to have from the time TOFA begins
+to apply to its financial arrangements, subsection 230-355(3) states:
+
+    The record must be made or in place, either:
+
+    (a) at, or soon after, the time when you create, acquire or apply the hedging financial
+    arrangement
+
+    (b) at such other time as is provided for in the regulations for the purposes of this
+    paragraph.
+
+If TOFA begins to apply to the entity from 1 July 2010 and the hedging financial
+arrangements method is elected, the required records for the hedging financial
+arrangements must be in place at the same time the hedging financial arrangement is
+created, acquired or applied. It is not sufficient to put relevant tax documentation in place
+when the hedging election is made.
+
+For more information, see:
+
+  Sub-item 104(9) of Schedule 1 to the TOFA Act (/law/view/document?
+  docid=PAC/20090015/Sch1-Cl104)
+
+  Subsection 230-355(3) (/law/view/document?docid=PAC/19970038/230-355).
+
+Regulations allowing for an extension of time
+
+The Income Tax Assessment Amendment Regulations 2011 (No. 4) (80 of 2011) extended
+the time for recording details of the basis for allocating gains and losses for certain
+hedging financial arrangements for income tax purposes until 30 June 2011.
+
+See Income Tax Assessment Amendment Regulations 2011 (No. 4) (80 of 2011)
+(/law/view/document?Docid=REG/20110080/ATOTOC&PiT=99991231235958).
+
+
+Hedge effectiveness requirements
+
+It is a requirement of section 230-365 that the hedge be expected to be highly effective
+within the meaning of the accounting principles. Hedge effectiveness is addressed in
+Taxation Determination TD 2011/23.
+
+If the hedge proves to be ineffective, this will result in a balancing adjustment under
+section 230-375.
+
+For more information, see:
+
+  Section 230-375 – Balancing adjustment if election ceases to apply
+  (/law/view/document?docid=PAC/19970038/230-365)
+
+  Section 230-365 – Effectiveness of the hedge (/law/view/document?
+  docid=PAC/19970038/230-365)
+
+  TD 2011/23 (/law/view/document?docid=TXD/TD201123/NAT/ATO/00001) Income
+  tax: does the hedge effectiveness test under section 230-365 of the Income Tax
+  Assessment Act 1997 require both retrospective and prospective testing where
+  'highly effective' takes its meaning from Australian accounting principles?.
+Tax treatment
+
+The gain or loss from a hedging financial arrangement is equal to the overall gain or loss
+from the arrangement pursuant to subsection 230-300(2). This will be the case whether
+a gain or loss results from, among other things, the expiration, sale, termination or
+exercise of a hedging financial arrangement (see Taxation Determination TD 2012/13).
+
+A gain or loss under subsection 230-300(2) will be allocated to income years in
+accordance with the determination made under section 230-360 (see Tax-timing and
+tax-status matching (#Taxtimingandtaxstatusmatching)).
+
+The exception to this is if a hedging event under section 230-305 applies, in which case
+the gain or loss is identified in subsection 230-300(5).
+
+For more information, see:
+
+  Section 230-300 – Applying hedging financial arrangements method to gains and
+  losses (/law/view/document?docid=PAC/19970038/230-300)
+
+  TD 2012/13 (/law/view/document?docid=TXD/TD201213/NAT/ATO/00001) Income
+  tax: is the gain or loss resulting from the expiration, sale, termination or exercise of
+  a hedging financial arrangement to which a hedging financial arrangement election
+  applies, determined and allocated in accordance with subsections 230-300(2) and
+  230-300(3) of the Income Tax Assessment Act 1997?
+
+Hedging events under section 230-305
+
+Where an event in the table under subsection 230-305(1) happens (for example,
+revocation of the hedge or the hedge is ineffective), pursuant to subsection 230-300(5)
+the gain or loss from the hedging financial arrangement is the gain or loss that would
+have been made from the hedging financial arrangement if the entity ceased to have the
+arrangement for its fair value at the time of the event.
+
+This gain or loss will either be allocated according to the determination made under
+section 230-360, or to the income year in which the event happens, depending on which
+item of the table in section 230-305 applies to the event.
+
+Paragraph 230-300(5)(b) states that TOFA applies as if the arrangement had been
+acquired (or reacquired) for its fair value immediately after the event. This requires a
+reassessment of whether the arrangement will continue to satisfy the definition of
+hedging financial arrangement in subsection 230-335(1) after the time of the deemed
+reacquisition.
+
+See Section 230-305 – Table of events and allocation rules (/law/view/document?
+docid=PAC/19970038/230-305).
+
+
+Tax-timing and tax-status matching
+Under the hedging financial arrangements method, the timing of the gains or losses on
+the hedging financial arrangement is matched with the timing of gains or losses on the
+hedged item (section 230-360). Similarly, the tax status of the gains or losses on the
+hedging financial arrangement is generally matched with the tax status of the gains or
+losses on the hedged item (subsection 230-310(4)).
+
+The tax-timing matching rule ensures that gains and losses made from a hedging financial
+arrangement are allocated on an objective, fair and reasonable basis. The gains and
+losses allocated must fairly and reasonably correspond with the basis on which gains,
+losses and other amounts in relation to the hedged item are recognised or allocated for
+tax purposes (subsection 230-360). There might be more than one way to fairly and
+reasonably do this, but the basis of allocation must correspond to the basis of taxation for
+the hedged item.
+
+Under the tax-status matching rule, the tax classification of gains and losses from
+hedging financial arrangements are generally matched with the classification of the
+hedged item (section 230-310). For example, as a result of the tax-status matching rule, a
+gain or loss made on a hedging financial arrangement might be classified as on capital or
+revenue account, depending on the classification of the hedged item.
+
+The tax-status matching rules do not apply to gains and losses made from an existing
+hedging financial arrangement. As a result, gains and losses made from these existing
+arrangements will be on revenue account and tax status or classification will be
+determined in the manner set out in subsection 230-310(3).
+
+
+  Example: applying the hedging financial arrangement method
+
+  Ben Co is an Australian company with a foreign subsidiary that has an active business in a foreign
+  jurisdiction. Ben Co's interest in the net assets of the foreign subsidiary is a net investment in a
+  foreign operation as defined in AASB 121 being:
+
+     the net assets of the foreign subsidiary in the consolidated financial report of
+     Ben Co
+
+     long-term intra-group debt lent by Ben Co to the foreign subsidiary.
+
+  The only election Ben Co has made is the hedging financial arrangement method election.
+
+  Ben Co takes out a series of rolling foreign exchange forward contracts to hedge the exchange
+  rate risk in relation to its interest in the net assets of the foreign subsidiary.
+
+  Ben Co will recognise a relevant portion of the gains and losses from these forward contracts for
+  the purposes of section 230-360. The time of recognition will be when any of the following occur:
+
+     a dividend is paid by the foreign subsidiary
+
+     part of the loan principal is repaid
+     there is a capital return from this investment, for example on disposal of shares.
+
+
+For more information, see:
+
+  Section 230-360 – Determining basis for allocating gain or loss
+  (/law/view/document?docid=PAC/19970038/230-360)
+
+  Section 230-310 – Aligning classification of gain or loss from hedging financial
+  arrangement with tax classification of hedged item (/law/view/document?
+  docid=PAC/19970038/230-310).
+
+
+
+
+QC 27222
+
+
+
+
+Our commitment to you
+We are committed to providing you with accurate, consistent and clear information to help you
+understand your rights and entitlements and meet your obligations.
+
+If you follow our information and it turns out to be incorrect, or it is misleading and you make a mistake
+as a result, we will take that into account when determining what action, if any, we should take.
+
+Some of the information on this website applies to a specific financial year. This is clearly marked. Make
+sure you have the information for the right year before making decisions based on that information.
+
+If you feel that our information does not fully cover your circumstances, or you are unsure how it applies
+to you, contact us or seek professional advice.
+
+
+Copyright notice
+
+© Australian Taxation Office for the Commonwealth of Australia
+
+You are free to copy, adapt, modify, transmit and distribute this material as you wish (but not in any way
+that suggests the ATO or the Commonwealth endorses you or any of your services or products).
+
