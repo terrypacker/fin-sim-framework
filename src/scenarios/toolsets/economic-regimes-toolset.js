@@ -43,7 +43,7 @@ import { FxTickHandler }                  from '../../finance/fx/fx-tick-handler
 import { FxRefreshReducer }               from '../../finance/fx/fx-refresh-reducer.js';
 import { FxProcessReducer }               from '../../finance/fx/fx-process-reducer.js';
 import { FxStepApplyReducer }             from '../../finance/fx/fx-step-apply-reducer.js';
-import { HedgeFxMarkHandler, HedgeFxMarkReducer, buildHedgeFxMarkSeries } from '../../finance/fx/hedge-fx-mark.js';
+import { HedgeYearEndHandler, HedgeYearEndReducer, buildHedgeYearEndSeries } from '../../finance/fx/hedge-year-end.js';
 import { DEFAULT_HEDGE_FOREIGN_CASH_RATE, DEFAULT_HEDGE_COST } from '../../finance/holdings/currency-overlay.js';
 import { SHOCK_LIBRARY, SHOCK_PRESET_OPTIONS } from '../../finance/economic-shocks/shock-library.js';
 import { BEHAVIORAL_STRATEGY_REGISTRY }       from '../../finance/behavioral/behavioral-strategy-registry.js';
@@ -557,9 +557,14 @@ function _stampMarketShock(context) {
     && (p.fxEquityCorrelation ?? DEFAULT_FX_EQUITY_CORRELATION) !== 0;
 }
 
-/** The mark event runs only when an overlay can read a moving rate. */
-function _hedgeFxMarkActive(context) {
-  return _hedgeOverlayActive(context) && _fxProcess(context) != null;
+/**
+ * The hedge year-end event runs when it has something to stamp: a moving rate for an
+ * overlay to read, or an `INCOME` fund whose carried loss moves even on a flat rate (a
+ * negative carry is a hedge loss every year).
+ */
+function _hedgeYearEndActive(context) {
+  return _hedgeOverlayActive(context) && (_fxProcess(context) != null
+    || (context.securities ?? []).some(s => s?.hedgeTaxTreatment === 'INCOME' && s?.hedgeRatio > 0));
 }
 
 export const ECONOMIC_REGIMES = {
@@ -568,8 +573,8 @@ export const ECONOMIC_REGIMES = {
   dependencies: [],
 
   types: {
-    handlers: [EconomicShockHandler, EconomicRecoveryTickHandler, YieldCurveTickHandler, EquityReturnTickHandler, PropertyReturnTickHandler, InflationTickHandler, FxTickHandler, HedgeFxMarkHandler],
-    reducers: [HedgeFxMarkReducer, FxRefreshReducer, FxProcessReducer, FxStepApplyReducer, RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer, YieldCurveReducer, YieldCurveStepReducer, EquityReturnReducer, EquityReturnStepReducer, PropertyReturnStepReducer, InflationStepReducer, InflationPathReducer, BondPriceAdjustReducer, BondMaturityReducer],
+    handlers: [EconomicShockHandler, EconomicRecoveryTickHandler, YieldCurveTickHandler, EquityReturnTickHandler, PropertyReturnTickHandler, InflationTickHandler, FxTickHandler, HedgeYearEndHandler],
+    reducers: [HedgeYearEndReducer, FxRefreshReducer, FxProcessReducer, FxStepApplyReducer, RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer, YieldCurveReducer, YieldCurveStepReducer, EquityReturnReducer, EquityReturnStepReducer, PropertyReturnStepReducer, InflationStepReducer, InflationPathReducer, BondPriceAdjustReducer, BondMaturityReducer],
     actions: [
       { type: 'ADD_REGIME_APPLY',    fields: { regime: ValueType.any() } },
       { type: 'REMOVE_REGIME_APPLY', fields: { regimeId: ValueType.text() } },
@@ -597,8 +602,8 @@ export const ECONOMIC_REGIMES = {
       // US_AU_CROSS_BORDER too, with the same fields, for a cross-border plan without this
       // toolset.
       { type: 'FX_STEP_APPLY', fields: { pair: ValueType.text(), deviation: ValueType.number() } },
-      // Design 120 §5.6 — the year-end exchange rates the currency overlay measures f from.
-      { type: 'HEDGE_FX_MARK_APPLY', fields: { rates: ValueType.any() } },
+      // Design 120 §5.6, §5.7 — the year-end FX mark and INCOME funds' carried losses.
+      { type: 'HEDGE_YEAR_END_APPLY', fields: { rates: ValueType.any(), carriedLoss: ValueType.any() } },
       // ── Behavioral strategy action types (design/29) ──────────────────────
       {
         type: 'STOCK_HARVEST_APPLY',
@@ -1647,8 +1652,8 @@ export const ECONOMIC_REGIMES = {
 
     // FX tick series (design 47) — only with a stochastic FX model (design 120 §5.3).
     events.push(...(_fxProcess(context)?.events ?? []));
-    // The year-end FX mark the currency overlay reads (design 120 §5.6).
-    if (_hedgeFxMarkActive(context)) events.push(buildHedgeFxMarkSeries());
+    // The hedge year end: the FX mark and INCOME carried losses (design 120 §5.6, §5.7).
+    if (_hedgeYearEndActive(context)) events.push(buildHedgeYearEndSeries());
 
     return events;
   },
@@ -1749,7 +1754,7 @@ export const ECONOMIC_REGIMES = {
         : []),
       // FX tick (design 47) — only with a stochastic FX model (design 120 §5.3).
       ...(_fxProcess(context)?.handlers ?? []),
-      ...(_hedgeFxMarkActive(context) ? [new HedgeFxMarkHandler()] : []),
+      ...(_hedgeYearEndActive(context) ? [new HedgeYearEndHandler()] : []),
       ...behavioralHandlers,
     ];
   },
@@ -1775,7 +1780,7 @@ export const ECONOMIC_REGIMES = {
       new BondMaturityReducer(),
       // FX rate composition (design 47): refresh, process, step — when the FX layer is here.
       ...(_fxProcess(context)?.reducers ?? []),
-      ...(_hedgeFxMarkActive(context) ? [new HedgeFxMarkReducer()] : []),
+      ...(_hedgeYearEndActive(context) ? [new HedgeYearEndReducer()] : []),
       ...behavioralReducers,
     ];
   },

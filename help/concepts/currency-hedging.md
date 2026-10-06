@@ -4,7 +4,7 @@ kind: concept
 title: Currency Hedging
 panels: []
 params: [hedgeForeignCashRate, hedgeCost, fxEquityCorrelation]
-actions: [HEDGE_FX_MARK_APPLY]
+actions: [HEDGE_YEAR_END_APPLY]
 tools: []
 design: [120-currency-hedged-equity.md]
 sources: [src/finance/holdings/currency-overlay.js]
@@ -12,7 +12,7 @@ stamps:
   param:hedgeForeignCashRate: b900f1
   param:hedgeCost: 25d37a
   param:fxEquityCorrelation: 3f56d7
-  src/finance/holdings/currency-overlay.js: a10423
+  src/finance/holdings/currency-overlay.js: 6d7de1
 ---
 
 An Australian investor in world shares holds two things at once: the shares, and the
@@ -42,9 +42,11 @@ worth sweeping: there, hedging was the lower-risk choice.
 local-currency volatility, so the currency is not counted twice. From then on a lot whose
 security says nothing is treated as unhedged, which is what it was all along.
 
-**Tax.** A fund with the TOFA hedging election (VGAD since July 2024) keeps hedge gains
-and losses in the unit price, taxed when you sell. Super funds hedge and are taxed inside
-the fund, so a super lot takes the overlay's return with no new tax.
+**Tax** depends on one election. A fund that has made the TOFA hedging election (VGAD
+since July 2024, and the default) keeps hedge results in the unit price, taxed when you
+sell. One that has not pays a hedge gain out as ordinary income, while a hedge loss eats
+the distribution and is carried inside the fund. VGAD paid nothing in FY2022 and FY2023.
+Either way the total return is the same; only its timing and character move. Super lots
+are taxed inside the fund and get no new tax path.
 
-**What it leaves out.** One currency pair stands in for the basket, and a hedged fund's
-slightly higher fee is not modelled, because no security carries a fee.
+**Left out:** one currency pair stands in for the basket, and no security carries a fee.

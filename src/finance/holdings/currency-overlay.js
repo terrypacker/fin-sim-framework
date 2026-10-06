@@ -34,6 +34,7 @@
  */
 
 import { RATE_KEYS } from '../economic-regimes/rate-keys.js';
+import { priceOf }   from './holdings-earnings.js';
 
 /**
  * The markets with a currency exposure the overlay can price, keyed by rate key (§5.2).
@@ -154,4 +155,75 @@ export function currencyOverlay({ state, account, inst, rateKey, g }) {
   const delta = (1 - h) * f * (1 + g) + h * (carry - cost);
   const hedgeResult = h * (carry - cost - f * (1 + g));
   return { delta, hedgeResult, f, carry, h };
+}
+
+/**
+ * §5.7 `INCOME` — a fund without the TOFA hedging election, whose hedge result moves its
+ * distribution. Computed per SECURITY, on the fund's own year (the market's shared rate,
+ * not any one account's seeded rate), because the carried loss is the fund's, not a lot's:
+ *
+ *     distributed  D′ = max(0, D + H − L)
+ *     carried      L′ = max(0, L − D − H)
+ *
+ * D is the year's paid yield (after any regime dividend cut), H the hedge result and L the
+ * loss carried in from earlier years, all per dollar of the lot. A positive H is assessable
+ * as ordinary income (s275-105(2)(a), s775-15), which is how the AU brokerage already pays
+ * an ex-AU distribution: unfranked, undiscounted, no offset. A negative H reduces the
+ * year's components, to nil when it exceeds them (s276-265(2), (3)), and the rest is a
+ * tax loss of the trust, carried forward (s36-15(2)) and never passed to the investor.
+ *
+ * The total return is unchanged: the price slice takes D − D′, so `INCOME` and `ALIGNED`
+ * lots hold the same value at every year end.
+ *
+ * L is kept per dollar of the security's value and deflated by its unit-price move each
+ * year (see `nextCarriedLoss`), which keeps it a per-UNIT amount: a lot bought after a loss
+ * year inherits it, as a real unitholder does. Trust-loss tests are not modelled.
+ *
+ * Null unless the security declares `hedgeTaxTreatment: 'INCOME'`, a positive hedge ratio,
+ * and a market the overlay prices.
+ *
+ * @param {object} state
+ * @param {object} inst    - the security (or a lot's instrument view)
+ * @param {string|null} rateKey
+ * @returns {{ d: number, hedge: number, carriedIn: number, distributed: number,
+ *             carriedOut: number, price: number }|null}
+ */
+export function incomeHedgeSplit(state, inst, rateKey) {
+  if (inst?.hedgeTaxTreatment !== 'INCOME') return null;
+  const h = inst.hedgeRatio;
+  if (!(h > 0)) return null;
+  const exposure = rateKey != null ? FX_EXPOSURE_BY_MARKET[rateKey] : null;
+  if (!exposure) return null;
+  const yld   = inst.dividendYield ?? state?.marketDividendYields?.[rateKey] ?? 0;
+  const adj   = state?.effectiveDividendAdjustments?.[rateKey] ?? 0;
+  const d     = Math.max(0, yld * (1 + adj));
+  const total = state?.effectiveGrowthRates?.[rateKey] ?? 0;
+  const price = priceOf(total, yld) + (state?.securityReturnOverlay?.[inst.id] ?? 0);
+  const f     = fxMoveFor(state, exposure);
+  const cost  = state?.hedgeOverlay?.cost ?? DEFAULT_HEDGE_COST;
+  const hedge = h * (hedgeCarryFor(state, exposure) - cost - f * (1 + price));
+  const carriedIn = state?.hedgeOverlay?.carriedLoss?.[inst.id] ?? 0;
+  return {
+    d, hedge, carriedIn, price,
+    distributed: Math.max(0, d + hedge - carriedIn),
+    carriedOut:  Math.max(0, carriedIn - d - hedge),
+  };
+}
+
+/**
+ * Next year's carried loss for an `INCOME` security, per dollar of its value: this year's
+ * carried amount over the unit price after the distribution. The price after the year is
+ * (1 + price + Δ + d − D′) per dollar at its start, with Δ the overlay's delta.
+ *
+ * @returns {number|null} null when the security is not `INCOME`
+ */
+export function nextCarriedLoss(state, inst, rateKey) {
+  const split = incomeHedgeSplit(state, inst, rateKey);
+  if (!split) return null;
+  if (split.carriedOut === 0) return 0;
+  // The overlay's Δ = (1 − h)·f·(1 + p) + h·(carry − cost) = f·(1 + p) + H.
+  const f = fxMoveFor(state, FX_EXPOSURE_BY_MARKET[rateKey]);
+  const delta = f * (1 + split.price) + split.hedge;
+  const unitGrowth = 1 + split.price + delta + split.d - split.distributed;
+  return unitGrowth > 0 ? split.carriedOut / unitGrowth : split.carriedOut;
 }
