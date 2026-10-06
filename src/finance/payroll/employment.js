@@ -379,6 +379,10 @@ export function validateJobs(jobs, persons, accounts = null) {
       } else if (fund.role !== 'super' && fund.__type !== 'SuperannuationAccount') {
         // 'super' is ACCOUNT_ROLES.SUPER, spelled out because this module stays a leaf.
         errors.push(`${label}: superAccountKey "${j.superAccountKey}" is not a super account.`);
+      } else if (fund.__type === 'MsbsAccount' || fund.scheme === 'MSBS') {
+        // A preserved MSBS benefit takes no contributions (design 119 §6.3).
+        errors.push(`${label}: superAccountKey "${j.superAccountKey}" is a preserved MSBS `
+          + 'benefit, which takes no contributions.');
       } else if (fund.ownerId != null && fund.ownerId !== j.personId) {
         errors.push(`${label}: superAccountKey "${j.superAccountKey}" belongs to `
           + `"${fund.ownerId}", not "${j.personId}".`);

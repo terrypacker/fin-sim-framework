@@ -224,6 +224,12 @@ export class StateSchemaRegistry {
     this.registerPattern('*.capitalGainsYTD.carriedLoss',      ParameterValueType.currency());
     this.registerPattern('*.capitalGainsYTD.netGain',          ParameterValueType.currency());
     this.registerPattern('*.capitalGainsYTD.revenueGain',      ParameterValueType.currency());
+    // A preserved MSBS employer benefit (design 119 §6.4): the two parts, the AU CPI level
+    // r 61A last indexed to, and the funded part's mix weights.
+    this.registerPattern('*.employerBenefit.funded',             ParameterValueType.currency());
+    this.registerPattern('*.employerBenefit.unfunded',           ParameterValueType.currency());
+    this.registerPattern('*.employerBenefit.cpiPeak',            ParameterValueType.decimal(4));
+    this.registerPattern('*.employerBenefit.fundedAllocation.*', ParameterValueType.rate());
     // Per-country residency cost-base step-up / per-lot AU cost base (design 36 §12.2).
     this.registerPattern('*.costBaseStepUpByCountry.*',   ParameterValueType.currency());
     this.registerPattern('*.holdings.*.costBaseByCountry.*', ParameterValueType.currency());
@@ -306,6 +312,11 @@ export class StateSchemaRegistry {
     // Move date (ms) stamped by ChangeResidencyApplyReducer — backs the FEIE
     // full-qualifying-year gate (design 52 §4.2).
     this.registerPattern('people.*.residencySinceMs', ParameterValueType.date());
+    // Design 116 employment spells, stamped on the person by the compile.
+    this.registerPattern('people.*.spells.*.startMs',         ParameterValueType.date());
+    this.registerPattern('people.*.spells.*.endMs',           ParameterValueType.date());
+    this.registerPattern('people.*.spells.*.baseMonthlyWage', ParameterValueType.currency());
+    this.registerPattern('people.*.spells.*.realGrowth',      ParameterValueType.rate());
     // Design 116 — the wage index a job spell's sim-start base is scaled by.
     this.registerPattern('wageIndex.*', ParameterValueType.decimal(4));
     // Person income (monthlyWage / socialSecurityMonthly) is stamped per-person and

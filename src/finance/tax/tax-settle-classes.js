@@ -13,6 +13,7 @@ import { HandlerEntry }        from '../../simulation-framework/handlers.js';
 import { TaxSettleService }    from '../tax-settle-service.js';
 import { ACCOUNT_ROLES } from '../state/account-roles.js';
 import { auSuperKeysOf } from '../account-rules/au/super-fund-key.js';
+import { isMsbs, msbsTotalSuperBalance } from '../account-rules/au/msbs.js';
 import { toUSD, toAUD, taxFxRate } from './tax-fx.js';
 import { rollUnusedConcessionalCap, concessionalCapWithCarryForward, nonConcessionalCap }
   from './au/au-super-limits.js';
@@ -913,9 +914,14 @@ function _auSuperCapsRoll(state, action) {
     // about to begin, which is what s291-20(3)(b) and s292-85(2)(b) both test. Summed
     // over EVERY fund the member owns (s307-230(1)(a), design 119 §6.3): reading one
     // fund understated the balance of anyone with two and opened caps it should close.
+    // A preserved MSBS benefit counts at its family law value (ITAR reg 307-230A.01(2);
+    // design 119 §5.6 item 7), not its member balance, on the 30 June the year ended.
+    const asOf = Date.UTC(fy + 1, 5, 30);
     const superKeys = auSuperKeysOf(state, key, rec?.superKey ?? null);
     const tsb = superKeys.length > 0
-      ? superKeys.reduce((sum, k) => sum + Math.max(0, state[k]?.balance ?? 0), 0)
+      ? superKeys.reduce((sum, k) => sum + Math.max(0, isMsbs(state[k])
+        ? msbsTotalSuperBalance(state[k], state.people?.[key]?.birthDate, asOf)
+        : (state[k]?.balance ?? 0)), 0)
       : (rec.tsbAtFyStart ?? 0);
 
     // ── The Div 292 bring-forward arrangement (s292-85(3)-(7)) ───────────────

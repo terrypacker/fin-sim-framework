@@ -10,8 +10,8 @@ stamps:
   panel:config-list: c29391
   panel:paycheque: d4e25c
   node:job: ded547
-  src/finance/payroll/employment.js: c220c1
-  src/visualization/people/jobs-section.js: dec79e
+  src/finance/payroll/employment.js: 82a7ee
+  src/visualization/people/jobs-section.js: b4f3e3
 ---
 
 One stretch of employment for one person: a raise, a pay cut, part-time work before
@@ -40,4 +40,4 @@ job; blank inherits. The Nodes panel lists every job; selecting one opens its pe
 - `k401EmployerMatchPct` — This employer's 401(k) match, read as a full match on the first share of pay; 0.04 matches up to 4%. Blank uses the person's own setting, then the household's. A typed 0 means this employer matches nothing.
 - `k401NonElectivePct` — A contribution this employer makes whether or not the person defers anything, as a share of pay. Blank inherits; 0 means none.
 - `superGuaranteePct` — The Super Guarantee rate this employer pays on AUD wages. Blank inherits the person's rate, then the household's. Each employer has its own maximum contributions base, so a new job in the same year starts its base again.
-- `superAccountKey` — The super fund this job's Super Guarantee, salary sacrifice and personal contributions go into, picked from the person's own funds. "First fund" uses the first one they own. Only that person's funds are offered, and a scenario that names someone else's fund refuses to load. A person with an Australian job and no fund of their own gets no AU contributions, and loading warns about it.
+- `superAccountKey` — The super fund this job's Super Guarantee, salary sacrifice and personal contributions go into, picked from the person's own funds. "First fund" uses the first one they own. A preserved MSBS benefit is never offered. Only that person's funds are offered, and a scenario that names someone else's fund refuses to load. A person with an Australian job and no fund of their own gets no AU contributions, and loading warns about it.

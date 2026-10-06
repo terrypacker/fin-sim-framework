@@ -61,7 +61,7 @@ import { Bequest } from './finance/assets/bequest.js';
 import { Collectible } from './finance/assets/collectible.js';
 import { CompanyEquity } from './finance/assets/company-equity.js';
 import { INHERITANCE_META_FIELDS, applyInheritanceMeta, serializeInheritanceMeta } from './finance/assets/inheritance-meta.js';
-import { reconcileLedgerToBalance, debitLedgerForLoss, creditDerivedIncome, drawDerivedProRata, realiseDerivedGain, revalueLedger, deriveEarningsBasis, InvestmentAccount, BrokerageAccount, RetirementAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from './finance/assets/investment-account.js';
+import { reconcileLedgerToBalance, debitLedgerForLoss, creditDerivedIncome, drawDerivedProRata, realiseDerivedGain, revalueLedger, deriveEarningsBasis, InvestmentAccount, BrokerageAccount, RetirementAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount, MsbsAccount } from './finance/assets/investment-account.js';
 import { RealProperty } from './finance/assets/real-property.js';
 import { DEFAULT_LOCATION_POLICY, GOLD_PREFERENCE_BY_RESIDENCY, resolveLocationPolicy, planLocatedTargets } from './finance/behavioral/allocation-location.js';
 import { BehavioralPanicSellApplyReducer } from './finance/behavioral/behavioral-panic-sell-apply-reducer.js';
@@ -939,6 +939,7 @@ export const Finance = {
   RothAccount,
   TraditionalIRAAccount,
   SuperannuationAccount,
+  MsbsAccount,
   RealProperty,
   DEFAULT_LOCATION_POLICY,
   GOLD_PREFERENCE_BY_RESIDENCY,

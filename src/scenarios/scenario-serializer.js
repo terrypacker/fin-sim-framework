@@ -21,7 +21,7 @@ import { Person, PAYROLL_ELECTION_FIELDS } from '../finance/person.js';
 import { Account, CheckingAccount, SavingsAccount, LoanAccount, OffsetAccount } from '../finance/assets/account.js';
 import {
   InvestmentAccount, BrokerageAccount, FourOhOneKAccount,
-  RothAccount, TraditionalIRAAccount, SuperannuationAccount,
+  RothAccount, TraditionalIRAAccount, SuperannuationAccount, MsbsAccount, MSBS_FIELDS,
   reconcileLedgerToBalance,
 } from '../finance/assets/investment-account.js';
 import { supportsEarlyWithdrawal } from '../finance/account-rules/us/us-early-withdrawal-rules.js';
@@ -736,7 +736,9 @@ export class ScenarioSerializer {
     // `constructor.name` wrote 'Object', which deserializes as a generic Account — every MC
     // path then ran brokerage/retirement/super accounts without their class (design 89 §21.8.3).
     const ownType = _isAlreadySerialized(account) ? account.__type : null;
-    const __type = typeToClass[account.type] ?? ownType ?? account.constructor?.name ?? 'Account';
+    // An MSBS benefit is type 'super' like any fund; its class is what tells them apart.
+    const __type = account.scheme === 'MSBS' || ownType === 'MsbsAccount' ? 'MsbsAccount'
+      : typeToClass[account.type] ?? ownType ?? account.constructor?.name ?? 'Account';
     const d = {
       __type,
       id:               account.id,
@@ -854,6 +856,10 @@ export class ScenarioSerializer {
     // Super draw date (design 119 §6.1) — a household choice, so it is saved, unlike
     // `minimumAge`. Emitted only when set: blank means "from the release date".
     if (account.drawStartDate != null) d.drawStartDate = account.drawStartDate;
+    // A preserved MSBS benefit's statement figures (design 119 §6.4).
+    if (__type === 'MsbsAccount') {
+      for (const f of MSBS_FIELDS) if (account[f] != null) d[f] = account[f];
+    }
     // Per-security DRIP overrides (design 106 §5). Emitted only when it actually holds an
     // entry: an empty map is the same statement as no map, and writing `{}` would be a
     // fixture-moving no-op on every account that has never been asked.
@@ -1402,6 +1408,9 @@ export class ScenarioSerializer {
     // the field existed.
     if (d.reinvestDividends !== undefined) opts.reinvestDividends = d.reinvestDividends;
     if (d.drawStartDate !== undefined) opts.drawStartDate = d.drawStartDate;
+    if (d.__type === 'MsbsAccount') {
+      for (const f of MSBS_FIELDS) if (d[f] !== undefined) opts[f] = d[f];
+    }
     if (d.reinvestDividendsBySecurity !== undefined) {
       opts.reinvestDividendsBySecurity = d.reinvestDividendsBySecurity;
     }
@@ -1416,6 +1425,7 @@ export class ScenarioSerializer {
       case 'RothAccount':           account = new RothAccount           ((d.balance ?? d.initialValue) ?? 0, opts); break;
       case 'TraditionalIRAAccount': account = new TraditionalIRAAccount ((d.balance ?? d.initialValue) ?? 0, opts); break;
       case 'SuperannuationAccount': account = new SuperannuationAccount ((d.balance ?? d.initialValue) ?? 0, opts); break;
+      case 'MsbsAccount':           account = new MsbsAccount           ((d.balance ?? d.initialValue) ?? 0, opts); break;
       default:
         account = new Account((d.balance ?? d.initialValue) ?? 0, opts);
     }

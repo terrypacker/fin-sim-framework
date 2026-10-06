@@ -140,6 +140,16 @@ export class AccountsController {
       if (cur) builder.currency(cur);
     }
 
+    // A preserved MSBS benefit (design 119 §6.4): a super account with its statement fields.
+    if (data.type === 'super' && data.scheme === 'MSBS') {
+      builder.msbs({
+        unfundedEmployerBenefit: _num(data.unfundedEmployerBenefit),
+        fundedEmployerBenefit:   _num(data.fundedEmployerBenefit),
+        fundedAllocation:        data.fundedAllocation ?? null,
+        serviceEndDate:          data.serviceEndDate || null,
+        officerOnExit:           !!data.officerOnExit,
+      });
+    }
     if (RETIREMENT_TYPES.has(data.type)) {
       if (data.contributionBasis != null && data.contributionBasis !== '') {
         builder.contributionBasis(Number(data.contributionBasis));
@@ -272,6 +282,12 @@ export class AccountsController {
       n.reinvestDividendsBySecurity = (m && Object.keys(m).length) ? { ...m } : null;
     }
     if ('drawStartDate' in n) n.drawStartDate = n.drawStartDate || null;
+    // MSBS statement fields (design 119 §6.4). `scheme` itself is fixed at creation.
+    delete n.scheme;
+    if ('unfundedEmployerBenefit' in n) n.unfundedEmployerBenefit = Number(n.unfundedEmployerBenefit) || 0;
+    if ('fundedEmployerBenefit'   in n) n.fundedEmployerBenefit   = Number(n.fundedEmployerBenefit)   || 0;
+    if ('serviceEndDate' in n) n.serviceEndDate = n.serviceEndDate || null;
+    if ('officerOnExit'  in n) n.officerOnExit  = !!n.officerOnExit;
     // Prime-relative cash rate (design 56) — spread (or legacy absolute), null clears.
     if ('primeSpread'  in n) n.primeSpread  = (n.primeSpread  == null) ? null : Number(n.primeSpread);
     if ('interestRate' in n) n.interestRate = (n.interestRate == null) ? null : Number(n.interestRate);

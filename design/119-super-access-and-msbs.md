@@ -1,7 +1,7 @@
 # 119 — Super access dates, multiple funds and MSBS
 
 **Status:** ACCEPTED, rev 5, 5 Oct 2026. Q1–Q5 (§9) are answered by the author, and
-§3 records the decisions. **Phases 1–3 BUILT** 5 Oct 2026 (multiple funds §6.3; release date §6.2; draw date and pension phase §6.1); phases 4–6 not started. Rev 4 adds the CSC documents and the
+§3 records the decisions. **Phases 1–4 BUILT** 5 Oct 2026 (multiple funds §6.3; release date §6.2; draw date and pension phase §6.1; the preserved MSBS account §6.4, built as §6.4.1 records); phases 5–6 not started. Rev 4 adds the CSC documents and the
 valuation law (§5.6), which settle the tax and total-super-balance questions. Rev 5
 closes the last two points (§5.7). No source questions remain open.
 
@@ -338,7 +338,6 @@ held at CSC's Balanced allocation and not the member's choice (§5.6 item 2). It
 
 | Field | Meaning | Source |
 |---|---|---|
-| `statementDate` | The date the statement values the benefits at | — |
 | `unfundedEmployerBenefit` | The unfunded part of the employer benefit on `statementDate` | r 61A |
 | `fundedEmployerBenefit` | The funded part on `statementDate`, which opens the Balanced sleeve | Sch 1; PDS §3 |
 | `fundedAllocation` | The Balanced option's target mix, defaulted from the PDS and editable, since CSC changes it | PDS §5 |
@@ -393,6 +392,43 @@ contributes `P × PF` from Table 4A. The two tables go into a data module transc
 `docs/au-tax/FLSR-2025/F2026C00100VOL03.txt`, never from model output. §6.3's
 summed total super balance then includes the MSBS account.
 
+### 6.4.1 As built (phase 4)
+
+- **Still a super account.** `MsbsAccount extends SuperannuationAccount` keeps type `super`
+  and role `super`, so the member benefit gets the release gate, the earnings tax, holdings
+  and the total-super-balance sum with no new branches. `scheme: 'MSBS'` marks it. The
+  election is its draw start: `auSuperDrawStartMs` takes the later of the release date and
+  the draw date clamped into the §5.4 window.
+- **The employer benefit is two numbers on the state entry**, `employerBenefit: { funded,
+  unfunded, fundedAllocation, cpiPeak }`, not holdings. So no draw, rebalance or pool can
+  reach it, by construction rather than by a guard in each.
+- **Funded part**: grown on the year-end super earnings event, at the mix's market returns
+  less 15% on income (an equity market's yield; all of a bond or cash rate), the way CSC
+  credits a unit price. Franking is not modelled on it. The Balanced mix (PDS ed. 10, 31 Oct
+  2025) maps to the model's classes as 74.5% equity (shares, property, infrastructure,
+  alternatives), 12.5% bonds, 13% cash. The PDS does not split shares by market, so the
+  default is half Australian and half international; the editor can change it.
+- **Unfunded part**: indexed on the AU period advance (1 July), after the inflation reducer,
+  by the rise in the model's AU CPI level over `cpiPeak`, rounded to 0.1% (r 61E(3)). The
+  model's CPI is annual, so the March-quarter index is approximated by the year's level.
+- **Both stop at the election**; phase 5 pays them.
+- **Net worth** counts the funded part and not the unfunded one. The allocation cube adds one
+  `employer-benefit` row per mix class so it still ties to net worth (design 82 §3).
+- **Total super balance**: the 30 June that ends each year, from Table 1 (male columns,
+  `officerOnExit` picks officer or other ranks), interpolated by month.
+- **`statementDate` dropped.** Growing or indexing from a date before the run would need the
+  CPI and returns from before it, which the model does not have. The statement figures are
+  taken as at the start of the run.
+- **No contribution reaches it**: a job naming it fails to load, the Jobs editor does not
+  offer it, and the "first fund" fallback skips it.
+- **Worked example**: the AU Single Homeowner (born 1 Jul 1981) left the ADF on 30 Jun 2014
+  as other ranks, with an AUD 60,000 member benefit, 25,000 funded and 140,000 unfunded, and
+  a draw date of 1 Jul 2041 (age 60). The flat salary became two jobs at the same pay. The
+  current one pays the existing fund until 1 Jul 2036, and the next one pays a second fund
+  opened for it. The two static wage and retirement params went with the flat salary;
+  the jobs' generated `job.` levers sweep them now.
+- **Not yet**: the unfunded part as a side figure in the panels (phase 6).
+
 ### 6.5 Retire the dormant handlers
 
 Delete `SuperWithdrawal*Handler` and the `*_APPLY` reducers that read `state.superAccount`,
@@ -407,7 +443,7 @@ spending-classification tests.
 | 1 | **BUILT.** Multiple funds: job `superAccountKey`, remove the fallback, sum caps across funds. `super-fund-key.js`; the downsizer uses the same resolver; tests `super-fund-routing.test.mjs` | none expected; a plan with one fund per person is unchanged |
 | 2 | **BUILT.** Lawful release date and the preservation-age table (`super-release.js`), read by the drawdown walk, pool metrics, net liquidity and the unlock date. Also releases at the end of any job held at 60+ (reg 6.01(7)(b)(i)), which §6.2's formula left out. Tests `super-release.test.mjs` | none moved: every golden run ends before its AU members reach 60 |
 | 3 | **BUILT.** `drawStartDate` on ordinary accounts, pension phase from the effective start, the date sweep. `auSuperDrawStartMs` (`super-release.js`) is the one effective start: the gate and `superEarningsTaxRate(drawStartMs, asOf)` both read it, so the bond-income and capital-gain reducers follow. Lever `acct.<key>.drawStartDate` (Opt only, no `sweepUnset`: blank is a default, not an absent event), declared in `AU_RETIREMENT.derivedState` so a rollout takes it from the candidate. Tests `super-draw-start.test.mjs` | two moved, both by fund tax a member now pays from 60 until their job ends: au-single-homeowner (works to 65) ends with \$206k less super, \$45k at retirement compounded over 20 years of drawdown; cross-border-reference (works to 61¾) \$11.6k less |
-| 4 | `MsbsAccount` from a statement: the fields, the member sleeve, the Balanced funded sleeve, the unfunded benefit with r 61A indexation, preserved before the draw; total super balance value from Table 1 | none (new account type) |
+| 4 | **BUILT.** `MsbsAccount` from a statement: the fields, the member sleeve, the Balanced funded sleeve, the unfunded benefit with r 61A indexation, preserved before the draw; total super balance value from Table 1. `msbs.js`, `msbs-classes.js`, `msbs-valuation-factors.js` (parsed from the Approval text). The AU Single Homeowner plan is the worked example (§6.4.1). Tests `msbs-preserved.test.mjs` | au-single-homeowner moved: the plan gained two jobs, a second fund and the MSBS account |
 | 5 | MSBS draw: the window, `MSBS_ELECTION`, the Sch 5 pension and r 56 indexation, the lump-sum routing, `pensionShare`; pension tax with the taxed/untaxed split and the defined benefit income cap; total super balance from Table 4A; survivor pension at 67% after checking Part 4 Div 2 | none (new account type) |
 | 6 | Help topics (`help/nodes/account.md`, `job.md`), editors, restamp | none |
 

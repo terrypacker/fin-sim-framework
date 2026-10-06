@@ -14,7 +14,7 @@
  * Two questions, kept apart because they have different answers:
  *
  *   - **Where does a contribution go?** One fund: the one the job names, else the
- *     person's first. `auSuperKeyFor`.
+ *     person's first. Never a preserved MSBS benefit, which takes none. `auSuperKeyFor`.
  *   - **What is the person's total superannuation balance?** Every fund they own,
  *     summed (ITAA 1997 s307-230(1)(a): "each of … a superannuation interest of
  *     yours"). `auSuperKeysOf`.
@@ -26,6 +26,7 @@
  */
 
 import { ACCOUNT_ROLES } from '../../state/account-roles.js';
+import { isMsbs } from './msbs.js';
 
 const isSuper = a => a != null && typeof a === 'object' && a.role === ACCOUNT_ROLES.SUPER;
 
@@ -52,12 +53,17 @@ function ownerless(account, state) {
 export function auSuperKeyFor({ state, stateRegistry = null, personKey, preferredKey = null }) {
   if (preferredKey != null) {
     const a = state?.[preferredKey];
-    if (isSuper(a) && (a.ownerId === personKey || ownerless(a, state))) return preferredKey;
+    if (isSuper(a) && !isMsbs(a) && (a.ownerId === personKey || ownerless(a, state))) return preferredKey;
   }
   const own = stateRegistry?.getStateKey?.(ACCOUNT_ROLES.SUPER, personKey);
-  if (own != null && state?.[own] != null) return own;
+  if (own != null && state?.[own] != null && !isMsbs(state[own])) return own;
   const any = stateRegistry?.getStateKey?.(ACCOUNT_ROLES.SUPER);
-  if (any != null && ownerless(state?.[any], state)) return any;
+  if (any != null && ownerless(state?.[any], state) && !isMsbs(state[any])) return any;
+  // The registry answers with the person's FIRST fund. When that is a preserved MSBS
+  // benefit, which takes no contributions (design 119 §6.3), use their first other fund.
+  for (const [key, a] of Object.entries(state ?? {})) {
+    if (isSuper(a) && !isMsbs(a) && (a.ownerId === personKey || ownerless(a, state))) return key;
+  }
   return null;
 }
 

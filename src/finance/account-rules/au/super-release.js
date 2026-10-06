@@ -38,6 +38,7 @@
  */
 
 import { spellsOf } from '../../payroll/employment.js';
+import { isMsbs, msbsElectionMs } from './msbs.js';
 
 const toMs = v => {
   if (v == null) return null;
@@ -122,7 +123,9 @@ export function auSuperReleaseMs(person, birthDate = person?.birthDate) {
 export function auSuperDrawStartMs(account, person, birthDate = person?.birthDate) {
   const release = auSuperReleaseMs(person, birthDate);
   if (release == null) return null;
-  const chosen = toMs(account?.drawStartDate);
+  // An MSBS account starts paying on its election (§6.4): the draw date clamped into the
+  // scheme's window. Its member benefit is then released by the ordinary rules.
+  const chosen = isMsbs(account) ? msbsElectionMs(account, birthDate) : toMs(account?.drawStartDate);
   return chosen != null && chosen > release ? chosen : release;
 }
 

@@ -15,6 +15,7 @@ import {
   RothAccount,
   TraditionalIRAAccount,
   SuperannuationAccount,
+  MsbsAccount,
 } from '../assets/investment-account.js';
 
 /**
@@ -303,10 +304,16 @@ class SuperannuationAccountBuilder extends RetirementBuilder {
     this._country    = 'AU';
     this._currency   = AUD;
     this._minimumAge = 60;
+    this._msbs       = null;
   }
 
+  /** Build a preserved MSBS benefit (design 119 §6.4) with these statement fields. */
+  msbs(fields = {}) { this._msbs = { ...fields }; return this; }
+
   build() {
-    return new SuperannuationAccount(this._balance, this._retirementOpts());
+    return this._msbs
+      ? new MsbsAccount(this._balance, { ...this._retirementOpts(), ...this._msbs })
+      : new SuperannuationAccount(this._balance, this._retirementOpts());
   }
 }
 

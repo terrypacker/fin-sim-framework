@@ -39,6 +39,9 @@ import { AccumulateConsumptionReducer } from '../../finance/reducers/accumulate-
 import { AccumulateConsumptionUtilityReducer } from '../../finance/reducers/accumulate-consumption-utility-reducer.js';
 import { OutOfFundsReducer }          from '../../finance/reducers/out-of-funds-reducer.js';
 import { InflationAdjustReducer }         from '../../finance/reducers/inflation-adjust-reducer.js';
+import { MsbsFundedEarningsHandler, MsbsFundedEarningsApplyReducer, MsbsUnfundedIndexReducer }
+  from '../../finance/account-rules/au/msbs-classes.js';
+import { isMsbs } from '../../finance/account-rules/au/msbs.js';
 import { SpendingStrategyApplyReducer }   from '../../finance/spending/spending-strategy-apply-reducer.js';
 import { SPENDING_STRATEGY_REGISTRY }     from '../../finance/spending/spending-strategy-registry.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
@@ -96,7 +99,7 @@ export const AU_RETIREMENT = {
       SuperContributionHandler, SuperWithdrawalContributionsHandler,
       SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler, SuperEarningsHandler,
       IntlAuStockEarningsHandler, IntlAuStockDividendHandler,
-      PayrollHandler,
+      PayrollHandler, MsbsFundedEarningsHandler,
     ],
     reducers: [
       ExpenseDebitReducer, ReplenishSavingsReducer,
@@ -105,7 +108,7 @@ export const AU_RETIREMENT = {
   SuperNonConcessionalApplyReducer, AuSuperCapsAccumulateReducer,
   SuperWithdrawalContribApplyReducer,
       SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperCapitalGainApplyReducer,
-      SsEntitlementApplyReducer,
+      SsEntitlementApplyReducer, MsbsFundedEarningsApplyReducer, MsbsUnfundedIndexReducer,
     ],
     actions: [
       // `section988` — design 87 §14.4 item 2, the §988 character declaration the currency
@@ -192,6 +195,8 @@ export const AU_RETIREMENT = {
       // must be declared or pickPayload drops them and the journal cannot explain the split.
       // `frankingCredit` (design 90 §8.4) is the GROSS credit on the fund's AU dividends.
       { type: 'SUPER_EARNINGS_APPLY',              fields: { amount: ValueType.currency('AUD'), grossAmount: ValueType.currency('AUD'), frankingCredit: ValueType.currency('AUD'), stateKey: ValueType.text(), taxRate: ValueType.number() } },
+      // design 119 §6.4 — a year's net Balanced return on a preserved MSBS funded benefit.
+      { type: 'MSBS_FUNDED_EARNINGS_APPLY',       fields: { stateKey: ValueType.text(), amount: ValueType.currency('AUD'), rate: ValueType.number() } },
       { type: 'SUPER_EARNINGS_TAX',               fields: { amount: ValueType.currency('AUD'), frankingCredit: ValueType.currency('AUD'), stateKey: ValueType.text(), taxRate: ValueType.number() } },
       // design 105 — a super lot sold by the rebalancer: the realised gain split by the
       // 12-month discount test, and the loss, before the fund's netting.
@@ -693,6 +698,12 @@ export const AU_RETIREMENT = {
         });
         h.handledEvents.push(superEvent);
         handlers.push(h);
+        // A preserved MSBS benefit's funded employer part (design 119 §6.4).
+        if (isMsbs(acct)) {
+          const f = new MsbsFundedEarningsHandler({ stateKey: acct.stateKey });
+          f.handledEvents.push(superEvent);
+          handlers.push(f);
+        }
       }
     }
 
@@ -906,6 +917,10 @@ export const AU_RETIREMENT = {
       new SuperWithdrawalEarningsApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
       new SuperEarningsApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
       new SuperCapitalGainApplyReducer(),
+    );
+    if (superAccts.some(isMsbs)) reducers.push(
+      new MsbsFundedEarningsApplyReducer(),
+      new MsbsUnfundedIndexReducer(),
     );
 
     // Social Security entitlement stamp (design 118 D7), under the same guard as the

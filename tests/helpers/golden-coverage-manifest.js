@@ -136,6 +136,8 @@ export const COVERED = [
   'SUPER_EARNINGS_TAX',
   // design 105 — `wash-sale-harvest` rebalances super in accumulation phase.
   'SUPER_CAPITAL_GAIN',
+  // design 119 §6.4 — `au-single-homeowner` holds a preserved MSBS benefit.
+  'MSBS_FUNDED_EARNINGS_APPLY',
   // design 94 §8.1o — the `wash-sale-harvest` golden. The §1091 family: the harvester's
   // sell-and-rebuy, and the April filing that resolves the windows the 31-December settle
   // could not see and assesses the balance due. Before it, `washPendingLosses` and
