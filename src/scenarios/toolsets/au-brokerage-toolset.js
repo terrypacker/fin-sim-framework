@@ -13,6 +13,7 @@ import {
   AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer,
   AuDividendFrankedResidentCashApplyReducer,
   AuDividendFrankedNonResidentCashApplyReducer,
+  AuDividendUnfrankedResidentCashApplyReducer,
   AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer,
   AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer,
   AuDividendFrankedResidentHandler, AuDividendFrankedNonResidentHandler,
@@ -38,6 +39,7 @@ export const AU_BROKERAGE = {
     handlers: [AuDividendFrankedResidentHandler, AuDividendFrankedNonResidentHandler, AuDividendUnfrankedResidentHandler, AuDividendUnfrankedNonResidentHandler, AuStockEarningsHandler, AuStockWithdrawalHandler],
     reducers: [AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer,
       AuDividendFrankedResidentCashApplyReducer, AuDividendFrankedNonResidentCashApplyReducer,
+      AuDividendUnfrankedResidentCashApplyReducer,
       AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer, AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer],
     actions: [
       // `stateKey` names the account that PAID the dividend. The reinvest reducers
@@ -50,6 +52,7 @@ export const AU_BROKERAGE = {
       { type: 'AU_DIVIDEND_FRANKED_RESIDENT_CASH_APPLY',    fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
       { type: 'AU_DIVIDEND_FRANKED_NONRESIDENT_CASH_APPLY', fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
       { type: 'AU_DIVIDEND_UNFRANKED_RESIDENT_APPLY',  fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
+      { type: 'AU_DIVIDEND_UNFRANKED_RESIDENT_CASH_APPLY', fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
       { type: 'AU_DIVIDEND_UNFRANKED_NONRESIDENT_APPLY', fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
       { type: 'AU_STOCK_EARNINGS_APPLY', fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
       { type: 'AU_STOCK_WITHDRAWAL_APPLY', family: 'WITHDRAWAL', cc: 'AU',
@@ -101,6 +104,8 @@ export const AU_BROKERAGE = {
       new AuDividendFrankedResidentCashApplyReducer({ accountService, stateRegistry }),
       new AuDividendFrankedNonResidentCashApplyReducer({ accountService, stateRegistry }),
       new AuDividendUnfrankedResidentApplyReducer({ accountService, stateRegistry }),
+      // An ex-AU lot's dividend paid out (see IntlAuStockDividendHandler's split).
+      new AuDividendUnfrankedResidentCashApplyReducer({ accountService, stateRegistry }),
       new AuDividendUnfrankedNonResidentApplyReducer({ accountService, stateRegistry }),
       new AuStockEarningsApplyReducer({ accountService, stateRegistry }),
       new AuStockWithdrawalApplyReducer({ accountService, stateRegistry }),

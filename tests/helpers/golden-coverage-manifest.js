@@ -55,6 +55,9 @@ export const COVERED = [
   'AU_DIVIDEND_FRANKED_RESIDENT_APPLY',
   'AU_DIVIDEND_FRANKED_RESIDENT_CASH_APPLY',
   'AU_DIVIDEND_FRANKED_RESIDENT_TAX',
+  // A resident's ex-AU dividend (VGS in au-single-homeowner's brokerage) is unfranked.
+  'AU_DIVIDEND_UNFRANKED_RESIDENT_APPLY',
+  'AU_DIVIDEND_UNFRANKED_RESIDENT_TAX',
   // The US REINVEST branches, closed by `dividend-drip-per-security` (design 106 §5).
   // Both sat in KNOWN_GAPS for as long as the list has existed, for one reason: every
   // golden took the `dividendReinvest: false` default, so the whole reinvestment half of
@@ -338,8 +341,9 @@ export const KNOWN_GAPS = [
   // brokerage account. See design/inconsistencies.md §4.11.
   'AU_DIVIDEND_UNFRANKED_NONRESIDENT_APPLY',
   'AU_DIVIDEND_UNFRANKED_NONRESIDENT_TAX',
-  'AU_DIVIDEND_UNFRANKED_RESIDENT_APPLY',
-  'AU_DIVIDEND_UNFRANKED_RESIDENT_TAX',
+  // The cash sibling of the unfranked reinvest branch: every golden that holds an ex-AU
+  // lot in an AU brokerage reinvests its dividends.
+  'AU_DIVIDEND_UNFRANKED_RESIDENT_CASH_APPLY',
   'AU_SAVINGS_CONTRIBUTION_APPLY',
   'AU_SAVINGS_WITHDRAWAL_APPLY',
   'AU_STOCK_WITHDRAWAL_APPLY',

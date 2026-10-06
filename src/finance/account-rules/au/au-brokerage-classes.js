@@ -212,6 +212,28 @@ export class AuDividendFrankedNonResidentCashApplyReducer extends AuDividendFran
 }
 
 /**
+ * EVT-28c: unfranked dividend (resident), paid out as cash.
+ *
+ * The cash sibling of the unfranked reinvest reducer below, and the branch an ex-AU lot's
+ * distribution takes when its account pays dividends out. The base class is the franked
+ * one's, unchanged: it moves the cash and forwards the franking fields only when the
+ * action carries them, and an unfranked dividend carries none.
+ */
+export class AuDividendUnfrankedResidentCashApplyReducer extends AuDividendFrankedCashApplyReducerBase {
+  static type        = 'AuDividendUnfrankedResidentCashApplyReducer';
+  static description = 'Pays a resident unfranked dividend out to the AU transaction account; chains AU_DIVIDEND_UNFRANKED_RESIDENT_TAX against the PAYING account.';
+  static actionType  = 'AU_DIVIDEND_UNFRANKED_RESIDENT_CASH_APPLY';
+
+  constructor(services) {
+    super(services, {
+      name:       'AU Unfranked Dividend Resident Cash Apply',
+      actionType: 'AU_DIVIDEND_UNFRANKED_RESIDENT_CASH_APPLY',
+      taxType:    'AU_DIVIDEND_UNFRANKED_RESIDENT_TAX',
+    });
+  }
+}
+
+/**
  * EVT-28: AU unfranked dividend (resident) — stays in account.
  * Chains AU_DIVIDEND_UNFRANKED_RESIDENT_TAX.
  */

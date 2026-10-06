@@ -368,10 +368,12 @@ export class IntlAuStockEarningsHandler extends HandlerEntry {
  * cash lands afterwards is not a tax fact, so the assessable amount, the s207-20
  * gross-up and the offset are unchanged — see the cash reducers in au-brokerage-classes.
  *
- * Assumes fully franked dividends, which is typical for Australian equities.
+ * Assumes an EQUITY_AU dividend is fully franked, which is typical for Australian
+ * equities. A resident's dividends from lots on any other market (an ex-AU fund) are
+ * unfranked — see the split in `call`.
  */
 export class IntlAuStockDividendHandler extends HandlerEntry {
-  static description = 'Computes annual AU stock dividends per holding (marketValue × dividendYield, scaled by any active regime dividend adjustment) and routes to the franked-resident or franked-non-resident apply action based on residency.';
+  static description = 'Computes annual AU stock dividends per holding (marketValue × dividendYield, scaled by any active regime dividend adjustment) and routes to the franked-resident or franked-non-resident apply action based on residency; a resident\'s dividends from non-EQUITY_AU lots (ex-AU funds) route to the unfranked-resident apply action instead.';
   static type        = 'IntlAuStockDividendHandler';
   static eventType   = 'INTL_AU_STOCK_DIVIDEND';
   static rateKey     = RATE_KEYS.EQUITY_AU;
@@ -393,6 +395,8 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
       'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY',
       'AU_DIVIDEND_FRANKED_RESIDENT_CASH_APPLY',
       'AU_DIVIDEND_FRANKED_NONRESIDENT_CASH_APPLY',
+      'AU_DIVIDEND_UNFRANKED_RESIDENT_APPLY',
+      'AU_DIVIDEND_UNFRANKED_RESIDENT_CASH_APPLY',
       'RECORD_BALANCE',
     ];
   }
@@ -416,7 +420,7 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
     // account-level credit; on the cash branch they are dropped — the money leaves.
     // `holdingActions` is deliberately NOT taken: the reducer reinvests, opening a vintage
     // lot per security rather than growing the lot that paid (design 106 §5).
-    const { amount, bySecurity } = computeHoldingsDividends({
+    const { amount, bySecurity, bySecurityMarket } = computeHoldingsDividends({
       state, stateKey,
       fallbackYield:   this.dividendRate,
       fallbackRateKey: this.rateKey,
@@ -442,25 +446,31 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
       return typeof v === 'boolean' ? v : accountElection;
     };
 
-    // The AU side needs no `_bySecurity` plumbing on the action: `holdingActions` are
-    // already per LOT, so filtering them to the elected securities IS the split. Only the
-    // cash/reinvest amounts have to be re-totalled from the same breakdown.
-    let reinvestAmount = 0, cashAmount = 0;
-    const reinvestSlices = [];
-    if (bySecurity.length === 0) {
-      // No lots — the whole-account fallback; there is no security to elect for.
-      if (accountElection) reinvestAmount = amount; else cashAmount = amount;
-    } else {
-      for (const slice of bySecurity) {
-        if (elects(slice.securityId)) { reinvestSlices.push(slice); reinvestAmount += slice.amount; }
-        else cashAmount += slice.amount;
-      }
-      reinvestAmount = +reinvestAmount.toFixed(2);
-      cashAmount     = +cashAmount.toFixed(2);
-    }
+    // Only an EQUITY_AU dividend is franked. An ex-AU lot (a VGS-style world-ex-Australia
+    // fund) pays foreign income with no Australian credit, so for a RESIDENT its slices go
+    // through the unfranked branch: assessable cash, no gross-up, no offset — the same rule
+    // `computeFundIncome` applies to super. A non-resident's franked branch already books
+    // no AU tax and no credit, so a non-resident's payment is not split. The no-lots
+    // fallback tracks `this.rateKey` (EQUITY_AU) and stays franked. When nothing is ex-AU
+    // the split is skipped entirely, so an all-domestic account emits exactly what it did.
+    const sumBySecurity = (slices) => {
+      const m = new Map();
+      for (const sl of slices) m.set(sl.securityId, +((m.get(sl.securityId) ?? 0) + sl.amount).toFixed(2));
+      return [...m.entries()].map(([securityId, amt]) => ({ securityId, amount: amt }));
+    };
+    const foreign = residency === 'AU'
+      ? bySecurityMarket.filter(sl => sl.rateKey !== RATE_KEYS.EQUITY_AU) : [];
+    const groups = foreign.length === 0
+      ? [{ franked: true, slices: bySecurity, total: amount }]
+      : [
+          { franked: true,  slices: sumBySecurity(bySecurityMarket.filter(sl => sl.rateKey === RATE_KEYS.EQUITY_AU)) },
+          { franked: false, slices: sumBySecurity(foreign) },
+        ];
 
-    const applyType = (reinvest) => residency === 'AU'
-      ? (reinvest ? 'AU_DIVIDEND_FRANKED_RESIDENT_APPLY'    : 'AU_DIVIDEND_FRANKED_RESIDENT_CASH_APPLY')
+    const applyType = (reinvest, franked) => residency === 'AU'
+      ? (franked
+          ? (reinvest ? 'AU_DIVIDEND_FRANKED_RESIDENT_APPLY'   : 'AU_DIVIDEND_FRANKED_RESIDENT_CASH_APPLY')
+          : (reinvest ? 'AU_DIVIDEND_UNFRANKED_RESIDENT_APPLY' : 'AU_DIVIDEND_UNFRANKED_RESIDENT_CASH_APPLY'))
       : (reinvest ? 'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY' : 'AU_DIVIDEND_FRANKED_NONRESIDENT_CASH_APPLY');
 
     // `stateKey` names the account that PAID (design 106 §4b / F6). This handler is
@@ -471,19 +481,36 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
     // `resolveAttributionAsset` then assessed them — and the franking credit on them —
     // against the first account's owner.
     //
-    // Up to TWO apply actions for one event since 2b. Both chain the same tax action, so
-    // the assessed total is unchanged by the split.
+    // Up to TWO apply actions per franking group since 2b (reinvest and cash). Both chain
+    // the same tax action, so the assessed total is unchanged by the split.
     const out = [];
-    if (reinvestAmount !== 0) {
-      // `_bySecurity` carries the slices to the reducer, which opens a vintage lot per
-      // security (design 106 §5). The handler no longer emits `holdingActions` for the
-      // reinvested part: those ADDED the money to the paying lot, blending a purchase into
-      // an older acquisition date (design 93 §5.0a) and adding no basis (design 94 F3).
-      // The reducer does both correctly, exactly as the US one has since design 93.
-      out.push({ type: applyType(true), amount: reinvestAmount, stateKey,
-                 ...(reinvestSlices.length ? { _bySecurity: reinvestSlices } : {}) });
+    for (const { franked, slices, total } of groups) {
+      // The AU side needs no `_bySecurity` plumbing for the split itself: only the
+      // cash/reinvest amounts have to be re-totalled from the same breakdown.
+      let reinvestAmount = 0, cashAmount = 0;
+      const reinvestSlices = [];
+      if (slices.length === 0) {
+        // No lots — the whole-account fallback; there is no security to elect for.
+        if (total != null) { if (accountElection) reinvestAmount = total; else cashAmount = total; }
+      } else {
+        for (const slice of slices) {
+          if (elects(slice.securityId)) { reinvestSlices.push(slice); reinvestAmount += slice.amount; }
+          else cashAmount += slice.amount;
+        }
+        reinvestAmount = +reinvestAmount.toFixed(2);
+        cashAmount     = +cashAmount.toFixed(2);
+      }
+      if (reinvestAmount !== 0) {
+        // `_bySecurity` carries the slices to the reducer, which opens a vintage lot per
+        // security (design 106 §5). The handler no longer emits `holdingActions` for the
+        // reinvested part: those ADDED the money to the paying lot, blending a purchase
+        // into an older acquisition date (design 93 §5.0a) and adding no basis (design 94
+        // F3). The reducer does both correctly, exactly as the US one has since design 93.
+        out.push({ type: applyType(true, franked), amount: reinvestAmount, stateKey,
+                   ...(reinvestSlices.length ? { _bySecurity: reinvestSlices } : {}) });
+      }
+      if (cashAmount !== 0) out.push({ type: applyType(false, franked), amount: cashAmount, stateKey });
     }
-    if (cashAmount !== 0) out.push({ type: applyType(false), amount: cashAmount, stateKey });
     out.push(new RecordBalanceAction(`${stateKey}.balance`, stateKey));
     return out;
   }

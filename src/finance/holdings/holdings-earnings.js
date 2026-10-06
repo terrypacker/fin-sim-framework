@@ -353,9 +353,12 @@ export function computeHoldingsGrowth({
  * already scaled by each regime's recovery factor in RegimeApplyReducer). The
  * `max(0, …)` floors a full dividend suspension (adj ≤ -1) at zero.
  *
- * Returns `{ amount, holdingActions, bySecurity }` — the first two the same shape as
+ * Returns `{ amount, holdingActions, bySecurity, bySecurityMarket }` — the first two the same shape as
  * computeHoldingsGrowth, and `bySecurity` the per-instrument breakdown of the same
  * payment (design 106 §5), so
+ * `bySecurityMarket` is that breakdown split again by the lot's market rate key, for a
+ * caller whose tax treatment depends on the market (an AU brokerage franks only
+ * EQUITY_AU). So
  * a handler can either emit the per-holding reinvestment actions (AU franked
  * dividends grow the sleeves) or use only the summed amount (US cash / account-
  * level apply). `costBasisDelta` is 0 — reinvested-dividend basis is raised at
@@ -384,14 +387,14 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
   // Drawn down to nothing pays no dividend — see computeHoldingsGrowth for why an EMPTY
   // holdings array and an ABSENT one are not the same state (design 106 §4b, F7).
   if (Array.isArray(account?.holdings) && account.holdings.length === 0) {
-    return { amount: 0, holdingActions: [], bySecurity: [] };
+    return { amount: 0, holdingActions: [], bySecurity: [], bySecurityMarket: [] };
   }
   if (!holdings.length) {
     const balance = account?.balance ?? 0;
     const y0      = state?.marketDividendYields?.[fallbackRateKey] ?? fallbackYield ?? 0;
     const amount  = +(balance * effYield(y0, fallbackRateKey)).toFixed(2);
     // No lots ⇒ no security paid it; the caller falls back to the whole-account path.
-    return { amount, holdingActions: [], bySecurity: [] };
+    return { amount, holdingActions: [], bySecurity: [], bySecurityMarket: [] };
   }
 
   let total = 0;
@@ -402,6 +405,10 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
   // security rather than summed, so the breakdown is built here, beside the arithmetic
   // that knows which lot paid what, rather than re-derived by a reducer that does not.
   const bySecurityMap = new Map();
+  // The same slices, split once more by the MARKET the lot tracks. An AU brokerage needs
+  // it: only an EQUITY_AU dividend carries a franking credit, so a VGS-style ex-AU lot
+  // must not be paid through the franked branch. Keyed `sid|rateKey` in insertion order.
+  const byMarketMap = new Map();
   for (const h of holdings) {
     if (!h) continue;
     // Only EQUITY (and OTHER) sleeves pay an equity dividend. BOND, CASH and GOLD
@@ -427,6 +434,9 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
       // world, where "the account's equity" is the only instrument there is.
       const sid = h.securityId ?? null;
       bySecurityMap.set(sid, +((bySecurityMap.get(sid) ?? 0) + div).toFixed(2));
+      const mk = `${sid}|${rk}`;
+      const prev = byMarketMap.get(mk);
+      byMarketMap.set(mk, { securityId: sid, rateKey: rk, amount: +((prev?.amount ?? 0) + div).toFixed(2) });
     }
     if (div !== 0) {
       holdingActions.push(new HoldingTransactAction({
@@ -447,6 +457,7 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
     amount: +total.toFixed(2),
     holdingActions,
     bySecurity: [...bySecurityMap.entries()].map(([securityId, amount]) => ({ securityId, amount })),
+    bySecurityMarket: [...byMarketMap.values()],
   };
 }
 

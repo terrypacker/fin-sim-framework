@@ -85,6 +85,9 @@ export const AU_SINGLE_HOMEOWNER_DEFAULTS = {
   // structural difference between the two retirement systems in this model.
   brokerageBalance:      150_000,
   brokerageBasis:        110_000,
+  // How the brokerage is invested: two Vanguard ETFs, VAS and VGS. This share goes to VGS
+  // and the rest to VAS; basis splits in the same ratio.
+  brokerageOverseasWeight:    0.50,
   superBalance:          320_000,
   superBasis:            320_000,
   // How the fund is invested (design 94): two REST indexed options rather than one
@@ -172,6 +175,17 @@ export const AU_SINGLE_HOMEOWNER_SECURITIES = Object.freeze([
   Object.freeze({ id: 'sec-rest-au-index', symbol: 'REST AU Index',
                   name: 'REST Australian Shares – Indexed',
                   rateKey: RATE_KEYS.EQUITY_AU }),
+  // The brokerage's two ETFs, both AU-domiciled. Same rule as the REST options: identity
+  // and market only. VGS is UNHEDGED, which is what EQUITY_INTL_EX_AU prices — its total,
+  // vol and beta are sourced on an unhedged AUD basis (docs/market-returns/SOURCES.md),
+  // so the currency risk is inside that sleeve's distribution rather than modelled apart.
+  // Its distribution is foreign income and is paid unfranked; VAS's is franked.
+  Object.freeze({ id: 'sec-vas', symbol: 'VAS',
+                  name: 'Vanguard Australian Shares Index ETF',
+                  rateKey: RATE_KEYS.EQUITY_AU }),
+  Object.freeze({ id: 'sec-vgs', symbol: 'VGS',
+                  name: 'Vanguard MSCI Index International Shares ETF',
+                  rateKey: RATE_KEYS.EQUITY_INTL_EX_AU }),
 ]);
 
 /**
@@ -345,6 +359,7 @@ export class AuSingleHomeownerScenario extends BaseScenario {
           balance: p.brokerageBalance,     contributionBasis: p.brokerageBasis,
           ownerId: 'primary',              drawdownPriority: 1,
           country: 'AU', currency: AUD,
+          holdings: _brokerageHoldings(p),
         },
         {
           __type: 'SuperannuationAccount', stateKey: 'superAccount',
@@ -465,6 +480,29 @@ function _superHoldings(p) {
     new Holding({
       id: 'h-rest-au-index', label: 'REST AU Index', allocation: ALLOCATION.EQUITY,
       rateKey: RATE_KEYS.EQUITY_AU, securityId: 'sec-rest-au-index',
+      marketValue: +((total - osMv).toFixed(2)), costBasis: +((basis - osBasis).toFixed(2)),
+    }),
+  ];
+}
+
+/**
+ * The brokerage as two lots, VGS and VAS, split by `brokerageOverseasWeight`. The VAS lot
+ * takes the rounding remainder, for the same reason as `_superHoldings`.
+ */
+function _brokerageHoldings(p) {
+  const total = p.brokerageBalance ?? 0;
+  const basis = p.brokerageBasis   ?? 0;
+  const osMv    = +((total * p.brokerageOverseasWeight).toFixed(2));
+  const osBasis = +((basis * p.brokerageOverseasWeight).toFixed(2));
+  return [
+    new Holding({
+      id: 'h-vgs', label: 'VGS', allocation: ALLOCATION.EQUITY,
+      rateKey: RATE_KEYS.EQUITY_INTL_EX_AU, securityId: 'sec-vgs',
+      marketValue: osMv, costBasis: osBasis,
+    }),
+    new Holding({
+      id: 'h-vas', label: 'VAS', allocation: ALLOCATION.EQUITY,
+      rateKey: RATE_KEYS.EQUITY_AU, securityId: 'sec-vas',
       marketValue: +((total - osMv).toFixed(2)), costBasis: +((basis - osBasis).toFixed(2)),
     }),
   ];

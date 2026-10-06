@@ -213,6 +213,7 @@ import {
   AuStockEarningsHandler, AuStockWithdrawalHandler,
   AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer,
   AuDividendFrankedResidentCashApplyReducer, AuDividendFrankedNonResidentCashApplyReducer,
+  AuDividendUnfrankedResidentCashApplyReducer,
   AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer,
   AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer,
 } from '../finance/account-rules/au/au-brokerage-classes.js';
@@ -339,6 +340,7 @@ const _ALL_CLASSES = [
   SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperCapitalGainApplyReducer,
   AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer,
   AuDividendFrankedResidentCashApplyReducer, AuDividendFrankedNonResidentCashApplyReducer,
+  AuDividendUnfrankedResidentCashApplyReducer,
   AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer,
   AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer,
   AuHouseSaleApplyReducer, AuSeIncomeApplyReducer, AuWagesIncomeApplyReducer,

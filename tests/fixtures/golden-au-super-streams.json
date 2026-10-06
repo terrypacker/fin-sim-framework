@@ -1,7 +1,7 @@
 {
  "activeRegimes": [],
  "auCapitalGainsYTD": 0,
- "auCgtEffectiveRate": 0.69,
+ "auCgtEffectiveRate": 0.547070634618,
  "auDeductibleSuperYTD": 0,
  "auDiscountAllowanceYTD": 0,
  "auDiscountApportionedBaseYTD": 0,
@@ -97,7 +97,7 @@
  "auNrWithholdingUnfrankedDividendYTD": 0,
  "auOrdinaryIncomeYTD": 0,
  "auPersonCapitalGainsYTD": {
-  "primary": 3979.16
+  "primary": 10676.84
  },
  "auPersonCapitalLossPool": {
   "primary": 0
@@ -112,13 +112,13 @@
   "primary": 0
  },
  "auPersonDiscountableGainsYTD": {
-  "primary": 3979.16
+  "primary": 10676.84
  },
  "auPersonEarnedIncomeYTD": {
   "primary": 85076.22
  },
  "auPersonFrankingCreditYTD": {
-  "primary": 1595.02285714
+  "primary": 1277.34
  },
  "auPersonNonResidentWithholdingYTD": {
   "primary": 0
@@ -130,10 +130,10 @@
   "primary": 0
  },
  "auPersonOrdinaryIncomeYTD": {
-  "primary": 90619.37
+  "primary": 89654.57
  },
  "auPersonRealCapitalGainsYTD": {
-  "primary": 3979.16
+  "primary": 10676.84
  },
  "auPersonSuperTaxYTD": {
   "primary": 547.7325
@@ -148,7 +148,7 @@
   "primary": 0
  },
  "auPersonUsSourceRealCapGainsAudYTD": {
-  "primary": 3979.16
+  "primary": 10676.84
  },
  "auRealCapitalGainsYTD": 0,
  "auSavingsAccount": {
@@ -169,7 +169,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 10188.9123571,
+    "costBasis": 10188.9050286,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -180,7 +180,7 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 10188.9123571,
+    "marketValue": 10188.9050286,
     "maturityDate": null,
     "purchaseDate": null,
     "rateKey": "SAVINGS_AU",
@@ -200,7 +200,7 @@
  },
  "auStockAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 112226.53,
+  "balance": 96372.51,
   "country": "AU",
   "currency": {
    "code": "AUD",
@@ -214,57 +214,86 @@
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 59028.03,
+    "costBasis": 38540.53,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
     "duration": null,
     "faceValue": null,
     "fxBasisRate": null,
-    "id": "hld3",
+    "id": "h-vas",
     "inflationLinked": false,
     "issuingState": null,
-    "label": "",
-    "marketValue": 73939.67,
+    "label": "VAS",
+    "marketValue": 65831.76,
     "maturityDate": null,
-    "pricePerUnit": 125.26196926,
+    "pricePerUnit": 125.26196201,
     "purchaseDate": null,
     "rateKey": "EQUITY_AU",
     "rollAtMaturity": false,
     "rollTermYears": null,
-    "securityId": "sec-auto-EQUITY_AU",
+    "securityId": "sec-vas",
     "taxExemption": "none",
     "taxLossPartner": null,
-    "units": 590.28027771,
+    "units": 525.55268132,
     "zeroCoupon": false
    },
    {
     "acquisitionDateByCountry": null,
-    "acquisitionPriceLevel": 1.10302831395,
+    "acquisitionPriceLevel": 1.11385655875,
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 30699.19,
+    "costBasis": 18906.17,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
     "duration": null,
     "faceValue": null,
-    "id": "reinvest-auStockAccount-sec-auto-EQUITY_AU|EQUITY|none||EQUITY_AU-2026",
+    "id": "reinvest-auStockAccount-sec-vas|EQUITY|none||EQUITY_AU-2026",
     "inflationLinked": false,
     "issuingState": null,
     "label": "Reinvested dividends",
-    "marketValue": 34565.14,
+    "marketValue": 21061.97,
     "maturityDate": null,
-    "pricePerUnit": 125.26199798,
+    "pricePerUnit": 125.26192959,
     "purchaseDate": "2026-07-01T00:00:00.000Z",
     "rateKey": "EQUITY_AU",
     "rollAtMaturity": false,
     "rollTermYears": null,
-    "securityId": "sec-auto-EQUITY_AU",
+    "securityId": "sec-vas",
     "taxExemption": "none",
     "taxLossPartner": null,
-    "units": 275.94274846,
+    "units": 168.14342609,
+    "zeroCoupon": false
+   },
+   {
+    "acquisitionDateByCountry": null,
+    "acquisitionPriceLevel": 1.08175639667,
+    "allocation": "EQUITY",
+    "appreciationSchedule": null,
+    "costBaseByCountry": null,
+    "costBasis": 4959.23,
+    "couponFrequency": 2,
+    "couponRate": null,
+    "dividendYield": null,
+    "duration": null,
+    "faceValue": null,
+    "id": "reinvest-auStockAccount-sec-vgs|EQUITY|none||EQUITY_INTL_EX_AU-2026",
+    "inflationLinked": false,
+    "issuingState": null,
+    "label": "Reinvested dividends",
+    "marketValue": 6404.18,
+    "maturityDate": null,
+    "pricePerUnit": 150.66131861,
+    "purchaseDate": "2026-07-01T00:00:00.000Z",
+    "rateKey": "EQUITY_INTL_EX_AU",
+    "rollAtMaturity": false,
+    "rollTermYears": null,
+    "securityId": "sec-vgs",
+    "taxExemption": "none",
+    "taxLossPartner": null,
+    "units": 42.5071283,
     "zeroCoupon": false
    },
    {
@@ -273,27 +302,56 @@
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 3721.72,
+    "costBasis": 2980.46,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
     "duration": null,
     "faceValue": null,
-    "id": "reinvest-auStockAccount-sec-auto-EQUITY_AU|EQUITY|none||EQUITY_AU-2032",
+    "id": "reinvest-auStockAccount-sec-vas|EQUITY|none||EQUITY_AU-2032",
     "inflationLinked": false,
     "issuingState": null,
     "label": "Reinvested dividends",
-    "marketValue": 3721.72,
+    "marketValue": 2980.46,
     "maturityDate": null,
-    "pricePerUnit": 125.26197841,
+    "pricePerUnit": 125.26195415,
     "purchaseDate": "2032-07-01T00:00:00.000Z",
     "rateKey": "EQUITY_AU",
     "rollAtMaturity": false,
     "rollTermYears": null,
-    "securityId": "sec-auto-EQUITY_AU",
+    "securityId": "sec-vas",
     "taxExemption": "none",
     "taxLossPartner": null,
-    "units": 29.71148985,
+    "units": 23.79381689,
+    "zeroCoupon": false
+   },
+   {
+    "acquisitionDateByCountry": null,
+    "acquisitionPriceLevel": 1.22987386542,
+    "allocation": "EQUITY",
+    "appreciationSchedule": null,
+    "costBaseByCountry": null,
+    "costBasis": 94.14,
+    "couponFrequency": 2,
+    "couponRate": null,
+    "dividendYield": null,
+    "duration": null,
+    "faceValue": null,
+    "id": "reinvest-auStockAccount-sec-vgs|EQUITY|none||EQUITY_INTL_EX_AU-2032",
+    "inflationLinked": false,
+    "issuingState": null,
+    "label": "Reinvested dividends",
+    "marketValue": 94.14,
+    "maturityDate": null,
+    "pricePerUnit": 150.66131861,
+    "purchaseDate": "2032-07-01T00:00:00.000Z",
+    "rateKey": "EQUITY_INTL_EX_AU",
+    "rollAtMaturity": false,
+    "rollTermYears": null,
+    "securityId": "sec-vgs",
+    "taxExemption": "none",
+    "taxLossPartner": null,
+    "units": 0.62484519,
     "zeroCoupon": false
    }
   ],
@@ -518,7 +576,7 @@
  "cumulativeConsumptionMarginalUtility": 0.000146678634069,
  "cumulativeConsumptionUtility": 165.977067342,
  "cumulativeConsumptionUtilityCount": 84,
- "cumulativeTaxesPaid": 276911.638443,
+ "cumulativeTaxesPaid": 293258.550371,
  "currentPeriods": {
   "AU": {
    "endMs": 2003788800000,
@@ -566,9 +624,9 @@
   "essential": 6026.38194058
  },
  "foreignGeneralIncomeYTD": 1095231.11343,
- "foreignPassiveCapGainsYTD": 12998.62,
- "foreignPassiveIncomeYTD": 53334.74,
- "ftcCurrentForeignTax": 43893.3437513,
+ "foreignPassiveCapGainsYTD": 48863.26,
+ "foreignPassiveIncomeYTD": 81713.23,
+ "ftcCurrentForeignTax": 48230.3111942,
  "ftcCurrentGeneral": 0,
  "ftcCurrentPassive": 0,
  "ftcCurrentResourced": 0,
@@ -652,8 +710,8 @@
  "marketIndexAsOfMs": 1988064000000,
  "metrics": {
   "msbsUnfundedBenefit": 172182.34,
-  "netLiquidity": 146537.17,
-  "netWorth": 1677303.32,
+  "netLiquidity": 130683.15,
+  "netWorth": 1661449.3,
   "offsetAppliedCapacity": 0,
   "offsetIdleCapacity": 0
  },
@@ -693,7 +751,7 @@
     "duration": null,
     "faceValue": null,
     "fxBasisRate": null,
-    "id": "hld6",
+    "id": "hld5",
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
@@ -723,7 +781,7 @@
     "duration": null,
     "faceValue": null,
     "fxBasisRate": null,
-    "id": "hld7",
+    "id": "hld6",
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
@@ -910,7 +968,7 @@
     "duration": null,
     "faceValue": null,
     "fxBasisRate": null,
-    "id": "hld4",
+    "id": "hld3",
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
@@ -940,7 +998,7 @@
     "duration": null,
     "faceValue": null,
     "fxBasisRate": null,
-    "id": "hld5",
+    "id": "hld4",
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
@@ -1011,6 +1069,18 @@
    "name": "REST Overseas Shares – Indexed",
    "rateKey": "EQUITY_INTL_EX_AU",
    "symbol": "REST OS Index"
+  },
+  "sec-vas": {
+   "id": "sec-vas",
+   "name": "Vanguard Australian Shares Index ETF",
+   "rateKey": "EQUITY_AU",
+   "symbol": "VAS"
+  },
+  "sec-vgs": {
+   "id": "sec-vgs",
+   "name": "Vanguard MSCI Index International Shares ETF",
+   "rateKey": "EQUITY_INTL_EX_AU",
+   "symbol": "VGS"
   }
  },
  "securityIndex": {
@@ -1035,6 +1105,14 @@
    "total": 157.452998613
   },
   "sec-rest-os-index": {
+   "price": 150.661167957,
+   "total": 165.904914006
+  },
+  "sec-vas": {
+   "price": 125.26197045,
+   "total": 157.452998613
+  },
+  "sec-vgs": {
    "price": 150.661167957,
    "total": 165.904914006
   }
@@ -1128,7 +1206,7 @@
  "taxBasis": {
   "AU": {
    "primary": {
-    "instalmentBase": 174183.71,
+    "instalmentBase": 173485.25,
     "year": 2031
    }
   }
@@ -1136,13 +1214,13 @@
  "taxInstalmentsPaid": {
   "AU": 0
  },
- "usCapitalGainsYTD": 12998.62,
+ "usCapitalGainsYTD": 48863.26,
  "usCollectibleGainsYTD": 0,
  "usFilingSingle": true,
  "usFilingSingleBase": true,
  "usNegativeIncomeYTD": 0,
- "usNetInvestmentIncomeYTD": 40336.12,
- "usOrdinaryIncomeYTD": 1135567.23343,
+ "usNetInvestmentIncomeYTD": 32849.97,
+ "usOrdinaryIncomeYTD": 1128081.08343,
  "usPenaltyYTD": 0,
  "usPersonHousehold": false,
  "usSeEarningsYTD": 0,

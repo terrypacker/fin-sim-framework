@@ -95,6 +95,9 @@ export const COVERED = [
   // tax names the PAYING account rather than the one the cash landed in.
   'AuDividendFrankedResidentCashApplyReducer', 'AuDividendFrankedNonResidentCashApplyReducer',
   'AuDividendUnfrankedResidentApplyReducer', 'AuDividendUnfrankedNonResidentApplyReducer',
+  // The unfranked cash sibling — an ex-AU lot's dividend paid out
+  // (au-brokerage-ex-au-unfranked.test.mjs EXAU-5).
+  'AuDividendUnfrankedResidentCashApplyReducer',
   'AuStockEarningsApplyReducer', 'AuStockWithdrawalApplyReducer',
   'AuFixedIncomeEarningsApplyReducer', 'AuSeIncomeApplyReducer', 'AuWagesIncomeApplyReducer', 'AuHouseSaleApplyReducer',
   // Buying a dwelling mid-run (design 83 §10 follow-on) — tests/unit/evt-property-purchase.test.mjs
