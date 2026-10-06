@@ -746,6 +746,7 @@
   "officerOnExit": false,
   "ownerId": "primary",
   "ownershipType": "sole",
+  "pensionShare": 1,
   "role": "super",
   "scheme": "MSBS",
   "serviceEndDate": "2014-06-30",

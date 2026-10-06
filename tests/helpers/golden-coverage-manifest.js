@@ -136,8 +136,11 @@ export const COVERED = [
   'SUPER_EARNINGS_TAX',
   // design 105 — `wash-sale-harvest` rebalances super in accumulation phase.
   'SUPER_CAPITAL_GAIN',
-  // design 119 §6.4 — `au-single-homeowner` holds a preserved MSBS benefit.
+  // design 119 §6.4 — `au-single-homeowner` holds a preserved MSBS benefit, elects a
+  // full pension at 60 (phase 5) and is paid it for the rest of the run.
   'MSBS_FUNDED_EARNINGS_APPLY',
+  'MSBS_ELECTION_APPLY',
+  'MSBS_PENSION_APPLY',
   // design 94 §8.1o — the `wash-sale-harvest` golden. The §1091 family: the harvester's
   // sell-and-rebuy, and the April filing that resolves the windows the 31-December settle
   // could not see and assesses the balance due. Before it, `washPendingLosses` and
@@ -192,6 +195,12 @@ export const COVERED = [
  * this file exists to prevent.
  */
 export const KNOWN_GAPS = [
+  // ── MSBS reversion (design 119 phase 5)
+  // The only golden with an MSBS pension is a single person who outlives the run, so
+  // nothing dies holding one. MSP-10 in msbs-pension.test.mjs covers it in isolation.
+  // One golden clears it: a couple, the member dying while the pension is paid.
+  'MSBS_PENSION_REVERT',
+
   // ── Tax instalments and the refund they make routine (design 107 §6–§8)
   // The refund reducers are wired into every scenario — the settle has to have somewhere to
   // put an over-payment the moment instalments exist — but nothing FIRES them until a golden

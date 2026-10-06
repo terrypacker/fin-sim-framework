@@ -244,6 +244,7 @@ export class AccountEditor extends BaseComponent {
     const se = this._node?.serviceEndDate;
     el.querySelector('[data-id="serviceEndDate"]').value = se ? String(se).slice(0, 10) : '';
     el.querySelector('[data-id="officerOnExit"]').checked = !!this._node?.officerOnExit;
+    el.querySelector('[data-id="pensionShare"]').value = this._node?.pensionShare ?? '';
     const mix = this._node?.fundedAllocation ?? {};
     for (const [id, key] of MSBS_MIX_INPUTS) {
       el.querySelector(`[data-id="${id}"]`).value = mix[key] ?? '';
@@ -328,6 +329,8 @@ export class AccountEditor extends BaseComponent {
       { dataId: 'reinvestDividends', field: 'reinvestDividends',
         coerce: (raw) => (raw === '' || raw == null ? null : raw === 'true' || raw === true) },
       { dataId: 'drawStartDate', field: 'drawStartDate', coerce: (raw) => raw || null },
+      // MSBS pension share (design 119 D7): blank is the default full pension.
+      { dataId: 'pensionShare', field: 'pensionShare', coerce: (raw) => (raw === '' || raw == null ? 1 : Number(raw)) },
     ];
     // `balance` is param-linked only when it is a free scalar. When holdings drive the
     // balance it is computed (and no balance param is generated), so linking would
@@ -1147,6 +1150,7 @@ export class AccountEditor extends BaseComponent {
         data.fundedEmployerBenefit   = num('fundedEmployerBenefit') ?? 0;
         data.serviceEndDate          = el.querySelector('[data-id="serviceEndDate"]').value || null;
         data.officerOnExit           = el.querySelector('[data-id="officerOnExit"]').checked;
+        data.pensionShare            = num('pensionShare') ?? 1;
         // All four blank ⇒ null ⇒ CSC's Balanced mix; otherwise the weights as typed.
         const mix = Object.fromEntries(MSBS_MIX_INPUTS.map(([id, key]) => [key, num(id)])
           .filter(([, v]) => v != null));

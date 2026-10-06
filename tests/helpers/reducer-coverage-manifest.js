@@ -120,6 +120,8 @@ export const COVERED = [
   'SuperDeathBenefitApplyReducer',
   // design 119 §6.4 — MSB-10 in msbs-preserved.test.mjs
   'MsbsFundedEarningsApplyReducer', 'MsbsUnfundedIndexReducer',
+  // design 119 phase 5 — MSP-8 and MSP-10 in msbs-pension.test.mjs
+  'MsbsElectionApplyReducer', 'MsbsPensionApplyReducer', 'MsbsPensionRevertReducer',
 
   // E — behavioral (reducer-postconditions-behavioral.test.mjs)
   'PanicSellReducer', 'BehavioralPanicSellApplyReducer', 'OpportunisticRebalanceReducer',

@@ -10,7 +10,7 @@ stamps:
   panel:config-graph: 82a0c7
   panel:holdings: 962055
   panel:pools: 78458e
-  node:account: 798eb2
+  node:account: f4309e
 ---
 
 Every pot of money in the plan, and every debt: cash, brokerage, the four retirement
@@ -50,7 +50,7 @@ fund tax until then; Opt searches it.
 - `cashDeductibleFraction` — The share of this pool put to an income-producing use, 0 to 1. It drives two tests at once: whether §988 applies to the expense at all, and whether a currency loss is deductible as a transaction entered into for profit. Blank means fully personal, which is the safe default — a personal currency loss is disallowed while the matching gain is still taxed. An offset backing a rental should be set explicitly.
 - `drawdownPriority` — Where this account sits in the liquidation order, 1 first. BLANK EXCLUDES IT from the drawdown chain entirely: the balance still earns and still counts in net worth, but no spending shortfall will ever reach it, and it is not counted as reserve. That is the right setting for money that is genuinely not available, and the wrong one for an account you expected to fund retirement.
 - `earningsBasis` — The earnings half of a retirement account's balance, computed as the balance less the contribution basis. Read-only: it is derived, and the two halves matter because a withdrawal takes basis out tax-free and earnings out taxable.
-- `superScheme` — Whether this super account is an ordinary fund or a preserved MSBS (MilitarySuper) benefit, for a member who has left the ADF. Fixed once the account is created. On MSBS, the balance and holdings are the member benefit, with any ancillary benefit added in. Draw Start Date is the election, which the model keeps between age 55 (or leaving the ADF, if later) and 65.
+- `superScheme` — An ordinary fund, or a preserved MSBS (MilitarySuper) benefit for a member who has left the ADF. Fixed once created. On MSBS, the balance and holdings are the member benefit, ancillary benefit included. Draw Start Date is the election, kept between 55 (or leaving the ADF, if later) and 65. On it, Pension Share of the employer benefit becomes a CPI-indexed pension and the rest a lump sum, rolled into your other fund unless you are already released.
 - `unfundedEmployerBenefit` — The unfunded part of the employer benefit, as the CSC statement shows it. It rises each 1 July with CPI and never falls, but it is not invested and is not in net worth. If the statement shows only an employer benefit total, enter the total less the funded part here. A former DFRDB member's unfunded productivity benefit is indexed the same way, so it goes here too.
 - `fundedEmployerBenefit` — The funded (productivity) part of the employer benefit, from the statement. CSC invests it in its Balanced option whatever you chose for the member benefit, so it earns the mix below. It counts in net worth, but no draw reaches it before the election.
 - `serviceEndDate` — The day the member left the ADF. The MSBS pension cannot start while serving, so a member who served past 55 cannot elect before this date.

@@ -498,7 +498,7 @@ export class SuperannuationAccount extends RetirementAccount {
 /** The statement fields an `MsbsAccount` adds, saved with the plan when set. */
 export const MSBS_FIELDS = Object.freeze([
   'unfundedEmployerBenefit', 'fundedEmployerBenefit', 'fundedAllocation',
-  'serviceEndDate', 'officerOnExit',
+  'serviceEndDate', 'officerOnExit', 'pensionShare',
 ]);
 
 /**
@@ -517,6 +517,8 @@ export class MsbsAccount extends SuperannuationAccount {
    * @param {object|null} [opts.fundedAllocation=null] - rate key → weight; null = CSC Balanced
    * @param {string|null} [opts.serviceEndDate=null]   - 'YYYY-MM-DD' the member left the ADF
    * @param {boolean} [opts.officerOnExit=false]       - an officer when membership ceased
+   * @param {number}  [opts.pensionShare=1]            - share of the employer benefit taken
+   *        as a pension at the election: 0 (all lump sum), or 0.5 to 1 (r 52(1)(c))
    */
   constructor(balance = 0, opts = {}) {
     super(balance, opts);
@@ -526,5 +528,6 @@ export class MsbsAccount extends SuperannuationAccount {
     this.fundedAllocation        = opts.fundedAllocation        ?? null;
     this.serviceEndDate          = opts.serviceEndDate          ?? null;
     this.officerOnExit           = opts.officerOnExit           ?? false;
+    this.pensionShare            = opts.pensionShare            ?? 1;
   }
 }

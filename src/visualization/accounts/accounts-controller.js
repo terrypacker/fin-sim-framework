@@ -148,6 +148,7 @@ export class AccountsController {
         fundedAllocation:        data.fundedAllocation ?? null,
         serviceEndDate:          data.serviceEndDate || null,
         officerOnExit:           !!data.officerOnExit,
+        pensionShare:            data.pensionShare ?? 1,
       });
     }
     if (RETIREMENT_TYPES.has(data.type)) {
@@ -288,6 +289,7 @@ export class AccountsController {
     if ('fundedEmployerBenefit'   in n) n.fundedEmployerBenefit   = Number(n.fundedEmployerBenefit)   || 0;
     if ('serviceEndDate' in n) n.serviceEndDate = n.serviceEndDate || null;
     if ('officerOnExit'  in n) n.officerOnExit  = !!n.officerOnExit;
+    if ('pensionShare'   in n) n.pensionShare   = n.pensionShare == null || n.pensionShare === '' ? 1 : Number(n.pensionShare);
     // Prime-relative cash rate (design 56) — spread (or legacy absolute), null clears.
     if ('primeSpread'  in n) n.primeSpread  = (n.primeSpread  == null) ? null : Number(n.primeSpread);
     if ('interestRate' in n) n.interestRate = (n.interestRate == null) ? null : Number(n.interestRate);
