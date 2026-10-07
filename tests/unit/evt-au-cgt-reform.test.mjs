@@ -447,6 +447,27 @@ test('Part 6: a capital loss reaches the nominal and real buckets identically', 
     'from the FY2027 assessment:\n  ' + failures.join('\n  '));
 });
 
+test('Part 6: an AU-domiciled disposal with a rate in state books both buckets in its own AUD', () => {
+  // The service drawdown emits STOCK_WITHDRAWAL_TAX for an AU-domiciled brokerage, and an
+  // AU-domiciled collectible's sale emits COLLECTIBLE_SALE_TAX, both stamped `currency: 'AUD'`.
+  // The nominal side converted the AU split as USD, which is invisible at 1:1 (no rate in
+  // state) and multiplied the nominal bucket by the rate once there was one, so the two
+  // buckets stopped being partitions of one quantity and the FY2027 partition check threw.
+  const rated = { effectiveExchangeRates: { USD_AUD: 1.8 } };
+  for (const type of ['STOCK_WITHDRAWAL_TAX', 'COLLECTIBLE_SALE_TAX']) {
+    for (const g of [1_000, -400]) {
+      const action = { residency: 'AU', currency: 'AUD', gain: g, auGain: g,
+        auIndexedGain: Math.max(0, g), auDiscountableGain: g, auShortTermGain: 0,
+        auLongTermGain: g, stateKey: 'auStockAccount' };
+      let s = { ...rated, people: null, auCapitalGainsYTD: 0, auDiscountableGainsYTD: 0,
+        auRealCapitalGainsYTD: 0, usCapitalGainsYTD: 0, usCollectibleGainsYTD: 0 };
+      s = US_FNS_2026.get(type)(s, action);
+      s = AU_FNS_2027.get(type)(s, action);
+      assert.deepEqual(buckets(s), { nominal: g, real: g }, `${type} ${g}: both buckets in AUD, unconverted`);
+    }
+  }
+});
+
 test('Part 6: a loss beside a larger gain in the SAME bucket still nets the real gain', () => {
   const stock = AU_FNS_2027.get('AU_STOCK_WITHDRAWAL_TAX');
   const disp = (nominal, indexed) => ({ residency: 'AU', gain: nominal, auGain: nominal,

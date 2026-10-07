@@ -53,6 +53,8 @@
  * EVT-HDG-16 AU Single Homeowner states REST OS Index and VGS unhedged and offers VGAD
  *            (fully hedged, ALIGNED); with FX on it runs re-based, and at NONE every
  *            balance is what the silent plan gives.
+ * EVT-HDG-17 Switching the FX process on leaves an AU-only plan's monthly expenses in AUD:
+ *            a flat rate debits what FX off debits.
  */
 
 import { test } from 'node:test';
@@ -529,4 +531,18 @@ test('EVT-HDG-16: AU Single Homeowner states its hedges and offers VGAD', () => 
   // With FX on, the plan runs re-based: its silent super lots take super's default.
   const fx = runGolden(withParams(AU_SPEC, { fxProcessModel: 'MEAN_REVERTING', randomSeed: 2 }));
   assert.equal(fx.state.hedgeOverlay.rebased, true);
+});
+
+test('EVT-HDG-17: switching the FX process on does not re-price an AU-only plan\'s expenses', () => {
+  // An AU-only household states its expenses in AUD. The expense handler re-bases from USD at
+  // the anchor rate, which was a silent 1:1 while an AU-only plan had no anchor; once phase 1
+  // let the FX process run here, every month cost 1.55× and the brokerage drained in 3 years.
+  const debits = run => run.sim.journal.journal
+    .filter(e => e.action?.type === 'EXPENSE_DEBIT' && e.event?.type === 'MONTHLY_EXPENSES')
+    .map(e => e.action.amount);
+  const off  = runGolden(AU_SPEC);
+  const flat = runGolden(withParams(AU_SPEC, { fxProcessModel: 'MEAN_REVERTING', fxVolatility: 0, randomSeed: 1 }));
+  assert.ok(flat.state.baseExchangeRates, 'the anchor the re-base reads is in state');
+  assert.deepEqual(debits(flat), debits(off));
+  assert.equal(flat.state.auStockAccount.balance, off.state.auStockAccount.balance);
 });

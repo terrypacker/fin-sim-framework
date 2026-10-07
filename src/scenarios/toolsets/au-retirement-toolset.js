@@ -618,6 +618,11 @@ export const AU_RETIREMENT = {
         stateRegistry:    sr,
         monthlyExpenses:  p.monthlyExpenses,
         expensesCurrency: p.monthlyExpensesCurrency ?? 'RESIDENCE',
+        // An AU-only household states its expenses in AUD. The handler's default base is
+        // USD, re-based at the anchor rate; that was a silent 1:1 while an AU-only plan had
+        // no anchor, but since the FX process can run here (design 120 §5.3) the anchor
+        // exists and would multiply every month's spending by 1.55.
+        baseCurrency:     'AUD',
         usRole:           ACCOUNT_ROLES.US_SAVINGS, usOwnerId: null,
         auRole:           ACCOUNT_ROLES.AU_SAVINGS,  auOwnerId: primaryId,
       });

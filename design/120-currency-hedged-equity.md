@@ -86,10 +86,39 @@ recommendations by asking for the build.
     added (`hedgeOverlay`, the stated ratios, VGAD's record and its index level). No balance
     or tax figure moved.
   - **Still open:**
-    - The paired VGS-against-VGAD Monte Carlo A/B (a study for `scenarios/`).
     - The §6 Later items: FX replay in the bootstrap, and a parity switch.
     - VGAD's `securityIndex` (design 101) tracks the unhedged market, as every index does
       today.
+- **Phase 3 study RUN** (6 Oct). The paired Monte Carlo A/B on AU Single Homeowner. Its runs
+  and tables are in the study's own directory under `scenarios/`, not here.
+  - **What it found:** switching the brokerage's VGS to VGAD moves nothing that matters on
+    this plan, because the lot is small and sold down early. The choice that carries money
+    is super's overseas sleeve. At the default ρ, unhedged is the lower-risk and
+    higher-return holding there, and full hedging widens the retirement-balance spread and
+    pays the carry. At ρ ≥ 0, hedging narrows the spread a little at the carry's cost.
+    APRA's 0.255 is close to neutral throughout. This is §4's low h*, seen on a whole plan.
+  - **Setting it up found three defects** that would have decided its answer. All are fixed:
+    - **Phase 1 regression: an AU-only plan's expenses were re-priced by FX being on.**
+      `MonthlyExpensesHandler` reads the authored figure as USD by default and re-bases it at
+      the anchor. An AU-only plan had no anchor, so that was a silent 1:1. Once §5.3 let the FX
+      process run there, every month cost 1.55× and the brokerage drained within three years.
+      The AU-only branch of AU_RETIREMENT now states `baseCurrency: 'AUD'` (EVT-HDG-17).
+    - **The same exposure in the tax path: an AUD disposal's nominal gain was converted as
+      USD.** For an AU-domiciled brokerage draw (`STOCK_WITHDRAWAL_TAX`) and an AU-domiciled
+      collectible sale (`COLLECTIBLE_SALE_TAX`), the US module booked `auCapitalGainsYTD` with
+      a hard-coded `'USD'`, while the FY2027 real bucket used the disposal's `currency`.
+      - At 1:1 the two agreed. With a rate in state, the nominal bucket was multiplied by it.
+        A gain year was over-assessed, and a loss year left real > nominal, which throws the
+        FY2027 partition check.
+      - Both reducers now convert from the disposal's own currency (evt-au-cgt-reform, Part 6).
+    - **Older than this design: under `rngStreams` the FX tick drew the same z all year.** A
+      substream is rebuilt from (seed, label, year) on every call, and the FX tick is the one
+      process that ticks monthly. All twelve months drew one value, so the annual move was
+      √12·σ·z, about 40% a year against 11.4%. The tick now keys its stream by its day within
+      the year too (RNG-6). Every other process ticks once a year and was unaffected.
+    - **The general rule:** an A/B arm that changes a lot can only be read once the plan
+      conserves money under the risk model the study switches on. Check that a smaller
+      opening balance stays smaller under that model before reading any paired delta.
 
 - **Rev 2** (5 Oct) added the Rest, RBA, MSCI and cost sources (§3.1–3.5) and Q7, the
   FX–equity correlation.

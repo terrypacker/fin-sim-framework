@@ -69,7 +69,11 @@ export class FxTickHandler extends HandlerEntry {
     // Design 107 §15.5 — draw from this process's OWN year-keyed substream, so an unrelated
     // process drawing more or fewer times cannot shift which year this value lands on. Falls
     // back to the shared cursor unless `useRngStreams` is on, so default runs are unchanged.
-    const rng = sim.rngStream?.('fx', (sim.currentDate ?? new Date()).getUTCFullYear()) ?? sim.rng;
+    // The label carries the tick's day within the year: a substream is rebuilt from its key on
+    // every call, and this tick runs twelve times a year, so a year-only key handed every
+    // month the SAME draw — the year's move became √12·σ·z, ~40% a year against 11.4%.
+    const at  = sim.currentDate ?? new Date();
+    const rng = sim.rngStream?.(`fx:${at.getUTCMonth() + 1}-${at.getUTCDate()}`, at.getUTCFullYear()) ?? sim.rng;
 
     const stepFn = FX_PROCESS_MODELS[this.model] ?? FX_PROCESS_MODELS.NONE;
     const zMarket = this._marketShock(sim, state);

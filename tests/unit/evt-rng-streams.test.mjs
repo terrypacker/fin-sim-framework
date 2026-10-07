@@ -21,7 +21,8 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Simulation } from '../../src/simulation-framework/simulation.js';
+import { Simulation }    from '../../src/simulation-framework/simulation.js';
+import { FxTickHandler } from '../../src/finance/fx/fx-tick-handler.js';
 
 /** A bare Simulation is heavy to construct; the RNG surface is self-contained. */
 function rngHost(seed, { streams = true } = {}) {
@@ -70,6 +71,35 @@ test('RNG-4: OFF is the default and falls back to the shared cursor, byte-identi
   // is unmoved by this feature.
   const plain = rngHost(1, { streams: false });
   assert.deepEqual(take(plain.rngStream('equity', 2035), 4), take(rngHost(1, { streams: false }).rng, 4));
+});
+
+test('RNG-6: a monthly process draws a fresh value each tick, so its annual vol is the calibrated one', () => {
+  // A substream is rebuilt from its key on every call. The FX tick runs monthly, and keyed by
+  // year alone all twelve months drew the same z: the annual log move was √12·σ·z, 3.5× the
+  // calibration, on every plan with streams and an FX process on.
+  const fx = new FxTickHandler({ model: 'RANDOM_WALK' });
+  const annualMoves = streams => {
+    const h = rngHost(3, { streams });
+    const moves = [];
+    for (let year = 2000; year < 3000; year++) {
+      let dev = 0;
+      const zs = new Set();
+      for (let m = 0; m < 12; m++) {
+        const state = { fxDeviation: { USD_AUD: dev }, effectiveFxVol: { USD_AUD: 0.1142 } };
+        const next = fx.call({ sim: { ...h, rng: h.rng, rngStream: h.rngStream.bind(h),
+          currentDate: new Date(Date.UTC(year, m, 1)) }, state })[0].deviation;
+        zs.add(next - dev);
+        dev = next;
+      }
+      if (streams) assert.equal(zs.size, 12, `${year}: every month drew its own value`);
+      moves.push(dev);
+    }
+    return Math.sqrt(moves.reduce((a, x) => a + x * x, 0) / moves.length);
+  };
+  for (const streams of [true, false]) {
+    const vol = annualMoves(streams);
+    assert.ok(Math.abs(vol / 0.1142 - 1) < 0.08, `streams ${streams}: annual FX vol ${vol.toFixed(4)} ≈ 0.1142`);
+  }
 });
 
 test('RNG-5: reseed repoints the substreams too, not just the cursor', () => {

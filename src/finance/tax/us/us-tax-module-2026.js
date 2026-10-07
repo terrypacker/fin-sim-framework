@@ -499,7 +499,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
           const disposalCcy = action.currency ?? 'USD';
           const audGain = toAUD(auGain, disposalCcy, state);
           const audDiscountableGain = toAUD(auDiscountableGain, disposalCcy, state);
-          // Design 90 §5 — signed AU split (USD here; converted at the booking below).
+          // Design 90 §5 — signed AU split, in the disposal's currency; converted at the
+          // booking below.
           const auChar = characterizeAuCapitalGain(action, auGain);
           // Design 83 G10 — §865(a) sources personal-property gain by the SELLER's
           // residence, so for an AU-resident US citizen this gain is FOREIGN source,
@@ -529,9 +530,13 @@ export class UsTaxModule2026 extends BaseTaxModule {
           // Design 90 §5 — SIGNED, so an AU capital LOSS survives to be netted under
           // s102-5 Step 1. `auChar.long` is the Div 115 discount-eligible slice and
           // `.short` the rest; their sum is the gross gain this line used to book.
+          // From `disposalCcy`, as `audGain` above and the FY2027 real bucket are. Converting
+          // an AU-domiciled brokerage's AUD gain as USD multiplied the nominal bucket by the
+          // rate once a plan had one (design 120 put an FX layer in AU-only plans), so a
+          // loss year left real > nominal and a gain year was over-assessed.
           next = bookAuResident(state, next, action, 'usStockAccount', {
-            auCapitalGainsYTD:      toAUD(auChar.short + auChar.long, 'USD', state),
-            auDiscountableGainsYTD: toAUD(auChar.long, 'USD', state),
+            auCapitalGainsYTD:      toAUD(auChar.short + auChar.long, disposalCcy, state),
+            auDiscountableGainsYTD: toAUD(auChar.long, disposalCcy, state),
             ...(foreignSource ? {} : { usSourceCapGainsAudYTD: audGain }),
           });
         }
@@ -1052,10 +1057,15 @@ export class UsTaxModule2026 extends BaseTaxModule {
           // derives from — an indexation "relief" that added assessable income
           // (au-house-sale F5). Every sibling classifier already derives this; only this
           // one did not. Falls back to `gain` when no AU basis was stamped.
-          const auGainUsd = action.auGain ?? gain;
-          const audGain = toAUD(auGainUsd, 'USD', state);
-          // Design 90 §5 — signed AU split (USD; converted at the booking below).
-          const auChar = characterizeAuCapitalGain(action, auGainUsd);
+          //
+          // In the collectible's own currency, as the FY2027 real bucket converts it: an
+          // AU-domiciled collectible states AUD, and converting that as USD multiplied the
+          // nominal bucket by the rate once a plan had one. `?? 'USD'` keeps US ones as were.
+          const saleCcy = action.currency ?? 'USD';
+          const auGainNative = action.auGain ?? gain;
+          const audGain = toAUD(auGainNative, saleCcy, state);
+          // Design 90 §5 — signed AU split (sale currency; converted at the booking below).
+          const auChar = characterizeAuCapitalGain(action, auGainNative);
           // Design 83 G10 — §865(a) sources personal-property gain by the SELLER's
           // residence, so for an AU-resident US citizen this gain is FOREIGN source,
           // not US-source, whatever the account's domicile. It therefore books as
@@ -1081,9 +1091,9 @@ export class UsTaxModule2026 extends BaseTaxModule {
           // 12-month tracking), so the split is degenerate, but the SIGN is not: a loss
           // must reach s102-5 Step 1 rather than being floored away.
           next = bookAuResident(state, next, action, null, {
-            auCapitalGainsYTD:      toAUD(auChar.short + auChar.long, 'USD', state),
+            auCapitalGainsYTD:      toAUD(auChar.short + auChar.long, saleCcy, state),
             // Collectibles carry no per-lot 12-month tracking here (design 62 §4).
-            auDiscountableGainsYTD: toAUD(auChar.long, 'USD', state),
+            auDiscountableGainsYTD: toAUD(auChar.long, saleCcy, state),
             ...(foreignSource ? {} : { usSourceCapGainsAudYTD: audGain }),
           });
         }
