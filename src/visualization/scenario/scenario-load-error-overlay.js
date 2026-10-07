@@ -128,15 +128,27 @@ function cleanStoredCopy(config, scenarioRegistry) {
   const stored = scenarioRegistry?.getStored?.(config?.id);
   if (!stored) return null;                       // a prebuilt, or never persisted
   if (paramSignature(stored) === paramSignature(config)) return null;
+  return storedCopyProblems(stored).length ? null : stored;
+}
+
+/**
+ * The problems that would stop a stored record from loading — the test this page uses to
+ * decide a stored copy is a way out. Exported so a config-node Save can refuse to write a
+ * copy that would fail it (`ScenarioRegistry.persistRecordEdits`), which keeps the
+ * "discard the unsaved changes" exit pointing at something that loads.
+ *
+ * @param {object} record  a scenario record as stored
+ * @returns {Array<object>} blocking problems; empty when the record loads
+ */
+export function storedCopyProblems(record) {
   const bag = {};
-  for (const p of (Array.isArray(stored.params) ? stored.params : [])) bag[p.name] = p.value;
+  for (const p of (Array.isArray(record?.params) ? record.params : [])) bag[p.name] = p.value;
   // Design 110 §4.3: advisories filtered OUT. This decides whether a stored copy is loadable,
   // and an unscheduled shape is a loadable scenario with a note on it — treating it as
   // unloadable would strand the user on this page for something that compiles.
-  const bad = [...collectAuthoredMixProblems(bag),
-               ...blockingProblems(collectAuthoredGraphProblems(bag, stored.accounts ?? [])),
-               ...collectRunPlayability(bag).disabled];
-  return bad.length ? null : stored;
+  return [...collectAuthoredMixProblems(bag),
+          ...blockingProblems(collectAuthoredGraphProblems(bag, record?.accounts ?? [])),
+          ...collectRunPlayability(bag).disabled];
 }
 
 /**

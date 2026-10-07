@@ -96,7 +96,8 @@ import { listScenarioJobs, listPersonJobs, replacePersonJobs, deletePersonJobs }
   from '../scenarios/scenario-jobs.js';
 import { ScenarioComparePresenter }  from '../visualization/scenario-compare/scenario-compare-presenter.js';
 import { DecisionGraphPresenter }    from '../visualization/decision-graph/decision-graph-presenter.js';
-import { showScenarioLoadError }     from '../visualization/scenario/scenario-load-error-overlay.js';
+import { showScenarioLoadError, storedCopyProblems }
+  from '../visualization/scenario/scenario-load-error-overlay.js';
 
 const STORAGE_KEY = 'sim-workbench-layout-prod';
 
@@ -474,6 +475,7 @@ export class WorkbenchApp extends BaseComponent {
               personId = peopleController.create(personData)?.id ?? null;
             }
             if (scenario && personId) replacePersonJobs(scenario, personId, jobs);
+            this._persistRecordEdits();
             this._editModal.close();
             this.configList?.render();
           },
@@ -481,6 +483,7 @@ export class WorkbenchApp extends BaseComponent {
             peopleController.delete(id);
             // A job naming no person fails the next load (design 116 §4.6).
             deletePersonJobs(registry.scenarioService?.getActive?.(), id);
+            this._persistRecordEdits();
             this._editModal.close();
             this.configList?.render();
           },
@@ -518,10 +521,12 @@ export class WorkbenchApp extends BaseComponent {
             } else {
               accountsController.create(data);
             }
+            this._persistRecordEdits();
             this._editModal.close();
           },
           onDelete: (id) => {
             accountsController.delete(id);
+            this._persistRecordEdits();
             this._editModal.close();
           },
           onHistory: (account) => {
@@ -560,10 +565,12 @@ export class WorkbenchApp extends BaseComponent {
               const prop = new RealProperty(data.value ?? 0, data);
               registry.realPropertyService.createProperty(prop);
             }
+            this._persistRecordEdits();
             this._editModal.close();
           },
           onDelete: (id) => {
             registry.realPropertyService.deleteProperty(id);
+            this._persistRecordEdits();
             this._editModal.close();
           },
         });
@@ -589,10 +596,12 @@ export class WorkbenchApp extends BaseComponent {
               const col = new Collectible(data.value ?? 0, data);
               registry.collectibleService.createCollectible(col);
             }
+            this._persistRecordEdits();
             this._editModal.close();
           },
           onDelete: (id) => {
             registry.collectibleService.deleteCollectible(id);
+            this._persistRecordEdits();
             this._editModal.close();
           },
         });
@@ -618,10 +627,12 @@ export class WorkbenchApp extends BaseComponent {
               const eq = new CompanyEquity(data.value ?? 0, data);
               registry.companyEquityService.createCompanyEquity(eq);
             }
+            this._persistRecordEdits();
             this._editModal.close();
           },
           onDelete: (id) => {
             registry.companyEquityService.deleteCompanyEquity(id);
+            this._persistRecordEdits();
             this._editModal.close();
           },
         });
@@ -651,6 +662,7 @@ export class WorkbenchApp extends BaseComponent {
               window.alert(e.message);
               return;
             }
+            this._persistRecordEdits();
             this._editModal.close();
             this.configList?.render();
             // The drawdown-order param resolves its options from this list at render
@@ -674,6 +686,7 @@ export class WorkbenchApp extends BaseComponent {
               if (!ok) return;
             }
             deleteScenarioSecurity(scenario, id);
+            this._persistRecordEdits();
             this._editModal.close();
             this.configList?.render();
             this.scenarioTabPresenter?.refreshParams();
@@ -707,10 +720,12 @@ export class WorkbenchApp extends BaseComponent {
             } else {
               registry.bequestService.createBequest(new Bequest(data));
             }
+            this._persistRecordEdits();
             this._editModal.close();
           },
           onDelete: (id) => {
             registry.bequestService.deleteBequest(id);
+            this._persistRecordEdits();
             this._editModal.close();
           },
         });
@@ -1476,6 +1491,30 @@ export class WorkbenchApp extends BaseComponent {
    * later serializes, so for a user scenario these values reach storage on the next
    * action that saves anything (a scenario switch, a delete, an upload, Save to Browser).
    */
+  /**
+   * Persist a config-node Save (Person, Account, Property, …) so a reload keeps it, with
+   * no Save to Browser.
+   *
+   * Harvests the services into the loaded record exactly as Rebuild does
+   * (`destroyScenario`), then writes only the record slice to storage
+   * (`ScenarioRegistry.persistRecordEdits`). In-flight Scenario-panel params stay
+   * unsaved, and a patched copy that would fail the recovery overlay's load check is not
+   * written — so the overlay's "discard the unsaved changes" exit still reaches a stored
+   * copy that loads. A prebuilt is never persisted; graph nodes (event / handler /
+   * action / reducer) still need Save to Browser, which freezes the graph.
+   * @private
+   */
+  _persistRecordEdits() {
+    const cfg = this._loadedCfg;
+    if (!cfg || cfg.prebuilt) return;
+    const registry = ServiceRegistry.getInstance();
+    Object.assign(cfg, ScenarioSerializer.snapshotDomainRecords(registry));
+    ScenarioLoader.recordDeletedDefaults(cfg);
+    const written = registry.scenarioRegistry.persistRecordEdits(
+      cfg, (next) => storedCopyProblems(next).length === 0);
+    if (!written) console.info('[WorkbenchApp] node edit kept in memory only — not persisted');
+  }
+
   _applyParamsToActive(params) {
     if (!params) return;
     const registry = ServiceRegistry.getInstance();

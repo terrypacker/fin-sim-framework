@@ -9,6 +9,7 @@
  */
 
 import { ScenarioSerializer } from './scenario-serializer.js';
+import { mergeRecordEdits } from './record-edits.js';
 
 /**
  * Storage to track and manage Scenarios, including the current active one.
@@ -199,6 +200,30 @@ export class ScenarioRegistry {
   getStored(id) {
     const data = this._scenarioStorage.load();
     return (data?.scenarios ?? []).find(s => s?.id === id) ?? null;
+  }
+
+  /**
+   * Persist a config-node Save: only the record slice of `live` (see `record-edits.js`)
+   * is written over the STORED copy, so in-flight param edits stay out of storage and the
+   * recovery overlay keeps its "discard the unsaved changes" exit.
+   *
+   * @param {object} live   the live scenario record, already harvested from the services
+   * @param {(next: object) => boolean} [accept]  veto on the patched stored copy — the
+   *        caller refuses one that would no longer load
+   * @returns {boolean} true when storage was written; false for a prebuilt, a scenario
+   *          storage has never seen, or a veto
+   */
+  persistRecordEdits(live, accept = () => true) {
+    if (!live?.id || live.prebuilt) return false;
+    const data = this._scenarioStorage.load();
+    const scenarios = Array.isArray(data?.scenarios) ? data.scenarios : [];
+    const i = scenarios.findIndex(s => s?.id === live.id);
+    if (i < 0) return false;
+    const next = mergeRecordEdits(scenarios[i], live);
+    if (!accept(next)) return false;
+    scenarios[i] = next;
+    this._scenarioStorage.save({ ...data, scenarios });
+    return true;
   }
 
   /**
