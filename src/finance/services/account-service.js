@@ -18,7 +18,7 @@ import { computeConversionRecapture } from '../account-rules/us/roth-conversion-
 import { getBirthDate, getResidency } from '../residency-utils.js';
 import { Holding } from '../holdings/holding.js';
 import { resolveDefaultAllocation, resolveRateKey, resolveEquityMarketMix } from '../holdings/default-allocations.js';
-import { rescaleHoldingsToBalance, instrumentOf, distributeHoldingsCredit } from '../holdings/holding-utils.js';
+import { rescaleHoldingsToBalance, instrumentOf, distributeHoldingsCredit, openingMixOf, openingMixShares } from '../holdings/holding-utils.js';
 import { deriveEarningsBasis } from '../assets/investment-account.js';
 import { consumeHoldings } from '../holdings/holdings-fifo.js';
 import { disposalTermFields, auCpiRate } from '../holdings/holding-period.js';
@@ -618,12 +618,15 @@ export class AccountService extends AssetService {
     } else {
       // Credit (contribution / sale proceeds / transfer-in): distribute across
       // sleeves by market value; the deposited cash carries basis equal to its
-      // market value. With no market value to weight against, land the whole
-      // credit in the first sleeve.
+      // market value. With no market value to weight against, split the credit by the
+      // account's market mix (`openingMixShares`), or land it whole in the first sleeve.
       if (totalMv <= 0) {
-        account.holdings = holdings.map((h, i) => {
-          if (i !== 0) return h;
-          const value = (h.marketValue ?? 0) + amount;
+        const shares = openingMixShares(holdings, amount, openingMixOf(account), false)
+          ?? new Map([[holdings[0]?.id, amount]]);
+        account.holdings = holdings.map((h) => {
+          if (!shares.has(h?.id)) return h;
+          const share = shares.get(h.id);
+          const value = (h.marketValue ?? 0) + share;
           // Zero market value to weight against — the credit BECOMES the position, which
           // is `establish`'s statement (design 93 §5b). Spelled out rather than delegated
           // because `establish` rounds to cents and this loop deliberately does not: `sold`
@@ -643,7 +646,7 @@ export class AccountService extends AssetService {
           return {
             ...h,
             marketValue: value,
-            costBasis:   (h.costBasis ?? 0) + amount,
+            costBasis:   (h.costBasis ?? 0) + share,
             ...(units == null ? {} : { units }),
             ...(units == null || inst.parPerUnit == null
               ? {}

@@ -39,6 +39,8 @@ import { ALLOCATION }       from '../../src/finance/holdings/allocation.js';
 import { RATE_KEYS }        from '../../src/finance/economic-regimes/rate-keys.js';
 import { resolveEquityMarketMix, EQUITY_MARKETS_BY_COUNTRY }
   from '../../src/finance/holdings/default-allocations.js';
+import { scaleHoldings, distributeHoldingsCredit, lotVintage }
+  from '../../src/finance/holdings/holding-utils.js';
 import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
 
 const SS = new Date(Date.UTC(2026, 0, 1));
@@ -218,4 +220,46 @@ test('P5c §4.4: the super split is value-exact on awkward balances', () => {
     const h = bootstrap(superAcct({ balance: bal }));
     assert.equal(+h.reduce((s, x) => s + x.marketValue, 0).toFixed(2), bal);
   }
+});
+
+// ─── An account opened EMPTY buys its mix ───────────────────────────────────
+// A super fund opened at A$0 (a job change's new fund) bootstraps both sleeves at zero.
+// With nothing to weight against, every credit path used to land the first deposit in the
+// FIRST lot, and every later deposit followed market value, so the fund held 100% AU
+// equity for the rest of the run. Each path now splits the first money by the mix.
+
+const sleeveValues = hs => Object.fromEntries(
+  [RATE_KEYS.EQUITY_AU, RATE_KEYS.EQUITY_INTL_EX_AU]
+    .map(k => [k, +hs.filter(x => x.rateKey === k).reduce((s, x) => s + x.marketValue, 0).toFixed(2)]));
+
+test('P5c: transaction() into an empty super splits the credit by its mix, and the mix holds', () => {
+  const svc = new AccountService();
+  const a   = superAcct({ balance: 0 });
+  svc._bootstrapDefaultHolding(a);
+  svc.transaction(a, 1_000, null);
+  assert.deepEqual(sleeveValues(a.holdings),
+    { [RATE_KEYS.EQUITY_AU]: 397, [RATE_KEYS.EQUITY_INTL_EX_AU]: 603 });
+  svc.transaction(a, 1_000, null);
+  assert.deepEqual(sleeveValues(a.holdings),
+    { [RATE_KEYS.EQUITY_AU]: 794, [RATE_KEYS.EQUITY_INTL_EX_AU]: 1_206 });
+  assert.equal(a.balance, 2_000);
+});
+
+test('P5c: scaleHoldings and distributeHoldingsCredit split an empty super by its mix', () => {
+  const a = superAcct({ balance: 0 });
+  bootstrap(a);
+  const vintage = lotVintage({}, a);
+  assert.deepEqual(sleeveValues(scaleHoldings(a.holdings, 0, 33_333.33, vintage)),
+    { [RATE_KEYS.EQUITY_AU]: 13_233.33, [RATE_KEYS.EQUITY_INTL_EX_AU]: 20_100 });
+  assert.deepEqual(sleeveValues(distributeHoldingsCredit(a.holdings, 1_000, vintage)),
+    { [RATE_KEYS.EQUITY_AU]: 397, [RATE_KEYS.EQUITY_INTL_EX_AU]: 603 });
+});
+
+test('P5c: a single-market account keeps the first-lot rule (no mix ⇒ no opening split)', () => {
+  const a = acct({ type: ACCOUNT_TYPE.BROKERAGE, role: ACCOUNT_ROLES.AU_STOCK, country: 'AU', balance: 0 });
+  bootstrap(a);
+  assert.equal(lotVintage({}, a).openingMix, undefined);
+  const svc = new AccountService();
+  svc.transaction(a, 500, null);
+  assert.equal(a.holdings[0].marketValue, 500);
 });

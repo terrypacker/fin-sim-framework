@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-226 parameters · 33 panels · 12 node types (205 fields) · 179 action types · 87 tools · 317 state field types · 78 topics · 128 design docs
+226 parameters · 33 panels · 12 node types (205 fields) · 179 action types · 88 tools · 317 state field types · 78 topics · 128 design docs
 
 ---
 
@@ -1068,11 +1068,11 @@ Explained in [`help/nodes`](nodes/reducer.md). 0 field(s) described by a record 
 
 ---
 
-## Headless tools (87)
+## Headless tools (88)
 
 Command-line entry points under `scripts/`. **Purpose** is harvested from each script's
 docblock, not re-authored here. Arguments come from each script's declarative
-`parseFlags` spec: 74 of 74 entry points carry one (design 108 D6 — all of them).
+`parseFlags` spec: 75 of 75 entry points carry one (design 108 D6 — all of them).
 6 scripts carry no docblock naming themselves and show `(undocumented)`.
 
 ### scripts/config-converters/
@@ -1185,6 +1185,13 @@ docblock, not re-authored here. Arguments come from each script's declarative
     - `--run` (flag) — price each corner against a smoothed counterfactual
     - `--seeds` (number, default `0`) — re-price over n stochastic seeds (implies --run)
     - `--material` (number, default `0.05`) — share at or above which a class counts as a position
+- **`scripts/lab/hedge-horizon.mjs`**
+  the model's minimum-variance currency hedge ratio by holding period
+    - `--seeds` (int, default `200`) — seeds per ρ (1..N)
+    - `--rho` (list, default `-0.54,0,0.16`) — fxEquityCorrelation values
+    - `--workers` (int, default `8`) — worker processes
+    - `--out` (string) — save the per-path rows (JSONL)
+    - `--in` (string) — analyse saved rows instead of running
 - **`scripts/lab/paired-delta.mjs`**
   re-report a `variant-grid` run as PAIRED DIFFERENCES
     - `--spec` (string) — the grid spec

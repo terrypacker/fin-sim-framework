@@ -10,6 +10,8 @@
 
 import { YEAR_MS as HOLDING_YEAR_MS } from './holding-period.js';
 import { syntheticSecurityId }         from './security.js';
+import { resolveEquityMarketMix }      from './default-allocations.js';
+import { ALLOCATION }                  from './allocation.js';
 
 /**
  * ─── THE VALUE-CHANGE PRIMITIVES (design 93 §4) ───────────────────────────────
@@ -587,7 +589,8 @@ export function scaleHoldings(holdings, oldBalance, newBalance, vintage = null) 
   if (!Array.isArray(holdings) || holdings.length === 0) return holdings;
   if (oldBalance <= 0) {
     if (newBalance <= 0) return holdings;
-    return holdings.map((h, i) => i === 0 ? establish(h, newBalance) : h);
+    return _establishByMix(holdings, holdings, newBalance, vintage?.openingMix)
+      ?? holdings.map((h, i) => i === 0 ? establish(h, newBalance) : h);
   }
   // design 93 §5.0a item 2 — the two DIRECTIONS are different operations, and treating
   // them alike was the last blending path design 62 §9 never reached.
@@ -707,16 +710,77 @@ export function rescaleHoldingsToBalance(holdings, targetBalance) {
  *
  * @param {object} state
  * @param {object} account - the account record in state (for its country)
- * @returns {{ year: number|null, purchaseMs: number|null, priceLevel: number }}
+ * @returns {{ year: number|null, purchaseMs: number|null, priceLevel: number,
+ *   openingMix?: Object<string,number> }} `openingMix` only on a multi-market account: how a
+ *   credit into it splits while every lot is empty (`openingMixOf`)
  */
 export function lotVintage(state, account) {
   const cc     = account?.country === 'AU' ? 'AU' : 'US';
   const asOfMs = state?.currentPeriods?.[cc]?.startMs ?? null;
+  const openingMix = openingMixOf(account);
   return {
     purchaseMs: asOfMs,
     year:       asOfMs == null ? null : new Date(asOfMs).getUTCFullYear(),
     priceLevel: state?.cpiAccumulator?.AU ?? state?.inflationAccumulator?.AU ?? 1,
+    ...(openingMix ? { openingMix } : {}),
   };
+}
+
+/**
+ * The equity market mix an EMPTY account's first money is split by, or null when the
+ * account names one market (the first lot is then the only place the money can go).
+ *
+ * Without it, a credit into an account whose lots are all at zero had nothing to weight
+ * against and landed wholly in the first lot; every later credit is weighted by market
+ * value, so the account stayed in that one sleeve for the rest of the run. A super fund
+ * opened empty at a job change bootstraps a 39.7% AU / 60.3% ex-AU pair of lots
+ * (`DEFAULT_EQUITY_MARKET_MIX_BY_ROLE`) and then held 100% AU equity forever.
+ *
+ * @param {object} account
+ * @returns {Object<string,number>|null} rateKey → weight
+ */
+export function openingMixOf(account) {
+  const mix = account ? resolveEquityMarketMix(account, ALLOCATION.EQUITY) : null;
+  return mix && Object.values(mix).filter(w => w > 0).length > 1 ? mix : null;
+}
+
+/**
+ * How a credit into an account whose eligible lots are all empty splits by its market mix:
+ * the first eligible lot of each market takes that market's weight, renormalised over the
+ * markets that have a lot, and the last takes the remainder so the parts sum to `amount`
+ * exactly. Null when there is no mix or fewer than two of its markets have a lot, so the
+ * caller keeps its first-lot rule.
+ *
+ * @param {Array} eligible - the lots the credit may land in
+ * @param {number} amount
+ * @param {Object<string,number>|null|undefined} mix - from `openingMixOf`
+ * @param {boolean} [round=true] - round each share to cents; `transaction()` does not
+ * @returns {Map<string,number>|null} lot id → share
+ */
+export function openingMixShares(eligible, amount, mix, round = true) {
+  if (!mix) return null;
+  const targets = [];
+  for (const [rateKey, w] of Object.entries(mix)) {
+    const lot = w > 0 ? eligible.find(h => h?.rateKey === rateKey) : null;
+    if (lot) targets.push([lot.id, w]);
+  }
+  if (targets.length < 2) return null;
+  const total  = targets.reduce((sum, [, w]) => sum + w, 0);
+  const cents  = v => (round ? +v.toFixed(2) : v);
+  const shares = new Map();
+  let placed = 0;
+  targets.forEach(([id, w], i) => {
+    const v = i === targets.length - 1 ? cents(amount - placed) : cents(amount * w / total);
+    placed = cents(placed + v);
+    shares.set(id, v);
+  });
+  return shares;
+}
+
+/** `establish` each lot `openingMixShares` names; null when it names none. */
+function _establishByMix(holdings, eligible, amount, mix) {
+  const shares = openingMixShares(eligible, amount, mix);
+  return shares && holdings.map(h => shares.has(h?.id) ? establish(h, (h.marketValue ?? 0) + shares.get(h.id)) : h);
 }
 
 /**
@@ -776,11 +840,13 @@ function _incomeBucketKey(h) {
  * @param {number|null} [opts.purchaseMs=null] - the lot's acquisition date
  * @param {number|null} [opts.priceLevel=null] - AU CPI level at acquisition (design 57 §6.3)
  * @param {string} [opts.label='Reinvested income']
+ * @param {Object<string,number>|null} [opts.openingMix=null] - rateKey → weight a credit is
+ *   split by while every eligible lot is empty (`lotVintage` supplies it)
  * @returns {Array} new holdings array
  */
 export function distributeHoldingsCredit(holdings, amount, {
   stateKey = 'acct', year = null, purchaseMs = null, priceLevel = null,
-  label = 'Reinvested income', only = null,
+  label = 'Reinvested income', only = null, openingMix = null,
 } = {}) {
   if (!Array.isArray(holdings) || holdings.length === 0 || amount === 0) return holdings;
   // `only` restricts which lots the credit may be weighted across and land in (design 106
@@ -792,7 +858,10 @@ export function distributeHoldingsCredit(holdings, amount, {
   if (eligible.length === 0) return holdings;
   const total = eligible.reduce((s, h) => s + (h?.marketValue ?? 0), 0);
   if (total <= 0) {
-    // No market value to weight against — the credit BECOMES the first ELIGIBLE position.
+    // No market value to weight against — the credit is split by the account's market mix
+    // when it has one, and otherwise BECOMES the first ELIGIBLE position.
+    const byMix = _establishByMix(holdings, eligible, amount, openingMix);
+    if (byMix) return byMix;
     const firstId = eligible[0]?.id;
     return holdings.map(h => h?.id === firstId ? establish(h, (h.marketValue ?? 0) + amount) : h);
   }
