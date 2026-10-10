@@ -35,10 +35,12 @@ import { COVERED, KNOWN_GAPS, ALL_MANIFEST_ACTION_TYPES }
 
 const fired = new Set();
 const wired = new Set();
+const unreduced = {};
 for (const spec of GOLDEN_SPECS) {
   const run = getGoldenRun(spec);
   for (const t of run.firedActionTypes) fired.add(t);
   for (const t of run.wiredActionTypes) wired.add(t);
+  if (run.sim.unreducedActionTypes.size) unreduced[spec.name] = Object.fromEntries(run.sim.unreducedActionTypes);
 }
 const universe = new Set([...wired, ...fired]);
 
@@ -53,6 +55,16 @@ test('golden coverage: the manifest has no duplicate or overlapping entries', ()
     (t, i) => ALL_MANIFEST_ACTION_TYPES.indexOf(t) !== i);
   assert.deepEqual([...new Set(dupes)], [],
     'action type listed twice in golden-coverage-manifest.js');
+});
+
+// `fired` comes from the journal, which records only REDUCED actions, so an action the
+// engine dropped for want of a reducer is invisible to every check above. That is how a
+// single-country plan's INTL_TRANSFER_APPLY escalation — its only route to OUT_OF_FUNDS —
+// vanished for every unfunded month. The engine counts such drops; none is allowed.
+test('golden coverage: no golden dispatches an action that nothing reduces', () => {
+  assert.deepEqual(unreduced, {},
+    'these goldens dispatched action types with no reducer (type → count). The action did\n'
+    + 'nothing: wire its reducer into the toolsets the scenario loads, or stop emitting it.');
 });
 
 test('golden coverage: COVERED lists exactly what the goldens fire', () => {

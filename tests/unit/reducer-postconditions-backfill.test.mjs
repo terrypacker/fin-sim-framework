@@ -285,6 +285,8 @@ test('StateTaxPaymentDebitReducer: short balance escalates the residual cross-bo
   const r = new StateTaxPaymentDebitReducer(services);
   const state = {
     people: makePeople({ residency: 'US' }),
+    // The AU counterpart is what makes escalation cross-border; without it the residual is OUT_OF_FUNDS.
+    auSavingsAccount: makeAccount({ stateKey: 'auSavingsAccount', currency: 'AUD', holdings: [{ id: 'a0', marketValue: 0, costBasis: 0 }] }),
     usSavingsAccount: makeAccount({ stateKey: 'usSavingsAccount', holdings: [{ id: 's1', marketValue: 100, costBasis: 100 }] }),
   };
   const next = runReducer(r, state, makeAction('STATE_TAX_PAYMENT_DEBIT', { amount: 320 }), DATE,

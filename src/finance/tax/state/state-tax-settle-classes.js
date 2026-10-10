@@ -15,6 +15,7 @@ import { StateTaxSettleService } from './state-tax-settle-service.js';
 import { STATE_YTD_FIELDS }    from './state-income-classification.js';
 import { taxFxRate }           from '../tax-fx.js';
 import { DRAWDOWN_TAX_ACTION_TYPES } from '../tax-settle-classes.js';
+import { escalateShortfall } from '../../account-rules/shortfall-escalation.js';
 
 /**
  * US state tax settlement (design 34 §5) — the state analog of the federal
@@ -144,12 +145,16 @@ export class StateTaxPaymentDebitReducer extends Reducer {
     // symmetric with the federal debit reducer and the spending path. The transfer
     // reports any residual it still cannot cover as OUT_OF_FUNDS.
     const unpaid = action.amount - debit;
+    // A US-only plan has no AU side to draw from: the residual is OUT_OF_FUNDS here.
     let residualActions = [];
     if (unpaid > 0.01 && !escalated) {
-      residualActions = [
-        { type: 'INTL_TRANSFER_APPLY', direction: 'AU_TO_US', targetDeficit: unpaid, dstKey: accountKey },
-        { type: 'STATE_TAX_PAYMENT_DEBIT', amount: unpaid, escalated: true },
-      ];
+      const { crossBorder, actions } = escalateShortfall({
+        state, stateRegistry: this.stateRegistry,
+        toCountry: 'US', deficit: unpaid, dstKey: accountKey, currency,
+      });
+      residualActions = crossBorder
+        ? [...actions, { type: 'STATE_TAX_PAYMENT_DEBIT', amount: unpaid, escalated: true }]
+        : actions;
     }
 
     return this.newState(state, {

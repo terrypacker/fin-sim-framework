@@ -443,6 +443,8 @@ test('escalated exclusion survives reducer → pickPayload → journal → repor
   services.stateRegistry.getStateKey = () => 'usSavingsAccount';
   const state = {
     people: makePeople({ residency: 'US' }),
+    // The AU counterpart is what makes escalation cross-border; without it the residual is OUT_OF_FUNDS.
+    auSavingsAccount: makeAccount({ stateKey: 'auSavingsAccount', currency: 'AUD', holdings: [{ id: 'a0', marketValue: 0, costBasis: 0 }] }),
     usSavingsAccount: makeAccount({ stateKey: 'usSavingsAccount',
                                     holdings: [{ id: 's1', marketValue: 100, costBasis: 100 }] }),
   };

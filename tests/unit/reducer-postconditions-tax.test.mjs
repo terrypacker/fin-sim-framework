@@ -165,6 +165,8 @@ test('UsTaxPaymentDebitReducer: short balance escalates the residual cross-borde
   const r = new UsTaxPaymentDebitReducer(services);
   const state = {
     people: makePeople({ residency: 'US' }),
+    // The AU counterpart is what makes escalation cross-border; without it the residual is OUT_OF_FUNDS.
+    auSavingsAccount: makeAccount({ stateKey: 'auSavingsAccount', currency: 'AUD', holdings: [{ id: 'a0', marketValue: 0, costBasis: 0 }] }),
     usSavingsAccount: makeAccount({ stateKey: 'usSavingsAccount', holdings: [{ id: 's1', marketValue: 100, costBasis: 100 }] }),
   };
   const next = runReducer(r, state, makeAction('US_TAX_PAYMENT_DEBIT', { amount: 320 }), DATE,
@@ -185,6 +187,24 @@ test('UsTaxPaymentDebitReducer: short balance escalates the residual cross-borde
   assert.equal(Math.round(redebit.amount), 220);
   // No direct OUT_OF_FUNDS from the tax reducer itself — the transfer owns that.
   assert.equal(next.next.find(a => a.type === 'OUT_OF_FUNDS'), undefined, 'residual is escalated, not stranded');
+});
+
+test('UsTaxPaymentDebitReducer: with no other country the residual is OUT_OF_FUNDS, not re-debited', () => {
+  const services = makeServices();
+  services.stateRegistry.getStateKey = () => 'usSavingsAccount';
+  const r = new UsTaxPaymentDebitReducer(services);
+  const state = {
+    people: makePeople({ residency: 'US' }),
+    usSavingsAccount: makeAccount({ stateKey: 'usSavingsAccount', holdings: [{ id: 's1', marketValue: 100, costBasis: 100 }] }),
+  };
+  const next = runReducer(r, state, makeAction('US_TAX_PAYMENT_DEBIT', { amount: 320 }), DATE,
+    { checkNoMutation: false, balance: true, nonNegative: true });
+  assert.equal(next.next.find(a => a.type === 'INTL_TRANSFER_APPLY'), undefined, 'nothing to draw across the border');
+  assert.equal(next.next.find(a => a.escalated), undefined, 'nothing landed, so nothing to re-debit');
+  const oof = next.next.find(a => a.type === 'OUT_OF_FUNDS');
+  assert.ok(oof, 'the unpaid tax is reported');
+  assert.equal(Math.round(oof.deficit), 220);
+  assert.equal(oof.currency, 'USD');
 });
 
 test('UsTaxPaymentDebitReducer: a fully-funded tax bill emits NO OUT_OF_FUNDS (I8)', () => {
@@ -269,6 +289,8 @@ test('UsTaxPaymentDebitReducer: an EXHAUSTED draw still reports what it realized
   const r = new UsTaxPaymentDebitReducer(services);
   const state = {
     people: makePeople({ residency: 'US' }),
+    // The AU counterpart is what makes escalation cross-border; without it the residual is OUT_OF_FUNDS.
+    auSavingsAccount: makeAccount({ stateKey: 'auSavingsAccount', currency: 'AUD', holdings: [{ id: 'a0', marketValue: 0, costBasis: 0 }] }),
     usSavingsAccount: makeAccount({ stateKey: 'usSavingsAccount', role: ACCOUNT_ROLES.US_SAVINGS,
       holdings: [{ id: 'c1', marketValue: 1_000, costBasis: 1_000 }] }),
     usStockAccount: {

@@ -280,6 +280,13 @@ export class Simulation {
     this.actionExecutions = 0;
     this.reducerExecutions = 0;
 
+    // Action types dispatched with no reducer and no transform: type → count. Such an
+    // action does nothing, and the engine used to finish it without a word — which is
+    // how a single-country plan's INTL_TRANSFER_APPLY escalation (the only route to
+    // OUT_OF_FUNDS) vanished for every unfunded month. Tracked at every telemetry level
+    // so a silent MC run can still be asked; warned once per type when not silent.
+    this.unreducedActionTypes = new Map();
+
     // Hierarchical execution ID tracking — reset on rewind.
     // _executionCounts: configNodeId → number of times that node has executed this run.
     // _executionStack:  ancestry stack of full executionIds for the current call frame.
@@ -617,6 +624,19 @@ export class Simulation {
   /** Peek at the current execution ID without removing it. */
   _currentExecutionId() {
     return this._executionStack.at(-1) ?? null;
+  }
+
+  /**
+   * Count an action that reached dispatch with nothing to reduce it, warning on the
+   * first occurrence of each type unless the run is silent.
+   * @param {string} type
+   */
+  _noteUnreducedAction(type) {
+    const n = this.unreducedActionTypes.get(type) ?? 0;
+    this.unreducedActionTypes.set(type, n + 1);
+    if (n === 0 && !this.silent) {
+      console.warn(`[Simulation] action '${type}' has no reducer — dropped`);
+    }
   }
 
   /**
@@ -1012,6 +1032,7 @@ export class Simulation {
       }
 
       if (!reducers || reducers.length === 0) {
+        if (!action.transform) this._noteUnreducedAction(action.type);
         if (!this.silent) {
           this.bus.publish(new ExecutionBusMessage({
             phase:       EXECUTION_PHASES.END,

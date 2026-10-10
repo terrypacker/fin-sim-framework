@@ -422,6 +422,12 @@ export const AU_RETIREMENT = {
       // No `metrics.<stateKey>` balance seed: retired with the copies (design 101 W-D10).
       patches.metrics = metrics;
       patches.people  = people;
+      // The failure record OutOfFundsReducer and its chain write — seeded as the US
+      // toolset does, so a solvent AU-only plan reads "not failed" rather than undefined.
+      patches.outOfFundsDate    = null;
+      patches.scenarioFailed    = false;
+      patches.cumulativeDeficit = 0;
+      patches.deficitMonths     = 0;
     }
 
     for (const account of context.accounts) {

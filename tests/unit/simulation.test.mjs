@@ -1210,3 +1210,16 @@ test('Quarterly event with mid-year startDate fires at correct quarterly interva
   sim.stepTo(new Date(2026, 3, 1));
   assert.strictEqual(sim.state.count, 4, 'should have fired 4 times by Apr 1 2026');
 });
+
+test('An action with no reducer is counted in unreducedActionTypes, not silently dropped', () => {
+  const sim = new Simulation(new Date(2025, 0, 1), { initialState: { count: 0 }, opts: { silent: true } });
+
+  sim.reducers.register('INCREMENT', (state) => ({ ...state, count: state.count + 1 }));
+  sim.register('MONTHLY', () => [{ type: 'INCREMENT' }, { type: 'NOBODY_HOME' }]);
+  sim.scheduleQuarterly({ startDate: new Date(2025, 0, 1), type: 'MONTHLY' });
+
+  sim.stepTo(new Date(2025, 6, 1));
+  assert.strictEqual(sim.state.count, 3);
+  assert.deepEqual(Object.fromEntries(sim.unreducedActionTypes), { NOBODY_HOME: 3 },
+    'a reduced type must not be counted; the unreduced one is counted per dispatch');
+});

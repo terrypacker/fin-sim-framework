@@ -19,6 +19,7 @@ import { rollUnusedConcessionalCap, concessionalCapWithCarryForward, nonConcessi
   from './au/au-super-limits.js';
 import { ageAt } from '../mpc/harvest.js';
 import { auFinancialYearOf } from '../payroll/au-super-caps.js';
+import { escalateShortfall } from '../account-rules/shortfall-escalation.js';
 
 /** Sum the numeric values of a { key: number } map (per-person accumulators). */
 function _sumMap(map) {
@@ -1224,15 +1225,17 @@ class TaxPaymentDebitReducerBase extends Reducer {
     // the topped-up balance. The transfer reports any part even that cannot cover
     // as OUT_OF_FUNDS, so a genuine insolvency still surfaces — symmetric with
     // spending — without stranding a solvent household across the currency border.
+    // With no other country to draw from (a single-country plan) the residual is
+    // reported as OUT_OF_FUNDS here and there is nothing to re-debit.
     let residualActions = [];
     if (unpaid > 0.01 && !escalated) {
-      residualActions = [
-        { type: 'INTL_TRANSFER_APPLY',
-          direction:     this.constructor.cc === 'AU' ? 'US_TO_AU' : 'AU_TO_US',
-          targetDeficit: unpaid,
-          dstKey:        accountKey },
-        { type: this.constructor.actionType, amount: unpaid, escalated: true },
-      ];
+      const { crossBorder, actions } = escalateShortfall({
+        state, stateRegistry: this.stateRegistry,
+        toCountry: this.constructor.cc, deficit: unpaid, dstKey: accountKey, currency,
+      });
+      residualActions = crossBorder
+        ? [...actions, { type: this.constructor.actionType, amount: unpaid, escalated: true }]
+        : actions;
     }
 
     return this.newState(state, {

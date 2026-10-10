@@ -118,6 +118,8 @@ test('ReplenishSavingsReducer: domestic exhaustion chains INTL_TRANSFER_APPLY (I
   const r = new ReplenishSavingsReducer(services);
   const state = {
     people: makePeople({ residency: 'US' }),
+    // The AU counterpart is what makes escalation cross-border; without it the residual is OUT_OF_FUNDS.
+    auSavingsAccount: makeAccount({ stateKey: 'auSavingsAccount', currency: 'AUD', holdings: [{ id: 'a0', marketValue: 0, costBasis: 0 }] }),
     usSavingsAccount: { ...makeAccount({ stateKey: 'usSavingsAccount', holdings: [{ id: 's1', marketValue: 0, costBasis: 0 }] }), drawdownPriority: null },
     usBrokerage: { ...makeAccount({ stateKey: 'usBrokerage', holdings: [{ id: 'b1', marketValue: 100, costBasis: 100 }] }), drawdownPriority: 1 },
   };
@@ -127,6 +129,24 @@ test('ReplenishSavingsReducer: domestic exhaustion chains INTL_TRANSFER_APPLY (I
   assert.ok(intl, 'chained INTL_TRANSFER_APPLY on domestic exhaustion');
   assert.equal(intl.direction, 'AU_TO_US');
   assert.ok(intl.targetDeficit > 0);
+});
+
+test('ReplenishSavingsReducer: with no other country, domestic exhaustion is OUT_OF_FUNDS', () => {
+  const services = makeServices();
+  const r = new ReplenishSavingsReducer(services);
+  const state = {
+    people: makePeople({ residency: 'US' }),
+    usSavingsAccount: { ...makeAccount({ stateKey: 'usSavingsAccount', holdings: [{ id: 's1', marketValue: 0, costBasis: 0 }] }), drawdownPriority: null },
+    usBrokerage: { ...makeAccount({ stateKey: 'usBrokerage', holdings: [{ id: 'b1', marketValue: 100, costBasis: 100 }] }), drawdownPriority: 1 },
+  };
+  const next = runReducer(r, state, makeAction('REPLENISH_SAVINGS', { targetKey: 'usSavingsAccount', deficit: 5000 }),
+    DATE, { checkNoMutation: false, balance: true, nonNegative: true });
+  // A US-only plan has no IntlTransferApplyReducer: an escalation would be dropped.
+  assert.equal(next.next.find(a => a.type === 'INTL_TRANSFER_APPLY'), undefined);
+  const oof = next.next.find(a => a.type === 'OUT_OF_FUNDS');
+  assert.ok(oof, 'the shortfall is reported, not lost');
+  assert.equal(oof.currency, 'USD');
+  assert.equal(Math.round(oof.deficit), 4900, 'the part the brokerage could not cover');
 });
 
 // ─── IntlTransferApplyReducer (service-backed; FX) ─────────────────────────────

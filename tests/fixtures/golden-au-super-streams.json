@@ -576,6 +576,7 @@
  "cumulativeConsumptionMarginalUtility": 0.000146678634069,
  "cumulativeConsumptionUtility": 165.977067342,
  "cumulativeConsumptionUtilityCount": 84,
+ "cumulativeDeficit": 0,
  "cumulativeTaxesPaid": 293258.550371,
  "currentPeriods": {
   "AU": {
@@ -593,6 +594,7 @@
    "type": "YEAR_US"
   }
  },
+ "deficitMonths": 0,
  "discretionarySharePct": 0.3,
  "effectiveAppreciationRates": {},
  "effectiveDividendAdjustments": {},
@@ -818,6 +820,7 @@
   "type": "super"
  },
  "neInheritanceTaxYTD": 0,
+ "outOfFundsDate": null,
  "people": {
   "primary": {
    "birthDate": "1981-07-01T00:00:00.000Z",
@@ -945,6 +948,7 @@
  "propertyReturnDev": {},
  "propertyReturnDriftComp": {},
  "propertyReturnMarketDev": 0,
+ "scenarioFailed": false,
  "secondSuperAccount": {
   "allowsEarlyWithdrawal": false,
   "balance": 0,
