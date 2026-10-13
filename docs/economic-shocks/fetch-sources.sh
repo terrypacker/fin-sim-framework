@@ -88,4 +88,20 @@ curl -sSL --fail --max-time 120 -o /tmp/shiller-ie_data.xls \
   "https://img1.wsimg.com/blobby/go/e5e77e0b-59d1-44d9-ab25-4763ac982e53/downloads/ie_data.xls"
 python3 ../shiller-to-csv.py /tmp/shiller-ie_data.xls Shiller-SP500-monthly.csv
 
+echo "Gold, annual, 1968-1995 (MeasuringWorth)"
+# London PM fix annual average (+ USGS New York). The form POSTs; the page is HTML, flattened
+# by measuringworth-gold-to-csv.py. Used for the 1970s gold calibration (study macro-regimes-2026).
+curl -sSL --fail --max-time 60 -A "Mozilla/5.0" -o /tmp/measuringworth-gold.html \
+  --data "london=CHECKED&newyork=on&year_source=1968&year_result=1995" \
+  "https://www.measuringworth.com/datasets/gold/result.php"
+python3 ../measuringworth-gold-to-csv.py /tmp/measuringworth-gold.html MeasuringWorth-gold-annual-1968-1995.csv
+
+echo "Gold, monthly, 1960- (World Bank Pink Sheet)"
+# The Commodity Markets Outlook historical workbook. The URL carries a release id and moves when
+# the World Bank republishes; find the current "Monthly prices" link on
+# https://www.worldbank.org/en/research/commodity-markets if this 404s.
+curl -sSL --fail --max-time 120 -A "Mozilla/5.0" -o /tmp/CMO-Historical-Data-Monthly.xlsx \
+  "https://thedocs.worldbank.org/en/doc/18675f1d1639c7a34d463f59263ba0a2-0050012025/related/CMO-Historical-Data-Monthly.xlsx"
+python3 -I ../worldbank-cmo-gold-to-csv.py /tmp/CMO-Historical-Data-Monthly.xlsx WorldBank-CMO-gold-monthly.csv
+
 echo "done."
