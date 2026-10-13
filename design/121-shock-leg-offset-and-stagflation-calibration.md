@@ -1,6 +1,6 @@
 # 121 — Delayed shock legs, a recalibrated stagflation, gold risk, and TIPS real yields
 
-**Status:** ACCEPTED (12 Oct 2026), rev 3. **Phases 1–3 BUILT** (12 Oct 2026); phases 4–5 open.
+**Status:** ACCEPTED (12 Oct 2026), rev 3. **Phases 1–4 BUILT** (12 Oct 2026); phase 5 open.
 
 - **rev 2:** the author answered rev 1's questions.
   - Q1: raise the AU inflation leg (§4).
@@ -327,6 +327,36 @@ rate (`fxMoveFor`).
 **Blast radius of §6 and §6.1.** Every plan that holds gold gets riskier, more honest MC results. Deterministic
 runs and goldens do not move (no golden runs a stochastic path with gold). The study that
 prompted this design must re-run its gold arms afterwards.
+
+### 6.2 As built (phase 4)
+- **The draw lives in `EquityReturnTickHandler`** (`gold: { vol, correlation }`), on the
+  equity tick. It reads this year's market shock directly: the Gaussian innovation, or the
+  bootstrap year's deviation in units of the market vol. That is the same z design 120
+  stamps for FX, without a round trip through state.
+- **Same shape as a sleeve, not a separate lognormal.** `dev[GOLD] = vol·√dt·z_gold`, plus
+  the GEOMETRIC σ²/2 compensation, folded onto `effectiveGrowthRates.GOLD` (and per-account
+  `GOLD::` keys) by `EquityReturnReducer`. The anchor stays the CAGR, exactly as for equity.
+- **ε comes from a keyed stream even with `rngStreams` off** (`Simulation.keyedRng`). This
+  goes further than §6 asked. Drawing from the shared cursor would have shifted every
+  later draw in every stochastic run, gold or not. Measured on the one stochastic golden
+  (`two-security-concentration`, no gold): every balance is unchanged, and only
+  `effectiveGrowthRates.GOLD`, the stored gold deviation and the gold market index moved.
+  It was regolded.
+- **Params:** `goldReturnVol` (0.15) and `goldEquityCorrelation` (0, clamped to ±1), both
+  `mc: true`, with `enabled: false` MC rows beside `equityReturnVol`. `goldReturnVol` 0
+  draws nothing.
+- **§6.1:** `FX_EXPOSURE_BY_MARKET.GOLD` (USD_AUD, volScale 1.0) and
+  `DEFAULT_GOLD_HEDGE_RATIO` 0. `hedgeRatioOf` takes the lot's rate key, so a silent gold lot
+  is unhedged even in super, not the 0.255 equity default.
+- **The gate.** The overlay needs `state.hedgeOverlay` (its year-end FX mark) and the
+  year-end event. Both used to exist only when a security declared a hedge ratio. They now
+  also exist when the FX layer runs **and the plan may hold gold**: `_planMayHoldGold`
+  scans the parameters, account configs and securities for a positive `GOLD` weight or a
+  `GOLD` rate key. A miss leaves a plan as it was before this design. It never adds a
+  currency term wrongly. Gold alone does not re-base the ex-AU sleeve (`rebased` still
+  needs a declared hedge).
+- Tests: `evt-gold-risk.test.mjs` GOLD-1..6. Help: `stochastic-return-paths` (both
+  params) and `currency-hedging` (the gold exception), restamped.
 
 ## 7. Severity should scale only what it measures
 

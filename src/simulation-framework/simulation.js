@@ -546,6 +546,20 @@ export class Simulation {
    */
   rngStream(label, year) {
     if (!this.useRngStreams) return this.rng;
+    return this.keyedRng(label, year);
+  }
+
+  /**
+   * The (seed, label, year) substream, whatever `useRngStreams` says. For a process added
+   * AFTER the shared cursor's draw order was fixed (design 121 §6: gold): drawing it from the
+   * cursor would shift every later draw in every stochastic run, including plans that never
+   * read it. A keyed stream leaves the cursor exactly where it was.
+   *
+   * @param {string} label
+   * @param {number} year
+   * @returns {() => number} a uniform [0,1) generator
+   */
+  keyedRng(label, year) {
     // FNV-1a over the three inputs: cheap, stable across platforms, and — unlike seed+year
     // arithmetic — it does not put adjacent years on adjacent states, which for this
     // generator would make consecutive years visibly correlated.

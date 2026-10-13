@@ -623,6 +623,48 @@ function _hedgeOverlayActive(context) {
 }
 
 /**
+ * Whether AU-held gold needs the overlay (design 121 §6.1): the FX layer runs and the plan may
+ * hold gold. Gold is a USD price, so a gold lot in an AUD account moves with the AUD — but only
+ * the overlay can say so, and it needs `state.hedgeOverlay`'s year-end mark to measure from.
+ *
+ * @param {object} context
+ * @returns {boolean}
+ */
+function _goldFxActive(context) {
+  if (context._goldFxActive === undefined) {
+    context._goldFxActive = _fxProcess(context) != null && _planMayHoldGold(context);
+  }
+  return context._goldFxActive;
+}
+
+/**
+ * Whether anything in the plan can put GOLD in an account: a positive `GOLD` weight anywhere
+ * (a target allocation, a glide path, a pool, an opening mix) or a `GOLD` rate key (a lot or a
+ * security). Read off the authored config, never the run's state, so the answer cannot change
+ * between an MC path, a rollout and a replay. A miss leaves that plan as it was before design
+ * 121 (no currency term on AU gold), never the reverse, so the scan errs on the side of
+ * matching: an unrelated GOLD mention only switches on a year-end mark.
+ *
+ * @param {object} context
+ * @returns {boolean}
+ */
+function _planMayHoldGold(context) {
+  const seen = new Set();
+  const walk = (v) => {
+    if (v === RATE_KEYS.GOLD) return true;
+    if (v == null || typeof v !== 'object' || seen.has(v)) return false;
+    seen.add(v);
+    if (Array.isArray(v)) return v.some(walk);
+    for (const [k, x] of Object.entries(v)) {
+      if (k === RATE_KEYS.GOLD && typeof x === 'number' && x > 0) return true;
+      if (walk(x)) return true;
+    }
+    return false;
+  };
+  return walk(context.parameters) || walk(context.accounts) || walk(context.securities);
+}
+
+/**
  * `state.hedgeOverlay` (design 120 §5.6): the cash rate standing in for a foreign Prime the
  * plan does not load, the forward-roll cost, and the year-end FX mark the overlay measures f
  * from — seeded at the opening rate when the FX layer runs, empty otherwise (f is then 0).
@@ -665,8 +707,9 @@ function _stampMarketShock(context) {
  * negative carry is a hedge loss every year).
  */
 function _hedgeYearEndActive(context) {
-  return _hedgeOverlayActive(context) && (_fxProcess(context) != null
-    || (context.securities ?? []).some(s => s?.hedgeTaxTreatment === 'INCOME' && s?.hedgeRatio > 0));
+  return (_hedgeOverlayActive(context) && (_fxProcess(context) != null
+    || (context.securities ?? []).some(s => s?.hedgeTaxTreatment === 'INCOME' && s?.hedgeRatio > 0)))
+    || _goldFxActive(context);
 }
 
 export const ECONOMIC_REGIMES = {
@@ -1220,6 +1263,26 @@ export const ECONOMIC_REGIMES = {
         description:  'Annualized standard deviation (in rate units, e.g. 0.18 = 18%) of the shared equity MARKET factor — the US market\'s own volatility (0.18 is the mean of J.P. Morgan\'s and BlackRock\'s, design 90 §7.4). Each market loads on it by its beta (US 1.0; intl ex-US 0.85; intl ex-AU 0.81; AU 0.43) and adds its own idiosyncratic volatility. Only used when Stochastic Equity Returns is on.',
       },
       {
+        key:          'goldReturnVol',
+        label:        'Gold Return Volatility',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           true,
+        opt:          false,
+        defaultValue: 0.15,
+        description:  'Annualized standard deviation of gold\'s own yearly return draw, around Gold Growth Rate (design 121 §6). 0.15 is gold\'s measured real volatility since 1985. Drawn once a year alongside the equity market, only when Stochastic Equity Returns is on, so a single deterministic run still grows gold at exactly its growth rate. Set 0 for no gold draw.',
+      },
+      {
+        key:          'goldEquityCorrelation',
+        label:        'Gold–Equity Correlation',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           true,
+        opt:          false,
+        defaultValue: 0,
+        description:  'Correlation of gold\'s yearly draw with that year\'s equity market shock (−1 to 1). 0 is the centre of the measured windows: −0.23 over 1972–2024, −0.04 since 1985, +0.17 since 2000 (design 121 §6). Only used when Stochastic Equity Returns is on.',
+      },
+      {
         key:          'rngStreams',
         label:        'Paired RNG Streams',
         type:         'Boolean',
@@ -1592,7 +1655,8 @@ export const ECONOMIC_REGIMES = {
       priorMarkRates:              {},
       priorMarkCurve:              {},
       ...(_fxProcess(context)?.statePatches ?? {}),
-      ...(_hedgeOverlayActive(context) ? { hedgeOverlay: _hedgeOverlayState(context) } : {}),
+      ...(_hedgeOverlayActive(context) || _goldFxActive(context)
+        ? { hedgeOverlay: _hedgeOverlayState(context) } : {}),
     };
   },
 
@@ -1827,6 +1891,10 @@ export const ECONOMIC_REGIMES = {
               ? { ...DEFAULT_EQUITY_IDIO_LOCAL, ...(p.equityReturnIdioVol ?? {}) }
               : (p.equityReturnIdioVol ?? {}),
             stampMarketShock: _stampMarketShock(context),
+            // Design 121 §6 — gold's own draw. Without it gold is riskless in every MC path.
+            gold:           (p.goldReturnVol ?? 0.15) > 0
+              ? { vol: p.goldReturnVol ?? 0.15, correlation: p.goldEquityCorrelation ?? 0 }
+              : null,
             driftComp:      p.equityReturnDriftComp ?? 'GEOMETRIC',
             blockLength:    p.equityReturnBootstrapBlock ?? 5,
             // Design 103 §5.1: joint mode draws only post-war years, the era the inflation
