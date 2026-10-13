@@ -35,9 +35,13 @@ export class LateLifeCareHandler extends HandlerEntry {
     return h;
   }
 
-  call({ event }) {
-    const { personId, factor } = event.data ?? {};
-    const active = event.type === 'LATE_LIFE_CARE_BEGIN';
-    return [{ type: 'LATE_LIFE_CARE_APPLY', active, factor: factor ?? 2.0, personId }];
+  // The simulation calls a handler with `{ sim, date, data, meta, state }` — no event and no
+  // event TYPE — so BEGIN vs END travels in the data as `active`, stamped where the two events
+  // are scheduled. This used to read `event.type` / `event.data`, which only the unit test ever
+  // passed: in a run the first care event threw. `event` is still accepted for a direct call.
+  call({ data, event } = {}) {
+    const d      = data ?? event?.data ?? {};
+    const active = d.active ?? event?.type === 'LATE_LIFE_CARE_BEGIN';
+    return [{ type: 'LATE_LIFE_CARE_APPLY', active, factor: d.factor ?? 2.0, personId: d.personId }];
   }
 }

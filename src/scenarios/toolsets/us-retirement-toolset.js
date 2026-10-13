@@ -708,7 +708,9 @@ export const US_RETIREMENT = {
     // has a baseline without needing to wait for a future RETIREMENT_DATE_REACHED event.
     const strategies = p.spendingStrategy ?? ['FIXED'];
     if (strategies.includes('GUARDRAIL')) {
-      const simStart     = context.simStart ?? new Date();
+      // The compile context names the plan start `startDate`; reading `simStart` (which it does
+      // not have) fell back to the WALL CLOCK, so "already retired" meant retired before today.
+      const simStart     = context.startDate;
       // Design 116: the work end date is the last job's end when the person has jobs.
       const anyRetired   = context.people.some(pe => {
         const end = lastWorkDate(pe, context.spellsByPerson);
@@ -946,7 +948,7 @@ export const US_RETIREMENT = {
     // Post-retirement persons are handled via state() patches (baseline captured at sim start).
     const strategies = p.spendingStrategy ?? ['FIXED'];
     if (strategies.includes('GUARDRAIL')) {
-      const simStart = context.simStart ?? new Date();
+      const simStart = context.startDate;   // the plan start (not `simStart`: absent ⇒ wall clock)
       for (const person of people) {
         const workEnd = lastWorkDate(person, context.spellsByPerson);
         if (!workEnd) continue;
@@ -979,7 +981,7 @@ export const US_RETIREMENT = {
     const lateLifeCareFactor = p.lateLifeCareFactor ?? 2.0;
 
     if (mortalityEnabled) {
-      const simEnd = context.simEnd ? new Date(context.simEnd) : null;
+      const simEnd = context.endDate ?? null;   // `simEnd` is not a context field
       for (const person of people) {
         // Prefer the MC-perturbed lifeExpectancy from params.people if present;
         // fall back to the person's own lifeExpectancy field (deterministic single runs).
@@ -991,7 +993,11 @@ export const US_RETIREMENT = {
           birth.getUTCMonth(),
           birth.getUTCDate(),
         ));
-        if (simEnd && deathDate > simEnd) continue;
+        // Skip a person only when NOTHING of theirs lands inside the run: a late-life care
+        // window can begin before the end even when the death falls after it.
+        const firstEvent = new Date(deathDate);
+        if (lateLifeCareMonths > 0) firstEvent.setUTCMonth(firstEvent.getUTCMonth() - lateLifeCareMonths);
+        if (simEnd && firstEvent > simEnd) continue;
         schedules.push(new OneOffEvent({
           name:    `Death — ${person.name ?? person.id}`,
           type:    'PERSON_DIED',
@@ -1009,7 +1015,7 @@ export const US_RETIREMENT = {
             name:    `Late-Life Care Begin — ${person.name ?? person.id}`,
             type:    'LATE_LIFE_CARE_BEGIN',
             date:    careBegin,
-            data:    { personId: person.id, factor: lateLifeCareFactor },
+            data:    { personId: person.id, factor: lateLifeCareFactor, active: true },
             enabled: true,
             color:   '#BF360C',
           }));
@@ -1017,7 +1023,7 @@ export const US_RETIREMENT = {
             name:    `Late-Life Care End — ${person.name ?? person.id}`,
             type:    'LATE_LIFE_CARE_END',
             date:    new Date(deathDate),
-            data:    { personId: person.id },
+            data:    { personId: person.id, active: false },
             enabled: true,
             color:   '#BF360C',
           }));
