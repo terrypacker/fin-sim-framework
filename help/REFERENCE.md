@@ -9,11 +9,11 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-226 parameters · 33 panels · 12 node types (205 fields) · 179 action types · 88 tools · 317 state field types · 78 topics · 129 design docs
+228 parameters · 33 panels · 12 node types (205 fields) · 179 action types · 88 tools · 317 state field types · 78 topics · 129 design docs
 
 ---
 
-## Parameters (226)
+## Parameters (228)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
@@ -174,7 +174,7 @@ scenario's own schema), which is where to go to change it.
 - **`earlyWithdrawalStartYear`** — Early Withdrawal Optimization Start Year · `Number` · default — · via US_EARLY_WITHDRAWAL
   First year of the opt-in optimization window. Set with the end year to let the MPC cockpit tune/discover early withdrawals. null = no window (manual schedule only).
 
-### Economic Shocks (52)
+### Economic Shocks (54)
 
 - **`auYieldCurveShape`** — AU Yield Curve Shape · `YieldCurveShape` · default — · via ECONOMIC_REGIMES
   Optional AU term-structure overlay (design 67): an array of { tenor, spread } anchor points added to the FIXED_INCOME_AU level, linearly interpolated and clamped to the endpoints. Independent of the US shape. Absent/empty ⇒ a flat curve.
@@ -196,6 +196,10 @@ scenario's own schema), which is where to go to change it.
   When on (design 74), each year draws its own equity return from a seeded process instead of holding one constant rate for the whole run — so Monte Carlo measures sequence-of-returns risk, not just uncertainty about the long-run average. One shared market factor drives every equity sleeve (via per-sleeve beta), so systematic risk survives portfolio aggregation. Off by default ⇒ no randomness drawn, runs stay byte-identical. Reproducible: the rng cursor is snapshot-safe. NOTE (Phase 1): the anchor is treated as an ARITHMETIC mean, so turning this on lowers the realized geometric return by ≈σ²/2 (volatility drag). Geometric drift compensation is design 74 Phase 3. Monte Carlo turns this on for every iteration regardless (see "Monte Carlo: Stochastic Return Path"); this switch governs single runs.
 - **`equityReturnVol`** — Equity Return Volatility · `Number` · default `0.18` · sweep: mc · via ECONOMIC_REGIMES
   Annualized standard deviation (in rate units, e.g. 0.18 = 18%) of the shared equity MARKET factor — the US market's own volatility (0.18 is the mean of J.P. Morgan's and BlackRock's, design 90 §7.4). Each market loads on it by its beta (US 1.0; intl ex-US 0.85; intl ex-AU 0.81; AU 0.43) and adds its own idiosyncratic volatility. Only used when Stochastic Equity Returns is on.
+- **`goldEquityCorrelation`** — Gold–Equity Correlation · `Number` · default `0` · sweep: mc · via ECONOMIC_REGIMES
+  Correlation of gold's yearly draw with that year's equity market shock (−1 to 1). 0 is the centre of the measured windows: −0.23 over 1972–2024, −0.04 since 1985, +0.17 since 2000 (design 121 §6). Only used when Stochastic Equity Returns is on.
+- **`goldReturnVol`** — Gold Return Volatility · `Number` · default `0.15` · sweep: mc · via ECONOMIC_REGIMES
+  Annualized standard deviation of gold's own yearly return draw, around Gold Growth Rate (design 121 §6). 0.15 is gold's measured real volatility since 1985. Drawn once a year alongside the equity market, only when Stochastic Equity Returns is on, so a single deterministic run still grows gold at exactly its growth rate. Set 0 for no gold draw.
 - **`inflationGlobalReversionSpeed`** — Inflation Path Global Reversion Speed (k) · `Number` · default `0.1` · conditional · via ECONOMIC_REGIMES
   How quickly the shared global inflation cycle fades, per year: 0.1 keeps 0.90 of it each year, a half-life of about 7 years, so it moves on the scale of decades. Only used when Inflation Path Global Share is above 0.
 - **`inflationGlobalShare`** — Inflation Path Global Share · `Number` · default `0.4` · conditional · via ECONOMIC_REGIMES
@@ -2217,7 +2221,7 @@ what the in-app panel keys on.
 | [Cost Basis and Company Equity](concepts/cost-basis-and-equity.md) | concept | 247 | 2 panels · 3 params · design 94, 72 |
 | [Field × Action](panels/cross-action-query.md) | panel | 196 | 1 panel |
 | [Cross-Border Residency](concepts/cross-border-residency.md) | concept | 265 | 2 panels · 4 params · design 36, 52 |
-| [Currency Hedging](concepts/currency-hedging.md) | concept | 400 | 3 params · 1 action · design 120 |
+| [Currency Hedging](concepts/currency-hedging.md) | concept | 397 | 3 params · 1 action · design 120, 121 |
 | [Dashboard](panels/dashboard.md) | panel | 183 | 1 panel |
 | [Decision Graph](panels/dg-config.md) | panel | 168 | 1 panel · design 30 |
 | [DG Results](panels/dg-results.md) | panel | 162 | 1 panel · design 30 |
@@ -2271,7 +2275,7 @@ what the in-app panel keys on.
 | [Spending](panels/spending.md) | panel | 209 | 1 panel · design 89 |
 | [The Spending Rule](concepts/spending-rule.md) | concept | 296 | 1 panel · 17 params · design 89 |
 | [State](panels/state-panel.md) | panel | 181 | 1 panel |
-| [Stochastic Return Paths](concepts/stochastic-return-paths.md) | concept | 268 | 2 panels · 15 params · design 74, 90, 102 |
+| [Stochastic Return Paths](concepts/stochastic-return-paths.md) | concept | 339 | 2 panels · 17 params · design 74, 90, 102, 121 |
 | [Superannuation Access](concepts/superannuation.md) | concept | 399 | 1 panel · 4 actions · design 119, 77 |
 | [Tax Harvesting and Asset Location](concepts/tax-harvesting.md) | concept | 235 | 2 panels · 3 params · design 29, 94 |
 | [Timeline](panels/timeline.md) | panel | 203 | 1 panel |

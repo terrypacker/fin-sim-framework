@@ -39,11 +39,14 @@ import { priceOf }   from './holdings-earnings.js';
 /**
  * The markets with a currency exposure the overlay can price, keyed by rate key (§5.2).
  *
- * One today. `EQUITY_INTL_EX_AU` held in AUD is the only pair every §3 source is about
- * (Q2), and the model has one currency pair, so the basket's currency is proxied by USD:
- * the US is 74.07% of the index (§3.5). `volScale` scales the pair's log move to the
- * basket's — J.P. Morgan's numbers imply a 9.86% basket FX vol against USD/AUD's 11.42%
- * (§3, Q3).
+ * `EQUITY_INTL_EX_AU` held in AUD is the only pair every §3 source is about (Q2), and the
+ * model has one currency pair, so the basket's currency is proxied by USD: the US is 74.07%
+ * of the index (§3.5). `volScale` scales the pair's log move to the basket's — J.P. Morgan's
+ * numbers imply a 9.86% basket FX vol against USD/AUD's 11.42% (§3, Q3).
+ *
+ * `GOLD` (design 121 §6.1): gold is ONE USD price (design 56 §7), so an AUD holder's return is
+ * the USD return times the AUD/USD move, at the pair's full volatility. Before this entry a
+ * gold lot in super or an AU brokerage earned the USD rate in AUD with no currency term.
  */
 export const FX_EXPOSURE_BY_MARKET = Object.freeze({
   [RATE_KEYS.EQUITY_INTL_EX_AU]: Object.freeze({
@@ -53,7 +56,22 @@ export const FX_EXPOSURE_BY_MARKET = Object.freeze({
     pair:           'USD_AUD',
     volScale:       0.86,
   }),
+  [RATE_KEYS.GOLD]: Object.freeze({
+    home:           'AUD',
+    homeCountry:    'AU',
+    foreignCountry: 'US',
+    pair:           'USD_AUD',
+    volScale:       1.0,
+  }),
 });
+
+/**
+ * Design 121 §6.1 — the hedge ratio a silent gold lot runs at, in every role. Physical-backed
+ * ASX gold products are commonly unhedged; a hedged product declares its own `hedgeRatio` on
+ * the security (design 120 §5.1). Not the role default: super's 0.255 is its FOREIGN-EQUITY
+ * hedge, measured on equity (APRA Table 9a), and says nothing about gold.
+ */
+export const DEFAULT_GOLD_HEDGE_RATIO = 0;
 
 /**
  * §5.1, Q6 — the hedge ratio a silent lot runs at once the sleeve is re-based, by account
@@ -86,11 +104,15 @@ const PRIME_KEY = { US: RATE_KEYS.PRIME_US, AU: RATE_KEYS.PRIME_AU };
  * @param {object} inst - the lot's instrument view (`instrumentOf`)
  * @param {object} [state] - reads `hedgeOverlay.rebased`
  * @param {object} [account] - the account's state record, for its role's default
+ * @param {string|null} [rateKey] - the lot's market; a silent GOLD lot is unhedged (§6.1)
  * @returns {number|null}
  */
-export function hedgeRatioOf(inst, state = null, account = null) {
+export function hedgeRatioOf(inst, state = null, account = null, rateKey = null) {
   const h = inst?.hedgeRatio;
   if (h != null) return h;
+  // Design 121 §6.1 — wherever the overlay runs (it has a year-end mark to measure from), a
+  // silent gold lot takes the gold default, not its role's equity default.
+  if (rateKey === RATE_KEYS.GOLD) return state?.hedgeOverlay ? DEFAULT_GOLD_HEDGE_RATIO : null;
   // §5.5 — once the sleeve runs on the local-currency basis, a silent lot takes its
   // account's default (super 0.255, otherwise unhedged): the overlay is now where its
   // currency risk comes from.
@@ -159,7 +181,7 @@ export function hedgeCarryFor(state, exposure) {
  * @returns {{ delta: number, hedgeResult: number, f: number, carry: number, h: number }|null}
  */
 export function currencyOverlay({ state, account, inst, rateKey, g }) {
-  const h = hedgeRatioOf(inst, state, account);
+  const h = hedgeRatioOf(inst, state, account, rateKey);
   if (h == null) return null;
   const exposure = fxExposureOf(rateKey, account);
   if (!exposure) return null;

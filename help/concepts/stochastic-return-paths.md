@@ -3,8 +3,8 @@ id: stochastic-return-paths
 kind: concept
 title: Stochastic Return Paths
 panels: [mc-config, mc-results]
-params: [equityReturnStochastic, equityReturnModel, equityReturnVol, equityReturnReversionSpeed, equityReturnBeta, equityReturnIdioVol, equityReturnDriftComp, equityReturnBootstrapBlock, equityReturnBootstrapAuReplay, propertyReturnStochastic, propertyReturnBeta, propertyReturnIdioVol, propertyReturnIdioScale, mcSequenceRisk, mcEquityReturnModel]
-design: [74-stochastic-return-paths.md, 90-equity-fidelity-and-capital-losses.md, 102-historical-bootstrap-equity-returns.md]
+params: [equityReturnStochastic, equityReturnModel, equityReturnVol, equityReturnReversionSpeed, equityReturnBeta, equityReturnIdioVol, equityReturnDriftComp, equityReturnBootstrapBlock, equityReturnBootstrapAuReplay, propertyReturnStochastic, propertyReturnBeta, propertyReturnIdioVol, propertyReturnIdioScale, mcSequenceRisk, mcEquityReturnModel, goldReturnVol, goldEquityCorrelation]
+design: [74-stochastic-return-paths.md, 90-equity-fidelity-and-capital-losses.md, 102-historical-bootstrap-equity-returns.md, 121-shock-leg-offset-and-stagflation-calibration.md]
 stamps:
   param:equityReturnStochastic: 635a9b
   param:equityReturnModel: 613513
@@ -21,6 +21,8 @@ stamps:
   param:propertyReturnIdioScale: 9b7140
   param:mcSequenceRisk: b1d187
   param:mcEquityReturnModel: 012b08
+  param:goldReturnVol: e74662
+  param:goldEquityCorrelation: 578ce4
   panel:mc-config: ad4956
   panel:mc-results: cc2f55
 ---
@@ -42,6 +44,12 @@ pull-back speed means *more* persistence, which is the opposite of the intuition
 name suggests. Replaying blocks of real history keeps the multi-year runs and
 crashes that neither of the others produces, at the cost of drawing from fewer
 distinct sequences.
+
+Gold takes its own draw on the same yearly clock, loosely tied to the equity market's
+year. Without it, gold returned exactly its growth rate on every path: a riskless asset
+paying more than the default bond, which flatters any allocation that holds it.
+Measured gold swings nearly as much as the share market and barely moves with it, so
+it is a diversifier with real drawdowns, not a safe harbour.
 
 Property gets its own version, because a house is one asset with a sale date rather
 than a diversified position — the variance that matters is what it is worth on the

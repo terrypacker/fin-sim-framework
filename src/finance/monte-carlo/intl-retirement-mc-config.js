@@ -155,6 +155,17 @@ export const DEFAULT_MC_VARIABLE_CONFIGS = [
     type: DISTRIBUTION_TYPES.NORMAL,   mean: 0.18, stdDev: 0.03,
     group: 'Return Paths',             enabled: false,
   },
+  // Design 121 §6 — gold's own yearly draw. Like equity vol, inert unless the equity path runs.
+  {
+    paramKey: 'goldReturnVol',         label: 'Gold Return Volatility',
+    type: DISTRIBUTION_TYPES.NORMAL,   mean: 0.15, stdDev: 0.03,
+    group: 'Return Paths',             enabled: false,
+  },
+  {
+    paramKey: 'goldEquityCorrelation', label: 'Gold–Equity Correlation',
+    type: DISTRIBUTION_TYPES.NORMAL,   mean: 0,    stdDev: 0.15,
+    group: 'Return Paths',             enabled: false,
+  },
 
   // ── House path & running-cost MC scalers (design 75 §6.4 B) ───────────────
   // The per-property return/repair inputs live in cfg.realProperties (not cfg.parameters), so

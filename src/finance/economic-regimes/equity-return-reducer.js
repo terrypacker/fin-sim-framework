@@ -9,7 +9,10 @@
  */
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
-import { EQUITY_SLEEVES }    from './rate-keys.js';
+import { EQUITY_SLEEVES, RATE_KEYS } from './rate-keys.js';
+
+/** The keys the tick walks: every equity sleeve, and gold's own draw (design 121 §6). */
+const FOLDED_KEYS = [...EQUITY_SLEEVES, RATE_KEYS.GOLD];
 
 /**
  * EquityReturnReducer — folds the stochastic equity RETURN PATH onto effective growth
@@ -62,12 +65,12 @@ export class EquityReturnReducer extends Reducer {
     // Design 103 §5.2: in joint mode each market's nominal return also carries its
     // country's inflation deviation (the bootstrap's deviation is REAL). Absent otherwise.
     const pass   = state.equityInflationPassThrough ?? {};
-    const hasDev = EQUITY_SLEEVES.some(k => ((dev[k] ?? 0) + (comp[k] ?? 0) + (pass[k] ?? 0)) !== 0);
+    const hasDev = FOLDED_KEYS.some(k => ((dev[k] ?? 0) + (comp[k] ?? 0) + (pass[k] ?? 0)) !== 0);
     if (!hasDev) return this.newState(state, overlay);   // no sleeve path ⇒ overlay only
 
     const eff     = state.effectiveGrowthRates ?? {};
     const nextEff = { ...eff };
-    for (const sleeve of EQUITY_SLEEVES) {
+    for (const sleeve of FOLDED_KEYS) {
       const d = (dev[sleeve] ?? 0) + (comp[sleeve] ?? 0) + (pass[sleeve] ?? 0);
       if (d === 0) continue;
       if (nextEff[sleeve] != null) nextEff[sleeve] = nextEff[sleeve] + d;

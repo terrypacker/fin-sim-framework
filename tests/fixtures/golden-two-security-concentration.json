@@ -682,7 +682,7 @@
   "EQUITY_INTL_EX_AU": 0.163156709654,
   "EQUITY_INTL_EX_US": 0.125876380503,
   "EQUITY_US": 0.185280277745,
-  "GOLD": 0.05
+  "GOLD": 0.0137998765708
  },
  "effectiveInflationRates": {
   "AU": 0.03,
@@ -702,13 +702,15 @@
   "EQUITY_AU": 0.304820691129,
   "EQUITY_INTL_EX_AU": 0.077327889654,
   "EQUITY_INTL_EX_US": 0.0415593805033,
-  "EQUITY_US": 0.0990802777454
+  "EQUITY_US": 0.0990802777454,
+  "GOLD": -0.0474501234292
  },
  "equityReturnDriftComp": {
   "EQUITY_AU": 0.01144538,
   "EQUITY_INTL_EX_AU": 0.01082882,
   "EQUITY_INTL_EX_US": 0.015317,
-  "EQUITY_US": 0.0162
+  "EQUITY_US": 0.0162,
+  "GOLD": 0.01125
  },
  "equityReturnMarketDev": 0.0990802777454,
  "expenses": {
@@ -1241,8 +1243,8 @@
    "total": 253.14461592
   },
   "GOLD": {
-   "price": 147.745544379,
-   "total": 147.745544379
+   "price": 119.547380095,
+   "total": 119.547380095
   }
  },
  "marketIndexAsOfMs": 2019600000000,

@@ -163,7 +163,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
   static type        = 'EquityReturnTickHandler';
   static eventType   = 'EQUITY_RETURN_TICK';
 
-  constructor({ vol = 0.18, model = 'WHITE_NOISE', reversionSpeed = 0.3, beta = {}, idioVol = {}, driftComp = 'GEOMETRIC', blockLength = 5, window = 'FULL', auReplay = true, dt = 1, stampMarketShock = false } = {}) {
+  constructor({ vol = 0.18, model = 'WHITE_NOISE', reversionSpeed = 0.3, beta = {}, idioVol = {}, driftComp = 'GEOMETRIC', blockLength = 5, window = 'FULL', auReplay = true, dt = 1, stampMarketShock = false, gold = null } = {}) {
     super(null, 'Equity Return Tick');
     this.vol                  = vol;             // annualized market-factor sd (rate units)
     this.model                = model;           // one of EQUITY_RETURN_MODEL_IDS
@@ -178,6 +178,8 @@ export class EquityReturnTickHandler extends HandlerEntry {
     // Design 120 §5.4 — publish the year's standardized market shock for the FX tick to
     // correlate with. Only when the FX path reads it, so no other run gains a state key.
     this.stampMarketShock     = stampMarketShock;
+    // Design 121 §6 — gold's own annual draw, `{ vol, correlation }`, or null for none.
+    this.gold                 = gold;
     this.generatedActionTypes = ['EQUITY_RETURN_STEP_APPLY'];
   }
 
@@ -186,6 +188,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
       vol: d.vol, model: d.model, reversionSpeed: d.reversionSpeed,
       beta: d.beta, idioVol: d.idioVol, driftComp: d.driftComp, blockLength: d.blockLength,
       window: d.window, auReplay: d.auReplay, dt: d.dt, stampMarketShock: d.stampMarketShock ?? false,
+      gold: d.gold ?? null,
     });
     h.id = d.id;
     return h;
@@ -197,6 +200,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
       vol: this.vol, model: this.model, reversionSpeed: this.reversionSpeed,
       beta: this.beta, idioVol: this.idioVol, driftComp: this.driftComp, blockLength: this.blockLength,
       window: this.window, auReplay: this.auReplay, dt: this.dt, stampMarketShock: this.stampMarketShock,
+      gold: this.gold,
     };
   }
 
@@ -273,6 +277,32 @@ export class EquityReturnTickHandler extends HandlerEntry {
       driftComp[sleeve] = geometric
         ? sleeveVar[sleeve] / 2
         : 0;
+    }
+
+    // ── Gold (design 121 §6) ─────────────────────────────────────────────────────
+    //
+    // Without this gold was riskless in every Monte Carlo path: it returned exactly
+    // `goldGrowthRate` every year, out-yielding the default bond with no drawdown. Measured
+    // gold is a volatile diversifier — about 15 % real annual sd since 1985, with a
+    // correlation to equity near zero (MEASUREMENTS §12c).
+    //
+    // One draw a year on the equity cadence, correlated with THIS year's market shock in
+    // standardized units (the same z design 120 stamps for FX):
+    //
+    //     z_gold = ρ·z_market + √(1 − ρ²)·ε,      dev[GOLD] = vol·√dt·z_gold
+    //
+    // ε comes from gold's OWN keyed stream even when `rngStreams` is off: drawing it from the
+    // shared cursor would shift every later draw in every stochastic run, gold or not. The
+    // GEOMETRIC σ²/2 compensation applies as for a sleeve, so the anchor stays the CAGR.
+    if (this.gold?.vol > 0) {
+      const year  = (sim.currentDate ?? new Date()).getUTCFullYear();
+      const rho   = Math.max(-1, Math.min(1, this.gold.correlation ?? 0));
+      const zEq   = bootstrapping ? marketDev / this.vol : zMarket;
+      const eps   = gaussianFrom(sim.keyedRng?.('gold', year) ?? rng);
+      const zGold = rho * zEq + Math.sqrt(1 - rho * rho) * eps;
+      deviation[RATE_KEYS.GOLD] = this.gold.vol * Math.sqrt(this.dt) * zGold;
+      driftComp[RATE_KEYS.GOLD] = geometric ? this.gold.vol * this.gold.vol / 2 : 0;
+      sleeveVar[RATE_KEYS.GOLD] = this.gold.vol * this.gold.vol;
     }
 
     // ── The per-security overlay (design 94 §6.2) ─────────────────────────────────
