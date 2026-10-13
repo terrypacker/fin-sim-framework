@@ -16,6 +16,8 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
  *
  *     effectiveExchangeRates[pair] = anchor[pair] × exp(fxDeviation[pair])
  *
+ * where a fresh anchor is (base + regime drift) × fxPppIndex[pair] (design 122).
+ *
  * Runs at PRIORITY.PRE_PROCESS + 2 (12), after FxRefreshReducer (10) and
  * RegimeApplyReducer (11) have written the anchor into effectiveExchangeRates.
  *
@@ -67,8 +69,12 @@ export class FxProcessReducer extends Reducer {
     // read the stored anchor instead — avoiding a double exp(dev).
     const anchorIsFresh = action.type !== 'FX_STEP_APPLY';
 
+    // Design 122 — a fresh anchor is (authored rate + regime drift); scale it to the
+    // relative price level FxPppReducer last sampled. The stored anchor already carries it.
+    const ppp    = state.fxPppIndex ?? {};
     const anchor = anchorIsFresh
-      ? { ...state.effectiveExchangeRates }
+      ? Object.fromEntries(Object.entries(state.effectiveExchangeRates)
+          .map(([pair, a]) => [pair, ppp[pair] == null ? a : a * ppp[pair]]))
       : { ...(state.fxAnchorRates ?? state.effectiveExchangeRates) };
 
     const deviations = state.fxDeviation ?? {};

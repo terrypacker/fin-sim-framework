@@ -15,6 +15,7 @@ import { FxTransferApplyReducer } from './fx-transfer-apply-reducer.js';
 import { FxRefreshReducer }       from './fx-refresh-reducer.js';
 import { FxTickHandler }          from './fx-tick-handler.js';
 import { FxStepApplyReducer }     from './fx-step-apply-reducer.js';
+import { FxPppReducer, pppSampleAdvance } from './fx-ppp-reducer.js';
 import { FxProcessReducer }       from './fx-process-reducer.js';
 import { EventSeries }            from '../../simulation-framework/events/event-series.js';
 
@@ -144,11 +145,12 @@ export class FxService {
    *   `process` is the rate and its stochastic walk (anchors, volatility, deviation, the FX tick
    *   and the reducers that compose the rate), which ECONOMIC_REGIMES owns so an AU-only plan
    *   can run it; `transfers` is the transfer fee, the FX_TRANSFER handler and its reducer,
-   *   which US_AU_CROSS_BORDER keeps. Both by default.
+   *   which US_AU_CROSS_BORDER keeps. Both by default. `simStart` picks the advance the PPP
+   *   index is sampled on (design 122 §3.1).
    * @returns {{ statePatches: object, events: [], handlers: object[], reducers: object[] }}
    */
   getContributions(currencies, accountService, _stateRegistry, parameters,
-                   { process = true, transfers = true } = {}) {
+                   { process = true, transfers = true, simStart = null } = {}) {
     const pairs = this._collectPairs(currencies);
 
     const model      = parameters?.fxProcessModel ?? 'NONE';
@@ -207,6 +209,10 @@ export class FxService {
       ...(transfers ? [new FxTransferApplyReducer({ accountService })] : []),
       // Always registered with the process layer — no-ops when fxDeviation stays 0 (NONE model).
       ...(process   ? [new FxProcessReducer(), new FxStepApplyReducer()] : []),
+      // Design 122 — the anchor follows the AU/US price ratio. Writes nothing while the two
+      // price levels agree, so equal-inflation runs are byte-identical with it on.
+      ...(process && pairIds.includes('USD_AUD') && parameters?.fxPurchasingPowerParity !== false
+        ? [new FxPppReducer({ sampleOn: pppSampleAdvance(simStart) })] : []),
     ];
 
     const events = [];

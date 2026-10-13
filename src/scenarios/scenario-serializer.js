@@ -86,6 +86,7 @@ import { IntlTransferApplyReducer, IntlTransferRecordReducer }       from '../fi
 import { FxTransferApplyReducer }        from '../finance/fx/fx-transfer-apply-reducer.js';
 import { FxRefreshReducer }              from '../finance/fx/fx-refresh-reducer.js';
 import { FxProcessReducer }              from '../finance/fx/fx-process-reducer.js';
+import { FxPppReducer }                  from '../finance/fx/fx-ppp-reducer.js';
 import { FxStepApplyReducer }            from '../finance/fx/fx-step-apply-reducer.js';
 import { StockDividendCashApplyReducer }  from '../finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { BondCouponCashApplyReducer }     from '../finance/reducers/bond-coupon-cash-apply-reducer.js';
@@ -301,7 +302,7 @@ const _ALL_CLASSES = [
   // Finance reducers
   UsSavingsInterestCreditReducer, ExpenseDebitReducer, ReplenishSavingsReducer,
   IntlTransferApplyReducer, IntlTransferRecordReducer, FxTransferApplyReducer, FxRefreshReducer,
-  FxProcessReducer, FxStepApplyReducer,
+  FxProcessReducer, FxStepApplyReducer, FxPppReducer,
   StockDividendCashApplyReducer, BondCouponCashApplyReducer, CashSleeveInterestApplyReducer, BondSleeveCouponApplyReducer, BondAccretionApplyReducer, ChangeResidencyApplyReducer, ChangeStateResidencyApplyReducer,
   PersonDiedApplyReducer, SocialSecuritySurvivorApplyReducer, SsEntitlementApplyReducer, AccountRetitleApplyReducer, SuperDeathBenefitApplyReducer, ScenarioCompleteReducer,
   LateLifeCareApplyReducer,

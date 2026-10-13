@@ -21,6 +21,8 @@ import { stepsUpCostBaseOnResidency } from '../tax/residency-cost-base-policy.js
  *      plain Account objects that lack the field).
  *
  *   2. Sets residency = 'AU' on every person in state.people.
+ *
+ *   3. Freezes expenseRebaseRates.USD_AUD at the PPP-scaled rate (design 122 §3.3).
  *      Citizen arrays are NOT modified — moving countries does not change citizenship.
  *
  * Runs at PRIORITY.PRE_PROCESS — before any CASH_FLOW reducers that may
@@ -137,10 +139,23 @@ export class ChangeResidencyApplyReducer extends Reducer {
       }
     }
 
+    // 3. Design 122 §3.3 — freeze the rate the residence expense figure converts at. The
+    //    figure was indexed at US CPI until today and is indexed at AU CPI from here, so the
+    //    AU price rise RELATIVE to the US before the move has to enter once, now: authored
+    //    rate × the AU/US price ratio FxPppReducer last sampled. Frozen, not live, or the
+    //    post-move gap would count twice. Only stamped when PPP has moved the index, so a run
+    //    with equal inflation (or PPP off) keeps converting at baseExchangeRates.
+    const ppp  = state.fxPppIndex?.USD_AUD;
+    const base = state.baseExchangeRates?.USD_AUD;
+    const rebase = ppp != null && ppp !== 1 && base > 0
+      ? { expenseRebaseRates: { ...(state.expenseRebaseRates ?? {}), USD_AUD: base * ppp } }
+      : {};
+
     return this.newState({
       ...state,
       ...propertyUpdates,
       ...equityUpdates,
+      ...rebase,
       people: Object.keys(updatedPeople).length > 0 ? updatedPeople : state.people,
     });
   }

@@ -172,6 +172,8 @@ export const COVERED = [
   'HouseRepairApplyReducer',
   // Time-varying FX (design 47) — evt-fx-process.test.mjs
   'FxProcessReducer', 'FxStepApplyReducer',
+  // FX anchor follows the AU/US inflation gap (design 122) — evt-fx-ppp.test.mjs
+  'FxPppReducer',
   // Currency-hedge FX mark (design 120 §5.6) — evt-hedged-equity.test.mjs
   'HedgeYearEndReducer',
 

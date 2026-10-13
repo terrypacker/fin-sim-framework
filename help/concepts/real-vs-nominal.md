@@ -22,7 +22,7 @@ stamps:
   panel:mc-results: cc2f55
   panel:opt-results: 154951
   src/visualization/app-display-settings.js: ec6c02
-  src/finance/services/state-schema-registry.js: 98d70d
+  src/finance/services/state-schema-registry.js: 24191b
 ---
 
 Every balance the simulation books is **nominal**: money in the year it happens.
@@ -39,7 +39,7 @@ values are divided by US inflation, and when you view AUD, by AU inflation, each
 measured from the plan's start to the value's date. Every figure on one screen uses
 the same index, so totals still add up and a move between countries does not put a
 jump in the numbers. If the two countries' inflation differs while the exchange rate
-is held, switching currency changes a real curve's *shape*, not just its scale. That
+is held (purchasing-power parity off), switching currency changes a real curve's *shape*, not just its scale. That
 is correct: the two currencies' purchasing power really does drift apart.
 
 **Each value at its own date.** A value is converted at *its* date's exchange rate

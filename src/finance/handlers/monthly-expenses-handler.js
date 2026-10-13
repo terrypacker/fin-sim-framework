@@ -19,16 +19,19 @@ import { cashFloorOf } from '../account-rules/cash-floor.js';
  * Re-base an amount between USD and AUD at the scenario's ANCHOR rate.
  *
  * `state.baseExchangeRates.USD_AUD` is AUD per USD, written once from the authored
- * `exchangeRateUsdToAud` and never mutated — so this conversion is deterministic and
- * identical in every Monte Carlo path. That is the whole point: it re-denominates a
- * standard of living without importing exchange-rate risk into the LEVEL of it.
+ * `exchangeRateUsdToAud` and never mutated — so this conversion carries no exchange-rate
+ * noise. That is the whole point: it re-denominates a standard of living without importing
+ * exchange-rate risk into the LEVEL of it. Under PPP (design 122) the move freezes a rate
+ * scaled by the AU/US price ratio — a price-level fact, not a spot draw, so the point holds.
  *
  * Falls back to the amount unchanged when the pair is absent (a single-currency
  * scenario has no anchor and needs no re-basing) rather than guessing a rate.
  */
 function rebaseAtAnchor(amount, fromCode, toCode, state) {
   if (amount == null || fromCode === toCode) return amount;
-  const audPerUsd = state?.baseExchangeRates?.USD_AUD;
+  // Design 122 §3.3: the rate frozen at the move (authored × the AU/US price ratio then)
+  // when PPP has moved it; otherwise the authored anchor.
+  const audPerUsd = state?.expenseRebaseRates?.USD_AUD ?? state?.baseExchangeRates?.USD_AUD;
   if (!Number.isFinite(audPerUsd) || audPerUsd <= 0) return amount;
   if (fromCode === 'USD' && toCode === 'AUD') return amount * audPerUsd;
   if (fromCode === 'AUD' && toCode === 'USD') return amount / audPerUsd;

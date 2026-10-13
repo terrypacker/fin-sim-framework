@@ -131,6 +131,7 @@ import { fxRate, fxFeeIn, convertNetOfFee, grossUpForTarget } from './finance/fx
 import { CurrencyPair, FxEngine } from './finance/fx/fx-engine.js';
 import { FX_PROCESS_MODELS, FX_PROCESS_MODEL_IDS, gaussianFrom } from './finance/fx/fx-process-models.js';
 import { FxProcessReducer } from './finance/fx/fx-process-reducer.js';
+import { FxPppReducer } from './finance/fx/fx-ppp-reducer.js';
 import { FxRefreshReducer } from './finance/fx/fx-refresh-reducer.js';
 import { FxService } from './finance/fx/fx-service.js';
 import { FxStepApplyReducer } from './finance/fx/fx-step-apply-reducer.js';
@@ -1106,6 +1107,7 @@ export const Finance = {
   FX_PROCESS_MODEL_IDS,
   gaussianFrom,
   FxProcessReducer,
+  FxPppReducer,
   FxRefreshReducer,
   FxService,
   FxStepApplyReducer,

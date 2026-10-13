@@ -42,6 +42,7 @@ import { FxService, regimesContributesFxProcess, DEFAULT_FX_EQUITY_CORRELATION }
 import { FxTickHandler }                  from '../../finance/fx/fx-tick-handler.js';
 import { FxRefreshReducer }               from '../../finance/fx/fx-refresh-reducer.js';
 import { FxProcessReducer }               from '../../finance/fx/fx-process-reducer.js';
+import { FxPppReducer }                   from '../../finance/fx/fx-ppp-reducer.js';
 import { FxStepApplyReducer }             from '../../finance/fx/fx-step-apply-reducer.js';
 import { HedgeYearEndHandler, HedgeYearEndReducer, buildHedgeYearEndSeries } from '../../finance/fx/hedge-year-end.js';
 import { DEFAULT_HEDGE_FOREIGN_CASH_RATE, DEFAULT_HEDGE_COST } from '../../finance/holdings/currency-overlay.js';
@@ -607,7 +608,7 @@ function _fxProcess(context) {
   if (!context._fxService) context._fxService = new FxService();
   return context._fxService.getContributions(
     ['USD', 'AUD'], context.accountService, context.stateRegistry, context.parameters,
-    { process: true, transfers: false });
+    { process: true, transfers: false, simStart: context.startDate });
 }
 
 /**
@@ -719,7 +720,7 @@ export const ECONOMIC_REGIMES = {
 
   types: {
     handlers: [EconomicShockHandler, EconomicRecoveryTickHandler, YieldCurveTickHandler, EquityReturnTickHandler, PropertyReturnTickHandler, InflationTickHandler, FxTickHandler, HedgeYearEndHandler],
-    reducers: [HedgeYearEndReducer, FxRefreshReducer, FxProcessReducer, FxStepApplyReducer, RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer, YieldCurveReducer, YieldCurveStepReducer, EquityReturnReducer, EquityReturnStepReducer, PropertyReturnStepReducer, InflationStepReducer, InflationPathReducer, BondPriceAdjustReducer, BondMaturityReducer],
+    reducers: [HedgeYearEndReducer, FxRefreshReducer, FxProcessReducer, FxStepApplyReducer, FxPppReducer, RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer, YieldCurveReducer, YieldCurveStepReducer, EquityReturnReducer, EquityReturnStepReducer, PropertyReturnStepReducer, InflationStepReducer, InflationPathReducer, BondPriceAdjustReducer, BondMaturityReducer],
     actions: [
       { type: 'ADD_REGIME_APPLY',    fields: { regime: ValueType.any() } },
       { type: 'REMOVE_REGIME_APPLY', fields: { regimeId: ValueType.text() } },
@@ -1523,6 +1524,18 @@ export const ECONOMIC_REGIMES = {
           + 'flattens, understating 10-year dispersion by a third. Still the more '
           + 'window-sensitive of the two knobs (whole series 0.072, post-2000 0.104), so it is '
           + 'worth running as a sensitivity axis rather than trusted as a constant.',
+      },
+      {
+        key: 'fxPurchasingPowerParity', label: 'FX Follows the Inflation Gap (PPP)',
+        type: 'Boolean', group: 'FX', mc: false, opt: false,
+        defaultValue: true,
+        description: 'Moves the AUD price of a US dollar with the gap between AU and US prices since '
+          + 'the plan started (relative purchasing-power parity, design 122): if AU prices rise 10% '
+          + 'more than US prices, a dollar costs 10% more AUD. Any FX process then wanders around '
+          + 'that level instead of a fixed one. History: 1972–1990 AU prices rose 1.67x relative to '
+          + 'the US and the AUD fell 1.65x. Off pins the level, so an inflation gap becomes a real '
+          + 'change in the cost of living abroad. Sampled each 1 July; equal inflation in both '
+          + 'countries leaves the rate exactly where it was.',
       },
       // Currency hedge (design 120 §5.6). Read only by a lot whose security declares a
       // hedge ratio, so neither is a Monte Carlo axis by default: on every other plan they

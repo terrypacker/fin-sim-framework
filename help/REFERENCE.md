@@ -9,11 +9,11 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-229 parameters · 33 panels · 12 node types (205 fields) · 179 action types · 88 tools · 318 state field types · 78 topics · 129 design docs
+230 parameters · 33 panels · 12 node types (205 fields) · 179 action types · 88 tools · 320 state field types · 78 topics · 130 design docs
 
 ---
 
-## Parameters (229)
+## Parameters (230)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
@@ -287,7 +287,7 @@ scenario's own schema), which is where to go to change it.
 - **`yieldCurveVol`** — Yield Curve Volatility · `Number` · default `0.01` · via ECONOMIC_REGIMES
   Annualized standard deviation (in rate units, e.g. 0.01 = 100 bps) of the stochastic level walk. Only used when Stochastic Yield Curve is on.
 
-### FX (7)
+### FX (8)
 
 - **`fxBasisMethod`** — §988 Lot Consumption Method · `Enum` · default `pro-rata` · one of `pro-rata`, `fifo` · via US_AU_CROSS_BORDER
   Reg. §1.988-2(a)(2)(iii)(B)(1) lets a taxpayer use "any reasonable method consistently applied … to all accounts" and names FIFO, LIFO and pro rata. Pro-rata is the default because it is exactly what a single fxBasisRate scalar implements. FIFO additionally supplies a HOLDING PERIOD, which the personal capital branch needs and pro-rata cannot supply — at the cost of publishing a lot array on every pool. The choice is locked at adoption and binds all future years (design 87 G6).
@@ -295,6 +295,8 @@ scenario's own schema), which is where to go to change it.
   Annual correlation between the year's move in the AUD price of a US dollar and the year's equity market shock, used when the FX process and stochastic equity returns are both on. Negative means the Australian dollar falls when world shares fall, which cushions an unhedged holder. The default is the 2004–2023 annual measurement on the model's own pair (design 120 §3.6, `npm run fx:equity-correlation`); 1984–2003 measured +0.16, so sweep it rather than trust one era. 0 leaves the FX path independent.
 - **`fxProcessModel`** — FX Rate Process · `Enum` · default `NONE` · one of `NONE`, `WHITE_NOISE`, `RANDOM_WALK`, `MEAN_REVERTING` · via ECONOMIC_REGIMES
   Time-varying FX model (design 47). NONE = flat (today). MEAN_REVERTING/RANDOM_WALK/WHITE_NOISE vary the rate over time via the seeded RNG.
+- **`fxPurchasingPowerParity`** — FX Follows the Inflation Gap (PPP) · `Boolean` · default `true` · via ECONOMIC_REGIMES
+  Moves the AUD price of a US dollar with the gap between AU and US prices since the plan started (relative purchasing-power parity, design 122): if AU prices rise 10% more than US prices, a dollar costs 10% more AUD. Any FX process then wanders around that level instead of a fixed one. History: 1972–1990 AU prices rose 1.67x relative to the US and the AUD fell 1.65x. Off pins the level, so an inflation gap becomes a real change in the cost of living abroad. Sampled each 1 July; equal inflation in both countries leaves the rate exactly where it was.
 - **`fxReversionSpeed`** — FX Reversion Speed (per year) · `Number` · default `0.114` · sweep: mc · conditional · via ECONOMIC_REGIMES
   Mean-reversion speed toward the anchor for the MEAN_REVERTING model — a half-life of about 6.1 years. Fitted to the observed TERM STRUCTURE of FX dispersion over the post-float window, not to the lag-1 autocorrelation: the lag-1 AR(1) estimate on the same data is 0.296, which reproduces 1-year moves and then flattens, understating 10-year dispersion by a third. Still the more window-sensitive of the two knobs (whole series 0.072, post-2000 0.104), so it is worth running as a sensitivity axis rather than trusted as a constant.
 - **`fxVolatility`** — FX Volatility (annualized) · `Number` · default `0.1142` · sweep: mc · conditional · via ECONOMIC_REGIMES
@@ -1866,7 +1868,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 
 ---
 
-## State field types (318)
+## State field types (320)
 
 The scenario-INDEPENDENT half of `StateSchemaRegistry`: the globs and exact paths it
 installs in its own constructor, with the value type that decides how each formats.
@@ -2049,6 +2051,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `equityReturnDev.*` | rate |
 | `equityReturnDriftComp.*` | rate |
 | `equityReturnMarketDev` | rate |
+| `expenseRebaseRates.*` | fxRate |
 | `expenses.discretionary` | currency(USD) |
 | `expenses.essential` | currency(USD) |
 | `foreignGeneralCapGainsYTD` | currency(USD) |
@@ -2065,6 +2068,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `ftcYTD` | currency(USD) |
 | `fxAnchorRates.*` | fxRate |
 | `fxDeviation.*` | decimal |
+| `fxPppIndex.*` | decimal |
 | `hedgeOverlay.carriedLoss.*` | rate |
 | `hedgeOverlay.cost` | rate |
 | `hedgeOverlay.foreignCashRate` | rate |
@@ -2236,7 +2240,7 @@ what the in-app panel keys on.
 | [Event Sourcing](concepts/event-sourcing.md) | concept | 381 | 3 panels · design 2, 16, 91 |
 | [Node History](panels/exec-history.md) | panel | 191 | 1 panel |
 | [Funding and Instalments](concepts/funding-and-instalments.md) | concept | 248 | 2 panels · 3 params · design 107 |
-| [FX](concepts/fx.md) | concept | 257 | 2 panels · 5 params · design 47, 87 |
+| [FX](concepts/fx.md) | concept | 390 | 2 panels · 6 params · design 47, 87, 122 |
 | [Handler](nodes/handler.md) | node | 208 | 2 panels · design 2 |
 | [Help](panels/help.md) | panel | 223 | 1 panel · design 108 |
 | [Holdings](panels/holdings.md) | panel | 188 | 1 panel · design 82 |
@@ -2264,7 +2268,7 @@ what the in-app panel keys on.
 | [Liquidity Pools](panels/pools.md) | panel | 236 | 1 panel · design 97 |
 | [Randomness and Seeds](concepts/randomness-and-seeds.md) | concept | 251 | 2 panels · 2 params · design 74 |
 | [Real Property](nodes/real-property.md) | node | 221 | 2 panels · design 75, 83, 86, 48, 113 |
-| [Real vs Nominal Dollars](concepts/real-vs-nominal.md) | concept | 395 | 12 panels · design 79, 89 |
+| [Real vs Nominal Dollars](concepts/real-vs-nominal.md) | concept | 398 | 12 panels · design 79, 89 |
 | [Recorded MPC Runs](concepts/recorded-mpc-runs.md) | concept | 400 | 1 panel · 3 params · design 81, 80 |
 | [Reducer](nodes/reducer.md) | node | 195 | 3 panels · design 2, 16 |
 | [Return Assumptions](concepts/return-assumptions.md) | concept | 266 | 2 panels · 13 params · design 99, 106 |
@@ -2287,7 +2291,7 @@ what the in-app panel keys on.
 
 ---
 
-## Design documents (129)
+## Design documents (130)
 
 Tier 3 — the full argument behind each mechanic, in `design/`. The title is each
 file's own H1, read out of it; there is no summary column, because a one-line precis
@@ -2422,6 +2426,7 @@ between 10 and 11.
 | [`119-super-access-and-msbs.md`](../design/119-super-access-and-msbs.md) | 119 — Super access dates, multiple funds and MSBS |
 | [`120-currency-hedged-equity.md`](../design/120-currency-hedged-equity.md) | 120 — Currency-hedged and unhedged foreign equity |
 | [`121-shock-leg-offset-and-stagflation-calibration.md`](../design/121-shock-leg-offset-and-stagflation-calibration.md) | 121 — Delayed shock legs, a recalibrated stagflation, gold risk, and TIPS real yields |
+| [`122-fx-purchasing-power-parity.md`](../design/122-fx-purchasing-power-parity.md) | 122 — The exchange rate follows the inflation gap (relative PPP) |
 | [`bus-unification-plan.md`](../design/bus-unification-plan.md) | Bus Unification Plan |
 | [`inconsistencies.md`](../design/inconsistencies.md) | Inconsistencies, Rework Candidates, and Open Questions |
 | [`requirements.md`](../design/requirements.md) | Requirements Tracker |
