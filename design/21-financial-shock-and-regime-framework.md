@@ -998,6 +998,10 @@ instant-break shape at one end of an MC range and away from it at the other — 
 *shape* disguised as a change of magnitude. Each preset's `severity` is now its measured
 trough depth, so the knob stays readable.
 
+*Narrowed by design 121 §7 (12 Oct 2026):* only the **equity** `returnAdjustment` keys
+scale. Fixed income, gold and every other key keep the preset's value, so a rates leg's
+return and rate adjustments stay paired under a sweep.
+
 ---
 
 ## 22. Recovery that can overshoot — `V_REBOUND` / `U_REBOUND`

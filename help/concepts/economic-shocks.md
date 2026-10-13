@@ -27,7 +27,8 @@ A preset carries a severity, which is its measured trough depth. That matters be
 the shock itself: other mechanics gate on it, so a bucket strategy that should only
 engage in a deep drawdown can state its threshold in the same units a severity sweep
 moves. Thresholds expressed that way track the sweep instead of drifting away from
-it.
+it. Because it measures the equity fall, a severity sweep deepens or eases only the
+equity side of a preset; its rate, bond, inflation and gold legs keep their values.
 
 House repairs are here because they are shocks too, just small and frequent ones. The
 two scale knobs multiply the configured size and frequency of stochastic repair

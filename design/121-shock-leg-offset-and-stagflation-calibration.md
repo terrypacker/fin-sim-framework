@@ -1,6 +1,6 @@
 # 121 — Delayed shock legs, a recalibrated stagflation, gold risk, and TIPS real yields
 
-**Status:** ACCEPTED (12 Oct 2026), rev 3. **Phases 1–2 BUILT** (12 Oct 2026); phases 3–5 open.
+**Status:** ACCEPTED (12 Oct 2026), rev 3. **Phases 1–3 BUILT** (12 Oct 2026); phases 4–5 open.
 
 - **rev 2:** the author answered rev 1's questions.
   - Q1: raise the AU inflation leg (§4).
@@ -344,6 +344,13 @@ effects today:
 scale only the equity-class keys (`EQUITY_*` and what fans out from them). Leave fixed income,
 gold and every other key at the preset's value. This changes MC runs that sweep severity on any
 preset with a rates leg; it changes nothing at the preset's own severity.
+
+**As built (phase 3).** `applySeverity` scales a `returnAdjustment` key only when it is an
+equity sleeve (`EQUITY_SLEEVES`) or a member key one fans out to. Level effects were already
+equity-only (`equityRevaluation`). Nothing else read the old behaviour: the 1873 preset's
+`relief` tailwind is an equity key, so its offset shape still survives a sweep. Tests:
+`evt-shock-severity-scope.test.mjs` SEV-1..3, which run every rated preset. Phase 1's LAG-5
+now sweeps an equity key on the delayed leg.
 
 ## 8. TIPS at a market real yield
 
