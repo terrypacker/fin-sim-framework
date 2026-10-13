@@ -194,6 +194,7 @@ test('LAG-5: severity reaches the delayed group; a startDate sweep moves every g
 
 test('LAG-6: absent the field, or with every leg at 0, the schedule is unchanged', () => {
   for (const [id, preset] of Object.entries(SHOCK_LIBRARY)) {
+    if (preset.legs?.some(l => l.startMonths)) continue;   // delayed by design (STAGFLATION)
     const entry  = { preset: id, startDate: '2030-01-01' };
     const before = schedule([entry]);
     assert.equal(shocksOf(before).length, 1, `${id}: one event`);

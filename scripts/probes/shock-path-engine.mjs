@@ -196,6 +196,143 @@ emit('The trough column reads in whole years for every composed preset, because 
 emit('growth is applied once a year. A 17-month slide is expressible only as "two year-ends",');
 emit('which is why the GFC preset bottoms at 24 months against a measured 17.');
 emit('');
+// ── Stagflation: money by phase (design 121 §4-5) ─────────────────────────────────
+
+/**
+ * Measured targets for the stagflation's rate phases, transcribed from MEASUREMENTS §12.
+ * US FI is the 5-year, US policy is fed funds; AU FI is the 10-year, AU policy the 3-month bill.
+ */
+const PHASES = [
+  { label: '0–120 mo',   from: 0,   to: 120, episode: 'US 1973–80 · AU 1973–80',
+    us: { fi: -1.0, policy: -0.8 }, au: { fi: -2.0, policy: -1.6 } },
+  { label: '120–180 mo', from: 120, to: 180, episode: 'US 1981–85 · AU 1981–90',
+    us: { fi: 7.2, policy: 6.4 },   au: { fi: 5.5, policy: 6.6 } },
+  { label: '180–240 mo', from: 180, to: 240, episode: 'US 1986–90 · AU 1981–90',
+    us: { fi: 4.0, policy: 3.5 },   au: { fi: 5.5, policy: 6.6 } },
+  { label: '240–348 mo', from: 240, to: 348, episode: 'US — · AU 1991–99',
+    us: null,                       au: { fi: 6.0, policy: 4.4 } },
+];
+
+/** Gold, London annual average deflated by CPI-U (MEASUREMENTS §12c). */
+const GOLD_REAL = { run: { multiple: 5.35, years: 8 }, bust: { multiple: 0.39, years: 10 } };
+
+/**
+ * The monthly effective rates a scenario at the LIBRARY DEFAULT bases sees under `shocks`, one
+ * row per month from the shock's start. No rate overrides: the preset's legs are computed
+ * against those defaults, so that is the only base this check is meaningful at.
+ */
+function ratePath(shocks, monthsOut) {
+  ServiceRegistry.resetAll();
+  const end   = new Date(Date.UTC(START_YEAR + 1, monthsOut + 1, 1));
+  const cfg = {
+    toolsets: ['US_BANKING', 'US_TAX', 'US_RETIREMENT', 'AU_BANKING', 'ECONOMIC_REGIMES'],
+    simStart: `${START_YEAR}-01-01`, simEnd: end.toISOString().slice(0, 10),
+    parameters: { shocks },
+    persons: CFG.persons,
+    accounts: [CFG.accounts[0]],
+  };
+  const services = ServiceRegistry.getInstance();
+  const sc = new BaseScenario({ context: services.simulationContext,
+    simStart: new Date(`${START_YEAR}-01-01`), simEnd: end });
+  sc.buildSim();
+  new ScenarioLoader().load(cfg, services);
+  const rows = [];
+  for (let m = 0; m < monthsOut; m++) {
+    // Mid-month, so a leg that starts on the 1st is read inside its own month.
+    sc.sim.stepTo(new Date(Date.UTC(START_YEAR + 1, m, 15)));
+    const s = sc.sim.state;
+    rows.push({
+      fiUs: s.effectiveInterestRates.FIXED_INCOME_US, primeUs: s.effectiveInterestRates.PRIME_US,
+      fiAu: s.effectiveInterestRates.FIXED_INCOME_AU, primeAu: s.effectiveInterestRates.PRIME_AU,
+      infUs: s.effectiveInflationRates.US, infAu: s.effectiveInflationRates.AU,
+      gold: s.effectiveGrowthRates.GOLD,
+    });
+  }
+  return rows;
+}
+
+const avg = (rows, from, to, f) => rows.slice(from, to).reduce((x, r) => x + f(r), 0) / (to - from);
+const rp  = (x) => `${x >= 0 ? '+' : '−'}${Math.abs(x * 100).toFixed(1)}`;
+const tp  = (x) => `${x >= 0 ? '+' : '−'}${Math.abs(x).toFixed(1)}`;
+/** Real multiple of an asset growing at the monthly `gold` rate against `infUs`, months [from, to). */
+const realMultiple = (rows, from, to) => rows.slice(from, to)
+  .reduce((x, r) => x * (1 + r.gold) ** (1 / 12) / (1 + r.infUs) ** (1 / 12), 1);
+
+const stag = ratePath([{ preset: 'STAGFLATION_1970S_LITE', startDate: `${START_YEAR + 1}-01-01` }], 348);
+
+emit('## STAGFLATION_1970S_LITE — rates, inflation and gold by phase');
+emit('');
+emit('Real = phase average of the effective rate minus the phase average of effective');
+emit('inflation, at the library default bases (US/AU fixed income 4 %, policy 4.5 % / 4.35 %,');
+emit('inflation 3 %). Targets from `MEASUREMENTS.md` §12. The legs are additive, so a plan on');
+emit('other bases shifts every row by its own base real rate (design 121 §4).');
+emit('');
+emit('| window | | US infl. | US FI real | US policy real | AU infl. | AU FI real | AU policy real |');
+emit('|---|---|--:|--:|--:|--:|--:|--:|');
+for (const ph of PHASES) {
+  const a = (f) => avg(stag, ph.from, ph.to, f);
+  const infUs = a(r => r.infUs), infAu = a(r => r.infAu);
+  emit(`| **${ph.label}** | model | ${(infUs * 100).toFixed(1)} | ${rp(a(r => r.fiUs) - infUs)} `
+    + `| ${rp(a(r => r.primeUs) - infUs)} | ${(infAu * 100).toFixed(1)} | ${rp(a(r => r.fiAu) - infAu)} `
+    + `| ${rp(a(r => r.primeAu) - infAu)} |`);
+  emit(`| _${ph.episode}_ | measured | | ${ph.us ? tp(ph.us.fi) : '—'} | ${ph.us ? tp(ph.us.policy) : '—'} `
+    + `| | ${tp(ph.au.fi)} | ${tp(ph.au.policy)} |`);
+}
+emit('');
+emit('The 180–240 row is the US fade (U/120 holds five years, then fades over five), so it');
+emit('sits between the 1981–85 step and base; its average is close to 1986–90.');
+emit('');
+
+// The historical gold shape as a custom shock to run ALONGSIDE the preset. Each leg's
+// adjustment is what lifts the preset's own gold rate to the measured real return, given the
+// preset's inflation in that window.
+const runReal  = GOLD_REAL.run.multiple ** (1 / GOLD_REAL.run.years) - 1;
+const bustReal = GOLD_REAL.bust.multiple ** (1 / GOLD_REAL.bust.years) - 1;
+const runMonths = GOLD_REAL.run.years * 12, bustMonths = GOLD_REAL.bust.years * 12;
+const adjFor = (real, from, to) => {
+  const infl = avg(stag, from, to, r => r.infUs), gold = avg(stag, from, to, r => r.gold);
+  return Math.round(((1 + real) * (1 + infl) - 1 - gold) * 1000) / 1000;
+};
+const goldShock = {
+  shockId: 'GOLD_1970S_HISTORICAL', name: 'Gold, 1972-90 shape', startDate: `${START_YEAR + 1}-01-01`,
+  legs: [
+    { id: 'run', regime: { returnAdjustment: { GOLD: adjFor(runReal, 0, runMonths) } },
+      recovery: { profile: 'L', durationMonths: runMonths } },
+    { id: 'bustInInflation', startMonths: runMonths,
+      regime: { returnAdjustment: { GOLD: adjFor(bustReal, runMonths, 120) } },
+      recovery: { profile: 'L', durationMonths: 120 - runMonths } },
+    { id: 'bust', startMonths: 120,
+      regime: { returnAdjustment: { GOLD: adjFor(bustReal, 120, runMonths + bustMonths) } },
+      recovery: { profile: 'L', durationMonths: runMonths + bustMonths - 120 } },
+  ],
+};
+const both = ratePath([{ preset: 'STAGFLATION_1970S_LITE', startDate: `${START_YEAR + 1}-01-01` }, goldShock],
+  runMonths + bustMonths);
+
+emit('### Gold');
+emit('');
+emit('The preset\'s `inflation` leg adds +5 pp to `GOLD`, one-for-one with the US inflation');
+emit('leg, so gold keeps its base real return through the decade (+2 %/yr at the library');
+emit('defaults) instead of losing about 3 %/yr to the inflation leg (design 121 §5). It does not');
+emit('reproduce history, on purpose: much of 1972-80 was the one-off re-pricing after Bretton');
+emit('Woods, and building it in would make gold the guaranteed winner of every stagflation draw.');
+emit('');
+emit('| window | preset alone | preset + historical shock | measured |');
+emit('|---|--:|--:|--:|');
+emit(`| 0–${runMonths} mo, real × | ${realMultiple(stag, 0, runMonths).toFixed(2)} `
+  + `| ${realMultiple(both, 0, runMonths).toFixed(2)} | ${GOLD_REAL.run.multiple.toFixed(2)} (1972 → 1980) |`);
+emit(`| ${runMonths}–${runMonths + bustMonths} mo, real × | ${realMultiple(stag, runMonths, runMonths + bustMonths).toFixed(2)} `
+  + `| ${realMultiple(both, runMonths, runMonths + bustMonths).toFixed(2)} | ${GOLD_REAL.bust.multiple.toFixed(2)} (1980 → 1990) |`);
+emit('');
+emit('For the upper bound, add this custom shock to `shocks` beside the preset, with the same');
+emit('`startDate`. Its adjustments are sized against the preset\'s own gold and inflation legs, so');
+emit('it is only right in that pairing, and only at the library default bases.');
+emit('');
+emit('```json');
+emit(JSON.stringify(goldShock, null, 2));
+emit('```');
+emit('');
+
 emit('**Not covered here:** `SF_BAY_HOUSING_CRASH` (real property, not equity) and the three');
 emit('`CURVE_*` presets (pure term-structure, no equity path). The housing preset is');
 emit('calibrated the same way — 1 % of San Francisco\'s fall was front-loaded, so a −0.6 %');
