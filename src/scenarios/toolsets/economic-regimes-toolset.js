@@ -115,7 +115,7 @@ function buildRateKeyToStateKeys(realProperties = [], collectibles = []) {
 // The table itself lives in `finance/economic-regimes/market-returns.js` (design 99 P3)
 // so the account editor can read it without importing this toolset; re-exported here for
 // every existing importer.
-export { MARKET_GROWTH_PARAMS, marketReturnFor };
+export { MARKET_GROWTH_PARAMS, marketReturnFor, applySeverity };
 
 /** Per-market dividend yields, `rateKey → yield` (design 99 §2). Read by `baseDividendYield`. */
 function collectMarketDividendYields(p) {
@@ -356,18 +356,97 @@ function resolveShockEntry(item) {
 }
 
 /**
- * Schedule ECONOMIC_SHOCK + ECONOMIC_RECOVERY_TICK events for one resolved shock.
+ * A leg's start offset in months from its shock's `startDate` (design 121 §3.1). Absent means 0.
+ * Anything else that is not a non-negative integer is an authoring error, and a silent 0 would
+ * put a leg meant for the 1980s in force on day one, so it throws naming the shock and leg.
  */
-function scheduleShock(shock, events) {
+function legStartMonths(shock, leg) {
+  const m = leg?.startMonths;
+  if (m == null) return 0;
+  if (!Number.isInteger(m) || m < 0) {
+    throw new Error(`Shock "${shock.shockId}" leg "${leg.id ?? '?'}": startMonths must be a `
+      + `non-negative integer, got ${JSON.stringify(m)}`);
+  }
+  return m;
+}
+
+/**
+ * Schedule ECONOMIC_SHOCK + ECONOMIC_RECOVERY_TICK events for one resolved shock.
+ *
+ * A leg with `startMonths` > 0 (design 121 §3) is split off at schedule time: legs are grouped by
+ * offset and each group becomes an ordinary ECONOMIC_SHOCK on `startDate + startMonths`, carrying
+ * only its own legs and its own `startDate`. Nothing downstream learns about delay — the handler,
+ * the reducers, the recovery curves and every `activeRegimes` tag reader see a shock arriving on
+ * its date. The alternative, a post-dated regime, would be live on arrival: every recovery curve
+ * returns 1 for t < 0, and a dozen reducers read the regime stack as "in force now".
+ *
+ * - The shockId is shared by every group, so regime ids (`regime-<shockId>-<legId>`) are
+ *   unchanged and the behavioral strategies' fire-once-per-shock bookkeeping still sees one
+ *   episode.
+ * - `levelEffects` fire once, with the offset-0 group. With no leg at 0 they still fire on the
+ *   shock's own `startDate`, as a group with no legs, so the level break stays dated to the
+ *   episode rather than to its first delayed leg.
+ * - Severity was applied before this point (`resolveShockEntry`), so every group carries the
+ *   swept values, and a `startDate` sweep moves every group together.
+ * - A group starting on or after `endDate` is dropped with a warning naming the shock and legs.
+ *
+ * Absent any offset the shock is scheduled exactly as before, object for object.
+ *
+ * @param {object} shock    — a resolved FinancialShock
+ * @param {Array}  events   — receives the scheduled events
+ * @param {Date}  [endDate] — the run's end; groups at or after it are dropped
+ */
+function scheduleShock(shock, events, endDate = null) {
   const startDate = shock.startDate instanceof Date ? shock.startDate : new Date(shock.startDate);
+  const legs = Array.isArray(shock.legs) && shock.legs.length ? shock.legs : null;
+  if (!legs || legs.every(l => legStartMonths(shock, l) === 0)) {
+    scheduleShockGroup(shock, startDate, 0, events);
+    return;
+  }
+
+  const byOffset = new Map();
+  for (const leg of legs) {
+    const off = legStartMonths(shock, leg);
+    if (!byOffset.has(off)) byOffset.set(off, []);
+    byOffset.get(off).push(leg);
+  }
+  if (!byOffset.has(0)) byOffset.set(0, []);   // the level effects' own date
+
+  const { levelEffects, ...withoutLevel } = shock;
+  for (const off of [...byOffset.keys()].sort((a, b) => a - b)) {
+    const groupLegs = byOffset.get(off);
+    const date      = DateUtils.addMonths(startDate, off);
+    if (endDate && date >= endDate) {
+      console.warn(`Shock "${shock.shockId}": leg(s) ${groupLegs.map(l => `"${l.id}"`).join(', ')} `
+        + `start ${off} months after ${startDate.toISOString().slice(0, 10)}, on or after the `
+        + 'end of the run, and are dropped');
+      continue;
+    }
+    // A level-only group carries `regime: null` too: with no legs the handler would otherwise
+    // fall back to a shock-level regime, which a legged shock never meant to apply.
+    const group = off === 0
+      ? { ...shock, startDate: date, legs: groupLegs, ...(groupLegs.length ? {} : { regime: null }) }
+      : { ...withoutLevel, startDate: date, legs: groupLegs };
+    scheduleShockGroup(group, startDate, off, events);
+  }
+}
+
+/**
+ * One ECONOMIC_SHOCK on `shockStart + offsetMonths`, and the monthly recovery ticks spanning its
+ * longest leg. Tick dates count from the shock's own start so a delayed group's ticks land on the
+ * same calendar days as an undelayed shock's would.
+ */
+function scheduleShockGroup(shock, shockStart, offsetMonths, events) {
+  const startDate = offsetMonths ? DateUtils.addMonths(shockStart, offsetMonths) : shockStart;
   // Ticks have to span the LONGEST leg (design 21 §18.6). A multi-leg shock whose ticks stopped
   // at the equity leg's horizon would leave the slower leg's recovery factor un-recomputed
   // between period boundaries — it would still decay, but in yearly steps, which is exactly
   // the resolution the tick series exists to provide.
+  // A level-only group (design 121 §3.2: no leg at offset 0, `regime: null`) has no curve to tick.
   const legDurations = (Array.isArray(shock.legs) && shock.legs.length)
     ? shock.legs.map(l => l.recovery?.durationMonths ?? 12)
-    : [shock.recovery?.durationMonths ?? 12];
-  const durationMonths = Math.max(...legDurations);
+    : (shock.regime === null ? [] : [shock.recovery?.durationMonths ?? 12]);
+  const durationMonths = legDurations.length ? Math.max(...legDurations) : 0;
 
   events.push(new OneOffEvent({
     name:    shock.name ?? `Economic Shock (${shock.shockId})`,
@@ -382,7 +461,7 @@ function scheduleShock(shock, events) {
     events.push(new OneOffEvent({
       name:    `Recovery Tick ${m}/${durationMonths} (${shock.shockId})`,
       type:    'ECONOMIC_RECOVERY_TICK',
-      date:    DateUtils.addMonths(startDate, m),
+      date:    DateUtils.addMonths(shockStart, offsetMonths + m),
       data:    { shockId: shock.shockId },
       enabled: true,
       color:   '#E57373',
@@ -1503,7 +1582,7 @@ export const ECONOMIC_REGIMES = {
     for (const entry of shocks) {
       const shock = resolveShockEntry(entry);
       if (!shock) continue;
-      scheduleShock(shock, events);
+      scheduleShock(shock, events, context.endDate);
     }
 
     // Optional Prime rate path (design 56 §5, Phase 2b) → scheduled PRIME_* moves.

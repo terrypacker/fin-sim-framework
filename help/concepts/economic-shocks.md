@@ -35,4 +35,12 @@ events across every property, which is how you stress-test whether lumpy,
 badly-timed maintenance bites liquidity — a question about cash flow rather than
 about returns.
 
+A custom shock can split into legs, each with its own regime and recovery curve, and
+a leg can start later than the shock itself (`startMonths`). That is how an episode
+whose parts arrive in sequence is written — a 1970s-style decade where inflation runs
+ahead of rates first and real rates spike only after it breaks. A delayed leg is not
+in force, and no strategy sees it, until its own date; the shock's level break still
+lands on the shock's date. A leg that would start after the run ends is dropped with
+a warning.
+
 Shocks compose with everything else; adding one does not switch anything off.
