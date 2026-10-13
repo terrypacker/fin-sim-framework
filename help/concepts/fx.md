@@ -3,14 +3,15 @@ id: fx
 kind: concept
 title: FX
 panels: [chart, watchlist]
-params: [exchangeRateUsdToAud, fxProcessModel, fxVolatility, fxReversionSpeed, fxBasisMethod]
-design: [47-time-varying-fx-rates.md, 87-foreign-currency-basis-pools.md]
+params: [exchangeRateUsdToAud, fxProcessModel, fxVolatility, fxReversionSpeed, fxBasisMethod, fxPurchasingPowerParity]
+design: [47-time-varying-fx-rates.md, 87-foreign-currency-basis-pools.md, 122-fx-purchasing-power-parity.md]
 stamps:
   param:exchangeRateUsdToAud: 4813b3
   param:fxProcessModel: 7ba24c
   param:fxVolatility: ff6e43
   param:fxReversionSpeed: 6f045e
   param:fxBasisMethod: 116d2c
+  param:fxPurchasingPowerParity: 615154
   panel:chart: db45f8
   panel:watchlist: fb2d25
 ---
@@ -18,7 +19,7 @@ stamps:
 The exchange rate between the plan's two currencies, and what the tax code makes of
 holding foreign money.
 
-By default the rate is a constant — fine for a plan that is mostly in one currency,
+By default the rate has no randomness — fine for a plan that is mostly in one currency,
 and quietly wrong for one that is not. A household whose assets are in one currency
 and whose spending is in the other carries a real exposure, and a flat rate reports
 none of it.
@@ -28,6 +29,16 @@ process is the usual trade: a mean-reverting rate wanders and returns, a random 
 does not come back, and independent draws are neither. Which is right is a currency
 view, and holding one is unavoidable — a flat rate is a view too, and the strongest
 one available.
+
+**Where the rate returns to.** The level the rate settles around is not fixed: it moves
+with how far Australian prices have risen against American ones since the plan began.
+Over long periods currencies have done this — the Australian dollar lost about as much
+against the US dollar from 1972 to 1990 as Australian prices outran American ones. So a
+decade of higher inflation in one country shows up as a weaker currency there, not as a
+cheaper or dearer life abroad, and the random path describes the years when the rate
+strays from that level. If both countries' inflation is the same, the level never moves.
+Moving countries carries the gap into the cost of living once, on the move date. Turn
+it off to hold the level where you authored it.
 
 **The tax part is the half people miss.** Holding foreign currency is holding an
 asset, and disposing of it can realise a gain or loss in its own right, separately

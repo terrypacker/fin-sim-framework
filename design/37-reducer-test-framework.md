@@ -299,6 +299,7 @@ disposal variants add **I6**. **Swept ✅** — isolated postcondition tests in 
 | `MsbsUnfundedIndexReducer` | I1 I7 | ✅ `msbs-preserved` (MSB-10, design 119 §6.4) |
 | `MsbsElectionApplyReducer` | I3 I5 | ✅ `msbs-pension` (MSP-8, design 119 phase 5; not I1 — §7.3) |
 | `HedgeYearEndReducer` | I1 I7 | ✅ `evt-hedged-equity` (EVT-HDG-6, design 120 §5.6) |
+| `FxPppReducer` | I1 I7 | ✅ `evt-fx-ppp` (PPP-1…6, design 122 §3.1) |
 | `MsbsPensionApplyReducer` | I5 I7 | ✅ `msbs-pension` (MSP-10; not I1 — §7.3) |
 | `MsbsPensionRevertReducer` | I1 I7 | ✅ `msbs-pension` (MSP-10) |
 

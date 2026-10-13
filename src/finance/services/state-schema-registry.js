@@ -289,6 +289,10 @@ export class StateSchemaRegistry {
     this.registerPattern('baseFxVol.*',      ParameterValueType.decimal(4));
     this.registerPattern('effectiveFxVol.*', ParameterValueType.decimal(4));
     this.registerPattern('fxAnchorRates.*',  ParameterValueType.fxRate());
+    // Design 122 — the AU/US price ratio the anchor follows, and the rate the residence
+    // expense figure was converted at on the move (frozen there).
+    this.registerPattern('fxPppIndex.*',         ParameterValueType.decimal(6));
+    this.registerPattern('expenseRebaseRates.*', ParameterValueType.fxRate());
 
     // ── Economic regime effective/base rates (design 21) ─────────────────────
     // Growth rates are per MARKET (design 90 §7.2): a total return each, with the

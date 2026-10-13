@@ -23,6 +23,7 @@ import { FxRefreshReducer }           from '../../finance/fx/fx-refresh-reducer.
 import { FxTickHandler }              from '../../finance/fx/fx-tick-handler.js';
 import { FxStepApplyReducer }         from '../../finance/fx/fx-step-apply-reducer.js';
 import { FxProcessReducer }           from '../../finance/fx/fx-process-reducer.js';
+import { FxPppReducer }               from '../../finance/fx/fx-ppp-reducer.js';
 import { DATE_ANCHORS, assertOnAnchor, saleDateToUtc } from '../year-date-migration.js';
 
 /**
@@ -44,7 +45,7 @@ function _getFxService(context) {
 function _fxContributions(context) {
   return _getFxService(context).getContributions(
     ['USD', 'AUD'], context.accountService, context.stateRegistry, context.parameters,
-    { process: crossBorderContributesFxProcess(context), transfers: true });
+    { process: crossBorderContributesFxProcess(context), transfers: true, simStart: context.startDate });
 }
 
 /**
@@ -69,7 +70,7 @@ export const US_AU_CROSS_BORDER = {
 
   types: {
     handlers: [ChangeResidencyHandler, FxTransferToHandler, FxTickHandler],
-    reducers: [ChangeResidencyApplyReducer, IntlTransferApplyReducer, IntlTransferRecordReducer, FxTransferApplyReducer, FxRefreshReducer, FxProcessReducer, FxStepApplyReducer],
+    reducers: [ChangeResidencyApplyReducer, IntlTransferApplyReducer, IntlTransferRecordReducer, FxTransferApplyReducer, FxRefreshReducer, FxProcessReducer, FxStepApplyReducer, FxPppReducer],
     actions: [
       { type: 'CHANGE_RESIDENCY_APPLY' },
       // INTL_TRANSFER_APPLY is kept for ReplenishSavingsReducer cross-border escalation.
