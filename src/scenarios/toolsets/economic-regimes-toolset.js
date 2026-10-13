@@ -13,7 +13,7 @@ import { EventSeries }                   from '../../simulation-framework/events
 import { MarketIndexReducer }            from '../../finance/economic-regimes/market-index.js';
 import { DateUtils }                      from '../../simulation-framework/date-utils.js';
 import { ValueType }                      from '../../simulation-framework/type-registry.js';
-import { RATE_KEYS, RATE_KEY_META, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS, CASH_PRIME_KEY_BY_RATE_KEY, SAVINGS_KEY_BY_COUNTRY, EQUITY_SLEEVES, PROPERTY_SLEEVES, DEFAULT_EQUITY_BETA, DEFAULT_EQUITY_IDIO, DEFAULT_EQUITY_IDIO_LOCAL, DEFAULT_RE_BETA, DEFAULT_RE_IDIO } from '../../finance/economic-regimes/rate-keys.js';
+import { RATE_KEYS, RATE_KEY_META, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS, CASH_PRIME_KEY_BY_RATE_KEY, SAVINGS_KEY_BY_COUNTRY, EQUITY_SLEEVES, RATE_KEY_CLASS_MEMBERS, PROPERTY_SLEEVES, DEFAULT_EQUITY_BETA, DEFAULT_EQUITY_IDIO, DEFAULT_EQUITY_IDIO_LOCAL, DEFAULT_RE_BETA, DEFAULT_RE_IDIO } from '../../finance/economic-regimes/rate-keys.js';
 import { ACCOUNT_ROLES } from '../../finance/state/account-roles.js';
 import { MARKET_GROWTH_PARAMS, marketReturnFor } from '../../finance/economic-regimes/market-returns.js';
 import { RegimeApplyReducer }             from '../../finance/economic-regimes/regime-apply-reducer.js';
@@ -273,6 +273,18 @@ function seedPerAccountRates(accounts, baseInterestRates) {
 }
 
 /**
+ * Is `rk` an equity rate key: one of the equity sleeves (`EQUITY_US` …), or a member key a
+ * sleeve fans out to (`RATE_KEY_CLASS_MEMBERS`)?
+ *
+ * @param {string} rk
+ * @returns {boolean}
+ */
+function isEquityRateKey(rk) {
+  return EQUITY_SLEEVES.includes(rk)
+    || EQUITY_SLEEVES.some(sleeve => RATE_KEY_CLASS_MEMBERS[sleeve]?.includes(rk));
+}
+
+/**
  * Apply a severity value to a resolved FinancialShock, re-deriving the
  * equityRevaluation multiplier so severity is the single canonical knob.
  */
@@ -284,7 +296,7 @@ function applySeverity(shock, severity) {
   // `severity` is the episode's TROUGH DEPTH, and since design 21 §21 the trough is
   // composed from a level break PLUS a forward-return drag rather than being the level
   // break alone. So severity can no longer just overwrite the multiplier: it scales the
-  // whole shock — every level entry and every leg's returnAdjustment — by the ratio to
+  // whole shock — every level entry and every leg's EQUITY returnAdjustment — by the ratio to
   // the preset's own headline depth. Scaling only the level would sweep a preset toward
   // its old instant-break shape at one end of an MC range and away from it at the other,
   // which is a change of SHAPE disguised as a change of magnitude.
@@ -295,10 +307,17 @@ function applySeverity(shock, severity) {
     const one = (e) => ({ ...e, multiplier: -Math.abs((e?.multiplier ?? 0) * k) });
     return Array.isArray(lv) ? lv.map(one) : one(lv);
   };
+  // Only EQUITY keys scale (design 121 §7). `severity` measures the equity trough, so it has no
+  // standing over a bond or gold leg. Scaling those drifted apart pairs a rates leg sets equal —
+  // a fixed-income `returnAdjustment` moved while its `interestRateAdjustment` did not, so a
+  // swept bond's coupon and its return disagreed — and would make a deeper equity draw a bigger
+  // gold gain, which no measurement supports.
   const scaleReturns = (regime) => {
     if (!regime?.returnAdjustment) return regime;
     const scaled = {};
-    for (const [rk, v] of Object.entries(regime.returnAdjustment)) scaled[rk] = v * k;
+    for (const [rk, v] of Object.entries(regime.returnAdjustment)) {
+      scaled[rk] = isEquityRateKey(rk) ? v * k : v;
+    }
     return { ...regime, returnAdjustment: scaled };
   };
 

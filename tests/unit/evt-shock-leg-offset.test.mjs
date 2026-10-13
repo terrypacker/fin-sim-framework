@@ -182,10 +182,14 @@ test('LAG-5: severity reaches the delayed group; a startDate sweep moves every g
   // An MC sweep writes `severity` onto a preset entry and `resolveShockEntry` applies it before
   // `scheduleShock` sees the shock. The library is frozen, so apply it the same way here: the
   // swept shock must reach the delayed group with its scaled values.
-  const swept = applySeverity(lagShock(), 0.40);
+  // Severity scales equity keys only (design 121 §7), so give the delayed leg one.
+  const shock = lagShock();
+  shock.legs[1].regime.returnAdjustment.EQUITY_US = 0.01;
+  const swept = applySeverity(shock, 0.40);
   const [, later] = shocksOf(schedule([swept]));
-  const ra = later.data.shock.legs[0].regime.returnAdjustment.FIXED_INCOME_US;
-  assert.ok(Math.abs(ra - 0.06) < 1e-12, `k = 2 must reach the delayed leg, got ${ra}`);
+  const ra = later.data.shock.legs[0].regime.returnAdjustment;
+  assert.ok(Math.abs(ra.EQUITY_US - 0.02) < 1e-12, `k = 2 must reach the delayed leg, got ${ra.EQUITY_US}`);
+  assert.equal(ra.FIXED_INCOME_US, 0.03, 'and leave its fixed income alone');
   assert.equal(later.data.shock.severity, 0.40);
 
   const moved = shocksOf(schedule([lagShock({ startDate: '2030-04-01' })]));
