@@ -422,9 +422,12 @@ without the other.
 
 ### `STAGFLATION_1970S_LITE` — Stagflation
 
-**What it does.** Three legs: an equity leg (−7 % break, −40 pp drag, trough at 24 months),
-an inflation leg holding **US +5 pp / AU +4 pp flat for 120 months (L)**, and a rates leg
-raising policy 14 pp and bond yields 7 pp for the same decade.
+**What it does.** An equity leg (−7 % break, −40 pp drag, trough at 24 months), an
+inflation leg holding **US +5 pp / AU +8.6 pp flat for 120 months (L)** that also lifts
+gold +5 pp, a second AU inflation decade (+5.1 pp from month 120), and rates in **phases**
+(design 121): about −1 % real through the inflation decade, then +6–7 % real once it
+breaks, with Australia a decade behind the US. The later phases are legs with
+`startMonths`.
 
 **Why this shape.** The mechanism is inflation, and the damage arrives through *spending* —
 which the inflation adjustment drives directly — and through the erosion of a fixed-income
@@ -437,6 +440,28 @@ M §6), so this is a *level* shock with no twist — and duration is the loss.
 S&P fell 43.4 % nominal and 59.6 % real across 1973–74 and the ASX fell 54.1 % (M §1) —
 modelling the decade as an inflation event only understated it badly. And its duration was
 48 months for an episode that ran a decade.
+
+**Money in phases (design 121).** The rates leg used to put the 1981 *peak* (policy +14 pp,
+which was the bank prime move, and yields +7 pp) in force from month 0. At the library
+defaults that made new bonds +3 % real and cash +10.5 % real for the whole inflation decade,
+so bonds and cash *won* a stagflation. History ran the other way: real rates near −1 % in
+1973–80 (−1.6 / −2.0 in Australia), +6–7 % only after inflation broke (M §12). The model's
+prime is the policy rate, so it calibrates to fed funds and the AU 3-month bill; US fixed
+income to the 5-year (its default duration), AU to the 10-year. The legs are additive and
+computed against the library default bases, so a plan on other bases keeps its own base
+real rate inside the regime. `CALIBRATION.md` checks every phase in a real simulation.
+
+| window | US FI / policy (infl.) | US real | AU FI / policy (infl.) | AU real |
+|---|---|--:|---|--:|
+| 0–120 mo | 7.0 / 7.2 (8.0) | −1.0 / −0.8 | 9.6 / 10.0 (11.6) | −2.0 / −1.6 |
+| 120–240 mo | 10.2 / 9.4 (3.0), fading from 180 | +7.2 / +6.4 | 13.6 / 14.7 (8.1) | +5.5 / +6.6 |
+| from 240 mo | base | — | 9.0 / 7.4 (3.0), fading from 348 | +6.0 / +4.4 |
+
+**Gold.** Gold has its own rate key and no response in any other preset, so it lost about
+3 %/yr real through the inflation decade. It now gains +5 pp with the US inflation leg and
+keeps its base real return. History paid far more (real ×5.35 over 1972–80, ×0.39 over
+1980–90, M §12c), but much of that was the re-pricing after Bretton Woods. `CALIBRATION.md`
+writes that shape out as a custom shock to run beside the preset.
 
 **One number that rests on a series that cannot support it.** The FX leg's `USD_AUD −0.10`
 is a *trade-weighted* claim: the AUD was **pegged until 12 December 1983**, so there is no

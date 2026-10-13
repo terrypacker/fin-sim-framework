@@ -187,6 +187,10 @@ const HISTORICAL_SHOCKS = {
    * Duration: US CPI YoY averaged 8.3 % across 1972-1982 with a peak of 14.6 %, +5.76 pp
    * over a 2.5 % baseline (MEASUREMENTS §4). That is a DECADE, in three waves — hence
    * L/120 on the inflation leg, not the 48 months this preset used to claim.
+   *
+   * Money comes in PHASES (design 121): real rates near −1 % while inflation runs, then
+   * +6-7 % once it breaks, with Australia a decade behind the US. The later phases are legs
+   * with `startMonths`, so a run that ends inside the episode simply never reaches them.
    */
   STAGFLATION_1970S_LITE: {
     shockId:  'STAGFLATION_1970S_LITE',
@@ -223,7 +227,18 @@ const HISTORICAL_SHOCKS = {
       {
         id: 'inflation',
         regime: {
-          inflationAdjustment: { US: 0.05, AU: 0.04 },
+          // US CPI ran 9.3 %/yr Dec/Dec over 1973-80 and AU CPI averaged 11.6 % YoY
+          // (MEASUREMENTS §12a/§12b): +5 and +8.6 over the 3 % library default give 8 % and
+          // 11.6 %. The US leg is a point under history; the AU leg is history.
+          inflationAdjustment: { US: 0.05, AU: 0.086 },
+          // Gold moves one-for-one with the US inflation adjustment, so it keeps its base real
+          // return through the decade (+2 %/yr at the library defaults) instead of losing ~3 %/yr
+          // to the inflation leg (design 121 §5). Gold is USD-priced, so the US leg is the
+          // reference. History paid far more — real ×5.35 over 1972-80 (MEASUREMENTS §12c) —
+          // but much of that was the one-off re-pricing after Bretton Woods, and building it in
+          // would make gold the guaranteed winner of every stagflation draw. CALIBRATION.md
+          // writes the historical shape out as a custom shock for anyone who wants it.
+          returnAdjustment:    { GOLD: 0.05 },
           // Broad USD weakness. NOTE: the AUD did not float until 12 Dec 1983, so this is
           // NOT readable off USD/AUD — it is the trade-weighted claim (major-currencies
           // dollar −10.7 % over 1973-1980, MEASUREMENTS §7b). Sign supported, magnitude asserted.
@@ -234,28 +249,86 @@ const HISTORICAL_SHOCKS = {
         recovery: { profile: 'L', durationMonths: 120 },
       },
       {
+        // Australia's inflation did not break in 1980-82 the way the US's did: it averaged
+        // 8.1 % YoY across 1981-90 (MEASUREMENTS §12b), so AU gets a second decade at +5.1.
+        id: 'inflationAuTail',
+        startMonths: 120,
+        regime: { inflationAdjustment: { AU: 0.051 } },
+        recovery: { profile: 'L', durationMonths: 120 },
+      },
+      // ── Rates, in phases (design 121 §4) ──────────────────────────────────────────────
+      //
+      // History's real-rate SEQUENCE is the point: about −1 % real while inflation ran
+      // (1973-80), then +6-7 % real once it broke. Rates that jumped to their 1981 peak on
+      // day one made bonds and cash WIN the inflation decade, which is backwards.
+      //
+      // Calibration rules:
+      // - PRIME_* is the POLICY rate (`usPrimeRate` is "Fed policy", `auPrimeRate` "RBA
+      //   policy"), so it calibrates to fed funds and the AU 3-month bill, not bank prime.
+      // - FIXED_INCOME_US calibrates to the 5-year (its default duration is 5.0);
+      //   FIXED_INCOME_AU to the 10-year, the only AU long rate on disk.
+      // - returnAdjustment mirrors interestRateAdjustment for every fixed-income key.
+      //
+      // THESE LEGS ARE ADDITIVE AND COMPUTED AGAINST THE LIBRARY DEFAULT BASES: US fixed
+      // income 4 %, US policy 4.5 %, AU fixed income 4 %, AU policy 4.35 %, inflation 3 %
+      // in both. Leg = target real − base real + the inflation leg live in that window. A
+      // plan whose base real rate differs keeps that difference inside the regime (FI 3 %
+      // against 3 % inflation sits 1 pp lower throughout). Real-rate-target legs that would
+      // remove this are deferred (design 121 §9 Q2).
+      //
+      // Where they land (FI / policy, with inflation in brackets):
+      //   0-120 mo    US 7.0 / 7.2 (8.0)  real −1.0 / −0.8    AU  9.6 / 10.0 (11.6)  real −2.0 / −1.6
+      //   120-240 mo  US 10.2 / 9.4 (3.0) real +7.2 / +6.4    AU 13.6 / 14.7 (8.1)   real +5.5 / +6.6
+      //   from 240    US base                                  AU  9.0 / 7.4 (3.0)    real +6.0 / +4.4
+      //
+      // The month-120 step is a yield RISE (US 7 → 10.2, AU 9.6 → 13.6), so
+      // BondPriceAdjustReducer marks held bonds DOWN then — the 1979-81 direction. The 1979-81
+      // curve moved almost in parallel (twist ≤ 0.9 pp, MEASUREMENTS §6), so there is no
+      // yieldCurveTwist on any phase.
+      {
         id: 'rates',
         regime: {
-          // Fed funds +13.77 pp and US prime +14.24 pp from 1972 to mid-1981; AU 3-month
-          // +11.13 pp, AU 10-year +7.32 pp (MEASUREMENTS §5). The 1979-81 curve moved
-          // almost in PARALLEL — twist ≤ 0.9 pp at every tenor (§6) — so there is no
-          // yieldCurveTwist here. This is a level shock, and duration is the loss.
-          returnAdjustment:       { FIXED_INCOME_US: 0.070, FIXED_INCOME_AU: 0.073 },
+          returnAdjustment:       { FIXED_INCOME_US: 0.030, FIXED_INCOME_AU: 0.056 },
           interestRateAdjustment: {
-            FIXED_INCOME_US: 0.070, FIXED_INCOME_AU: 0.073,
-            PRIME_US:        0.140, PRIME_AU:        0.111,
+            FIXED_INCOME_US: 0.030, FIXED_INCOME_AU: 0.056,
+            PRIME_US:        0.027, PRIME_AU:        0.0565,
           },
         },
-        // U/240, NOT L/120 like the inflation leg. Inflation really did end abruptly —
-        // CPI YoY went 14.6 % (Mar 1980) to 3.8 % (Dec 1982) — but YIELDS did not: the
-        // 10-year peaked near 15 % in 1981 and took until about 2000 to work back to 6 %.
-        //
-        // The distinction is not cosmetic here. An L profile SNAPS its adjustment to zero
-        // at the end of its window, so a 7 pp yield spike unwinds in a single step and
-        // `BondPriceAdjustReducer` marks the whole ladder UP by duration × 7 pp at once.
-        // That handed a nominal bond ladder a windfall the 1970s never paid, and it was
-        // large enough to make bonds out-earn equity across this whole episode.
-        recovery: { profile: 'U', durationMonths: 240 },
+        recovery: { profile: 'L', durationMonths: 120 },
+      },
+      {
+        // US 1981-85 real: 5-year +7.2, fed funds +6.4 against base inflation. U/120 holds
+        // flat five years, then fades over five; the fade's average is about half the step,
+        // close to 1986-90's +4.0 / +3.5.
+        id: 'realRatesUs',
+        startMonths: 120,
+        regime: {
+          returnAdjustment:       { FIXED_INCOME_US: 0.062 },
+          interestRateAdjustment: { FIXED_INCOME_US: 0.062, PRIME_US: 0.049 },
+        },
+        recovery: { profile: 'U', durationMonths: 120 },
+      },
+      {
+        // AU 1981-90 real: 10-year +5.5, bill +6.6, against the AU tail's 8.1 % inflation.
+        id: 'realRatesAu',
+        startMonths: 120,
+        regime: {
+          returnAdjustment:       { FIXED_INCOME_AU: 0.096 },
+          interestRateAdjustment: { FIXED_INCOME_AU: 0.096, PRIME_AU: 0.1035 },
+        },
+        recovery: { profile: 'L', durationMonths: 120 },
+      },
+      {
+        // AU 1991-99 real: 10-year +6.0, bill +4.4, with inflation back at base. U/216 holds
+        // flat nine years, then fades over nine; the fade's average lands near 2000-07's
+        // +2.5 / +2.4.
+        id: 'realRatesAu2',
+        startMonths: 240,
+        regime: {
+          returnAdjustment:       { FIXED_INCOME_AU: 0.050 },
+          interestRateAdjustment: { FIXED_INCOME_AU: 0.050, PRIME_AU: 0.0305 },
+        },
+        recovery: { profile: 'U', durationMonths: 216 },
       },
     ],
     recovery: { profile: 'L', durationMonths: 120 },

@@ -388,15 +388,19 @@ function legStartMonths(shock, leg) {
  *   episode rather than to its first delayed leg.
  * - Severity was applied before this point (`resolveShockEntry`), so every group carries the
  *   swept values, and a `startDate` sweep moves every group together.
- * - A group starting on or after `endDate` is dropped with a warning naming the shock and legs.
+ * - A group starting on or after `endDate` is dropped. For a custom shock that is likely an
+ *   authoring slip, so it warns naming the shock and legs. A preset's later phases running past
+ *   a plan's end is ordinary (a 2045 stagflation in a run to 2060), and a warning there would
+ *   print on every Monte Carlo and optimizer compile, so `warnDropped` is off for presets.
  *
  * Absent any offset the shock is scheduled exactly as before, object for object.
  *
  * @param {object} shock    — a resolved FinancialShock
  * @param {Array}  events   — receives the scheduled events
  * @param {Date}  [endDate] — the run's end; groups at or after it are dropped
+ * @param {boolean} [warnDropped] — warn when a group is dropped
  */
-function scheduleShock(shock, events, endDate = null) {
+function scheduleShock(shock, events, endDate = null, warnDropped = true) {
   const startDate = shock.startDate instanceof Date ? shock.startDate : new Date(shock.startDate);
   const legs = Array.isArray(shock.legs) && shock.legs.length ? shock.legs : null;
   if (!legs || legs.every(l => legStartMonths(shock, l) === 0)) {
@@ -417,7 +421,7 @@ function scheduleShock(shock, events, endDate = null) {
     const groupLegs = byOffset.get(off);
     const date      = DateUtils.addMonths(startDate, off);
     if (endDate && date >= endDate) {
-      console.warn(`Shock "${shock.shockId}": leg(s) ${groupLegs.map(l => `"${l.id}"`).join(', ')} `
+      if (warnDropped) console.warn(`Shock "${shock.shockId}": leg(s) ${groupLegs.map(l => `"${l.id}"`).join(', ')} `
         + `start ${off} months after ${startDate.toISOString().slice(0, 10)}, on or after the `
         + 'end of the run, and are dropped');
       continue;
@@ -1582,7 +1586,7 @@ export const ECONOMIC_REGIMES = {
     for (const entry of shocks) {
       const shock = resolveShockEntry(entry);
       if (!shock) continue;
-      scheduleShock(shock, events, context.endDate);
+      scheduleShock(shock, events, context.endDate, !entry.preset);
     }
 
     // Optional Prime rate path (design 56 §5, Phase 2b) → scheduled PRIME_* moves.

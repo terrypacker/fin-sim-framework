@@ -1,6 +1,6 @@
 # 121 — Delayed shock legs, a recalibrated stagflation, gold risk, and TIPS real yields
 
-**Status:** ACCEPTED (12 Oct 2026), rev 3. **Phase 1 BUILT** (12 Oct 2026); phases 2–5 open.
+**Status:** ACCEPTED (12 Oct 2026), rev 3. **Phases 1–2 BUILT** (12 Oct 2026); phases 3–5 open.
 
 - **rev 2:** the author answered rev 1's questions.
   - Q1: raise the AU inflation leg (§4).
@@ -72,9 +72,14 @@ compounded; for AU it is the average of quarterly YoY.
 | 1981–85 | 4.9 | +6.4 | +7.2 | +7.4 | +6.3 |
 | 1986–90 | 4.2 | +3.5 | +4.0 | +4.2 | +3.3 |
 
-Total return, real, Dec 1972 = 1 (par bond rebought monthly, coupon included):
-- The 10-year falls to 0.625 by Dec 1980 (−37%).
-- The rolled 1-year falls to 0.935 (−6.5%), then reaches 1.534 by 1990.
+Total return, real, Dec 1972 = 1 (rebought monthly, coupon included):
+- The 10-year par bond, marked monthly, falls to 0.627 by Dec 1980 (−37%) and reaches 1.492
+  by 1990.
+- The 1-year yield, accrued monthly with no price change, falls to 0.935 (−6.5%), then
+  reaches 1.534 by 1990.
+
+Every figure in this section is printed by `scripts/probes/measure-shock-history.mjs` into
+`MEASUREMENTS.md` §12 (phase 2).
 
 **Australia**
 
@@ -88,13 +93,19 @@ Total return, real, Dec 1972 = 1 (par bond rebought monthly, coupon included):
 **Gold**
 - London PM fix, annual average: 1972 → 1980 real ×5.35 (+23%/yr); 1980 → 1990 real ×0.39
   (−8.9%/yr).
-- Annual real returns against the S&P real total return:
+- Calendar-year (Dec/Dec) real returns against the S&P real total return. Gold is the World
+  Bank monthly series deflated by CPI-U:
 
 | Window | Gold real sd | Geometric real | Corr. with S&P | Corr. with CPI |
 |---|--:|--:|--:|--:|
-| 1972–2024 | 22% | +3.6% | −0.24 | +0.35 |
-| 1985–2024 | 14% | +2.0% | −0.05 | −0.17 |
-| 2000–2024 | 14% | +5.8% | +0.15 | −0.05 |
+| 1972–2024 | 22% | +4.0% | −0.23 | +0.34 |
+| 1985–2024 | 15% | +2.6% | −0.04 | −0.16 |
+| 2000–2024 | 15% | +6.6% | +0.17 | −0.04 |
+
+  Rev 3 printed slightly different figures here (22/+3.6/−0.24/+0.35, 14/+2.0/−0.05/−0.17,
+  14/+5.8/+0.15/−0.05) from a method no longer on record. These are the ones the script
+  reproduces. Nothing downstream moves: the sd since 1985 is 15%, which is §6's
+  `goldReturnVol` default, and the correlation windows still centre on 0.
 
 ## 3. Mechanism: a leg start offset
 
@@ -155,6 +166,9 @@ moved to the group's date). Each group gets its own recovery ticks spanning its 
 - **There is no custom-shock leg editor to extend.** The `shocks` editor offers a preset and a
   date only, so legs, and `startMonths` with them, are authored in the scenario JSON. The
   help topic `economic-shocks` describes delayed legs.
+- **Presets drop late phases silently.** A preset's later phases running past a plan's end is
+  ordinary (a 2045 stagflation in a run to 2060), and a warning would print on every Monte
+  Carlo and optimizer compile. Only a custom shock warns (phase 2).
 - `applySeverity` is exported so LAG-5 can sweep a custom shock the way `resolveShockEntry`
   sweeps a preset (`SHOCK_LIBRARY` is frozen). A custom shock's own `severity` is its
   headline, so a custom entry is never rescaled. Only presets sweep.
@@ -220,10 +234,28 @@ example, a plan at FI 3% / inflation 3% sits 1pp lower throughout. Real-rate-tar
 deferred (§9). The preset's rates legs carry a comment saying they are computed against the
 library defaults, naming those defaults, so the next reader knows what a non-default base does.
 
+### 4.1 As built (phase 2)
+- The preset carries the legs in §4's tables exactly, with the additive-base comment.
+  `CALIBRATION.md` (`scripts/probes/shock-path-engine.mjs`) now runs the preset at the library
+  defaults and prints each phase's real rates against `MEASUREMENTS.md` §12. Every row lands
+  on its target. The US fade window (180–240 mo) reads +4.2 / +4.0 against 1986–90's
+  +4.0 / +3.5.
+- **The month-120 hand-off is clean.** An L leg's factor is 0 from `t >= durationMonths`, and
+  the next phase's shock event recomputes regimes on that same day.
+- **Inflation-linked prime does not double-count.** Design 104's link moves prime with the
+  *stochastic* inflation deviation (`inflationDev`), not with a regime's
+  `inflationAdjustment`. The `PRIME_*` legs therefore add on top in Monte Carlo too.
+- `CALIBRATION.md` also writes out §5's historical gold shape as a custom shock to run
+  beside the preset (`GOLD_1970S_HISTORICAL`, three legs). Its sizes are computed from the
+  measured multiples and the preset's own gold and inflation legs, and the engine reproduces
+  ×5.35 and ×0.39.
+- Tests: `evt-shock-stagflation-phases.test.mjs` STAG-1..5.
+
 ## 5. A gold leg
 
-**Add `returnAdjustment: { GOLD: +0.05 }` to the `inflation` leg** (L/120). Gold then holds its
-real value through the US inflation decade, moving one-for-one with the US inflation adjustment.
+**Add `returnAdjustment: { GOLD: +0.05 }` to the `inflation` leg** (L/120). Gold then keeps its
+base real return through the US inflation decade (+2%/yr at the library defaults, 5% against
+3%), moving one-for-one with the US inflation adjustment, instead of losing about 3%/yr.
 The gold key is USD-priced, so the US leg is the reference.
 
 **Why not the historical shape** (+23%/yr real for 8 years, then −8.9%/yr for 10)?

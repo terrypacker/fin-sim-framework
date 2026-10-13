@@ -597,6 +597,129 @@ say('record (`NBER-business-cycle-dates.txt`). No non-US market is on disk for t
 say('FRED\'s NBER UK share series begin in 1887 — so the preset is US-led by necessity.');
 say('');
 
+// ── 12. Real rates and gold through the stagflation (design 121 §2) ──────────────
+
+/** A two-column CSV that is not a FRED download (gold), as [{ date, v }]. */
+function plainCsv(file, col = 1) {
+  return fs.readFileSync(path.join(DATA, file), 'utf8').replace(/\r/g, '').trim().split('\n').slice(1)
+    .map(l => l.split(','))
+    .map(f => ({ date: f[0], v: f[col]?.trim() === '' ? NaN : Number(f[col]) }))
+    .filter(r => Number.isFinite(r.v));
+}
+
+/** A daily series averaged to one row per month, dated the 1st. */
+function monthlyAverage(s) {
+  const byMonth = new Map();
+  for (const r of s) {
+    const k = r.date.slice(0, 7);
+    if (!byMonth.has(k)) byMonth.set(k, []);
+    byMonth.get(k).push(r.v);
+  }
+  return [...byMonth].map(([k, a]) => ({ date: `${k}-01`, v: a.reduce((x, y) => x + y, 0) / a.length }));
+}
+
+/** Price of a semiannual par-style bond: coupon `c`, yield `y` (decimals), `T` years left. */
+function bondPrice(c, y, T) {
+  const n = Math.round(T * 2), i = y / 2;
+  if (Math.abs(i) < 1e-12) return 1 + c * T;
+  return (c / 2) * (1 - (1 + i) ** -n) / i + (1 + i) ** -n;
+}
+
+/**
+ * Real total-return index of a bond strategy rebought monthly from `from` (= 1), deflated by
+ * CPI. `tenor` null accrues the yield with no price change (a bill rolled at the 1-year rate);
+ * a tenor buys a par bond at last month's yield and marks it at this month's.
+ */
+function rolledReal(s, tenor, from, to) {
+  const w = between(s, from, to);
+  let idx = 1;
+  const nominal = [{ date: w[0].date, v: 1 }];
+  for (let k = 1; k < w.length; k++) {
+    const c = w[k - 1].v / 100, y = w[k].v / 100;
+    idx *= tenor == null ? 1 + c / 12 : bondPrice(c, y, tenor - 1 / 12) + c / 12;
+    nominal.push({ date: w[k].date, v: idx });
+  }
+  return (d) => at(nominal, d).v / (at(cpi, d).v / at(cpi, from).v);
+}
+
+const gs1  = fred('GS1');
+const gs10 = fred('GS10');
+const dgs5 = monthlyAverage(fred('DGS5'));
+const auCpiYoy = fred('CPALTT01AUQ659N');
+const goldAnnual  = plainCsv('MeasuringWorth-gold-annual-1968-1995.csv', 2);   // London, USD
+const goldMonthly = plainCsv('WorldBank-CMO-gold-monthly.csv').map(r => ({ date: `${r.date}-01`, v: r.v }));
+
+say('## 12. Real rates and gold through the stagflation (design 121)');
+say('');
+say('"Real" is the phase average of the monthly rate minus the phase\'s inflation. US inflation');
+say('is CPI-U Dec/Dec compounded across the phase; AU inflation is the average of the');
+say('quarterly YoY prints (`CPALTT01AUQ659N`). The 5-year is `DGS5` averaged to months.');
+say('');
+say('### 12a. United States');
+say('');
+say('| phase | CPI/yr | fed funds real | 5-year real | 10-year real | 1-year real |');
+say('|---|--:|--:|--:|--:|--:|');
+const sgn = (x) => `${x >= 0 ? '+' : '−'}${Math.abs(x).toFixed(1)}`;
+for (const [label, a, b] of [['1973–80', 1973, 1980], ['1981–85', 1981, 1985], ['1986–90', 1986, 1990]]) {
+  const infl = ((at(cpi, `${b}-12-01`).v / at(cpi, `${a - 1}-12-01`).v) ** (1 / (b - a + 1)) - 1) * 100;
+  const real = (s) => sgn(mean(s, `${a}-01-01`, `${b}-12-31`) - infl);
+  say(`| ${label} | ${infl.toFixed(1)} | ${real(ff)} | ${real(dgs5)} | ${real(gs10)} | ${real(gs1)} |`);
+}
+say('');
+const tr10 = rolledReal(gs10, 10,   '1972-12-01', '1990-12-01');
+const tr1  = rolledReal(gs1,  null, '1972-12-01', '1990-12-01');
+say('Real total return from Dec 1972 = 1, rebought monthly, coupon included:');
+say('');
+say('| strategy | Dec 1980 | Dec 1990 |');
+say('|---|--:|--:|');
+say(`| 10-year par bond (\`GS10\`, marked monthly) | ${tr10('1980-12-01').toFixed(3)} | ${tr10('1990-12-01').toFixed(3)} |`);
+say(`| 1-year yield accrued (\`GS1\`, no price change) | ${tr1('1980-12-01').toFixed(3)} | ${tr1('1990-12-01').toFixed(3)} |`);
+say('');
+say('### 12b. Australia');
+say('');
+say('| phase | CPI/yr (avg YoY) | 3-month bill real | 10-year real |');
+say('|---|--:|--:|--:|');
+for (const [label, a, b] of [['1973–80', 1973, 1980], ['1981–90', 1981, 1990], ['1991–99', 1991, 1999], ['2000–07', 2000, 2007]]) {
+  const infl = mean(auCpiYoy, `${a}-01-01`, `${b}-12-31`);
+  say(`| ${label} | ${infl.toFixed(1)} | ${sgn(mean(au3m, `${a}-01-01`, `${b}-12-31`) - infl)} `
+    + `| ${sgn(mean(au10, `${a}-01-01`, `${b}-12-31`) - infl)} |`);
+}
+say('');
+say('### 12c. Gold');
+say('');
+const cpiYear = (y) => mean(cpi, `${y}-01-01`, `${y}-12-31`);
+const goldYear = (y) => goldAnnual.find(r => r.date === String(y)).v;
+const goldReal = (a, b) => goldYear(b) / goldYear(a) / (cpiYear(b) / cpiYear(a));
+const g7280 = goldReal(1972, 1980), g8090 = goldReal(1980, 1990);
+say(`London price, annual average (MeasuringWorth), deflated by the CPI-U annual average:`);
+say(`1972 → 1980 real ×${g7280.toFixed(2)} (${sgn((g7280 ** (1 / 8) - 1) * 100)} %/yr); `
+  + `1980 → 1990 real ×${g8090.toFixed(2)} (${sgn((g8090 ** (1 / 10) - 1) * 100)} %/yr).`);
+say('');
+say('Calendar-year returns, Dec/Dec: gold (World Bank monthly) deflated by CPI-U, against the');
+say('S&P 500 real total return (Shiller). sd is the sample sd of the annual real returns.');
+say('');
+say('| years | gold real sd | geometric real | corr. with S&P real TR | corr. with CPI |');
+say('|---|--:|--:|--:|--:|');
+const dec = (s, y) => at(s, `${y}-12-01`).v;
+const sampleMean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+const sampleSd   = (a) => { const m = sampleMean(a); return Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / (a.length - 1)); };
+const corr = (a, b) => {
+  const ma = sampleMean(a), mb = sampleMean(b);
+  return a.reduce((x, _, i) => x + (a[i] - ma) * (b[i] - mb), 0) / ((a.length - 1) * sampleSd(a) * sampleSd(b));
+};
+for (const [a, b] of [[1972, 2024], [1985, 2024], [2000, 2024]]) {
+  const g = [], s = [], inf = [];
+  for (let y = a; y <= b; y++) {
+    const i = dec(cpi, y) / dec(cpi, y - 1);
+    g.push(dec(goldMonthly, y) / dec(goldMonthly, y - 1) / i - 1);
+    s.push(dec(sptr, y) / dec(sptr, y - 1) - 1);
+    inf.push(i - 1);
+  }
+  const geo = g.reduce((x, r) => x * (1 + r), 1) ** (1 / g.length) - 1;
+  say(`| ${a}–${b} | ${(sampleSd(g) * 100).toFixed(0)} % | ${sgn(geo * 100)} % | ${corr(g, s).toFixed(2)} | ${corr(g, inf).toFixed(2)} |`);
+}
+say('');
+
 const text = out.join('\n') + '\n';
 if (opts.write) {
   const dest = path.join(ROOT, 'docs/economic-shocks/MEASUREMENTS.md');
