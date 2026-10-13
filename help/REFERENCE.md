@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-226 parameters · 33 panels · 12 node types (205 fields) · 179 action types · 88 tools · 317 state field types · 78 topics · 128 design docs
+226 parameters · 33 panels · 12 node types (205 fields) · 179 action types · 88 tools · 317 state field types · 78 topics · 129 design docs
 
 ---
 
@@ -2223,7 +2223,7 @@ what the in-app panel keys on.
 | [DG Results](panels/dg-results.md) | panel | 162 | 1 panel · design 30 |
 | [Drawdown Order](concepts/drawdown-order.md) | concept | 316 | 2 panels · 22 params · design 44, 65, 97 |
 | [Early Withdrawal](concepts/early-withdrawal.md) | concept | 228 | 1 panel · 8 params |
-| [Economic Shocks](concepts/economic-shocks.md) | concept | 242 | 2 panels · 3 params |
+| [Economic Shocks](concepts/economic-shocks.md) | concept | 338 | 2 panels · 3 params |
 | [Editing Liquidity Pools](workflows/editing-liquidity-pools.md) | workflow | 523 | 1 panel · 3 params · design 114, 110, 109 |
 | [Event](nodes/event.md) | node | 220 | 2 panels · design 2 |
 | [Event Sourcing](concepts/event-sourcing.md) | concept | 381 | 3 panels · design 2, 16, 91 |
@@ -2280,7 +2280,7 @@ what the in-app panel keys on.
 
 ---
 
-## Design documents (128)
+## Design documents (129)
 
 Tier 3 — the full argument behind each mechanic, in `design/`. The title is each
 file's own H1, read out of it; there is no summary column, because a one-line precis
@@ -2414,6 +2414,7 @@ between 10 and 11.
 | [`118-social-security-claiming.md`](../design/118-social-security-claiming.md) | 118 — Social Security claiming: claim age, spousal and survivor benefits |
 | [`119-super-access-and-msbs.md`](../design/119-super-access-and-msbs.md) | 119 — Super access dates, multiple funds and MSBS |
 | [`120-currency-hedged-equity.md`](../design/120-currency-hedged-equity.md) | 120 — Currency-hedged and unhedged foreign equity |
+| [`121-shock-leg-offset-and-stagflation-calibration.md`](../design/121-shock-leg-offset-and-stagflation-calibration.md) | 121 — Delayed shock legs, a recalibrated stagflation, gold risk, and TIPS real yields |
 | [`bus-unification-plan.md`](../design/bus-unification-plan.md) | Bus Unification Plan |
 | [`inconsistencies.md`](../design/inconsistencies.md) | Inconsistencies, Rework Candidates, and Open Questions |
 | [`requirements.md`](../design/requirements.md) | Requirements Tracker |

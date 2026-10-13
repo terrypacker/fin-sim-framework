@@ -64,9 +64,11 @@ export class EconomicShockHandler extends HandlerEntry {
     // own composition mechanism, not a second one bolted beside it.
     //
     // Absent `legs`, the shock is its own single leg and the behaviour is byte-identical.
+    // `legs: []` with `regime: null` is the level-only part of a shock whose every leg starts
+    // later (design 121 §3.2): it revalues and adds no regime.
     const legs = Array.isArray(shock.legs) && shock.legs.length
       ? shock.legs
-      : [{ id: null, regime: shock.regime, recovery: shock.recovery }];
+      : (shock.regime === null ? [] : [{ id: null, regime: shock.regime, recovery: shock.recovery }]);
 
     const actions = [];
     for (const leg of legs) {
