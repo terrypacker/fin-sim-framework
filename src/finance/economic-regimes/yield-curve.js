@@ -116,6 +116,48 @@ export function resolveYield(state, { rateKey, stateKey = null, country = null, 
 }
 
 /**
+ * The realised inflation over the trailing 12 months for `cc` (design 121 §8, Q6): the price
+ * level now over the level a year ago, less one.
+ *
+ * Read off `state.bracketIndexAccumulatorByYear[cc]`, the per-period-year level history
+ * `InflationAdjustReducer` already records, less that series' constant spread
+ * (`bracketIndexSpreads[cc]`, 0 by default) to recover CPI itself. The history steps once a
+ * year at the period advance, by the inflation of the year just ended, so `level(Y) /
+ * level(Y − 1)` IS the trailing year. Reusing it rather than recording a new level keeps every
+ * whole-state fixture byte-identical. With no history yet (before a period advance, or a run
+ * with every series flat) it falls back to the current effective rate, which is what the
+ * trailing year would read in a run whose inflation never moved.
+ *
+ * @param {object} state
+ * @param {'US'|'AU'} cc
+ * @returns {number}
+ */
+export function trailingInflation(state, cc) {
+  const levels = state?.bracketIndexAccumulatorByYear?.[cc];
+  const year   = new Date(state?.currentPeriods?.[cc]?.startMs ?? NaN).getUTCFullYear();
+  const now    = Number.isFinite(year) ? levels?.[year]     : undefined;
+  const prior  = Number.isFinite(year) ? levels?.[year - 1] : undefined;
+  if (now > 0 && prior > 0) return now / prior - 1 - (state?.bracketIndexSpreads?.[cc] ?? 0);
+  return state?.effectiveInflationRates?.[cc] ?? state?.inflationRates?.[cc] ?? 0;
+}
+
+/**
+ * The market REAL yield an inflation-linked bond prices at (design 121 §8): the nominal curve
+ * yield at `tenorYears` less the country's trailing-12-month inflation. No floor: real yields
+ * were negative in the 1970s and in 2020-21, and the deflation floor on principal is separate.
+ * Null when the nominal anchor is absent, so a caller keeps its own fallback.
+ *
+ * @param {object} state
+ * @param {{ rateKey: string, tenorYears?: number|null, stateKey?: string|null }} opts
+ * @returns {number|null}
+ */
+export function tipsRealYield(state, { rateKey, tenorYears = null, stateKey = null } = {}) {
+  const nominal = resolveYield(state, { rateKey, tenorYears, stateKey });
+  if (nominal == null) return null;
+  return nominal - trailingInflation(state, countryOfRateKey(rateKey));
+}
+
+/**
  * Compose an effective curve shape from a base shape + a set of additive TWISTS
  * (design 67 §6, Phase 3). Each twist is `{ points, factor }` — a `{tenor, spread}`
  * shape whose spreads are added (scaled by `factor`, the regime's recovery factor)

@@ -822,6 +822,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 0,
     "zeroCoupon": false
    },
@@ -852,6 +853,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 0,
     "zeroCoupon": false
    },
@@ -881,6 +883,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 0,
     "zeroCoupon": false
    },
@@ -910,6 +913,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 0,
     "zeroCoupon": false
    },
@@ -939,6 +943,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 0,
     "zeroCoupon": false
    },
@@ -968,6 +973,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 0,
     "zeroCoupon": false
    },
@@ -997,6 +1003,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 0,
     "zeroCoupon": false
    }
@@ -1060,6 +1067,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 365.38,
     "zeroCoupon": false
    },
@@ -1090,6 +1098,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 365.38,
     "zeroCoupon": false
    },
@@ -1120,6 +1129,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 376.3414,
     "zeroCoupon": false
    },
@@ -1150,6 +1160,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 344.4057,
     "zeroCoupon": false
    },
@@ -1180,6 +1191,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 1369.7894,
     "zeroCoupon": false
    },
@@ -1210,6 +1222,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 154.0909,
     "zeroCoupon": false
    },
@@ -1240,6 +1253,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 790.7585,
     "zeroCoupon": false
    },
@@ -1270,6 +1284,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 40.3533,
     "zeroCoupon": false
    },
@@ -1299,6 +1314,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 37.2992,
     "zeroCoupon": false
    },
@@ -1328,6 +1344,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 38.8036,
     "zeroCoupon": false
    },
@@ -1357,6 +1374,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 40.3683,
     "zeroCoupon": false
    },
@@ -1386,6 +1404,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 20.9459,
     "zeroCoupon": false
    }
@@ -1814,6 +1833,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 0,
     "zeroCoupon": false
    },
@@ -1844,6 +1864,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 0,
     "zeroCoupon": false
    },
@@ -1873,6 +1894,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 0,
     "zeroCoupon": false
    },
@@ -1902,6 +1924,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 0,
     "zeroCoupon": false
    },
@@ -1931,6 +1954,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 0,
     "zeroCoupon": false
    },
@@ -1960,6 +1984,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 0,
     "zeroCoupon": false
    },
@@ -1989,6 +2014,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 0,
     "zeroCoupon": false
    }
@@ -2052,6 +2078,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 497.1154,
     "zeroCoupon": false
    },
@@ -2082,6 +2109,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 512.0288,
     "zeroCoupon": false
    },
@@ -2112,6 +2140,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 512.0288,
     "zeroCoupon": false
    },
@@ -2142,6 +2171,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 527.3899,
     "zeroCoupon": false
    },
@@ -2172,6 +2202,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 21.783,
     "zeroCoupon": false
    },
@@ -2201,6 +2232,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 20.1344,
     "zeroCoupon": false
    },
@@ -2230,6 +2262,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 20.9458,
     "zeroCoupon": false
    },
@@ -2259,6 +2292,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 21.7903,
     "zeroCoupon": false
    },
@@ -2288,6 +2322,7 @@
     "rollTermYears": 4,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "tipsCouponMode": "PINNED",
     "units": 11.3066,
     "zeroCoupon": false
    }

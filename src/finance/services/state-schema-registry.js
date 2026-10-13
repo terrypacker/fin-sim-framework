@@ -561,6 +561,7 @@ export class StateSchemaRegistry {
     this.registerPattern('*.holdings.*.parPerUnit',            ParameterValueType.currency());
     this.registerPattern('*.holdings.*.couponFrequency',       ParameterValueType.integer());
     this.registerPattern('*.holdings.*.rollTermYears',         ParameterValueType.integer());
+    this.registerPattern('*.holdings.*.tipsCouponMode',        ParameterValueType.text());
     this.registerPattern('*.holdings.*.cpiIndexRatio',         ParameterValueType.decimal(4));
     this.registerPattern('*.holdings.*.acquisitionPriceLevel', ParameterValueType.decimal(4));
 

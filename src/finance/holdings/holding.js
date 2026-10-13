@@ -267,6 +267,8 @@ export class Holding {
     zeroCoupon           = false,
     inflationLinked      = false,
     fxBasisRate          = null,
+    // Design 121 §8 — a ladder-built TIPS rung's roll rule ('MARKET' | 'PINNED'); absent otherwise.
+    tipsCouponMode       = null,
     // ── design 93 §5 (Option A): the UNITISED representation, bonds first ──────────
     // Present only on an individual bond. When `units` is non-null the holding is
     // UNITISED and its value flows from a count times a per-unit quantity; when it is
@@ -336,6 +338,7 @@ export class Holding {
     if (pricePerUnit  != null) this.pricePerUnit  = pricePerUnit;
     if (cpiIndexRatio != null) this.cpiIndexRatio = cpiIndexRatio;
     if (securityId    != null) this.securityId    = securityId;
+    if (tipsCouponMode != null) this.tipsCouponMode = tipsCouponMode;
   }
 
   toJSON() {
@@ -385,6 +388,7 @@ export class Holding {
       ...(this.pricePerUnit  != null ? { pricePerUnit:  this.pricePerUnit }  : {}),
       ...(this.cpiIndexRatio != null ? { cpiIndexRatio: this.cpiIndexRatio } : {}),
       ...(this.securityId    != null ? { securityId:    this.securityId }    : {}),
+      ...(this.tipsCouponMode != null ? { tipsCouponMode: this.tipsCouponMode } : {}),
     };
   }
 
@@ -433,6 +437,7 @@ export class Holding {
       pricePerUnit:    d.pricePerUnit    ?? null,
       cpiIndexRatio:   d.cpiIndexRatio   ?? null,
       securityId:      d.securityId      ?? null,
+      tipsCouponMode:  d.tipsCouponMode  ?? null,
     });
   }
 }

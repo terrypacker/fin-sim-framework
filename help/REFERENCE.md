@@ -9,18 +9,18 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-228 parameters · 33 panels · 12 node types (205 fields) · 179 action types · 88 tools · 317 state field types · 78 topics · 129 design docs
+229 parameters · 33 panels · 12 node types (205 fields) · 179 action types · 88 tools · 318 state field types · 78 topics · 129 design docs
 
 ---
 
-## Parameters (228)
+## Parameters (229)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
 `opt` to the optimizer. `via` names the toolset that contributed it (`SCENARIO` = the
 scenario's own schema), which is where to go to change it.
 
-### Allocation (19)
+### Allocation (20)
 
 - **`allocationClassRestrictions`** — Allocation Class Restrictions · `ClassRestrictions` · default — · conditional · via ECONOMIC_REGIMES
   Account roles an allocation class may NEVER be placed in, as a map of class → roles, e.g. {"GOLD":["super"]}. Classes: GOLD, BOND, EQUITY, CASH. Unlike the location policy this is hard: a class weight no permitted account can hold is spread over the other classes, and a barred holding is sold at the next rebalance even inside the drift band. Applies to TARGET_ALLOCATION in both location modes. An empty list ({"GOLD":[]}) restricts nothing but records that the placement was considered, which silences the US-citizen super warning. Null ⇒ no restrictions.
@@ -45,7 +45,7 @@ scenario's own schema), which is where to go to change it.
 - **`bondLadderCouponRate`** — Bond Ladder — Coupon Rate (blank = market) · `Number` · default — · range 0…0.15 · conditional · via ECONOMIC_REGIMES
   Fixed coupon stamped on every rung at build. Blank (default) = the prevailing curve yield at each rung's own tenor. For a TIPS ladder this is the REAL yield.
 - **`bondLadderInflationLinked`** — Bond Ladder — TIPS (inflation-linked) · `Boolean` · default `false` · conditional · via ECONOMIC_REGIMES
-  ON = every rung is a TIPS / inflation-linked bond (design 66 §G5): principal indexes to CPI, the accretion is imputed ordinary income, the coupon pays on the adjusted principal and redemption carries the deflation floor. Set `bondLadderCouponRate` to the REAL yield when ON — leaving it null stamps the NOMINAL market yield on top of CPI indexation, which pays twice for inflation.
+  ON = every rung is a TIPS / inflation-linked bond (design 66 §G5): principal indexes to CPI, the accretion is imputed ordinary income, the coupon pays on the adjusted principal and redemption carries the deflation floor. With no coupon set, each rung takes the market REAL yield (design 121 §8): the nominal curve yield at its tenor less the trailing 12 months of inflation, which can be negative.
 - **`bondLadderRole`** — Bond Ladder — Account Role(s) · `EnumMulti` · default `us-stock` · one of `ALL`, `us-savings`, `fixed-income`, `us-stock`, `ira`, `k401`, `roth-ira`, `au-savings`, `au-fixed-income`, `au-stock`, `super`, `us-loan`, `au-loan`, `us-offset`, `au-offset`, `inherited-ira`, `inherited-k401`, `inherited-roth` · conditional · via ECONOMIC_REGIMES
   WHERE the ladder lives: tick the account roles to ladder, or ALL for every account that holds bonds. EVERY account matching a ticked role is laddered, not just the first — a household commonly holds several accounts in one role. Nothing ticked = the default (us-stock). Note there is no SIZE lever here: a ladder is the account's whole BOND sleeve, restruck as N individual bonds, so how much is in it is set by the allocation target (TARGET_ALLOCATION), not by this strategy — this strategy only decides the SHAPE (rungs × spacing) and the LOCATION.
 - **`bondLadderRoll`** — Bond Ladder — Roll Maturing Rungs · `Boolean` · default `true` · conditional · via ECONOMIC_REGIMES
@@ -56,6 +56,8 @@ scenario's own schema), which is where to go to change it.
   Years between adjacent rung maturities. Ladder term = rungs × spacing. 0.25 is a quarterly ladder — four rungs of it cover a year of spending in three-month steps, which is the shape a liquidity pool wants; the reducer has always accepted it, the control just could not express it.
 - **`bondLadderTaxTreatment`** — Bond Ladder — Tax Treatment · `Enum` · default `state` · one of `none`, `state`, `federal`, `both` · conditional · via ECONOMIC_REGIMES
   Holding tax treatment for every rung (design 66 §G2): none = fully taxable, state = US Treasury (state-exempt, default), federal = municipal, both = muni all-state.
+- **`bondLadderTipsCouponMode`** — Bond Ladder — TIPS Coupon at Roll · `Enum` · default `AUTO` · one of `AUTO`, `MARKET`, `PINNED` · conditional · via ECONOMIC_REGIMES
+  TIPS ladders only: the real yield a rung takes when it rolls (design 121 §8). Market re-locks at the nominal curve yield for the roll term less trailing 12-month inflation, so the ladder reprices as real rates move. Pinned keeps the rung's coupon for good. Automatic is Market when Coupon Rate is blank and Pinned when it is set.
 - **`rebalanceDriftBandSheltered`** — Rebalance Drift Band — Sheltered · `Number` · default `0.02` · range 0.01…0.2 · sweep: opt · conditional · via ECONOMIC_REGIMES
   Allocation drift (fraction) that triggers a rebalance in a tax-advantaged (401k/IRA/Roth/Super) account. Defaults TIGHT (0.02) — rebalancing there is ~free, so tight banding buys the best risk control at no tax cost (design 61 §OQ3).
 - **`rebalanceDriftBandTaxable`** — Rebalance Drift Band — Taxable · `Number` · default `0.1` · range 0.02…0.2 · sweep: opt · conditional · via ECONOMIC_REGIMES
@@ -1864,7 +1866,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 
 ---
 
-## State field types (317)
+## State field types (318)
 
 The scenario-INDEPENDENT half of `StateSchemaRegistry`: the globs and exact paths it
 installs in its own constructor, with the value type that decides how each formats.
@@ -1922,6 +1924,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `*.holdings.*.rateKey` | text |
 | `*.holdings.*.rollTermYears` | integer |
 | `*.holdings.*.taxLossPartner` | text |
+| `*.holdings.*.tipsCouponMode` | text |
 | `*.holdings.*.units` | decimal |
 | `*.interestOnlyUntil` | date |
 | `*.interestRate` | rate |
@@ -2211,7 +2214,7 @@ what the in-app panel keys on.
 | [AU Tax and PAYG Instalments](concepts/au-tax.md) | concept | 236 | 2 panels · 6 params · design 107 |
 | [Behavioral Strategies](concepts/behavioral-strategies.md) | concept | 232 | 2 panels · 5 params · design 29 |
 | [Inheritance](nodes/bequest.md) | node | 233 | 2 panels · design 63 |
-| [Bond Ladders](concepts/bond-ladders.md) | concept | 237 | 1 panel · 7 params · design 66 |
+| [Bond Ladders](concepts/bond-ladders.md) | concept | 315 | 1 panel · 8 params · design 66, 121 |
 | [Chart](panels/chart.md) | panel | 199 | 1 panel |
 | [Collectible](nodes/collectible.md) | node | 205 | 2 panels · design 57, 88 |
 | [Company Equity](nodes/company.md) | node | 214 | 2 panels · design 49, 72, 88 |

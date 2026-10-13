@@ -253,9 +253,9 @@ export const GOLDEN_SPECS = [
       bondLadderSpacingYears:    1,
       bondLadderRoll:            true,
       // The two parameters that make this golden different from its twin. The coupon is
-      // PINNED to a real yield: the engine models a nominal curve only (design 67), so
-      // stamping the market anchor on a principal that also indexes to CPI would pay for
-      // inflation twice.
+      // PINNED to a real yield, so the rungs' coupons are a constant this fixture controls
+      // rather than the market real yield (design 121 §8), and every rung carries
+      // `tipsCouponMode: 'PINNED'` and keeps that coupon when it rolls.
       bondLadderInflationLinked: true,
       bondLadderCouponRate:      0.01,
       rothConversionEnabled:     true,
