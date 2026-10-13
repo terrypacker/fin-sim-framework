@@ -12,7 +12,7 @@ import { Reducer, PRIORITY }  from '../../simulation-framework/reducers.js';
 import { ALLOCATION }         from '../holdings/allocation.js';
 import { _syncBalance }       from '../holdings/holding-reducers.js';
 import { resolveRateKey }     from '../holdings/default-allocations.js';
-import { resolveYield }       from '../economic-regimes/yield-curve.js';
+import { resolveYield, tipsRealYield } from '../economic-regimes/yield-curve.js';
 import { unitiseBond, addValue, instrumentOf } from '../holdings/holding-utils.js';
 import { compactLots, LOT_POLICIES } from '../holdings/holding-utils.js';
 
@@ -63,11 +63,14 @@ export class BondLadderReducer extends Reducer {
    *   set to the REAL yield — the market anchor is a NOMINAL yield and stamping it on a CPI-indexed
    *   principal pays for inflation twice.
    * @param {number|null} [opts.couponRate=null] - fixed coupon for every rung; null ⇒ the curve yield
-   *   at each rung's own tenor.
+   *   at each rung's own tenor (for a TIPS ladder, the market REAL yield — design 121 §8).
+   * @param {'AUTO'|'MARKET'|'PINNED'} [opts.tipsCouponMode='AUTO'] - TIPS only: whether a rung
+   *   re-locks at the market real yield when it rolls (MARKET) or keeps its coupon (PINNED).
+   *   AUTO is MARKET with no `couponRate`, PINNED with one.
    */
   constructor({ stateKey, country = 'US', targetRungs = 5, spacingYears = 1,
                 roll = true, taxExemption = 'state',
-                inflationLinked = false, couponRate = null } = {}) {
+                inflationLinked = false, couponRate = null, tipsCouponMode = 'AUTO' } = {}) {
     super('Bond Ladder', PRIORITY.PRE_PROCESS + 5); // after maturity (+3) and rebalance detect (+4)
     this.reducedActionTypes = ['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE'];
     this.stateKey     = stateKey;
@@ -78,6 +81,25 @@ export class BondLadderReducer extends Reducer {
     this.taxExemption = taxExemption;
     this.inflationLinked = inflationLinked;
     this.couponRate      = couponRate;
+    this.tipsCouponMode  = tipsCouponMode;
+  }
+
+  /**
+   * The yield an unpinned rung takes at `tenorYears`. A TIPS rung takes the market REAL yield
+   * (design 121 §8): the nominal curve less trailing inflation. Stamping the nominal yield on a
+   * CPI-indexed principal paid for inflation twice.
+   */
+  _marketYield(state, rateKey, tenorYears) {
+    return this.inflationLinked === true
+      ? tipsRealYield(state, { rateKey, tenorYears })
+      : resolveYield(state, { rateKey, tenorYears });
+  }
+
+  /** The roll rule stamped on every TIPS rung, resolved from AUTO; null for a nominal ladder. */
+  _tipsMode() {
+    if (this.inflationLinked !== true) return null;
+    if (this.tipsCouponMode === 'MARKET' || this.tipsCouponMode === 'PINNED') return this.tipsCouponMode;
+    return this.couponRate == null ? 'MARKET' : 'PINNED';
   }
 
   /**
@@ -133,8 +155,9 @@ export class BondLadderReducer extends Reducer {
         roll: this.roll !== false,
         taxExemption: this.taxExemption ?? 'state',
         inflationLinked: this.inflationLinked === true,
+        tipsCouponMode:  this._tipsMode(),
         couponRate: this.couponRate
-          ?? resolveYield(state, { rateKey: rateKeyA, tenorYears: ladderTermYears })
+          ?? this._marketYield(state, rateKeyA, ladderTermYears)
           ?? null,
         levelNow: state.cpiAccumulator?.AU ?? state.inflationAccumulator?.AU ?? 1,
       });
@@ -156,14 +179,17 @@ export class BondLadderReducer extends Reducer {
       roll: this.roll !== false, taxExemption: this.taxExemption ?? 'state',
       stateKey: this.stateKey, rateKey,
       inflationLinked: this.inflationLinked === true,
+      tipsCouponMode:  this._tipsMode(),
       couponRate: this.couponRate
-        ?? ((rateKey != null ? state.effectiveInterestRates?.[rateKey] : null) ?? null),
+        ?? (rateKey == null ? null
+          : this.inflationLinked === true ? tipsRealYield(state, { rateKey })
+          : (state.effectiveInterestRates?.[rateKey] ?? null)),
       // design 67 — price each rung along the yield curve at ITS OWN tenor, so a
       // freshly built ladder earns the term premium (flat curve ⇒ every rung == anchor).
       // A pinned `couponRate` (a contracted real yield, typically) overrides the curve.
       couponForTenor: this.couponRate != null
         ? null
-        : (tenorYears) => resolveYield(state, { rateKey, tenorYears }),
+        : (tenorYears) => this._marketYield(state, rateKey, tenorYears),
       priceLevel: auLevel,
       // design 62 §9.5 follow-up — the rebuild REPLACES existing lots, so it must carry
       // their tax attributes across instead of re-basing the sleeve at market value.
@@ -197,7 +223,7 @@ export function materializeLadder({ bondValue, rungs, spacingYears = 1, asOfMs,
                                     roll = true, taxExemption = 'state',
                                     stateKey = 'ladder', rateKey = null, couponRate = null,
                                     couponForTenor = null, priceLevel = null, carry = null,
-                                    inflationLinked = false }) {
+                                    inflationLinked = false, tipsCouponMode = null }) {
   const n        = Math.max(1, Math.round(rungs));
   const spacing  = spacingYears > 0 ? spacingYears : 1;
   const ladderTermYears = +(n * spacing).toFixed(4);
@@ -251,6 +277,9 @@ export function materializeLadder({ bondValue, rungs, spacingYears = 1, asOfMs,
       rollTermYears:  roll ? ladderTermYears : null,
       zeroCoupon:      false,
       inflationLinked: inflationLinked === true,
+      // Design 121 §8 — how a TIPS rung re-prices when it rolls. Written only on a TIPS rung
+      // built by the ladder strategy, so every other bond keeps its exact shape.
+      ...(tipsCouponMode ? { tipsCouponMode } : {}),
       // design 93 §5b — a rung is ISSUED, so it is unitised from birth rather than
       // promoted later. A par bond at build, so `pricePerUnit` lands on PAR_PER_UNIT and
       // `units x parPerUnit` reproduces `face` exactly (face is 2dp, units 4dp).
@@ -421,6 +450,7 @@ function _carrySplitter(carry, bondValue, n) {
 export function absorbAsTailRung(rungs, funds, {
   asOfMs, ladderTermYears, stateKey = 'ladder', rateKey = null, roll = true,
   taxExemption = 'state', inflationLinked = false, couponRate = null, levelNow = 1,
+  tipsCouponMode = null,
 } = {}) {
   const addMv = +(funds ?? []).reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
   if (!(addMv > 0.005)) return rungs;
@@ -479,6 +509,7 @@ export function absorbAsTailRung(rungs, funds, {
     rollTermYears:  roll ? ladderTermYears : null,
     zeroCoupon:      false,
     inflationLinked: inflationLinked === true,
+    ...(tipsCouponMode ? { tipsCouponMode } : {}),
     // Issued at par today, like every other rung (design 93 §5b).
     ...unitiseBond({ faceValue: addMv, inflationLinked: inflationLinked === true }),
   }];

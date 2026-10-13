@@ -10,7 +10,7 @@
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { ALLOCATION }         from '../holdings/allocation.js';
-import { resolveYield }       from './yield-curve.js';
+import { resolveYield, tipsRealYield } from './yield-curve.js';
 import { _syncBalance }       from '../holdings/holding-reducers.js';
 import { section988ForRedemption } from '../account-rules/bond-currency-basis.js';
 import { unitiseBond, indexedRedemptionValue, instrumentOf } from '../holdings/holding-utils.js';
@@ -130,7 +130,7 @@ export class BondMaturityReducer extends Reducer {
       const nextHoldings = account.holdings.map(h => {
         const inst = instrumentOf(h, securities);
         if (!isMatured(h, inst, asOfMs)) return h;
-        const out = redeem(h, inst, asOfMs, effectiveRates, yieldCurve, spot, securities);
+        const out = redeem(h, inst, asOfMs, effectiveRates, yieldCurve, spot, securities, state);
         if (!isSuper || (h.marketValue ?? 0) <= 0.005) return out;
         // Design 105 §8.6 — the fund's revenue gain on the matured bond, measured against
         // the SAME redemption value `redeem` just paid.
@@ -181,7 +181,7 @@ function redemptionValue(h, inst, securities) {
  * at par to a CASH holding (default). `faceValue ?? marketValue` is the par
  * proceeds.
  */
-function redeem(h, inst, asOfMs, effectiveRates, yieldCurve = {}, spot = null, securities = null) {
+function redeem(h, inst, asOfMs, effectiveRates, yieldCurve = {}, spot = null, securities = null, state = null) {
   // A TIPS redeems at the greater of its inflation-adjusted principal (its accreted
   // marketValue) and the original face — the Treasury deflation floor (design 66
   // §G5). A zero / plain bond redeems at par (faceValue). Falls back to marketValue
@@ -252,14 +252,21 @@ function redeem(h, inst, asOfMs, effectiveRates, yieldCurve = {}, spot = null, s
     // bond keeps the pre-existing behavior (roll into a plain par bond), which is what the
     // §G5 note below is about.
     const rollsAsTips = inst.inflationLinked === true && h.rollTermYears != null;
-    // A rolling TIPS re-issues at the CONTRACTED REAL yield it already carries. The engine
-    // models a nominal curve only (design 67), so `resolveYield` would hand a TIPS the
-    // NOMINAL yield and pay it on a principal that also indexes to CPI — compensating for
-    // inflation twice. Holding the real yield flat is the neutral assumption in the absence
-    // of a real-yield curve, and it is what makes a TIPS ladder the risk-free leg it is
-    // supposed to be.
+    // A rolling TIPS never takes the NOMINAL yield: `resolveYield` reads a nominal curve
+    // (design 67), and paying it on a principal that also indexes to CPI compensates for
+    // inflation twice. Which REAL yield it takes is the rung's `tipsCouponMode`, stamped by
+    // the ladder that built it (design 121 §8):
+    //   - MARKET re-locks at the market real yield for the roll tenor — the nominal curve
+    //     less trailing-12-month inflation — so a TIPS ladder reprices as real rates move.
+    //     Held flat, a ladder pinned at a low real yield stayed there through a decade in
+    //     which nominal bonds re-locked at +7 % real.
+    //   - PINNED, or no mode (a rung built before design 121, or by the account editor),
+    //     keeps the contracted real yield it already carries.
+    const marketReal = rollsAsTips && h.tipsCouponMode === 'MARKET' && state != null
+      ? tipsRealYield(state, { rateKey: inst.rateKey, tenorYears: rollTenorYears })
+      : null;
     const newCoupon = rollsAsTips
-      ? (inst.couponRate ?? null)
+      ? (marketReal ?? inst.couponRate ?? null)
       : (resolveYield(
           { effectiveInterestRates: effectiveRates, yieldCurve },
           { rateKey: inst.rateKey, tenorYears: rollTenorYears },

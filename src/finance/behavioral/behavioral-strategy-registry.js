@@ -444,6 +444,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
         taxExemption:    p.bondLadderTaxTreatment ?? 'state',
         inflationLinked: p.bondLadderInflationLinked ?? false,
         couponRate:      p.bondLadderCouponRate ?? null,
+        tipsCouponMode:  p.bondLadderTipsCouponMode ?? 'AUTO',
       }));
     },
     paramSchema: () => [
@@ -475,9 +476,9 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
         defaultValue: false,
         description: 'ON = every rung is a TIPS / inflation-linked bond (design 66 §G5): principal indexes ' +
           'to CPI, the accretion is imputed ordinary income, the coupon pays on the adjusted principal and ' +
-          'redemption carries the deflation floor. Set `bondLadderCouponRate` to the REAL yield when ON — ' +
-          'leaving it null stamps the NOMINAL market yield on top of CPI indexation, which pays twice for ' +
-          'inflation.',
+          'redemption carries the deflation floor. With no coupon set, each rung takes the market REAL ' +
+          'yield (design 121 §8): the nominal curve yield at its tenor less the trailing 12 months of ' +
+          'inflation, which can be negative.',
         visibleWhen: { param: 'behavioralStrategies', includes: 'BOND_LADDER' },
       },
       {
@@ -487,6 +488,22 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
         description: 'Fixed coupon stamped on every rung at build. Blank (default) = the prevailing ' +
           'curve yield at each rung\'s own tenor. For a TIPS ladder this is the REAL yield.',
         visibleWhen: { param: 'behavioralStrategies', includes: 'BOND_LADDER' },
+      },
+      {
+        key: 'bondLadderTipsCouponMode', label: 'Bond Ladder — TIPS Coupon at Roll',
+        type: 'Enum', group: 'Allocation', mc: false, opt: false,
+        options: ['AUTO', 'MARKET', 'PINNED'],
+        optionLabels: {
+          AUTO:   'Automatic — market with no coupon set, pinned with one (default)',
+          MARKET: 'Market — re-lock at the market real yield',
+          PINNED: 'Pinned — keep the coupon the rung was built with',
+        },
+        defaultValue: 'AUTO',
+        description: 'TIPS ladders only: the real yield a rung takes when it rolls (design 121 §8). ' +
+          'Market re-locks at the nominal curve yield for the roll term less trailing 12-month ' +
+          'inflation, so the ladder reprices as real rates move. Pinned keeps the rung\'s coupon for ' +
+          'good. Automatic is Market when Coupon Rate is blank and Pinned when it is set.',
+        visibleWhen: { param: 'bondLadderInflationLinked', truthy: true },
       },
       {
         key: 'bondLadderSpacingYears', label: 'Bond Ladder Spacing (years)',

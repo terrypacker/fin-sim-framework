@@ -1,6 +1,6 @@
 # 121 — Delayed shock legs, a recalibrated stagflation, gold risk, and TIPS real yields
 
-**Status:** ACCEPTED (12 Oct 2026), rev 3. **Phases 1–4 BUILT** (12 Oct 2026); phase 5 open.
+**Status:** ACCEPTED (12 Oct 2026), rev 3. **COMPLETE** (12 Oct 2026): phases 1–5 built. Q2 (real-rate legs) stays deferred.
 
 - **rev 2:** the author answered rev 1's questions.
   - Q1: raise the AU inflation leg (§4).
@@ -420,6 +420,31 @@ level), and phase 2 gives 10.2 − 3.0 = +7.2%, matching nominal bonds' real yie
 double-paying, so TIPS returns fall. Plans with a pinned coupon change only at roll, and only
 under `MARKET`. A golden that builds an unpinned TIPS ladder will move (find them at build time
 with a `bondLadderInflationLinked` grep under `tests/`).
+
+### 8.1 As built (phase 5)
+- **`tipsRealYield` / `trailingInflation`** in `yield-curve.js`. Trailing inflation comes
+  from `bracketIndexAccumulatorByYear[cc]`, the per-period-year level history
+  `InflationAdjustReducer` already records, less its constant `bracketIndexSpreads[cc]` (0 by
+  default). It steps once a year by the inflation of the year just ended, so
+  `level(Y)/level(Y−1)` is the trailing year. Reusing it avoided a new state key on every
+  whole-state fixture. With under a year of history it falls back to the current effective
+  rate, as Q6 specified.
+- **Build** (`BondLadderReducer`): an unpinned TIPS ladder prices each rung at its own
+  tenor's real yield, including the tail rung that absorbs new money. A nominal ladder's
+  coupons are unchanged.
+- **Roll is per rung, not per plan.** The ladder stamps `tipsCouponMode` (`MARKET` |
+  `PINNED`) on every TIPS rung it builds, and `BondMaturityReducer` re-locks only a
+  `MARKET` rung. A rung with no mode keeps its coupon, as before: one built before this
+  design, or by the account editor's ladder builder. The param is
+  `bondLadderTipsCouponMode` with **AUTO** (default) = MARKET when the coupon is blank,
+  PINNED when it is set. That is §8's "default MARKET when the coupon is null" plus the
+  blast-radius promise that a pinned plan changes only if it opts in.
+- **Golden:** `tips-ladder-conservation` pins its coupon, so its only diff is the new
+  `tipsCouponMode: "PINNED"` field on its 35 rung records. No value moved.
+- **Not changed:** `bondLadderCouponRate` keeps `min: 0`, so a *pinned* negative real yield
+  cannot be typed. The market path has no floor.
+- Tests: `evt-tips-real-yield.test.mjs` TIPS-1..4, including §8's −1.0% / +7.2% check.
+  Help: `bond-ladders` cites the new param, restamped.
 
 ## 9. Phases and open questions
 
