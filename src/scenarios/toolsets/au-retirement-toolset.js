@@ -524,7 +524,7 @@ export const AU_RETIREMENT = {
     const p        = context.parameters;
     const strategies = p.spendingStrategy ?? ['FIXED'];
     if (strategies.includes('GUARDRAIL') && !context._auSharedDelegated) {
-      const simStart = context.simStart ?? new Date();
+      const simStart = context.startDate;   // the plan start (not `simStart`: absent ⇒ wall clock)
       for (const person of people) {
         const workEnd = lastWorkDate(person, context.spellsByPerson);
         if (!workEnd) continue;
@@ -559,7 +559,7 @@ export const AU_RETIREMENT = {
     const lateLifeCareFactor = p.lateLifeCareFactor ?? 2.0;
 
     if (mortalityEnabled && !context._auSharedDelegated) {
-      const simEnd = context.simEnd ? new Date(context.simEnd) : null;
+      const simEnd = context.endDate ?? null;   // `simEnd` is not a context field
       for (const person of people) {
         const lifeExpectancy = p.people?.[person.id]?.lifeExpectancy ?? person.lifeExpectancy;
         if (!person.birthDate || !lifeExpectancy) continue;
@@ -569,7 +569,11 @@ export const AU_RETIREMENT = {
           birth.getUTCMonth(),
           birth.getUTCDate(),
         ));
-        if (simEnd && deathDate > simEnd) continue;
+        // Skip a person only when NOTHING of theirs lands inside the run: a late-life care
+        // window can begin before the end even when the death falls after it.
+        const firstEvent = new Date(deathDate);
+        if (lateLifeCareMonths > 0) firstEvent.setUTCMonth(firstEvent.getUTCMonth() - lateLifeCareMonths);
+        if (simEnd && firstEvent > simEnd) continue;
         schedules.push(new OneOffEvent({
           name:    `Death — ${person.name ?? person.id}`,
           type:    'PERSON_DIED',
@@ -586,7 +590,7 @@ export const AU_RETIREMENT = {
             name:    `Late-Life Care Begin — ${person.name ?? person.id}`,
             type:    'LATE_LIFE_CARE_BEGIN',
             date:    careBegin,
-            data:    { personId: person.id, factor: lateLifeCareFactor },
+            data:    { personId: person.id, factor: lateLifeCareFactor, active: true },
             enabled: true,
             color:   '#BF360C',
           }));
@@ -594,7 +598,7 @@ export const AU_RETIREMENT = {
             name:    `Late-Life Care End — ${person.name ?? person.id}`,
             type:    'LATE_LIFE_CARE_END',
             date:    new Date(deathDate),
-            data:    { personId: person.id },
+            data:    { personId: person.id, active: false },
             enabled: true,
             color:   '#BF360C',
           }));

@@ -94,6 +94,13 @@ test('LLC-4: Handler emits active=true on BEGIN, active=false on END', () => {
   assert.strictEqual(startActions[0].active, true);
   assert.strictEqual(startActions[0].factor, 2.0);
   assert.strictEqual(endActions[0].active,   false);
+
+  // The convention the simulation actually uses: `{ data }`, BEGIN/END carried as `active`.
+  const runBegin = handler.call({ data: { personId: 'primary', factor: 2.0, active: true } });
+  const runEnd   = handler.call({ data: { personId: 'primary', active: false } });
+  assert.strictEqual(runBegin[0].active, true);
+  assert.strictEqual(runBegin[0].factor, 2.0);
+  assert.strictEqual(runEnd[0].active,   false);
 });
 
 // ── LLC-5 ─────────────────────────────────────────────────────────────────────
