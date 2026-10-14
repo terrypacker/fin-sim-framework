@@ -16,6 +16,7 @@ import { INTL_RETIREMENT_DEFAULTS, DRAWDOWN_STRATEGIES, buildDrawdownWeightSchem
          buildAllocWeightSchema, presentAllocations, allocWeightKey,
          ALLOC_WEIGHT_PREFIX, ALLOC_WEIGHT_SEP, buildSleeveWeightSchema } from '../../scenarios/intl-retirement-scenario.js';
 import { SLEEVE_ORDER_MODES, LOT_STRATEGIES } from '../holdings/holdings-selection.js';
+import { REBALANCE_LOT_STRATEGIES } from '../behavioral/rebalance-to-target-apply-reducer.js';
 import { SHOCK_LIBRARY }              from '../economic-shocks/shock-library.js';
 import { US_STATE_CODES }             from '../tax/state/us-states.js';
 import { indexParamSchema, resolveSweepVariables, harvestSweepVariables,
@@ -360,6 +361,16 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
     label:    'Rebalance Drift Band — Taxable',
     type:     OPT_PARAM_TYPES.CONTINUOUS,
     min: 0.02, max: 0.20, step: 0.01,
+    group:    'Allocation',
+    enabled:  false,
+  },
+  // Which lots a taxable rebalance sells (flag 22 of the macro-regimes study). Categorical;
+  // FIFO is the byte-identical default.
+  {
+    paramKey: 'rebalanceLotStrategy',
+    label:    'Rebalance Lot Strategy',
+    type:     OPT_PARAM_TYPES.ENUM,
+    values:   REBALANCE_LOT_STRATEGIES,
     group:    'Allocation',
     enabled:  false,
   },

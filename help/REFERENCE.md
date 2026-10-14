@@ -9,18 +9,18 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-230 parameters · 33 panels · 12 node types (205 fields) · 179 action types · 88 tools · 320 state field types · 78 topics · 130 design docs
+231 parameters · 33 panels · 12 node types (205 fields) · 179 action types · 88 tools · 320 state field types · 78 topics · 130 design docs
 
 ---
 
-## Parameters (230)
+## Parameters (231)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
 `opt` to the optimizer. `via` names the toolset that contributed it (`SCENARIO` = the
 scenario's own schema), which is where to go to change it.
 
-### Allocation (20)
+### Allocation (21)
 
 - **`allocationClassRestrictions`** — Allocation Class Restrictions · `ClassRestrictions` · default — · conditional · via ECONOMIC_REGIMES
   Account roles an allocation class may NEVER be placed in, as a map of class → roles, e.g. {"GOLD":["super"]}. Classes: GOLD, BOND, EQUITY, CASH. Unlike the location policy this is hard: a class weight no permitted account can hold is spread over the other classes, and a barred holding is sold at the next rebalance even inside the drift band. Applies to TARGET_ALLOCATION in both location modes. An empty list ({"GOLD":[]}) restricts nothing but records that the placement was considered, which silences the US-citizen super warning. Null ⇒ no restrictions.
@@ -62,6 +62,8 @@ scenario's own schema), which is where to go to change it.
   Allocation drift (fraction) that triggers a rebalance in a tax-advantaged (401k/IRA/Roth/Super) account. Defaults TIGHT (0.02) — rebalancing there is ~free, so tight banding buys the best risk control at no tax cost (design 61 §OQ3).
 - **`rebalanceDriftBandTaxable`** — Rebalance Drift Band — Taxable · `Number` · default `0.1` · range 0.02…0.2 · sweep: opt · conditional · via ECONOMIC_REGIMES
   Allocation drift (fraction) that triggers a rebalance in a TAXABLE brokerage account. Defaults WIDE (0.10) — a wide band beats annual/tight by realizing far less CGT for marginal tracking gain (design 61 §OQ3).
+- **`rebalanceLotStrategy`** — Rebalance Lot Strategy · `Enum` · default `FIFO` · one of `FIFO`, `HIFO`, `LOSS_FIRST`, `SPECIFIC`, `LADDER`, `DRAWDOWN` · sweep: opt · conditional · via ECONOMIC_REGIMES
+  Which lots a rebalance sells in a TAXABLE account, and so how much gain it realizes. FIFO (default) sells oldest first, which is usually the largest gain. HIFO and SPECIFIC sell the highest cost basis first; LOSS_FIRST sells losing lots first; LADDER sells the nearest-maturity bond rung first. DRAWDOWN follows Drawdown Lot Strategy. Sheltered accounts and cash legs sell pro rata, so this does not affect them.
 
 ### AU Banking (3)
 

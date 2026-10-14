@@ -19,7 +19,7 @@ import { BehavioralPanicSellApplyReducer }     from './behavioral-panic-sell-app
 import { ContributionSuspensionToggleReducer } from './contribution-suspension-toggle-reducer.js';
 import { CashBucketDrawdownReducer }           from './cash-bucket-drawdown-reducer.js';
 import { RebalanceToTargetReducer, TAX_ADVANTAGED_ROLES, TAXABLE_ROLES, ALLOCATION_SCHEDULE, ALLOCATION_LOCATION, countryForRole, assertAuthoredMixes } from './rebalance-to-target-reducer.js';
-import { RebalanceToTargetApplyReducer }       from './rebalance-to-target-apply-reducer.js';
+import { RebalanceToTargetApplyReducer, REBALANCE_LOT_STRATEGIES } from './rebalance-to-target-apply-reducer.js';
 import { normalizeClassRestrictions, collectClassRestrictionProblems, RESTRICTABLE_CLASSES } from './allocation-location.js';
 import { BondLadderReducer }                   from './bond-ladder-reducer.js';
 import { ACCOUNT_ROLES }                       from '../state/account-roles.js';
@@ -259,7 +259,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
           // on the sale that would refill them. Null ⇒ every design-97 line is inert.
           poolGraph: resolveLiquidityGraph(p, context.accounts ?? []),
         }),
-        new RebalanceToTargetApplyReducer(),
+        new RebalanceToTargetApplyReducer({ lotStrategy: p.rebalanceLotStrategy ?? 'FIFO' }),
       ];
     },
     paramSchema: () => [
@@ -304,6 +304,17 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
         description: 'Allocation drift (fraction) that triggers a rebalance in a TAXABLE brokerage ' +
           'account. Defaults WIDE (0.10) — a wide band beats annual/tight by realizing far less CGT ' +
           'for marginal tracking gain (design 61 §OQ3).',
+        visibleWhen: { param: 'behavioralStrategies', includes: 'TARGET_ALLOCATION' },
+      },
+      {
+        key: 'rebalanceLotStrategy', label: 'Rebalance Lot Strategy',
+        type: 'Enum', group: 'Allocation', mc: false, opt: true,
+        options: REBALANCE_LOT_STRATEGIES, defaultValue: 'FIFO',
+        description: 'Which lots a rebalance sells in a TAXABLE account, and so how much gain it ' +
+          'realizes. FIFO (default) sells oldest first, which is usually the largest gain. HIFO and ' +
+          'SPECIFIC sell the highest cost basis first; LOSS_FIRST sells losing lots first; LADDER sells ' +
+          'the nearest-maturity bond rung first. DRAWDOWN follows Drawdown Lot Strategy. Sheltered ' +
+          'accounts and cash legs sell pro rata, so this does not affect them.',
         visibleWhen: { param: 'behavioralStrategies', includes: 'TARGET_ALLOCATION' },
       },
       {
