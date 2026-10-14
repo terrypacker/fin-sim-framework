@@ -63,7 +63,7 @@ scenario's own schema), which is where to go to change it.
 - **`rebalanceDriftBandTaxable`** — Rebalance Drift Band — Taxable · `Number` · default `0.1` · range 0.02…0.2 · sweep: opt · conditional · via ECONOMIC_REGIMES
   Allocation drift (fraction) that triggers a rebalance in a TAXABLE brokerage account. Defaults WIDE (0.10) — a wide band beats annual/tight by realizing far less CGT for marginal tracking gain (design 61 §OQ3).
 - **`rebalanceLotStrategy`** — Rebalance Lot Strategy · `Enum` · default `FIFO` · one of `FIFO`, `HIFO`, `LOSS_FIRST`, `SPECIFIC`, `LADDER`, `DRAWDOWN` · sweep: opt · conditional · via ECONOMIC_REGIMES
-  Which lots a rebalance sells in a TAXABLE account, and so how much gain it realizes. FIFO (default) sells oldest first, which is usually the largest gain. HIFO and SPECIFIC sell the highest cost basis first; LOSS_FIRST sells losing lots first; LADDER sells the nearest-maturity bond rung first. DRAWDOWN follows Drawdown Lot Strategy. Sheltered accounts and cash legs sell pro rata, so this does not affect them.
+  Which lots a rebalance sells in a TAXABLE account, and so how much gain it realizes. FIFO (default) sells oldest first, which is usually the largest gain. HIFO and SPECIFIC sell the highest cost basis first; LOSS_FIRST sells losing lots first; LADDER sells the nearest-maturity bond rung first. DRAWDOWN follows Drawdown Lot Strategy. Under any strategy but FIFO an equity sale is split across markets (US, international) by value and lots are picked within each, so the account keeps its market split. Sheltered accounts and cash legs sell pro rata, so this does not affect them.
 
 ### AU Banking (3)
 
@@ -2216,7 +2216,7 @@ what the in-app panel keys on.
 | [Action](nodes/action.md) | node | 200 | 3 panels · design 2, 91 |
 | [Action Detail](panels/action-detail.md) | panel | 172 | 1 panel · design 91 |
 | [Allocation](panels/allocation.md) | panel | 185 | 1 panel · design 82 |
-| [Allocation and Rebalancing](concepts/allocation-and-rebalancing.md) | concept | 376 | 2 panels · 14 params · design 61, 82, 115 |
+| [Allocation and Rebalancing](concepts/allocation-and-rebalancing.md) | concept | 388 | 2 panels · 15 params · design 61, 82, 115 |
 | [AU Tax and PAYG Instalments](concepts/au-tax.md) | concept | 236 | 2 panels · 6 params · design 107 |
 | [Behavioral Strategies](concepts/behavioral-strategies.md) | concept | 232 | 2 panels · 5 params · design 29 |
 | [Inheritance](nodes/bequest.md) | node | 233 | 2 panels · design 63 |

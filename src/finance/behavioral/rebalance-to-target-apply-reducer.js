@@ -188,12 +188,21 @@ export class RebalanceToTargetApplyReducer extends Reducer {
       if (taxable && allocation !== ALLOCATION.CASH) {
         // Design 90 §9 step 2 — the full entry point, so the signed, §1222-charactered
         // split can be requested. `selection` is the lot order (null ⇒ FIFO).
-        const r = consumeHoldings(matching, take, {
+        const consumeOpts = {
           selection,
           indexation: { level: auLevel, asOfMs: auAsOfMs, country: 'AU', cpiRate: auCpiRate(state) },
           terms:      { asOfMs: auAsOfMs, countries: ['US', 'AU'] },
           securities: state.securities ?? null,
-        });
+        };
+        // A chosen lot order picks lots by tax alone, and across a mixed EQUITY sleeve that
+        // can sell one market out entirely: HIFO took a US account's only international
+        // fund, and every later buy inherits the remaining market (`_inheritedTraits`), so
+        // it never came back. Under a lot strategy the sale is therefore split across
+        // markets by value and the strategy picks lots WITHIN each market, which leaves
+        // the sleeve's market split as it was. FIFO keeps the historic single walk.
+        const r = (selection && allocation === ALLOCATION.EQUITY)
+          ? _consumeByMarket(matching, take, consumeOpts)
+          : consumeHoldings(matching, take, consumeOpts);
         // Design 94 §8.1n — BEFORE `holdings` is rebuilt, while the pre-sale lots
         // (`matching`) and their post-sale counterparts (`r.newHoldings`) are both in hand.
         // That pairing is the only place the units and identity of what was sold can be
@@ -675,6 +684,54 @@ function _equityBuySplit(account, matching, amount, securities) {
     allocated = +(allocated + legAmt).toFixed(2);
     return { rateKey, amount: legAmt, siblings: byMarket.get(rateKey)?.lots ?? [] };
   }).filter(leg => leg.amount > 0);
+}
+
+/**
+ * Sell `amount` of a taxable EQUITY sleeve pro rata across its markets, with the lot order
+ * applied within each market, and return ONE `consumeHoldings` result for the whole leg.
+ *
+ * Merged rather than reported per market so the caller's tax step is unchanged: `_sellTax`
+ * clamps the leg's gain at zero and nets its signed term split, and per-market legs would
+ * stop a loss in one market offsetting a gain in another. Numeric fields sum, per-country
+ * maps sum key by key, and `newHoldings` is the concatenation, which still covers every lot
+ * in `matching` (the wash-sale pairing reads it by id). A sleeve with one market takes the
+ * plain single call. The last market absorbs the rounding remainder, so the total is exact.
+ */
+function _consumeByMarket(matching, amount, opts) {
+  const byMarket = new Map();
+  for (const h of matching) {
+    const key = instrumentOf(h, opts.securities).rateKey ?? null;
+    const g = byMarket.get(key) ?? [];
+    g.push(h);
+    byMarket.set(key, g);
+  }
+  if (byMarket.size < 2) return consumeHoldings(matching, amount, opts);
+  const groups = [...byMarket.values()].map(lots => ({ lots, mv: lots.reduce((s, h) => s + (h.marketValue ?? 0), 0) }));
+  const totalMv = groups.reduce((s, g) => s + g.mv, 0);
+  let allocated = 0;
+  const parts = groups.map((g, i) => {
+    const amt = i === groups.length - 1 ? +(amount - allocated).toFixed(2) : +(amount * g.mv / totalMv).toFixed(2);
+    allocated = +(allocated + amt).toFixed(2);
+    return consumeHoldings(g.lots, amt, opts);
+  });
+  return parts.reduce(_mergeConsumed);
+}
+
+/** Sum two `consumeHoldings` results field by field (see `_consumeByMarket`). */
+function _mergeConsumed(a, b) {
+  const sum = (x, y) => {
+    if (typeof x === 'number' || typeof y === 'number') return (x ?? 0) + (y ?? 0);
+    if (x == null) return y ?? null;
+    if (y == null) return x;
+    const out = { ...x };
+    for (const [k, v] of Object.entries(y)) out[k] = sum(x[k], v);
+    return out;
+  };
+  const out = {};
+  for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    out[k] = k === 'newHoldings' ? [...(a.newHoldings ?? []), ...(b.newHoldings ?? [])] : sum(a[k], b[k]);
+  }
+  return out;
 }
 
 /** Establish a fresh sleeve of `allocation` at cost = market (design 61 §6 buy primitive). */

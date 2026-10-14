@@ -83,3 +83,40 @@ test('TARGET_ALLOCATION builds the apply reducer from rebalanceLotStrategy', () 
   assert.strictEqual(build({}).lotStrategy, 'FIFO');
   assert.strictEqual(build({ rebalanceLotStrategy: 'HIFO' }).lotStrategy, 'HIFO');
 });
+
+// ── Flag 28: a lot strategy must not sell one market out of a mixed sleeve ─────────────
+
+// A US lot near cost and an international lot with a large gain, 50/50 by value.
+function mixedState() {
+  return state({ usStockAccount: { balance: 100000, holdings: [
+    { id: 'us',   allocation: ALLOCATION.EQUITY, rateKey: 'EQUITY_US',         marketValue: 50000, costBasis: 49000, purchaseDate: new Date(Date.UTC(2020, 0, 1)) },
+    { id: 'intl', allocation: ALLOCATION.EQUITY, rateKey: 'EQUITY_INTL_EX_US', marketValue: 50000, costBasis: 10000, purchaseDate: new Date(Date.UTC(2021, 0, 1)) },
+  ] } });
+}
+
+function rebalanced(apply, s) {
+  const reducer = new RebalanceToTargetReducer({
+    accounts: [{ stateKey: 'usStockAccount', role: ACCOUNT_ROLES.US_STOCK }],
+    targetAllocation: { EQUITY: 0.5, BOND: 0.5 }, driftBandTaxable: 0.10, driftBandSheltered: 0.02,
+  });
+  let next = s, gain = 0;
+  for (const a of reducer.reduce(s, { type: 'US_PERIOD_ADVANCE' }).next ?? []) {
+    next = apply.reduce(next, a);
+    for (const t of next.next ?? []) if (t.type === 'STOCK_WITHDRAWAL_TAX') gain += t.gain;
+  }
+  const eq = k => next.usStockAccount.holdings.filter(h => h.allocation === ALLOCATION.EQUITY && h.rateKey === k)
+    .reduce((x, h) => x + h.marketValue, 0);
+  return { gain, us: eq('EQUITY_US'), intl: eq('EQUITY_INTL_EX_US') };
+}
+
+test('HIFO sells each market pro rata, so the sleeve keeps its market split', () => {
+  const r = rebalanced(new RebalanceToTargetApplyReducer({ lotStrategy: 'HIFO' }), mixedState());
+  assert.ok(Math.abs(r.us - 25000) < 1 && Math.abs(r.intl - 25000) < 1, `split kept: ${r.us}/${r.intl}`);
+  // $25k from each: US gain 25k×(1−0.98)=500, intl 25k×(1−0.2)=20,000 — one merged tax action.
+  assert.ok(Math.abs(r.gain - 20500) < 1, `gain ${r.gain}`);
+});
+
+test('FIFO keeps the historic single walk across markets', () => {
+  const r = rebalanced(new RebalanceToTargetApplyReducer(), mixedState());
+  assert.ok(Math.abs(r.us - 0) < 1 && Math.abs(r.intl - 50000) < 1, `oldest (US) lot sold first: ${r.us}/${r.intl}`);
+});
