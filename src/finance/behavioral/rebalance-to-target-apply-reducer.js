@@ -11,6 +11,7 @@
 import { Reducer, PRIORITY }    from '../../simulation-framework/reducers.js';
 import { ALLOCATION }           from '../holdings/allocation.js';
 import { consumeHoldings }      from '../holdings/holdings-fifo.js';
+import { LOT_STRATEGIES }       from '../holdings/holdings-selection.js';
 import { disposalTermFields, auCpiRate, isLongTerm } from '../holdings/holding-period.js';
 import { ACCOUNT_ROLES }        from '../state/account-roles.js';
 import { compactLots, LOT_POLICIES, promoteToUnitised, prevailingPrice, instrumentOf } from '../holdings/holding-utils.js';
@@ -27,8 +28,8 @@ import { addValue, resize } from '../holdings/holding-utils.js';
  * RebalanceToTargetApplyReducer — design 61 Lever C (Phase 2). Executes the
  * per-account legs of REBALANCE_TO_TARGET_APPLY, routing each by tax treatment:
  *
- *   - **Taxable sell** (US_STOCK / AU_STOCK, non-CASH): FIFO-consume that
- *     allocation's lots and chain the jurisdiction-correct capital-gains tax —
+ *   - **Taxable sell** (US_STOCK / AU_STOCK, non-CASH): consume that allocation's
+ *     lots in the `lotStrategy` order (FIFO by default; see the constructor) and chain the jurisdiction-correct capital-gains tax —
  *     STOCK_WITHDRAWAL_TAX (US), AU_STOCK_WITHDRAWAL_TAX (AU), or COLLECTIBLE_SALE_TAX
  *     (GOLD, US 28% collectible / AU indexed via `isGold`). The gain accrues to the
  *     year's CGT accumulator and settles at year-end — no cash is moved here, because
@@ -108,12 +109,26 @@ import { addValue, resize } from '../holdings/holding-utils.js';
  * basis is material (see the guard there), and it cannot fire on a freshly bought
  * sleeve because a buy leg only runs above the same 0.01 threshold.
  */
+/** The `rebalanceLotStrategy` value that defers to `drawdownLotStrategy`. */
+export const REBALANCE_LOT_INHERIT = 'DRAWDOWN';
+/** Every `rebalanceLotStrategy` value: the drawdown lot strategies plus DRAWDOWN. */
+export const REBALANCE_LOT_STRATEGIES = Object.freeze([...LOT_STRATEGIES, REBALANCE_LOT_INHERIT]);
+
 export class RebalanceToTargetApplyReducer extends Reducer {
   static type        = 'RebalanceToTargetApplyReducer';
   static description = 'Applies a target-allocation rebalance: taxable sells realize CGT (jurisdiction-correct), sheltered sells are free, buys add-to or establish sleeves; value conserved gross.';
 
-  constructor() {
+  /**
+   * @param {{ lotStrategy?: string }} [opts]
+   *   `lotStrategy` is which lots a TAXABLE sell leg consumes: one of LOT_STRATEGIES, or
+   *   `DRAWDOWN` to follow `state.drawdownLotStrategy` (the spending debit's choice), read
+   *   at each rebalance. FIFO (the default) is the historic order, so a reducer built
+   *   without it is byte-identical. Sheltered and CASH legs are pro rata and ignore it.
+   */
+  constructor({ lotStrategy = 'FIFO' } = {}) {
     super('Rebalance To Target Apply', PRIORITY.POSITION_UPDATE);
+    this.lotStrategy = (lotStrategy === REBALANCE_LOT_INHERIT || LOT_STRATEGIES.includes(lotStrategy))
+      ? lotStrategy : 'FIFO';
     this.reducedActionTypes   = ['REBALANCE_TO_TARGET_APPLY'];
     this.generatedActionTypes = ['STOCK_WITHDRAWAL_TAX', 'AU_STOCK_WITHDRAWAL_TAX', 'COLLECTIBLE_SALE_TAX', 'SECTION_988_GAIN', 'SUPER_CAPITAL_GAIN'];
   }
@@ -140,6 +155,12 @@ export class RebalanceToTargetApplyReducer extends Reducer {
 
     let holdings = [...account.holdings];
     const taxActions = [];
+    // The taxable sell legs' lot order. Null for FIFO, which is exactly what
+    // `consumeHoldings` treats as the historic oldest-first walk.
+    const lot = this.lotStrategy === REBALANCE_LOT_INHERIT
+      ? (LOT_STRATEGIES.includes(state.drawdownLotStrategy) ? state.drawdownLotStrategy : 'FIFO')
+      : this.lotStrategy;
+    const selection = lot === 'FIFO' ? null : { lotStrategy: lot };
     // Design 94 §8.1n — the §1091 pending entries this reducer's sell legs generate. See
     // `_washPendingEntries` for why they are written here and what they deliberately omit.
     const washEntries = [];
@@ -165,11 +186,10 @@ export class RebalanceToTargetApplyReducer extends Reducer {
       // A taxable, non-CASH sell realizes CGT; CASH has no gain, and sheltered
       // accounts rebalance for free.
       if (taxable && allocation !== ALLOCATION.CASH) {
-        // Design 90 §9 step 2 — switched from the `consumeHoldingsFifo` wrapper to the
-        // full entry point so the signed, §1222-charactered split can be requested.
-        // Selection stays null, which is exactly what the wrapper passed, so lot
-        // choice (and therefore every realized figure) is unchanged.
+        // Design 90 §9 step 2 — the full entry point, so the signed, §1222-charactered
+        // split can be requested. `selection` is the lot order (null ⇒ FIFO).
         const r = consumeHoldings(matching, take, {
+          selection,
           indexation: { level: auLevel, asOfMs: auAsOfMs, country: 'AU', cpiRate: auCpiRate(state) },
           terms:      { asOfMs: auAsOfMs, countries: ['US', 'AU'] },
           securities: state.securities ?? null,

@@ -3,7 +3,7 @@ id: allocation-and-rebalancing
 kind: concept
 title: Allocation and Rebalancing
 panels: [allocation, holdings]
-params: [allocationStrategy, allocationSchedule, allocationGlidepath, allocationRegimeTargets, allocationLocation, allocationLocationPolicy, allocWeight::EQUITY, allocWeight::BOND, allocWeight::CASH, rebalanceTargetAllocation, rebalanceDriftBand, rebalanceDriftBandTaxable, rebalanceDriftBandSheltered, allocationClassRestrictions]
+params: [allocationStrategy, allocationSchedule, allocationGlidepath, allocationRegimeTargets, allocationLocation, allocationLocationPolicy, allocWeight::EQUITY, allocWeight::BOND, allocWeight::CASH, rebalanceTargetAllocation, rebalanceDriftBand, rebalanceDriftBandTaxable, rebalanceDriftBandSheltered, rebalanceLotStrategy, allocationClassRestrictions]
 design: [61-holding-allocation-lever.md, 82-allocation-over-time-reporting.md, 115-asset-class-restrictions.md]
 stamps:
   param:allocationStrategy: 277063
@@ -19,6 +19,7 @@ stamps:
   param:rebalanceDriftBand: f8d8e6
   param:rebalanceDriftBandTaxable: 102a66
   param:rebalanceDriftBandSheltered: 960cb2
+  param:rebalanceLotStrategy: c785f1
   param:allocationClassRestrictions: 4c97ef
   panel:allocation: 762dd9
   panel:holdings: 962055
@@ -39,8 +40,7 @@ fifty, which nobody would choose deliberately.
 account holds the bonds, and that placement is worth real money — putting the
 tax-inefficient class in the sheltered account and letting equity compound where
 gains are never taxed. The placement preference is soft: it spills when an account
-is full rather than refusing, because an unfillable preference that silently fails
-is worse than one that does its best.
+is full rather than refusing.
 
 Some placements are not preferences at all but things you cannot do. Gold in
 Australian super is the motivating case: for a US citizen it usually means running a
@@ -54,8 +54,11 @@ until you decide either way.
 **Rebalancing** is separate again, and the band is the lever. The taxable band
 deliberately defaults *wider* than the sheltered one, because a rebalance in a
 taxable account realises gains — and a wide band gives up very little tracking
-accuracy for a large reduction in tax. Tight bands everywhere is a common and
+accuracy for a large reduction in tax. Tight bands everywhere is an
 expensive default.
+
+*Which* lots go matters as much: the same sale from a decade-old fund or from last
+year's purchase can differ tenfold in realised gain, for the same final mix.
 
 Rebalancing also interacts with spending: a drawdown can be biased toward selling
 whatever is overweight, so one sale does both jobs. See
