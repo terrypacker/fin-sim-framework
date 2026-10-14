@@ -313,7 +313,9 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
         description: 'Which lots a rebalance sells in a TAXABLE account, and so how much gain it ' +
           'realizes. FIFO (default) sells oldest first, which is usually the largest gain. HIFO and ' +
           'SPECIFIC sell the highest cost basis first; LOSS_FIRST sells losing lots first; LADDER sells ' +
-          'the nearest-maturity bond rung first. DRAWDOWN follows Drawdown Lot Strategy. Sheltered ' +
+          'the nearest-maturity bond rung first. DRAWDOWN follows Drawdown Lot Strategy. Under any ' +
+          'strategy but FIFO an equity sale is split across markets (US, international) by value and ' +
+          'lots are picked within each, so the account keeps its market split. Sheltered ' +
           'accounts and cash legs sell pro rata, so this does not affect them.',
         visibleWhen: { param: 'behavioralStrategies', includes: 'TARGET_ALLOCATION' },
       },
