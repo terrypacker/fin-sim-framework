@@ -8,7 +8,7 @@ design: [75-house-costs-and-property-return-path.md, 83-us-au-tax-treaty-intrica
 stamps:
   panel:config-list: c29391
   panel:config-graph: 82a0c7
-  node:real-property: de7599
+  node:real-property: e31906
 ---
 
 A dwelling or land parcel: the most configurable record in the app, because a house is
@@ -40,6 +40,7 @@ after the sale.
 - `currency` — The currency the value, basis, rent and mortgage are stated in. Defaults from the country. A non-USD property held by a US person carries currency exposure on both the asset and its debt.
 - `costBasis` — What was paid, plus capitalised improvements — the number the taxable gain is measured from. A basis left at 0 taxes the entire sale proceeds as gain. Capitalised repairs lift it over the run; depreciation claimed against rent reduces it, and is recaptured on a US sale.
 - `saleDestinationAccount` — Which account receives the net proceeds when this property sells. Blank sends them to the country's cash pool, where the spending rule can consume them. Naming a brokerage account is how a downsize is reinvested rather than quietly spent.
+- `sellingCostRate` — The agent's commission, legal fees and other costs of selling, as a fraction of the sale price (0.05 = 5%). They are paid out of the proceeds, and they shrink the taxable gain as well: the US measures the gain from the price less selling expenses, and Australia adds them to the cost base as incidental costs. Blank means a sale that costs nothing, which overstates the cash it raises by about 5–6% of the price.
 - `ownershipType` — Sole or joint, which decides how the gain, the rent and the deductions are split between the two people. With different marginal rates or different residencies it is one of the larger levers on a property plan.
 - `ownerId` — The person who owns it when ownership is sole. Their residency, age and rate at the sale date decide what the gain costs.
 - `purchaseDate` — The day this dwelling is bought. Blank means it is already owned at the start of the run. Set, the property is dormant — worth nothing, costing nothing — until that day, when the price is debited and it becomes an ordinary property. The purchase settles after any sale on the same day.

@@ -53,14 +53,21 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
   reduce(state, action, date) {
     const { salePrice, costBasis, mortgageBalance, residency, ownershipType, ownerId, owners, stateKey, destinationKey } = action;
     const mortgage    = mortgageBalance ?? 0;
+    // Selling costs (agent, legal, advertising) are paid from the proceeds. For CGT they
+    // are incidental costs, the second element of the cost base (ITAA97 s110-25(3),
+    // s110-35(2) and (5)), so they lift the basis and leave the capital proceeds whole —
+    // which is what the downsizer cap is measured from. The US measures the same gain
+    // from the amount realized, price less selling expenses (IRS Pub 523).
+    const sellingCost = action.sellingCost ?? 0;
     // Design 113 §7.1 — a fixed-rate break fee is paid out of the proceeds with the loan.
-    const netProceeds = Math.max(0, salePrice - mortgage - (action.breakCost ?? 0));
+    const netProceeds = Math.max(0, salePrice - sellingCost - mortgage - (action.breakCost ?? 0));
     // Div 43 capital-works deductions taken during the hold reduce the CGT cost
     // base, so the gain is larger (design 48 §4.5). accumulatedDepreciation is 0
     // for non-rental properties, so this is a no-op there.
     const propState      = stateKey ? state[stateKey] : null;
     const accumulatedDep = propState?.accumulatedDepreciation ?? 0;
-    const adjustedBasis  = Math.max(0, costBasis - accumulatedDep);
+    const depAdjustedBasis = Math.max(0, costBasis - accumulatedDep);
+    const adjustedBasis    = depAdjustedBasis + sellingCost;
     const gain        = Math.max(0, salePrice - adjustedBasis);
 
     // Design 83 G7 steps 1–2 + 3b. Three figures leave here instead of one, because
@@ -123,7 +130,7 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
     const { usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain } =
       singleAssetTermFields({
         proceeds: salePrice, usBasis: adjustedBasis,
-        auBasis: propState?.costBaseByCountry?.AU ?? adjustedBasis,
+        auBasis: (propState?.costBaseByCountry?.AU ?? depAdjustedBasis) + sellingCost,
         acquisitionMs:   toMs(propState?.acquisitionDate),
         auAcquisitionMs: propState?.acquisitionDateByCountry?.AU ?? toMs(propState?.acquisitionDate),
         saleMs, deductibleLoss,
@@ -144,8 +151,10 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
     // — same min-against-the-US-gain, same s118-185 fraction — because that is exactly
     // what `AuTaxRates2027._cgtRelief` assesses. Emitting the pre-exemption figure here
     // would re-open the phantom-assessable-income defect noted in `au-tax-module-2027.js`.
-    const auBasisRaw     = propState?.costBaseByCountry?.AU ?? adjustedBasis;
-    const indexedAuBasis = auIndexedCostBase({
+    // Selling costs are incurred at the sale, so they join the cost base after it is
+    // indexed rather than being indexed from the acquisition.
+    const auBasisRaw     = propState?.costBaseByCountry?.AU ?? depAdjustedBasis;
+    const indexedAuBasis = sellingCost + auIndexedCostBase({
       auBasis:               auBasisRaw,
       acquisitionPriceLevel: propState?.acquisitionPriceLevel ?? null,
       currentPriceLevel:     auCpiLevel(state),
@@ -196,6 +205,7 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
          // modules ignore it and keep discounting `gain`.
          auIndexedGain,
          proceeds: salePrice, costBasis: adjustedBasis, description,
+         ...(sellingCost > 0 ? { sellingCost } : {}),
          // G7: the AU-assessable slice after s118-185, and the §1250 slice the US
          // taxes at its own rate. Both default to the pre-G7 answer — taxableFraction
          // 1 and a 0 depreciation slice — for any property that states no history.
@@ -241,10 +251,14 @@ export class AuHouseSaleHandler extends HandlerEntry {
       ...(breakCost > 0 ? { breakCost, loanPayoffs: payoffs.filter(p => p.breakCost > 0) } : {}),
     };
     const destinationKey  = resolveDestinationKey(state, data.saleDestinationAccount);
+    const salePrice       = data.salePrice ?? propState?.value ?? 0;
+    const sellingCost     = data.sellingCostRate > 0 ? +(salePrice * data.sellingCostRate).toFixed(2) : 0;
     const actions = [
       {
         type:            'AU_HOUSE_SALE_APPLY',
-        salePrice:       data.salePrice ?? propState?.value ?? 0,
+        salePrice,
+        // Stated only when set, so a sale without selling costs keeps its action.
+        ...(sellingCost > 0 ? { sellingCost } : {}),
         // Capitalized repairs accrued during the sim (design 75 §8 Q6); 0 by default ⇒ inert.
         costBasis:       data.costBasis + (propState?.capitalizedImprovements ?? 0),
         mortgageBalance,

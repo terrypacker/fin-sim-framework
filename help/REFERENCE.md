@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-233 parameters · 33 panels · 12 node types (205 fields) · 179 action types · 88 tools · 320 state field types · 78 topics · 130 design docs
+233 parameters · 33 panels · 12 node types (206 fields) · 179 action types · 88 tools · 320 state field types · 78 topics · 130 design docs
 
 ---
 
@@ -598,7 +598,7 @@ menu files it under.
 
 ---
 
-## Node types (12 kinds · 205 fields)
+## Node types (12 kinds · 206 fields)
 
 Every kind of record the Nodes panel can open, and every control its edit form offers.
 The inventory is read from the FORM — the `<template>` in `index.html` the editor
@@ -789,7 +789,7 @@ Explained in [`help/nodes`](nodes/account.md). 7 field(s) described by a record 
 - **`bookingFxRate`** — §988 Booking FX · `number` · topic
   Foreign units per USD on the date the debt was incurred. A non-USD loan held by a US person realises ordinary gain or loss on each principal repayment, measured against this rate. Blank stamps it at the first payment, which treats the loan as incurred then and so understates the exposure on a loan already outstanding at the start of the run.
 
-### Real Property — `real-property` (53 fields)
+### Real Property — `real-property` (54 fields)
 
 Explained in [`help/nodes`](nodes/real-property.md). 6 field(s) described by a record parameter.
 
@@ -809,6 +809,8 @@ Explained in [`help/nodes`](nodes/real-property.md). 6 field(s) described by a r
   The day this property is sold. Leave blank for no planned sale.
 - **`saleDestinationAccount`** — Sale Acct. · `select` · topic
   Which account receives the net proceeds when this property sells. Blank sends them to the country's cash pool, where the spending rule can consume them. Naming a brokerage account is how a downsize is reinvested rather than quietly spent.
+- **`sellingCostRate`** — Selling Costs · `number` · topic
+  The agent's commission, legal fees and other costs of selling, as a fraction of the sale price (0.05 = 5%). They are paid out of the proceeds, and they shrink the taxable gain as well: the US measures the gain from the price less selling expenses, and Australia adds them to the cost base as incidental costs. Blank means a sale that costs nothing, which overstates the cash it raises by about 5–6% of the price.
 - **`ownershipType`** — Ownership · `select` · topic
   Sole or joint, which decides how the gain, the rent and the deductions are split between the two people. With different marginal rates or different residencies it is one of the larger levers on a property plan.
 - **`ownerId`** — Owner · `select` · topic
@@ -1709,8 +1711,8 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `AU_DIVIDEND_UNFRANKED_RESIDENT_TAX` | amount: currency(AUD), stateKey: text | AU_BROKERAGE |
 | `AU_FIXED_INCOME_EARNINGS_APPLY` | amount: currency(AUD), residency: text, stateKey: text | AU_BANKING |
 | `AU_FIXED_INCOME_EARNINGS_TAX` | amount: currency(AUD), residency: text, stateKey: text | AU_BANKING |
-| `AU_HOUSE_SALE_APPLY` | salePrice: currency(AUD), costBasis: currency(AUD), stateKey: text, mortgageBalance: currency(AUD), residency: text, ownershipType: text, ownerId: text, owners: any, loanKeys: any, breakCost: currency(AUD), loanPayoffs: any | AU_REAL_PROPERTY |
-| `AU_HOUSE_SALE_TAX` | usShortTermGain: currency(AUD), usLongTermGain: currency(AUD), auShortTermGain: currency(AUD), auLongTermGain: currency(AUD), gain: currency(AUD), auIndexedGain: currency(AUD), depreciationGain: currency(AUD), residency: text, proceeds: currency(AUD), costBasis: currency(AUD), description: text, ownershipType: text, ownerId: text, owners: any, auTaxableFraction: number, auExemptionReason: text, acquisitionMs: number, saleMs: number, mainResidenceFrom: text, mainResidenceUntil: text, isPrimaryResidence: boolean | AU_REAL_PROPERTY |
+| `AU_HOUSE_SALE_APPLY` | salePrice: currency(AUD), costBasis: currency(AUD), stateKey: text, mortgageBalance: currency(AUD), residency: text, ownershipType: text, ownerId: text, owners: any, loanKeys: any, breakCost: currency(AUD), loanPayoffs: any, sellingCost: currency(AUD) | AU_REAL_PROPERTY |
+| `AU_HOUSE_SALE_TAX` | usShortTermGain: currency(AUD), usLongTermGain: currency(AUD), auShortTermGain: currency(AUD), auLongTermGain: currency(AUD), gain: currency(AUD), auIndexedGain: currency(AUD), depreciationGain: currency(AUD), residency: text, proceeds: currency(AUD), sellingCost: currency(AUD), costBasis: currency(AUD), description: text, ownershipType: text, ownerId: text, owners: any, auTaxableFraction: number, auExemptionReason: text, acquisitionMs: number, saleMs: number, mainResidenceFrom: text, mainResidenceUntil: text, isPrimaryResidence: boolean | AU_REAL_PROPERTY |
 | `AU_INVESTMENT_INTEREST_DEDUCTION` | loanKey: text, amount: number, residency: text, currency: text, ownerId: text, ownershipType: text, owners: any | AU_REAL_PROPERTY, US_REAL_PROPERTY |
 | `AU_PERIOD_ADVANCE` | period: any | AU_TAX |
 | `AU_QUALIFYING_EARNINGS_APPLY` | amount: currency(AUD), personKey: text, clamps: any, carriedForward: currency(AUD), employerKey: text | AU_RETIREMENT |
@@ -1855,8 +1857,8 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `SUPER_WITHDRAWAL_EARNINGS_APPLY` | amount: currency(AUD), blocked: boolean | AU_RETIREMENT |
 | `SUPER_WITHDRAWAL_EARNINGS_TAX` | amount: currency(AUD) | AU_RETIREMENT |
 | `TLH_NO_SUBSTITUTE` | count: number, holdingIds: any, stateKeys: any | ECONOMIC_REGIMES |
-| `US_HOUSE_SALE_APPLY` | salePrice: currency(USD), costBasis: currency(USD), stateKey: text, mortgageBalance: currency(USD), residency: text, loanKeys: any, breakCost: currency(USD), loanPayoffs: any | US_REAL_PROPERTY |
-| `US_HOUSE_SALE_TAX` | gain: currency(USD), depreciationGain: currency(USD), auGain: currency(USD), auIndexedGain: currency(USD), auDiscountableGain: currency(USD), usShortTermGain: currency(USD), usLongTermGain: currency(USD), auShortTermGain: currency(USD), auLongTermGain: currency(USD), residency: text, proceeds: currency(USD), costBasis: currency(USD), description: text, ownershipType: text, ownerId: text, owners: any | US_REAL_PROPERTY |
+| `US_HOUSE_SALE_APPLY` | salePrice: currency(USD), costBasis: currency(USD), stateKey: text, mortgageBalance: currency(USD), residency: text, loanKeys: any, breakCost: currency(USD), loanPayoffs: any, sellingCost: currency(USD) | US_REAL_PROPERTY |
+| `US_HOUSE_SALE_TAX` | gain: currency(USD), depreciationGain: currency(USD), auGain: currency(USD), auIndexedGain: currency(USD), auDiscountableGain: currency(USD), usShortTermGain: currency(USD), usLongTermGain: currency(USD), auShortTermGain: currency(USD), auLongTermGain: currency(USD), residency: text, proceeds: currency(USD), sellingCost: currency(USD), costBasis: currency(USD), description: text, ownershipType: text, ownerId: text, owners: any | US_REAL_PROPERTY |
 | `US_INVESTMENT_INTEREST_DEDUCTION` | loanKey: text, amount: number, residency: text, currency: text, ownerId: text, ownershipType: text, owners: any | AU_REAL_PROPERTY, US_REAL_PROPERTY |
 | `US_PERIOD_ADVANCE` | period: any | US_TAX |
 | `US_RENTAL_INCOME_APPLY` | netCash: currency(USD), taxableRental: number, monthlyDepreciation: number, stateKey: text, residency: text | US_REAL_PROPERTY |

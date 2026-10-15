@@ -44,6 +44,7 @@ export class RealProperty extends Asset {
    * @param {boolean}       [opts.isPrimaryResidence=false]     - Affects capital-gains tax treatment
    * @param {string|null}   [opts.plannedSaleDate=null]         - Planned sale date, 'YYYY-MM-DD' (design 117)
    * @param {string|null}   [opts.saleDestinationAccount=null]  - Account id to receive net sale proceeds
+   * @param {number|null}   [opts.sellingCostRate=null]         - Agent, legal and closing costs of the sale, as a fraction of the price
    * @param {PropertyOwner[]} [opts.owners=[]]                  - Per-person ownership breakdown; overrides sole/joint split
    * @param {number|null}   [opts.balanceAtResidencyChange=null] - Value snapshot on first residency change
    * @param {string}        [opts.country='US']                 - 'US' | 'AU' — determines currency and sale tax treatment
@@ -113,6 +114,7 @@ export class RealProperty extends Asset {
     // the SAME lever as mainResidenceFrom rather than an independent switch.
     this.claimDownsizerContribution = opts.claimDownsizerContribution ?? false;
     this.saleDestinationAccount  = opts.saleDestinationAccount  ?? null;
+    this.sellingCostRate         = opts.sellingCostRate         ?? null;
     this.owners                  = opts.owners                  ?? [];
     this.balanceAtResidencyChange = opts.balanceAtResidencyChange ?? null;
     this.country                 = opts.country                 ?? 'US';

@@ -87,15 +87,23 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
     // action dispatched without a date.
     const eventMs = toMs(date);
     const mortgage    = mortgageBalance ?? 0;
+    // Selling expenses (agent's commission, advertising, legal fees) come out of the
+    // proceeds and out of the gain: the gain is measured from the "amount realized",
+    // sale price minus selling expenses (IRS Pub 523, Worksheet 2 line 3;
+    // docs/us-tax/IRS-Pub-523-Selling-Your-Home-2025.txt). The AU assessment below
+    // reaches the same figure by adding them to the cost base as incidental costs
+    // (ITAA97 s110-25(3), s110-35(2) and (5)), so one net figure serves both.
+    const sellingCost    = action.sellingCost ?? 0;
+    const amountRealized = salePrice - sellingCost;
     // Design 113 §7.1 — a fixed-rate break fee is paid out of the proceeds with the loan.
-    const netProceeds = Math.max(0, salePrice - mortgage - (action.breakCost ?? 0));
+    const netProceeds = Math.max(0, amountRealized - mortgage - (action.breakCost ?? 0));
     // Depreciation taken during the hold reduces the tax basis, so the gain is
     // larger (design 48 §4.5). accumulatedDepreciation is 0 for non-rental
     // properties, so this is a no-op there.
     const propState = stateKey ? state[stateKey] : null;
     const accumulatedDep = propState?.accumulatedDepreciation ?? 0;
     const adjustedBasis  = Math.max(0, costBasis - accumulatedDep);
-    const rawGain     = Math.max(0, salePrice - adjustedBasis);
+    const rawGain     = Math.max(0, amountRealized - adjustedBasis);
     // IRC §121 (design 83 G7 step 5), through the shared rules module. Routed through
     // the same helper the AU dwelling uses, because the alternative was a double
     // standard pointing the wrong way: the AU house would face the 2-of-5 use test and
@@ -129,7 +137,7 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
     if (auBasis != null && residency === 'AU') {
       const saleMs      = eventMs ?? state.currentPeriods?.AU?.startMs ?? state.currentPeriods?.US?.startMs ?? null;
       const deemedAcqMs = propState.acquisitionDateByCountry?.AU ?? null;
-      const auRawGain   = Math.max(0, salePrice - auBasis);
+      const auRawGain   = Math.max(0, amountRealized - auBasis);
       const exemptFrac  = auMainResidenceExemptFraction(propState, deemedAcqMs, saleMs);
       auGain = +(auRawGain * (1 - exemptFrac)).toFixed(2);
       // CGT 50%-discount eligibility (design 62 §4): held ≥12 months from the deemed
@@ -149,7 +157,7 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
         saleMs,
         cpiRate:               auCpiRate(state),
       });
-      auIndexedGain = +(Math.max(0, salePrice - indexedAuBasis) * (1 - exemptFrac)).toFixed(2);
+      auIndexedGain = +(Math.max(0, amountRealized - indexedAuBasis) * (1 - exemptFrac)).toFixed(2);
     }
 
     // Design 90 §9 step 2 — the signed, §1222-charactered split, and the ONE disposal
@@ -169,7 +177,7 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
     const deductibleLoss = propState?.isPrimaryResidence !== true || accumulatedDep > 0;
     const { usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain } =
       singleAssetTermFields({
-        proceeds: salePrice, usBasis: adjustedBasis, auBasis: auBasis ?? adjustedBasis,
+        proceeds: amountRealized, usBasis: adjustedBasis, auBasis: auBasis ?? adjustedBasis,
         acquisitionMs:   toMs(propState?.acquisitionDate),
         auAcquisitionMs: propState?.acquisitionDateByCountry?.AU ?? toMs(propState?.acquisitionDate),
         saleMs, deductibleLoss,
@@ -220,7 +228,10 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
         // here would understate a loss that §165(c) does allow on a rental.
         usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
         residency,
-        proceeds:    salePrice,
+        // Net of selling expenses, as Form 8949 column (d) may be, so the only
+        // reconciling adjustment left in column (g) is the §121 exclusion (code H).
+        proceeds:    amountRealized,
+        ...(sellingCost > 0 ? { sellingCost } : {}),
         costBasis:   adjustedBasis,
         description: stateKey || 'usHouse',
         // Design 76 Gap B: attribute the AU gain to the property's owner(s), as
@@ -264,10 +275,14 @@ export class UsHouseSaleHandler extends HandlerEntry {
       ...(breakCost > 0 ? { breakCost, loanPayoffs: payoffs.filter(p => p.breakCost > 0) } : {}),
     };
     const destinationKey  = resolveDestinationKey(state, data.saleDestinationAccount);
+    const salePrice       = data.salePrice ?? propState?.value ?? 0;
+    const sellingCost     = data.sellingCostRate > 0 ? +(salePrice * data.sellingCostRate).toFixed(2) : 0;
     const actions = [
       {
         type:            'US_HOUSE_SALE_APPLY',
-        salePrice:       data.salePrice ?? propState?.value ?? 0,
+        salePrice,
+        // Stated only when set, so a sale without selling costs keeps its action.
+        ...(sellingCost > 0 ? { sellingCost } : {}),
         // Add any capitalized repairs accrued during the sim (design 75 §8 Q6). The
         // accumulator is 0 by default ⇒ inert; a positive value lifts basis and cuts CGT.
         costBasis:       data.costBasis + (propState?.capitalizedImprovements ?? 0),

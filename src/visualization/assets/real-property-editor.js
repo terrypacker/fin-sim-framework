@@ -170,6 +170,7 @@ export class RealPropertyEditor extends BaseComponent {
     el.querySelector('[data-id="monthlyMortgage"]').value   = this._node?.monthlyMortgage   ?? 0;
 
     el.querySelector('[data-id="plannedSaleDate"]').value = this._node?.plannedSaleDate ?? '';
+    el.querySelector('[data-id="sellingCostRate"]').value = this._node?.sellingCostRate ?? '';
 
     el.querySelector('[data-id="ownershipType"]').value = this._node?.ownershipType ?? 'sole';
 
@@ -370,6 +371,7 @@ export class RealPropertyEditor extends BaseComponent {
       // A blank date is "no planned sale" (design 117); the picker gives 'YYYY-MM-DD'.
       plannedSaleDate:      el.querySelector('[data-id="plannedSaleDate"]').value || null,
       saleDestinationAccount: el.querySelector('[data-id="saleDestinationAccount"]').value || null,
+      sellingCostRate:      nullableNum('sellingCostRate'),
       // Purchase (design 83 §10 follow-on). A blank date or price means "no purchase",
       // never 0 — a free house is a real value that differs from "unset", which is the
       // same trap the loan term fields document.

@@ -631,6 +631,57 @@ test('EVT-33: AU house sale capital gain is unaffected by mortgage payoff', () =
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
+// sellingCostRate (US + AU) — agent, legal and closing costs
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('EVT-34: US selling costs come out of the proceeds and the amount realized', () => {
+  const config = structuredClone(US_HOUSE_JSON);
+  config.realProperties[0].isPrimaryResidence = false;   // no §121, so the gain shows whole
+  config.realProperties[0].sellingCostRate    = 0.05;
+  const { sim } = loadToolsetScenario(config);
+  sim.stepTo(Q1_2028);
+
+  const [apply] = sim.journal.getActions('US_HOUSE_SALE_APPLY');
+  assert.strictEqual(apply.action.data.sellingCost, 50_000);
+  assert.strictEqual(findDiff(apply, 'usSavingsAccount.balance').delta, 950_000);
+
+  const [tax] = sim.journal.getActions('US_HOUSE_SALE_TAX');
+  // IRS Pub 523: amount realized = price − selling expenses; gain = 950k − 800k.
+  assert.strictEqual(tax.action.data.proceeds, 950_000);
+  assert.strictEqual(tax.action.data.sellingCost, 50_000);
+  assert.strictEqual(tax.action.data.gain, 150_000);
+  assert.strictEqual(findDiff(tax, 'usCapitalGainsYTD').delta, 150_000);
+});
+
+test('EVT-33: AU selling costs come out of the proceeds and into the cost base', () => {
+  const config = structuredClone(AU_HOUSE_JSON);
+  config.realProperties[0].sellingCostRate = 0.05;
+  const { value, costBasis } = config.realProperties[0];
+  const { sim } = loadToolsetScenario(config);
+  sim.stepTo(Q1_2028);
+
+  const [apply] = sim.journal.getActions('AU_HOUSE_SALE_APPLY');
+  assert.strictEqual(apply.action.data.sellingCost, value * 0.05);
+  assert.strictEqual(findDiff(apply, 'auSavingsAccount.balance').delta, value * 0.95);
+
+  const [tax] = sim.journal.getActions('AU_HOUSE_SALE_TAX');
+  // ITAA97 s110-25(3): element 2 of the cost base; the capital proceeds are unchanged.
+  assert.strictEqual(tax.action.data.proceeds, value);
+  assert.strictEqual(tax.action.data.costBasis, costBasis + value * 0.05);
+  assert.strictEqual(tax.action.data.gain, value * 0.95 - costBasis);
+});
+
+test('EVT-34: a sale with no selling-cost rate carries no sellingCost field', () => {
+  const { sim } = loadToolsetScenario(structuredClone(US_HOUSE_JSON));
+  sim.stepTo(Q1_2028);
+  const [apply] = sim.journal.getActions('US_HOUSE_SALE_APPLY');
+  const [tax]   = sim.journal.getActions('US_HOUSE_SALE_TAX');
+  assert.ok(!('sellingCost' in apply.action.data));
+  assert.ok(!('sellingCost' in tax.action.data));
+  assert.strictEqual(tax.action.data.proceeds, US_HOUSE_JSON.realProperties[0].value);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
 // saleDestinationAccount routing (US + AU)
 // ══════════════════════════════════════════════════════════════════════════════
 

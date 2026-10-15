@@ -135,6 +135,25 @@ test('AU HOUSE: the disposal carries an indexed gain strictly below the raw gain
   assert.ok(tax.auIndexedGain < tax.gain);
 });
 
+test('AU HOUSE: selling costs join the cost base after indexation, not before', () => {
+  // ITAA97 s110-25(3): incidental costs of the CGT event are element 2. They are incurred
+  // at the sale, so indexing them from the acquisition would overstate the relief.
+  const state = auHouseState();
+  const plain = taxAction(sellAuHouse(state));
+  const next  = new AuHouseSaleApplyReducer(makeServices()).reduce(state, {
+    type: 'AU_HOUSE_SALE_APPLY', salePrice: 1_000_000, sellingCost: 50_000, costBasis: 400_000,
+    mortgageBalance: 0, residency: 'AU', ownershipType: 'sole', ownerId: 'primary',
+    stateKey: 'auHouse', destinationKey: 'auSavingsAccount',
+  }, new Date('2032-01-15'));
+  const tax = taxAction(next);
+  assert.equal(tax.gain, 550_000);
+  assert.equal(tax.costBasis, 450_000);
+  assert.equal(tax.proceeds, 1_000_000);   // capital proceeds stay whole
+  assert.equal(tax.sellingCost, 50_000);
+  assert.ok(Math.abs(tax.auIndexedGain - (plain.auIndexedGain - 50_000)) < 0.02,
+    `auIndexedGain ${tax.auIndexedGain} vs ${plain.auIndexedGain} − 50,000`);
+});
+
 test('AU HOUSE: an authored acquisitionPriceLevel overrides the back-cast', () => {
   const tax = taxAction(sellAuHouse(auHouseState({ acquisitionPriceLevel: 0.80 })));
   // level 1.20 / 0.80 = 1.5 ⇒ basis 600,000 ⇒ gain 400,000.

@@ -85,7 +85,9 @@ export const AU_REAL_PROPERTY = {
                   mortgageBalance: ValueType.currency('AUD'), residency: ValueType.text(),
                   ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any(),
                   // Design 113 — every loan discharged (a split) and any fixed-rate break cost.
-                  loanKeys: ValueType.any(), breakCost: ValueType.currency('AUD'), loanPayoffs: ValueType.any() } },
+                  loanKeys: ValueType.any(), breakCost: ValueType.currency('AUD'), loanPayoffs: ValueType.any(),
+                  // Agent, legal and advertising costs, paid from the proceeds.
+                  sellingCost: ValueType.currency('AUD') } },
       // ITAA97 s292-102 downsizer contribution — a CASH movement into super, not a tax.
       { type: 'SUPER_DOWNSIZER_CONTRIBUTION_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'AU',
         fields: { personKey: ValueType.text(), amount: ValueType.number(), reason: ValueType.text(),
@@ -99,7 +101,7 @@ export const AU_REAL_PROPERTY = {
       // apportioned gain with no way to explain it. The ownership trio (design 76
       // Gap B) attributes the gain to the owner(s) rather than splitting it 50/50.
       { type: 'AU_HOUSE_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'AU',
-        fields: { usShortTermGain: ValueType.currency('AUD'), usLongTermGain: ValueType.currency('AUD'), auShortTermGain: ValueType.currency('AUD'), auLongTermGain: ValueType.currency('AUD'), gain: ValueType.currency('AUD'), auIndexedGain: ValueType.currency('AUD'), depreciationGain: ValueType.currency('AUD'), residency: ValueType.text(), proceeds: ValueType.currency('AUD'), costBasis: ValueType.currency('AUD'), description: ValueType.text(),
+        fields: { usShortTermGain: ValueType.currency('AUD'), usLongTermGain: ValueType.currency('AUD'), auShortTermGain: ValueType.currency('AUD'), auLongTermGain: ValueType.currency('AUD'), gain: ValueType.currency('AUD'), auIndexedGain: ValueType.currency('AUD'), depreciationGain: ValueType.currency('AUD'), residency: ValueType.text(), proceeds: ValueType.currency('AUD'), sellingCost: ValueType.currency('AUD'), costBasis: ValueType.currency('AUD'), description: ValueType.text(),
                   ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any(),
                   auTaxableFraction: ValueType.number(), auExemptionReason: ValueType.text(),
                   acquisitionMs: ValueType.number(), saleMs: ValueType.number(),
@@ -198,7 +200,9 @@ export const AU_REAL_PROPERTY = {
         name:    `Sell ${p.name}`,
         type:    'AU_HOUSE_SALE',
         date:    saleDateToUtc(p.plannedSaleDate),
-        data:    { costBasis: p.costBasis, ownershipType: p.ownershipType, ownerId: p.ownerId, owners: p.owners, stateKey: p.stateKey, saleDestinationAccount: p.saleDestinationAccount },
+        // sellingCostRate only when set, so a plan without one queues the same event.
+        data:    { costBasis: p.costBasis, ownershipType: p.ownershipType, ownerId: p.ownerId, owners: p.owners, stateKey: p.stateKey, saleDestinationAccount: p.saleDestinationAccount,
+                   ...(p.sellingCostRate > 0 ? { sellingCostRate: p.sellingCostRate } : {}) },
         enabled: true,
         color:   '#5D4037',
       }));
