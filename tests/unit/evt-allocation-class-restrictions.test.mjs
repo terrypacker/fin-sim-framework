@@ -419,3 +419,34 @@ test('R-22: EFFECT on the loaded International Retirement plan — no gold in su
     assert.ok(book(barred) > 0.5 * book(free), 'the gold moved elsewhere rather than vanishing');
   } finally { console.warn = orig; }
 });
+
+// ─── A restriction can name ONE account (study flag 25: TreasuryDirect holds no equity) ─────
+
+test('R-23: an account state key bars that account only — the rest of its role is untouched', () => {
+  const TD = { stateKey: 'treasuryDirectAccount', role: ACCOUNT_ROLES.US_STOCK };
+  const BROKER = { stateKey: 'usStockAccount', role: ACCOUNT_ROLES.US_STOCK };
+  const r = { EQUITY: ['treasuryDirectAccount'], GOLD: ['treasuryDirectAccount'] };
+  assert.equal(roleCanHold(EQUITY, TD, r), false);
+  assert.equal(roleCanHold(EQUITY, BROKER, r), true);
+  assert.equal(roleCanHold(EQUITY, ACCOUNT_ROLES.US_STOCK, r), true, 'a bare role is not the account');
+  assert.deepEqual(normalizeClassRestrictions(r, ['treasuryDirectAccount', 'usStockAccount']), r);
+  assert.equal(normalizeClassRestrictions(r), null, 'an unknown name is dropped without the account list');
+
+  const accounts = [{ ...TD, total: 20_000 }, { ...BROKER, total: 980_000 }];
+  const plan = planLocatedTargets({ accounts, portfolioTarget: { EQUITY: 0.7, BOND: 0.3, CASH: 0, GOLD: 0 },
+    restrictions: r });
+  assert.equal(classIn(plan, 'treasuryDirectAccount', EQUITY), 0);
+  assert.ok(near(aggregate(plan, EQUITY), 700_000), 'the book keeps its equity, in the main brokerage');
+  assertConserved(accounts, plan);
+  assert.deepEqual(restrictMixForRole({ EQUITY: 0.7, BOND: 0.3 }, TD, r, 20_000), { BOND: 1, EQUITY: 0 });
+});
+
+test('R-24: problems — an account key is accepted; a name that is neither role nor account is not', () => {
+  const accounts = [{ name: 'TD', stateKey: 'treasuryDirectAccount', role: ACCOUNT_ROLES.US_STOCK },
+                    { name: 'Broker', stateKey: 'usStockAccount', role: ACCOUNT_ROLES.US_STOCK }];
+  assert.deepEqual(codes(collectClassRestrictionProblems({ EQUITY: ['treasuryDirectAccount'], GOLD: [] }, accounts, [])), []);
+  assert.deepEqual(codes(collectClassRestrictionProblems({ EQUITY: ['tresuryDirect'], GOLD: [] }, accounts, [])), ['unknown-role']);
+  // With the TD account the only one, barring it IS barring the class everywhere — said so.
+  assert.deepEqual(codes(collectClassRestrictionProblems({ EQUITY: ['treasuryDirectAccount'], GOLD: [] }, accounts.slice(0, 1), [])),
+    ['class-barred-everywhere']);
+});

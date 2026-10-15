@@ -23,7 +23,7 @@ scenario's own schema), which is where to go to change it.
 ### Allocation (23)
 
 - **`allocationClassRestrictions`** — Allocation Class Restrictions · `ClassRestrictions` · default — · conditional · via ECONOMIC_REGIMES
-  Account roles an allocation class may NEVER be placed in, as a map of class → roles, e.g. {"GOLD":["super"]}. Classes: GOLD, BOND, EQUITY, CASH. Unlike the location policy this is hard: a class weight no permitted account can hold is spread over the other classes, and a barred holding is sold at the next rebalance even inside the drift band. Applies to TARGET_ALLOCATION in both location modes. An empty list ({"GOLD":[]}) restricts nothing but records that the placement was considered, which silences the US-citizen super warning. Null ⇒ no restrictions.
+  Account roles, or single accounts by state key, an allocation class may NEVER be placed in, as a map of class → roles/accounts, e.g. {"GOLD":["super"]} or {"EQUITY":["treasuryDirectAccount"]} (an account cannot hold what its role can). Classes: GOLD, BOND, EQUITY, CASH. Unlike the location policy this is hard: a class weight no permitted account can hold is spread over the other classes, and a barred holding is sold at the next rebalance even inside the drift band. Applies to TARGET_ALLOCATION in both location modes. An empty list ({"GOLD":[]}) restricts nothing but records that the placement was considered, which silences the US-citizen super warning. Null ⇒ no restrictions.
 - **`allocationGlidepath`** — Allocation Glidepath · `AllocationGlidepath` · default — · conditional · via ECONOMIC_REGIMES
   GLIDEPATH anchors: an array of { age, weights } where weights is a mix map, e.g. [{"age":50,"weights":{"EQUITY":0.8,"BOND":0.2}},{"age":75,"weights":{"EQUITY":0.4,"BOND":0.6}}]. The target is linearly interpolated by the primary's age. Null ⇒ falls back to the static mix.
 - **`allocationLocation`** — Allocation Location · `Enum` · default `LOCATED` · one of `LOCATED`, `PER_ACCOUNT` · conditional · via ECONOMIC_REGIMES
@@ -2238,7 +2238,7 @@ what the in-app panel keys on.
 | [Action](nodes/action.md) | node | 200 | 3 panels · design 2, 91 |
 | [Action Detail](panels/action-detail.md) | panel | 172 | 1 panel · design 91 |
 | [Allocation](panels/allocation.md) | panel | 185 | 1 panel · design 82 |
-| [Allocation and Rebalancing](concepts/allocation-and-rebalancing.md) | concept | 399 | 2 panels · 17 params · design 61, 82, 115 |
+| [Allocation and Rebalancing](concepts/allocation-and-rebalancing.md) | concept | 381 | 2 panels · 17 params · design 61, 82, 115 |
 | [AU Tax and PAYG Instalments](concepts/au-tax.md) | concept | 236 | 2 panels · 6 params · design 107 |
 | [Behavioral Strategies](concepts/behavioral-strategies.md) | concept | 232 | 2 panels · 5 params · design 29 |
 | [Inheritance](nodes/bequest.md) | node | 233 | 2 panels · design 63 |

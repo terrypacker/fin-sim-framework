@@ -22,7 +22,7 @@ stamps:
   param:rebalanceLotStrategy: cf4f95
   param:rebalanceIntlShareUs: 7edf07
   param:rebalanceIntlShareAu: 017138
-  param:allocationClassRestrictions: 4c97ef
+  param:allocationClassRestrictions: e61dbe
   panel:allocation: 762dd9
   panel:holdings: 962055
 ---
@@ -44,20 +44,17 @@ gains are never taxed. The placement preference is soft: it spills when an accou
 is full rather than refusing. Inside equity, the home/international split can carry its
 own target; without one it is whatever the holdings happen to be.
 
-Some placements are not preferences at all but things you cannot do. Gold in
-Australian super is the motivating case: for a US citizen it usually means running a
-self-managed fund, which the US is likely to treat as a foreign grantor trust. The
-class restrictions exist for that. They are the one part of placement that never
-bends, so when every permitted account is full the model holds less of that class
-rather than break the rule, and the shortfall shows up in the realised mix. Nothing
-is restricted unless you say so; a plan where a US citizen owns super gets a warning
-until you decide either way.
+Some placements are things you cannot do. Gold in Australian super is the motivating
+case: for a US citizen it usually means a self-managed fund, which the US is likely to
+treat as a foreign grantor trust. Class restrictions never bend, so when every permitted
+account is full the model holds less of that class, and the shortfall shows in the
+realised mix. A restriction can name one account as well as a kind (a TreasuryDirect
+account can never own a share fund). Nothing is restricted unless you say so; a plan
+where a US citizen owns super gets a warning until you decide.
 
 **Rebalancing** is separate again, and the band is the lever. The taxable band
-deliberately defaults *wider* than the sheltered one, because a rebalance in a
-taxable account realises gains — and a wide band gives up very little tracking
-accuracy for a large reduction in tax. Tight bands everywhere is an
-expensive default.
+defaults *wider* than the sheltered one, because a taxable rebalance realises gains,
+and a wide band gives up little tracking accuracy for a large saving in tax.
 
 *Which* lots go matters as much: the same sale from a decade-old fund or from last
 year's purchase can differ tenfold in realised gain, for the same final mix.

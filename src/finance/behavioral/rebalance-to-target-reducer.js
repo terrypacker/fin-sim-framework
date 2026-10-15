@@ -837,7 +837,7 @@ export class RebalanceToTargetReducer extends Reducer {
       // barred account becomes a held-but-not-targeted class below, and is sold.
       const target = locatedPlan
         ? _fractionsOf(locatedPlan.get(stateKey), total)
-        : restrictMixForRole(scheduledTarget, role, this.classRestrictions, total, locationStats);
+        : restrictMixForRole(scheduledTarget, { role, stateKey }, this.classRestrictions, total, locationStats);
       // `targetBand` rides along for design 82 §7's target overlay: it is the band THIS
       // reducer just drift-checked against, so a report can mark a breach exactly rather
       // than re-deriving it from params + a role classification that could drift out of
@@ -858,7 +858,7 @@ export class RebalanceToTargetReducer extends Reducer {
       const needsRebalance = Object.entries(target).some(([alloc, tgt]) => {
         const actualFrac = (actual[alloc] ?? 0) / total;
         return Math.abs(actualFrac - tgt) > band;
-      }) || _holdsBarredClass(actual, role, this.classRestrictions);
+      }) || _holdsBarredClass(actual, { role, stateKey }, this.classRestrictions);
       const intlShare = _intlShareFor(this.intlShare, role);
       const marketDrift = intlShare != null && !taxable
         && _intlShareDrift(account.holdings, role, intlShare, state.securities ?? null) > band;
