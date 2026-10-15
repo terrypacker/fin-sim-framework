@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-233 parameters · 33 panels · 12 node types (206 fields) · 179 action types · 88 tools · 320 state field types · 78 topics · 132 design docs
+233 parameters · 33 panels · 12 node types (206 fields) · 179 action types · 89 tools · 320 state field types · 78 topics · 132 design docs
 
 ---
 
@@ -1084,11 +1084,11 @@ Explained in [`help/nodes`](nodes/reducer.md). 0 field(s) described by a record 
 
 ---
 
-## Headless tools (88)
+## Headless tools (89)
 
 Command-line entry points under `scripts/`. **Purpose** is harvested from each script's
 docblock, not re-authored here. Arguments come from each script's declarative
-`parseFlags` spec: 75 of 75 entry points carry one (design 108 D6 — all of them).
+`parseFlags` spec: 76 of 76 entry points carry one (design 108 D6 — all of them).
 6 scripts carry no docblock naming themselves and show `(undocumented)`.
 
 ### scripts/config-converters/
@@ -1405,6 +1405,22 @@ docblock, not re-authored here. Arguments come from each script's declarative
     - `--no-recentre` (flag) — skip the check that MC centers match the scenario
     - `--mix` (flag) — also record the per-year asset mix
     - `--spending` (flag) — also record classified spending — forces FULL telemetry, ~7.5x
+- **`scripts/montecarlo/mc-trace.mjs`**
+  replay ONE Monte Carlo path of one arm with the journal on
+    - `--arms` (string) — REQUIRED. the { base, arms } spec mc-run was given
+    - `--arm` (string) — REQUIRED. which arm
+    - `--seed` (number) — REQUIRED. the arm row's seed (1-based)
+    - `--scenario` (string) — base scenario export; omitted => synthetic
+    - `--index` (number, default `0`) — scenario index in that file
+    - `--paths` (flag) — as mc-run: stochastic year-by-year equity returns
+    - `--vol` (number, default `0.18`) — as mc-run: equity return vol when --paths
+    - `--drift` (string, default `GEOMETRIC`, one of GEOMETRIC|NONE) — as mc-run
+    - `--property-paths` (flag) — as mc-run: stochastic property appreciation path
+    - `--shock` (flag) — as mc-run: manufactured single crash
+    - `--no-recentre` (flag) — as mc-run: skip the MC-centre check
+    - `--actions` (list, default `POOL_FLOW_APPLY,REBALANCE_TO_TARGET_APPLY`) — journal action types to list in full
+    - `--check` (string) — the arm's mc-run output file, to verify this path against
+    - `--out` (string) — output file (default stdout)
 
 ### scripts/probes/
 

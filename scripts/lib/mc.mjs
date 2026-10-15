@@ -58,11 +58,12 @@
  */
 
 import { IntlRetirementMcRunner } from '../../src/finance/monte-carlo/intl-retirement-mc-runner.js';
+import { perturbParams, createIterationSimulation } from '../../src/finance/monte-carlo/parallel/mc-worker-core.js';
 import { IntlRetirementMcConfig } from '../../src/finance/monte-carlo/intl-retirement-mc-config.js';
 import { scenarioParamValues }    from '../../src/finance/param-schema-utils.js';
 import { DISTRIBUTION_TYPES }     from '../../src/simulation-framework/distributions.js';
 import { mixSeriesFromRuns }      from '../../src/finance/allocation-reporting/mix-distribution.js';
-import { quietAsync } from './run.mjs';
+import { quietAsync, quiet } from './run.mjs';
 import { numericParams } from './variant.mjs';
 
 /**
@@ -164,6 +165,38 @@ export function summarizeSequenceRisk(runs) {
     model: p.equityReturnModel     ?? null,
     drift: p.equityReturnDriftComp ?? null,
   };
+}
+
+/**
+ * The `stochastic` lever block `mc-run`'s risk-model flags add to every arm. One function so
+ * `mc-trace` replays a path under exactly the risk model its arm was run with.
+ */
+export function stochasticFromFlags({ paths = false, vol = 0.18, drift = 'GEOMETRIC', propertyPaths = false } = {}) {
+  if (!paths && !propertyPaths) return null;
+  return {
+    ...(paths ? { equity: true, equityVol: vol, equityModel: 'WHITE_NOISE', equityDrift: drift } : {}),
+    ...(propertyPaths ? { property: true } : {}),
+  };
+}
+
+/**
+ * Build — not run — path `seed` of an arm, as `runArm` would have run it, at a richer
+ * `telemetry` (default 'journal'). Same runner preparation (`_prepare`, which is what
+ * `run()` calls), same `perturbParams(ctx.base, seed - 1, …)`, and the worker's own
+ * `createIterationSimulation`; telemetry only records, so the path is the arm row's path.
+ *
+ * @param {{ cfg: object, mcConfig: object, shocks: Array, seed: number, telemetry?: string }} opts
+ *   `seed` is the arm row's `seed` (1-based iteration index)
+ * @returns {{ sim: object, params: object, simStart: Date, simEnd: Date }}
+ */
+export function buildArmPathSim({ cfg, mcConfig, shocks, seed, telemetry = 'journal' }) {
+  if (!Number.isInteger(seed) || seed < 1) throw new Error(`seed must be a 1-based integer, got ${seed}`);
+  const simStart = new Date(cfg.simStart), simEnd = new Date(cfg.simEnd);
+  const runner = new IntlRetirementMcRunner({ n: seed, mcConfig, cfgTemplate: cfg, simStart, simEnd });
+  const { ctx } = runner._prepare({ shocks });
+  const params = perturbParams(ctx.base, seed - 1, ctx.variables);
+  const sim = quiet(() => createIterationSimulation(ctx, params, seed, { telemetry }));
+  return { sim, params, simStart, simEnd };
 }
 
 /**

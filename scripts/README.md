@@ -136,6 +136,17 @@ node scripts/montecarlo/mc-report.mjs --dir /tmp/mc
 split is deliberate — an arm costs minutes, a report costs milliseconds, and the
 report is what you rewrite ten times.
 
+**Explaining one path.** When a row needs a why, `mc-trace` replays that one path — same
+spec, same risk-model flags, the row's `seed` — with the journal on, and writes it year by
+year (balances, mix, pool cube) plus the chosen journal actions. `--check` compares it with
+the arm's row and exits 1 on any difference; an arm file run before a code change will not
+match, so re-run the arm at a small `-n` first.
+
+```bash
+node scripts/montecarlo/mc-trace.mjs --arms scripts/specs/example-arms.json \
+     --arm retire-2030 --seed 17 --paths --check /tmp/mc/retire-2030.json --out /tmp/trace.json
+```
+
 **Choosing a risk model.** Default samples only the long-run *average* return, held
 constant for the whole horizon: that captures estimation error but contains no
 sequence-of-returns risk, so it **understates** failure probability. `--paths` gives
