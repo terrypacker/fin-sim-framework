@@ -9,7 +9,7 @@ tools: []
 design: [114-pool-shape-inheritance-and-editor.md, 110-liquidity-pool-control-surface.md, 109-time-varying-pool-shapes.md]
 sources: []
 stamps:
-  param:liquidityGraph: ed9c1e
+  param:liquidityGraph: 346c4e
   param:liquidityShapes: eddce3
   param:liquidityTargetSchedule: 6c32a4
   panel:parameters: 671185
@@ -41,7 +41,8 @@ read its difference line, and choose the parent it says it matches.
 **The tables show their essential columns.** Id, spend order, target, size and what a
 remainder sits behind for buckets; the route, trigger and amount for flows. **More
 columns** shows the rest — label, residency, early access, capacity, flow priority and
-cadence, and the Search id a clause needs before it can be searched. A hidden setting that
+cadence, a drawdown clause's high half-life, and the Search id a clause needs before it can be
+searched. A hidden setting that
 is not at its default still appears as a badge on its row (*US only*, *cap: offset*,
 *once a year*), so hiding a column never hides a decision. The choice is remembered on this
 device.

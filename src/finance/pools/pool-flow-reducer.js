@@ -238,7 +238,7 @@ export class PoolFlowReducer extends Reducer {
    * Returns `{ open, reason }` — the reason is carried into the cube so a closed gate is a
    * recorded event rather than an absence.
    */
-  _leafClauses(g, flow, { metrics, highs, indices, indexHighs, state, asOfMs, priorYearReturns, ignoreCover = false }) {
+  _leafClauses(g, flow, { metrics, highs, indices, indexHighs, decayHighs, state, asOfMs, priorYearReturns, ignoreCover = false }) {
 
     // Drawdown from the trailing high, on whichever series the gate names (§20.14). Both are
     // persisted pool state, not a journal window: a peak set before the run's start date is
@@ -250,13 +250,17 @@ export class PoolFlowReducer extends Reducer {
     // Neither reads anything later than the last COMPLETED year: `_returnIndices` compounds
     // the prior year's stamp for the same reason `_priorYearReturns` reads it (§20.2).
     const onIndex = g.drawdownBasis === POOL_DRAWDOWN_BASIS.INDEX;
+    // `highHalfLifeYears` swaps the all-time index high for a decaying one (`_returnIndices`).
+    const halfLife = onIndex ? g.highHalfLifeYears : null;
     const drawdownOf = (poolId) => {
-      const high = (onIndex ? indexHighs?.[poolId] : highs[poolId]) ?? 0;
+      const high = (halfLife != null ? decayHighs?.[poolId]?.[String(halfLife)]
+                  : onIndex ? indexHighs?.[poolId] : highs[poolId]) ?? 0;
       const now  = onIndex ? (indices?.[poolId] ?? 0) : (metrics[poolId]?.balance ?? 0);
       if (!(high > 0)) return 0;
       return Math.max(0, 1 - now / high);
     };
-    const highWord = onIndex ? 'its return index\'s high' : 'its high';
+    const highWord = halfLife != null ? `its return index's ${halfLife}-year-half-life high`
+                   : onIndex ? 'its return index\'s high' : 'its high';
 
     if (g.sourceDrawdownUnder != null && drawdownOf(flow.from) > g.sourceDrawdownUnder + 1e-12) {
       return { open: false, reason: `source ${flow.from} is ${(drawdownOf(flow.from) * 100).toFixed(1)}% below ${highWord}` };
@@ -377,6 +381,15 @@ export class PoolFlowReducer extends Reducer {
   _returnIndices(prior, yearOf, graph) {
     const indices = {};
     const highs   = {};
+    // The DECAYING highs (`highHalfLifeYears`), one per half-life the graph's gates name, and
+    // none at all when no gate names one — so a graph without the field carries no new state
+    // and its runs are byte-identical. Each decays by 2^(−1/h) per COMPLETED year, on the same
+    // `done` test as the index, so a second advance within a year reads what the first did,
+    // and is then lifted to the index if the index is higher. Seeded from the all-time high: a
+    // half-life that first appears mid-run (a shape switch) starts from the peak the pool has
+    // actually had, not from wherever the index happens to be.
+    const halfLives = _gateHalfLives(graph);
+    const decay = halfLives.length ? {} : null;
     for (const pool of (graph?.pools ?? [])) {
       const p     = prior?.[pool.id] ?? {};
       const start = p.returnIndex ?? 1;
@@ -384,8 +397,16 @@ export class PoolFlowReducer extends Reducer {
       const idx   = done ? start * (1 + p.marketReturn) : start;
       indices[pool.id] = idx;
       highs[pool.id]   = Math.max(p.returnIndexHigh ?? idx, idx);
+      if (decay) {
+        decay[pool.id] = {};
+        for (const h of halfLives) {
+          const key  = String(h);
+          const prev = p.returnIndexDecayHighs?.[key] ?? p.returnIndexHigh ?? start;
+          decay[pool.id][key] = Math.max(idx, done ? prev * Math.pow(2, -1 / h) : prev);
+        }
+      }
     }
-    return { indices, indexHighs: highs };
+    return { indices, indexHighs: highs, decayHighs: decay };
   }
 
   /** How much the destination is asking for, or 0 when the trigger has not tripped. */
@@ -441,7 +462,7 @@ export class PoolFlowReducer extends Reducer {
     const metrics = allPoolMetrics(state, graph, ctx);
     const yearOf  = new Date(asOfMs).getUTCFullYear();
     const priorYearReturns = this._priorYearReturns(prior, yearOf, graph);
-    const { indices, indexHighs } = this._returnIndices(prior, yearOf, graph);
+    const { indices, indexHighs, decayHighs } = this._returnIndices(prior, yearOf, graph);
 
     // The trailing high, monotone, updated BEFORE the gates read it so a pool at a fresh peak
     // this period reads as 0% below its high rather than as one period stale.
@@ -497,7 +518,7 @@ export class PoolFlowReducer extends Reducer {
         if (isPaycheck !== isPaycheckFlow) continue;
         if (flow.cadence === 'ANNUAL' && prior[flow.to]?.lastFired?.[flow.id] === yearOf) continue;
 
-        const gateCtx = { metrics, highs, indices, indexHighs, state, asOfMs,
+        const gateCtx = { metrics, highs, indices, indexHighs, decayHighs, state, asOfMs,
                           priorYearReturns, streaksIn, streaksOut, yearOf };
         let gate = this._gateOpen(flow, gateCtx);
         // A gate opened ONLY by its cover floor (`targetCoverUnder`) refills the destination up
@@ -668,6 +689,9 @@ export class PoolFlowReducer extends Reducer {
         // and a replay that started later would compound a different number of factors.
         returnIndex:     +indices[pool.id].toFixed(8),
         returnIndexHigh: +indexHighs[pool.id].toFixed(8),
+        // Only when a gate names a `highHalfLifeYears`, keyed by that half-life.
+        ...(decayHighs ? { returnIndexDecayHighs: Object.fromEntries(Object.entries(decayHighs[pool.id])
+          .map(([k, v]) => [k, +v.toFixed(8)])) } : {}),
         inflow:       +(inflow[pool.id] ?? 0).toFixed(2),
         outflow:      +(outflow[pool.id] ?? 0).toFixed(2),
         gatedFlows:   gatedFlows.filter(g => g.to === pool.id || g.from === pool.id),
@@ -786,6 +810,19 @@ export class PoolFlowReducer extends Reducer {
     r.id = d.id;
     return r;
   }
+}
+
+/** Every `highHalfLifeYears` named by any gate in the graph, sorted and distinct. */
+function _gateHalfLives(graph) {
+  const out = new Set();
+  const walk = (node) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { node.forEach(walk); return; }
+    if (Number.isFinite(node.highHalfLifeYears)) out.add(node.highHalfLifeYears);
+    for (const kid of [...(node.allOf ?? []), ...(node.anyOf ?? []), ...(node.not ? [node.not] : [])]) walk(kid);
+  };
+  for (const flow of (graph?.flows ?? [])) walk(flow.gate);
+  return [...out].sort((a, b) => a - b);
 }
 
 /** The largest `targetCoverUnder` anywhere in a gate tree, or null when it has none. */

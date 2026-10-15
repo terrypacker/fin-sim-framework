@@ -1514,6 +1514,56 @@ test('POOL-12f: the return index compounds COMPLETED years only, once per year',
   assert.equal(y31.next.length, 0);
 });
 
+test('POOL-12g: highHalfLifeYears measures against a high that halves per completed year', () => {
+  // Macro-regimes flag 29: after a deep bust the all-time index high holds an INDEX gate shut
+  // until a 3–4x recovery. A decaying high forgives the bust after a few half-lives. Index at
+  // 0.5 of a 1.0 peak, flat years (marketReturn 0), gate "within 20% of the high", h = 2.
+  const graphFor = (gate) => normalizeLiquidityGraph({
+    pools: [
+      { id: 'cash',   spendOrder: 10, claims: [{ key: 'usSavingsAccount' }], target: { mode: 'AMOUNT', value: 200_000 } },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [{ id: 'g2c', from: 'growth', to: 'cash', gate }],
+  }, ACCOUNTS);
+  const savings = new CheckingAccount(0, { country: 'US', currency: USD });
+  const broker  = new BrokerageAccount(800_000, { country: 'US', currency: USD });
+  broker.holdings = [new Holding({ id: 'eq', allocation: ALLOCATION.EQUITY, marketValue: 800_000, costBasis: 800_000, purchaseDate: D(2010), rateKey: 'EQUITY_US' })];
+  const base = {
+    usSavingsAccount: savings, usStockAccount: broker, monthlyExpenses: 10_000,
+    effectiveExchangeRates: { USD_AUD: 1 },
+    effectiveGrowthRates: { EQUITY_US: 0 },
+    liquidityPools: {
+      growth: { high: 800_000, returnIndex: 0.5, returnIndexHigh: 1, marketReturn: 0, marketReturnYear: 2029 },
+      cash:   { high: 0 },
+    },
+  };
+  const decaying = new PoolFlowReducer({ graph: graphFor({ sourceDrawdownUnder: 0.2, drawdownBasis: 'INDEX', highHalfLifeYears: 2 }) });
+  const allTime  = new PoolFlowReducer({ graph: graphFor({ sourceDrawdownUnder: 0.2, drawdownBasis: 'INDEX' }) });
+
+  // 2030: one completed year since the peak → high 2^(−1/2) = 0.7071, index 29% under it: shut.
+  const y30 = fire(decaying, base, { date: D(2030) });
+  assert.ok(Math.abs(y30.state.liquidityPools.growth.returnIndexDecayHighs['2'] - Math.SQRT1_2) < 1e-8);
+  assert.equal(y30.next.length, 0);
+  assert.match(y30.state.poolRefillPlan.gated[0].reason, /2-year-half-life high/);
+
+  // July 2030 is the same year: no second decay.
+  const jul = fire(decaying, { ...base, liquidityPools: y30.state.liquidityPools }, { date: new Date(Date.UTC(2030, 6, 1)) });
+  assert.ok(Math.abs(jul.state.liquidityPools.growth.returnIndexDecayHighs['2'] - Math.SQRT1_2) < 1e-8);
+
+  // 2031: two half-lives → the high has decayed to 0.5, the index itself, and the gate opens;
+  // the all-time high is still 1.0 and that gate stays shut.
+  const y31 = fire(decaying, { ...base, liquidityPools: jul.state.liquidityPools }, { date: D(2031) });
+  assert.equal(y31.state.liquidityPools.growth.returnIndexDecayHighs['2'], 0.5);
+  assert.equal(y31.next.length, 1);
+  assert.equal(fire(allTime, { ...base, liquidityPools: y31.state.liquidityPools }, { date: D(2032) }).next.length, 0);
+
+  // A graph that names no half-life carries no new state.
+  assert.equal(fire(allTime, base, { date: D(2030) }).state.liquidityPools.growth.returnIndexDecayHighs, undefined);
+
+  // INDEX only: on a BALANCE clause the field would forgive the household's own spending.
+  assert.throws(() => graphFor({ sourceDrawdownUnder: 0.2, highHalfLifeYears: 2 }), /needs drawdownBasis: INDEX/);
+});
+
 test('POOL-12d: a second advance in the same year does not pick up the first one\'s stamp', () => {
   // The half of §20.2 the first fix missed, and the reason the unit here is the YEAR and not
   // the period. This reducer fires on both US_ and AU_PERIOD_ADVANCE, six months apart. With
