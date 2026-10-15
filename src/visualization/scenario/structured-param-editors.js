@@ -486,13 +486,14 @@ export function buildLocationPolicyEditor(param) {
  * (tax-advantaged ∪ taxable brokerage). A role outside that set holds nothing the planner
  * moves, so offering it would be a control that does nothing.
  */
-const RESTRICTABLE_ROLE_OPTIONS = Object.freeze(
-  [...TAX_ADVANTAGED_ROLES, ...TAXABLE_ROLES].map(r => [r, r]));
+const RESTRICTABLE_ROLES = new Set([...TAX_ADVANTAGED_ROLES, ...TAXABLE_ROLES]);
+const RESTRICTABLE_ROLE_OPTIONS = Object.freeze([...RESTRICTABLE_ROLES].map(r => [r, r]));
 
 /**
  * `ClassRestrictions` — design 115's `allocationClassRestrictions`, class → roles barred.
  *
- * One row per class, with a check set of the roles it may never occupy. Unlike the
+ * One row per class, with a check set of the roles — or individual accounts — it may never
+ * occupy. Unlike the
  * LocationPolicy editor there is no order to preserve, so the roles are a set, not ranked
  * rows. **A row with nothing ticked is kept, not dropped**: `{ GOLD: [] }` is the author
  * saying "considered, allowed everywhere", which is what answers the US-citizen super
@@ -547,8 +548,14 @@ export function buildClassRestrictionsEditor(param, accounts = () => [], people 
     columns: [
       { field: 'allocation', label: 'Class', type: 'select',
         options: RESTRICTABLE_CLASSES.map(a => [a, a]) },
+      // Roles first, then the plan's own rebalanceable accounts by name: a single account can
+      // be barred where its whole role cannot (a TreasuryDirect account holds no equity, the
+      // main brokerage of the same role does).
       { field: 'roles', label: 'Never in', type: 'checkset', blankValue: [],
-        options: RESTRICTABLE_ROLE_OPTIONS, width: '2fr' },
+        options: () => [...RESTRICTABLE_ROLE_OPTIONS,
+          ...(accounts() ?? []).filter(a => a?.stateKey && RESTRICTABLE_ROLES.has(a.role))
+            .map(a => [a.stateKey, a.name ? `${a.name} (account)` : a.stateKey])],
+        width: '2fr' },
       { field: 'effect', label: '', type: 'note',
         text: (r) => (r.roles?.length ? '' : 'allowed everywhere') },
     ],

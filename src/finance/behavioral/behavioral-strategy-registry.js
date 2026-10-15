@@ -63,7 +63,8 @@ function _classRestrictionsFor(context) {
     _warnedClassRestrictionProblems.add(message);
     console.warn(`[design 115] ${message}`);
   }
-  return normalizeClassRestrictions(p.allocationClassRestrictions);
+  return normalizeClassRestrictions(p.allocationClassRestrictions,
+    (context.accounts ?? []).map(a => a?.stateKey).filter(Boolean));
 }
 
 /**
@@ -427,8 +428,9 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
         key: 'allocationClassRestrictions', label: 'Allocation Class Restrictions',
         type: 'ClassRestrictions', group: 'Allocation', mc: false, opt: false,
         defaultValue: null,
-        description: 'Account roles an allocation class may NEVER be placed in, as a map of class → '
-          + `roles, e.g. {"GOLD":["super"]}. Classes: ${RESTRICTABLE_CLASSES.join(', ')}. Unlike the `
+        description: 'Account roles, or single accounts by state key, an allocation class may NEVER be placed in, '
+          + 'as a map of class → roles/accounts, e.g. {"GOLD":["super"]} or {"EQUITY":["treasuryDirectAccount"]} '
+          + `(an account cannot hold what its role can). Classes: ${RESTRICTABLE_CLASSES.join(', ')}. Unlike the `
           + 'location policy this is hard: a class weight no permitted account can hold is spread over '
           + 'the other classes, and a barred holding is sold at the next rebalance even inside the drift '
           + 'band. Applies to TARGET_ALLOCATION in both location modes. '

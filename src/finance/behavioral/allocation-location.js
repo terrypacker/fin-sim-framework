@@ -42,16 +42,30 @@ const LOCATION_FILL_ORDER = [ALLOCATION.GOLD, ALLOCATION.BOND, ALLOCATION.EQUITY
 const EXCESS_FALLBACK_ORDER = [ALLOCATION.EQUITY, ALLOCATION.BOND, ALLOCATION.CASH, ALLOCATION.GOLD];
 
 /**
- * True when an account of `role` may hold `allocation` under `restrictions` (design 115).
+ * True when an account may hold `allocation` under `restrictions` (design 115).
  *
- * `restrictions` is the `allocationClassRestrictions` map, class → roles that class may
- * NEVER occupy. Null, a class the map does not name, or a non-array entry ⇒ permitted, so
- * a plan without restrictions behaves exactly as before. An empty array is the author
- * saying "considered, allowed everywhere" — also permitted.
+ * `restrictions` is the `allocationClassRestrictions` map, class → the account ROLES, or
+ * individual account STATE KEYS, that class may NEVER occupy. Null, a class the map does not
+ * name, or a non-array entry ⇒ permitted, so a plan without restrictions behaves exactly as
+ * before. An empty array is the author saying "considered, allowed everywhere" — also
+ * permitted.
+ *
+ * A state key is how one account differs from the rest of its role: a TreasuryDirect account
+ * is a `us-stock` brokerage for its coupons, maturities and Treasury state-tax exemption, but
+ * it cannot hold equity, and barring EQUITY from the role would bar it from the main
+ * brokerage too.
+ *
+ * @param {string} allocation
+ * @param {string|{role: string, stateKey?: string}} who - a role, or the account itself
+ * @param {?object} restrictions
  */
-export function roleCanHold(allocation, role, restrictions = null) {
+export function roleCanHold(allocation, who, restrictions = null) {
   const forbidden = restrictions?.[allocation];
-  return !(Array.isArray(forbidden) && forbidden.includes(role));
+  if (!Array.isArray(forbidden)) return true;
+  if (who != null && typeof who === 'object') {
+    return !(forbidden.includes(who.role) || (who.stateKey != null && forbidden.includes(who.stateKey)));
+  }
+  return !forbidden.includes(who);
 }
 
 /**
@@ -160,21 +174,26 @@ const KNOWN_ROLES = new Set(Object.values(ACCOUNT_ROLES));
 /**
  * Design 115 §5.1 — the `allocationClassRestrictions` param as the reducers take it.
  *
- * Drops what cannot mean anything (a non-object, an unknown class, a non-array entry, an
- * unknown role) — `collectClassRestrictionProblems` reports each of those, so nothing is
+ * Drops what cannot mean anything (a non-object, an unknown class, a non-array entry, a name
+ * that is neither a role nor one of `accountKeys`) — `collectClassRestrictionProblems` reports
+ * each of those, so nothing is
  * dropped silently. Returns **null** when no class names a role, so an absent map, `{}`
  * and the explicit acknowledgement `{ GOLD: [] }` all compile to exactly the unrestricted
  * reducers.
  *
  * @param {*} raw - the authored param value
- * @returns {object|null} class → barred roles, or null
+ * @param {string[]} [accountKeys=[]] - the plan's account state keys, which an entry may name
+ * @returns {object|null} class → barred roles / account keys, or null
  */
-export function normalizeClassRestrictions(raw) {
+export function normalizeClassRestrictions(raw, accountKeys = []) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const keys = new Set(accountKeys ?? []);
   const out = {};
   for (const [cls, roles] of Object.entries(raw)) {
     if (!RESTRICTABLE_CLASSES.includes(cls) || !Array.isArray(roles)) continue;
-    const known = [...new Set(roles.filter(r => KNOWN_ROLES.has(r)))];
+    // A role, or the state key of an account in this plan; anything else is a typo
+    // (`collectClassRestrictionProblems` names it) and is dropped.
+    const known = [...new Set(roles.filter(r => KNOWN_ROLES.has(r) || keys.has(r)))];
     if (known.length) out[cls] = known;
   }
   return Object.keys(out).length ? out : null;
@@ -222,21 +241,30 @@ export function collectClassRestrictionProblems(raw, accounts = [], people = [])
       warn('shape', `allocationClassRestrictions.${cls}: expected a list of account roles, got ${JSON.stringify(roles)}; ignored.`);
       continue;
     }
+    const keys = new Set(accounts.map(a => a?.stateKey).filter(Boolean));
     for (const r of roles) {
-      if (!KNOWN_ROLES.has(r)) warn('unknown-role', `allocationClassRestrictions.${cls}: "${r}" is not an account role; ignored.`);
+      if (!KNOWN_ROLES.has(r) && !keys.has(r)) {
+        warn('unknown-role', `allocationClassRestrictions.${cls}: "${r}" is not an account role or an account in this plan; ignored.`);
+      }
     }
   }
 
-  const restrictions = normalizeClassRestrictions(raw);
+  const restrictions = normalizeClassRestrictions(raw, accounts.map(a => a?.stateKey).filter(Boolean));
   const presentRoles = [...new Set(accounts.map(a => a?.role).filter(r => KNOWN_ROLES.has(r)))];
+  const present = accounts.filter(a => KNOWN_ROLES.has(a?.role));
   if (restrictions) {
     for (const role of presentRoles) {
       if (RESTRICTABLE_CLASSES.every(c => !roleCanHold(c, role, restrictions))) {
         warn('role-barred-everywhere', `allocationClassRestrictions bars every class from "${role}", which cannot then hold its own balance; those accounts are planned unrestricted.`);
       }
     }
+    for (const a of present) {
+      if (!RESTRICTABLE_CLASSES.every(c => roleCanHold(c, a.role, restrictions))
+          || RESTRICTABLE_CLASSES.some(c => roleCanHold(c, a, restrictions))) continue;
+      warn('role-barred-everywhere', `allocationClassRestrictions bars every class from ${a.name ?? a.stateKey}, which cannot then hold its own balance; it is planned unrestricted.`);
+    }
     for (const cls of Object.keys(restrictions)) {
-      if (presentRoles.length && presentRoles.every(r => !roleCanHold(cls, r, restrictions))) {
+      if (present.length && present.every(a => !roleCanHold(cls, a, restrictions))) {
         warn('class-barred-everywhere', `allocationClassRestrictions bars ${cls} from every account in this plan, so none is held; its target weight is spread over the other classes.`);
       }
     }
@@ -272,7 +300,7 @@ export function collectClassRestrictionProblems(raw, accounts = [], people = [])
  * barred from every class keeps the mix unchanged, matching `planLocatedTargets`.
  *
  * @param {object}      mix          - { <ALLOCATION>: fraction } summing to ~1
- * @param {string}      role         - the account's role
+ * @param {string|object} role       - the account's role, or `{ role, stateKey }` (see `roleCanHold`)
  * @param {object|null} restrictions - class → barred roles
  * @param {number}      [total=0]    - the account's value, for `stats`
  * @param {?object}     [stats]      - out-param; `stats.restricted` accumulates barred dollars
@@ -432,8 +460,9 @@ export function planLocatedTargets({ accounts = [], portfolioTarget = {}, policy
   // A role barred from EVERY class cannot hold its own money, so the restriction is
   // unsatisfiable for it. The loader refuses that shape; defensively, such an account is
   // planned as if unrestricted rather than breaking value conservation.
-  const canHold = (cls, role) => roleCanHold(cls, role, restrictions)
-    || LOCATION_FILL_ORDER.every(c => !roleCanHold(c, role, restrictions));
+  // `a` is the account itself, so a restriction can name its state key as well as its role.
+  const canHold = (cls, a) => roleCanHold(cls, a, restrictions)
+    || LOCATION_FILL_ORDER.every(c => !roleCanHold(c, a, restrictions));
   const totalPortfolio = active.reduce((s, a) => s + a.total, 0);
   const out = new Map(active.map(a => [a.stateKey, {}]));
   if (totalPortfolio <= 0) return out;
@@ -447,7 +476,7 @@ export function planLocatedTargets({ accounts = [], portfolioTarget = {}, policy
   // pro-rata to their targets, and the loop repeats because the redistribution can push
   // another class over. Unrestricted ⇒ every cap is the whole book and nothing moves.
   const caps = Object.fromEntries(LOCATION_FILL_ORDER.map(cls =>
-    [cls, active.filter(a => canHold(cls, a.role)).reduce((s, a) => s + a.total, 0)]));
+    [cls, active.filter(a => canHold(cls, a)).reduce((s, a) => s + a.total, 0)]));
   const capped = new Set();
   for (let pass = 0; pass < LOCATION_FILL_ORDER.length; pass++) {
     const over = LOCATION_FILL_ORDER.filter(c => !capped.has(c) && classTargets[c] > caps[c] + 1e-6);
@@ -476,7 +505,7 @@ export function planLocatedTargets({ accounts = [], portfolioTarget = {}, policy
   for (const cls of LOCATION_FILL_ORDER) {
     let need = classTargets[cls];
     if (need <= 0) continue;
-    const eligible = active.filter(a => canHold(cls, a.role) && _canHold(eligibility, a.stateKey, cls));
+    const eligible = active.filter(a => canHold(cls, a) && _canHold(eligibility, a.stateKey, cls));
     for (const a of _orderedForClass(eligible, remaining, policy[cls])) {
       if (need <= 1e-6) break;
       const amt = Math.min(need, remaining[a.stateKey]);
@@ -497,7 +526,7 @@ export function planLocatedTargets({ accounts = [], portfolioTarget = {}, policy
     if (need <= 1e-6) continue;
     for (const a of active) {
       if (need <= 1e-6) break;
-      if (!canHold(cls, a.role)) continue;
+      if (!canHold(cls, a)) continue;
       if (!_canHold(eligibility, a.stateKey, cls)) continue;
       const amt = Math.min(need, remaining[a.stateKey]);
       if (amt <= 1e-6) continue;
@@ -518,7 +547,7 @@ export function planLocatedTargets({ accounts = [], portfolioTarget = {}, policy
       if (need <= 1e-6) continue;
       for (const a of active) {
         if (need <= 1e-6) break;
-        if (!canHold(cls, a.role)) continue;
+        if (!canHold(cls, a)) continue;
         const amt = Math.min(need, remaining[a.stateKey]);
         if (amt <= 1e-6) continue;
         assign(a.stateKey, cls, amt);
@@ -541,7 +570,7 @@ export function planLocatedTargets({ accounts = [], portfolioTarget = {}, policy
   // infeasible and falls to the over-place fill below.
   if (restrictions) {
     _repairRestrictedGaps(active, out, remaining, classTargets,
-      (cls, a) => canHold(cls, a.role) && _canHold(eligibility, a.stateKey, cls));
+      (cls, a) => canHold(cls, a) && _canHold(eligibility, a.stateKey, cls));
   }
 
   // Value conservation still wins, but never over a restriction: a gap nothing can fix is
@@ -551,7 +580,7 @@ export function planLocatedTargets({ accounts = [], portfolioTarget = {}, policy
     for (const a of active) {
       const gap = remaining[a.stateKey];
       if (gap <= 1e-6) continue;
-      const cls = EXCESS_FALLBACK_ORDER.find(c => canHold(c, a.role));
+      const cls = EXCESS_FALLBACK_ORDER.find(c => canHold(c, a));
       if (!cls) continue;
       assign(a.stateKey, cls, gap);
       if (stats) stats.overPlaced = (stats.overPlaced ?? 0) + gap;
@@ -571,7 +600,7 @@ export function planLocatedTargets({ accounts = [], portfolioTarget = {}, policy
     const drift = R2(a.total - sum);
     if (drift !== 0 && largest !== null) comp[largest] = R2(comp[largest] + drift);
     else if (drift !== 0) {
-      const cls = EXCESS_FALLBACK_ORDER.find(c => canHold(c, a.role)) ?? ALLOCATION.EQUITY;
+      const cls = EXCESS_FALLBACK_ORDER.find(c => canHold(c, a)) ?? ALLOCATION.EQUITY;
       comp[cls] = R2((comp[cls] ?? 0) + drift);
     }
   }
