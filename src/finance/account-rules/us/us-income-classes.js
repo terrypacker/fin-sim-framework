@@ -196,7 +196,7 @@ export class CompanySaleApplyReducer extends AccountServiceReducer {
     const gain    = Math.max(0, salePrice - costBasis);
     const destKey = resolveDestinationCashKey(this.stateRegistry, 'US', state, destinationKey);
     const { transfer: fxLeg } = creditSaleProceeds(
-      this.accountService, state, destKey, salePrice, 'USD', stateKey, null);
+      this.accountService, state, destKey, salePrice, 'USD', stateKey, date);
     const stateUpdate = {};
     const eq = stateKey ? state[stateKey] : null;
     if (stateKey && eq != null) {

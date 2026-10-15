@@ -63,7 +63,7 @@ export class CollectibleSaleApplyReducer extends AccountServiceReducer {
     const currency = col?.currency?.code ?? (country === 'AU' ? 'AUD' : 'USD');
     const destKey = resolveDestinationCashKey(this.stateRegistry, country, state, destinationKey);
     const { transfer: fxLeg } = creditSaleProceeds(
-      this.accountService, state, destKey, salePrice, currency, stateKey, null);
+      this.accountService, state, destKey, salePrice, currency, stateKey, date);
     const stateUpdate = {};
     if (col != null) {
       stateUpdate[key] = { ...col, value: 0 };

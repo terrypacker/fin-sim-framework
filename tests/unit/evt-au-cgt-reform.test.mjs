@@ -179,7 +179,7 @@ test('COLLECTIBLE-STEP-UP: gold gets an AU cost base + level at the move; non-go
 
 /** Sale reducer with a stubbed cash credit; destinationKey short-circuits routing. */
 function saleReducer() {
-  return new CollectibleSaleApplyReducer({ accountService: { transaction() {} }, stateRegistry: {} });
+  return new CollectibleSaleApplyReducer({ accountService: { transaction() {}, creditPurchase() {} }, stateRegistry: {} });
 }
 
 test('COLLECTIBLE-SALE: stepped-up gold sold post-2027 (AU) yields an indexed real gain < auGain', () => {

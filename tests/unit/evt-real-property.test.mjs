@@ -461,7 +461,7 @@ test('EVT-34: US sale of a NON-primary residence gets no §121 exclusion (full g
 // US_PERIOD_ADVANCE reducer overwriting it from survivorship.
 test('EVT-34: US primary-residence sale for a single filer excludes only $250K (reducer)', () => {
   const reducer = new UsHouseSaleApplyReducer({
-    accountService: { transaction: () => {} },   // no-op: destinationKey exists in state
+    accountService: { transaction: () => {}, creditPurchase: () => {} },   // no-op: destinationKey exists in state
     stateRegistry:  {},                           // unused: destinationKey resolves directly
   });
   const runSale = (usFilingSingle) => {

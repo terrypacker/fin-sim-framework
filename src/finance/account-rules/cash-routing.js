@@ -181,8 +181,14 @@ export function creditSaleProceeds(accountService, state, destKey, amount, fromC
   const dest  = state[destKey];
   const toCcy = dest?.currency?.code ?? dest?.country ?? fromCcy;
 
+  // A deposit into an investment account is a purchase in a dated lot of its own (flag 21);
+  // into a cash account it is the plain credit, as always (`AccountService.creditPurchase`).
+  const credit = (value) => accountService.creditPurchase(dest, value, {
+    date, label: 'Sale proceeds',
+    priceLevel: state.cpiAccumulator?.AU ?? state.inflationAccumulator?.AU ?? 1,
+  });
   if (toCcy === fromCcy || !(amount > 0)) {
-    accountService.transaction(dest, amount, date);
+    credit(amount);
     return { credited: amount, transfer: null };
   }
 
@@ -190,7 +196,7 @@ export function creditSaleProceeds(accountService, state, destKey, amount, fromC
   const fxFeeUsd = state.effectiveFxFees?.USD_AUD ?? 15;
   const fee      = fxFeeIn(toCcy, fromCcy, usdAud, fxFeeUsd);
   const credited = Math.max(0, convertNetOfFee(amount, fromCcy, toCcy, usdAud, fxFeeUsd));
-  accountService.transaction(dest, credited, date);
+  credit(credited);
 
   return {
     credited,

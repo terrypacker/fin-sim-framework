@@ -188,7 +188,7 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
     // and `transaction` would credit USD proceeds as AUD. See `creditSaleProceeds`.
     const { transfer: fxLeg } = creditSaleProceeds(
       this.accountService, state, destKey, netProceeds,
-      propState?.currency?.code ?? 'USD', stateKey, null);
+      propState?.currency?.code ?? 'USD', stateKey, date);
     const updates = {};
     if (stateKey && state[stateKey]) {
       updates[stateKey] = { ...state[stateKey], mortgageBalance: 0, value: 0 };
