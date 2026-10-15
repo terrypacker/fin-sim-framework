@@ -256,6 +256,12 @@ export class PoolFlowReducer extends Reducer {
       const high = (halfLife != null ? decayHighs?.[poolId]?.[String(halfLife)]
                   : onIndex ? indexHighs?.[poolId] : highs[poolId]) ?? 0;
       const now  = onIndex ? (indices?.[poolId] ?? 0) : (metrics[poolId]?.balance ?? 0);
+      // Design 124 — an EMPTY pool's balance drawdown is no signal, not 100%. Read literally it
+      // shut a BALANCE gate for good the period the pool emptied, and the shut SOURCE gate kept
+      // its household-wide veto for the rest of the run. A balance high has no household
+      // analogue (the INDEX basis does — see `householdSleeveReturn`), so "no signal" it is:
+      // 0, open, `sourceDrawdownUnder`'s absent-reading default.
+      if (!onIndex && !(now > 0.005)) return 0;
       if (!(high > 0)) return 0;
       return Math.max(0, 1 - now / high);
     };
@@ -293,9 +299,10 @@ export class PoolFlowReducer extends Reducer {
     // every advance within a year, which is also the right unit on its own terms: the equity
     // tick is annual (`dt = 1`), so a year is the finest grain at which the signal changes.
     //
-    // Null on the first year, and for a pool with no rated lots (POOL-12b): "no signal" is
-    // not "bad signal", so `sourceReturnOver` stays OPEN and `targetReturnUnder` stays SHUT,
-    // matching each gate's own absent-reading default.
+    // Null on the first year, and when neither the pool nor the household holds any of its
+    // sleeves (POOL-12b): "no signal" is not "bad signal", so `sourceReturnOver` stays OPEN and
+    // `targetReturnUnder` stays SHUT, matching each gate's own absent-reading default. An EMPTY
+    // sleeve pool reads the household's return of its sleeves instead (design 124).
     const ret = (poolId) => priorYearReturns?.[poolId] ?? null;
     if (g.sourceReturnOver != null) {
       const r = ret(flow.from);
@@ -374,9 +381,12 @@ export class PoolFlowReducer extends Reducer {
    * within one year therefore compounds nothing and reads the same index as the first, which
    * is also what makes the two advances agree.
    *
-   * A pool with no rated lots stamps a null `marketReturn` and simply does not compound —
-   * "no signal" leaves the index where it is, so the drawdown reads 0 and the gate stays
-   * OPEN, matching `sourceDrawdownUnder`'s absent-reading default (POOL-12b's rule).
+   * A null `marketReturn` (no signal) does not compound: the index, its high and every
+   * decaying high stay exactly where they are. That FREEZES the drawdown at its last value —
+   * it does not read 0 — which is why design 124 gave an empty sleeve pool the household's
+   * return of its sleeves (`householdSleeveReturn`): before it, a pool that emptied during a
+   * crash kept its gate shut, and its household-wide veto, for the rest of the run. Null now
+   * means the household holds none of the pool's sleeves either, or a whole-account pool.
    */
   _returnIndices(prior, yearOf, graph) {
     const indices = {};
@@ -680,6 +690,11 @@ export class PoolFlowReducer extends Reducer {
         // of it.
         marketReturn:     m.marketReturn != null ? +m.marketReturn.toFixed(6) : null,
         marketReturnYear: yearOf,
+        // Design 124 — present only while the pool is EMPTY and its market is the household's
+        // holdings of its sleeves, with the year that began. Absent otherwise, so a pool that
+        // never empties stamps exactly what it always did (a vanished field diffs to null).
+        ...(m.marketBasis ? { marketBasis: m.marketBasis,
+          marketBasisSince: p.marketBasis === m.marketBasis ? (p.marketBasisSince ?? yearOf) : yearOf } : {}),
         // What the gates ACTED on this period. Persisted rather than re-derived because a
         // second advance in the same year must reach the same conclusion as the first, and
         // because a closed gate is only debuggable next to the number that closed it.

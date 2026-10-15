@@ -85,6 +85,68 @@ export function poolMarketReturn(state, pool) {
   return total > 0 ? weighted / total : null;
 }
 
+/**
+ * DESIGN 124 — the market an EMPTY sleeve pool was in: the value-weighted return of the same
+ * sleeves over every lot in the book (`accountKeys`, the accounts the graph claims), weighted
+ * in the BASE currency because the book spans currencies.
+ *
+ * Why an empty pool needs one at all. A pool with no rated lots has no return of its own, so
+ * `_returnIndices` stopped compounding its index and the drawdown froze at whatever it read
+ * when the pool emptied — a gate stuck OPEN or SHUT for the rest of the run. Its gate still
+ * matters after the pool is empty, because a SOURCE gate's veto floors the pool's class across
+ * the whole HOUSEHOLD (`RebalanceToTargetReducer._applySourceVeto`). So once the pool has none
+ * of the class, it measures the household's holdings of it: the veto and the measurement then
+ * mean the same thing. While the pool holds anything it measures its own lots, exactly as before.
+ *
+ * Null when the book holds none of `sleeves` either — then there is truly no signal.
+ *
+ * @param {object} state
+ * @param {string[]} sleeves      the ALLOCATION classes the pool's claims narrow to
+ * @param {Iterable<string>} accountKeys
+ * @param {string} baseCurrency
+ */
+export function householdSleeveReturn(state, sleeves, accountKeys, baseCurrency = 'USD') {
+  const rates = state?.effectiveGrowthRates;
+  if (!rates || !sleeves?.length) return null;
+  let weighted = 0, total = 0;
+  for (const key of accountKeys ?? []) {
+    const account = state?.[key];
+    if (!account || !Array.isArray(account.holdings)) continue;
+    const ccy = currencyOf(account, baseCurrency);
+    for (const h of account.holdings) {
+      if (!sleeves.includes(h?.allocation)) continue;
+      const rate = rates[h?.rateKey];
+      const mv   = h?.marketValue ?? 0;
+      if (!Number.isFinite(rate) || !(mv > 0)) continue;
+      const v = toBaseCurrency(mv, ccy, baseCurrency, state);
+      weighted += v * rate;
+      total    += v;
+    }
+  }
+  return total > 0 ? weighted / total : null;
+}
+
+/** Every account key a graph claims — the book (`PoolFlowReducer._bookBase` sums the same). */
+export function graphAccountKeys(graph) {
+  const out = new Set();
+  for (const pool of graph?.pools ?? []) for (const c of pool.claims ?? []) if (c?.key) out.add(c.key);
+  return out;
+}
+
+/**
+ * The pool's market return and where it was measured: its own lots (`marketBasis` absent), or —
+ * when it has no rated lots and narrows to sleeves — the household's lots in those sleeves
+ * (`marketBasis: 'HOUSEHOLD'`). A whole-account pool (an offset, a savings account) names no
+ * class to fall back to, and keeps reading no signal (§6 Q2).
+ */
+function marketOf(state, pool, ctx) {
+  const own = poolMarketReturn(state, pool);
+  if (own != null || !ctx?.bookKeys) return { marketReturn: own };
+  const sleeves = [...new Set((pool.claims ?? []).flatMap(c => c.sleeves ?? []))];
+  const hh = householdSleeveReturn(state, sleeves, ctx.bookKeys, ctx.baseCurrency);
+  return hh == null ? { marketReturn: null } : { marketReturn: hh, marketBasis: 'HOUSEHOLD' };
+}
+
 /** Σ market value of the lots of `account` inside `sleeves` (null ⇒ every lot). */
 function holdingsValue(account, sleeves) {
   const holdings = account?.holdings;
@@ -464,7 +526,9 @@ export function poolMetrics(state, pool, ctx) {
     // was previously sized against money Phase 1 cannot reach, so the refill quietly did less
     // than it said (the scoped draw's shortfall is discarded by `PoolFlowApplyReducer`).
     available: Math.max(0, accessible - floor),
-    marketReturn: poolMarketReturn(state, pool),
+    // Design 124 — an empty sleeve pool measures the household's holdings of its sleeves, and
+    // says so (`marketBasis`), rather than reading no signal and freezing its gate's index.
+    ...marketOf(state, pool, ctx),
     // The reserve the pool HOLDS, and the reserve it was ASKED to hold, in the same unit.
     // Two numbers because they answer different questions and routinely disagree by years:
     // `yearsOfCover` is what a bad decade can actually be paid out of, and
@@ -488,7 +552,10 @@ export function poolMetrics(state, pool, ctx) {
 export function allPoolMetrics(state, graph, ctx) {
   const out = {};
   const pools = graph?.pools ?? [];
-  for (const pool of pools) out[pool.id] = poolMetrics(state, pool, ctx);
+  // The book an empty pool falls back to (design 124). The flow reducer passes the graph it is
+  // running; a panel that builds its own context gets the same set from the graph here.
+  const c = ctx?.bookKeys ? ctx : { ...ctx, bookKeys: graphAccountKeys(graph) };
+  for (const pool of pools) out[pool.id] = poolMetrics(state, pool, c);
   // §12.2b — remainder targets read the pass above, so they resolve after all of it.
   resolveRemainderTargets(out, pools, ctx);
   return out;

@@ -3,7 +3,7 @@ id: pools
 kind: panel
 title: Liquidity Pools
 panels: [pools]
-design: [97-liquidity-pools-and-drawdown-sequence.md]
+design: [97-liquidity-pools-and-drawdown-sequence.md, 124-gates-on-an-empty-pool.md]
 stamps:
   panel:pools: 78458e
 ---
@@ -23,7 +23,8 @@ or capped. A refill that was blocked looks exactly like a refill that was never
 configured, unless something says so.
 
 Policy changes are marked too — dashed where the structure switched, dotted where a pool
-was resized ("cash ×1→1.5") — so a jumping target line has its cause beside it.
+was resized ("cash ×1→1.5") — so a jumping target line has its cause beside it. An
+emptied pool's chip says when its gates began watching household holdings.
 
 Open it whenever a drawdown came from somewhere you did not expect, or when a pool
 you configured appears to be doing nothing.

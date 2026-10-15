@@ -1,8 +1,11 @@
 # 124 — What a pool gate measures, and protects, once its pool is empty
 
-**Status:** PROPOSED (15 Oct 2026). Raised by a study flag: "the gate veto does not cover equity
-outside the gated pool". The trace in §2 shows the flag's premise is not what happened, and
-finds a different defect underneath it. The options in §4 are open; §5 is the proposal's.
+**Status:** BUILT (15 Oct 2026), rev 2. Raised by a study flag: "the gate veto does not cover
+equity outside the gated pool". The trace in §2 shows the flag's premise is not what happened,
+and finds a different defect underneath it. Rev 2 (§8) checks the proposal against the code and
+records the author's choices: option A for **every** empty sleeve pool, household
+value-weighted in the base currency (§6 Q1), and an empty pool's BALANCE drawdown read as no
+signal (§6 Q3).
 
 **Related:** design 97 (liquidity pools: §12.4 the gate as a veto, §12.4c SOURCE/EDGE scope,
 §20 the return index, §20.14 `drawdownBasis: INDEX`, POOL-12b the "no signal" rule), the pool
@@ -28,6 +31,10 @@ household's whole equity weight, not just the taxable sleeve. The trace shows it
 gate shut once, after a down year, and the next year's rebalance sold roughly a tenth of the
 equity of the years either side.
 
+The veto is recorded whenever the destination still wants a refill (`want > 0`), whatever the
+source holds, so an EMPTY source with a shut gate still floors its class household-wide — the
+fact §2.3 turns on.
+
 So the flag's premise is wrong. The selling did not get past a shut gate. The gate was
 **open**, and the rebalancer was doing what it is meant to do with an open gate: moving the mix
 to target. The target was the problem: a years-of-spend buffer that outgrew a shrinking book
@@ -51,8 +58,11 @@ the pool emptied at its high. In general the drawdown is frozen at its last valu
 pool's gate is stuck **open or shut** for the rest of the run, depending on the year it emptied.
 A pool that empties during a crash keeps its SOURCE veto, and with it the household floor on
 its class, for good.
-The one exception is a gate with `highHalfLifeYears`: its high decays toward the frozen index,
-so the drawdown drifts to 0 and the gate eventually opens, and stays open.
+
+~~The one exception is a gate with `highHalfLifeYears`: its high decays toward the frozen index.~~
+Rev 2: there is no exception. The decaying high decays on the same "completed year with a
+return" test as the index (`done` requires `marketReturn != null`), so it freezes too. Every
+INDEX gate on an empty pool was stuck.
 
 ### 2.3 Why it matters even though an empty pool cannot be sold
 
@@ -97,7 +107,7 @@ household's other equity is then unguarded after the pool empties, but visibly s
 "liquidity buckets" from "do not sell after a crash", but it is a second mechanism doing the
 gate's job, which design 97 §12.4 deliberately avoided.
 
-## 5. Proposal
+## 5. Proposal — BUILT
 
 **A, plus C's reporting.** An empty pool's gate measures the household holdings of its sleeves,
 so it never freezes, and the pool panel says when a gate is measuring household-wide because its
@@ -113,20 +123,44 @@ own pool is empty. Reasons:
 Also: correct the POOL-12b docstring in `_returnIndices` (the drawdown is frozen at its last
 value, not 0) whichever option is chosen.
 
+### 5.1 As built
+
+- **Measurement** (`pool-metrics.js`): `poolMetrics` reads `poolMarketReturn` as before; when it
+  is null and the pool's claims narrow to sleeves, it falls back to `householdSleeveReturn` —
+  Σ(mv × rate) / Σ mv over every lot in those sleeves across the **book** (every account the
+  graph claims, the set `PoolFlowReducer._bookBase` sums), converted to the base currency — and
+  marks the metrics `marketBasis: 'HOUSEHOLD'`. "Household" is the book rather than the
+  rebalancer's managed accounts because the pool reducer cannot see the latter; in a pooled
+  plan the two are the same accounts.
+- **Every empty sleeve pool**, gated or not (author's choice): the stamped `marketReturn` and
+  index always mean "this pool's market", whoever reads them.
+- **Return gates follow too.** `sourceReturnOver` / `targetReturnUnder` read the same
+  `marketReturn`, so an empty pool's return gates now watch the household's holdings of its
+  sleeves as well. The draft did not say so; it is the same argument.
+- **Stamp** (`pool-flow-reducer.js`): the cube entry carries `marketBasis` and
+  `marketBasisSince` (the year it began) only while the fallback is in force; absent otherwise,
+  so a pool that never empties stamps exactly what it did.
+- **BALANCE basis** (§6 Q3, author's choice): an empty pool (balance ≤ half a cent) reads a 0
+  drawdown — no signal, gate open — instead of 100%.
+- **Panel**: the pool chip shows "household market since <year>" with a tooltip.
+- **Goldens**: none moved — no golden fixture has a sleeve pool that empties or an empty
+  BALANCE-gated pool. Every pool study run before this whose growth pool emptied is affected.
+
 ## 6. Open questions
 
-1. **The fallback's weights.** Household value-weighted over the pool's sleeves (proposed), or
-   the pool's last known rate-key composition carried forward? The second needs new state on
-   every pool entry, which moves goldens.
-2. **Whole-account claims.** A pool whose claims have no sleeves (an offset, a savings account)
-   has no class to fall back to. Proposed: unchanged (no signal).
-3. **BALANCE-basis gates.** An empty pool reads a 100% balance drawdown, so a BALANCE gate shuts
-   for good. Same defect, opposite direction; should the fallback cover it too?
+1. ~~**The fallback's weights.**~~ Household value-weighted over the pool's sleeves, in the base
+   currency. Built.
+2. ~~**Whole-account claims.**~~ Unchanged (no signal). Built; a pool mixing whole-account and
+   sleeve claims falls back on its sleeve claims' classes.
+3. ~~**BALANCE-basis gates.**~~ An empty pool's BALANCE drawdown is no signal (0, open). Built.
 4. **Does the veto belong class-wide at all?** §12.4 made it class-wide to stop the drift band
    laundering the same trade. If B or A is rejected, should the veto narrow to the pool's own
    accounts instead?
 
-## 7. Test plan (to be written with the code)
+## 7. Tests
+
+Built as `tests/unit/pool-empty-gate.test.mjs` (EPG-1…6; EPG-1, 4, 5 and 6 fail on the
+pre-124 code) and a panel case in `tests/viz/liquidity-pools-plugin.test.mjs`. The plan:
 
 - A gated growth pool that empties: the index keeps compounding at the household equity return;
   a later crash shuts the gate and the source veto floors household equity.
@@ -135,3 +169,17 @@ value, not 0) whichever option is chosen.
   (today it stays shut).
 - Whole-account empty pool: null market return, as today.
 - Panel: the "measuring household-wide" note appears only for an empty gated pool.
+
+## 8. Rev 2 — review against the code (15 Oct 2026)
+
+| § | Draft | Code / rev 2 |
+|---|---|---|
+| 2.2 | `highHalfLifeYears` decays toward the frozen index and eventually opens | no: the decaying high freezes with the index; there was no exception |
+| 4 A | "only alters runs in which a gated pool empties" | behaviour yes; the stamped `marketReturn`/index change for any sleeve pool that empties |
+| 4 A | fallback for the INDEX gate | it is `marketReturn`, so the RETURN gates follow it too |
+| 4 A | "every account" | the graph's book: the pool reducer cannot see the rebalancer's account list |
+| 4 A | value-weighted | must be in the BASE currency; `poolMarketReturn` itself weights native amounts across currencies (flagged, unchanged) |
+
+Flag, not fixed here: `poolMarketReturn` weights a pool's lots by NATIVE market value, so a pool
+claiming both a USD and an AUD account over-weights the AUD lots by the exchange rate. The
+household fallback converts; the pool's own reading is unchanged to keep every golden still.

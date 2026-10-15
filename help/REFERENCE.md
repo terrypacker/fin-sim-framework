@@ -2289,7 +2289,7 @@ what the in-app panel keys on.
 | [Performance](panels/perf.md) | panel | 201 | 1 panel · design 78 |
 | [Person](nodes/person.md) | node | 204 | 3 panels · design 116, 34, 95, 83 |
 | [Pool Shapes Over Time](concepts/pool-shapes-over-time.md) | concept | 395 | 3 params · design 109, 114, 112, 97 |
-| [Liquidity Pools](panels/pools.md) | panel | 236 | 1 panel · design 97 |
+| [Liquidity Pools](panels/pools.md) | panel | 248 | 1 panel · design 97, 124 |
 | [Randomness and Seeds](concepts/randomness-and-seeds.md) | concept | 251 | 2 panels · 2 params · design 74 |
 | [Real Property](nodes/real-property.md) | node | 221 | 2 panels · design 75, 83, 86, 48, 113 |
 | [Real vs Nominal Dollars](concepts/real-vs-nominal.md) | concept | 398 | 12 panels · design 79, 89 |
