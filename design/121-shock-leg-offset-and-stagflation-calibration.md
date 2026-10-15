@@ -194,6 +194,7 @@ The stress and equity legs are unchanged (equity is already calibrated: MEASUREM
 |---|---|--:|--:|
 | `inflation` | 0–120 mo, L | +5.0 (8% vs 9.3% measured) | **+8.6** (11.6%) — was +4 |
 | `inflationAuTail` | `startMonths` 120, L/120 | — | **+5.1** (8.1%, 1981–90) |
+| `inflationUsTail` (added 15 Oct 2026) | `startMonths` 120, L/120 | **+1.5** (4.5%, 1981–90) | — |
 
 The FX adjustment stays on `inflation`, unchanged.
 
@@ -203,6 +204,7 @@ The FX adjustment stays on `inflation`, unchanged.
 |---|---|--:|--:|--:|--:|
 | `rates` | 0–120 mo, L | +3.0 | +2.7 | +5.6 | +5.65 |
 | `realRatesUs` | `startMonths` 120, U/120 | +6.2 | +4.9 | — | — |
+| `ratesUsTail` (added 15 Oct 2026) | `startMonths` 120, L/120 | +1.5 | +1.5 | — | — |
 | `realRatesAu` | `startMonths` 120, L/120 | — | — | +9.6 | +10.35 |
 | `realRatesAu2` | `startMonths` 240, U/216 | — | — | +5.0 | +3.05 |
 
@@ -211,9 +213,15 @@ Where those land:
 | Window | US FI / policy (inflation) | US real | AU FI / policy (inflation) | AU real |
 |---|---|--:|---|--:|
 | 0–120 mo | 7.0 / 7.2 (8.0) | −1.0 / −0.8 | 9.6 / 10.0 (11.6) | −2.0 / −1.6 |
-| 120–240 mo | 10.2 / 9.4 (3.0), then fading | +7.2 / +6.4 | 13.6 / 14.7 (8.1) | +5.5 / +6.6 |
+| 120–240 mo | 11.7 / 10.9 (4.5), then fading | +7.2 / +6.4 | 13.6 / 14.7 (8.1) | +5.5 / +6.6 |
 | from 240 mo | base | — | 9.0 / 7.4 (3.0) | +6.0 / +4.4 |
 
+- **US tail (added 15 Oct 2026).** The first build ended US inflation at month 120, but US CPI
+  ran 4.5%/yr over 1981–90 (Dec 1980 → Dec 1990 ×1.557), not the 3% base. That overstated the
+  AU/US price gap (×2.25 in-model against ×1.67 measured), which design 122's PPP anchor turns
+  into an exchange-rate error. `inflationUsTail` adds +1.5 (and gold +1.5, one-for-one as on
+  `inflation`); `ratesUsTail` adds the same +1.5 to US rates, so every real rate above is
+  unchanged and only the nominal levels move.
 - **US phase 2** is flat 5 years, then fades over 5. The fade's average is about half, close to
   the 1986–90 step.
 - **AU phase 3** (1991–99) is flat 9 years, then fades over 9. The fade's average lands near
