@@ -378,6 +378,18 @@ describe('TaxGainHarvestHandler', () => {
     assert.strictEqual(a.substituteHoldingId, 'h1', 'same holding for gain harvest');
   });
 
+  test('TGH-4: no harvest while anyone in the household is not US-resident (no 0% band abroad)', () => {
+    const h1 = holding({ id: 'h1', mv: 2000, basis: 1000 });
+    const handler = new TaxGainHarvestHandler({ taxableStateKeys: ['usStockAccount'], taxGainHarvestBracketCeiling: 98900 });
+    const state = (people) => ({ usStockAccount: account({ holdings: [h1] }),
+      usOrdinaryIncomeYTD: 0, usCapitalGainsYTD: 0, people });
+    assert.strictEqual(handler.call({ state: state({ primary: { residency: 'AU' } }) }).length, 0, 'AU resident');
+    assert.strictEqual(handler.call({ state: state({ primary: { residency: 'US' }, spouse: { residency: 'AU' } }) }).length, 0,
+      'a split household');
+    assert.ok(handler.call({ state: state({ primary: { residency: 'US' }, spouse: { residency: 'US' } }) }).length > 0,
+      'both US-resident');
+  });
+
   test('TGH-2: no-op when ceiling = 0', () => {
     const h1 = holding({ id: 'h1', mv: 2000, basis: 1000 });
     const state = {
