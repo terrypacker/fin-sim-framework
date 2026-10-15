@@ -2243,7 +2243,7 @@ what the in-app panel keys on.
 | [Drawdown Order](concepts/drawdown-order.md) | concept | 316 | 2 panels · 22 params · design 44, 65, 97 |
 | [Early Withdrawal](concepts/early-withdrawal.md) | concept | 228 | 1 panel · 8 params |
 | [Economic Shocks](concepts/economic-shocks.md) | concept | 367 | 2 panels · 3 params |
-| [Editing Liquidity Pools](workflows/editing-liquidity-pools.md) | workflow | 528 | 1 panel · 3 params · design 114, 110, 109 |
+| [Editing Liquidity Pools](workflows/editing-liquidity-pools.md) | workflow | 537 | 1 panel · 3 params · design 114, 110, 109 |
 | [Event](nodes/event.md) | node | 220 | 2 panels · design 2 |
 | [Event Sourcing](concepts/event-sourcing.md) | concept | 381 | 3 panels · design 2, 16, 91 |
 | [Node History](panels/exec-history.md) | panel | 191 | 1 panel |
@@ -2258,7 +2258,7 @@ what the in-app panel keys on.
 | [Job](nodes/job.md) | node | 230 | 2 panels · design 116, 50, 73, 119 |
 | [Journal Report](panels/journal-report.md) | panel | 193 | 1 panel · design 16 |
 | [Lineage](panels/lineage.md) | panel | 196 | 1 panel · design 30 |
-| [Liquidity Pools](concepts/liquidity-pools.md) | concept | 294 | 1 panel · 6 params · design 97 |
+| [Liquidity Pools](concepts/liquidity-pools.md) | concept | 385 | 1 panel · 6 params · design 97 |
 | [Monte Carlo](panels/mc-config.md) | panel | 239 | 1 panel · design 100 |
 | [MC Results](panels/mc-results.md) | panel | 202 | 1 panel · design 100, 89 |
 | [MC Runs](panels/mc-runs.md) | panel | 196 | 1 panel · design 100 |

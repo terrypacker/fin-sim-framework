@@ -665,6 +665,19 @@ test('LiquidityGraph: a residency-conditional target and a PAYCHECK edge round-t
     ['mode', 'value', 'whenResident']);
 });
 
+test('LiquidityGraph: a target maxFraction is drawn, round-trips once, and badges', () => {
+  withCoreColumns();
+  const graph = { pools: [
+    { id: 'buffer', spendOrder: 20, target: { mode: 'YEARS_OF_SPEND', value: 9, maxFraction: 0.3 },
+      claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }] },
+  ] };
+  const param = { name: 'liquidityGraph', value: JSON.parse(JSON.stringify(graph)) };
+  const host  = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  assert.deepStrictEqual(param.value, graph);
+  assert.deepStrictEqual(Object.keys(param.value.pools[0].target).sort(), ['maxFraction', 'mode', 'value']);
+  assert.strictEqual(cell(host, 'badge-targetMaxFraction').textContent, '≤ 30% of book');
+});
+
 test('LiquidityGraph: a multi-account pool is just two claim rows', () => {
   const param = { name: 'liquidityGraph', value: {
     pools: [{ id: 'cash', spendOrder: 10, claims: [{ key: 'usSavingsAccount' }] }],

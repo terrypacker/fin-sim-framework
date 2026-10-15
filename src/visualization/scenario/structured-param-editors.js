@@ -2079,6 +2079,10 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
     // failed to fill. Like `targetAfter`, being drawn means it must also come OUT of
     // `targetExtra` below or the sync writes it twice.
     targetWhenResident: p?.target?.whenResident ?? '',
+    // "N years, at most X of the book" — drawn so a reserve that can outgrow the portfolio
+    // shows its ceiling beside its size; out of `targetExtra` below for the same reason.
+    targetMaxFraction: Number.isFinite(Number(p?.target?.maxFraction)) && p?.target?.maxFraction != null
+      ? Number(p.target.maxFraction) : null,
     // §24.5. Absent is PENALTY_FREE — the default, and what every graph authored before it
     // means — so the cell always shows the policy in force rather than an empty box.
     access:      p?.access?.mode ?? 'PENALTY_FREE',
@@ -2089,7 +2093,7 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
     capacityValue: Number.isFinite(Number(p?.capacity?.value)) ? Number(p.capacity.value) : null,
     // Carried, not drawn — see `extraKeys`.
     floor:         p?.floor ?? null,
-    targetExtra:   extraKeys(p?.target,   ['mode', 'value', 'after', 'whenResident']),
+    targetExtra:   extraKeys(p?.target,   ['mode', 'value', 'after', 'whenResident', 'maxFraction']),
     capacityExtra: extraKeys(p?.capacity, ['mode', 'value']),
     // Round-tripped untouched: `ui` is opaque to the engine and belongs to the editor that
     // effort 2 will build (design 97 §14). Dropping it here would silently discard a layout.
@@ -2204,6 +2208,8 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
                                 id => id !== p.id && liveIds.has(id)) }
                           : {}),
                         ...(p.targetWhenResident ? { whenResident: p.targetWhenResident } : {}),
+                        ...(p.targetMaxFraction != null && p.targetMode !== 'PERCENT'
+                          ? { maxFraction: p.targetMaxFraction } : {}),
                         ...(p.targetExtra ?? {}) } }
           : {}),
         ...(p.capacity && p.capacity !== 'BALANCE'
@@ -2469,6 +2475,13 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
       { field: 'targetWhenResident', label: 'While in', type: 'select', width: '0.9fr',
         options: [['', 'anywhere'], ['US', 'US'], ['AU', 'AU']],
         optional: true, badge: (row) => (row.targetWhenResident ? `${row.targetWhenResident} only` : null) },
+      // A ceiling on the target as a FRACTION of the book (0.5 is 50 %). Blank = uncapped, which
+      // every graph authored before it means. Ignored on PERCENT, which already is one.
+      { field: 'targetMaxFraction', label: 'Max of book', type: 'number', width: '0.7fr',
+        min: '0', max: '1', step: '0.05', placeholder: 'none',
+        title: 'Cap the target at this FRACTION of the book — 0.5 is 50%. Blank = no cap.',
+        optional: true, badge: (row) => (row.targetMaxFraction != null && row.targetMode !== 'PERCENT'
+          ? `≤ ${Math.round(row.targetMaxFraction * 100)}% of book` : null) },
       // §12.2b. Blank for every other target mode — `buildCheckSet` renders `emptyText` when a
       // row has no options, which is what a non-remainder row wants anyway.
       // S2 — one line until opened: the pools a remainder sits behind, as a sentence.
@@ -2513,6 +2526,7 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
     newRow:    () => ({ id: null, label: null, spendOrder: null, access: 'PENALTY_FREE',
                         targetMode: '', targetValue: null, targetAfter: [], capacity: 'BALANCE',
                         capacityValue: null, floor: null, targetExtra: null, targetWhenResident: '',
+                        targetMaxFraction: null,
                         capacityExtra: null, ui: null }),
     addLabel:  '+ Add Pool',
     showOptional,

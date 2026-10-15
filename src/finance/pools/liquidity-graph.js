@@ -256,7 +256,7 @@ function num(v, what, { min = -Infinity, max = Infinity } = {}) {
  * Normalize a `{ mode, value }` size spec (target / floor / capacity).
  * A bare number is sugar for the caller's default mode.
  */
-function sizeSpec(raw, what, allowed, defaultMode) {
+function sizeSpec(raw, what, allowed, defaultMode, { allowMaxFraction = false } = {}) {
   if (raw == null) return null;
   const spec = (typeof raw === 'number') ? { mode: defaultMode, value: raw } : raw;
   if (typeof spec !== 'object') err(`${what} must be a number or { mode, value }`);
@@ -290,6 +290,22 @@ function sizeSpec(raw, what, allowed, defaultMode) {
   }
   if (mode === POOL_TARGET_MODE.PERCENT && out.value > 1) {
     err(`${what}.value is a FRACTION of the book, not a percentage — got ${out.value}`);
+  }
+  // ── flag: a years target that outgrows the book ──────────────────────────────────────
+  //
+  // `maxFraction` caps a TARGET at a fraction of the same book a PERCENT target reads:
+  // "N years of spending, but never more than X of the book". A YEARS_OF_SPEND reserve grows
+  // with the spend line while the book it is a share of is drawn down, so without a cap the
+  // target quietly comes to exceed the whole portfolio and its class saturates the mix (the
+  // 90 % bond book `RebalanceToTargetReducer._resolvePoolTarget` warns of). A target only:
+  // a floor or a capacity is not what the rebalancer sizes the mix from. Not on PERCENT,
+  // which is already a fraction of that book and would just take the smaller of two.
+  if (spec.maxFraction != null) {
+    if (!allowMaxFraction) err(`${what}.maxFraction applies only to a pool target`);
+    if (mode === POOL_TARGET_MODE.PERCENT) {
+      err(`${what}.maxFraction has no meaning on a PERCENT target — lower its value instead`);
+    }
+    out.maxFraction = num(spec.maxFraction, `${what}.maxFraction`, { min: 0, max: 1 });
   }
   // ── design 107 §15.3 — a size that applies only while resident somewhere ─────────────
   //
@@ -828,7 +844,8 @@ export function normalizeLiquidityGraph(graph, accounts = [], opts = {}) {
       err(`pool '${id}' access '${accessMode}' is not one of ${ACCESS_MODES.join(', ')}`);
     }
 
-    const target   = sizeSpec(raw.target,   `pool '${id}' target`,   TARGET_MODES,   POOL_TARGET_MODE.YEARS_OF_SPEND);
+    const target   = sizeSpec(raw.target,   `pool '${id}' target`,   TARGET_MODES,   POOL_TARGET_MODE.YEARS_OF_SPEND,
+                               { allowMaxFraction: true });
     const floor    = sizeSpec(raw.floor,    `pool '${id}' floor`,    TARGET_MODES,   POOL_TARGET_MODE.AMOUNT);
     const capacity = sizeSpec(raw.capacity, `pool '${id}' capacity`, CAPACITY_MODES, POOL_CAPACITY_MODE.BALANCE)
                   ?? { mode: POOL_CAPACITY_MODE.BALANCE };
@@ -1508,7 +1525,7 @@ export function collectAuthoredGraphProblems(params, accounts = []) {
  */
 function _sizeSpecProblems(rawPools, param, shape) {
   const specs = [
-    ['target',   TARGET_MODES,   POOL_TARGET_MODE.YEARS_OF_SPEND],
+    ['target',   TARGET_MODES,   POOL_TARGET_MODE.YEARS_OF_SPEND, { allowMaxFraction: true }],
     ['floor',    TARGET_MODES,   POOL_TARGET_MODE.AMOUNT],
     ['capacity', CAPACITY_MODES, POOL_CAPACITY_MODE.BALANCE],
   ];
@@ -1516,9 +1533,9 @@ function _sizeSpecProblems(rawPools, param, shape) {
   (Array.isArray(rawPools) ? rawPools : []).forEach((raw, index) => {
     if (!raw || typeof raw !== 'object') return;
     const id = typeof raw.id === 'string' && raw.id ? raw.id : `#${index}`;
-    for (const [field, allowed, defaultMode] of specs) {
+    for (const [field, allowed, defaultMode, opts] of specs) {
       try {
-        sizeSpec(raw[field], `pool '${id}' ${field}`, allowed, defaultMode);
+        sizeSpec(raw[field], `pool '${id}' ${field}`, allowed, defaultMode, opts);
       } catch (e) {
         out.push({ param, index, field, pool: raw.id ?? null,
                    ...(shape != null ? { shape } : {}),

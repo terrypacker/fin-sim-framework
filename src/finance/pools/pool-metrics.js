@@ -263,8 +263,22 @@ function spendForSpec(spec, ctx, poolState) {
   return window.reduce((s, v) => s + v, 0) / window.length;
 }
 
+/**
+ * A target's `maxFraction` cap: at most that share of the book PERCENT reads (`ctx.bookBase`,
+ * the pools' own book). Applied to the RESOLVED figure, so a years target, an amount and a
+ * remainder are capped the same way, and a `POOL_TARGET` factor scales the ask, not the cap.
+ */
+function capToBook(v, spec, ctx) {
+  if (spec?.maxFraction == null || !Number.isFinite(v)) return v;
+  return Math.min(v, spec.maxFraction * (ctx.bookBase ?? 0));
+}
+
 /** Resolve a `{ mode, value }` size spec to a base-currency figure. */
 function resolveSize(spec, ctx, poolState) {
+  return capToBook(resolveSizeUncapped(spec, ctx, poolState), spec, ctx);
+}
+
+function resolveSizeUncapped(spec, ctx, poolState) {
   if (!spec) return null;
   // Design 107 §15.3 — a size that applies only while resident in one country resolves to
   // ZERO elsewhere, not to null. The distinction is load-bearing: null means "this pool sizes
@@ -337,7 +351,7 @@ function resolveRemainderTargets(out, pools, ctx) {
         ? (r.utilised ?? 0)
         : (Number.isFinite(r.target) ? r.target : (r.balance ?? 0));
     }
-    m.target    = Math.max(0, aggregate - covered);
+    m.target    = capToBook(Math.max(0, aggregate - covered), spec, ctx);
     // Everything downstream of `target` on this record was computed with it null, so the two
     // would disagree — and `shortfall` is what a `toTarget` refill moves. Recomputed, not
     // patched, so there is one expression of each.
