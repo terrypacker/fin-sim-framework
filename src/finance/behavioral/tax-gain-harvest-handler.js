@@ -24,6 +24,15 @@ import { HandlerEntry } from '../../simulation-framework/handlers.js';
  *
  * Gating: the handler reads projectedTaxableIncome from state (written by the
  * tax module's period-advance step). If not present, the handler is a no-op.
+ *
+ * **US-resident years only.** The 0% band is a US rate, and a gain realised while anyone in
+ * the household lives somewhere else is taxed there too: an Australian resident pays AU CGT on
+ * it at marginal rates (with the 12-month discount at best), and Australia has no 0% band. In
+ * those years US ordinary income is near zero, so the US-only test above saw the whole ceiling
+ * as "room" and the handler sold and rebought every year — on one studied plan, every
+ * AU-resident year from the move onward, raising lifetime tax by more than half again and
+ * turning a surviving stagflation path into a failure. The check is at the event (31 Dec), so
+ * the year of a move to AU, when the household is AU-resident at year end, is skipped too.
  */
 export class TaxGainHarvestHandler extends HandlerEntry {
   static type        = 'TaxGainHarvestHandler';
@@ -45,6 +54,7 @@ export class TaxGainHarvestHandler extends HandlerEntry {
   call({ state }) {
     const ceiling   = this.taxGainHarvestBracketCeiling;
     if (ceiling <= 0) return [];
+    if (!_householdUsResident(state)) return [];
 
     // Gate: projected taxable income must be below the ceiling
     const projectedIncome = state.usOrdinaryIncomeYTD ?? 0;
@@ -106,6 +116,12 @@ export class TaxGainHarvestHandler extends HandlerEntry {
 
     return actions;
   }
+}
+
+/** True when every person in the household is US-resident (absent residency reads as US). */
+function _householdUsResident(state) {
+  const people = Object.values(state.people ?? {}).filter(Boolean);
+  return people.every(p => (p.residency ?? 'US') === 'US');
 }
 
 function _primaryResidency(state) {
