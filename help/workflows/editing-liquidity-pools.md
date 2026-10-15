@@ -40,10 +40,11 @@ read its difference line, and choose the parent it says it matches.
 
 **The tables show their essential columns.** Id, spend order, target, size and what a
 remainder sits behind for buckets; the route, trigger and amount for flows. **More
-columns** shows the rest — label, residency, early access, capacity, flow priority and
+columns** shows the rest — label, residency, a target's ceiling (Max of book), early access,
+capacity, flow priority and
 cadence, a drawdown clause's high half-life, and the Search id a clause needs before it can be
 searched. A hidden setting that
-is not at its default still appears as a badge on its row (*US only*, *cap: offset*,
+is not at its default still appears as a badge on its row (*US only*, *≤ 30% of book*, *cap: offset*,
 *once a year*), so hiding a column never hides a decision. The choice is remembered on this
 device.
 

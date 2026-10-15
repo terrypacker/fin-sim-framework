@@ -28,6 +28,13 @@ resolve against the live, inflated spend line every period, so the buffer keeps 
 meaning as the plan ages; a percentage of a portfolio that has halved buys half as
 much time exactly when time matters most.
 
+The same property cuts the other way late in a plan. The spend line keeps rising while the
+portfolio is drawn down, so a reserve of many years can come to ask for more than the whole
+portfolio holds; its class then crowds every other one out of the mix, and the plan ends up
+almost all bonds without anyone choosing that. A target can carry a ceiling for this — "this
+many years, but never more than this share of the portfolio" — set as **Max of book** in the
+bucket table.
+
 Three switches, which are not the same switch:
 
 - The graph's own off switch, which stops everything.

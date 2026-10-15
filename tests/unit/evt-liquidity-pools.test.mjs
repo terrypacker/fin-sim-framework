@@ -2416,3 +2416,66 @@ test('CTRL-4b: the reporting pass does not print the advisories four times', () 
   }, PLACEMENT_ACCOUNTS));
   assert.deepEqual(lines, [], `the reporting path must be silent, got:\n${lines.join('\n')}`);
 });
+
+// ─── target maxFraction: "N years, at most X of the book" ──────────────────────────
+
+/** A cash + growth plan whose cash target is `target`; book = 50k cash + 1m equity. */
+function cappedFixture(target, { extra = [] } = {}) {
+  const graph = normalizeLiquidityGraph({
+    pools: [
+      { id: 'cash',   spendOrder: 10, claims: [{ key: 'usSavingsAccount' }], target },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+      ...extra,
+    ],
+  }, ACCOUNTS);
+  const broker = new BrokerageAccount(1_000_000, { country: 'US', currency: USD, drawdownPriority: 4 });
+  broker.holdings = [new Holding({ id: 'eq', allocation: ALLOCATION.EQUITY, marketValue: 1_000_000,
+    costBasis: 500_000, purchaseDate: D(2010), rateKey: 'EQUITY_US' })];
+  const state = {
+    usSavingsAccount: new CheckingAccount(50_000, { country: 'US', currency: USD }),
+    usStockAccount: broker,
+    monthlyExpenses: 10_000,                 // 120k/yr
+    effectiveExchangeRates: { USD_AUD: 1 },
+    people: { p1: { birthDate: new Date(Date.UTC(1975, 0, 1)) } },
+  };
+  return { graph, state };
+}
+
+test('POOL-CAP-1: maxFraction caps a years target at a share of the book PERCENT reads', () => {
+  // 10 years × 120k = 1.2m asked of a 1.05m book: uncapped it is MORE than the portfolio,
+  // which is the ratchet that saturates the mix. Capped at 0.25 it is 262.5k.
+  const { graph, state } = cappedFixture({ mode: 'YEARS_OF_SPEND', value: 10, maxFraction: 0.25 });
+  const out = fire(new PoolFlowReducer({ graph }), state);
+  assert.equal(out.state.liquidityPools.cash.target, 262_500);
+  assert.equal(out.state.liquidityPools.cash.yearsOfCoverTarget, 2.188);   // stamped to 3 dp
+
+  // A cap that does not bind changes nothing: 2 years = 240k < 262.5k.
+  const loose = cappedFixture({ mode: 'YEARS_OF_SPEND', value: 2, maxFraction: 0.25 });
+  assert.equal(fire(new PoolFlowReducer({ graph: loose.graph }), loose.state)
+    .state.liquidityPools.cash.target, 240_000);
+});
+
+test('POOL-CAP-2: a remainder target is capped after the remainder is taken', () => {
+  // 10 years aggregate (1.2m) less the cash pool's 240k = 960k, capped at 0.5 × 1.05m.
+  const { graph, state } = cappedFixture({ mode: 'YEARS_OF_SPEND', value: 2 }, { extra: [
+    { id: 'reserve', spendOrder: 15, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }],
+      target: { mode: 'YEARS_OF_SPEND_REMAINDER', value: 10, after: ['cash'], maxFraction: 0.5 } },
+  ] });
+  const out = fire(new PoolFlowReducer({ graph }), state);
+  assert.equal(out.state.liquidityPools.reserve.target, 525_000);
+});
+
+test('POOL-CAP-3: maxFraction is a TARGET field, a fraction, and not on PERCENT', () => {
+  const one = (pool) => () => normalizeLiquidityGraph({ pools: [
+    { id: 'cash', spendOrder: 10, claims: [{ key: 'usSavingsAccount' }], ...pool }] }, ACCOUNTS);
+  assert.throws(one({ floor: { mode: 'AMOUNT', value: 1, maxFraction: 0.5 } }), /applies only to a pool target/);
+  assert.throws(one({ target: { mode: 'PERCENT', value: 0.2, maxFraction: 0.5 } }), /no meaning on a PERCENT/);
+  assert.throws(one({ target: { mode: 'YEARS_OF_SPEND', value: 4, maxFraction: 50 } }), /maxFraction/);
+  const g = one({ target: { mode: 'YEARS_OF_SPEND', value: 4, maxFraction: 0.5 } })();
+  assert.equal(g.pools[0].target.maxFraction, 0.5);
+  // The editor's problem list says the same sentence the compiler throws.
+  const problems = collectAuthoredGraphProblems({ liquidityGraph: { pools: [
+    { id: 'cash', spendOrder: 10, claims: [{ key: 'usSavingsAccount' }],
+      target: { mode: 'PERCENT', value: 0.2, maxFraction: 0.5 } }] } }, ACCOUNTS);
+  assert.deepEqual(problems.map(p => p.field), ['target']);
+});
