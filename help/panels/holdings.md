@@ -28,5 +28,9 @@ use [Securities](securities.md).
 
 Needs a scenario built and stepped, with the journal recorded for the Activity view.
 
+Units are the broker's share count only where the lot was given one, by an import or
+the account editor's Shares field. Any other equity lot counts synthetic units that start
+at \$100 each. Those keep the dollars right, but they are not shares.
+
 It will not total the Units column, and that is deliberate: adding up counts of
 different instruments produces a number that looks like a quantity and is not one.

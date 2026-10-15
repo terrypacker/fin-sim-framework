@@ -180,7 +180,7 @@ export class StockHarvestApplyReducer extends Reducer {
         purchaseDate:  date instanceof Date ? new Date(date) : new Date(toMs(date) ?? 0),
         acquisitionPriceLevel:    source.acquisitionPriceLevel ?? null,
         acquisitionDateByCountry: null,
-      }, { price: prevailingPrice(siblings) });
+      }, { price: prevailingPrice(siblings, substituteSecurityId) });
       afterRebuy       = [...afterSell, fresh];
       substituteFound  = true;
       replacementId    = fresh.id;

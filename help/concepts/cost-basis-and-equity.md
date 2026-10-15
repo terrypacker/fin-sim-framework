@@ -39,3 +39,11 @@ does nothing at all until its sale date arrives and then converts to cash in one
 event. That lumpiness is the interesting part — one year's tax bill, one year's
 reinvestment decision, and a large sensitivity to which date you assume. Leave the
 date unset for a stake that is never sold.
+
+## Shares on a lot
+
+An equity lot can carry its **Shares** and **Price / share**, as a Quicken import writes
+them from the broker. With both set, the lot's value is their product and is locked in the
+form. **Cost / share** is shown beside them, and it is the quickest check on an import: a
+lot that cost several times what the same fund's other lots paid near the same date has
+probably missed a split. Leave Shares blank and the lot is a plain dollar amount.

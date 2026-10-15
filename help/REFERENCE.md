@@ -1862,7 +1862,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `US_RENTAL_INCOME_APPLY` | netCash: currency(USD), taxableRental: number, monthlyDepreciation: number, stateKey: text, residency: text | US_REAL_PROPERTY |
 | `US_RENTAL_INCOME_TAX` | amount: number, residency: text, ownershipType: text, ownerId: text, owners: any | US_REAL_PROPERTY |
 | `US_SAVINGS_INTEREST_CREDIT` | amount: currency(USD), stateKey: text | US_BANKING |
-| `US_TAX_FILE_APPLY` | taxYear: number, delta: currency(USD), disallowed: currency(USD), ledger: any, remaining: any, capitalLoss: any, basisAdjustments: any | US_TAX |
+| `US_TAX_FILE_APPLY` | taxYear: number, delta: currency(USD), disallowed: currency(USD), ledger: any, remaining: any, capitalLoss: any, capitalLossAsFiled: any, basisAdjustments: any | US_TAX |
 | `US_TAX_INSTALMENT_DEBIT` | amount: currency(USD), quarter: number | US_TAX |
 | `US_TAX_PAYMENT_DEBIT` | amount: currency(USD), escalated: boolean, section988: any | US_TAX |
 | `US_TAX_REFUND_CREDIT` | amount: currency(USD) | US_TAX |
@@ -2231,7 +2231,7 @@ what the in-app panel keys on.
 | [Graph](panels/config-graph.md) | panel | 197 | 1 panel |
 | [Nodes](panels/config-list.md) | panel | 173 | 1 panel |
 | [Contributions and Payroll](concepts/contributions-and-payroll.md) | concept | 242 | 1 panel · 13 params · design 95 |
-| [Cost Basis and Company Equity](concepts/cost-basis-and-equity.md) | concept | 247 | 2 panels · 3 params · design 94, 72 |
+| [Cost Basis and Company Equity](concepts/cost-basis-and-equity.md) | concept | 333 | 2 panels · 3 params · design 94, 72 |
 | [Field × Action](panels/cross-action-query.md) | panel | 196 | 1 panel |
 | [Cross-Border Residency](concepts/cross-border-residency.md) | concept | 265 | 2 panels · 4 params · design 36, 52 |
 | [Currency Hedging](concepts/currency-hedging.md) | concept | 397 | 3 params · 1 action · design 120, 121 |
@@ -2249,7 +2249,7 @@ what the in-app panel keys on.
 | [FX](concepts/fx.md) | concept | 390 | 2 panels · 6 params · design 47, 87, 122 |
 | [Handler](nodes/handler.md) | node | 208 | 2 panels · design 2 |
 | [Help](panels/help.md) | panel | 223 | 1 panel · design 108 |
-| [Holdings](panels/holdings.md) | panel | 188 | 1 panel · design 82 |
+| [Holdings](panels/holdings.md) | panel | 232 | 1 panel · design 82 |
 | [Inflation](concepts/inflation.md) | concept | 261 | 2 panels · 18 params · design 103 |
 | [Edit](panels/inspector.md) | panel | 182 | 1 panel |
 | [Interest Rates and the Yield Curve](concepts/interest-rates.md) | concept | 350 | 2 panels · 23 params · design 56, 67 |

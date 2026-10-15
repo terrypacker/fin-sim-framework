@@ -122,6 +122,10 @@ export class UsTaxFileHandler extends HandlerEntry {
       // The corrected §1212(b) pools replace what the settle wrote. Safe because nothing
       // between 31 December and 15 April touches them: they move only at a US settle.
       capitalLoss: asAmended.capitalLoss ?? null,
+      // The pools as the return was filed, so the action records what the filing changed.
+      // §1091(a) bites in one of two forms, and only this pair shows the second: a year that
+      // still nets a loss past the allowance pays nothing more and carries forward less.
+      capitalLossAsFiled: asFiled.capitalLoss ?? null,
     }];
   }
 }

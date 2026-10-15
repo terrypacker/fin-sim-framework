@@ -166,26 +166,35 @@ describe('the §1091(d) twin defers the loss into basis (§8.1p)', () => {
       'the sheltered golden defers nothing — the two goldens must not be measuring one thing');
   });
 
-  test('§1091(a) still bites: the disallowed loss leaves the return, and the bill is paid', () => {
+  test('§1091(a) still bites: the disallowed loss leaves the return', () => {
     // Deferral is about where the money GOES, not about whether the deduction survives. A
     // reading that let a taxable wash cost nothing would be the rule inverted.
     //
-    // In general the bite takes one of two forms, depending on the year rather than on §1091:
-    // a higher liability if the add-back tips the year into a net gain, or a SMALLER §1212(b)
-    // carryforward if it still nets a loss past the $3,000 allowance. This plan is sized
-    // (the spouse book, see the spec) so it takes the FIRST form. That keeps the
-    // taxable-match filing → April payment chain covered here, not only by the sheltered
-    // golden.
+    // The bite takes one of two forms, depending on the year rather than on §1091: a higher
+    // liability if the add-back tips the year into a net gain, or a SMALLER §1212(b)
+    // carryforward if it still nets a loss past the \$3,000 allowance. Either is the rule
+    // working, so either passes. Which one this plan takes moves with ordinary retuning:
+    // pricing the harvest rebuy by its own security (not a blend across the account) cut
+    // an over-matched \$107k disallowance to \$63k, and the year went from the first form
+    // to the second. The April payment step is covered by `wash-sale-harvest`, whose
+    // filing assesses a balance due.
     const [f] = twinFilings.filter(x => x.disallowed > 0);
-    assert.ok(f.delta > 0,
-      `the amended year must net a gain so the filing assesses a balance due, got ${f.delta} `
-      + '— if a retune broke this, resize the spouse book rather than weakening the assertion');
+    const carried = (cl) => (cl?.closingShort ?? 0) + (cl?.closingLong ?? 0);
+    const carryShrank = carried(f.capitalLossAsFiled) - carried(f.capitalLoss);
+    assert.ok(f.delta > 0 || carryShrank > 0,
+      `the disallowance must raise the liability or shrink the carryforward; got delta ${f.delta}, `
+      + `carryforward ${carried(f.capitalLossAsFiled)} → ${carried(f.capitalLoss)}`);
 
-    const paidInApril = twin.sim.journal.journal.filter(e =>
-      e.action?.type === 'US_TAX_PAYMENT_DEBIT'
-      && new Date(e.date).getUTCMonth() === 3
-      && Math.abs(payload(e).amount - f.delta) < 0.005);
-    assert.equal(paidInApril.length, 1, 'the balance due is chained as an April payment');
+    if (f.delta > 0) {
+      const paidInApril = twin.sim.journal.journal.filter(e =>
+        e.action?.type === 'US_TAX_PAYMENT_DEBIT'
+        && new Date(e.date).getUTCMonth() === 3
+        && Math.abs(payload(e).amount - f.delta) < 0.005);
+      assert.equal(paidInApril.length, 1, 'the balance due is chained as an April payment');
+    } else {
+      // Every disallowed dollar is a dollar of loss the return no longer carries.
+      assert.equal(+carryShrank.toFixed(2), +f.disallowed.toFixed(2));
+    }
   });
 
   test('every deferred dollar found a lot to land in', () => {

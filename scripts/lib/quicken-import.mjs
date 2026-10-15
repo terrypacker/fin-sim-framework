@@ -58,20 +58,19 @@
  *
  * ─── what is deliberately NOT emitted ──────────────────────────────────────────────
  *
- * **`units` / `pricePerUnit` / `parPerUnit`.** Promotion is an act at the config→run
- * boundary, not a property of a saved file (design 93 §5b) — `projectHoldingsToState`
- * does it, and for a bond `unitiseBond` reproduces the Quicken row exactly, because
- * Quicken's bond "shares" ARE $100-par units and `PAR_PER_UNIT` is 100. Writing units
- * into the scenario file would duplicate that derivation in a second place.
+ * **A bond's `units` / `pricePerUnit` / `parPerUnit`.** Promotion is an act at the
+ * config→run boundary, not a property of a saved file (design 93 §5b) —
+ * `projectHoldingsToState` does it, and `unitiseBond` reproduces the Quicken row exactly,
+ * because Quicken's bond "shares" ARE $100-par units and `PAR_PER_UNIT` is 100. Writing
+ * units into the scenario file would duplicate that derivation in a second place.
  *
- * For EQUITY the reason is different and worth stating, because the share counts ARE
- * in the export and importing them looks like free fidelity. The engine's equity unit
- * is `marketValue / 100`, a synthetic count, and `prevailingPrice` — which prices every
- * lot the rebalancer and harvester create — averages across all lots of the same
- * ALLOCATION in an account regardless of security. Real share counts there blend VOO
- * against SWTSX into a price that is no instrument's. It stays dollar-conserving, so
- * nothing breaks; it just buys nothing the engine reads. The real share count is kept
- * on the lot's `label`, where it is visible and inert.
+ * An EQUITY lot is different, and does carry `units` and `pricePerUnit`: the broker's
+ * share count and the instrument's price. Without them the engine counts synthetic $100
+ * units, and the only record of the real count was the label. That hid a split Quicken
+ * applied to some lots and not others (study macro-regimes-2026 flag 23). It is safe
+ * because every lot born beside these is priced only by lots of its OWN security
+ * (`prevailingPrice(lots, securityId)`), so SWTSX at 18.68 and VOO at 550 in one account
+ * never blend into a price that is neither.
  */
 
 import { ALLOCATION }       from '../../src/finance/holdings/allocation.js';
@@ -222,6 +221,19 @@ function lotToHolding({ position, lot, spec, index, accountName, stateKey, polic
     ...(spec.id != null ? { securityId: spec.id } : {}),
   };
 
+  // The broker's share count, priced so that units × price reproduces Quicken's market
+  // value to the cent, because `syncHolding` derives the value from the two and would
+  // otherwise move the balance at boot. The instrument's printed price does that for a
+  // typical lot; when its rounding does not (a 4-dp NAV on a large lot), the lot's own
+  // value ÷ shares does. GOLD stays scalar: `promoteToUnitised` does not unitise it, so a
+  // count would have nothing reading it.
+  if (allocation === ALLOCATION.EQUITY && lot.shares > 0 && marketValue > 0) {
+    const atPrice = position.price > 0
+      && Math.abs(round2(lot.shares * position.price) - marketValue) < 0.005;
+    holding.units = lot.shares;
+    holding.pricePerUnit = atPrice ? position.price : +(marketValue / lot.shares).toFixed(8);
+  }
+
   if (allocation === ALLOCATION.BOND) {
     // `promoteToUnitised` requires BOTH maturityDate and faceValue, and silently leaves
     // the lot scalar without them — a bond that never redeems and never pulls to par.
@@ -294,6 +306,100 @@ function validateSpec(key, spec) {
       + `prefix, which names the engine's synthetic market securities.`);
   }
   return errors;
+}
+
+/** How far apart two lots' purchase dates may be and still price each other. */
+const SHARE_SCALE_WINDOW_MS = 180 * 86_400_000;
+/** The cost-per-share ratio past which two nearby lots cannot be the same share. */
+const SHARE_SCALE_RATIO = 1.8;
+
+const median = (xs) => {
+  const s = [...xs].sort((a, b) => a - b);
+  const mid = s.length >> 1;
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+};
+
+/**
+ * Lots whose cost per share puts them on a different share scale from the same security's
+ * lots in the other accounts: the mark of a split that Quicken applied to some lots and not
+ * to others.
+ *
+ * The export cannot show this on its own. Every lot's market value is its shares × the one
+ * current price, so a lot left on pre-split share counts just imports as a large loss. A
+ * fund's real price cannot be 7× apart on two dates a few weeks apart, though, so the
+ * other accounts' lots of the same security are the check. Each lot is compared with each
+ * OTHER account's nearest-dated lot within `SHARE_SCALE_WINDOW_MS`: the nearest, not a
+ * median over the window, so the ratio is the split's and not the split's plus the drift.
+ * It is flagged when at least two of those accounts disagree with it and they outnumber the
+ * ones that agree. So one account outvoted by the rest is named, and a one-against-one
+ * disagreement names neither, because nothing in the export says which side is wrong.
+ * Its own account's lots never vote, because an unapplied split moves all of them together.
+ *
+ * Placeholder, undated and unknown-basis lots carry no price and are skipped. A symbol held
+ * in one account has nothing to compare against. A 3-for-2 split (ratio 1.5) is below the
+ * threshold and is missed; a lower threshold would fire on an ordinary rally over the window.
+ *
+ * @param {object} parsed - from `parseQuickenPortfolio`
+ * @returns {Array<{account: string, symbol: string, lots: number, from: string, to: string,
+ *   ratio: number, splitFactor: ?number, marketValue: number}>} one entry per account and
+ *   symbol. `ratio` is the median cost-per-share ratio of the flagged lots to the others.
+ *   `splitFactor` is n when that ratio is within 5% of a whole n ≥ 2 (these lots' share
+ *   counts are 1/n of the broker's), −n when it is within 5% of 1/n (n× the broker's), and
+ *   null otherwise.
+ */
+export function lotShareScaleMismatches(parsed) {
+  const bySymbol = new Map();
+  for (const qa of parsed?.accounts ?? []) {
+    for (const p of qa.positions ?? []) {
+      const symbol = p.symbol ?? p.name;
+      for (const lot of p.lots ?? []) {
+        if (lot.placeholder || lot.purchaseDate == null || lot.basisUnknown) continue;
+        if (!(lot.shares > 0) || !(lot.costBasis > 0)) continue;
+        if (!bySymbol.has(symbol)) bySymbol.set(symbol, []);
+        bySymbol.get(symbol).push({
+          account: qa.name, date: lot.purchaseDate, ms: Date.parse(lot.purchaseDate),
+          cps: lot.costBasis / lot.shares, marketValue: lot.marketValue ?? 0,
+        });
+      }
+    }
+  }
+
+  const out = [];
+  for (const [symbol, lots] of bySymbol) {
+    const flagged = new Map();
+    for (const lot of lots) {
+      const others = new Map();
+      for (const o of lots) {
+        if (o.account === lot.account || Math.abs(o.ms - lot.ms) > SHARE_SCALE_WINDOW_MS) continue;
+        const near = others.get(o.account);
+        if (!near || Math.abs(o.ms - lot.ms) < Math.abs(near.ms - lot.ms)) others.set(o.account, o);
+      }
+      let agree = 0;
+      const against = [];
+      for (const near of others.values()) {
+        const r = lot.cps / near.cps;
+        if (r > SHARE_SCALE_RATIO || r < 1 / SHARE_SCALE_RATIO) against.push(r);
+        else agree++;
+      }
+      if (against.length >= 2 && against.length > agree) {
+        if (!flagged.has(lot.account)) flagged.set(lot.account, []);
+        flagged.get(lot.account).push({ ...lot, ratio: median(against) });
+      }
+    }
+    for (const [account, hits] of flagged) {
+      hits.sort((a, b) => a.ms - b.ms);
+      const ratio = median(hits.map(h => h.ratio));
+      const whole = Math.round(ratio >= 1 ? ratio : 1 / ratio);
+      const exact = whole >= 2 && Math.abs((ratio >= 1 ? ratio : 1 / ratio) / whole - 1) <= 0.05;
+      out.push({
+        account, symbol, lots: hits.length, from: hits[0].date, to: hits.at(-1).date,
+        ratio: +ratio.toFixed(2),
+        splitFactor: exact ? (ratio >= 1 ? whole : -whole) : null,
+        marketValue: round2(hits.reduce((s, h) => s + h.marketValue, 0)),
+      });
+    }
+  }
+  return out;
 }
 
 /**
@@ -496,6 +602,25 @@ export function buildImport(parsed, mapping, { targetAccounts = [] } = {}) {
     }
 
     accounts.push(patch);
+  }
+
+  for (const m of lotShareScaleMismatches(parsed)) {
+    const entry = accountMap[m.account];
+    const stateKey = entry && entry.skip !== true ? entry.stateKey ?? null : null;
+    const lots = `${m.lots} ${m.symbol} lot${m.lots === 1 ? '' : 's'} (${m.from} to ${m.to})`;
+    const n = m.splitFactor;
+    const cause = n == null
+      ? `A split or a mis-keyed share count is the likely cause. Check these lots' shares against `
+        + `the broker's statement.`
+      : n > 0
+        ? `That fits a ${n}-for-1 split that was not applied to these lots. Their share counts would `
+          + `then be 1/${n} of the broker's, so their market value (${m.marketValue}) is understated by `
+          + `about ${round2(m.marketValue * (n - 1))}, and the losses they show are not real.`
+        : `That fits a ${-n}-for-1 split applied to these lots and not to the others. Their share `
+          + `counts would then be ${-n}× the broker's, so their market value (${m.marketValue}) is `
+          + `overstated.`;
+    warn(stateKey, `${m.account}: ${lots} cost ${m.ratio}× per share what the other accounts paid `
+      + `for ${m.symbol} near the same dates. ${cause} Fix the lots in Quicken and re-export.`);
   }
 
   for (const key of Object.keys(securityMap)) {

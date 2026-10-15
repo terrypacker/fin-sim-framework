@@ -20,7 +20,7 @@ import { RATE_KEY_META }        from '../economic-regimes/rate-keys.js';
 import { resolveYield }         from '../economic-regimes/yield-curve.js';
 import { realiseDerivedGain } from '../assets/investment-account.js';
 import { section988ForBondPrincipal } from '../account-rules/bond-currency-basis.js';
-import { identityGroupOf }       from '../holdings/security.js';
+import { identityGroupOf, syntheticSecurityId } from '../holdings/security.js';
 import { toMs } from '../account-rules/main-residence.js';
 import { addValue, resize } from '../holdings/holding-utils.js';
 
@@ -931,7 +931,10 @@ function _newSleeve({ allocation, amount, country, role, purchaseMs, holdings = 
   // joins at is the sleeve's own (`prevailingPrice`), never the convention's 100: minting
   // at 100 beside a seasoned lot fabricates the unit count and defeats compaction.
   // A no-op on BOND-fund and CASH sleeves, which carry no unit count to establish.
-  return promoteToUnitised(lot, { price: prevailingPrice(siblings) });
+  // Only siblings of the security this lot will be a position in may price it: a market
+  // group holds several funds, each on its own per-share scale.
+  const securityId = lot.securityId ?? syntheticSecurityId(rateKey);
+  return promoteToUnitised(lot, { price: prevailingPrice(siblings, securityId) });
 }
 
 /**

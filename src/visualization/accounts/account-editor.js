@@ -631,7 +631,7 @@ export class AccountEditor extends BaseComponent {
         <td><input class="h-input" data-f="label" value="${_escape(h.label ?? '')}" placeholder="Label"/></td>
         <td><select class="h-input" data-f="allocation">${allocOpts}</select></td>
         <td>${_rateKeyCellHtml(h, this._instrumentOverride(h, 'rateKey'))}</td>
-        <td><input class="h-input h-num" type="number" data-f="marketValue" value="${h.marketValue ?? 0}"/></td>
+        <td><input class="h-input h-num" type="number" data-f="marketValue" value="${h.marketValue ?? 0}"${_bySharesTitle(h)}/></td>
         <td class="h-actions"><button class="btn btn-xs btn-warn h-delete" type="button">✕</button></td>
       `;
       tbody.appendChild(tr);
@@ -815,6 +815,23 @@ export class AccountEditor extends BaseComponent {
         `<input class="h-input h-num" type="number" data-f="costBasis" value="${h.costBasis ?? 0}"/>`));
     }
 
+    // ── Shares (design 94 §9.2) — POSITION fields, so `field`, not `instrumentField` ──
+    //
+    // The broker's share count and this lot's price per share. Both set, Market Value is
+    // their product: `syncHolding` derives the value from the two at boot, so a typed value
+    // beside them would be overwritten silently. Both blank, the lot is a dollar position
+    // and the run counts synthetic $100 units, as every lot did before imports carried
+    // counts. EQUITY only — GOLD is never unitised, and a bond's units are its par, which
+    // the run derives from its face value.
+    if (alloc === 'EQUITY') {
+      parts.push(field('Shares',
+        `<input class="h-input h-num" type="number" step="any" min="0" data-f="units" value="${h.units ?? ''}" placeholder="—"/>`));
+      parts.push(field('Price / share',
+        `<input class="h-input h-num" type="number" step="any" min="0" data-f="pricePerUnit" value="${h.pricePerUnit ?? ''}" placeholder="—"/>`));
+      parts.push(field('Cost / share',
+        `<input class="h-input h-num" data-out="costPerShare" value="${_costPerShare(h)}" disabled/>`));
+    }
+
     // ── Acquisition date — a POSITION field, and deliberately not an instrument one ──
     //
     // Note this goes through `field`, NOT `instrumentField`. Design 94 §5.1 puts the
@@ -945,13 +962,26 @@ export class AccountEditor extends BaseComponent {
         const field   = input.dataset.f;
         const isNum   = input.type === 'number';
         const isCheck = input.type === 'checkbox';
-        const evtName = (input.tagName === 'SELECT' || isCheck) ? 'change' : 'input';
+        // Shares and Price / share commit on change, not per keystroke: backspacing one to
+        // empty on the way to a new number would otherwise clear the pair.
+        const isShare = field === 'units' || field === 'pricePerUnit';
+        const evtName = (input.tagName === 'SELECT' || isCheck || isShare) ? 'change' : 'input';
 
         input.addEventListener(evtName, () => {
           if (isCheck) {
             // Boolean per-holding flag — read `.checked`.
             this._holdings[i][field] = input.checked;
+          } else if (field === 'units' || field === 'pricePerUnit') {
+            _setShareField(this._holdings[i], field, input.value);
+            this._refreshShareCells(this._holdings[i], tr, detailTr);
+            this._syncBalance(this._rootEl);
           } else if (field === 'allocation') {
+            // A share count is an EQUITY lot's: GOLD is never unitised and a bond's units
+            // are par the run derives, so a count carried across would be read as either.
+            if (this._holdings[i].allocation === 'EQUITY' && input.value !== 'EQUITY') {
+              delete this._holdings[i].units;
+              delete this._holdings[i].pricePerUnit;
+            }
             this._holdings[i].allocation = input.value;
             // Bond Cost Basis is hidden and defaulted to Market Value (§5.3.4):
             // on switch to BOND, snap basis to MV so no embedded gain is authored.
@@ -1012,6 +1042,7 @@ export class AccountEditor extends BaseComponent {
             } else {
               this._holdings[i][field] = Number(input.value) || 0;
             }
+            if (field === 'costBasis') this._refreshShareCells(this._holdings[i], tr, detailTr);
             if (field === 'marketValue') {
               // Editor-time MV edit on a BOND keeps costBasis synced to MV (§5.3.4).
               if (this._holdings[i].allocation === 'BOND') {
@@ -1025,6 +1056,22 @@ export class AccountEditor extends BaseComponent {
         });
       });
     }
+  }
+
+  /**
+   * Re-derive the cells a share edit moves, in place rather than by re-rendering, so the
+   * input being typed into keeps its focus: Market Value (shares × price, locked while
+   * both are set) and Cost / share.
+   */
+  _refreshShareCells(h, tr, detailTr) {
+    const mv = tr.querySelector('[data-f="marketValue"]');
+    if (mv) {
+      mv.value    = h.marketValue ?? 0;
+      mv.disabled = _pricedByShares(h);
+      mv.title    = _pricedByShares(h) ? BY_SHARES_TITLE : '';
+    }
+    const cps = detailTr?.querySelector('[data-out="costPerShare"]');
+    if (cps) cps.value = _costPerShare(h);
   }
 
   _syncBalance(el) {
@@ -1107,12 +1154,21 @@ export class AccountEditor extends BaseComponent {
   _readForm(el) {
     // par-reviewed: UI normalisation of user-entered numbers on the editor form, before
     // anything is committed to state.
-    const holdings = this._holdings.map(h => ({
-      ...h,
-      marketValue:    Number(h.marketValue)  || 0,
-      costBasis:      Number(h.costBasis)    || 0,
-      taxLossPartner: h.taxLossPartner || null,
-    }));
+    const holdings = this._holdings.map(h => {
+      const out = {
+        ...h,
+        marketValue:    Number(h.marketValue)  || 0,
+        costBasis:      Number(h.costBasis)    || 0,
+        taxLossPartner: h.taxLossPartner || null,
+      };
+      // A count without a price would boot at $0 (`syncHolding` multiplies the two), so
+      // a half-entered pair is saved as the dollar position it still is.
+      if (out.allocation === 'EQUITY') {
+        if (_pricedByShares(out)) out.marketValue = +(out.units * out.pricePerUnit).toFixed(2);
+        else { delete out.units; delete out.pricePerUnit; }
+      }
+      return out;
+    });
     const balance = holdings.length > 0
       ? holdings.reduce((s, h) => s + h.marketValue, 0)
       : (Number(el.querySelector('[data-id="balance"]').value) || 0);
@@ -1533,6 +1589,52 @@ export class AccountEditor extends BaseComponent {
     this._rootEl?.remove();
     super.destroy();
   }
+}
+
+const BY_SHARES_TITLE = 'Shares × Price / share. Edit those, or clear Shares to type a value.';
+
+/** An EQUITY lot whose value is its share count × its price (design 94 §9.2). */
+function _pricedByShares(h) {
+  return (h?.allocation ?? 'EQUITY') === 'EQUITY' && h.units > 0 && h.pricePerUnit > 0;
+}
+
+/** The disabled + title attributes for a lot's Market Value input. */
+function _bySharesTitle(h) {
+  return _pricedByShares(h) ? ` disabled title="${BY_SHARES_TITLE}"` : '';
+}
+
+/** Cost basis ÷ shares, for display; blank when the lot has no share count. */
+function _costPerShare(h) {
+  return h?.units > 0 ? (+(h.costBasis ?? 0) / h.units).toFixed(4) : '';
+}
+
+/**
+ * Apply one Shares or Price / share edit to a lot, keeping value, count and price in step.
+ *
+ * Entering the first of the two derives the other from the lot's current value, so typing
+ * a share count does not move the money. Once both are set, either edit re-derives the
+ * value. Clearing either makes the lot a dollar position again, at the value it stands at.
+ *
+ * @param {object} h     - the working holding (mutated)
+ * @param {'units'|'pricePerUnit'} field
+ * @param {string} raw   - the input's value
+ */
+function _setShareField(h, field, raw) {
+  const n  = raw === '' ? null : Number(raw);
+  const v  = Number.isFinite(n) && n > 0 ? n : null;
+  const mv = Number(h.marketValue) || 0;
+  if (v == null) {
+    delete h.units;
+    delete h.pricePerUnit;
+    return;
+  }
+  const other = field === 'units' ? 'pricePerUnit' : 'units';
+  h[field] = v;
+  if (!(h[other] > 0)) {
+    if (!(mv > 0)) return;    // nothing to derive from yet: the pair waits for its other half
+    h[other] = +(mv / v).toFixed(8);
+  }
+  h.marketValue = +(h.units * h.pricePerUnit).toFixed(2);
 }
 
 function _escape(s) {

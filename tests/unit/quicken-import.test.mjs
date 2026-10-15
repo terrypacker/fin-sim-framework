@@ -35,7 +35,7 @@ import assert from 'node:assert/strict';
 
 import { parseQuickenPortfolio, parseMoney, parseUsDate, parseBondName, splitCsvLine }
   from '../../scripts/lib/quicken-csv.mjs';
-import { buildImport, IMPORT_LOT_PREFIX, UNKNOWN_BASIS_POLICY }
+import { buildImport, IMPORT_LOT_PREFIX, UNKNOWN_BASIS_POLICY, lotShareScaleMismatches }
   from '../../scripts/lib/quicken-import.mjs';
 
 // ── Fixture ─────────────────────────────────────────────────────────────────
@@ -378,4 +378,93 @@ test('an unused mapping entry is a warning, so a stale map is visible', () => {
 
 test('a clean mapping produces no errors at all', () => {
   assert.deepEqual(run().errors, []);
+});
+
+// ── Share scale across accounts ─────────────────────────────────────────────
+
+/**
+ * One fund in three accounts. `Taxable 001`'s 2025 lots kept their pre-split share counts
+ * through a 7-for-1 split, so they cost 7× per share what the other two paid on nearby
+ * dates. The shape of the real export that hid an \$111k understatement as \$80k of losses.
+ */
+const SPLIT_CSV = [
+  `${BOM}Price and Holdings as of: 9/4/2026`,
+  '',
+  `${BOM},Account,Symbol,Price,Shares,Cost Basis,Market Value,Gain/Loss,Gain/Loss (%),Holding Period,Type`,
+  `${BOM}Taxable 001,,,,,"$3,000.00","$474.00",,,,`,
+  `${BOM}    BIG INDEX FUND,    Taxable 001,    BIGX,"16.00","29.6",,"$474.00",,,,    Mutual Fund`,
+  `${BOM}        1/10/2025,        Taxable 001,        BIGX,,"10","$1,000.00","$160.00",,,        Long Term,        Mutual Fund`,
+  `${BOM}        3/10/2025,        Taxable 001,        BIGX,,"9.6","$1,000.00","$153.60",,,        Long Term,        Mutual Fund`,
+  `${BOM}        6/10/2025,        Taxable 001,        BIGX,,"10","$1,000.00","$160.00",,,        Long Term,        Mutual Fund`,
+  `${BOM}Retirement 002,,,,,"$2,000.00","$2,288.00",,,,`,
+  `${BOM}    BIG INDEX FUND,    Retirement 002,    BIGX,"16.00","143",,"$2,288.00",,,,    Mutual Fund`,
+  `${BOM}        1/12/2025,        Retirement 002,        BIGX,,"70","$1,000.00","$1,120.00",,,        Long Term,        Mutual Fund`,
+  `${BOM}        6/12/2025,        Retirement 002,        BIGX,,"73","$1,000.00","$1,168.00",,,        Long Term,        Mutual Fund`,
+  `${BOM}Joint 003,,,,,"$1,000.00","$1,120.00",,,,`,
+  `${BOM}    BIG INDEX FUND,    Joint 003,    BIGX,"16.00","70",,"$1,120.00",,,,    Mutual Fund`,
+  `${BOM}        3/12/2025,        Joint 003,        BIGX,,"70","$1,000.00","$1,120.00",,,        Long Term,        Mutual Fund`,
+  `${BOM}Totals,,,,,"$6,000.00","$3,882.00",,,,`,
+  '',
+].join('\n');
+
+const SPLIT_MAPPING = {
+  accounts: {
+    'Taxable 001': { stateKey: 'usStockAccount' },
+    'Retirement 002': { stateKey: 'rothAccount' },
+    'Joint 003': { stateKey: 'jointAccount' },
+  },
+  securities: { BIGX: MAPPING.securities.BIGX },
+};
+
+test('lots left on pre-split share counts are named, with the split factor', () => {
+  const m = lotShareScaleMismatches(parseQuickenPortfolio(SPLIT_CSV));
+  assert.equal(m.length, 1);
+  assert.equal(m[0].account, 'Taxable 001');
+  assert.equal(m[0].lots, 3);
+  assert.equal(m[0].from, '2025-01-10');
+  assert.equal(m[0].to, '2025-06-10');
+  assert.equal(m[0].splitFactor, 7);
+  assert.equal(m[0].marketValue, 473.6);
+});
+
+test('the share-scale warning is attributed to the outvoted account and states the effect', () => {
+  const r = buildImport(parseQuickenPortfolio(SPLIT_CSV), SPLIT_MAPPING);
+  const w = r.warnings.filter(d => /per share what the other accounts paid/.test(d.message));
+  assert.equal(w.length, 1);
+  assert.equal(w[0].stateKey, 'usStockAccount');
+  assert.ok(w[0].message.includes('7-for-1 split that was not applied'));
+  assert.ok(w[0].message.includes('understated by about 2841.6'));
+});
+
+test('one account against one names neither — nothing says which is the wrong one', () => {
+  const twoAccounts = SPLIT_CSV.split('\n').filter(l => !/Joint 003/.test(l)).join('\n');
+  assert.deepEqual(lotShareScaleMismatches(parseQuickenPortfolio(twoAccounts)), []);
+});
+
+test('consistent lots across accounts raise no share-scale warning', () => {
+  assert.deepEqual(lotShareScaleMismatches(parseQuickenPortfolio(CSV)), []);
+});
+
+// ── Share counts ────────────────────────────────────────────────────────────
+
+test('an equity lot carries the broker share count and a price that reproduces its value', () => {
+  const equity = acct(run(), 'usStockAccount').holdings.filter(h => h.securityId === 'bigx');
+  assert.deepEqual(equity.map(h => h.units), [500, 300]);
+  assert.deepEqual(equity.map(h => h.pricePerUnit), [10, 10]);
+  for (const h of equity) assert.equal(+(h.units * h.pricePerUnit).toFixed(2), h.marketValue);
+});
+
+test('a lot the printed price does not reproduce to the cent is priced by its own value', () => {
+  // The printed price is rounded, so shares × 10.00 is 12,345.68 and not Quicken's figure.
+  const csv = CSV.replace('"500","$4,000.00","$5,000.00"', '"1234.5678","$4,000.00","$16,695.10"');
+  const [lot] = acct(buildImport(parseQuickenPortfolio(csv), MAPPING, { targetAccounts: TARGET }),
+    'usStockAccount').holdings.filter(h => h.securityId === 'bigx');
+  assert.equal(lot.units, 1234.5678);
+  assert.equal(+(lot.units * lot.pricePerUnit).toFixed(2), 16695.10);
+});
+
+test('gold and bond lots carry no imported share count', () => {
+  const holdings = acct(run(), 'usStockAccount').holdings;
+  assert.equal(holdings.find(h => h.allocation === 'GOLD').units, undefined);
+  assert.equal(holdings.find(h => h.allocation === 'BOND').units, undefined);
 });

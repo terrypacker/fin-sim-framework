@@ -63,11 +63,14 @@ export const US_TAX = {
       // moved INTO, and the §1223(3) date it was tacked to. Undeclared it was dropped from
       // the journal while still being applied to state, which is the worst of both: the
       // deferral happened and nothing could be drilled to show where it went.
+      // `capitalLossAsFiled` — the §1212(b) pools before the amendment, beside `capitalLoss`
+      // after it. A filing that only shrinks a carryforward has `delta` 0, and this pair is
+      // the only record of what it changed.
       { type: 'US_TAX_FILE_APPLY', cc: 'US',
         fields: { taxYear: ValueType.number(), delta: ValueType.currency('USD'),
                   disallowed: ValueType.currency('USD'), ledger: ValueType.any(),
                   remaining: ValueType.any(), capitalLoss: ValueType.any(),
-                  basisAdjustments: ValueType.any() } },
+                  capitalLossAsFiled: ValueType.any(), basisAdjustments: ValueType.any() } },
       // ── design 107 §6–§8 — instalments and the refund they make routine ─────────
       // The instalment is its OWN family, not TAX_PAYMENT_DEBIT: it chains one of those to
       // move the cash, so counting both would double every instalment in "Tax Paid by Year".

@@ -191,13 +191,23 @@ export function unitiseEquity({ marketValue, pricePerUnit = PAR_PER_UNIT }) {
  * biggest lot in a bucket and the bucket may hold several; weighting by value is the same
  * rule the merge itself uses and cannot be thrown by a dust lot.
  *
+ * Pass the new lot's `securityId` whenever the lots may hold more than one security. A
+ * price is per share of ONE instrument: a lot of SWTSX at 18.68 and one of VOO at 550 in
+ * the same sleeve blend to a price that is neither, and a new lot minted at it carries a
+ * share count no broker would show. With imported share counts (design 94 §9.2), siblings
+ * are on real, different prices, so the filter is what keeps a birth on its own scale. A
+ * lot with no `securityId` counts as its market's synthetic security, which is what
+ * `promoteToUnitised` would stamp on it.
+ *
  * @param {Array<object>} lots
+ * @param {string} [securityId] - only lots of this security price the birth; absent ⇒ all
  * @returns {number}
  */
-export function prevailingPrice(lots) {
+export function prevailingPrice(lots, securityId) {
   let mv = 0, units = 0;
   for (const h of lots ?? []) {
     if (!h || h.units == null || !((h.pricePerUnit ?? 0) > 0)) continue;
+    if (securityId != null && (h.securityId ?? syntheticSecurityId(h.rateKey)) !== securityId) continue;
     mv    += h.units * h.pricePerUnit;
     units += h.units;
   }
@@ -295,9 +305,10 @@ export function indexedRedemptionValue(h, securities = null) {
  * @param {object} h - a holding
  * @param {object} [opts]
  * @param {number} [opts.price=PAR_PER_UNIT] - the price a newly-unitised EQUITY position
- *   joins at. The config→run boundary leaves it at the convention, because at boot every
- *   lot in the run is promoted at the same moment and they are therefore consistent with
- *   each other. A BIRTH site mid-run must pass `prevailingPrice(siblings)` instead — see
+ *   joins at. The config→run boundary leaves it at the convention unless the account
+ *   already holds an authored share count of the same security (`projectHoldingsToState`),
+ *   because at boot every other lot is promoted at the same moment and they are therefore
+ *   consistent with each other. A BIRTH site mid-run must pass `prevailingPrice(siblings)` instead — see
  *   that function for what minting at 100 beside a seasoned lot would do.
  * @returns {object} the holding, unitised (unchanged when there is nothing to promote)
  */
@@ -359,7 +370,16 @@ export function promoteToUnitised(h, { price = PAR_PER_UNIT } = {}) {
  * @returns {Array<object>} plain, structuredClone-safe holdings for `sim.state`
  */
 export function projectHoldingsToState(holdings) {
-  return (holdings ?? []).map(h => promoteToUnitised({ ...h }));
+  const lots = holdings ?? [];
+  // A lot authored with a share count (an import, design 94 §9.2) stands at its security's
+  // real price. A lot of the SAME security authored without one joins at that price, not
+  // at the convention's 100, or one security would sit on two per-share scales in one
+  // account. With no authored count in the account this is 100, exactly as before.
+  return lots.map(h => {
+    if (h?.allocation !== 'EQUITY' || h.units != null) return promoteToUnitised({ ...h });
+    const securityId = h.securityId ?? syntheticSecurityId(h.rateKey);
+    return promoteToUnitised({ ...h }, { price: prevailingPrice(lots, securityId) });
+  });
 }
 
 /**
