@@ -1082,3 +1082,17 @@ test('R11: the strip lists the size steps; a run with no target rows says nothin
   assert.doesNotMatch(q(other, 'provenance').textContent, /sizes/);
   other.unmount();
 });
+
+// ─── design 124 — an empty pool measured on the household ────────────────────
+
+test('design 124: an empty pool measuring household-wide says so; a full one does not', () => {
+  const { plugin } = mountPlugin(simOf(GATED_RUN({ balance: 0, accessible: 0, locked: 0, unlocksAt: null,
+    marketBasis: 'HOUSEHOLD', marketBasisSince: 2041 })));
+  const chip = q(plugin, 'legend').querySelector('[data-key="growth"]');
+  const note = chip.querySelector('.pool-market-household');
+  assert.ok(note, 'the household-market note');
+  assert.match(note.textContent, /household market since 2041/);
+  assert.match(note.getAttribute('title'), /empty since 2041/);
+  assert.equal(q(plugin, 'legend').querySelector('[data-key="offset"] .pool-market-household'), null);
+  plugin.unmount();
+});

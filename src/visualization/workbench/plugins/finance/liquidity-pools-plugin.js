@@ -1273,10 +1273,16 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
             ? `This pool may be drawn early, so all of it is reachable — but ${this._money(m.locked)} of what it holds would be paid away as the early-withdrawal penalty. The years-of-cover figure counts the ${this._money(m.accessible ?? 0)} that would actually arrive.`
             : `${this._money(m.locked)} of this pool sits behind an age gate: a penalty-free draw would find ${this._money(m.accessible ?? 0)} of it today, which is what the years-of-cover figure beside it counts. The balance is what the pool HOLDS.`)}${m.unlocksAt ? _esc(` The gate opens ${String(m.unlocksAt).slice(0, 10)}${raidable ? ', after which there is no penalty to pay' : ''}.`) : ''}">${_esc(this._money(m.locked))} ${raidable ? 'penalty' : 'locked'}${m.unlocksAt ? ` → ${_esc(String(m.unlocksAt).slice(0, 10))}` : ''}</span>`
         : '';
+      // Design 124 — an EMPTY sleeve pool measures its market on the household's holdings of
+      // its sleeves. Said here because it changes what the pool's gates read: a drawdown or
+      // return gate on this pool is now watching the household's equity (say), not its own.
+      const householdTail = m?.marketBasis === 'HOUSEHOLD'
+        ? ` <span class="pool-dim pool-market-household" title="${_esc(`This pool has been empty since ${m.marketBasisSince ?? 'an earlier year'}, so its market return — and any gate measuring it — reads the household's holdings of the same classes. Its gate's veto already applies household-wide, so the two now measure and protect the same money (design 124).`)}">household market since ${_esc(String(m.marketBasisSince ?? '—'))}</span>`
+        : '';
       const tail = m
         ? ` <strong>${_esc(this._money(m.balance))}</strong>` +
           (m.yearsOfCover != null ? ` <span class="pool-dim">${m.yearsOfCover.toFixed(1)}y</span>` : '') +
-          lockedTail +
+          lockedTail + householdTail +
           (short != null ? ` <span class="pool-clamped" title="This pool asked for ${_esc(this._money(m.target))} and the portfolio could only afford ${_esc(this._money(m.targetAfforded))} — ${short}% of the ask. The rest of the mix is squeezed to make room, so the other allocation classes hold less than any authored weight asked for. Reduce this pool's target.">${short}% of ask</span>` : '')
         : '';
       // The title says what the chip DOES, not just what it is: this strip is the panel's
