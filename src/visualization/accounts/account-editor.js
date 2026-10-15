@@ -19,6 +19,7 @@ import { SYNTHETIC_SECURITY_PREFIX } from '../../finance/holdings/security.js';
 import { rateKeyOptionsHtml } from './rate-key-options.js';
 import { effectiveEquityReturn } from '../../finance/holdings/effective-return.js';
 import { hasCashFloor } from '../../finance/account-rules/cash-floor.js';
+import { drawdownOrderAdvisory } from '../../finance/services/drawdown-order-advisory.js';
 
 const FIXED_COUNTRY    = new Set(['401k', 'roth', 'ira', 'super']);
 // Liability types: `balance` is debt owed (positive), net worth subtracts it, and
@@ -224,7 +225,11 @@ export class AccountEditor extends BaseComponent {
     this._refreshCashRateHint(el);
 
     const dp = this._node?.drawdownPriority;
-    el.querySelector('[data-id="drawdownPriority"]').value = dp ?? '';
+    const dpInput = el.querySelector('[data-id="drawdownPriority"]');
+    dpInput.value = dp ?? '';
+    this.listen(dpInput, 'input', () => this._refreshDrawdownHint(el));
+    this.listen(el.querySelector('[data-id="type"]'), 'change', () => this._refreshDrawdownHint(el));
+    this._refreshDrawdownHint(el);
 
     // contributionBasis: a NEW account is left blank (placeholder "= balance"), so the
     // derived earningsBasis defaults to 0 — "all principal" (design 53 §8, the chosen
@@ -1398,6 +1403,22 @@ export class AccountEditor extends BaseComponent {
     const show = AccountEditor.FX_POOL_TYPES.has(type) && ccy && ccy !== 'USD';
     fields.style.display = show ? '' : 'none';
     if (show) this._refreshFxBasisHint(el);
+  }
+
+  /**
+   * A Roth ranked ahead of taxed accounts in the drawdownPriority walk, from this account's side
+   * (`drawdownOrderAdvisory`). Read against the siblings with THIS account's priority as typed,
+   * so the hint follows the edit rather than the saved value.
+   */
+  _refreshDrawdownHint(el) {
+    const hint = el.querySelector('[data-id="drawdownHint"]');
+    if (!hint) return;
+    const raw  = el.querySelector('[data-id="drawdownPriority"]')?.value;
+    const type = el.querySelector('[data-id="type"]')?.value ?? this._node?.type;
+    const self = { ...(this._node ?? {}), type, drawdownPriority: raw === '' ? null : raw };
+    const key  = this._node?.stateKey ?? this._node?.id;
+    const others = (this._accounts ?? []).filter(a => (a?.stateKey ?? a?.id) !== key);
+    hint.textContent = drawdownOrderAdvisory(self, [...others, self]) ?? '';
   }
 
   /** Restates the entered rate as what it means, and flags the understatement default. */
