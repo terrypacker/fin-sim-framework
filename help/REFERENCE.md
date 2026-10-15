@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-233 parameters · 33 panels · 12 node types (206 fields) · 179 action types · 88 tools · 320 state field types · 78 topics · 130 design docs
+233 parameters · 33 panels · 12 node types (206 fields) · 179 action types · 88 tools · 320 state field types · 78 topics · 131 design docs
 
 ---
 
@@ -2299,7 +2299,7 @@ what the in-app panel keys on.
 
 ---
 
-## Design documents (130)
+## Design documents (131)
 
 Tier 3 — the full argument behind each mechanic, in `design/`. The title is each
 file's own H1, read out of it; there is no summary column, because a one-line precis
@@ -2435,6 +2435,7 @@ between 10 and 11.
 | [`120-currency-hedged-equity.md`](../design/120-currency-hedged-equity.md) | 120 — Currency-hedged and unhedged foreign equity |
 | [`121-shock-leg-offset-and-stagflation-calibration.md`](../design/121-shock-leg-offset-and-stagflation-calibration.md) | 121 — Delayed shock legs, a recalibrated stagflation, gold risk, and TIPS real yields |
 | [`122-fx-purchasing-power-parity.md`](../design/122-fx-purchasing-power-parity.md) | 122 — The exchange rate follows the inflation gap (relative PPP) |
+| [`123-pool-rows-after-a-session.md`](../design/123-pool-rows-after-a-session.md) | 123 — What a cockpit session's pool rows mean after the session |
 | [`bus-unification-plan.md`](../design/bus-unification-plan.md) | Bus Unification Plan |
 | [`inconsistencies.md`](../design/inconsistencies.md) | Inconsistencies, Rework Candidates, and Open Questions |
 | [`requirements.md`](../design/requirements.md) | Requirements Tracker |
