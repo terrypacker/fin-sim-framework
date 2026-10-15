@@ -1843,7 +1843,8 @@ function describeClause(r) {
   // balance counts the household's own spending as drawdown while the return index cannot,
   // so a drawdown clause whose basis is unstated is a clause whose behaviour is unstated.
   const basis = isDrawdownClause(r.gateKind)
-    ? ` (measured against ${r.gateBasis === 'INDEX' ? 'its return index' : 'its peak balance'})`
+    ? ` (measured against ${r.gateBasis !== 'INDEX' ? 'its peak balance'
+        : r.gateHalfLife ? `its return index, high halving every ${r.gateHalfLife} years` : 'its return index'})`
     : '';
   // §20.13 measured DURATION, not level, as the lever that moves the answer — the three
   // drawdown thresholds landed within $13k while the same gate family differing only in
@@ -2400,6 +2401,12 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
       // differing only in how long it stays shut spread by $460k. Years, never periods —
       // this reducer fires twice a year in a cross-border plan (§20.15).
       { field: 'gateYears', label: 'for N yrs', type: 'number', step: '1', min: '1', width: '0.7fr' },
+      // `highHalfLifeYears`: the return-index high this clause measures against halves every
+      // N completed years, so a deep bust stops holding the gate shut after a few half-lives.
+      // Blank is the all-time high. Saved only on an INDEX drawdown row (`rowsToGate`).
+      { field: 'gateHalfLife', label: 'High half-life (yrs)', type: 'number', step: '0.5', min: '0.5', max: '50',
+        width: '0.8fr', optional: true, placeholder: '—',
+        badge: (row) => (row.gateHalfLife ? `high half-life ${row.gateHalfLife}y` : null) },
       // §12.4c. One per GATE, not per clause — `syncGateScopes` propagates an edit to every
       // row of the same flow, so the table can never show one gate with two scopes. SOURCE is
       // the stricter reading and stays the default; see the design section before assuming
@@ -2418,7 +2425,7 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
     newRow:    () => ({ flow: (focusOn() ? gateableFlowIds().find(id => touches(flows.find(f => f.id === id)))
                                : null) ?? gateableFlowIds()[0] ?? null, branch: 1, gateNegate: '',
                         gateKind: 'sourceDrawdownUnder', gateValue: 0.05,
-                        gateBasis: 'INDEX', gateYears: 1, gateScope: 'SOURCE', gateId: null }),
+                        gateBasis: 'INDEX', gateYears: 1, gateHalfLife: null, gateScope: 'SOURCE', gateId: null }),
     addLabel:  '+ Add Gate Clause',
     showOptional,
     rowFilter: gateFilter,
@@ -2639,7 +2646,7 @@ function gateNodeToRow(node) {
   // `id` is design 110 §6.3's optional ADDRESS. It joins the known set rather than sending the
   // clause to `rawGate`: it is drawable (one text cell) and, unlike a nested scope, it round-trips
   // faithfully — which is the guard's actual test.
-  const known = new Set([...GATE_CLAUSE_KINDS, 'sustainedYears', 'drawdownBasis', 'id']);
+  const known = new Set([...GATE_CLAUSE_KINDS, 'sustainedYears', 'drawdownBasis', 'highHalfLifeYears', 'id']);
   if (Object.keys(node).some(k => !known.has(k))) return null;    // a clause the table lacks
   const kind = kinds[0];
   return {
@@ -2648,6 +2655,7 @@ function gateNodeToRow(node) {
     gateValue: node[kind],
     gateBasis: isDrawdownClause(kind) ? (node.drawdownBasis ?? 'BALANCE') : '',
     gateYears: node.sustainedYears ?? 1,
+    gateHalfLife: node.highHalfLifeYears ?? null,
     gateId:    typeof node.id === 'string' ? node.id : null,
   };
 }
@@ -2696,7 +2704,10 @@ function rowsToGate(rows) {
     const clause = { [r.gateKind]: r.gateValue };
     // Only when they are not the defaults, for the reason `cadence` is: an authored default on
     // every clause would make every previously-saved graph differ from itself on the next save.
-    if (r.gateBasis === 'INDEX' && isDrawdownClause(r.gateKind)) clause.drawdownBasis = 'INDEX';
+    if (r.gateBasis === 'INDEX' && isDrawdownClause(r.gateKind)) {
+      clause.drawdownBasis = 'INDEX';
+      if (Number(r.gateHalfLife) > 0) clause.highHalfLifeYears = Number(r.gateHalfLife);
+    }
     // The dwell rides on the node the row IS — which, for a negated row, is the `not` holding
     // the clause: "the source has NOT been within 5% of its high for two years".
     const node = r.gateNegate === 'NOT' ? { not: clause } : clause;

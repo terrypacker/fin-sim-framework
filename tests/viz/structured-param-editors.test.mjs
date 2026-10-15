@@ -2022,6 +2022,24 @@ test('LiquidityGraph: a gate clause id round-trips and survives an unrelated edi
     { id: 'harvest', sourceDrawdownUnder: 0.05, drawdownBasis: 'INDEX' });
 });
 
+test('LiquidityGraph: a high half-life round-trips, and saves only on an INDEX drawdown row', async () => {
+  const { normalizeLiquidityGraph } = await import('../../src/finance/pools/liquidity-graph.js');
+  const g = IDD_GRAPH();
+  g.flows[0].gate = { sourceDrawdownUnder: 0.2, drawdownBasis: 'INDEX', highHalfLifeYears: 5 };
+  const param = { name: 'liquidityGraph', value: g };
+  const host  = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  assert.strictEqual(cell(host, 'gateHalfLife').value, '5');
+  type(cell(host, 'priority'), '5', 'change');
+  assert.deepStrictEqual(param.value.flows[0].gate,
+    { sourceDrawdownUnder: 0.2, drawdownBasis: 'INDEX', highHalfLifeYears: 5 });
+  assert.strictEqual(normalizeLiquidityGraph(param.value, ACCOUNTS).flows[0].gate.highHalfLifeYears, 5);
+
+  // On the BALANCE basis the normalizer refuses the field, so the editor must not write it.
+  pick(cell(host, 'gateBasis'), 'BALANCE');
+  assert.deepStrictEqual(param.value.flows[0].gate, { sourceDrawdownUnder: 0.2 });
+  assert.ok(normalizeLiquidityGraph(param.value, ACCOUNTS));
+});
+
 test('LiquidityGraph: a blank Search id authors no `id` at all', async () => {
   const { normalizeLiquidityGraph } = await import('../../src/finance/pools/liquidity-graph.js');
   // Blank is what every graph authored before §6.3 means — positional, and not searchable. An

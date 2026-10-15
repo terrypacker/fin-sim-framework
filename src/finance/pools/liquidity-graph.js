@@ -424,6 +424,21 @@ function normalizeGate(raw, flowId, depth = 0, where = 'gate') {
     }
     if (b !== POOL_DRAWDOWN_BASIS.BALANCE) out.drawdownBasis = b;   // default stays absent
   }
+  // A DECAYING high for an INDEX drawdown clause (macro-regimes study flag 29). The all-time
+  // high is a fixed point: after a −70% index fall the pool needs a 3–4x recovery before a
+  // `sourceDrawdownUnder 0.2` gate reopens, and a reserve can be spent to zero in the
+  // meantime. With a half-life of h years the high the clause measures against shrinks by
+  // half every h completed years, and is lifted back to the index whenever the index passes
+  // it — so a deep bust stops counting as "still down" after a few half-lives, while a fresh
+  // peak still reads as 0% below. Absent = the all-time high, exactly as before. INDEX only:
+  // a decaying peak BALANCE would forgive the household's own spending, which is the
+  // defect BALANCE already has.
+  if (raw.highHalfLifeYears != null) {
+    if (out.drawdownBasis !== POOL_DRAWDOWN_BASIS.INDEX) {
+      err(`flow '${flowId}' ${where}.highHalfLifeYears needs drawdownBasis: INDEX on the same clause`);
+    }
+    out.highHalfLifeYears = num(raw.highHalfLifeYears, `flow '${flowId}' ${where}.highHalfLifeYears`, { min: 0.5, max: 50 });
+  }
   // The market-state pair. Prefer these to the drawdown pair in a DECUMULATION plan: a
   // trailing-high gate cannot tell a falling market from a pool being spent down, and latches
   // shut after the first crash (see `poolMarketReturn`).
