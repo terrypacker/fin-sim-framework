@@ -18,16 +18,16 @@ wrappers, a loan, an offset. One form covers them all, and the **Type** decides 
 half of it you see — a loan shows a rate, a term and a payment source; a wrapper shows
 its basis; a cash account shows a floor and the transaction flag.
 
-An account is not the same thing as a *holding*. The balance of a holdings-bearing
-account is the sum of its positions, and it is those positions —
-[Holdings](../panels/holdings.md) — that carry the units, the basis lots and the
-market they track. What lives here is the wrapper around them: who owns it, which
-country taxes it, when the drawdown chain may reach it.
+An account is not a *holding*. Its balance is the sum of its positions, and those —
+[Holdings](../panels/holdings.md) — carry the units, the basis lots and the market they
+track. What lives here is the wrapper: who owns it, which country taxes it, when the
+drawdown chain may reach it.
 
 Three fields decide more than they look like they do.
 **Transaction account** flags the one cash account per country that household money
 flows through. **Drawdown** decides whether this account can fund spending at all —
-left blank it is excluded, which is a real choice and a common accident. And on a
+blank excludes it, a real choice and a common accident, and a note warns when a Roth is
+ranked ahead of taxed accounts. On a
 foreign-currency pool, the **§988 basis** is what a disposition of that cash is
 measured against: currency is property to a US person, and spending it realises
 ordinary gain or loss. See [Liquidity Pools](../concepts/liquidity-pools.md) and
