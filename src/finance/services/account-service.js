@@ -17,6 +17,7 @@ import { cashFloorOf, floorTopUp } from '../account-rules/cash-floor.js';
 import { computeConversionRecapture } from '../account-rules/us/roth-conversion-lots.js';
 import { getBirthDate, getResidency } from '../residency-utils.js';
 import { Holding } from '../holdings/holding.js';
+import { ALLOCATION } from '../holdings/allocation.js';
 import { resolveDefaultAllocation, resolveRateKey, resolveEquityMarketMix } from '../holdings/default-allocations.js';
 import { rescaleHoldingsToBalance, instrumentOf, distributeHoldingsCredit, openingMixOf, openingMixShares } from '../holdings/holding-utils.js';
 import { deriveEarningsBasis } from '../assets/investment-account.js';
@@ -461,6 +462,45 @@ export class AccountService extends AssetService {
       if (!placed) { next.push(...bought); placed = true; }
     }
     targetAccount.holdings = next;
+  }
+
+  /**
+   * A CREDIT that is a purchase: new money buying more of what an investment account already
+   * holds, in dated lots of its own rather than blended into the existing ones.
+   *
+   * `transaction()`'s credit adds value and basis to every existing lot pro rata, so sale
+   * proceeds deposited into a brokerage were backdated into lots bought years earlier and
+   * blended their basis — a later lot-aware sale could not reach the proceeds' own zero-gain
+   * money first, and a FIFO sale sold the OLDEST lot, now partly made of last month's cash.
+   * `distributeHoldingsCredit` is the seam that already gets this right for reinvested income,
+   * wrapper deposits and pool purchases (`_creditTarget`): the credit still splits by market
+   * value across the sleeves, so the account's MIX is unchanged, but each share opens (or
+   * joins) a lot dated `date` with cost basis equal to the cash.
+   *
+   * Only an account holding a non-CASH lot is a purchase. A cash account (one CASH lot, basis
+   * always equal to value) takes the plain `transaction()` credit, so the many sale paths that
+   * land in savings are byte-identical; so does an account with no market value to weight by.
+   *
+   * @param {object} account
+   * @param {number} amount - positive, in the account's own currency
+   * @param {{ date?: Date|number|null, priceLevel?: number, label?: string }} [opts]
+   */
+  creditPurchase(account, amount, { date = null, priceLevel = 1, label = 'Purchase' } = {}) {
+    const holdings = account?.holdings;
+    const ms = date instanceof Date ? date.getTime() : (typeof date === 'number' ? date : null);
+    const invested = Array.isArray(holdings)
+      && holdings.some(h => h?.allocation !== ALLOCATION.CASH && (h?.marketValue ?? 0) > 0);
+    if (!(amount > 0) || ms == null || !invested) { this.transaction(account, amount, date); return; }
+    account.balance = (account.balance ?? 0) + amount;
+    const openingMix = openingMixOf(account);
+    account.holdings = distributeHoldingsCredit(holdings, amount, {
+      stateKey:   account.stateKey ?? 'acct',
+      year:       new Date(ms).getUTCFullYear(),
+      purchaseMs: ms,
+      priceLevel,
+      label,
+      ...(openingMix ? { openingMix } : {}),
+    });
   }
 
   /**

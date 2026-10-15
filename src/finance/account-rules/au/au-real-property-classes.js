@@ -176,7 +176,7 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
     // a 1.55x windfall — see `creditSaleProceeds`.
     const { transfer: fxLeg } = creditSaleProceeds(
       this.accountService, state, destKey, netProceeds,
-      propState?.currency?.code ?? 'AUD', stateKey, null);
+      propState?.currency?.code ?? 'AUD', stateKey, date);
     const updates = {};
     if (stateKey && state[stateKey]) {
       updates[stateKey] = { ...state[stateKey], mortgageBalance: 0, value: 0 };
