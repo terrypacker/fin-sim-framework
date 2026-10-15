@@ -11,7 +11,8 @@
 import { WorkbenchComponent } from '../../component.js';
 import { WB_EVENTS }          from '../../workbench-runtime.js';
 import { ServiceRegistry }    from '../../../../services/service-registry.js';
-import { CockpitController, COCKPIT_CONTROLS } from '../../../../finance/mpc/cockpit-controller.js';
+import { CockpitController, COCKPIT_CONTROLS, endPoolSession } from '../../../../finance/mpc/cockpit-controller.js';
+import { lastSessionYear, SESSION_END } from '../../../../finance/pools/pool-session-end.js';
 import { RolloutWorkerPool } from '../../../../finance/optimization/parallel/rollout-worker-pool.js';
 import { readDecisionRecords, readDecisionRuns } from '../../../../finance/mpc/apply-forward.js';
 import { harvestDecisions, COLLAPSE_RULES } from '../../../../finance/mpc/harvest.js';
@@ -184,6 +185,9 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
              harvest survives as an EXPORT — a three-band summary a human can argue with is
              worth having — so it is demoted to a secondary action and labelled for what it
              is, rather than deleted. -->
+        <!-- Design 123 — a session's last pool decision holds to the end of the plan unless
+             someone says otherwise. End session is where they say it. -->
+        <button class="btn btn-sm" data-mpc="end-session" title="Choose what this session's last pool decision means after the session: hold it to the end of the plan (what the controller priced) or revert to the plan's own rows (design 123)" disabled>End session…</button>
         <button class="btn btn-sm btn-primary" data-mpc="save-run" title="Save this run's decisions into the scenario as a recorded MPC run, and play it back exactly (design 81 §8). Lossless." disabled>Save run to plan…</button>
         <button class="btn btn-sm" data-mpc="harvest" title="Export this run as ordinary static settings — small and legible, and LOSSY: the squash is what design 80 measured turning a solvent run into an insolvent plan (design 81 D10)" disabled>Export as settings…</button>
       </div>
@@ -225,6 +229,20 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
       </div>
 
       <div class="mpc-fan" data-mpc="fan" style="display:none"></div>
+
+      <!-- Design 123 §4.3 — End session. Hold writes no rows (it marks them); revert appends
+           closing rows from 1 January after the chosen year. -->
+      <div class="mpc-harvest mpc-end-session" data-mpc="end-panel" style="display:none">
+        <div class="mpc-harvest-head">
+          <span>End session</span>
+          <label class="mpc-field"><input type="radio" name="mpc-end-policy" value="hold" data-mpc="end-hold" checked> Hold to the end of the plan</label>
+          <label class="mpc-field"><input type="radio" name="mpc-end-policy" value="revert" data-mpc="end-revert"> Revert after
+            <input class="wb-input mpc-num" type="number" step="1" data-mpc="end-year"></label>
+          <button class="btn btn-sm btn-primary" data-mpc="end-apply">End session</button>
+          <button class="btn btn-sm" data-mpc="end-cancel">Cancel</button>
+        </div>
+        <div class="mpc-harvest-body" data-mpc="end-body"></div>
+      </div>
 
       <!-- Harvest review (design 39 §13.8): nothing is written to the scenario
            until the user reads this diff and approves it. Design 81 D10 demotes what this
@@ -269,6 +287,9 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     this._bind('apply',   'click',  () => this._apply());
     this._bind('harvest',        'click', () => this._openHarvest());
     this._bind('save-run',       'click', () => this._saveRunToPlan());
+    this._bind('end-session',    'click', () => this._openEndSession());
+    this._bind('end-apply',      'click', () => this._applyEndSession());
+    this._bind('end-cancel',     'click', () => this._closeEndSession());
     this._bind('harvest-apply',  'click', () => this._applyHarvest());
     this._bind('harvest-cancel', 'click', () => this._closeHarvest());
     this._bind('harvest-resolve','change', () => this._openHarvest());   // re-price the preview
@@ -1194,7 +1215,68 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     // Design 81 §8 — the same condition: a run with no epochs has nothing to save either.
     const save = this._q('save-run');
     if (save) save.disabled = !has;
+    const end = this._q('end-session');
+    if (end) end.disabled = this._sessionPoolEnd() == null;
     this._syncModeIndicator();
+  }
+
+  // ─── Design 123 — End session ─────────────────────────────────────────────
+
+  /** `{ runId, lastYear, scenario }` when the session wrote pool rows to the plan, else null. */
+  _sessionPoolEnd() {
+    const runId = this._harvestRun()?.runId ?? this._runId;
+    const scenario = this._services()?.scenarioService?.getActive?.() ?? null;
+    if (!runId || !Array.isArray(scenario?.params)) return null;
+    const val = (n) => scenario.params.find(p => (p.key ?? p.name) === n)?.value ?? null;
+    const lastYear = lastSessionYear(
+      { targets: val('liquidityTargetSchedule'), shapes: val('liquidityGraphSchedule') }, runId);
+    return lastYear == null ? null : { runId, lastYear, scenario };
+  }
+
+  _openEndSession() {
+    const s = this._sessionPoolEnd();
+    const panel = this._q('end-panel');
+    if (!s || !panel) return;
+    const year = this._q('end-year');
+    if (year) { year.min = String(s.lastYear); year.value = String(s.lastYear); }
+    const body = this._q('end-body');
+    if (body) {
+      body.textContent = `This session's last pool decision is for ${s.lastYear}. The controller priced `
+        + 'every decision as held for the rest of the plan, so Hold keeps what it showed you. '
+        + 'Revert returns each pool (and the shape schedule) to the plan\'s own rows from 1 January '
+        + 'after the year you choose — that changes the plan after that year, and every projection '
+        + 'the session showed assumed it would not.';
+    }
+    panel.style.display = '';
+  }
+
+  _closeEndSession() {
+    const panel = this._q('end-panel');
+    if (panel) panel.style.display = 'none';
+  }
+
+  _applyEndSession() {
+    const s = this._sessionPoolEnd();
+    if (!s) return;
+    const policy = this._q('end-revert')?.checked ? SESSION_END.REVERT : SESSION_END.HOLD;
+    const afterYear = policy === SESSION_END.REVERT ? Number(this._q('end-year')?.value) : null;
+    let out;
+    try {
+      out = endPoolSession({ services: this._services(), scenario: s.scenario, runId: s.runId,
+                             policy, afterYear });
+    } catch (err) {
+      this._setNow(err?.message ?? String(err));
+      return;
+    }
+    // Kept for Save run (§4.5): the recorded entry carries the choice and the closing rows.
+    this._sessionEnd = { runId: s.runId, ...out.end, closing: out.closing };
+    this._runtime?.bus?.publish({ type: WB_EVENTS.PARAMS_CHANGED, scenario: s.scenario, source: 'mpc-end-session' });
+    if (out.closing.length) this._controller = null;   // next Advise re-snapshots the reverted plan
+    this._closeEndSession();
+    this._setNow(policy === SESSION_END.HOLD
+      ? `Session ended: its last pool decisions hold to the end of the plan.`
+      : `Session ended: ${out.closing.length} closing row(s) revert to the plan's own rows from `
+        + `${out.end.afterYear + 1}.`);
   }
 
   // ─── Design 81 §8 — mode, and saving the run itself ───────────────────────
@@ -1241,6 +1323,8 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
       runId:          run.runId,
       solver:         this._solverLabel(),
       baseScenarioId: scenario.id ?? scenario.name ?? null,
+      // Design 123 §4.5 — the End session choice, when this run made one.
+      end:            this._sessionEnd?.runId === run.runId ? this._sessionEnd : null,
     });
     if (!entry) { this._setNow(warnings[0] ?? 'This run decided nothing that can be saved.'); return; }
 
@@ -1299,6 +1383,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
       baseParams,
       birth:    { birthDate: _primaryBirthDate(scenario, this._sim) },
       simStart: scenario?.simStart ? new Date(scenario.simStart) : null,
+      simEnd:   scenario?.simEnd   ? new Date(scenario.simEnd)   : null,   // design 123 advisory
       collapse: COLLAPSE_RULES.LAST,
     });
 

@@ -40,6 +40,7 @@ import { poolGraphFor, poolGraphEntries } from '../pools/pool-shape-expansion.js
 import { POOL_TARGET_SCALE_RANGE, poolTargetScaleKey, scaledTargetDescriptor, describeScaledDescriptor }
   from '../pools/pool-target-scale.js';
 import { truncateActiveRunAt }  from './run-schedule.js';
+import { sessionTails, describeSessionTail, endSessionRows, SESSION_END } from '../pools/pool-session-end.js';
 import { adviceSignals }        from './advice-signals.js';
 
 /*
@@ -1141,9 +1142,10 @@ export const COCKPIT_CONTROLS = {
      * Not the POINT default, which kept only the LAST epoch's shape under an index key
      * (`liquidityGraphSchedule[1].shape`): one year of a dated decision, addressed by a position
      * in a table the scaffold keeps re-sorting. `shape: null` (the base graph) is a decision and
-     * is kept. No `by` mark: the schedule's editor and normalizer carry only `{ year, shape }`.
+     * is kept. Each row is marked `by` with the run (design 123 §4.4), as POOL_TARGET's are, so
+     * the advisory below can tell a session's last row from an authored one.
      */
-    harvest: ({ epochs, baseParams }) => {
+    harvest: ({ epochs, baseParams, simEnd = null }) => {
       const rows = (Array.isArray(baseParams?.liquidityGraphSchedule)
         ? baseParams.liquidityGraphSchedule : []).map(e => ({ ...e }));
       let decided = 0;
@@ -1152,8 +1154,9 @@ export const COCKPIT_CONTROLS = {
         if (!Number.isFinite(v?._year) || !e.candidate || !Object.hasOwn(e.candidate, v.paramKey)) continue;
         const shape = e.candidate[v.paramKey];
         if (!(shape === null || (typeof shape === 'string' && shape))) continue;
+        const row = { year: v._year, shape, by: e.record?.runId ?? 'mpc' };
         const i = rows.findIndex(r => Number(r?.year) === v._year);
-        if (i >= 0) rows[i] = { year: v._year, shape }; else rows.push({ year: v._year, shape });
+        if (i >= 0) rows[i] = _sameSession(rows[i], row); else rows.push(row);
         decided++;
       }
       if (!decided) {
@@ -1167,6 +1170,7 @@ export const COCKPIT_CONTROLS = {
         params: { liquidityGraphSchedule: rows },
         labels: { liquidityGraphSchedule: `${decided} decision(s): ${label.slice(0, 4).join(' · ')}`
           + (label.length > 4 ? ' …' : '') },
+        warnings: _tailWarnings({ shapes: rows }, simEnd),
       };
     },
     describe: (candidate, vars) => {
@@ -1179,7 +1183,7 @@ export const COCKPIT_CONTROLS = {
     },
     /**
      * Forward-effective LIVE SWAP. Three writes, and all three are needed:
-     *   1) the scenario's `liquidityGraphSchedule` row for the year, so a Rebuild, the next
+     *   1) the scenario's `liquidityGraphSchedule` row for the year (marked `by` the run), so a Rebuild, the next
      *      Advise (which recompiles from `scenario.params`) and a design 81 replay (which folds
      *      the same row) all describe the plan the live sim is flying;
      *   2) the running sim's pool reducers, which hold the schedule from their constructors —
@@ -1191,7 +1195,7 @@ export const COCKPIT_CONTROLS = {
      *      The reducer swaps at the row's year-open, as it does in a rollout and a replay.
      * Returns true when the live sim now carries the decision.
      */
-    actuate: ({ services, scenario, candidate, vars }) => {
+    actuate: ({ services, scenario, candidate, vars, runId = null }) => {
       const v = vars?.[0];
       if (!v || !Number.isFinite(v._year)) return false;
       const shape = candidate?.[v.paramKey] ?? null;
@@ -1199,7 +1203,9 @@ export const COCKPIT_CONTROLS = {
       if (!p) return false;
       const sched = (Array.isArray(p.value) ? p.value : []).map(e => ({ ...e }))
         .filter(e => Number(e?.year) !== v._year);
-      sched.push({ year: v._year, shape });
+      // Design 123 §4.4 — marked with the run, like a POOL_TARGET row, so the editor and the
+      // session-end advisory can tell the session's rows from the author's.
+      sched.push({ year: v._year, shape, by: runId ?? 'mpc' });
       sched.sort((a, b) => Number(a.year) - Number(b.year));
       p.value = sched;
       return _restampLivePools(services, scenario);
@@ -1280,8 +1286,10 @@ export const COCKPIT_CONTROLS = {
      * Not the POINT default: that keeps the LAST epoch's value under an index key
      * (`liquidityTargetSchedule[3].scale`), which is one year of a dated decision and a position
      * in a table that has since moved. Each row is marked `by` with the run (R12).
+     *
+     * Design 123 §4.2 — warns when a pool's last row is the session's and holds past it.
      */
-    harvest: ({ epochs, baseParams }) => {
+    harvest: ({ epochs, baseParams, simEnd = null }) => {
       const rows = (Array.isArray(baseParams?.liquidityTargetSchedule)
         ? baseParams.liquidityTargetSchedule : []).map(e => ({ ...e }));
       let decided = 0;
@@ -1292,7 +1300,7 @@ export const COCKPIT_CONTROLS = {
           if (!Number.isFinite(v?._year) || typeof v?._pool !== 'string' || !Number.isFinite(k)) continue;
           const row = { year: v._year, pool: v._pool, scale: k, by: e.record?.runId ?? 'mpc' };
           const i = rows.findIndex(r => Number(r?.year) === v._year && r?.pool === v._pool);
-          if (i >= 0) rows[i] = row; else rows.push(row);
+          if (i >= 0) rows[i] = _sameSession(rows[i], row); else rows.push(row);
           decided++;
           pools.add(v._pool);
         }
@@ -1306,6 +1314,7 @@ export const COCKPIT_CONTROLS = {
         form: HARVEST_FORMS.SCHEDULE,
         params: { liquidityTargetSchedule: rows },
         labels: { liquidityTargetSchedule: `${decided} decision(s) over ${pools.size} pool(s)` },
+        warnings: _tailWarnings({ targets: rows }, simEnd),
       };
     },
     describe: (candidate, vars) => {
@@ -1382,6 +1391,50 @@ function _restampLivePools(services, scenario) {
   const patch = liquidityStateAt({ graph, schedule }, sim.state, new Date(sim.currentDate).getTime());
   if (Object.keys(patch).length) sim.state = { ...sim.state, ...patch };
   return true;
+}
+
+/**
+ * A harvested row replacing a row the SAME session already wrote keeps its hold mark (design
+ * 123: an `end: 'hold'` the operator chose survives a re-bake of the same decision). A closing
+ * `revert` row is not a decision, so a decision for its year replaces it outright, as does a
+ * row by anyone else.
+ */
+function _sameSession(prev, row) {
+  return (prev && prev.by === row.by && prev.end === SESSION_END.HOLD) ? { ...row, end: prev.end } : row;
+}
+
+/** Design 123 §4.2 — the session-tail advisories as harvest warnings. */
+function _tailWarnings(schedules, simEnd) {
+  const y = simEnd != null ? new Date(simEnd).getUTCFullYear() : null;
+  return sessionTails(schedules).map(t => describeSessionTail(t, { planEndYear: Number.isInteger(y) ? y : null }));
+}
+
+/**
+ * DESIGN 123 §4.3 — End session: decide what the session's pool rows mean after it.
+ *
+ *   · `hold` (the default, and what the controller priced) stamps `end: 'hold'` on the
+ *     session's final rows. No row is added and no output changes; the advisory stops.
+ *   · `revert` appends, at 1 January after `afterYear`, a closing row per pool (and for the
+ *     shape schedule) carrying the value the plan's OWN rows have in force there, then hands
+ *     the re-resolved schedule to the live sim exactly as an actuate does.
+ *
+ * Writes `scenario.params` only (one store), like every actuate. Idempotent per session.
+ *
+ * @returns {{ end: {policy, afterYear}, closing: Array, restamped: boolean }}
+ */
+export function endPoolSession({ services = null, scenario, runId, policy = SESSION_END.HOLD,
+                                 afterYear = null } = {}) {
+  const params = scenario?.params;
+  if (!Array.isArray(params)) throw new Error('End session: no scenario to end the session on');
+  const find = (name) => params.find(pp => (pp.key ?? pp.name) === name);
+  const tp = find('liquidityTargetSchedule');
+  const sp = find('liquidityGraphSchedule');
+  const out = endSessionRows({ targets: tp?.value ?? null, shapes: sp?.value ?? null,
+                               runId, policy, afterYear });
+  if (tp && out.targets.length) tp.value = out.targets;
+  if (sp && out.shapes.length) sp.value = out.shapes;
+  const restamped = out.closing.length ? _restampLivePools(services, scenario) : false;
+  return { end: out.end, closing: out.closing, restamped };
 }
 
 /**

@@ -172,33 +172,47 @@ export function knownPoolIds(rawGraph, rawShapes) {
  * An MPC session that re-decides every year writes a row per pool per year, and most of them
  * repeat the factor already in force. That is correct and replayable, so storage keeps every
  * row; this is what the editor shows above the table, one line per run of an unchanged factor:
- * `{ pool, scale, fromYear, lastYear, count, by }`. `by` is the set of provenance marks in the
- * run (hand-written rows contribute none).
+ * `{ pool, scale, fromYear, lastYear, count, by, end, openEnded }`. `by` is the set of
+ * provenance marks in the run (hand-written rows contribute none).
+ *
+ * Design 123 §4.1 — `openEnded` is true for a pool's LAST run when its factor is not 1: nothing
+ * follows it, so it holds to the end of the plan, and the summary has to say so rather than
+ * read like a run that stops at `lastYear` (a scale-1 run is the identity — `appliedScales`
+ * drops it — so it departs from nothing). `end` is the session-end mark of the run's last row
+ * (`'hold'` | `'revert'` | null); a closing `revert` row always starts a run of its own.
  *
  * Takes RAW rows (it runs in the editor, on whatever is typed) and skips any it cannot read, so
  * it never throws on a half-finished row.
  *
  * @param {Array} raw  the authored `liquidityTargetSchedule`
- * @returns {Array<{pool:string, scale:number, fromYear:number, lastYear:number, count:number, by:string[]}>}
+ * @returns {Array<{pool:string, scale:number, fromYear:number, lastYear:number, count:number,
+ *                   by:string[], end:string|null, openEnded:boolean}>}
  */
 export function collapseTargetRuns(raw) {
   const rows = (Array.isArray(raw) ? raw : [])
     .filter(r => r && Number.isInteger(Number(r.year)) && typeof r.pool === 'string' && r.pool
       && Number.isFinite(r.scale))
     .map(r => ({ year: Number(r.year), pool: r.pool, scale: r.scale,
-                 by: typeof r.by === 'string' && r.by ? r.by : null }))
+                 by: typeof r.by === 'string' && r.by ? r.by : null,
+                 end: typeof r.end === 'string' && r.end ? r.end : null }))
     .sort((a, b) => (a.pool < b.pool ? -1 : a.pool > b.pool ? 1 : 0) || a.year - b.year);
   const out = [];
   for (const r of rows) {
     const last = out[out.length - 1];
-    if (last && last.pool === r.pool && last.scale === r.scale) {
+    if (last && last.pool === r.pool && last.scale === r.scale
+        && r.end !== 'revert' && last.end !== 'revert') {
       last.lastYear = r.year;
       last.count += 1;
+      last.end = r.end;
       if (r.by && !last.by.includes(r.by)) last.by.push(r.by);
       continue;
     }
     out.push({ pool: r.pool, scale: r.scale, fromYear: r.year, lastYear: r.year, count: 1,
-               by: r.by ? [r.by] : [] });
+               by: r.by ? [r.by] : [], end: r.end, openEnded: false });
+  }
+  for (let i = 0; i < out.length; i++) {
+    const isLast = i === out.length - 1 || out[i + 1].pool !== out[i].pool;
+    out[i].openEnded = isLast && out[i].scale !== 1;
   }
   return out;
 }

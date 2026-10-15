@@ -889,3 +889,39 @@ test('MpcCockpitPlugin: the pool list is hidden for other levers', () => {
   plugin._syncRangeEnabled();
   assert.equal(plugin._q('pool-list').style.display, 'none');
 });
+
+// ─── design 123: End session ─────────────────────────────────────────────────
+
+test('MpcCockpitPlugin: End session enables once the session wrote pool rows, and revert closes them', () => {
+  const rows = [2030, 2031].map(year => ({ year, pool: 'reserve', scale: 2, by: 'run:test' }));
+  const { plugin, graph, scenario, published } = mountHarvestPlugin({
+    params: [{ name: 'liquidityTargetSchedule', type: 'LiquidityTargetSchedule', value: rows }],
+  });
+  plugin._syncHarvestEnabled();
+  assert.equal(plugin._q('end-session').disabled, true, 'no decision log yet');
+
+  addSpendingEpoch(graph, { year: 2030, amount: 6000 });   // the run the rows belong to
+  plugin._syncHarvestEnabled();
+  assert.equal(plugin._q('end-session').disabled, false);
+
+  plugin._openEndSession();
+  assert.notEqual(plugin._q('end-panel').style.display, 'none');
+  assert.equal(plugin._q('end-year').value, '2031', 'defaults to the last decided year');
+  assert.match(plugin._q('end-body').textContent, /priced every decision as held/);
+
+  plugin._q('end-revert').checked = true;
+  plugin._q('end-year').value = '2029';
+  plugin._applyEndSession();
+  assert.match(plugin._q('now').textContent, /cannot revert after 2029/, 'refused, and said');
+  assert.equal(scenario.params[0].value.length, 2, 'nothing written');
+
+  plugin._q('end-year').value = '2031';
+  plugin._applyEndSession();
+  assert.deepStrictEqual(scenario.params[0].value.at(-1),
+    { year: 2032, pool: 'reserve', scale: 1, by: 'run:test', end: 'revert' });
+  assert.equal(plugin._q('end-panel').style.display, 'none');
+  assert.ok(published.some(e => e.source === 'mpc-end-session'));
+  assert.deepStrictEqual(plugin._sessionEnd,
+    { runId: 'run:test', policy: 'revert', afterYear: 2031,
+      closing: [{ lever: 'POOL_TARGET', year: 2032, pool: 'reserve', value: 1 }] });
+});

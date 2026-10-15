@@ -340,10 +340,14 @@ test('PSL-9: the harvest bakes every decided year as a schedule row (SCHEDULE, n
   assert.equal(plan.entries[0].form, 'SCHEDULE');
   assert.deepEqual(plan.entries[0].to, [
     { year: 2040, shape: 'early' },           // authored, kept
-    { year: 2046, shape: 'early' },
-    { year: 2047, shape: null },              // back to the base graph is a decision, kept
+    { year: 2046, shape: 'early', by: 'run:1' },   // design 123 §4.4 — marked with the run
+    { year: 2047, shape: null, by: 'run:1' },      // back to the base graph is a decision, kept
   ]);
   assert.match(plan.entries[0].label, /2 decision\(s\)/);
+  // Design 123 §4.2 — the session's last row (base graph from 2047) departs from the authored
+  // 'early' and nothing follows it, so the bake says it holds to the end of the plan.
+  assert.ok(plan.warnings.some(w => /Liquidity Pool Shape: the session's last decision \(the base graph, 2047\) holds to the end of the plan/.test(w)),
+    plan.warnings.join('\n'));
 });
 
 test('PSL-9b: a harvested schedule replays as the decisions — compile of the bake ≡ compile of the rows', () => {

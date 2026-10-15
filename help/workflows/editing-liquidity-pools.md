@@ -6,7 +6,7 @@ panels: [parameters]
 params: [liquidityGraph, liquidityShapes, liquidityTargetSchedule]
 actions: []
 tools: []
-design: [114-pool-shape-inheritance-and-editor.md, 110-liquidity-pool-control-surface.md, 109-time-varying-pool-shapes.md]
+design: [114-pool-shape-inheritance-and-editor.md, 110-liquidity-pool-control-surface.md, 109-time-varying-pool-shapes.md, 123-pool-rows-after-a-session.md]
 sources: []
 stamps:
   param:liquidityGraph: 346c4e
@@ -54,7 +54,9 @@ conditions on those. Nothing hidden is changed, and a claim added while narrowed
 bucket.
 
 **Size decisions from a cockpit session stay folded.** The multipliers open as one line per
-run of equal decisions; **Show rows** lists every year, and adding a row opens them.
+run of equal decisions; **Show rows** lists every year, and adding a row opens them. A last
+run says *held to the end of the plan*; a session's that nobody ended is flagged until
+**End session** in the cockpit holds it or reverts to the plan's own rows.
 
 Two neighbours share the word "pool" and are not these: the cash and bond *years of spend*
 settings size the allocation mix, and the hand-written drawdown sequence is replaced by the

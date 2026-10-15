@@ -65,6 +65,7 @@ import { claimValueNative } from '../../finance/pools/pool-metrics.js';
 import { describeRunSource } from '../../finance/mpc/run-schedule.js';
 import { describeScaledTarget } from '../../finance/pools/pool-target-scale.js';
 import { collapseTargetRuns }   from '../../finance/pools/pool-target-schedule.js';
+import { sessionTails, describeSessionTail } from '../../finance/pools/pool-session-end.js';
 import {
   poolGraphEntries, expandLiquidityShapes, shapeDeltaAgainst, shapeLineage,
   isDeltaShape, sameGraphValue, BASE_SHAPE_ID,
@@ -1076,10 +1077,17 @@ const sizeAttr = (modeField, key) => (row) => boundsFor(row?.[modeField])?.[key]
  * bridge shape starts in 2035" and leaves the first nine years of the plan looking
  * unauthored, when in fact `liquidityGraph` governs them.
  *
+ * Design 123 — the LAST row is open-ended too, and is said to be: a row naming a shape reads
+ * "held to the end of the plan". A row an MPC session wrote carries `by` (shown, and kept
+ * across edits) and possibly an `end` mark; when the session's last row holds past the session
+ * with no End choice made, the advisory says so under the summary.
+ *
  * @param {object} param
  * @param {function(): Array<string>} shapeIdsProvider  the live `liquidityShapes` keys
+ * @param {function(): (string|null)} [planEndProvider] the scenario's `simEnd`, for the wording
  */
-export function buildLiquidityGraphScheduleEditor(param, shapeIdsProvider = () => []) {
+export function buildLiquidityGraphScheduleEditor(param, shapeIdsProvider = () => [],
+                                                  planEndProvider = () => null) {
   // A row may select the BASE graph with `shape: null` (design 39 §14.9.8), which is how an
   // MPC decision to stay on or return to it is saved. A select cannot hold null, so the editor
   // carries it as a sentinel that never leaves this function. Without it, `sync()` below
@@ -1088,11 +1096,16 @@ export function buildLiquidityGraphScheduleEditor(param, shapeIdsProvider = () =
     year:  Number.isFinite(Number(r?.year)) ? Number(r.year) : null,
     shape: typeof r?.shape === 'string' ? r.shape
       : (r?.shape === null && r && Object.hasOwn(r, 'shape')) ? BASE_SHAPE_OPTION : null,
+    by:    typeof r?.by === 'string' && r.by ? r.by : null,
+    end:   typeof r?.end === 'string' && r.end ? r.end : null,
   }));
+  // `by`/`end` ride through untouched (design 123 §4.4): dropping them here would erase the
+  // session marks the moment the panel opened, since `sync()` runs on build.
   const sync = () => {
     const kept = rows.filter(r => r.year != null && r.shape);
     param.value = kept.length
-      ? kept.map(r => ({ year: r.year, shape: r.shape === BASE_SHAPE_OPTION ? null : r.shape }))
+      ? kept.map(r => ({ year: r.year, shape: r.shape === BASE_SHAPE_OPTION ? null : r.shape,
+                         ...(r.by ? { by: r.by } : {}), ...(r.end ? { end: r.end } : {}) }))
       : null;
   };
   sync();
@@ -1111,6 +1124,18 @@ export function buildLiquidityGraphScheduleEditor(param, shapeIdsProvider = () =
       : 'No shapes defined yet — add one under Liquidity Pool Shapes, then schedule it here.';
     container.appendChild(base);
 
+    // Design 123 §4.1–4.2 — the last row's tail, stated; and the session advisory.
+    const endYear = _planEndYear(planEndProvider);
+    const last = [...rows].filter(r => r.year != null && r.shape)
+      .sort((a, b) => a.year - b.year).pop();
+    if (last && last.shape !== BASE_SHAPE_OPTION) {
+      const tail = el('div', 'row-list-empty liquidity-schedule-tail',
+        `'${last.shape}' from ${last.year}, held ${_untilPlanEnd(endYear)}${_endNote(last.end)}`);
+      tail.dataset.id = 'schedule-tail';
+      container.appendChild(tail);
+    }
+    _appendSessionAdvisories(container, { shapes: param.value }, endYear);
+
     container.appendChild(buildRowListEditor({
       rows,
       columns: [
@@ -1125,10 +1150,14 @@ export function buildLiquidityGraphScheduleEditor(param, shapeIdsProvider = () =
             }
             return opts;
           } },
+        { field: 'by',    label: 'By', type: 'note', width: '0.8fr',
+          text: (row) => row.by ? `${row.by}${row.end ? ` (${row.end})` : ''}` : '',
+          title: (row) => row.by ? `Written by MPC session ${row.by}` : 'Written by hand' },
       ],
       newRow: () => {
         const last = rows[rows.length - 1];
-        return { year: (last?.year ?? new Date().getUTCFullYear()) + 1, shape: ids[0] ?? null };
+        return { year: (last?.year ?? new Date().getUTCFullYear()) + 1, shape: ids[0] ?? null,
+                 by: null, end: null };
       },
       addLabel:  '+ Add Year',
       emptyText: 'One shape for the whole run — the base graph governs throughout.',
@@ -1156,21 +1185,28 @@ export function buildLiquidityGraphScheduleEditor(param, shapeIdsProvider = () =
  *   · R13 — a session that re-decides every year writes a row per pool per year. Above the
  *     table the rows are shown as RUNS of an unchanged factor ("cash 3y (×1.5), 2031–2040,
  *     10 rows"). Display only: storage keeps every row, so a replay is unchanged.
+ *   · Design 123 — a pool's last run is open-ended and the summary says so ("…, then held to
+ *     the end of the plan (2060)"); a session's last row that holds past the session with no
+ *     End choice made raises the advisory under the summary. `end` marks are kept like `by`.
  *
  * @param {object} param
  * @param {function(): object} graphsProvider  live `{ liquidityGraph, liquidityShapes }`
+ * @param {function(): (string|null)} [planEndProvider] the scenario's `simEnd`, for the wording
  */
-export function buildLiquidityTargetScheduleEditor(param, graphsProvider = () => ({})) {
+export function buildLiquidityTargetScheduleEditor(param, graphsProvider = () => ({}),
+                                                   planEndProvider = () => null) {
   const rows = (Array.isArray(param.value) ? param.value : []).map(r => ({
     year:  Number.isFinite(Number(r?.year)) ? Number(r.year) : null,
     pool:  typeof r?.pool === 'string' && r.pool ? r.pool : null,
     scale: Number.isFinite(r?.scale) ? r.scale : null,
     by:    typeof r?.by === 'string' && r.by ? r.by : null,
+    end:   typeof r?.end === 'string' && r.end ? r.end : null,
   }));
   const sync = () => {
     const kept = rows.filter(r => r.year != null && r.pool && r.scale != null);
     param.value = kept.length
-      ? kept.map(r => ({ year: r.year, pool: r.pool, scale: r.scale, ...(r.by ? { by: r.by } : {}) }))
+      ? kept.map(r => ({ year: r.year, pool: r.pool, scale: r.scale,
+                         ...(r.by ? { by: r.by } : {}), ...(r.end ? { end: r.end } : {}) }))
       : null;
   };
   sync();
@@ -1200,20 +1236,27 @@ export function buildLiquidityTargetScheduleEditor(param, graphsProvider = () =>
     const ids = poolIds(g);
 
     const runs = collapseTargetRuns(param.value);
+    const endYear = _planEndYear(planEndProvider);
     if (runs.length) {
       const summary = el('div', 'row-list-empty liquidity-target-runs');
       summary.dataset.id = 'target-runs';
       for (const run of runs) {
         const line = el('div', 'liquidity-target-run');
-        const span = run.lastYear === run.fromYear ? `from ${run.fromYear}`
-          : `${run.fromYear}–${run.lastYear}`;
-        const rowsNote = run.count > 1 ? `, ${run.count} rows` : '';
+        const single = run.lastYear === run.fromYear;
+        // Design 123 §4.1 — the last run of a pool holds to the end of the plan; say so.
+        const span = run.openEnded
+          ? (single ? `from ${run.fromYear}, held ${_untilPlanEnd(endYear)}`
+            : `${run.fromYear}–${run.lastYear}, then held ${_untilPlanEnd(endYear)}`)
+          : (single ? `from ${run.fromYear}` : `${run.fromYear}–${run.lastYear}`);
+        const rowsNote = run.count > 1 ? ` · ${run.count} rows` : '';
         const byNote   = run.by.length ? ` · by ${run.by.join(', ')}` : '';
-        line.textContent = `${describeScaledTarget(g, run.pool, run.scale)}, ${span}${rowsNote}${byNote}`;
+        line.textContent = `${describeScaledTarget(g, run.pool, run.scale)}, ${span}${rowsNote}`
+          + `${byNote}${_endNote(run.end)}`;
         summary.appendChild(line);
       }
       container.appendChild(summary);
     }
+    _appendSessionAdvisories(container, { targets: param.value }, endYear);
 
     if (rows.length && !ui.showRows) {
       const bar = el('div', 'pool-graph-controls');
@@ -1250,13 +1293,13 @@ export function buildLiquidityTargetScheduleEditor(param, graphsProvider = () =>
         { field: 'size',  label: 'Size', type: 'note', width: '1.8fr',
           text: (row) => (row.pool && row.scale != null) ? describeScaledTarget(g, row.pool, row.scale) : '' },
         { field: 'by',    label: 'By', type: 'note', width: '0.8fr',
-          text: (row) => row.by ?? '',
+          text: (row) => row.by ? `${row.by}${row.end ? ` (${row.end})` : ''}` : '',
           title: (row) => row.by ? `Written by MPC session ${row.by}` : 'Written by hand' },
       ],
       newRow: () => {
         const last = rows[rows.length - 1];
         return { year: (last?.year ?? new Date().getUTCFullYear()) + 1,
-                 pool: last?.pool ?? ids[0] ?? null, scale: 1, by: null };
+                 pool: last?.pool ?? ids[0] ?? null, scale: 1, by: null, end: null };
       },
       addLabel:  '+ Add Row',
       emptyText: ids.length
@@ -1273,6 +1316,34 @@ export function buildLiquidityTargetScheduleEditor(param, graphsProvider = () =>
 
 /** The schedule editor's stand-in for `shape: null` (the base graph). Never saved. */
 const BASE_SHAPE_OPTION = '\u0000base';
+
+// ─── design 123 — the pool schedules' open-ended tail ───────────────────────────
+
+/** The plan's end year from a `simEnd` provider; null when it cannot be read. */
+function _planEndYear(provider) {
+  const v = provider?.();
+  if (v == null || v === '') return null;
+  const y = new Date(v).getUTCFullYear();
+  return Number.isInteger(y) ? y : null;
+}
+
+function _untilPlanEnd(year) {
+  return year != null ? `to the end of the plan (${year})` : 'to the end of the plan';
+}
+
+function _endNote(end) {
+  return end === 'hold' ? ' · session ended: held'
+    : end === 'revert' ? ' · session ended: reverted' : '';
+}
+
+/** §4.2 — one warning line per session tail, under the summary. */
+function _appendSessionAdvisories(container, schedules, planEndYear) {
+  for (const t of sessionTails(schedules)) {
+    const note = el('div', 'pool-readout pool-readout--warn', describeSessionTail(t, { planEndYear }));
+    note.dataset.id = 'session-tail-advisory';
+    container.appendChild(note);
+  }
+}
 
 /**
  * `LiquidityShapes` — the named alternative graphs (design 109 §11), as TABS (design 114 §7.2).
