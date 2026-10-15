@@ -1777,6 +1777,23 @@ test('LiquidityGraphSchedule: a row pointing at a DELETED shape is kept and mark
   assert.match([...sel.options].map(o => o.textContent).join(' '), /not found/);
 });
 
+test('LiquidityGraphSchedule: a session row keeps by/end; the last row\'s tail is stated (design 123)', () => {
+  const param = { name: 'liquidityGraphSchedule',
+    value: [{ year: 2035, shape: 'bridge' }, { year: 2040, shape: 'late', by: 'mpc-1' }] };
+  const host = mount(buildLiquidityGraphScheduleEditor(param, () => ['bridge', 'late'], () => '2060-01-01'));
+  assert.deepStrictEqual(param.value, [{ year: 2035, shape: 'bridge' }, { year: 2040, shape: 'late', by: 'mpc-1' }],
+    'opening the panel keeps the session mark');
+  assert.equal(cell(host, 'schedule-tail').textContent, "'late' from 2040, held to the end of the plan (2060)");
+  assert.match(cell(host, 'session-tail-advisory').textContent,
+    /Liquidity Pool Shape: the session's last decision \('late', 2040\) holds to 2060/);
+  assert.deepStrictEqual(cells(host, 'by').map(c => c.textContent), ['', 'mpc-1']);
+
+  param.value[1].end = 'hold';
+  const held = mount(buildLiquidityGraphScheduleEditor(param, () => ['bridge', 'late'], () => '2060-01-01'));
+  assert.equal(cell(held, 'session-tail-advisory'), null);
+  assert.match(cell(held, 'schedule-tail').textContent, /session ended: held/);
+});
+
 test('LiquidityGraphSchedule: rows sort by year, and an incomplete row is not written', () => {
   const param = { name: 'liquidityGraphSchedule', value: [{ year: 2050, shape: 'late' }] };
   const host = mount(buildLiquidityGraphScheduleEditor(param, () => ['bridge', 'late']));
@@ -2161,9 +2178,39 @@ test('LiquidityTargetSchedule: equal consecutive rows collapse in DISPLAY only (
   const host = showTargetRows(mount(buildLiquidityTargetScheduleEditor(param, TGT_GRAPHS)));
   const runs = cell(host, 'target-runs');
   assert.equal(runs.children.length, 1);
-  assert.equal(runs.textContent, 'cash 3y (×1.5), 2031–2033, 3 rows · by mpc-1');
+  assert.equal(runs.textContent,
+    'cash 3y (×1.5), 2031–2033, then held to the end of the plan · 3 rows · by mpc-1');
   assert.deepStrictEqual(param.value, value, 'storage keeps every row');
   assert.equal(cells(host, 'year').length, 3, 'and the table edits every row');
+});
+
+test('LiquidityTargetSchedule: the last run names the plan end; the session tail is flagged (design 123)', () => {
+  const value = [2030, 2031].map(year => ({ year, pool: 'cash', scale: 1.5, by: 'mpc-1' }));
+  const param = { name: 'liquidityTargetSchedule', value };
+  const host = mount(buildLiquidityTargetScheduleEditor(param, TGT_GRAPHS, () => '2060-01-01'));
+  assert.equal(cell(host, 'target-runs').textContent,
+    'cash 3y (×1.5), 2030–2031, then held to the end of the plan (2060) · 2 rows · by mpc-1');
+  assert.match(cell(host, 'session-tail-advisory').textContent,
+    /the session's last decision for cash \(×1.5, 2031\) holds to 2060/);
+});
+
+test('LiquidityTargetSchedule: an End mark is kept, said, and silences the advisory (design 123)', () => {
+  const param = { name: 'liquidityTargetSchedule', value: [
+    { year: 2030, pool: 'cash', scale: 1.5, by: 'mpc-1' },
+    { year: 2031, pool: 'cash', scale: 1.5, by: 'mpc-1', end: 'hold' },
+    { year: 2030, pool: 'bonds', scale: 2 },
+    { year: 2035, pool: 'bonds', scale: 1 },
+  ] };
+  const host = showTargetRows(mount(buildLiquidityTargetScheduleEditor(param, TGT_GRAPHS, () => '2060-01-01')));
+  const lines = [...cell(host, 'target-runs').children].map(c => c.textContent);
+  assert.deepStrictEqual(lines, [
+    'bonds base 6y / bridge 10y (×2), from 2030',     // closed by the ×1 row: not open-ended
+    'bonds base 3y / bridge 5y (×1), from 2035',      // ×1 is the plan itself: nothing to say
+    'cash 3y (×1.5), 2030–2031, then held to the end of the plan (2060) · 2 rows · by mpc-1 · session ended: held',
+  ]);
+  assert.equal(cell(host, 'session-tail-advisory'), null);
+  type(cells(host, 'scale').at(-1), '1.25', 'change');
+  assert.equal(param.value.find(r => r.year === 2031).end, 'hold', 'the mark survives an edit');
 });
 
 test('LiquidityTargetSchedule: a row naming a pool no graph has is kept and marked', () => {

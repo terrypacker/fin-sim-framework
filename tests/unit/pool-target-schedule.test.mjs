@@ -432,9 +432,10 @@ test('DPT-17: equal consecutive rows collapse into runs; display only, never thr
     null,
   ]);
   assert.deepEqual(runs, [
-    { pool: 'bonds', scale: 2,    fromYear: 2030, lastYear: 2030, count: 1, by: [] },
-    { pool: 'cash',  scale: 1.5,  fromYear: 2031, lastYear: 2032, count: 2, by: ['mpc-1'] },
-    { pool: 'cash',  scale: 1.25, fromYear: 2033, lastYear: 2034, count: 2, by: ['mpc-1'] },
+    // Design 123 §4.1 — a pool's LAST run (scale ≠ 1) is open-ended: it holds to the plan end.
+    { pool: 'bonds', scale: 2,    fromYear: 2030, lastYear: 2030, count: 1, by: [], end: null, openEnded: true },
+    { pool: 'cash',  scale: 1.5,  fromYear: 2031, lastYear: 2032, count: 2, by: ['mpc-1'], end: null, openEnded: false },
+    { pool: 'cash',  scale: 1.25, fromYear: 2033, lastYear: 2034, count: 2, by: ['mpc-1'], end: null, openEnded: true },
   ]);
   assert.deepEqual(collapseTargetRuns(null), []);
 });

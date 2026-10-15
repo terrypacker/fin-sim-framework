@@ -2259,7 +2259,7 @@ what the in-app panel keys on.
 | [Drawdown Order](concepts/drawdown-order.md) | concept | 316 | 2 panels · 22 params · design 44, 65, 97 |
 | [Early Withdrawal](concepts/early-withdrawal.md) | concept | 228 | 1 panel · 8 params |
 | [Economic Shocks](concepts/economic-shocks.md) | concept | 367 | 2 panels · 3 params |
-| [Editing Liquidity Pools](workflows/editing-liquidity-pools.md) | workflow | 537 | 1 panel · 3 params · design 114, 110, 109 |
+| [Editing Liquidity Pools](workflows/editing-liquidity-pools.md) | workflow | 570 | 1 panel · 3 params · design 114, 110, 109, 123 |
 | [Event](nodes/event.md) | node | 220 | 2 panels · design 2 |
 | [Event Sourcing](concepts/event-sourcing.md) | concept | 381 | 3 panels · design 2, 16, 91 |
 | [Node History](panels/exec-history.md) | panel | 191 | 1 panel |

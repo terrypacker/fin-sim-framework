@@ -84,6 +84,8 @@ export function requirementSatisfied(from, to) {
  * @param {object}  [opts.epsilon]      - per-form collapse tolerances.
  * @param {string}  [opts.collapse]     - COLLAPSE_RULES for POINT levers.
  * @param {Date}    [opts.simStart]     - plan start, for the glidepath's prepended anchor.
+ * @param {Date}    [opts.simEnd]       - plan end, named by the pool levers' session-tail
+ *                                        advisory (design 123 §4.2).
  * @returns {{
  *   runId, epochs, epochRange: [string|null, string|null], levers: string[],
  *   goal: object|null,
@@ -99,6 +101,7 @@ export function harvestDecisions(records = [], {
   epsilon       = {},
   collapse      = COLLAPSE_RULES.LAST,
   simStart      = null,
+  simEnd        = null,
 } = {}) {
   const rows = [...records].sort((a, b) => String(a.asOfDate).localeCompare(String(b.asOfDate)));
   const leverKeys = [...new Set(rows.flatMap(r => r.controlKeys ?? []))];
@@ -116,7 +119,7 @@ export function harvestDecisions(records = [], {
     const epochs = _epochsFor(rows, key);
     if (!epochs.length) continue;
 
-    const ctx = { epochs, baseParams, birth, epsilon, collapse, simStart, control };
+    const ctx = { epochs, baseParams, birth, epsilon, collapse, simStart, simEnd, control };
     let out;
     try {
       out = control.harvest

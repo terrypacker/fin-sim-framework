@@ -123,11 +123,16 @@ function _sameScalar(a, b) {
  * @param {string}  [opts.baseScenarioId]   the scenario it was recorded against (Q5 provenance)
  * @param {string}  [opts.solver]           e.g. 'CEM/128'
  * @param {string}  [opts.recordedAt]       ISO; defaults to now
+ * @param {object}  [opts.end]              design 123 §4.5 — the session's End choice,
+ *                                          `{ policy, afterYear, closing }` from `endPoolSession`.
+ *                                          Recorded as `source.end`; a revert's closing rows are
+ *                                          appended as ordinary decisions, so the compile fold
+ *                                          plays them with no new code. Absent ⇒ today's entry.
  * @returns {{ entry: {source: object, decisions: Array}|null, warnings: string[] }}
  */
 export function buildRunEntry(records = [], {
   controlsByKey = {}, runId = null, derivedFrom = null, baseScenarioId = null,
-  solver = null, recordedAt = null, dedupeUnchanged = true,
+  solver = null, recordedAt = null, dedupeUnchanged = true, end = null,
 } = {}) {
   const { decisions, warnings } = decisionsFromRecords(records, { controlsByKey, dedupeUnchanged });
   if (decisions.length === 0) {
@@ -148,6 +153,17 @@ export function buildRunEntry(records = [], {
     derivedFrom,
     rows:           decisions.length,
   };
+  if (end && (end.policy === 'hold' || end.policy === 'revert')) {
+    source.end = { policy: end.policy, afterYear: end.afterYear ?? null };
+    // Dated at the session's last epoch: a closing row is part of the End decision, taken then.
+    // Its key is the lever's own `scheduleKey`, so it folds exactly as a decided row would.
+    for (const c of (end.policy === 'revert' ? (end.closing ?? []) : [])) {
+      const key = controlsByKey[c.lever]?.scheduleKey?.({ _year: c.year, _pool: c.pool });
+      if (key == null) continue;
+      decisions.push({ date: source.last, lever: c.lever, key, value: c.value, end: 'revert' });
+    }
+    source.rows = decisions.length;
+  }
   return { entry: { source, decisions }, warnings };
 }
 
