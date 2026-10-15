@@ -9,7 +9,7 @@ tools: []
 design: [114-pool-shape-inheritance-and-editor.md, 110-liquidity-pool-control-surface.md, 109-time-varying-pool-shapes.md]
 sources: []
 stamps:
-  param:liquidityGraph: c86d6c
+  param:liquidityGraph: ed9c1e
   param:liquidityShapes: eddce3
   param:liquidityTargetSchedule: 6c32a4
   panel:parameters: 671185

@@ -6,7 +6,7 @@ panels: [pools]
 params: [liquidityGraph, liquidityGraphEnabled, poolFlowsEnabled, poolCashYears, poolBondYears, cashBucketDrawdownMinSeverity]
 design: [97-liquidity-pools-and-drawdown-sequence.md]
 stamps:
-  param:liquidityGraph: c86d6c
+  param:liquidityGraph: ed9c1e
   param:liquidityGraphEnabled: 2df3a6
   param:poolFlowsEnabled: 8b8123
   param:poolCashYears: 92629a

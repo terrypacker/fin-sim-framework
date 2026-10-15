@@ -858,6 +858,9 @@ const GATE_OPTIONS = Object.freeze([
   ['targetReturnUnder',   'destination returned under X last year'],
   ['sourceDrawdownUnder', 'source within X of its high'],
   ['targetDrawdownOver',  'destination X below its high'],
+  // In YEARS of spending, unlike the four above. Pair it with a market clause on another OR
+  // branch: "refill when the market allows, or regardless once the reserve is under X years".
+  ['targetCoverUnder',    'destination under X years of spending'],
 ]);
 
 // The SENSE of a clause — design 97 §12.3's `not`, on the row rather than as a nested node.
@@ -896,7 +899,7 @@ const GATE_BASIS_OPTIONS = Object.freeze([
  * The blank is labelled rather than empty: a bare "—" in a column headed "Measured against"
  * reads as a setting the author forgot, and this one is a setting the clause cannot have.
  */
-const GATE_BASIS_NA_OPTIONS = Object.freeze([['', 'n/a — a return clause']]);
+const GATE_BASIS_NA_OPTIONS = Object.freeze([['', 'n/a — not a drawdown clause']]);
 
 /**
  * Does this clause kind measure a pool against a trailing high, and so name a series?
@@ -2387,9 +2390,10 @@ export function buildLiquidityGraphEditor(param, accounts = [], flags = null, in
       { field: 'gateKind',  label: 'Clause', type: 'select', options: GATE_OPTIONS,
         rerender: true, width: '1.8fr' },
       // No min of 0: a RETURN threshold is legitimately negative ("harvest unless the market
-      // is down more than 10%"), while a drawdown fraction is not. The normalizer enforces
-      // the per-kind range; the control must not pre-empt it with the tighter one.
-      { field: 'gateValue', label: 'X',      type: 'number', step: '0.01', min: '-1', max: '1', width: '0.6fr' },
+      // is down more than 10%"), while a drawdown fraction is not; and a COVER floor is in
+      // years, so it runs past 1. The normalizer enforces the per-kind range; the control
+      // must not pre-empt it with a tighter one.
+      { field: 'gateValue', label: 'X',      type: 'number', step: '0.01', min: '-1', max: '50', width: '0.6fr' },
       { field: 'gateBasis', label: 'Measured against', type: 'select', options: gateBasisOptionsFor, width: '1.5fr' },
       // The lever design 97 §20.13 measured as the one that moves the answer: the three
       // drawdown thresholds landed within $13k of each other, while the same gate family
@@ -2608,7 +2612,7 @@ function writeMoreColumnsPref(on) {
  * the flow keeps its authored gate verbatim in `rawGate`, round-tripped the way `ui` is.
  */
 const GATE_CLAUSE_KINDS = ['sourceReturnOver', 'targetReturnUnder',
-                           'sourceDrawdownUnder', 'targetDrawdownOver'];
+                           'sourceDrawdownUnder', 'targetDrawdownOver', 'targetCoverUnder'];
 
 /** One node → one row, or null when the node says more than a row can. */
 function gateNodeToRow(node) {

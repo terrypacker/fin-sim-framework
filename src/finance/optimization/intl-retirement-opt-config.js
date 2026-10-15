@@ -374,6 +374,23 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
     group:    'Allocation',
     enabled:  false,
   },
+  // The equity market target (flag 28 option 2): international share per country.
+  {
+    paramKey: 'rebalanceIntlShareUs',
+    label:    'International Share — US Accounts',
+    type:     OPT_PARAM_TYPES.CONTINUOUS,
+    min: 0, max: 1, step: 0.05,
+    group:    'Allocation',
+    enabled:  false,
+  },
+  {
+    paramKey: 'rebalanceIntlShareAu',
+    label:    'International Share — AU Accounts',
+    type:     OPT_PARAM_TYPES.CONTINUOUS,
+    min: 0, max: 1, step: 0.05,
+    group:    'Allocation',
+    enabled:  false,
+  },
   {
     paramKey: 'rebalanceDriftBandSheltered',
     label:    'Rebalance Drift Band — Sheltered',

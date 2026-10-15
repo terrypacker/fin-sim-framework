@@ -14,6 +14,8 @@ import { ALLOCATION, totalizeMix, assertTotalMix } from '../holdings/allocation.
 import { ACCOUNT_ROLES }       from '../state/account-roles.js';
 import { planLocatedTargets, roleCanHold, restrictMixForRole } from './allocation-location.js';
 import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
+import { instrumentOf }        from '../holdings/holding-utils.js';
+import { EQUITY_MARKETS_BY_COUNTRY } from '../holdings/default-allocations.js';
 
 const ACTION_KEY = 'rebalance_to_target';
 
@@ -292,13 +294,17 @@ export class RebalanceToTargetReducer extends Reducer {
    * @param {object}   [opts.locationPolicy]       - class → preferred-roles map (Lever D placement)
    * @param {object}   [opts.classRestrictions]    - design 115: class → roles it may NEVER occupy
    *                                                 (`allocationClassRestrictions`); HARD, both modes
+   * @param {object}   [opts.intlShare]            - { US?: number, AU?: number }: the target share of
+   *                                                 the international market inside an account's EQUITY
+   *                                                 (`rebalanceIntlShareUs/Au`). Null/absent ⇒ no target.
    */
   constructor({ accounts = [], targetAllocation = { EQUITY: 0.60, BOND: 0.40 },
                 driftBandTaxable = 0.10, driftBandSheltered = 0.02,
                 scheduleMode = ALLOCATION_SCHEDULE.STATIC, glidepath = null, regimeTargets = null,
                 poolYears = null, expensesCurrency = 'RESIDENCE', baseCurrency = 'USD',
                 locationMode = ALLOCATION_LOCATION.LOCATED, locationPolicy = null,
-                poolGraph = null, locationEligibility = null, classRestrictions = null } = {}) {
+                poolGraph = null, locationEligibility = null, classRestrictions = null,
+                intlShare = null } = {}) {
     super('Rebalance To Target', PRIORITY.PRE_PROCESS + 4);
     this.reducedActionTypes   = ['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE'];
     this.generatedActionTypes = ['REBALANCE_TO_TARGET_APPLY'];
@@ -338,6 +344,10 @@ export class RebalanceToTargetReducer extends Reducer {
     // `_overPlacedDollars` is value placed beyond a class's target because the restrictions
     // together admitted no exact placement (only reachable with several classes restricted).
     this.classRestrictions    = classRestrictions;
+    // The equity MARKET target (flag 28 of the macro-regimes study). A sheltered account
+    // whose international share drifts past its band rebalances on that alone; a taxable one
+    // only carries the share on its action so the apply step can steer its sales and buys.
+    this.intlShare            = intlShare;
     this._restrictedDollars   = 0;
     this._overPlacedDollars   = 0;
   }
@@ -474,11 +484,11 @@ export class RebalanceToTargetReducer extends Reducer {
    * Raising the target rather than deleting the sell leg is deliberate — legs must sum to
    * zero for gross value to be conserved, and surgery on one leg breaks that invariant.
    */
-  _applyVeto(mix, state, actualFractions) {
+  _applyVeto(mix, state, actualFractions, bookBase = 0) {
     if (!mix) return mix;
     // Floor first, then cap (§12.4c): a graph may mix the two scopes, and the cap has to see
     // the mix the floor left or the two would each renormalise a different denominator.
-    const floored = this._applySourceVeto(mix, state, actualFractions);
+    const floored = this._applySourceVeto(mix, state, actualFractions, bookBase);
     return this._applyEdgeVeto(floored, state, actualFractions);
   }
 
@@ -495,14 +505,27 @@ export class RebalanceToTargetReducer extends Reducer {
    * years, on a graph whose gates never mentioned cash), and it is the strictness this scope
    * is FOR, not a defect in it — but it is why §12.4c exists and why EDGE is the safer scope.
    */
-  _applySourceVeto(mix, state, actualFractions) {
+  _applySourceVeto(mix, state, actualFractions, bookBase = 0) {
     const vetoed = state?.poolRefillPlan?.vetoed;
     if (!Array.isArray(vetoed) || vetoed.length === 0) return mix;
     const byId = new Map((this._poolGraphOf(state)?.pools ?? []).map(p => [p.id, p]));
+    const sleevesOf = id => (byId.get(id)?.claims ?? []).flatMap(c => c.sleeves ?? []);
+    // A cover-floor release (`poolRefillPlan.release`, flag 29): the source stays vetoed, but
+    // this much of it may be sold, and the proceeds go to the destination's class ONLY — a
+    // partial refill to the floor, not a reopening of the whole book to the drift band.
+    const releaseFrom = new Map(), releaseTo = new Map();
+    for (const r of state?.poolRefillPlan?.release ?? []) {
+      if (!(bookBase > 0) || !vetoed.includes(r.from)) continue;
+      const fromCls = sleevesOf(r.from)[0], toCls = sleevesOf(r.to)[0];
+      if (!fromCls || !toCls) continue;
+      const frac = Math.min(r.amountBase / bookBase, actualFractions?.[fromCls] ?? 0);
+      releaseFrom.set(fromCls, (releaseFrom.get(fromCls) ?? 0) + frac);
+      releaseTo.set(toCls, (releaseTo.get(toCls) ?? 0) + frac);
+    }
     const held = new Map();
     for (const id of vetoed) {
-      for (const cls of (byId.get(id)?.claims ?? []).flatMap(c => c.sleeves ?? [])) {
-        held.set(cls, Math.max(held.get(cls) ?? 0, actualFractions?.[cls] ?? 0));
+      for (const cls of sleevesOf(id)) {
+        held.set(cls, Math.max(held.get(cls) ?? 0, (actualFractions?.[cls] ?? 0) - (releaseFrom.get(cls) ?? 0)));
       }
     }
     if (!held.size) return mix;
@@ -510,6 +533,14 @@ export class RebalanceToTargetReducer extends Reducer {
     let floorSum = 0;
     for (const [cls, frac] of held) {
       out[cls] = Math.max(out[cls] ?? 0, frac);
+      floorSum += out[cls];
+    }
+    // The released weight is pinned on its destination class like a floor of its own, so the
+    // renormalisation below cannot hand it to gold or cash instead.
+    for (const [cls, frac] of releaseTo) {
+      if (held.has(cls)) continue;
+      out[cls] = (actualFractions?.[cls] ?? 0) + frac;
+      held.set(cls, out[cls]);
       floorSum += out[cls];
     }
     if (floorSum >= 1) return totalizeMix(Object.fromEntries([...held].map(([c]) => [c, out[c]])));
@@ -679,7 +710,7 @@ export class RebalanceToTargetReducer extends Reducer {
     if (this._poolGraphOf(state)) {
       const base = this._scheduledMix(state, action, bookBase);
       const mix  = this._resolvePoolTarget(state, bookBase, base, clamped) ?? base;
-      return this._applyVeto(mix, state, actualFractions);
+      return this._applyVeto(mix, state, actualFractions, bookBase);
     }
     return this._scheduledMix(state, action, bookBase);
   }
@@ -828,7 +859,10 @@ export class RebalanceToTargetReducer extends Reducer {
         const actualFrac = (actual[alloc] ?? 0) / total;
         return Math.abs(actualFrac - tgt) > band;
       }) || _holdsBarredClass(actual, role, this.classRestrictions);
-      if (!needsRebalance && qualifyingRegimes.length === 0) continue;
+      const intlShare = _intlShareFor(this.intlShare, role);
+      const marketDrift = intlShare != null && !taxable
+        && _intlShareDrift(account.holdings, role, intlShare, state.securities ?? null) > band;
+      if (!needsRebalance && !marketDrift && qualifyingRegimes.length === 0) continue;
 
       // Legs: signed delta per allocation. Include a negative leg for any
       // held-but-not-targeted class (e.g. drop a legacy sleeve) so its value is
@@ -839,11 +873,13 @@ export class RebalanceToTargetReducer extends Reducer {
         const actualMv = actual[alloc] ?? 0;
         return { allocation: alloc, delta: +(targetMv - actualMv).toFixed(2) };
       }).filter(l => Math.abs(l.delta) > 0.01);
-      if (legs.length === 0) continue;
+      if (legs.length === 0 && !marketDrift) continue;
 
       rebalanceActions.push({
         type: 'REBALANCE_TO_TARGET_APPLY',
         stateKey, role, taxable, country: countryForRole(role), legs,
+        // Absent unless authored, so a plan without a market target emits the same action.
+        ...(intlShare != null ? { intlShare } : {}),
       });
     }
 
@@ -928,4 +964,27 @@ function _primaryResidency(state) {
     if (p?.residency) return p.residency;
   }
   return 'US';
+}
+
+/** The authored international share for this role's country, or null (flag 28 option 2). */
+function _intlShareFor(intlShare, role) {
+  const t = intlShare?.[countryForRole(role)];
+  return Number.isFinite(t) ? Math.min(1, Math.max(0, t)) : null;
+}
+
+/**
+ * How far an account's EQUITY sleeve sits from its international-share target, as an
+ * absolute fraction of the sleeve. An account with no equity has no drift.
+ */
+export function _intlShareDrift(holdings, role, intlShare, securities = null) {
+  const markets = EQUITY_MARKETS_BY_COUNTRY[countryForRole(role)];
+  if (!markets) return 0;
+  let equity = 0, intl = 0;
+  for (const h of holdings ?? []) {
+    if (h?.allocation !== ALLOCATION.EQUITY) continue;
+    const mv = h.marketValue ?? 0;
+    equity += mv;
+    if (instrumentOf(h, securities).rateKey === markets.international) intl += mv;
+  }
+  return equity > 0 ? Math.abs(intl / equity - intlShare) : 0;
 }

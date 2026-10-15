@@ -258,6 +258,11 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
           // target with poolCashYears/poolBondYears throws) and honours its gates as a veto
           // on the sale that would refill them. Null ⇒ every design-97 line is inert.
           poolGraph: resolveLiquidityGraph(p, context.accounts ?? []),
+          // The equity market target (flag 28 of the macro-regimes study). Null per country
+          // ⇒ no target there, and the actions are the same as before.
+          intlShare: (Number.isFinite(p.rebalanceIntlShareUs) || Number.isFinite(p.rebalanceIntlShareAu))
+            ? { US: p.rebalanceIntlShareUs ?? null, AU: p.rebalanceIntlShareAu ?? null }
+            : null,
         }),
         new RebalanceToTargetApplyReducer({ lotStrategy: p.rebalanceLotStrategy ?? 'FIFO' }),
       ];
@@ -317,6 +322,26 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
           'strategy but FIFO an equity sale is split across markets (US, international) by value and ' +
           'lots are picked within each, so the account keeps its market split. Sheltered ' +
           'accounts and cash legs sell pro rata, so this does not affect them.',
+        visibleWhen: { param: 'behavioralStrategies', includes: 'TARGET_ALLOCATION' },
+      },
+      {
+        key: 'rebalanceIntlShareUs', label: 'International Share — US Accounts',
+        type: 'Number', group: 'Allocation', mc: false, opt: true,
+        min: 0, max: 1, step: 0.05, defaultValue: null,
+        description: 'Target share of international (ex-US) equity inside each US account\'s equity. ' +
+          'Sheltered accounts (401k, IRA, Roth) rebalance to it whenever it drifts past the sheltered ' +
+          'band. Taxable accounts never sell only to fix it: each rebalance sale comes out of the ' +
+          'over-weight market first and each buy goes into the under-weight one. Spending sales and ' +
+          'deposits do not steer it. Blank = no target, and the split is whatever the holdings are.',
+        visibleWhen: { param: 'behavioralStrategies', includes: 'TARGET_ALLOCATION' },
+      },
+      {
+        key: 'rebalanceIntlShareAu', label: 'International Share — AU Accounts',
+        type: 'Number', group: 'Allocation', mc: false, opt: true,
+        min: 0, max: 1, step: 0.05, defaultValue: null,
+        description: 'The same target for Australian accounts: the share of ex-Australia equity inside ' +
+          'each AU account\'s equity, super included. Super otherwise keeps the APRA default split it ' +
+          'was opened with. Blank = no target.',
         visibleWhen: { param: 'behavioralStrategies', includes: 'TARGET_ALLOCATION' },
       },
       {
@@ -691,6 +716,12 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
           + 'spent down and latches shut after the first crash, so use BALANCE only for a pool that is '
           + 'accumulating. `sourceReturnOver: 0` is "only harvest after an up year" and '
           + '`targetReturnUnder` is the same machinery pointing the other way, i.e. buy the dip. '
+          + '`targetCoverUnder: n` opens while the destination holds under n years of spending; put it '
+          + 'on its own `anyOf` branch beside a drawdown clause so a deep bust cannot hold the gate shut '
+          + 'while the reserve runs dry. When only that branch is open, the refill stops at n years, not '
+          + 'the full target, and the source stays otherwise unsold. Measure it before relying on it: '
+          + 'opening while the source is still deep below its high sells growth into the recovery the '
+          + 'drawdown clause was waiting for, which can cost more than the empty reserve. '
           + 'Clauses can be composed — `anyOf` / `allOf` / `not`, an array is an AND — and any of them '
           + 'can carry `sustainedYears: n`, which holds the gate shut until its condition has held n '
           + 'consecutive years; §20.13 measured that DURATION, not the threshold, as the lever. '
