@@ -13,7 +13,7 @@
  *
  * STAG-1  at the library default bases each phase lands on its measured real rates
  *         (MEASUREMENTS §12): about −1 % real while inflation runs, +6-7 % once it breaks
- * STAG-2  gold gains +5 pp with the US inflation leg, and only during it
+ * STAG-2  gold moves one-for-one with the US inflation legs (+5 pp, then the +1.5 tail), and only then
  * STAG-3  the month-120 phase step is a yield RISE (bonds are marked down, not up)
  * STAG-4  every fixed-income returnAdjustment mirrors its interestRateAdjustment
  * STAG-5  a run that ends inside the episode drops the later phases without a warning
@@ -75,7 +75,7 @@ test('STAG-1 / STAG-2: each phase lands on its measured real rates, and gold mov
   // [month, US FI real, US policy real, AU FI real, AU policy real, US infl, AU infl, gold]
   const CHECKS = [
     [  60, -0.010, -0.008, -0.020, -0.016, 0.080, 0.116, 0.10 ],   // 1973-80
-    [ 150,  0.072,  0.064,  0.055,  0.066, 0.030, 0.081, 0.05 ],   // US 1981-85, AU 1981-90
+    [ 150,  0.072,  0.064,  0.055,  0.066, 0.045, 0.081, 0.065 ],  // US 1981-85, AU 1981-90 (both tails)
     [ 300,  0.010,  0.015,  0.060,  0.044, 0.030, 0.030, 0.05 ],   // US base, AU 1991-99
   ];
   for (const [m, fiUs, prUs, fiAu, prAu, infUs, infAu, gold] of CHECKS) {

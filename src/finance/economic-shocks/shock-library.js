@@ -256,6 +256,18 @@ const HISTORICAL_SHOCKS = {
         regime: { inflationAdjustment: { AU: 0.051 } },
         recovery: { profile: 'L', durationMonths: 120 },
       },
+      {
+        // The US did not drop straight back to base either: CPIAUCSL Dec 1980 → Dec 1990 is
+        // ×1.557, 4.5 %/yr (1981-85 4.9, 1986-90 4.2), so the US gets a second decade at +1.5.
+        // Without it the AU/US price gap ran ×2.25 in-model against ×1.67 measured, which design
+        // 122's PPP anchor turns straight into an exchange-rate error. Gold keeps moving
+        // one-for-one with the US inflation adjustment, as on `inflation`. `ratesUsTail` lifts
+        // nominal rates by the same 1.5 so the phase-2 REAL rates stay on their measurements.
+        id: 'inflationUsTail',
+        startMonths: 120,
+        regime: { inflationAdjustment: { US: 0.015 }, returnAdjustment: { GOLD: 0.015 } },
+        recovery: { profile: 'L', durationMonths: 120 },
+      },
       // ── Rates, in phases (design 121 §4) ──────────────────────────────────────────────
       //
       // History's real-rate SEQUENCE is the point: about −1 % real while inflation ran
@@ -278,10 +290,10 @@ const HISTORICAL_SHOCKS = {
       //
       // Where they land (FI / policy, with inflation in brackets):
       //   0-120 mo    US 7.0 / 7.2 (8.0)  real −1.0 / −0.8    AU  9.6 / 10.0 (11.6)  real −2.0 / −1.6
-      //   120-240 mo  US 10.2 / 9.4 (3.0) real +7.2 / +6.4    AU 13.6 / 14.7 (8.1)   real +5.5 / +6.6
+      //   120-240 mo  US 11.7 / 10.9 (4.5) real +7.2 / +6.4   AU 13.6 / 14.7 (8.1)   real +5.5 / +6.6
       //   from 240    US base                                  AU  9.0 / 7.4 (3.0)    real +6.0 / +4.4
       //
-      // The month-120 step is a yield RISE (US 7 → 10.2, AU 9.6 → 13.6), so
+      // The month-120 step is a yield RISE (US 7 → 11.7, AU 9.6 → 13.6), so
       // BondPriceAdjustReducer marks held bonds DOWN then — the 1979-81 direction. The 1979-81
       // curve moved almost in parallel (twist ≤ 0.9 pp, MEASUREMENTS §6), so there is no
       // yieldCurveTwist on any phase.
@@ -307,6 +319,18 @@ const HISTORICAL_SHOCKS = {
           interestRateAdjustment: { FIXED_INCOME_US: 0.062, PRIME_US: 0.049 },
         },
         recovery: { profile: 'U', durationMonths: 120 },
+      },
+      {
+        // The nominal half of `inflationUsTail`: +1.5 on US rates for exactly the window the US
+        // tail inflation is live (L/120 from month 120), so `realRatesUs` above still states the
+        // real step against whatever inflation is in force — the same rule as every rates leg.
+        id: 'ratesUsTail',
+        startMonths: 120,
+        regime: {
+          returnAdjustment:       { FIXED_INCOME_US: 0.015 },
+          interestRateAdjustment: { FIXED_INCOME_US: 0.015, PRIME_US: 0.015 },
+        },
+        recovery: { profile: 'L', durationMonths: 120 },
       },
       {
         // AU 1981-90 real: 10-year +5.5, bill +6.6, against the AU tail's 8.1 % inflation.
