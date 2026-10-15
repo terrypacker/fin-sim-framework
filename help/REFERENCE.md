@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-233 parameters · 33 panels · 12 node types (206 fields) · 179 action types · 89 tools · 320 state field types · 78 topics · 134 design docs
+233 parameters · 33 panels · 12 node types (206 fields) · 179 action types · 89 tools · 320 state field types · 78 topics · 135 design docs
 
 ---
 
@@ -2315,7 +2315,7 @@ what the in-app panel keys on.
 
 ---
 
-## Design documents (134)
+## Design documents (135)
 
 Tier 3 — the full argument behind each mechanic, in `design/`. The title is each
 file's own H1, read out of it; there is no summary column, because a one-line precis
@@ -2455,6 +2455,7 @@ between 10 and 11.
 | [`124-gates-on-an-empty-pool.md`](../design/124-gates-on-an-empty-pool.md) | 124 — What a pool gate measures, and protects, once its pool is empty |
 | [`125-tips-expected-inflation.md`](../design/125-tips-expected-inflation.md) | 125 — Expected inflation for the TIPS market real yield |
 | [`126-regime-study-model-gaps.md`](../design/126-regime-study-model-gaps.md) | 126 — Model gaps that limit regime studies |
+| [`127-time-weighted-investment-earnings.md`](../design/127-time-weighted-investment-earnings.md) | 127 — Time-weighted investment earnings |
 | [`bus-unification-plan.md`](../design/bus-unification-plan.md) | Bus Unification Plan |
 | [`inconsistencies.md`](../design/inconsistencies.md) | Inconsistencies, Rework Candidates, and Open Questions |
 | [`requirements.md`](../design/requirements.md) | Requirements Tracker |
