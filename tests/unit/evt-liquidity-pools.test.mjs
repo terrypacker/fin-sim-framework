@@ -254,6 +254,72 @@ test('POOL-6b: the same graph with the gate open fires — a working-detector co
   assert.deepEqual(out.state.poolRefillPlan.vetoed, []);
 });
 
+// Flag 29 of the macro-regimes study: after a deep bust a drawdown gate stayed shut 14–18 years
+// while the reserve was spent to zero. A cover floor on its own OR branch is the escape.
+const coverGate = (years) => ({ anyOf: [{ sourceDrawdownUnder: 0.05 }, { targetCoverUnder: years }] });
+
+test('POOL-6c: a cover floor opens a shut market gate once the destination is nearly empty', () => {
+  // growth 20% down (the market clause is shut); cash 100k = 0.83 years of a 120k/yr spend.
+  const { reducer, state } = flowFixture({
+    cash: 100_000, equity: 800_000,
+    high: { growth: { high: 1_000_000 }, cash: { high: 100_000 } },
+    flow: { gate: coverGate(1) },
+  });
+  const out = fire(reducer, state);
+  assert.equal(out.next.length, 1, 'under one year of cover, the floor branch opens the gate');
+  assert.equal(out.next[0].amountBase, 20_000, 'and the refill goes to the 1-year floor (120k), not the 240k target');
+  assert.deepEqual(out.state.poolRefillPlan.vetoed, []);
+});
+
+test('POOL-6f: an in-portfolio edge opened only by its floor keeps the veto and releases the gap', () => {
+  // Reserve (BOND) refilled from growth (EQUITY) in ONE account: the rebalancer executes it.
+  const graph = normalizeLiquidityGraph({
+    pools: [
+      { id: 'reserve', spendOrder: 10, target: { mode: 'YEARS_OF_SPEND', value: 4 },
+        claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }] },
+      { id: 'growth',  spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [{ id: 'g2r', from: 'growth', to: 'reserve', gate: coverGate(2) }],
+  }, ACCOUNTS);
+  const broker = new BrokerageAccount(1_000_000, { country: 'US', currency: USD });
+  broker.holdings = [
+    new Holding({ id: 'bond', allocation: ALLOCATION.BOND,   marketValue: 100_000, costBasis: 100_000, purchaseDate: D(2010), rateKey: 'FIXED_INCOME_US' }),
+    new Holding({ id: 'eq',   allocation: ALLOCATION.EQUITY, marketValue: 900_000, costBasis: 900_000, purchaseDate: D(2010), rateKey: 'EQUITY_US' }),
+  ];
+  const state = { usStockAccount: broker, monthlyExpenses: 10_000, effectiveExchangeRates: { USD_AUD: 1 },
+    people: { p1: { birthDate: new Date(Date.UTC(1975, 0, 1)) } },
+    liquidityPools: { growth: { high: 2_000_000, returnIndex: 0.5, returnIndexHigh: 1 } } };
+  const out = new PoolFlowReducer({ graph, flowsEnabled: true })
+    .reduce(state, { type: 'US_PERIOD_ADVANCE', date: '2030-01-01T00:00:00.000Z' }, new Date('2030-01-01'));
+  // 0.83 years of cover against a 2-year floor: release 240k − 100k = 140k, veto kept.
+  assert.deepEqual(out.poolRefillPlan.vetoed, ['growth']);
+  assert.deepEqual(out.poolRefillPlan.release, [{ from: 'growth', to: 'reserve', amountBase: 140_000 }]);
+  // …and the rebalancer sells exactly that much equity into bonds, nothing more.
+  const rb = new RebalanceToTargetReducer({ accounts: [{ stateKey: 'usStockAccount', role: 'us-stock' }],
+    targetAllocation: { EQUITY: 0.6, BOND: 0.4 }, poolGraph: graph });
+  const mix = rb._applySourceVeto({ EQUITY: 0.52, BOND: 0.48 }, out, { EQUITY: 0.9, BOND: 0.1 }, 1_000_000);
+  assert.ok(Math.abs(mix.EQUITY - 0.76) < 1e-9 && Math.abs(mix.BOND - 0.24) < 1e-9, JSON.stringify(mix));
+});
+
+test('POOL-6d: above the cover floor the market clause still decides', () => {
+  const { reducer, state } = flowFixture({
+    cash: 100_000, equity: 800_000,
+    high: { growth: { high: 1_000_000 }, cash: { high: 100_000 } },
+    flow: { gate: coverGate(0.5) },
+  });
+  const out = fire(reducer, state);
+  assert.equal(out.next.length, 0);
+  assert.deepEqual(out.state.poolRefillPlan.vetoed, ['growth']);
+});
+
+test('POOL-6e: targetCoverUnder normalizes and rejects a negative floor', () => {
+  const g = normalizeLiquidityGraph({ ...REFERENCE, flows: [
+    { id: 'r2c', from: 'reserve', to: 'cash', amount: { fractionOfSource: 0.5 }, gate: { targetCoverUnder: 2 } }] }, ACCOUNTS);
+  assert.equal(g.flows[0].gate.targetCoverUnder, 2);
+  assert.throws(() => normalizeLiquidityGraph({ ...REFERENCE, flows: [
+    { id: 'r2c', from: 'reserve', to: 'cash', amount: { fractionOfSource: 0.5 }, gate: { targetCoverUnder: -1 } }] }, ACCOUNTS));
+});
+
 test('POOL-7: the reverse edge (buy the dip) shifts the target mix only when the destination is down', () => {
   // Buy-the-dip is an IN-PORTFOLIO edge — BOND sleeve into EQUITY sleeve of the same book.
   // It cannot be a cash-into-a-sleeve transfer: depositing cash into a brokerage does not

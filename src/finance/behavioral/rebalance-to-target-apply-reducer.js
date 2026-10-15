@@ -15,7 +15,7 @@ import { LOT_STRATEGIES }       from '../holdings/holdings-selection.js';
 import { disposalTermFields, auCpiRate, isLongTerm } from '../holdings/holding-period.js';
 import { ACCOUNT_ROLES }        from '../state/account-roles.js';
 import { compactLots, LOT_POLICIES, promoteToUnitised, prevailingPrice, instrumentOf } from '../holdings/holding-utils.js';
-import { resolveRateKey, resolveEquityMarketMix } from '../holdings/default-allocations.js';
+import { resolveRateKey, resolveEquityMarketMix, EQUITY_MARKETS_BY_COUNTRY } from '../holdings/default-allocations.js';
 import { RATE_KEY_META }        from '../economic-regimes/rate-keys.js';
 import { resolveYield }         from '../economic-regimes/yield-curve.js';
 import { realiseDerivedGain } from '../assets/investment-account.js';
@@ -134,7 +134,7 @@ export class RebalanceToTargetApplyReducer extends Reducer {
   }
 
   reduce(state, action, date) {
-    const { stateKey, role, taxable, country, legs } = action;
+    const { stateKey, role, taxable, country, intlShare } = action;
     const account = state[stateKey];
     if (!account || !Array.isArray(account.holdings)) return this.newState(state);
 
@@ -154,7 +154,24 @@ export class RebalanceToTargetApplyReducer extends Reducer {
                     ?? state.currentPeriods?.US?.startMs ?? null;
 
     let holdings = [...account.holdings];
+    // The equity MARKET target (flag 28 option 2): when the action carries `intlShare`, the
+    // EQUITY leg is planned per market up front — a sheltered account trades to the share
+    // exactly, a taxable one only steers the sale or buy it was already making. An EQUITY leg
+    // of 0 is added so a sheltered account can rebalance markets with no class drift.
+    const securities = state.securities ?? null;
+    const marketPlan = Number.isFinite(intlShare)
+      ? _planEquityMarkets(holdings, action.legs, intlShare, country, taxable, securities)
+      : null;
+    const legs = marketPlan && !action.legs.some(l => l.allocation === ALLOCATION.EQUITY)
+      ? [...action.legs, { allocation: ALLOCATION.EQUITY, delta: 0 }]
+      : action.legs;
     const taxActions = [];
+    const consumeOptsFor = () => ({
+      selection,
+      indexation: { level: auLevel, asOfMs: auAsOfMs, country: 'AU', cpiRate: auCpiRate(state) },
+      terms:      { asOfMs: auAsOfMs, countries: ['US', 'AU'] },
+      securities,
+    });
     // The taxable sell legs' lot order. Null for FIFO, which is exactly what
     // `consumeHoldings` treats as the historic oldest-first walk.
     const lot = this.lotStrategy === REBALANCE_LOT_INHERIT
@@ -177,8 +194,45 @@ export class RebalanceToTargetApplyReducer extends Reducer {
 
     // ── Sell legs first (delta < 0) — frees value the buy legs redeploy ──────────
     for (const { allocation, delta } of legs) {
-      if (delta >= -0.01) continue;
+      const planned = marketPlan && allocation === ALLOCATION.EQUITY ? marketPlan.sell : null;
+      if (planned ? planned.total <= 0.01 : delta >= -0.01) continue;
       const matching = holdings.filter(h => h.allocation === allocation && (h.marketValue ?? 0) > 0);
+      if (planned) {
+        const groupOf = h => _marketGroup(h, marketPlan.markets, securities);
+        if (taxable) {
+          const r = _consumeByMarket(matching, planned.total, consumeOptsFor(), { amounts: planned.byGroup, groupOf });
+          washEntries.push(..._washPendingEntries({ allocation, country, matching, fifo: r, state, stateKey, ms: purchaseMs }));
+          holdings = [...holdings.filter(h => h.allocation !== allocation), ...r.newHoldings];
+          taxActions.push(_sellTax({ allocation, country, proceeds: planned.total, fifo: r, residency, stateKey }));
+        } else {
+          // Pro rata WITHIN each market: each lot gives up its share of its market's amount.
+          const sold = new Map();
+          for (const [g, amt] of planned.byGroup) {
+            const lots = matching.filter(h => groupOf(h) === g);
+            const mv = lots.reduce((x, h) => x + (h.marketValue ?? 0), 0);
+            if (mv > 0) for (const h of lots) sold.set(h, Math.min(h.marketValue, amt * h.marketValue / mv));
+          }
+          // Netted across the leg before the floor, as the pro-rata path below does.
+          let legGain = 0;
+          for (const [h, amt] of sold) {
+            const gain = amt * (1 - (h.costBasis ?? 0) / h.marketValue);
+            legGain += gain;
+            if (isSuper) {
+              if (gain < 0) superCgt.capitalLoss -= gain;
+              else if (auAsOfMs == null || isLongTerm('AU', auAsOfMs - _purchaseTs(h))) superCgt.discountableGain += gain;
+              else superCgt.otherGain += gain;
+            }
+          }
+          shelteredGain += Math.max(0, +legGain.toFixed(2));
+          holdings = holdings.map(h => {
+            const amt = sold.get(h);
+            if (amt == null) return h;
+            const mv = +(h.marketValue - amt).toFixed(2);
+            return mv < 0.001 ? null : resize(h, mv / Math.max(h.marketValue, 0.001));
+          }).filter(Boolean);
+        }
+        continue;
+      }
       const availMv  = matching.reduce((s, h) => s + (h.marketValue ?? 0), 0);
       const take     = +Math.min(-delta, availMv).toFixed(2);
       if (take <= 0.01) continue;
@@ -188,12 +242,7 @@ export class RebalanceToTargetApplyReducer extends Reducer {
       if (taxable && allocation !== ALLOCATION.CASH) {
         // Design 90 §9 step 2 — the full entry point, so the signed, §1222-charactered
         // split can be requested. `selection` is the lot order (null ⇒ FIFO).
-        const consumeOpts = {
-          selection,
-          indexation: { level: auLevel, asOfMs: auAsOfMs, country: 'AU', cpiRate: auCpiRate(state) },
-          terms:      { asOfMs: auAsOfMs, countries: ['US', 'AU'] },
-          securities: state.securities ?? null,
-        };
+        const consumeOpts = consumeOptsFor();
         // A chosen lot order picks lots by tax alone, and across a mixed EQUITY sleeve that
         // can sell one market out entirely: HIFO took a US account's only international
         // fund, and every later buy inherits the remaining market (`_inheritedTraits`), so
@@ -256,6 +305,19 @@ export class RebalanceToTargetApplyReducer extends Reducer {
 
     // ── Buy legs (delta > 0) — each establishes a fresh lot dated today ──────────
     for (const { allocation, delta } of legs) {
+      if (marketPlan && allocation === ALLOCATION.EQUITY) {
+        for (const [g, amt] of marketPlan.buy.byGroup) {
+          if (amt <= 0.01) continue;
+          const siblings = holdings.filter(h => h.allocation === allocation && _marketGroup(h, marketPlan.markets, securities) === g);
+          const inherited = _inheritedTraits(siblings, securities);
+          const traits = inherited.rateKey !== undefined ? inherited : { rateKey: marketPlan.markets[g] };
+          holdings = [...holdings, _newSleeve({
+            allocation, amount: +amt.toFixed(2), country, role, purchaseMs, holdings, state, stateKey,
+            traits, priceLevel: auLevel, siblings,
+          })];
+        }
+        continue;
+      }
       if (delta <= 0.01) continue;
       const buyAmt   = +delta.toFixed(2);
       const matching = holdings.filter(h => h.allocation === allocation);
@@ -697,24 +759,83 @@ function _equityBuySplit(account, matching, amount, securities) {
  * in `matching` (the wash-sale pairing reads it by id). A sleeve with one market takes the
  * plain single call. The last market absorbs the rounding remainder, so the total is exact.
  */
-function _consumeByMarket(matching, amount, opts) {
+function _consumeByMarket(matching, amount, opts, { amounts = null, groupOf = null } = {}) {
+  const keyOf = groupOf ?? (h => instrumentOf(h, opts.securities).rateKey ?? null);
   const byMarket = new Map();
   for (const h of matching) {
-    const key = instrumentOf(h, opts.securities).rateKey ?? null;
+    const key = keyOf(h);
     const g = byMarket.get(key) ?? [];
     g.push(h);
     byMarket.set(key, g);
   }
-  if (byMarket.size < 2) return consumeHoldings(matching, amount, opts);
-  const groups = [...byMarket.values()].map(lots => ({ lots, mv: lots.reduce((s, h) => s + (h.marketValue ?? 0), 0) }));
+  if (!amounts && byMarket.size < 2) return consumeHoldings(matching, amount, opts);
+  const groups = [...byMarket].map(([key, lots]) => ({ key, lots, mv: lots.reduce((s, h) => s + (h.marketValue ?? 0), 0) }));
   const totalMv = groups.reduce((s, g) => s + g.mv, 0);
   let allocated = 0;
   const parts = groups.map((g, i) => {
-    const amt = i === groups.length - 1 ? +(amount - allocated).toFixed(2) : +(amount * g.mv / totalMv).toFixed(2);
+    // `amounts` (a market target's plan) names each market's share outright; otherwise
+    // pro rata by value, the last market absorbing the rounding remainder.
+    const amt = amounts ? +(amounts.get(g.key) ?? 0).toFixed(2)
+      : i === groups.length - 1 ? +(amount - allocated).toFixed(2) : +(amount * g.mv / totalMv).toFixed(2);
     allocated = +(allocated + amt).toFixed(2);
     return consumeHoldings(g.lots, amt, opts);
   });
   return parts.reduce(_mergeConsumed);
+}
+
+/** 'intl' for a lot on the country's international equity market, else 'dom'. */
+function _marketGroup(h, markets, securities) {
+  return instrumentOf(h, securities).rateKey === markets.intl ? 'intl' : 'dom';
+}
+
+/**
+ * Plan an EQUITY leg per market against an international-share target `t` (flag 28 option 2).
+ *
+ * The sleeve after the leg is E′ = E + delta, and the target holds t·E′ international.
+ *  - SHELTERED: trade to it exactly. Each market moves by (its target − what it holds), so a
+ *    market rebalance with no class drift is one sale and one buy of equal size.
+ *  - TAXABLE: never trade for the split alone. A sale comes out of the over-weight market
+ *    first and a buy goes into the under-weight market first; whatever is left of the leg
+ *    after the gap closes goes in the target proportion.
+ * Lots on neither market (a US account holding AU equity, say) count as domestic.
+ *
+ * @returns {{ markets: {dom: string, intl: string}, sell: {total: number, byGroup: Map},
+ *             buy: {byGroup: Map} }|null}  null when the country has no market axis.
+ */
+export function _planEquityMarkets(holdings, legs, t, country, taxable, securities = null) {
+  const m = EQUITY_MARKETS_BY_COUNTRY[country];
+  if (!m) return null;
+  const markets = { dom: m.domestic, intl: m.international };
+  let I = 0, D = 0;
+  for (const h of holdings) {
+    if (h?.allocation !== ALLOCATION.EQUITY) continue;
+    const mv = h.marketValue ?? 0;
+    if (_marketGroup(h, markets, securities) === 'intl') I += mv; else D += mv;
+  }
+  const delta = legs.find(l => l.allocation === ALLOCATION.EQUITY)?.delta ?? 0;
+  const E1 = Math.max(0, I + D + delta);
+  let dI, dD;
+  if (!taxable) {
+    dI = t * E1 - I;
+    dD = (1 - t) * E1 - D;
+  } else if (delta < 0) {
+    const S = Math.min(-delta, I + D);
+    const sI = Math.min(I, S, Math.max(0, I - t * (I + D - S)));
+    let sD = S - sI;
+    const over = Math.max(0, sD - D);           // domestic exhausted: the rest from intl
+    sD -= over;
+    dI = -(sI + over); dD = -sD;
+  } else {
+    const bI = Math.min(delta, Math.max(0, t * (I + D + delta) - I));
+    dI = bI; dD = delta - bI;
+  }
+  const sellBy = new Map([['dom', Math.max(0, -dD)], ['intl', Math.max(0, -dI)]]);
+  const buyBy  = new Map([['dom', Math.max(0, dD)], ['intl', Math.max(0, dI)]]);
+  return {
+    markets,
+    sell: { total: sellBy.get('dom') + sellBy.get('intl'), byGroup: sellBy },
+    buy:  { byGroup: buyBy },
+  };
 }
 
 /** Sum two `consumeHoldings` results field by field (see `_consumeByMarket`). */

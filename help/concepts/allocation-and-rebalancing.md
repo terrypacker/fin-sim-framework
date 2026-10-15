@@ -3,7 +3,7 @@ id: allocation-and-rebalancing
 kind: concept
 title: Allocation and Rebalancing
 panels: [allocation, holdings]
-params: [allocationStrategy, allocationSchedule, allocationGlidepath, allocationRegimeTargets, allocationLocation, allocationLocationPolicy, allocWeight::EQUITY, allocWeight::BOND, allocWeight::CASH, rebalanceTargetAllocation, rebalanceDriftBand, rebalanceDriftBandTaxable, rebalanceDriftBandSheltered, rebalanceLotStrategy, allocationClassRestrictions]
+params: [allocationStrategy, allocationSchedule, allocationGlidepath, allocationRegimeTargets, allocationLocation, allocationLocationPolicy, allocWeight::EQUITY, allocWeight::BOND, allocWeight::CASH, rebalanceTargetAllocation, rebalanceDriftBand, rebalanceDriftBandTaxable, rebalanceDriftBandSheltered, rebalanceLotStrategy, rebalanceIntlShareUs, rebalanceIntlShareAu, allocationClassRestrictions]
 design: [61-holding-allocation-lever.md, 82-allocation-over-time-reporting.md, 115-asset-class-restrictions.md]
 stamps:
   param:allocationStrategy: 277063
@@ -20,6 +20,8 @@ stamps:
   param:rebalanceDriftBandTaxable: 102a66
   param:rebalanceDriftBandSheltered: 960cb2
   param:rebalanceLotStrategy: cf4f95
+  param:rebalanceIntlShareUs: 7edf07
+  param:rebalanceIntlShareAu: 017138
   param:allocationClassRestrictions: 4c97ef
   panel:allocation: 762dd9
   panel:holdings: 962055
@@ -32,15 +34,15 @@ continuous weights the optimizer can search. The second form exists so the mix c
 an *answer* rather than an input.
 
 **How does it change over time?** It can hold still, glide between anchors by age, or
-switch by economic regime. Gliding is the common case and the one most plans get
-wrong by omission: a static mix means the portfolio is as aggressive at eighty as at
-fifty, which nobody would choose deliberately.
+switch by economic regime. Gliding is the common case: a static mix means the portfolio
+is as aggressive at eighty as at fifty, which nobody would choose deliberately.
 
 **Where does each class live?** A whole-portfolio mix says nothing about which
 account holds the bonds, and that placement is worth real money — putting the
 tax-inefficient class in the sheltered account and letting equity compound where
 gains are never taxed. The placement preference is soft: it spills when an account
-is full rather than refusing.
+is full rather than refusing. Inside equity, the home/international split can carry its
+own target; without one it is whatever the holdings happen to be.
 
 Some placements are not preferences at all but things you cannot do. Gold in
 Australian super is the motivating case: for a US citizen it usually means running a

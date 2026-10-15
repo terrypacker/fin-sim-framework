@@ -435,6 +435,12 @@ function normalizeGate(raw, flowId, depth = 0, where = 'gate') {
   // foresight and the second is not implementable.
   if (raw.sourceReturnOver  != null) out.sourceReturnOver  = num(raw.sourceReturnOver,  `flow '${flowId}' ${where}.sourceReturnOver`,  { min: -1, max: 1 });
   if (raw.targetReturnUnder != null) out.targetReturnUnder = num(raw.targetReturnUnder, `flow '${flowId}' ${where}.targetReturnUnder`, { min: -1, max: 1 });
+  // A COVER floor (macro-regimes study flag 29): open while the destination holds less than
+  // this many years of current spending. Composed as `anyOf: [<market clause>, {targetCoverUnder}]`
+  // it says "refill when the market allows, or regardless once the reserve is nearly gone" —
+  // the escape a market gate needs, because after a deep bust a drawdown test can stay shut
+  // for over a decade while the reserve is spent to zero.
+  if (raw.targetCoverUnder != null) out.targetCoverUnder = num(raw.targetCoverUnder, `flow '${flowId}' ${where}.targetCoverUnder`, { min: 0, max: 50 });
   if (raw.notInRegime != null) {
     const tags = Array.isArray(raw.notInRegime) ? raw.notInRegime : [raw.notInRegime];
     if (!tags.length) err(`flow '${flowId}' ${where}.notInRegime is empty; omit it`);

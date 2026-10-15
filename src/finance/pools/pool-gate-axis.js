@@ -95,6 +95,8 @@ export const GATE_THRESHOLD_RANGES = Object.freeze({
   // 10%" is -0.10, and "only after an up year" is 0.
   sourceReturnOver:    { min: -0.15, max: 0.15, step: 0.05 },
   targetReturnUnder:   { min: -0.15, max: 0.15, step: 0.05 },
+  // YEARS of current spending, not a fraction.
+  targetCoverUnder:    { min: 0.5, max: 5, step: 0.5 },
 });
 
 /** The dwell's range. Years, and a short span: a gate held shut for a decade never opens. */
@@ -320,6 +322,7 @@ const KIND_PHRASE = Object.freeze({
   targetDrawdownOver:  'destination down over',
   sourceReturnOver:    'source return over',
   targetReturnUnder:   'destination return under',
+  targetCoverUnder:    'destination cover under',
 });
 
 /**

@@ -238,7 +238,7 @@ export class PoolFlowReducer extends Reducer {
    * Returns `{ open, reason }` — the reason is carried into the cube so a closed gate is a
    * recorded event rather than an absence.
    */
-  _leafClauses(g, flow, { metrics, highs, indices, indexHighs, state, asOfMs, priorYearReturns }) {
+  _leafClauses(g, flow, { metrics, highs, indices, indexHighs, state, asOfMs, priorYearReturns, ignoreCover = false }) {
 
     // Drawdown from the trailing high, on whichever series the gate names (§20.14). Both are
     // persisted pool state, not a journal window: a peak set before the run's start date is
@@ -303,6 +303,17 @@ export class PoolFlowReducer extends Reducer {
       const r = ret(flow.to);
       if (r == null || r >= g.targetReturnUnder) {
         return { open: false, reason: `destination ${flow.to} is not returning below ${(g.targetReturnUnder * 100).toFixed(0)}%` };
+      }
+    }
+    // The cover floor: SHUT while the destination already holds `targetCoverUnder` years of
+    // spending, OPEN below it. No spend line (yearsOfCover null) reads as covered, so the
+    // clause cannot force a refill in a plan that states no spending.
+    if (g.targetCoverUnder != null) {
+      // `ignoreCover` asks "would the gate be open WITHOUT its cover floor?" (see `release`).
+      if (ignoreCover) return { open: false, reason: 'cover floor ignored' };
+      const cover = metrics[flow.to]?.yearsOfCover;
+      if (cover == null || cover >= g.targetCoverUnder) {
+        return { open: false, reason: `destination ${flow.to} holds ${cover == null ? 'no spend line' : cover.toFixed(1) + ' years'}, not under ${g.targetCoverUnder}` };
       }
     }
     if (g.notInRegime) {
@@ -464,6 +475,7 @@ export class PoolFlowReducer extends Reducer {
     const outflow    = {};
     const vetoed     = new Set();
     const capped     = new Set();   // §12.4c — EDGE-scoped: destinations the rebalancer may not grow
+    const release    = [];          // cover-floor partial refills through a still-vetoed source
     const transfers  = [];
     const fired      = [];
     const adjust     = {};
@@ -485,8 +497,30 @@ export class PoolFlowReducer extends Reducer {
         if (isPaycheck !== isPaycheckFlow) continue;
         if (flow.cadence === 'ANNUAL' && prior[flow.to]?.lastFired?.[flow.id] === yearOf) continue;
 
-        const gate = this._gateOpen(flow, { metrics, highs, indices, indexHighs, state, asOfMs,
-                                            priorYearReturns, streaksIn, streaksOut, yearOf });
+        const gateCtx = { metrics, highs, indices, indexHighs, state, asOfMs,
+                          priorYearReturns, streaksIn, streaksOut, yearOf };
+        let gate = this._gateOpen(flow, gateCtx);
+        // A gate opened ONLY by its cover floor (`targetCoverUnder`) refills the destination up
+        // to that floor, not to its full target: the market clause is still saying "do not sell
+        // the source", and the floor is a minimum, not a licence to rebuild the whole reserve at
+        // the bottom (macro-regimes §16: a full refill sold equity into a recovery). So the edge
+        // is treated as SHUT — its source stays vetoed — with a `release` the rebalancer may
+        // sell through the veto. Re-evaluated without streak writes, so dwells count once.
+        // A cross-account TRANSFER has no veto to keep, so it simply stays open with its
+        // amount capped at the floor (`coverCap`).
+        let coverFloor = null, coverCap = Infinity;
+        if (gate.open) {
+          const years = _maxCoverFloor(flow.gate);
+          if (years != null && !this._gateOpen(flow, { ...gateCtx, streaksOut: null, ignoreCover: true }).open) {
+            const level = years * (ctx.annualSpend ?? 0)
+              - (metrics[flow.to].balance + (inflow[flow.to] ?? 0));
+            if (flow.executor === FLOW_EXECUTOR.TRANSFER) coverCap = Math.max(0, level);
+            else {
+              coverFloor = years;
+              gate = { open: false, reason: `only the ${years}-year cover floor is open` };
+            }
+          }
+        }
         const dest = metrics[flow.to];
         const src  = metrics[flow.from];
         // Recompute the destination's shortfall against what earlier edges already promised
@@ -495,6 +529,14 @@ export class PoolFlowReducer extends Reducer {
         const destNow  = { ...dest, balance: dest.balance + promised, shortfall: Math.max(0, dest.shortfall - promised) };
         const want     = this._demand(flow, graph.pools.find(p => p.id === flow.to), destNow, ctx, prior[flow.to]);
 
+        if (coverFloor != null) {
+          const level = coverFloor * (ctx.annualSpend ?? 0) - (dest.balance + (inflow[flow.to] ?? 0));
+          if (level > 0.01) {
+            release.push({ from: flow.from, to: flow.to, amountBase: +level.toFixed(2) });
+            inflow[flow.to] = (inflow[flow.to] ?? 0) + level;
+            fired.push({ id: flow.id, from: flow.from, to: flow.to, amount: +level.toFixed(2), executor: flow.executor, coverFloor });
+          }
+        }
         if (!gate.open) {
           // Record the non-event, and veto the SOURCE's rebalance sale: a gate that stops the
           // explicit refill but leaves the drift band selling the same sleeve for the same
@@ -539,6 +581,7 @@ export class PoolFlowReducer extends Reducer {
           // capacity exists at all (§12.1), and pushing cash past it buys nothing.
           Math.max(0, destNow.headroom),
           flow.amount.max ?? Infinity,
+          coverCap,
         );
         if (!Number.isFinite(amount) || amount <= 0) continue;
         if (flow.amount.min != null && amount < flow.amount.min) continue;
@@ -727,6 +770,8 @@ export class PoolFlowReducer extends Reducer {
         gated:     gatedFlows,
         // Per-pool target shifts for executor 1 (in-portfolio `fractionOfSource` edges).
         adjust:    Object.fromEntries(Object.entries(adjust).map(([k, v]) => [k, +v.toFixed(2)])),
+        // Cover-floor refills the rebalancer may sell through a veto; absent when none.
+        ...(release.length ? { release } : {}),
       },
     }, transfers);
   }
@@ -741,4 +786,15 @@ export class PoolFlowReducer extends Reducer {
     r.id = d.id;
     return r;
   }
+}
+
+/** The largest `targetCoverUnder` anywhere in a gate tree, or null when it has none. */
+function _maxCoverFloor(node) {
+  if (!node || typeof node !== 'object') return null;
+  let best = Number.isFinite(node.targetCoverUnder) ? node.targetCoverUnder : null;
+  for (const kid of [...(node.allOf ?? []), ...(node.anyOf ?? []), ...(node.not ? [node.not] : [])]) {
+    const k = _maxCoverFloor(kid);
+    if (k != null && (best == null || k > best)) best = k;
+  }
+  return best;
 }
