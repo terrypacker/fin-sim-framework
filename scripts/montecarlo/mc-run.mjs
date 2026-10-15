@@ -89,7 +89,7 @@ import { join } from 'node:path';
 
 import { loadBaseConfig, describeSource } from '../lib/scenario-source.mjs';
 import { buildVariant } from '../lib/variant.mjs';
-import { buildMcConfig, runArm, mergeArmLevers } from '../lib/mc.mjs';
+import { buildMcConfig, runArm, mergeArmLevers, stochasticFromFlags } from '../lib/mc.mjs';
 import { pct } from '../lib/format.mjs';
 import { parseFlags } from '../lib/cli.mjs';
 import { MC_SAMPLER_CADENCE } from '../../src/finance/monte-carlo/intl-retirement-mc-runner.js';
@@ -147,12 +147,7 @@ const source = { file: opts.scenario, index: opts.index };
 const base = loadBaseConfig(source);
 mkdirSync(outDir, { recursive: true });
 
-const stochastic = (paths || propertyPaths)
-  ? {
-      ...(paths ? { equity: true, equityVol: vol, equityModel: 'WHITE_NOISE', equityDrift: drift } : {}),
-      ...(propertyPaths ? { property: true } : {}),
-    }
-  : null;
+const stochastic = stochasticFromFlags({ paths, vol, drift, propertyPaths });
 
 // Since design 98 M3 the runner draws the stochastic path in every iteration unless the
 // plan sets `mcSequenceRisk: false` — `--paths` only pins its vol/model/drift. So the

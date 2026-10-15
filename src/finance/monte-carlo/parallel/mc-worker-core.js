@@ -189,6 +189,86 @@ export function samplingSignature(variables) {
 }
 
 /**
+ * Build (not run) iteration `seed`'s simulation from the batch context: an isolated registry,
+ * the scenario at `seed`, and the template loaded with `params`. The ONE way an MC path is
+ * constructed — the worker's `ScenarioRunner` calls it, and so does `mc-trace.mjs`, which
+ * replays a single path at a richer `telemetry` (e.g. 'journal'). Telemetry and the sampler
+ * only record; neither can change the run, so a traced path is the batch's path exactly.
+ *
+ * @param {McIterationContext} ctx
+ * @param {object} params - the iteration's params (`perturbParams(ctx.base, seed - 1, …)`)
+ * @param {number} seed   - the ScenarioRunner iteration index, i + 1
+ * @param {{ sampler?: object|null, telemetry?: string|null }} [opts] - telemetry defaults to
+ *   the batch's own ('diffs' when recording spending, else 'off')
+ */
+export function createIterationSimulation(ctx, params, seed, { sampler = null, telemetry = null } = {}) {
+  const simStart    = ctx.simStart;
+  const simEnd      = ctx.simEnd;
+  const cfgTemplate = ctx.cfgTemplate;
+  // Isolated per-iteration registry: never touches the singleton, so the
+  // user's active config graph + UI bindings stay intact across MC runs.
+  const registry = new ServiceRegistry();
+  const scenario = new IntlRetirementScenario({
+    context: registry.simulationContext,
+    params,
+    simStart,
+    simEnd,
+  });
+  // Per-iteration seed so each path draws its OWN in-loop stochastic sequence
+  // (design 74 §5.2). Previously the seed was dropped here and every iteration
+  // ran at the default seed 1 — so with a stochastic path ON, all iterations
+  // drew the IDENTICAL return sequence and sequence-of-returns risk collapsed to
+  // a single ordering. The seed is the ScenarioRunner iteration index (i + 1),
+  // so a run is reproducible and the scalar-param sampling rng (makeSeededRng,
+  // same index) and the in-loop path share the iteration.
+  // telemetry 'off' + a sampler: MC needs no bus, journal or full-state
+  // history snapshots — only the yearly series, which the sampler collects
+  // directly (design 78 §4.5).
+  //
+  // The cadence is 'year-boundary' (design 82 §4/§8.3), NOT the event cadence
+  // design 78 shipped with. Design 78 picked the event cadence for cheapness, and
+  // it lands the "yearly" point at whatever event happened to be last in the year
+  // — mid-something, and drifting with event volume. A MIX is precisely sensitive
+  // to whether the year-end rebalance has fired, so an arbitrary instant is not an
+  // option here; and having MC sample somewhere the lab page and the workbench
+  // panel do not would defeat the shared-modules argument entirely.
+  //
+  // This RE-BASELINES the RECORDED series, and nothing else. The sampler cannot
+  // affect the run, so `scenarioFailed`, `outOfFundsDate`, `cumulativeDeficit` and
+  // `finalNetWorthUsd` are unchanged EXACTLY. What moves is `timeSeries`, and
+  // therefore `pathShape` (CAGR, worst-5yr, max drawdown, the decade split).
+  //
+  // Direction, measured rather than assumed — and the opposite of the intuition:
+  // on the reference plan the year-boundary series is LOWER in 25 of 45 years and
+  // higher in 2 (mean −0.10%, worst −1.17%). A retired plan spends faster than it
+  // compounds within a year, so a mid-year reading sits ABOVE the year-end one.
+  // See design 82 §8.3; an arm JSON from before this change is not comparable.
+  // `spending` needs a NON-silent run: the spending cube reads `stateDiff`, which
+  // `silent` mode skips entirely (simulation.js records the journal regardless of
+  // silent, but with a null diff). A 'journal'-level run therefore yields a
+  // well-formed journal whose cube totals zero — the quiet kind of wrong.
+  //
+  // 'diffs', NOT 'full'. 'full' also keeps ~2,000 whole-state history snapshots,
+  // an ~85k-node execution graph and a state clone per event day — ~470 MB of a
+  // ~540 MB iteration on the reference plan, none of it read here. With eight pool
+  // workers each holding one iteration, that crashed the tab. 'diffs' is ~70 MB and
+  // the result is bit-identical. Still ~7x an 'off' run (design 89 §20), which is
+  // why this stays opt-in.
+  scenario.buildSim({
+    seed, telemetry: telemetry ?? (ctx.spending ? 'diffs' : 'off'), sampler,
+    samplerCadence: MC_SAMPLER_CADENCE,
+  });
+
+  const cfg = structuredClone(cfgTemplate);
+  // Both param stores, alias-aware — shared with the workbench's Replay button so a
+  // replayed run applies the SAME bag the same way. See applyParamBagToConfig.
+  applyParamBagToConfig(cfg, params);
+  new ScenarioLoader().load(cfg, registry);
+
+  return scenario.sim;
+}
+
+/**
  * Build the `ScenarioRunner` that runs one MC iteration of `ctx`'s world.
  *
  * Called once per thread — once on the main thread for the serial path, once per
@@ -198,78 +278,14 @@ export function samplingSignature(variables) {
  * @returns {{ runIteration: (i: number, params?: object) => object, perturb: (i: number) => object }}
  */
 export function buildIterationRunner(ctx) {
-  const simStart    = ctx.simStart;
   const simEnd      = ctx.simEnd;
-  const cfgTemplate = ctx.cfgTemplate;
   const sampler     = createMcSampler({ mix: !!ctx.mix });
   // Metric (not economic) params, so one provider is correct for the whole run —
   // see the note at the runner's call site.
   const afterTaxOpts = afterTaxOptionsFromParams(ctx.base);
 
   const runner = new ScenarioRunner({
-    createSimulation: (params, seed) => {
-      // Isolated per-iteration registry: never touches the singleton, so the
-      // user's active config graph + UI bindings stay intact across MC runs.
-      const registry = new ServiceRegistry();
-      const scenario = new IntlRetirementScenario({
-        context: registry.simulationContext,
-        params,
-        simStart,
-        simEnd,
-      });
-      // Per-iteration seed so each path draws its OWN in-loop stochastic sequence
-      // (design 74 §5.2). Previously the seed was dropped here and every iteration
-      // ran at the default seed 1 — so with a stochastic path ON, all iterations
-      // drew the IDENTICAL return sequence and sequence-of-returns risk collapsed to
-      // a single ordering. The seed is the ScenarioRunner iteration index (i + 1),
-      // so a run is reproducible and the scalar-param sampling rng (makeSeededRng,
-      // same index) and the in-loop path share the iteration.
-      // telemetry 'off' + a sampler: MC needs no bus, journal or full-state
-      // history snapshots — only the yearly series, which the sampler collects
-      // directly (design 78 §4.5).
-      //
-      // The cadence is 'year-boundary' (design 82 §4/§8.3), NOT the event cadence
-      // design 78 shipped with. Design 78 picked the event cadence for cheapness, and
-      // it lands the "yearly" point at whatever event happened to be last in the year
-      // — mid-something, and drifting with event volume. A MIX is precisely sensitive
-      // to whether the year-end rebalance has fired, so an arbitrary instant is not an
-      // option here; and having MC sample somewhere the lab page and the workbench
-      // panel do not would defeat the shared-modules argument entirely.
-      //
-      // This RE-BASELINES the RECORDED series, and nothing else. The sampler cannot
-      // affect the run, so `scenarioFailed`, `outOfFundsDate`, `cumulativeDeficit` and
-      // `finalNetWorthUsd` are unchanged EXACTLY. What moves is `timeSeries`, and
-      // therefore `pathShape` (CAGR, worst-5yr, max drawdown, the decade split).
-      //
-      // Direction, measured rather than assumed — and the opposite of the intuition:
-      // on the reference plan the year-boundary series is LOWER in 25 of 45 years and
-      // higher in 2 (mean −0.10%, worst −1.17%). A retired plan spends faster than it
-      // compounds within a year, so a mid-year reading sits ABOVE the year-end one.
-      // See design 82 §8.3; an arm JSON from before this change is not comparable.
-      // `spending` needs a NON-silent run: the spending cube reads `stateDiff`, which
-      // `silent` mode skips entirely (simulation.js records the journal regardless of
-      // silent, but with a null diff). A 'journal'-level run therefore yields a
-      // well-formed journal whose cube totals zero — the quiet kind of wrong.
-      //
-      // 'diffs', NOT 'full'. 'full' also keeps ~2,000 whole-state history snapshots,
-      // an ~85k-node execution graph and a state clone per event day — ~470 MB of a
-      // ~540 MB iteration on the reference plan, none of it read here. With eight pool
-      // workers each holding one iteration, that crashed the tab. 'diffs' is ~70 MB and
-      // the result is bit-identical. Still ~7x an 'off' run (design 89 §20), which is
-      // why this stays opt-in.
-      scenario.buildSim({
-        seed, telemetry: ctx.spending ? 'diffs' : 'off', sampler,
-        samplerCadence: MC_SAMPLER_CADENCE,
-      });
-
-      const cfg = structuredClone(cfgTemplate);
-      // Both param stores, alias-aware — shared with the workbench's Replay button so a
-      // replayed run applies the SAME bag the same way. See applyParamBagToConfig.
-      applyParamBagToConfig(cfg, params);
-      new ScenarioLoader().load(cfg, registry);
-
-      return scenario.sim;
-    },
+    createSimulation: (params, seed) => createIterationSimulation(ctx, params, seed, { sampler }),
     evaluate: (sim) => ({
       // Design 84 §6.4a — MC used to record NOMINAL net worth only, which prices a
       // Roth dollar at par with a pre-tax one. On any question about WHERE wealth
