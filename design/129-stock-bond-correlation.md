@@ -1,6 +1,6 @@
 # 129 — Stock–bond correlation as a regime property (design 126 G3)
 
-**Status:** PROPOSED (15 Oct 2026). Expands design 126 §5, which recorded only a direction. It
+**Status:** PROPOSED (15 Oct 2026; the author settled Q2 and Q4, deferred Q1 and Q6). Expands design 126 §5, which recorded only a direction. It
 opens with a measurement step that decides whether the regime half is built (§6).
 
 **Related:** design 126 §5 (the gap), design 67 §6 (the stochastic yield-curve level), design 74
@@ -217,14 +217,14 @@ measure.
 
 ## 7. Open questions
 
-1. **The gate threshold.** Proposed: 3 points of failure rate, paired, under stagflation.
-2. **The crash presets.** Leave them without ρ (proposed), or give them their own era's negative
+1. **The gate threshold.** Proposed: 3 points of failure rate, paired, under stagflation. *Deferred (the author, 15 Oct 2026): reviewed when step 0 starts.*
+2. **The crash presets.** *Decided (the author, 15 Oct 2026): left without ρ.* The alternative was their own era's negative
    value? The second is historically right but makes every MC crash milder, a behaviour change
    for every stochastic plan that uses one.
 3. **Joint mode.** Ignore ρ and warn (proposed), or blend?
-4. **The inflation channel** (§5). A separate design after step 0, or fold it into step 1?
+4. **The inflation channel** (§5). *Decided (the author, 15 Oct 2026): its own design, after step 0.*
 5. **Per-country ρ.** Proposed no: one global value, AU through its β.
-6. **The default base.** 0 (proposed: changing it moves every stochastic plan), or the post-2000
+6. **The default base.** *Deferred (the author, 15 Oct 2026).* 0 (proposed: changing it moves every stochastic plan), or the post-2000
    −0.33 / −0.53? A study can set it either way.
 
 ## 8. Test plan
