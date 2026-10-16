@@ -46,6 +46,11 @@
 
 /** Action types at least one golden scenario actually fires. */
 export const COVERED = [
+  // MONTHLY equity earnings (design 127): the two wash-sale goldens run MONTHLY since phase 3,
+  // because their crash preset is calibrated under it. The batched lot deltas and the
+  // month-end index step fire there.
+  'HOLDING_TRANSACT_BATCH',
+  'MARKET_INDEX_STEP_APPLY',
   'ASSET_APPRECIATE_APPLY',
   'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY',
   // The cash siblings (design 106 §4a) — both reached by `au-dividend-cash`, which

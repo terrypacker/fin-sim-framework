@@ -466,7 +466,7 @@ export const GOLDEN_SPECS = [
       + 'through the repo\'s strongest gate, and one did (§8.1o\'s double-match). Three '
       + 'things had to be true at once before a fixture could reach it, which is why no '
       + 'existing golden does. The plan must HARVEST, so TAX_LOSS_HARVEST is on. It must '
-      + 'have a LOSS to harvest, so a 2029 crash puts the book under water. And the '
+      + 'have a LOSS to harvest, so a 2030 crash puts the book under water. And the '
       + 'replacement must be substantially identical AND land in a wrapper the cited '
       + 'authority reaches (Rev. Rul. 2008-5: IRA and Roth only), so the taxable brokerage, '
       + 'the IRA and the Roth all hold `sec-core` while the harvester rotates into '
@@ -500,8 +500,14 @@ export const GOLDEN_SPECS = [
       rebalanceTargetAllocation: { EQUITY: 0.7, BOND: 0.3, CASH: 0, GOLD: 0 },
       // The loss. Without a shock the book only ever appreciates, the harvester finds
       // nothing to sell, and every §1091 path in the engine stays unreachable — which is
-      // exactly the state the other ten goldens are in.
-      shocks: [{ preset: 'MARKET_CRASH_2008_LITE', startDate: '2029-06-01' }],
+      // exactly the state the other ten goldens are in. January 2030, not the June 2029 it
+      // was before design 127 recalibrated the preset: the refitted GFC bottoms at month 17
+      // and is back at 69, so a 2029 crash had recovered by the final year-end and the
+      // harvest that must leave a §1091 entry pending at simEnd found no loss.
+      shocks: [{ preset: 'MARKET_CRASH_2008_LITE', startDate: '2030-01-01' }],
+      // Design 127 phase 3: the shock presets are calibrated under MONTHLY equity crediting,
+      // so the golden that needs a real crash runs the cadence its preset was fitted to.
+      equityEarningsCadence: 'MONTHLY',
       // Big enough that the Roth holds BOTH classes: a wrapper already at 100% equity is
       // pinned, never buys, and so can never be anyone's replacement.
       rothBalance: 900_000,
@@ -574,7 +580,8 @@ export const GOLDEN_SPECS = [
         { age: 72, weights: { EQUITY: 0.75, BOND: 0.25, CASH: 0, GOLD: 0 } },
       ],
       rebalanceTargetAllocation: { EQUITY: 0.7, BOND: 0.3, CASH: 0, GOLD: 0 },
-      shocks: [{ preset: 'MARKET_CRASH_2008_LITE', startDate: '2029-06-01' }],
+      shocks: [{ preset: 'MARKET_CRASH_2008_LITE', startDate: '2030-01-01' }],
+      equityEarningsCadence: 'MONTHLY',
       rothBalance: 900_000,
     },
     simStart: new Date(Date.UTC(2026, 0, 1)),
@@ -585,13 +592,13 @@ export const GOLDEN_SPECS = [
       // it is still there to harvest in the crash years — a book spent before the crash
       // cannot be anyone's replacement.
       //
-      // Its SIZE is what makes the April filing assess a balance due. The book's own
-      // unmatched December losses scale with it, and at \$500k they outweighed the January
-      // rebalance gain even with the \$86k disallowance added back: 2030 still netted a loss
-      // past the \$3,000 allowance, so the filing only shrank a carryforward and the payment
-      // step went dark once rebalance buys followed the market split (design 99 P5c). At
-      // \$300k the amended year nets about +\$31k of gain and the balance due is about \$5.4k,
-      // enough margin that ordinary retuning elsewhere will not tip it back.
+      // Its SIZE decides which form §1091(a)'s bite takes: a balance due when the add-back
+      // tips the year into a net gain, or a smaller §1212(b) carryforward when the year
+      // still nets a loss. At \$300k it was a balance due (about \$5.4k) on the pre-design-127
+      // crash path. On the recalibrated path (design 127 phase 3) the book harvests past the
+      // other in 2030 and 2031, both years still net a loss, and both filings shrink the
+      // carryforward instead (\$62k and \$53k disallowed, delta 0). The test accepts either
+      // form; the April balance-due payment is pinned by `wash-sale-harvest`.
       cfg.accounts.push({
         __type: 'BrokerageAccount', stateKey: 'spouseStockAccount',
         name: 'US Stock (spouse)', role: ACCOUNT_ROLES.US_STOCK,

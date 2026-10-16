@@ -12,6 +12,7 @@ import { HandlerEntry }      from '../../simulation-framework/handlers.js';
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { EventSeries }       from '../../simulation-framework/events/event-series.js';
 import { nextCarriedLoss }   from '../holdings/currency-overlay.js';
+import { isQuarterEnd, DIVIDENDS_PER_YEAR } from '../holdings/earnings-cadence.js';
 
 /**
  * The currency hedge's year end (design 120 §5.6, §5.7): the FX mark the overlay measures
@@ -33,16 +34,28 @@ import { nextCarriedLoss }   from '../holdings/currency-overlay.js';
  *     counts toward the year it opens, not to neither.
  *   - **scheduled only when a security declares a hedge ratio.** Every other plan gets no
  *     event, so its queue is unchanged.
+ *
+ * Design 127 §4.3 — under MONTHLY equity earnings the same event fires at every month-end,
+ * still at order 0.5, after that day's growth (−0.5) and dividends (−0.4):
+ *   - `rates` (the growth overlay's `fxMark`) every month, so each month's f is that month's;
+ *   - `distRates` (`fxMarkDist`) and the carried losses only at quarter-ends, the dates an
+ *     `INCOME` fund distributes, with the split computed on the quarter.
  */
 export const HEDGE_YEAR_END_ORDER = 0.5;
 
-/** The year-end series. @returns {EventSeries} */
-export function buildHedgeYearEndSeries() {
+/**
+ * The year-end series, or under design 127's MONTHLY cadence the month-end one.
+ *
+ * @param {{ monthly?: boolean }} [opts]
+ * @returns {EventSeries}
+ */
+export function buildHedgeYearEndSeries({ monthly = false } = {}) {
   return new EventSeries({
     name:     'Hedge Year End',
     type:     'HEDGE_YEAR_END',
-    interval: 'year-end',
+    interval: monthly ? 'month-end' : 'year-end',
     order:    HEDGE_YEAR_END_ORDER,
+    ...(monthly ? { data: { periodsPerYear: 12 } } : {}),
     enabled:  true,
     color:    '#7E57C2',
   });
@@ -65,14 +78,19 @@ export class HedgeYearEndHandler extends HandlerEntry {
     return h;
   }
 
-  call({ state }) {
+  call({ state, data, date }) {
     const out = { type: 'HEDGE_YEAR_END_APPLY' };
     if (state.effectiveExchangeRates) out.rates = { ...state.effectiveExchangeRates };
+    // Design 127 §4.3 — sub-annual: the distribution side moves only on a payment date.
+    const sub = (data?.periodsPerYear ?? 1) !== 1;
+    if (sub && !isQuarterEnd(date)) return out.rates ? [out] : [];
+    if (sub && out.rates) out.distRates = out.rates;
+    const opts = sub ? { periodsPerYear: DIVIDENDS_PER_YEAR } : undefined;
     // Sorted ids, so the map's key order is a function of the registry alone.
     const carriedLoss = {};
     for (const id of Object.keys(state.securities ?? {}).sort()) {
       const sec = state.securities[id];
-      const l   = nextCarriedLoss(state, sec, sec?.rateKey ?? null);
+      const l   = nextCarriedLoss(state, sec, sec?.rateKey ?? null, opts);
       if (l != null && l !== 0) carriedLoss[id] = l;
     }
     if (Object.keys(carriedLoss).length || state.hedgeOverlay?.carriedLoss) out.carriedLoss = carriedLoss;
@@ -105,6 +123,7 @@ export class HedgeYearEndReducer extends Reducer {
       hedgeOverlay: {
         ...(state.hedgeOverlay ?? {}),
         ...(action.rates       ? { fxMark:      { ...action.rates } }       : {}),
+        ...(action.distRates   ? { fxMarkDist:  { ...action.distRates } }   : {}),
         ...(action.carriedLoss ? { carriedLoss: { ...action.carriedLoss } } : {}),
       },
     });

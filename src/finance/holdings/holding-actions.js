@@ -16,6 +16,8 @@ import { Action } from '../../simulation-framework/actions.js';
  */
 export const HOLDING_ACTION_TYPES = Object.freeze({
   HOLDING_TRANSACT:    'HOLDING_TRANSACT',
+  // Design 127 §4.8 — many HOLDING_TRANSACTs on one account, in order, in one reducer pass.
+  HOLDING_TRANSACT_BATCH: 'HOLDING_TRANSACT_BATCH',
   HOLDING_REVALUE:     'HOLDING_REVALUE',
   HOLDING_SET_BASIS:   'HOLDING_SET_BASIS',
   HOLDING_SPLIT:       'HOLDING_SPLIT',
@@ -74,6 +76,16 @@ export const HOLDING_ACTION_ENTRIES = Object.freeze([
       // an undeclared field is dropped from the journal silently, which is how payload
       // manifests drift away from the actions they describe (design 91).
       valueKind:           {},
+    },
+  },
+  {
+    type:        HOLDING_ACTION_TYPES.HOLDING_TRANSACT_BATCH,
+    family:      'HOLDING',
+    cc:          null,
+    description: 'Several HOLDING_TRANSACT legs on one account, applied in order in one reducer pass with one balance re-sync. Each leg is { holdingId, marketValueDelta, costBasisDelta, valueKind? } and means exactly what a HOLDING_TRANSACT means. Emitted by the earnings handlers under the monthly cadence (design 127).',
+    fields:      {
+      stateKey: {},
+      legs:     {},
     },
   },
   {
@@ -206,6 +218,40 @@ export class HoldingTransactAction extends Action {
  * Targeting: if holdingId is set, exactly that holding. Otherwise rateKey
  * matches every holding under that rateKey.
  */
+/**
+ * Design 127 §4.8 — fold an earnings event's per-lot HOLDING_TRANSACTs into one
+ * HOLDING_TRANSACT_BATCH per account, in order.
+ *
+ * Every action costs a pass through the reducer pipeline, each pass a copy of the top
+ * level of state. Under the monthly cadence that per-lot overhead was about half of a
+ * run's time, for arithmetic the batch does identically (each leg is applied exactly as a
+ * HOLDING_TRANSACT would apply it, in the same order).
+ *
+ * Only for a sub-annual cadence (`periodsPerYear !== 1`). A plan compiled before the
+ * batch existed restores its HoldingTransactReducer's action types from its saved JSON,
+ * so it would not reduce a batch; its earnings events are annual and stay unbatched. Every
+ * monthly graph was compiled with the batch type. A single action is left as it is.
+ *
+ * @param {object[]} actions - HoldingTransactActions
+ * @param {number} periodsPerYear
+ * @returns {object[]}
+ */
+export function batchHoldingActions(actions, periodsPerYear) {
+  if (periodsPerYear === 1 || actions.length <= 1) return actions;
+  const byKey = new Map();
+  for (const a of actions) {
+    const legs = byKey.get(a.stateKey) ?? byKey.set(a.stateKey, []).get(a.stateKey);
+    legs.push({
+      holdingId:        a.holdingId,
+      marketValueDelta: a.marketValueDelta,
+      costBasisDelta:   a.costBasisDelta,
+      ...(a.cpiIndexRatioFactor == null ? {} : { cpiIndexRatioFactor: a.cpiIndexRatioFactor }),
+      ...(a.valueKind == null ? {} : { valueKind: a.valueKind }),
+    });
+  }
+  return [...byKey].map(([stateKey, legs]) => ({ type: HOLDING_ACTION_TYPES.HOLDING_TRANSACT_BATCH, stateKey, legs }));
+}
+
 export class HoldingRevalueAction extends Action {
   static type        = 'HoldingRevalueAction';
   static description = 'Mark-to-market revalue by holdingId or rateKey: multiplier or priceDelta.';

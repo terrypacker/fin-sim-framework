@@ -60,6 +60,10 @@ export class EquityReturnStepReducer extends Reducer {
     // Design 120 §5.4 — the next year's standardized market shock, for the FX tick. Written
     // only when the handler stamps it (an FX path correlates with it).
     if (action.marketShock != null) next.equityMarketShock = { ...action.marketShock };
+    // Design 127 §4.7 — the shape of the months inside the year just drawn, stored beside
+    // the deviation and published with it by EquityReturnReducer's fold, so the months and
+    // the year they belong to go live together. Written only under MONTHLY earnings.
+    if (action.monthShape != null) next.equityReturnMonthShapeNext = action.monthShape;
     return this.newState(state, next);
   }
 }

@@ -54,7 +54,7 @@ test('SEV-1: the handler stamps severity onto every leg of a shock', () => {
   const shock   = { ...SHOCK_LIBRARY.MARKET_CRASH_2008_LITE, startDate: new Date('2030-01-01') };
   const regimes = regimesOf(shock);
 
-  assert.equal(regimes.length, 4, 'stress + equity + markets + rates');
+  assert.equal(regimes.length, 5, 'stress + equity + equity-au (design 127) + markets + rates');
   for (const r of regimes) {
     assert.equal(r.severity, 0.51,
       `leg ${r.id} must carry the episode's depth — severity is a property of the SHOCK, and a `

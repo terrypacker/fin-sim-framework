@@ -336,7 +336,7 @@ test('AU_RETIREMENT: AU YTD counters initialized to 0', () => {
   assert.strictEqual(sim.state.auSuperTaxYTD, 0);
 });
 
-test('AU_RETIREMENT: super earnings event fires (INTL_SUPER_EARNINGS registered with year-end schedule)', () => {
+test('AU_RETIREMENT: super earnings event fires (INTL_SUPER_EARNINGS registered with its cadence\'s schedule)', () => {
   // Verify INTL_SUPER_EARNINGS is scheduled (already tested above) and that
   // the SuperEarningsHandler is wired by confirming the event exists in the
   // event service with the correct type and interval.
@@ -364,8 +364,10 @@ test('AU_RETIREMENT: super earnings event fires (INTL_SUPER_EARNINGS registered 
   const events = services.eventService.getAll();
   const superEvent = events.find(e => e.type === 'INTL_SUPER_EARNINGS');
   assert.ok(superEvent != null, 'INTL_SUPER_EARNINGS must be registered');
-  assert.strictEqual(superEvent.interval, 'year-end', 'INTL_SUPER_EARNINGS must use year-end interval');
-  // startOffset 0 → earnings accrue from the first sim year-end (holdings held
-  // from simStart earn in year one; the prior startOffset(1) skipped year one).
+  // Design 127: month-end under the MONTHLY default (year-end under ANNUAL), told its cadence.
+  assert.strictEqual(superEvent.interval, 'month-end', 'INTL_SUPER_EARNINGS must use the monthly cadence\'s interval');
+  assert.strictEqual(superEvent.data?.periodsPerYear, 12);
+  // startOffset 0 → earnings accrue from the first period (holdings held from simStart earn
+  // in year one; the prior startOffset(1) skipped year one).
   assert.strictEqual(superEvent.startOffset, 0, 'INTL_SUPER_EARNINGS must have startOffset 0 (year-one accrual)');
 });

@@ -18,6 +18,7 @@ import { addValue, isUnitised } from './holding-utils.js';
 import { RATE_KEYS }                from '../economic-regimes/rate-keys.js';
 import { frankingCreditOn }         from '../tax/au/franking.js';
 import { currencyOverlay, incomeHedgeSplit, fxExposureOf } from './currency-overlay.js';
+import { periodRate, shapedPeriodRate, sleeveOfRateKey, multiplicativePrice, DIVIDENDS_PER_YEAR } from './earnings-cadence.js';
 
 /**
  * Whether a BOND holding's coupon is EXEMPT from US FEDERAL income tax
@@ -156,7 +157,24 @@ export function priceOf(total, yld) {
  *                                            price then moves by total − yield. False (the
  *                                            wrappers) grows by the total and reports the
  *                                            yield as `derivedAmount`, a slice OF it.
- * @returns {{ amount: number, holdingActions: HoldingTransactAction[] }}
+ * @param {number} [opts.periodsPerYear=1]  - Design 127. How many times a year this event
+ *                                            credits growth. 1 is the annual model, unchanged.
+ *                                            Above 1, each lot earns the period rate of its
+ *                                            composed annual rate, `(1 + r)^(1/n) − 1` floored
+ *                                            at −1; a taxable lot's price rate is the
+ *                                            multiplicative split `(1 + T)/(1 + y) − 1`; and
+ *                                            the currency overlay reads the period's FX move.
+ * @param {number|null} [opts.monthIndex=null] - Design 127 §4.7. Under the monthly cadence,
+ *                                            the calendar month credited (0 = January): the
+ *                                            lot's sleeve takes that month of the year's
+ *                                            shape (`state.equityMonthShape`), so the months
+ *                                            inside a stochastic year move like a market's.
+ * @param {boolean} [opts.distributionDue=false] - Design 127 §4.3. Under a sub-annual cadence,
+ *                                            true on the firing that coincides with a dividend
+ *                                            payment: an `INCOME` hedged lot's price then
+ *                                            keeps that period's D − D′.
+ * @returns {{ amount: number, derivedAmount: number, holdingActions: HoldingTransactAction[],
+ *             flooredLots: number }}
  */
 export function computeHoldingsGrowth({
   state,
@@ -169,7 +187,15 @@ export function computeHoldingsGrowth({
   currentDate  = null,
   dividendYield = null,
   yieldPaidSeparately = false,
+  periodsPerYear = 1,
+  distributionDue = false,
+  monthIndex = null,
 }) {
+  const sub        = periodsPerYear !== 1;
+  // Design 127 §4.7 — the month's shape, by sleeve; absent (no draw yet, ANNUAL, or a
+  // deterministic run) means the straight line.
+  const shapes     = sub && periodsPerYear === 12 && monthIndex != null ? state?.equityMonthShape ?? null : null;
+  const shapeOf    = rk => shapes?.[sleeveOfRateKey(rk)]?.[monthIndex] ?? 0;
   const account    = state?.[stateKey];
   const holdings   = account?.holdings ?? [];
   const ratesMap   = state?.[rateSource] ?? {};
@@ -216,17 +242,25 @@ export function computeHoldingsGrowth({
   // stamps (F6, F7a), and this is what fed on it — so the guard is here rather than left
   // to the §4.4 gate alone, which can only see the damage after the fact.
   if (Array.isArray(account?.holdings) && account.holdings.length === 0) {
-    return { amount: 0, derivedAmount: 0, holdingActions: [] };
+    return { amount: 0, derivedAmount: 0, holdingActions: [], flooredLots: 0 };
   }
   if (!holdings.length) {
     // No holdings ARRAY: the scalar-balance code path.
     const balance = account?.balance ?? 0;
     const y0      = isGrowthPath ? (state?.marketDividendYields?.[fallbackRateKey] ?? dividendYield ?? 0) : 0;
     const total0  = requireRate(fbRate, fallbackRateKey);
+    if (sub) {
+      const annual  = yieldPaidSeparately ? multiplicativePrice(total0, y0) : total0;
+      const shaped  = isGrowthPath ? shapedPeriodRate(annual, periodsPerYear, shapeOf(fallbackRateKey)) : periodRate(annual, periodsPerYear);
+      const amount  = +(balance * shaped * factor).toFixed(2);
+      const derivedAmount = !yieldPaidSeparately && y0
+        ? +(balance * periodRate(y0, periodsPerYear) * factor).toFixed(2) : 0;
+      return { amount, derivedAmount, holdingActions: [], flooredLots: annual <= -1 ? 1 : 0 };
+    }
     const amount  = +(balance * (yieldPaidSeparately ? priceOf(total0, y0) : total0) * factor).toFixed(2);
     const derivedAmount = !yieldPaidSeparately && y0
       ? +(balance * y0 * factor).toFixed(2) : 0;
-    return { amount, derivedAmount, holdingActions: [] };
+    return { amount, derivedAmount, holdingActions: [], flooredLots: 0 };
   }
 
   // On the fixed-income path, a non-null per-holding `couponRate` is a FIXED
@@ -240,6 +274,7 @@ export function computeHoldingsGrowth({
 
   let total = 0;
   let derived = 0;
+  let flooredLots = 0;
   const holdingActions = [];
   for (const h of holdings) {
     if (!h) continue;
@@ -289,7 +324,12 @@ export function computeHoldingsGrowth({
     // security overlay and the appreciationSchedule: both stay price-rate overrides,
     // exactly as they were when the account carried a price rate of its own.
     const yld       = useCoupon ? 0 : baseDividendYield(h, inst, state, fallbackRateKey, dividendYield);
-    const priceRate = yieldPaidSeparately ? priceOf(baseRate, yld) : baseRate;
+    // Design 127 §3.2 — spread across the year, an additive split no longer sums to the
+    // total (reinvested dividends earn the price return after they land), so a sub-annual
+    // cadence splits multiplicatively. ANNUAL keeps `priceOf`.
+    const priceRate = yieldPaidSeparately
+      ? (sub ? multiplicativePrice(baseRate, yld) : priceOf(baseRate, yld))
+      : baseRate;
     // The per-security return overlay (design 94 §6.2/§6.3). An OVERLAY, not a rate:
     // added to the holding's resolved rate directly, exactly as `AssetAppreciationHandler`
     // adds `propertyReturnDev[<sleeve>]` (design 75 §4.2 A2), so `effectiveGrowthRates`
@@ -315,15 +355,28 @@ export function computeHoldingsGrowth({
     // today unless an author says otherwise) get null and an unchanged rate. Applied last,
     // to the rate the lot would otherwise earn, because FX moves the whole foreign price.
     // ALIGNED treatment (§5.7) keeps the hedge result in this price slice.
+    //
+    // Design 127 — under a sub-annual cadence the overlay composes on the PERIOD's rate,
+    // with the period's FX move (the mark is stamped every period) and the period's carry.
+    const gRate   = !sub ? schedRate
+      : useCoupon ? periodRate(schedRate, periodsPerYear)
+      : shapedPeriodRate(schedRate, periodsPerYear, shapeOf(inst.rateKey ?? fallbackRateKey));
     const fx      = useCoupon ? null : currencyOverlay({
-      state, account, inst, rateKey: inst.rateKey ?? fallbackRateKey, g: schedRate,
+      state, account, inst, rateKey: inst.rateKey ?? fallbackRateKey, g: gRate, periodsPerYear,
     });
     // §5.7 INCOME — where the yield is paid out beside this price, the hedge result moves
     // the distribution instead: the price keeps D − D′ of what the dividend no longer pays.
-    const split   = fx && yieldPaidSeparately
-      ? incomeHedgeSplit(state, inst, inst.rateKey ?? fallbackRateKey) : null;
+    // Sub-annual: once per distribution period, on the firing that shares its date (§4.3).
+    const split   = fx && yieldPaidSeparately && (!sub || distributionDue)
+      ? incomeHedgeSplit(state, inst, inst.rateKey ?? fallbackRateKey,
+          sub ? { periodsPerYear: DIVIDENDS_PER_YEAR } : undefined)
+      : null;
     const fxDelta = (fx?.delta ?? 0) + (split ? split.d - split.distributed : 0);
-    const hRate   = fxDelta !== 0 ? schedRate + fxDelta : schedRate;
+    let   hRate   = fxDelta !== 0 ? gRate + fxDelta : gRate;
+    // §3.3 — a lot loses at most all of its value. ANNUAL is left as it was (§7 Q5).
+    // `periodRate` has already floored a composed annual rate at −1; the overlay can still
+    // push the period's rate below it.
+    if (sub && (schedRate <= -1 || hRate < -1)) { hRate = Math.max(hRate, -1); flooredLots++; }
     const growth  = +(mv * hRate * factor).toFixed(2);
     total += growth;
     // Design 84 G2 — carve the DERIVED slice out of the same return, without
@@ -339,7 +392,9 @@ export function computeHoldingsGrowth({
     //
     // Not where the yield is paid separately: there it is a dividend of its own, not a
     // slice of this growth.
-    if (!yieldPaidSeparately && yld) derived += +(mv * yld * factor).toFixed(2);
+    if (!yieldPaidSeparately && yld) {
+      derived += +(mv * (sub ? periodRate(yld, periodsPerYear) : yld) * factor).toFixed(2);
+    }
     if (growth !== 0) {
       holdingActions.push(new HoldingTransactAction({
         stateKey,
@@ -353,7 +408,7 @@ export function computeHoldingsGrowth({
       }));
     }
   }
-  return { amount: +total.toFixed(2), derivedAmount: +derived.toFixed(2), holdingActions };
+  return { amount: +total.toFixed(2), derivedAmount: +derived.toFixed(2), holdingActions, flooredLots };
 }
 
 /**
@@ -389,15 +444,23 @@ export function computeHoldingsGrowth({
  * @param {string} opts.stateKey           - state[stateKey] is the account
  * @param {number} opts.fallbackYield      - Account-level yield used when a holding has no dividendYield
  * @param {string|null} opts.fallbackRateKey - Rate key used when a holding has no rateKey
+ * @param {number} [opts.periodsPerYear=1] - Design 127. Payments a year. 1 pays the annual
+ *                                           yield, unchanged; above 1 each payment is the
+ *                                           period rate `(1 + y)^(1/n) − 1` of the lot's
+ *                                           annual yield, and an `INCOME` hedged lot's split
+ *                                           is that period's (§4.3).
  * @returns {{ amount: number, holdingActions: HoldingTransactAction[] }}
  */
-export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallbackRateKey }) {
+export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallbackRateKey, periodsPerYear = 1 }) {
   const account    = state?.[stateKey];
   const holdings   = account?.holdings ?? [];
   const adjMap     = state?.effectiveDividendAdjustments ?? {};
   const securities = state?.securities ?? null;
+  const sub        = periodsPerYear !== 1;
 
-  const effYield = (yld, rk) => Math.max(0, yld * (1 + (adjMap[rk] ?? 0)));
+  const effYield = (yld, rk) => sub
+    ? periodRate(Math.max(0, yld * (1 + (adjMap[rk] ?? 0))), periodsPerYear)
+    : Math.max(0, yld * (1 + (adjMap[rk] ?? 0)));
 
   // Drawn down to nothing pays no dividend — see computeHoldingsGrowth for why an EMPTY
   // holdings array and an ABSENT one are not the same state (design 106 §4b, F7).
@@ -443,7 +506,8 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
     const rk  = inst.rateKey ?? fallbackRateKey;
     // Design 120 §5.7 INCOME — a hedged fund without the TOFA election distributes
     // D′ = max(0, D + H − L) rather than its yield, on a lot held in the fund's currency.
-    const split = fxExposureOf(rk, account) ? incomeHedgeSplit(state, inst, rk) : null;
+    const split = fxExposureOf(rk, account)
+      ? incomeHedgeSplit(state, inst, rk, sub ? { periodsPerYear } : undefined) : null;
     const div = +(mv * (split ? split.distributed : effYield(yld, rk))).toFixed(2);
     total += div;
     if (div !== 0) {
@@ -499,17 +563,21 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
  * @param {string} opts.fallbackRateKey  - rate key for a lot without one
  * @param {number|null} [opts.fallbackYield=null] - below the market's yield (see `baseDividendYield`)
  * @param {number} [opts.frankedPercent=1]
+ * @param {number} [opts.periodsPerYear=1] - Design 127: the period's income, at the period
+ *                                           rate of the annual yield. 1 is unchanged.
  * @returns {{ dividend: number, credit: number,
  *             lots: { holdingId: string, dividend: number, credit: number }[] }}
  */
-export function computeFundIncome({ state, stateKey, fallbackRateKey, fallbackYield = null, frankedPercent = 1 }) {
+export function computeFundIncome({ state, stateKey, fallbackRateKey, fallbackYield = null, frankedPercent = 1, periodsPerYear = 1 }) {
   const account    = state?.[stateKey];
   const holdings   = account?.holdings ?? [];
   const adjMap     = state?.effectiveDividendAdjustments ?? {};
   const securities = state?.securities ?? null;
 
   // Rounded exactly as computeHoldingsDividends rounds the dividend it would pay.
-  const cashDividend = (mv, yld, rk) => +(mv * Math.max(0, yld * (1 + (adjMap[rk] ?? 0)))).toFixed(2);
+  const cashDividend = periodsPerYear !== 1
+    ? (mv, yld, rk) => +(mv * periodRate(Math.max(0, yld * (1 + (adjMap[rk] ?? 0))), periodsPerYear)).toFixed(2)
+    : (mv, yld, rk) => +(mv * Math.max(0, yld * (1 + (adjMap[rk] ?? 0)))).toFixed(2);
   const creditOn     = (cash, rk) => rk === RATE_KEYS.EQUITY_AU
     ? +frankingCreditOn(cash, { frankedPercent }).toFixed(2) : 0;
 

@@ -121,7 +121,9 @@ test('EVT-SHOCK-3: shock without levelEffects leaves balance unchanged', () => {
   };
   const { sim } = loadScenario({ shocks: [shock] });
 
-  sim.stepTo(new Date('2026-04-01'));
+  // Read before the first month-end after the shock (design 127): from 31 March the −2 pp
+  // drag is credited month by month, which is the regime working, not a level effect.
+  sim.stepTo(new Date('2026-03-20'));
 
   // No levelEffect → no REVALUE_ASSET_APPLY → balance unchanged (growthRate=0)
   assert.ok(

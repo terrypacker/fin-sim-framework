@@ -215,12 +215,13 @@ test('DRIP-6c: the election moves the MONEY without moving the TAX', () => {
   };
   const reinvested = taxOf(true);
   assert.ok(reinvested > 0, 'the run pays a franked dividend at all');
-  // Equal to the cent in the FIRST year; over a multi-year run the reinvested arm
-  // compounds a larger book and so pays a larger dividend next year, which is the
-  // economics working rather than the tax differing. Assert on year one alone.
+  // Equal to the cent on the FIRST payment; after it the reinvested arm compounds a larger
+  // book and so pays a larger dividend next time, which is the economics working rather
+  // than the tax differing. Under the monthly cadence (design 127) dividends are quarterly,
+  // so the first payment is the 31 March one, and the run stops just after it.
   const firstYear = (reinvest) => {
     const { sim } = loadScenarioSim({
-      simStart: '2026-01-01', simEnd: '2027-01-01', stepTo: '2027-01-01',
+      simStart: '2026-01-01', simEnd: '2026-04-01', stepTo: '2026-04-01',
       mutateCfg: (cfg) => {
         (cfg.accounts ?? []).find(a => a.role === ACCOUNT_ROLES.AU_STOCK).reinvestDividends = reinvest;
       },

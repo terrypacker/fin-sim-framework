@@ -35,6 +35,7 @@
 
 import { RATE_KEYS } from '../economic-regimes/rate-keys.js';
 import { priceOf }   from './holdings-earnings.js';
+import { periodRate, multiplicativePrice } from './earnings-cadence.js';
 
 /**
  * The markets with a currency exposure the overlay can price, keyed by rate key (§5.2).
@@ -140,13 +141,18 @@ export function fxExposureOf(rateKey, account) {
  * year-end mark, scaled to the basket (§5.2). 0 when the plan runs no FX layer or has not
  * marked the pair: a flat rate moves nothing.
  *
+ * Design 127 §4.3 — under a sub-annual cadence there are two marks: `fxMark`, stamped every
+ * growth period, which the growth overlay reads; and `fxMarkDist`, stamped every
+ * distribution period, which an `INCOME` fund's split reads.
+ *
  * @param {object} state
  * @param {object} exposure - an `FX_EXPOSURE_BY_MARKET` entry
+ * @param {'fxMark'|'fxMarkDist'} [markKey='fxMark']
  * @returns {number}
  */
-export function fxMoveFor(state, exposure) {
+export function fxMoveFor(state, exposure, markKey = 'fxMark') {
   const now  = state?.effectiveExchangeRates?.[exposure.pair];
-  const mark = state?.hedgeOverlay?.fxMark?.[exposure.pair];
+  const mark = state?.hedgeOverlay?.[markKey]?.[exposure.pair];
   if (!(now > 0) || !(mark > 0) || now === mark) return 0;
   return Math.exp(exposure.volScale * Math.log(now / mark)) - 1;
 }
@@ -178,9 +184,12 @@ export function hedgeCarryFor(state, exposure) {
  * @param {object} opts.inst     - the lot's instrument view
  * @param {string|null} opts.rateKey - the lot's resolved market
  * @param {number} opts.g        - the growth rate the lot gets without the overlay
+ * @param {number} [opts.periodsPerYear=1] - design 127: g is then the PERIOD's rate, f the
+ *                                  period's move (the mark is stamped every period), and the
+ *                                  carry less cost is converted to the period's rate
  * @returns {{ delta: number, hedgeResult: number, f: number, carry: number, h: number }|null}
  */
-export function currencyOverlay({ state, account, inst, rateKey, g }) {
+export function currencyOverlay({ state, account, inst, rateKey, g, periodsPerYear = 1 }) {
   const h = hedgeRatioOf(inst, state, account, rateKey);
   if (h == null) return null;
   const exposure = fxExposureOf(rateKey, account);
@@ -188,8 +197,9 @@ export function currencyOverlay({ state, account, inst, rateKey, g }) {
   const f     = fxMoveFor(state, exposure);
   const carry = h > 0 ? hedgeCarryFor(state, exposure) : 0;
   const cost  = h > 0 ? (state?.hedgeOverlay?.cost ?? DEFAULT_HEDGE_COST) : 0;
-  const delta = (1 - h) * f * (1 + g) + h * (carry - cost);
-  const hedgeResult = h * (carry - cost - f * (1 + g));
+  const net   = periodsPerYear === 1 ? carry - cost : periodRate(carry - cost, periodsPerYear);
+  const delta = (1 - h) * f * (1 + g) + h * net;
+  const hedgeResult = h * (net - f * (1 + g));
   return { delta, hedgeResult, f, carry, h };
 }
 
@@ -218,26 +228,39 @@ export function currencyOverlay({ state, account, inst, rateKey, g }) {
  * Null unless the security declares `hedgeTaxTreatment: 'INCOME'`, a positive hedge ratio,
  * and a market the overlay prices.
  *
+ * Design 127 §4.3 — under a sub-annual cadence the same split runs once per DISTRIBUTION
+ * period (`periodsPerYear` = payments a year): d and the price are that period's rates, f
+ * the move since the last distribution mark (`fxMarkDist`), and L is carried from payment to
+ * payment rather than year to year.
+ *
  * @param {object} state
  * @param {object} inst    - the security (or a lot's instrument view)
  * @param {string|null} rateKey
+ * @param {{ periodsPerYear?: number }} [opts]
  * @returns {{ d: number, hedge: number, carriedIn: number, distributed: number,
  *             carriedOut: number, price: number }|null}
  */
-export function incomeHedgeSplit(state, inst, rateKey) {
+export function incomeHedgeSplit(state, inst, rateKey, { periodsPerYear = 1 } = {}) {
   if (inst?.hedgeTaxTreatment !== 'INCOME') return null;
   const h = inst.hedgeRatio;
   if (!(h > 0)) return null;
   const exposure = rateKey != null ? FX_EXPOSURE_BY_MARKET[rateKey] : null;
   if (!exposure) return null;
+  const sub   = periodsPerYear !== 1;
   const yld   = inst.dividendYield ?? state?.marketDividendYields?.[rateKey] ?? 0;
   const adj   = state?.effectiveDividendAdjustments?.[rateKey] ?? 0;
-  const d     = Math.max(0, yld * (1 + adj));
   const total = state?.effectiveGrowthRates?.[rateKey] ?? 0;
-  const price = priceOf(total, yld) + (state?.securityReturnOverlay?.[inst.id] ?? 0);
-  const f     = fxMoveFor(state, exposure);
+  const o     = state?.securityReturnOverlay?.[inst.id] ?? 0;
+  const d     = sub ? periodRate(Math.max(0, yld * (1 + adj)), periodsPerYear) : Math.max(0, yld * (1 + adj));
+  const price = sub
+    ? periodRate(multiplicativePrice(total, yld) + o, periodsPerYear)
+    : priceOf(total, yld) + o;
+  const f     = fxMoveFor(state, exposure, sub ? 'fxMarkDist' : 'fxMark');
   const cost  = state?.hedgeOverlay?.cost ?? DEFAULT_HEDGE_COST;
-  const hedge = h * (hedgeCarryFor(state, exposure) - cost - f * (1 + price));
+  const net   = sub
+    ? periodRate(hedgeCarryFor(state, exposure) - cost, periodsPerYear)
+    : hedgeCarryFor(state, exposure) - cost;
+  const hedge = h * (net - f * (1 + price));
   const carriedIn = state?.hedgeOverlay?.carriedLoss?.[inst.id] ?? 0;
   return {
     d, hedge, carriedIn, price,
@@ -251,14 +274,16 @@ export function incomeHedgeSplit(state, inst, rateKey) {
  * carried amount over the unit price after the distribution. The price after the year is
  * (1 + price + Δ + d − D′) per dollar at its start, with Δ the overlay's delta.
  *
+ * Design 127: `periodsPerYear` is the distribution period's, as for `incomeHedgeSplit`.
+ *
  * @returns {number|null} null when the security is not `INCOME`
  */
-export function nextCarriedLoss(state, inst, rateKey) {
-  const split = incomeHedgeSplit(state, inst, rateKey);
+export function nextCarriedLoss(state, inst, rateKey, { periodsPerYear = 1 } = {}) {
+  const split = incomeHedgeSplit(state, inst, rateKey, { periodsPerYear });
   if (!split) return null;
   if (split.carriedOut === 0) return 0;
   // The overlay's Δ = (1 − h)·f·(1 + p) + h·(carry − cost) = f·(1 + p) + H.
-  const f = fxMoveFor(state, FX_EXPOSURE_BY_MARKET[rateKey]);
+  const f = fxMoveFor(state, FX_EXPOSURE_BY_MARKET[rateKey], periodsPerYear === 1 ? 'fxMark' : 'fxMarkDist');
   const delta = f * (1 + split.price) + split.hedge;
   const unitGrowth = 1 + split.price + delta + split.d - split.distributed;
   return unitGrowth > 0 ? split.carriedOut / unitGrowth : split.carriedOut;

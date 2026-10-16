@@ -185,7 +185,9 @@ test('DOTCOM-5: the level break is small — this episode is a GRIND, and the dr
   // rest arrives as a forward-return drag over two more year-ends. The distinction is the
   // whole point for a reserve study: an instant crash leaves nothing to bridge.
   const sim = loadScenario({ shocks: [{ preset: 'DOTCOM_2000_LITE', startDate: '2026-03-01' }] });
-  sim.stepTo(new Date('2026-04-01'));
+  // Before the first month-end after the shock (design 127), so the reading is the break
+  // alone and not the break plus March's credit of the drag.
+  sim.stepTo(new Date('2026-03-20'));
   const balance = sim.state.rothAccount.balance;
   assert.ok(balance > 91000 && balance < 94000, `Expected ~92600 after a −7.4 % break, got ${balance}`);
 });

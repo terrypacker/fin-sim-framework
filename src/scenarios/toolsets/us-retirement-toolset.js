@@ -9,6 +9,7 @@
  */
 
 import { EventBuilder }         from '../../simulation-framework/builders/event-builder.js';
+import { earningsSchedule, withEarningsCadence } from '../../finance/holdings/earnings-cadence.js';
 import { ReducerBuilder }       from '../../simulation-framework/builders/reducer-builder.js';
 import { OneOffEvent }          from '../../simulation-framework/events/one-off-event.js';
 import { ACCOUNT_ROLES }        from '../../finance/state/account-roles.js';
@@ -272,7 +273,7 @@ export const US_RETIREMENT = {
       // be declared: pickPayload keeps only declared fields, so an undeclared one is
       // silently dropped and the tax module falls back to assessing the whole amount.
       { type: 'ROTH_WITHDRAWAL_EARNINGS_TAX',   fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), auAssessableAmount: ValueType.number(), residency: ValueType.text() , stateKey: ValueType.text()} },
-      { type: 'ROTH_EARNINGS_APPLY',                    fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text(), derivedAmount: ValueType.number() } },
+      { type: 'ROTH_EARNINGS_APPLY',                    fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text(), derivedAmount: ValueType.number(), flooredLots: ValueType.number() } },
       { type: 'ROTH_ROLLOVER_CONTRIBUTION_APPLY',        fields: { amount: ValueType.currency('USD') } },
       { type: 'ROTH_ROLLOVER_EARNINGS_APPLY',            fields: { amount: ValueType.currency('USD') } },
       { type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), auAssessableAmount: ValueType.number(), residency: ValueType.text(), rolloverConversions: ValueType.any() } },
@@ -285,7 +286,7 @@ export const US_RETIREMENT = {
       { type: 'IRA_WITHDRAWAL_CONTRIB_TAX',     fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number() } },
       { type: 'IRA_WITHDRAWAL_EARNINGS_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), residency: ValueType.text() } },
       { type: 'IRA_WITHDRAWAL_EARNINGS_TAX',    fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), residency: ValueType.text() , stateKey: ValueType.text()} },
-      { type: 'IRA_EARNINGS_APPLY',                     fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text(), derivedAmount: ValueType.number() } },
+      { type: 'IRA_EARNINGS_APPLY',                     fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text(), derivedAmount: ValueType.number(), flooredLots: ValueType.number() } },
       { type: 'IRA_ROLLOVER_WITHDRAWAL_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD'), residency: ValueType.text() } },
       { type: 'IRA_ROLLOVER_WITHDRAWAL_TAX',    fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , stateKey: ValueType.text()} },
       { type: 'IRA_RMD_APPLY',                  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), stateKey: ValueType.text() } },
@@ -296,7 +297,7 @@ export const US_RETIREMENT = {
       // from a deferral.
       { type: 'K401_CONTRIBUTION_APPLY',                fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text(), employerFunded: ValueType.boolean(), personKey: ValueType.text(), nonElective: ValueType.boolean(), clamps: ValueType.any() } },
       { type: 'K401_CONTRIBUTION_TAX',                  fields: { amount: ValueType.currency('USD') } },
-      { type: 'K401_EARNINGS_APPLY',                    fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text(), derivedAmount: ValueType.number() } },
+      { type: 'K401_EARNINGS_APPLY',                    fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text(), derivedAmount: ValueType.number(), flooredLots: ValueType.number() } },
       { type: 'K401_WITHDRAWAL_APPLY',          family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number() } },
       { type: 'K401_WITHDRAWAL_TAX',            fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number() } },
       { type: 'K401_RMD_APPLY',                 family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), stateKey: ValueType.text() } },
@@ -739,6 +740,9 @@ export const US_RETIREMENT = {
     const p        = context.parameters;
     const accounts = context.accounts;
     const people   = context.people;
+    // Design 127 — year-end growth and dividends (ANNUAL), or month-end growth and
+    // quarter-end dividends (MONTHLY).
+    const cadence  = earningsSchedule(p);
 
     const usSavingsAccounts   = accounts.filter(a => a.role === ACCOUNT_ROLES.US_SAVINGS);
     const iraAccounts         = accounts.filter(a => a.role === ACCOUNT_ROLES.IRA);
@@ -808,9 +812,9 @@ export const US_RETIREMENT = {
 
     if (iraAccounts.length > 0) {
       schedules.push(
-        EventBuilder.eventSeries()
-          .name('IRA Earnings').type('INTL_IRA_EARNINGS')
-          .interval('year-end').startOffset(0).enabled(true).color('#5C6BC0').build()
+        withEarningsCadence(EventBuilder.eventSeries()
+          .name('IRA Earnings').type('INTL_IRA_EARNINGS'), cadence.growth)
+          .startOffset(0).enabled(true).color('#5C6BC0').build()
       );
       schedules.push(
         EventBuilder.eventSeries()
@@ -821,17 +825,17 @@ export const US_RETIREMENT = {
 
     if (rothAccounts.length > 0) {
       schedules.push(
-        EventBuilder.eventSeries()
-          .name('Roth IRA Earnings').type('INTL_ROTH_EARNINGS')
-          .interval('year-end').startOffset(0).enabled(true).color('#7E57C2').build()
+        withEarningsCadence(EventBuilder.eventSeries()
+          .name('Roth IRA Earnings').type('INTL_ROTH_EARNINGS'), cadence.growth)
+          .startOffset(0).enabled(true).color('#7E57C2').build()
       );
     }
 
     if (k401Accounts.length > 0) {
       schedules.push(
-        EventBuilder.eventSeries()
-          .name('401k Earnings').type('INTL_K401_EARNINGS')
-          .interval('year-end').startOffset(0).enabled(true).color('#42A5F5').build()
+        withEarningsCadence(EventBuilder.eventSeries()
+          .name('401k Earnings').type('INTL_K401_EARNINGS'), cadence.growth)
+          .startOffset(0).enabled(true).color('#42A5F5').build()
       );
       schedules.push(
         EventBuilder.eventSeries()
@@ -842,14 +846,14 @@ export const US_RETIREMENT = {
 
     if (usStockAccounts.length > 0) {
       schedules.push(
-        EventBuilder.eventSeries()
-          .name('US Stock Earnings').type('INTL_STOCK_EARNINGS')
-          .interval('year-end').startOffset(0).enabled(true).color('#26A69A').build()
+        withEarningsCadence(EventBuilder.eventSeries()
+          .name('US Stock Earnings').type('INTL_STOCK_EARNINGS'), cadence.growth)
+          .startOffset(0).enabled(true).color('#26A69A').build()
       );
       schedules.push(
-        EventBuilder.eventSeries()
-          .name('US Stock Dividends').type('DIVIDEND_SCHEDULED')
-          .interval('year-end').startOffset(0).enabled(true).color('#4CAF50').build()
+        withEarningsCadence(EventBuilder.eventSeries()
+          .name('US Stock Dividends').type('DIVIDEND_SCHEDULED'), cadence.dividend)
+          .startOffset(0).enabled(true).color('#4CAF50').build()
       );
       // Semi-annual coupons (design 66 §G10a): fires on both half-year ends (Jun 30 /
       // Dec 31); each firing pays the per-holding fraction of the annual coupon

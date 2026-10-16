@@ -82,6 +82,8 @@ export class DividendScheduledHandler extends HandlerEntry {
       state, stateKey,
       fallbackYield:   this.dividendRate,
       fallbackRateKey: this.rateKey,
+      // Design 127 — a quarter's payment under MONTHLY earnings; the year's otherwise.
+      periodsPerYear:  data?.periodsPerYear ?? 1,
     });
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
 

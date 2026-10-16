@@ -10,7 +10,9 @@
 
 import { OneOffEvent }                    from '../../simulation-framework/events/one-off-event.js';
 import { EventSeries }                   from '../../simulation-framework/events/event-series.js';
-import { MarketIndexReducer }            from '../../finance/economic-regimes/market-index.js';
+import { MarketIndexReducer, MarketIndexStepHandler, buildMarketIndexStepSeries } from '../../finance/economic-regimes/market-index.js';
+import { EquityYearOpenHandler, buildEquityYearOpenSeries } from '../../finance/economic-regimes/equity-year-open.js';
+import { EQUITY_EARNINGS_CADENCES, DEFAULT_EQUITY_EARNINGS_CADENCE, isMonthlyEarnings } from '../../finance/holdings/earnings-cadence.js';
 import { DateUtils }                      from '../../simulation-framework/date-utils.js';
 import { ValueType }                      from '../../simulation-framework/type-registry.js';
 import { RATE_KEYS, RATE_KEY_META, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS, CASH_PRIME_KEY_BY_RATE_KEY, SAVINGS_KEY_BY_COUNTRY, EQUITY_SLEEVES, RATE_KEY_CLASS_MEMBERS, PROPERTY_SLEEVES, DEFAULT_EQUITY_BETA, DEFAULT_EQUITY_IDIO, DEFAULT_EQUITY_IDIO_LOCAL, DEFAULT_RE_BETA, DEFAULT_RE_IDIO } from '../../finance/economic-regimes/rate-keys.js';
@@ -712,6 +714,9 @@ function _hedgeOverlayState(context) {
     foreignCashRate: p.hedgeForeignCashRate ?? DEFAULT_HEDGE_FOREIGN_CASH_RATE,
     cost:            p.hedgeCost ?? DEFAULT_HEDGE_COST,
     fxMark:          { ...(_fxProcess(context)?.statePatches.effectiveExchangeRates ?? {}) },
+    // Design 127 §4.3 — the distribution periods' mark, beside the growth periods' one.
+    ...(isMonthlyEarnings(p)
+      ? { fxMarkDist: { ...(_fxProcess(context)?.statePatches.effectiveExchangeRates ?? {}) } } : {}),
     // §5.5 — once the sleeve is local-currency, a silent ex-AU lot runs unhedged.
     ...(_sleeveRebased(context) ? { rebased: true } : {}),
   };
@@ -755,7 +760,7 @@ export const ECONOMIC_REGIMES = {
   dependencies: [],
 
   types: {
-    handlers: [EconomicShockHandler, EconomicRecoveryTickHandler, YieldCurveTickHandler, EquityReturnTickHandler, PropertyReturnTickHandler, InflationTickHandler, FxTickHandler, HedgeYearEndHandler],
+    handlers: [EconomicShockHandler, EconomicRecoveryTickHandler, YieldCurveTickHandler, EquityReturnTickHandler, PropertyReturnTickHandler, InflationTickHandler, FxTickHandler, HedgeYearEndHandler, MarketIndexStepHandler, EquityYearOpenHandler],
     reducers: [HedgeYearEndReducer, FxRefreshReducer, FxProcessReducer, FxStepApplyReducer, FxPppReducer, RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer, YieldCurveReducer, YieldCurveStepReducer, EquityReturnReducer, EquityReturnStepReducer, PropertyReturnStepReducer, InflationStepReducer, InflationPathReducer, BondPriceAdjustReducer, BondMaturityReducer],
     actions: [
       { type: 'ADD_REGIME_APPLY',    fields: { regime: ValueType.any() } },
@@ -764,7 +769,7 @@ export const ECONOMIC_REGIMES = {
       // `bootstrap` is the HISTORICAL_BOOTSTRAP block cursor (design 102 §4.3); other models omit it.
       // `marketShock` is the next year's standardized market shock (design 120 §5.4), only
       // when an FX path correlates with it.
-      { type: 'EQUITY_RETURN_STEP_APPLY', fields: { marketDev: ValueType.number(), deviation: ValueType.any(), driftComp: ValueType.any(), bootstrap: ValueType.any(), marketShock: ValueType.any() } },
+      { type: 'EQUITY_RETURN_STEP_APPLY', fields: { marketDev: ValueType.number(), deviation: ValueType.any(), driftComp: ValueType.any(), bootstrap: ValueType.any(), marketShock: ValueType.any(), monthShape: ValueType.any() } },
       { type: 'PROPERTY_RETURN_STEP_APPLY', fields: { marketDev: ValueType.number(), deviation: ValueType.any(), driftComp: ValueType.any() } },
       // Design 103 §4.2. `historicalYear` only in joint mode; `passThrough` only when set.
       // Design 104 adds `primeDeviation` / `primeFloor`, only in "follows inflation" prime mode.
@@ -785,7 +790,10 @@ export const ECONOMIC_REGIMES = {
       // toolset.
       { type: 'FX_STEP_APPLY', fields: { pair: ValueType.text(), deviation: ValueType.number() } },
       // Design 120 §5.6, §5.7 — the year-end FX mark and INCOME funds' carried losses.
-      { type: 'HEDGE_YEAR_END_APPLY', fields: { rates: ValueType.any(), carriedLoss: ValueType.any() } },
+      // Design 127 §4.3 — `distRates`, the distribution periods' mark under MONTHLY earnings.
+      { type: 'HEDGE_YEAR_END_APPLY', fields: { rates: ValueType.any(), distRates: ValueType.any(), carriedLoss: ValueType.any() } },
+      // Design 127 §4.2 — one sub-annual step of the market index.
+      { type: 'MARKET_INDEX_STEP_APPLY', fields: { periodsPerYear: ValueType.number() } },
       // ── Behavioral strategy action types (design/29) ──────────────────────
       {
         type: 'STOCK_HARVEST_APPLY',
@@ -1648,6 +1656,27 @@ export const ECONOMIC_REGIMES = {
           + 'single run. Reaches every holding that tracks a market; not an authored appreciation schedule, '
           + 'and not gold, bonds or cash.',
       },
+      // Design 127 — not a lever: it decides which earnings events are compiled.
+      {
+        key:          'equityEarningsCadence',
+        label:        'Equity Earnings Cadence',
+        type:         'Enum',
+        group:        'Market Rates',
+        mc:           false,
+        opt:          false,
+        options:      [...EQUITY_EARNINGS_CADENCES],
+        optionLabels: {
+          ANNUAL:  'Annual — one credit on 31 December',
+          MONTHLY: 'Monthly — growth each month-end, dividends each quarter-end',
+        },
+        defaultValue: DEFAULT_EQUITY_EARNINGS_CADENCE,
+        description:  'How often equity, gold and super holdings are credited with their return. Annual credits '
+          + 'the whole year on the balance held on 31 December, so money that arrived in November earns a '
+          + 'full year and money spent in June earns nothing for the months it was invested. Monthly credits '
+          + 'each month-end at the rate that compounds to the same annual return, pays dividends each '
+          + 'quarter-end, and lets prices move during the year. The year\'s return is still decided once a '
+          + 'year. Annual reproduces runs made before design 127.',
+      },
     ];
   },
 
@@ -1879,7 +1908,12 @@ export const ECONOMIC_REGIMES = {
     // FX tick series (design 47) — only with a stochastic FX model (design 120 §5.3).
     events.push(...(_fxProcess(context)?.events ?? []));
     // The hedge year end: the FX mark and INCOME carried losses (design 120 §5.6, §5.7).
-    if (_hedgeYearEndActive(context)) events.push(buildHedgeYearEndSeries());
+    if (_hedgeYearEndActive(context)) events.push(buildHedgeYearEndSeries({ monthly: isMonthlyEarnings(p) }));
+
+    // Design 127 §4.2 — under MONTHLY the market index steps with the lots, every month-end.
+    if (isMonthlyEarnings(p)) events.push(buildMarketIndexStepSeries());
+    // Design 127 §4.1 — and the year's equity draw is folded on 1 January in every plan.
+    if (isMonthlyEarnings(p) && p.equityReturnStochastic) events.push(buildEquityYearOpenSeries());
 
     return events;
   },
@@ -1952,6 +1986,8 @@ export const ECONOMIC_REGIMES = {
             window:         joint ? 'POSTWAR' : 'FULL',
             // Design 102 §6: the AU market replays its own history where the year has data.
             auReplay:       p.equityReturnBootstrapAuReplay ?? true,
+            // Design 127 §4.7 — the months inside each drawn year, under MONTHLY earnings.
+            monthShape:     isMonthlyEarnings(p),
           })]
         : []),
       // Stochastic property return path (design 75 §4) — only when on. `marketVol` matches
@@ -1975,6 +2011,9 @@ export const ECONOMIC_REGIMES = {
       // FX tick (design 47) — only with a stochastic FX model (design 120 §5.3).
       ...(_fxProcess(context)?.handlers ?? []),
       ...(_hedgeYearEndActive(context) ? [new HedgeYearEndHandler()] : []),
+      // Design 127 §4.1, §4.2 — MONTHLY earnings only.
+      ...(isMonthlyEarnings(p) ? [new MarketIndexStepHandler()] : []),
+      ...(isMonthlyEarnings(p) && p.equityReturnStochastic ? [new EquityYearOpenHandler()] : []),
       ...behavioralHandlers,
     ];
   },

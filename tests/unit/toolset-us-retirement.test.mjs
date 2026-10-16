@@ -290,21 +290,24 @@ test('toolset: monthly expenses reduce US savings over 3 months', () => {
     `Balance ${finalBalance.toFixed(0)} should not grow more than wages allow`);
 });
 
-test('toolset: IRA account exists and retains initial balance before year-end', () => {
+test('toolset: IRA account exists and retains initial balance before its first earnings', () => {
   const { sim } = loadToolsetScenario(CUSTOM_JSON);
-  sim.stepTo(Q1_2026);
+  // Design 127: equity earns at every month-end, so an untouched balance is checked before the
+  // first one (31 Jan), not at the end of the quarter.
+  sim.stepTo(new Date(Date.UTC(2026, 0, 20)));
   assert.ok(sim.state.iraAccount != null, 'iraAccount must be in state');
-  // No IRA earnings before first year-end (startOffset=1 means fires at end of year 2026+1)
   assert.strictEqual(sim.state.iraAccount.balance, 200_000,
-    'IRA balance should remain unchanged before year-end earnings fire');
+    'IRA balance should remain unchanged before its first earnings fire');
 });
 
 test('toolset: 401k account exists in state', () => {
   const { sim } = loadToolsetScenario(CUSTOM_JSON);
-  sim.stepTo(Q1_2026);
+  // Design 127: equity earns at every month-end, so an untouched balance is checked before the
+  // first one (31 Jan), not at the end of the quarter.
+  sim.stepTo(new Date(Date.UTC(2026, 0, 20)));
   assert.ok(sim.state.k401Account != null, 'k401Account must be in state');
   assert.strictEqual(sim.state.k401Account.balance, 300_000,
-    '401k balance should remain unchanged before year-end earnings fire');
+    '401k balance should remain unchanged before its first earnings fire');
 });
 
 test('toolset: deserializePersonsAccounts loads person into personService', () => {

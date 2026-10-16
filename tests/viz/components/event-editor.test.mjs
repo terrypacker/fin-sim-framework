@@ -161,6 +161,7 @@ describe('EventEditor', () => {
       'monthly',
       'quarterly',
       'semiannual',   // design 66 §G10a
+      'quarter-end',  // design 127
       'annually',
       'month-end',
       'year-end',

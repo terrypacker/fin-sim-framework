@@ -62,6 +62,10 @@ function config({ birthDate, total = 0.07, frankedPercent } = {}) {
     simEnd:   '2028-01-01',
     parameters: {
       monthlyExpenses: 0, inflationAdjust: false, inflationRate: 0,
+      // Design 127: these assert one year's exact figures from ONE 31 Dec earnings event, so
+      // they pin the cadence they were written for. The monthly path is covered in
+      // earnings-cadence.test.mjs (CAD-13 for super's month-by-month tax rate).
+      equityEarningsCadence: 'ANNUAL',
       usEquityGrowthRate: 0, intlExUsEquityGrowthRate: 0,
       usEquityDividendYield: 0, intlExUsEquityDividendYield: 0, fixedIncomeInterestRate: 0,
       usSavingsInterestRate: 0, auSavingsInterestRate: 0,

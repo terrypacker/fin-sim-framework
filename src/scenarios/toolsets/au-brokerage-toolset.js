@@ -54,7 +54,7 @@ export const AU_BROKERAGE = {
       { type: 'AU_DIVIDEND_UNFRANKED_RESIDENT_APPLY',  fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
       { type: 'AU_DIVIDEND_UNFRANKED_RESIDENT_CASH_APPLY', fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
       { type: 'AU_DIVIDEND_UNFRANKED_NONRESIDENT_APPLY', fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
-      { type: 'AU_STOCK_EARNINGS_APPLY', fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
+      { type: 'AU_STOCK_EARNINGS_APPLY', fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text(), flooredLots: ValueType.number() } },
       { type: 'AU_STOCK_WITHDRAWAL_APPLY', family: 'WITHDRAWAL', cc: 'AU',
         fields: { salePrice: ValueType.currency('AUD'), costBasis: ValueType.currency('AUD'), residency: ValueType.text() } },
       // auDiscountableGain is the CGT 50%-discount-eligible slice of auGain (design 62

@@ -36,6 +36,7 @@ import { superMemberKey, auSuperReleaseMs, preservationAge } from './super-relea
 import { auSuperKeyFor } from './super-fund-key.js';
 import { resolveCashKey } from '../cash-routing.js';
 import { SUPER_TAX_RATE } from '../../tax/au/super-tax-rate.js';
+import { periodRate } from '../../holdings/earnings-cadence.js';
 
 /** Whole months from `fromMs` to `toMs`, a part month of half or more counting (r 58(5)). */
 function monthsBetween(fromMs, toMs) {
@@ -73,12 +74,14 @@ export class MsbsFundedEarningsHandler extends HandlerEntry {
     return { ...super.toJSON(), stateKey: this.stateKey };
   }
 
-  call({ state, date }) {
+  call({ state, date, data }) {
     const a  = state?.[this.stateKey];
     const eb = a?.employerBenefit;
     if (!isMsbs(a) || !eb || !(eb.funded > 0) || !preservedOn(state, a, date)) return [];
     const rate   = fundedSleeveReturn(state, eb.fundedAllocation ?? MSBS_DEFAULT_FUNDED_ALLOCATION);
-    const amount = +(eb.funded * rate).toFixed(2);
+    // Design 127 — the member's fund event drives this one, so under MONTHLY it is the
+    // month's share of the year's net return, compounding to the annual figure.
+    const amount = +(eb.funded * periodRate(rate, data?.periodsPerYear ?? 1)).toFixed(2);
     return amount === 0 ? [] : [{ type: 'MSBS_FUNDED_EARNINGS_APPLY', stateKey: this.stateKey, amount, rate }];
   }
 }

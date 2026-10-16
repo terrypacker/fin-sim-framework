@@ -153,15 +153,20 @@ describe('the wash-sale-harvest golden reaches §1091 end to end (§8.1o)', () =
 
 describe('the §1091(d) twin defers the loss into basis (§8.1p)', () => {
   test('the disallowance is DEFERRED, not destroyed — and the ledger says so', () => {
+    // Asserted as a RULE over every wash filing, not as a count. It was `length === 1` until
+    // design 127 recalibrated the crash under monthly crediting: the two books then harvest
+    // past each other in two years rather than one, which is the fact pattern this golden
+    // exists for, repeated. What must hold is that every taxable wash is deferred whole.
     const washed = twinFilings.filter(f => f.disallowed > 0);
-    assert.equal(washed.length, 1);
-    const [f] = washed;
-    // Every row is a taxable match here, so the deferred total IS the disallowance: nothing
-    // in this plan was matched against an IRA or Roth. That is the contrast with
-    // `wash-sale-harvest`, whose single row carries no `deferred` at all.
-    const deferred = f.ledger.reduce((s2, r) => s2 + (r.deferred ?? 0), 0);
-    assert.ok(f.ledger.length >= 2, 'two books harvesting past each other produce several rows');
-    assert.equal(+deferred.toFixed(2), +f.disallowed.toFixed(2));
+    assert.ok(washed.length >= 1);
+    for (const f of washed) {
+      // Every row is a taxable match here, so the deferred total IS the disallowance: nothing
+      // in this plan was matched against an IRA or Roth. That is the contrast with
+      // `wash-sale-harvest`, whose single row carries no `deferred` at all.
+      const deferred = f.ledger.reduce((s2, r) => s2 + (r.deferred ?? 0), 0);
+      assert.equal(+deferred.toFixed(2), +f.disallowed.toFixed(2));
+    }
+    assert.ok(washed.some(f => f.ledger.length >= 2), 'two books harvesting past each other produce several rows');
     assert.equal(filings.filter(x => x.disallowed > 0)[0].ledger[0].deferred, undefined,
       'the sheltered golden defers nothing — the two goldens must not be measuring one thing');
   });

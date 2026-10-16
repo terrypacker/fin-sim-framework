@@ -12,7 +12,7 @@ stamps:
   param:hedgeForeignCashRate: b900f1
   param:hedgeCost: 25d37a
   param:fxEquityCorrelation: 3f56d7
-  src/finance/holdings/currency-overlay.js: 8d969d
+  src/finance/holdings/currency-overlay.js: fd6ff9
 ---
 
 An Australian investor in world shares holds two things at once: the shares, and the
@@ -23,8 +23,8 @@ keeps only the shares; its unhedged twin VGS keeps both.
 already an unhedged Australian-dollar figure, so a lot whose security declares no hedge
 ratio grows as it always has. Declaring one — even 0 — opts its lots into the overlay:
 
-- **The currency's move** reaches the unhedged part, measured from one 31 December to the
-  next, and is zero unless the FX process is on. The world-ex-Australia basket is priced
+- **The currency's move** reaches the unhedged part, measured over each earnings period,
+  and is zero unless the FX process is on. The world-ex-Australia basket is priced
   off USD/AUD, scaled down because a basket of currencies moves less than the dollar.
 - **The carry** reaches the hedged part: the Australian policy rate less the foreign one.
   When Australian rates are lower, a hedge costs money every year.

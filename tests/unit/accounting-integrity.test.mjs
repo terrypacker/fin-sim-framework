@@ -26,6 +26,7 @@
  *      ΔNetWorth reconciliation is confounded by cross-border FX translation).
  */
 
+import { multiplicativePrice } from '../../src/finance/holdings/earnings-cadence.js';
 import { test }  from 'node:test';
 import assert    from 'node:assert/strict';
 
@@ -141,9 +142,14 @@ test('per-account: untouched accounts compound at exactly their configured rate'
   // since design 99 P5b they no longer share a rate, so it is checked LOT by lot below:
   // each lot's price moves by its own market's total − yield (the yield leaves as cash,
   // reinvest off in the prebuilt).
+  // Design 127 §3.2: under the MONTHLY cadence (the default) the price half of a total is the
+  // multiplicative split, (1 + total)/(1 + yield) − 1, which is what makes reinvested dividends
+  // sum to the total across a year; ANNUAL kept the additive total − yield.
   const lotRate = (h) => {
     const m = marketReturnFor(p, h.rateKey);
-    return m.total - m.yield + (p.dividendReinvest ? m.yield : 0);
+    const price = (p.equityEarningsCadence ?? 'MONTHLY') === 'ANNUAL'
+      ? m.total - m.yield : multiplicativePrice(m.total, m.yield);
+    return price + (p.dividendReinvest ? m.yield : 0);
   };
   const equityMv = (acct) => (acct?.holdings ?? [])
     .filter(h => h.allocation === 'EQUITY')

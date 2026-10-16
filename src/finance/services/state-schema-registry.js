@@ -615,6 +615,10 @@ export class StateSchemaRegistry {
     this.registerPattern('equityReturnDev.*',         ParameterValueType.rate());
     this.registerPattern('equityReturnDriftComp.*',   ParameterValueType.rate());
     this.register('equityReturnMarketDev',            ParameterValueType.rate());
+    // Design 127 §4.7 — the monthly log-return shape inside the year, per sleeve: drawn
+    // (`…Next`) and in force.
+    this.registerPattern('equityReturnMonthShapeNext.*.*', ParameterValueType.decimal(4));
+    this.registerPattern('equityMonthShape.*.*',           ParameterValueType.decimal(4));
     // The stochastic inflation path (design 103 §4.2, §5.2).
     this.registerPattern('inflationDev.*',               ParameterValueType.rate());
     // The standardized global and per-country inflation factors (design 103 §10).
@@ -658,6 +662,8 @@ export class StateSchemaRegistry {
     this.register('hedgeOverlay.cost',                 ParameterValueType.rate());
     this.register('hedgeOverlay.foreignCashRate',      ParameterValueType.rate());
     this.registerPattern('hedgeOverlay.fxMark.*',      ParameterValueType.fxRate());
+    // Design 127 §4.3 — the distribution periods' mark under MONTHLY earnings.
+    this.registerPattern('hedgeOverlay.fxMarkDist.*',  ParameterValueType.fxRate());
     this.registerPattern('hedgeOverlay.carriedLoss.*', ParameterValueType.rate());
     this.register('equityMarketShock.year',            ParameterValueType.integer());
     this.register('equityMarketShock.z',               ParameterValueType.decimal(4));

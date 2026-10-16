@@ -116,22 +116,26 @@ test('PARAM-5: preset reference schedules ECONOMIC_SHOCK and RECOVERY_TICK event
   assert.ok(shock.startDate instanceof Date, 'startDate must be a Date');
 });
 
+// Design 127: under the MONTHLY default the toolset always schedules the month-end market-index
+// step, whatever the shocks say. "No events" means no shock-derived events.
+const nonIndexEvents = (events) => events.filter(e => e.type !== 'MARKET_INDEX_STEP');
+
 test('PARAM-6: preset=none produces no events', () => {
   const ctx = makeContext([{ preset: 'none', startDate: '2030-01-01' }]);
   const events = ECONOMIC_REGIMES.schedules(ctx);
-  assert.strictEqual(events.length, 0);
+  assert.strictEqual(nonIndexEvents(events).length, 0);
 });
 
 test('PARAM-7: missing startDate produces no events', () => {
   const ctx = makeContext([{ preset: 'MARKET_CRASH_2008_LITE', startDate: '' }]);
   const events = ECONOMIC_REGIMES.schedules(ctx);
-  assert.strictEqual(events.length, 0);
+  assert.strictEqual(nonIndexEvents(events).length, 0);
 });
 
 test('PARAM-7b: absent startDate (no key) produces no events', () => {
   const ctx = makeContext([{ preset: 'MARKET_CRASH_2008_LITE' }]);
   const events = ECONOMIC_REGIMES.schedules(ctx);
-  assert.strictEqual(events.length, 0);
+  assert.strictEqual(nonIndexEvents(events).length, 0);
 });
 
 test('PARAM-8: two preset shocks both schedule events independently', () => {
