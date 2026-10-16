@@ -3,8 +3,8 @@ id: bond-ladders
 kind: concept
 title: Bond Ladders
 panels: [holdings]
-params: [bondLadderRungs, bondLadderSpacingYears, bondLadderRoll, bondLadderTaxTreatment, bondLadderRole, bondLadderInflationLinked, bondLadderCouponRate, bondLadderTipsCouponMode, bondLadderTipsExpectedInflation]
-design: [66-bond-fidelity.md, 121-shock-leg-offset-and-stagflation-calibration.md, 125-tips-expected-inflation.md]
+params: [bondLadderRungs, bondLadderSpacingYears, bondLadderRoll, bondLadderTaxTreatment, bondLadderRole, bondLadderInflationLinked, bondLadderCouponRate, bondLadderTipsCouponMode, bondLadderTipsExpectedInflation, bondLadderMinSlotBuy]
+design: [66-bond-fidelity.md, 121-shock-leg-offset-and-stagflation-calibration.md, 125-tips-expected-inflation.md, 128-ladder-aware-bond-buys.md]
 stamps:
   param:bondLadderRungs: ac8710
   param:bondLadderSpacingYears: 218e34
@@ -15,6 +15,7 @@ stamps:
   param:bondLadderCouponRate: 134598
   param:bondLadderTipsCouponMode: 0be755
   param:bondLadderTipsExpectedInflation: f4594c
+  param:bondLadderMinSlotBuy: 01409f
   panel:holdings: 962055
 ---
 
@@ -28,8 +29,7 @@ rungs and years-of-cover appear together in
 
 The shape is a rung count and a spacing. More rungs and wider spacing buy duration
 and yield at the cost of rate risk; fewer and tighter buy liquidity and pay
-reinvestment drag. The optimizer can search this, which is usually more honest than
-guessing.
+reinvestment drag. The optimizer can search this.
 
 **Rolling is the decision that changes what the ladder is for.** With rolling on,
 each maturing rung is reinvested at the tail and the ladder perpetuates itself —
@@ -38,8 +38,11 @@ is a spend-down instrument that steadily converts itself into money to live on.
 Those are opposite plans, and it is one switch.
 
 Placement takes account roles, and **every** matching account is laddered, not the
-first one found — a household commonly holds bonds in several wrappers and
-laddering only one of them would quietly model something else.
+first one found.
+
+**New money buys more of the same ladder**, spread across its upcoming maturities:
+a rebalance into bonds on the day, reinvested coupons at the next review. Small sums
+go to the longest rung alone.
 
 Tax treatment is stated per ladder, because whether a rung is fully taxable,
 state-exempt like a Treasury, or municipal changes the after-tax yield without
