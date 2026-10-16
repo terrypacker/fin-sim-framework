@@ -51,6 +51,12 @@
  * CAD-16 A lot credited through a shaped year still ends it at exactly 1 + T, and a
  *        per-account rate key takes its sleeve's shape.
  * CAD-17 The market index steps through the same shaped months as the lots.
+ *
+ * The cost (§4.8, phase 2c):
+ * CAD-18 A HOLDING_TRANSACT_BATCH leaves the account exactly as its legs would as separate
+ *        HOLDING_TRANSACTs, two legs on one lot, an unknown lot and the zero floor included.
+ * CAD-19 Under MONTHLY an earnings handler emits one batch per account; under ANNUAL it
+ *        emits the per-lot actions it always has.
  */
 
 import { test } from 'node:test';
@@ -73,6 +79,8 @@ import { EquityReturnTickHandler, MONTHLY_AVERAGE_SD_RATIO, HISTORICAL_BOOTSTRAP
 import { HISTORICAL_EQUITY_RETURNS } from '../../src/finance/economic-regimes/historical-equity-returns.js';
 import { EQUITY_SLEEVES } from '../../src/finance/economic-regimes/rate-keys.js';
 import { keyedRng } from '../../src/simulation-framework/simulation.js';
+import { HoldingTransactReducer } from '../../src/finance/holdings/holding-reducers.js';
+import { HoldingTransactAction, VALUE_KIND, batchHoldingActions } from '../../src/finance/holdings/holding-actions.js';
 import { runReducer, assertStateUnchanged } from '../helpers/reducer-postconditions.js';
 import { makeAction } from '../helpers/reducer-fixtures.js';
 import { AuSingleHomeownerScenario } from '../../src/scenarios/au-single-homeowner-scenario.js';
@@ -451,4 +459,41 @@ test('CAD-17: the index steps through the same shaped months', () => {
       periodsPerYear: 12, monthIndex: m - 1 }).amount;
     assert.ok(near(s.marketIndex.EQUITY_US.total, lot.acct.holdings[0].marketValue, 0.01), `month ${m}`);
   }
+});
+
+// ── The cost (§4.8) ─────────────────────────────────────────────────────────────────
+
+test('CAD-18: a batch is its legs, in order', () => {
+  const state0 = { acct: { balance: 300, holdings: [
+    { id: 'a', allocation: 'EQUITY', marketValue: 100, costBasis: 80 },
+    { id: 'b', allocation: 'EQUITY', marketValue: 150, costBasis: 150 },
+    { id: 'c', allocation: 'EQUITY', marketValue: 50,  costBasis: 40 },
+  ] } };
+  const actions = [
+    new HoldingTransactAction({ stateKey: 'acct', holdingId: 'a', marketValueDelta: 7.25 }),
+    new HoldingTransactAction({ stateKey: 'acct', holdingId: 'a', marketValueDelta: 2, costBasisDelta: 2, valueKind: VALUE_KIND.UNITS }),
+    new HoldingTransactAction({ stateKey: 'acct', holdingId: 'b', marketValueDelta: -9.1 }),
+    new HoldingTransactAction({ stateKey: 'acct', holdingId: 'c', marketValueDelta: -80, costBasisDelta: -60 }),
+    new HoldingTransactAction({ stateKey: 'acct', holdingId: 'zz', marketValueDelta: 5 }),
+  ];
+  const r = new HoldingTransactReducer();
+  const strip = ({ next, ...st }) => st;
+  let one = state0;
+  for (const a of actions) one = r.reduce(one, a);
+  const [batch] = batchHoldingActions(actions, 12);
+  assert.equal(batch.type, 'HOLDING_TRANSACT_BATCH');
+  assert.equal(batch.legs.length, 5);
+  assert.deepEqual(strip(r.reduce(state0, batch)), strip(one));
+  assert.equal(strip(one).acct.holdings[2].marketValue, 0, 'the floor holds in both');
+  assert.deepEqual(batchHoldingActions(actions, 1), actions, 'ANNUAL is not batched');
+  assert.deepEqual(batchHoldingActions(actions.slice(0, 1), 12), actions.slice(0, 1), 'one action stays one');
+});
+
+test('CAD-19: the handlers batch under MONTHLY only', () => {
+  const s = oneLot(100_000);
+  s.acct.holdings.push({ id: 'h2', allocation: 'EQUITY', rateKey: 'EQUITY_US', marketValue: 50_000 });
+  const h = new IntlRothEarningsHandler({ stateRegistry: null, role: 'roth', stateKey: 'acct' });
+  const types = data => h.call({ state: s, data, date: at(2026, 3, 31) }).map(a => a.type);
+  assert.deepEqual(types({ periodsPerYear: 12 }), ['ROTH_EARNINGS_APPLY', 'HOLDING_TRANSACT_BATCH', 'RECORD_BALANCE']);
+  assert.deepEqual(types(undefined), ['ROTH_EARNINGS_APPLY', 'HOLDING_TRANSACT', 'HOLDING_TRANSACT', 'RECORD_BALANCE']);
 });

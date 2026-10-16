@@ -275,8 +275,8 @@ test('HoldingRetitleReducer: patches metadata without moving value', () => {
 
 // ─── HOLDING_ACTION_ENTRIES coverage ──────────────────────────────────────────
 
-test('HOLDING_ACTION_ENTRIES: covers all 5 action types with family=HOLDING', () => {
-  assert.equal(HOLDING_ACTION_ENTRIES.length, 5);
+test('HOLDING_ACTION_ENTRIES: covers all 6 action types with family=HOLDING', () => {
+  assert.equal(HOLDING_ACTION_ENTRIES.length, 6);
   for (const e of HOLDING_ACTION_ENTRIES) {
     assert.equal(e.family, 'HOLDING');
     assert.equal(e.cc, null);

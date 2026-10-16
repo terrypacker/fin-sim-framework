@@ -114,39 +114,72 @@ export class HoldingTransactReducer extends Reducer {
 
   constructor() {
     super('Holding Transact', PRIORITY.POSITION_UPDATE);
-    this.reducedActionTypes = [HOLDING_ACTION_TYPES.HOLDING_TRANSACT];
+    this.reducedActionTypes = [HOLDING_ACTION_TYPES.HOLDING_TRANSACT, HOLDING_ACTION_TYPES.HOLDING_TRANSACT_BATCH];
   }
 
   reduce(state, action) {
-    const { stateKey, holdingId, marketValueDelta = 0, costBasisDelta = 0,
-            cpiIndexRatioFactor = null, valueKind = VALUE_KIND.PRICE } = action;
+    if (action?.type === HOLDING_ACTION_TYPES.HOLDING_TRANSACT_BATCH) return this._reduceBatch(state, action);
+    const { stateKey, holdingId } = action;
     const account = state?.[stateKey];
     if (!account || !Array.isArray(account.holdings)) return this.newState(state);
 
     const target = account.holdings.find(h => h?.id === holdingId);
     if (!target) return this.newState(state);
 
-    // Floor both at zero: a withdrawal delta must never drive a position (or its
-    // basis) negative. account.balance is re-synced to Σ marketValue below, so
-    // the §4.4 invariant is preserved after the floor.
-    // par-reviewed: builds a PATCH, not a holding — the only spread is the conditional
-    // index-ratio field. `_patchHolding` is the choke point that applies it, and it routes
-    // a marketValue patch on a unitised lot through `reprice` so par cannot fall behind.
-    const patched = _patchHolding(target, {
-      marketValue: Math.max(0, (target.marketValue ?? 0) + marketValueDelta),
-      costBasis:   Math.max(0, (target.costBasis   ?? 0) + costBasisDelta),
-      // design 93 §5b — a TIPS accretion indexes the PRINCIPAL, and the index ratio is
-      // where that lives. The `marketValue` delta above then lands on `pricePerUnit`
-      // (the price follows the principal) via `_patchHolding`, leaving the unit count
-      // alone. Both must move on the same action, which is why it is one action.
-      ...(cpiIndexRatioFactor == null || target.cpiIndexRatio == null
-        ? {}
-        : { cpiIndexRatio: +(target.cpiIndexRatio * cpiIndexRatioFactor).toFixed(12) }),
-    }, valueKind);
+    const patched = _transactLeg(target, action);
     const nextHoldings = _replaceHolding(account.holdings, holdingId, patched);
     const nextAccount  = _syncBalance({ ...account, holdings: nextHoldings });
     return this.newState(state, { [stateKey]: nextAccount });
   }
+
+  /**
+   * Design 127 §4.8 — HOLDING_TRANSACT_BATCH: every leg applied exactly as a
+   * HOLDING_TRANSACT would apply it, in order, then ONE balance re-sync. The holdings come
+   * out identical to the legs as separate actions: each leg touches only its own lot, and
+   * `_syncBalance` is a function of the final holdings.
+   */
+  _reduceBatch(state, action) {
+    const { stateKey, legs = [] } = action;
+    const account = state?.[stateKey];
+    if (!account || !Array.isArray(account.holdings) || legs.length === 0) return this.newState(state);
+    const holdings = [...account.holdings];
+    const index = new Map(holdings.map((h, i) => [h?.id, i]));
+    let touched = false;
+    for (const leg of legs) {
+      const i = index.get(leg.holdingId);
+      if (i == null || !holdings[i]) continue;
+      holdings[i] = _transactLeg(holdings[i], leg);
+      touched = true;
+    }
+    if (!touched) return this.newState(state);
+    return this.newState(state, { [stateKey]: _syncBalance({ ...account, holdings }) });
+  }
+}
+
+/**
+ * One HOLDING_TRANSACT leg on its target lot — the arithmetic both the single action and
+ * the batch apply.
+ *
+ * Floor both at zero: a withdrawal delta must never drive a position (or its basis)
+ * negative. account.balance is re-synced to Σ marketValue by the caller, so the §4.4
+ * invariant is preserved after the floor.
+ */
+function _transactLeg(target, { marketValueDelta = 0, costBasisDelta = 0, cpiIndexRatioFactor = null,
+                                valueKind = VALUE_KIND.PRICE }) {
+  // par-reviewed: builds a PATCH, not a holding — the only spread is the conditional
+  // index-ratio field. `_patchHolding` is the choke point that applies it, and it routes
+  // a marketValue patch on a unitised lot through `reprice` so par cannot fall behind.
+  return _patchHolding(target, {
+    marketValue: Math.max(0, (target.marketValue ?? 0) + marketValueDelta),
+    costBasis:   Math.max(0, (target.costBasis   ?? 0) + costBasisDelta),
+    // design 93 §5b — a TIPS accretion indexes the PRINCIPAL, and the index ratio is
+    // where that lives. The `marketValue` delta above then lands on `pricePerUnit`
+    // (the price follows the principal) via `_patchHolding`, leaving the unit count
+    // alone. Both must move on the same action, which is why it is one action.
+    ...(cpiIndexRatioFactor == null || target.cpiIndexRatio == null
+      ? {}
+      : { cpiIndexRatio: +(target.cpiIndexRatio * cpiIndexRatioFactor).toFixed(12) }),
+  }, valueKind);
 }
 
 /**

@@ -142,6 +142,7 @@ const BY_ACTION_TYPE = Object.freeze({
   // 34% of debits on the draft's measure and ~45% on the converted one. Its absence
   // from the chart would be the first thing an operator asked about (§8 tier 2).
   HOLDING_TRANSACT:                  REPORT_CATEGORY.INTERNAL,
+  HOLDING_TRANSACT_BATCH:            REPORT_CATEGORY.INTERNAL,
   REPLENISH_SAVINGS:                 REPORT_CATEGORY.INTERNAL,
   REBALANCE_TO_TARGET_APPLY:         REPORT_CATEGORY.INTERNAL,
   IRA_RMD_APPLY:                     REPORT_CATEGORY.INTERNAL,

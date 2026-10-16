@@ -47,7 +47,7 @@ import { HandlerEntry } from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../simulation-framework/actions.js';
 import { RATE_KEYS } from '../economic-regimes/rate-keys.js';
 import { computeHoldingsGrowth, computeHoldingsDividends, computeFundIncome } from '../holdings/holdings-earnings.js';
-import { HoldingTransactAction, VALUE_KIND } from '../holdings/holding-actions.js';
+import { HoldingTransactAction, VALUE_KIND, batchHoldingActions } from '../holdings/holding-actions.js';
 import { superEarningsTaxRate } from '../tax/au/super-tax-rate.js';
 import { superDrawStartIn } from '../account-rules/au/super-release.js';
 import { isQuarterEnd } from '../holdings/earnings-cadence.js';
@@ -113,7 +113,7 @@ export class IntlRothEarningsHandler extends HandlerEntry {
     if (amount === 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'ROTH_EARNINGS_APPLY', amount, derivedAmount, stateKey, ...flooredField(flooredLots) },
-      ...holdingActions,
+      ...batchHoldingActions(holdingActions, periodsOf(data)),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
@@ -168,7 +168,7 @@ export class IntlIraEarningsHandler extends HandlerEntry {
     if (amount === 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'IRA_EARNINGS_APPLY', amount, derivedAmount, stateKey, ...flooredField(flooredLots) },
-      ...holdingActions,
+      ...batchHoldingActions(holdingActions, periodsOf(data)),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
@@ -223,7 +223,7 @@ export class IntlK401EarningsHandler extends HandlerEntry {
     if (amount === 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'K401_EARNINGS_APPLY', amount, derivedAmount, stateKey, ...flooredField(flooredLots) },
-      ...holdingActions,
+      ...batchHoldingActions(holdingActions, periodsOf(data)),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
@@ -285,7 +285,7 @@ export class IntlUsStockEarningsHandler extends HandlerEntry {
     if (amount === 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'STOCK_EARNINGS_APPLY', amount, stateKey, ...flooredField(flooredLots) },
-      ...holdingActions,
+      ...batchHoldingActions(holdingActions, periodsOf(data)),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
@@ -370,7 +370,7 @@ export class IntlAuStockEarningsHandler extends HandlerEntry {
       // asset behind it, which is where F7's phantom starts. The US sibling
       // (`STOCK_EARNINGS_APPLY`) has stamped it since design 76; this one never did.
       { type: 'AU_STOCK_EARNINGS_APPLY', amount, stateKey, ...flooredField(flooredLots) },
-      ...holdingActions,
+      ...batchHoldingActions(holdingActions, periodsOf(data)),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
@@ -859,7 +859,7 @@ export class SuperEarningsHandler extends HandlerEntry {
     return [
       { type: 'SUPER_EARNINGS_APPLY', amount: +amount.toFixed(2), grossAmount: income.dividend,
         frankingCredit: income.credit, stateKey, taxRate, ...flooredField(gross.flooredLots) },
-      ...holdingActions,
+      ...batchHoldingActions(holdingActions, periodsOf(data)),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }

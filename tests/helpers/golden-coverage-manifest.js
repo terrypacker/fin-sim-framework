@@ -199,10 +199,12 @@ export const COVERED = [
  */
 export const KNOWN_GAPS = [
   // ── MONTHLY equity earnings (design 127)
-  // MarketIndexReducer reduces the month-end index step in every scenario, but only a
-  // MONTHLY plan schedules it, and every golden runs ANNUAL until phase 4 switches the
-  // default. earnings-cadence.test.mjs covers it in isolation and in a run (CAD-11, CAD-7).
-  // Phase 4's regold clears it.
+  // MarketIndexReducer reduces the month-end index step, and HoldingTransactReducer the
+  // per-account batch of lot deltas (phase 2c), in every scenario, but only a MONTHLY plan
+  // emits either, and every golden runs ANNUAL until phase 4 switches the default.
+  // earnings-cadence.test.mjs covers both (CAD-7, CAD-11, CAD-18, CAD-19).
+  // Phase 4's regold clears them.
+  'HOLDING_TRANSACT_BATCH',
   'MARKET_INDEX_STEP_APPLY',
 
   // ── MSBS reversion (design 119 phase 5)
