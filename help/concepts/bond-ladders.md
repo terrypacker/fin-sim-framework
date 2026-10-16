@@ -3,17 +3,18 @@ id: bond-ladders
 kind: concept
 title: Bond Ladders
 panels: [holdings]
-params: [bondLadderRungs, bondLadderSpacingYears, bondLadderRoll, bondLadderTaxTreatment, bondLadderRole, bondLadderInflationLinked, bondLadderCouponRate, bondLadderTipsCouponMode]
-design: [66-bond-fidelity.md, 121-shock-leg-offset-and-stagflation-calibration.md]
+params: [bondLadderRungs, bondLadderSpacingYears, bondLadderRoll, bondLadderTaxTreatment, bondLadderRole, bondLadderInflationLinked, bondLadderCouponRate, bondLadderTipsCouponMode, bondLadderTipsExpectedInflation]
+design: [66-bond-fidelity.md, 121-shock-leg-offset-and-stagflation-calibration.md, 125-tips-expected-inflation.md]
 stamps:
   param:bondLadderRungs: ac8710
   param:bondLadderSpacingYears: 218e34
   param:bondLadderRoll: 1beb56
   param:bondLadderTaxTreatment: 611cb5
   param:bondLadderRole: 95dbbc
-  param:bondLadderInflationLinked: 288559
+  param:bondLadderInflationLinked: 0faa3b
   param:bondLadderCouponRate: 134598
-  param:bondLadderTipsCouponMode: 75ad68
+  param:bondLadderTipsCouponMode: 0be755
+  param:bondLadderTipsExpectedInflation: f4594c
   panel:holdings: 962055
 ---
 
@@ -50,3 +51,9 @@ inflation. Left blank, each rung takes that at build and again each time it roll
 the ladder reprices as real rates move: below zero through an inflation surge, high
 once it breaks. Pin a coupon instead to model bonds bought at a known yield and held
 to it.
+
+Which inflation counts matters. A market prices the inflation it expects over the
+bond's life, so in a hot year a one-year rung assumes the heat continues and a
+ten-year rung assumes it mostly passes. The default does the same, with the inflation
+path's own persistence. The older rule, last year's rate for every rung, gave a
+windfall at a shock's onset and a deeply negative coupon after any spike.

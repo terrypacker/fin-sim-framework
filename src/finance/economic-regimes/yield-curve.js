@@ -9,6 +9,7 @@
  */
 
 import { RATE_KEY_META } from './rate-keys.js';
+import { expectedInflationDeviation, inflationProcessConfig } from './inflation-tick-handler.js';
 
 /**
  * Yield curve — the term-structure primitive (design 67).
@@ -138,23 +139,94 @@ export function trailingInflation(state, cc) {
   const now    = Number.isFinite(year) ? levels?.[year]     : undefined;
   const prior  = Number.isFinite(year) ? levels?.[year - 1] : undefined;
   if (now > 0 && prior > 0) return now / prior - 1 - (state?.bracketIndexSpreads?.[cc] ?? 0);
+  return currentInflation(state, cc);
+}
+
+/** The effective inflation rate in force now for `cc`. */
+function currentInflation(state, cc) {
   return state?.effectiveInflationRates?.[cc] ?? state?.inflationRates?.[cc] ?? 0;
+}
+
+/** How a TIPS market real yield reads expected inflation (design 125 §4). */
+export const TIPS_EXPECTED_INFLATION_MODES = ['TENOR', 'TRAILING', 'CURRENT'];
+
+/**
+ * The expectation spec the bond reducers carry (design 125 §4): the mode, and the inflation
+ * process it forecasts with. Built once from the scenario's params so the build and the roll
+ * read the same thing.
+ *
+ * @param {object} p  the scenario's parameters
+ * @returns {{ mode: string, process: object }}
+ */
+export function tipsExpectationSpec(p) {
+  return { mode: p?.bondLadderTipsExpectedInflation ?? 'TENOR', process: inflationProcessConfig(p ?? {}) };
+}
+
+/**
+ * The inflation a TIPS rung of `tenorYears` expects over its life (design 125), by mode:
+ *
+ *   - TRAILING (also with no spec): `trailingInflation`, design 121's rule.
+ *   - CURRENT: the effective rate now, π₀.
+ *   - TENOR: the average over the tenor of the expected path from π₀ to the anchor A, one step a
+ *     year as the rate itself steps (§3 C). Year k (0 = this year, which accrues at π₀) weighs
+ *     the share of it inside the tenor. With the stochastic path on, its part of π₀ − A
+ *     (`inflationDev`) follows the latent factors exactly as the tick walks them
+ *     (`expectedInflationDeviation`); the rest (a regime's adjustment, the floor's clamp, or all
+ *     of it with the path off) decays at the latent's autocorrelation
+ *     w·a_g^k + (1 − w)·a^k, the best forecast without the split. No regime foresight (Q3).
+ *
+ * @param {object} state
+ * @param {'US'|'AU'} cc
+ * @param {number|null} tenorYears
+ * @param {{ mode?: string, process?: object }|null} [spec]
+ * @returns {number}
+ */
+export function expectedInflation(state, cc, tenorYears, spec = null) {
+  const mode = spec?.mode ?? 'TRAILING';
+  if (mode === 'TRAILING') return trailingInflation(state, cc);
+  const now = currentInflation(state, cc);
+  if (mode === 'CURRENT') return now;
+
+  const anchor = state?.baseInflationRates?.[cc];
+  const T      = Number.isFinite(tenorYears) ? tenorYears : 0;
+  if (anchor == null || !(T > 0)) return now;
+
+  const pr    = spec.process ?? {};
+  const joint = pr.model === 'HISTORICAL_JOINT';
+  const w     = Math.min(1, Math.max(0, (joint ? pr.globalShareJoint : pr.globalShare) ?? 0));
+  const ag    = Math.exp(-(pr.globalReversionSpeed ?? 0.1));
+  const a     = Math.exp(-(pr.reversionSpeed?.[cc] ?? 0.33));
+  const latent = state?.inflationLatent;
+  const dev    = state?.inflationDev?.[cc];
+  const onPath = latent != null && Number.isFinite(dev);
+  const residual = now - anchor - (onPath ? dev : 0);
+  const procOpts = { anchor, bound: pr.lowerBound?.[cc] ?? -0.01, vol: pr.vol?.[cc] ?? 0, w, ag, a, joint };
+
+  let sum = 0;
+  for (let k = 0; k < T; k++) {
+    const weight = Math.min(1, T - k);
+    const path   = onPath ? expectedInflationDeviation(latent, cc, k, procOpts) : 0;
+    sum += weight * (path + residual * (w * ag ** k + (1 - w) * a ** k));
+  }
+  return anchor + sum / T;
 }
 
 /**
  * The market REAL yield an inflation-linked bond prices at (design 121 §8): the nominal curve
- * yield at `tenorYears` less the country's trailing-12-month inflation. No floor: real yields
- * were negative in the 1970s and in 2020-21, and the deflation floor on principal is separate.
- * Null when the nominal anchor is absent, so a caller keeps its own fallback.
+ * yield at `tenorYears` less the inflation expected over that tenor (design 125; trailing
+ * inflation with no `expectation`). A null tenor is the fund tenor on both halves. No floor:
+ * real yields were negative in the 1970s and in 2020-21, and the deflation floor on principal
+ * is separate. Null when the nominal anchor is absent, so a caller keeps its own fallback.
  *
  * @param {object} state
- * @param {{ rateKey: string, tenorYears?: number|null, stateKey?: string|null }} opts
+ * @param {{ rateKey: string, tenorYears?: number|null, stateKey?: string|null, expectation?: object|null }} opts
  * @returns {number|null}
  */
-export function tipsRealYield(state, { rateKey, tenorYears = null, stateKey = null } = {}) {
+export function tipsRealYield(state, { rateKey, tenorYears = null, stateKey = null, expectation = null } = {}) {
   const nominal = resolveYield(state, { rateKey, tenorYears, stateKey });
   if (nominal == null) return null;
-  return nominal - trailingInflation(state, countryOfRateKey(rateKey));
+  const tenor = tenorYears ?? RATE_KEY_META[rateKey]?.defaultDuration ?? 0;
+  return nominal - expectedInflation(state, countryOfRateKey(rateKey), tenor, expectation);
 }
 
 /**

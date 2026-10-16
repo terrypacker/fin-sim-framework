@@ -22,6 +22,7 @@ import { RebalanceToTargetReducer, TAX_ADVANTAGED_ROLES, TAXABLE_ROLES, ALLOCATI
 import { RebalanceToTargetApplyReducer, REBALANCE_LOT_STRATEGIES } from './rebalance-to-target-apply-reducer.js';
 import { normalizeClassRestrictions, collectClassRestrictionProblems, RESTRICTABLE_CLASSES } from './allocation-location.js';
 import { BondLadderReducer }                   from './bond-ladder-reducer.js';
+import { tipsExpectationSpec, TIPS_EXPECTED_INFLATION_MODES } from '../economic-regimes/yield-curve.js';
 import { ACCOUNT_ROLES }                       from '../state/account-roles.js';
 import { PoolFlowReducer }                     from '../pools/pool-flow-reducer.js';
 import { SpendingRefillHandler }               from '../handlers/spending-refill-handler.js';
@@ -485,6 +486,8 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
         inflationLinked: p.bondLadderInflationLinked ?? false,
         couponRate:      p.bondLadderCouponRate ?? null,
         tipsCouponMode:  p.bondLadderTipsCouponMode ?? 'AUTO',
+        // Design 125 — the toolset hands BondMaturityReducer the same spec for the roll.
+        inflationExpectation: tipsExpectationSpec(p),
       }));
     },
     paramSchema: () => [
@@ -517,8 +520,8 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
         description: 'ON = every rung is a TIPS / inflation-linked bond (design 66 §G5): principal indexes ' +
           'to CPI, the accretion is imputed ordinary income, the coupon pays on the adjusted principal and ' +
           'redemption carries the deflation floor. With no coupon set, each rung takes the market REAL ' +
-          'yield (design 121 §8): the nominal curve yield at its tenor less the trailing 12 months of ' +
-          'inflation, which can be negative.',
+          'yield (design 121 §8): the nominal curve yield at its tenor less the inflation expected over ' +
+          'that tenor (see TIPS Expected Inflation), which can be negative.',
         visibleWhen: { param: 'behavioralStrategies', includes: 'BOND_LADDER' },
       },
       {
@@ -540,9 +543,27 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
         },
         defaultValue: 'AUTO',
         description: 'TIPS ladders only: the real yield a rung takes when it rolls (design 121 §8). ' +
-          'Market re-locks at the nominal curve yield for the roll term less trailing 12-month ' +
-          'inflation, so the ladder reprices as real rates move. Pinned keeps the rung\'s coupon for ' +
+          'Market re-locks at the nominal curve yield for the roll term less the inflation expected ' +
+          'over it, so the ladder reprices as real rates move. Pinned keeps the rung\'s coupon for ' +
           'good. Automatic is Market when Coupon Rate is blank and Pinned when it is set.',
+        visibleWhen: { param: 'bondLadderInflationLinked', truthy: true },
+      },
+      {
+        key: 'bondLadderTipsExpectedInflation', label: 'Bond Ladder — TIPS Expected Inflation',
+        type: 'Enum', group: 'Allocation', mc: false, opt: false,
+        options: TIPS_EXPECTED_INFLATION_MODES,
+        optionLabels: {
+          TENOR:    'Over the tenor — today\'s rate fading to the anchor (default)',
+          TRAILING: 'Trailing — the rate at the last period advance (before design 125)',
+          CURRENT:  'Current — today\'s rate for the whole tenor',
+        },
+        defaultValue: 'TENOR',
+        description: 'TIPS ladders at the market real yield only: the inflation subtracted from the nominal ' +
+          'yield, at build and at each roll (design 125). Over the tenor is a breakeven: today\'s rate ' +
+          'fading to the Inflation Rate anchor at the inflation path\'s own reversion speeds, so a short ' +
+          'rung expects about today\'s rate and a long one about the anchor. With the stochastic path on ' +
+          'it forecasts from the path\'s current state. Trailing reproduces runs made before design 125; ' +
+          'it lags a regime\'s onset and assumes one hot year lasts the whole tenor.',
         visibleWhen: { param: 'bondLadderInflationLinked', truthy: true },
       },
       {

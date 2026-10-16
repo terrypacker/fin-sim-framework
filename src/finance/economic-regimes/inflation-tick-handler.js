@@ -148,6 +148,74 @@ function jointLatentSd(w, ag, a) {
 }
 
 /**
+ * The standardized latent y for one country: `(√w·g + √(1−w)·x) / S`, with S = 1 in GAUSSIAN
+ * mode and `jointLatentSd` in joint mode (§10.4). The one place the two factors combine, shared
+ * by the tick and by the expectation below so the forecast cannot drift from the process.
+ */
+export function combineInflationLatent(g, x, { w, ag, a, joint }) {
+  const scale = joint ? jointLatentSd(w, ag, a) : 1;
+  return (Math.sqrt(w) * g + Math.sqrt(1 - w) * x) / scale;
+}
+
+/**
+ * The expected inflation deviation from the anchor `k` years ahead, given today's latent
+ * factors (design 125 §3 C). With no further surprises each factor decays (g by a_g^k, x by
+ * a^k), and the surprises still to come leave y_k Gaussian around that:
+ *
+ *     m_k = (√w·a_g^k·g + √(1−w)·a^k·x) / S
+ *     v_k = [w(1 − a_g^2k) + (1−w)(1 − a^2k) + 2√(w(1−w))·λ·√(1−a_g²)·√(1−a²)·(1 − (a_g·a)^k)/(1 − a_g·a)] / S²
+ *
+ * λ is joint mode's correlation between the global and own surprises (0 in GAUSSIAN, where
+ * they are independent). v_0 = 0 and v_∞ = 1. The skew map is lognormal above the bound, so
+ * its mean is exact: E[(A − F)·exp(s·y − s²/2)] = (A − F)·exp(s·m + s²·(v − 1)/2). At k = 0 this
+ * is today's deviation; as k grows it tends to 0 (the anchor).
+ *
+ * @param {{g:number, US?:number, AU?:number}} latent  `state.inflationLatent`
+ * @param {'US'|'AU'} cc
+ * @param {number} k  whole years ahead
+ * @param {{ anchor:number, bound:number, vol:number, w:number, ag:number, a:number, joint:boolean }} opts
+ * @returns {number}
+ */
+export function expectedInflationDeviation(latent, cc, k, { anchor, bound, vol, w, ag, a, joint }) {
+  const span = anchor - bound;
+  if (!(span > 0) || !(vol > 0)) return 0;
+  const s     = Math.sqrt(Math.log(1 + (vol / span) ** 2));
+  const scale = joint ? jointLatentSd(w, ag, a) : 1;
+  const lambda = joint ? Math.sqrt((1 + HISTORICAL_JOINT_WINDOW.normalScoreCorr) / 2) : 0;
+  const agk = ag ** k;
+  const ak  = a ** k;
+  const m = (Math.sqrt(w) * agk * (latent?.g ?? 0) + Math.sqrt(1 - w) * ak * (latent?.[cc] ?? 0)) / scale;
+  // Σ_{j<k} (a_g·a)^j, the shared-surprise covariance sum; k itself when a_g·a = 1 (no reversion).
+  const cross = ag * a === 1 ? k : (1 - (ag * a) ** k) / (1 - ag * a);
+  const v = (w * (1 - agk * agk) + (1 - w) * (1 - ak * ak)
+    + 2 * Math.sqrt(w * (1 - w)) * lambda * Math.sqrt(1 - ag * ag) * Math.sqrt(1 - a * a) * cross) / (scale * scale);
+  return span * (Math.exp(s * m + s * s * (v - 1) / 2) - 1);
+}
+
+/**
+ * The inflation process's configuration from a scenario's params (design 103), with the
+ * defaults the tick runs at. One source for the tick handler and for the TIPS expectation
+ * (design 125), so the two read the same speeds, share and skew.
+ *
+ * @param {object} p  the scenario's parameters
+ */
+export function inflationProcessConfig(p) {
+  return {
+    vol:            { US: p.inflationPathVolUs ?? 0.028, AU: p.inflationPathVolAu ?? 0.03 },
+    reversionSpeed: { US: p.inflationReversionSpeedUs ?? 0.33, AU: p.inflationReversionSpeedAu ?? 0.33 },
+    correlation:    p.inflationPathCorrelation ?? 0.35,
+    // Design 103 §10: the shared global cycle and the skew's lower bounds.
+    globalShare:          p.inflationGlobalShare          ?? 0.4,
+    globalShareJoint:     p.inflationGlobalShareJoint     ?? 0.2,
+    globalReversionSpeed: p.inflationGlobalReversionSpeed ?? 0.1,
+    lowerBound:     { US: p.inflationLowerBoundUs ?? -0.01, AU: p.inflationLowerBoundAu ?? -0.01 },
+    model:          jointInflationActive(p) ? 'HISTORICAL_JOINT' : 'GAUSSIAN',
+    floor:          p.inflationPathFloor ?? -0.05,
+    passThrough:    jointInflationActive(p),
+  };
+}
+
+/**
  * InflationTickHandler — the stochastic inflation path (design 103 §4, revised §10).
  * Another seeded, snapshot-safe in-loop consumer, gated like the others: it's only
  * *scheduled* when `inflationStochastic` is on, so default runs draw nothing and stay
@@ -272,8 +340,7 @@ export class InflationTickHandler extends HandlerEntry {
     for (const cc of COUNTRIES) {
       const a = Math.exp(-(this.reversionSpeed?.[cc] ?? 0.33) * this.dt);
       latent[cc] = a * (prevL[cc] ?? 0) + Math.sqrt(1 - a * a) * e[cc];
-      const scale = joint ? jointLatentSd(w, ag, a) : 1;
-      const y = (Math.sqrt(w) * latent.g + Math.sqrt(1 - w) * latent[cc]) / scale;
+      const y = combineInflationLatent(latent.g, latent[cc], { w, ag, a, joint });
       deviation[cc] = skewedInflationDeviation(y, {
         anchor: anchors[cc] ?? 0.03, bound: this.lowerBound?.[cc] ?? -0.01, vol: this.vol?.[cc] ?? 0,
       });

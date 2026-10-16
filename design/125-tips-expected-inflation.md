@@ -1,6 +1,6 @@
 # 125 — Expected inflation for the TIPS market real yield
 
-**Status:** ACCEPTED (15 Oct 2026), rev 3. Revisits design 121 §8 / Q6 (rev 3, the author:
+**Status:** BUILT (15 Oct 2026), rev 3 (§4.1). Revisits design 121 §8 / Q6 (rev 3, the author:
 expected inflation = the trailing 12 months), which a study found biased at a shock's onset. The
 author asked for this to be written up as a design rather than patched (15 Oct 2026).
 
@@ -179,7 +179,7 @@ is at the last bit: `trailingInflation` is a ratio of compounded levels and read
 2.8e-17 on a flat 3% run, while TENOR returns the anchor exactly, so even flat runs re-lock
 coupons that differ in the last digit. No
 golden builds a `MARKET` TIPS ladder today (`tips-ladder-conservation` pins its coupon), so the
-fixture set should not move; confirm with the golden gate. `evt-tips-real-yield.test.mjs`
+fixture set should not move; confirmed: no golden moved (7,669 unit + 1,805 viz pass). `evt-tips-real-yield.test.mjs`
 TIPS-2..4 build states where the effective rate and the history disagree, so they assert
 TRAILING behaviour and must name that mode explicitly.
 
@@ -187,6 +187,31 @@ TRAILING behaviour and must name that mode explicitly.
 12 months"; both change, plus the reversion-speed and global-share descriptions (TENOR reads
 them with the stochastic path off, while they are hidden), then `help/concepts/
 bond-ladders.md` is restamped (`npm run help:gate`).
+
+### 4.1 As built (15 Oct 2026)
+
+- **`expectedInflation(state, cc, tenorYears, spec)`** in `yield-curve.js`, with
+  `TIPS_EXPECTED_INFLATION_MODES` and `tipsExpectationSpec(p)` → `{ mode, process }`. No spec
+  means TRAILING, so `tipsRealYield` without an `expectation`, a bare `BondLadderReducer` and a
+  bare `BondMaturityReducer` all keep design 121's rule. TIPS-1..4 are unchanged for that reason;
+  §4's note that they must name the mode did not apply.
+- **Process math in `inflation-tick-handler.js`:** `combineInflationLatent` (now used by the
+  tick; draws unchanged), `expectedInflationDeviation` and `inflationProcessConfig(p)` (now
+  builds the tick handler too). The skew map is lognormal above the bound, so the forecast's
+  mean is exact, not the map of the mean: with y_k ~ N(m_k, v_k) the expected deviation is
+  (A − F)·(exp(s·m_k + s²(v_k − 1)/2) − 1). Joint mode's v_k carries the global–own covariance
+  term, so v_∞ = 1 in both modes.
+- **Wiring:** the BOND_LADDER strategy passes `tipsExpectationSpec(p)` to each
+  `BondLadderReducer`; the economic-regimes toolset passes the same to `BondMaturityReducer`.
+- **Param** `bondLadderTipsExpectedInflation` (Enum, default TENOR). Help: the two TIPS
+  descriptions and the four reversion-speed/share descriptions updated; `bond-ladders` and
+  `inflation` topics cite design 125 and are restamped.
+- **Tests:** `evt-tips-expected-inflation.test.mjs` EXP-1..6, including a 20,000-path check of
+  the latent forecast against the real tick + step reducer.
+- **Effect on the study** (plan 26, `buf25Tips`, stagflation, deterministic): the 1 Jul 2027
+  onset roll locks −0.55% real (was +3.5%); every later 3-year roll locks −0.55% (was −1.5%,
+  the regime's own real rate), because the household expects the 8% to fade. Rungs built at
+  the 2026 bootstrap are unchanged (inflation was at the anchor).
 
 ## 5. Open questions
 

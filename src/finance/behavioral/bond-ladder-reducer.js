@@ -67,10 +67,14 @@ export class BondLadderReducer extends Reducer {
    * @param {'AUTO'|'MARKET'|'PINNED'} [opts.tipsCouponMode='AUTO'] - TIPS only: whether a rung
    *   re-locks at the market real yield when it rolls (MARKET) or keeps its coupon (PINNED).
    *   AUTO is MARKET with no `couponRate`, PINNED with one.
+   * @param {{ mode: string, process: object }|null} [opts.inflationExpectation=null] - TIPS only:
+   *   how the market real yield reads expected inflation (design 125, `tipsExpectationSpec`);
+   *   null is design 121's trailing rule.
    */
   constructor({ stateKey, country = 'US', targetRungs = 5, spacingYears = 1,
                 roll = true, taxExemption = 'state',
-                inflationLinked = false, couponRate = null, tipsCouponMode = 'AUTO' } = {}) {
+                inflationLinked = false, couponRate = null, tipsCouponMode = 'AUTO',
+                inflationExpectation = null } = {}) {
     super('Bond Ladder', PRIORITY.PRE_PROCESS + 5); // after maturity (+3) and rebalance detect (+4)
     this.reducedActionTypes = ['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE'];
     this.stateKey     = stateKey;
@@ -82,16 +86,17 @@ export class BondLadderReducer extends Reducer {
     this.inflationLinked = inflationLinked;
     this.couponRate      = couponRate;
     this.tipsCouponMode  = tipsCouponMode;
+    this.inflationExpectation = inflationExpectation; // design 125; null = trailing (design 121)
   }
 
   /**
    * The yield an unpinned rung takes at `tenorYears`. A TIPS rung takes the market REAL yield
-   * (design 121 §8): the nominal curve less trailing inflation. Stamping the nominal yield on a
+   * (design 121 §8): the nominal curve less expected inflation (design 125). Stamping the nominal yield on a
    * CPI-indexed principal paid for inflation twice.
    */
   _marketYield(state, rateKey, tenorYears) {
     return this.inflationLinked === true
-      ? tipsRealYield(state, { rateKey, tenorYears })
+      ? tipsRealYield(state, { rateKey, tenorYears, expectation: this.inflationExpectation })
       : resolveYield(state, { rateKey, tenorYears });
   }
 
@@ -182,7 +187,7 @@ export class BondLadderReducer extends Reducer {
       tipsCouponMode:  this._tipsMode(),
       couponRate: this.couponRate
         ?? (rateKey == null ? null
-          : this.inflationLinked === true ? tipsRealYield(state, { rateKey })
+          : this.inflationLinked === true ? tipsRealYield(state, { rateKey, expectation: this.inflationExpectation })
           : (state.effectiveInterestRates?.[rateKey] ?? null)),
       // design 67 — price each rung along the yield curve at ITS OWN tenor, so a
       // freshly built ladder earns the term premium (flat curve ⇒ every rung == anchor).
