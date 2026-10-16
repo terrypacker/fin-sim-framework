@@ -38,19 +38,18 @@ there. Both are emergent, and both are what this file checks.
 
 ### The AU sleeve
 
-Each preset's `EQUITY_AU` adjustment is fitted to the OECD AU broad index (MEASUREMENTS
-§1), measured by running the AU legs on the probe's one account at AU's base rate. Within
-a leg AU shares the US recovery curve, so its back-to-peak follows the US clock: the GFC
-and the stagflation miss AU's measured recovery for that reason. Dot-com AU has a leg of
-its own. The international sleeves keep their authored ratio to US; nothing measures them.
+Where MEASUREMENTS §1 has an OECD AU broad figure, the preset gives AU its own `equity-au`
+leg, curve and all, fitted to it (design 127): AU ran its own clock in every one of these
+episodes. Measured by running the AU legs on the probe's one account at AU's base rate.
+The international sleeves keep their authored ratio to US; nothing measures them.
 
 | preset | | depth | trough | back to peak |
 |---|---|---|---|---|
-| **MARKET_CRASH_2008_LITE** | model | -50.3 % | 17 mo | 70 mo |
+| **MARKET_CRASH_2008_LITE** | model | -49.4 % | 17 mo | 141 mo |
 | _AU broad (OECD)_ | measured | -49.3 % | 17 mo | 141 mo |
-| **STAGFLATION_1970S_LITE** | model | -52.0 % | 23 mo | 116 mo |
+| **STAGFLATION_1970S_LITE** | model | -54.1 % | 21 mo | 80 mo |
 | _AU broad (OECD)_ | measured | -54.1 % | 21 mo | 80 mo |
-| **COVID_2020_LITE** | model | -24.1 % | 1 mo | 18 mo |
+| **COVID_2020_LITE** | model | -24.2 % | 2 mo | 17 mo |
 | _AU broad (OECD)_ | measured | -23.8 % | 2 mo | 14 mo |
 | **DOTCOM_2000_LITE** | model | -18.6 % | 13 mo | 26 mo |
 | _AU broad (OECD)_ | measured | -18.5 % | 13 mo | 28 mo |

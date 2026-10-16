@@ -123,18 +123,26 @@ const HISTORICAL_SHOCKS = {
         id: 'equity',
         regime: {
           returnAdjustment: {
-            EQUITY_US: -0.541, EQUITY_INTL_EX_AU: -0.541,
-            EQUITY_INTL_EX_US: -0.551, EQUITY_AU: -0.534,
+            EQUITY_US: -0.541, EQUITY_INTL_EX_AU: -0.541, EQUITY_INTL_EX_US: -0.551,
           },
         },
         // U_REBOUND/101 (design 127, fitted under monthly crediting): full strength for the
         // first 9 months, spent at month 17 — the measured trough — then a long tailwind
         // peaking at 30 % of the drag, which brings the book back to its prior peak at
         // month 69 (measured 65) and +66 % at ten years (measured +66.1 %). Without the
-        // tailwind, compounding at 7 % needs 96 months (design 21 §22). AU's drag is fitted
-        // to its own −49.3 %; it recovers on the US curve, so it is back at month 70, not
-        // the measured 141.
+        // tailwind, compounding at 7 % needs 96 months (design 21 §22). AU has its own leg
+        // below.
         recovery: { profile: 'U_REBOUND', durationMonths: 101, reboundStart: 0.172, reboundPeak: 0.299 },
+      },
+      {
+        // Australia's own clock (design 127). The ASX fell as far and as fast as the S&P —
+        // −49.3 % over 17 months — but did not regain its 2007 peak until mid-2019, 141 months
+        // on, against the S&P's 65 (MEASUREMENTS §1). On the US curve it was back at 70. Fitted
+        // under monthly crediting: an 18-month decline, a small tailwind spent by month 25,
+        // then the base rate: −49.3 %, trough at 17, back at 141.
+        id: 'equity-au',
+        regime: { returnAdjustment: { EQUITY_AU: -0.512 } },
+        recovery: { profile: 'U_REBOUND', durationMonths: 25, reboundStart: 0.721, reboundPeak: 0.115 },
       },
       {
         id: 'markets',
@@ -223,17 +231,24 @@ const HISTORICAL_SHOCKS = {
         id: 'equity',
         regime: {
           returnAdjustment: {
-            EQUITY_US: -0.361, EQUITY_INTL_EX_AU: -0.361,
-            EQUITY_INTL_EX_US: -0.382, EQUITY_AU: -0.424,
+            EQUITY_US: -0.361, EQUITY_INTL_EX_AU: -0.361, EQUITY_INTL_EX_US: -0.382,
           },
         },
         // U_REBOUND/56 (design 127, fitted under monthly crediting): spent at month 24, then a
         // moderate tailwind (0.38). Trough at month 23 and back at 89 against a measured 23
         // and 90; +20 % at ten years against +21.9 %. The 1970s recovery was slow and
-        // nominal, and in real terms never happened inside the decade at all. AU's drag is
-        // fitted to its −54.1 % (it lands at −52 %, trading depth for a less distant
-        // back-to-peak); on the US curve it is back at month 115, not the measured 80.
+        // nominal, and in real terms never happened inside the decade at all. AU has its own
+        // leg below.
         recovery: { profile: 'U_REBOUND', durationMonths: 56, reboundStart: 0.436, reboundPeak: 0.384 },
+      },
+      {
+        // Australia's own clock (design 127): the ASX fell further than the S&P, −54.1 % over
+        // 21 months to Oct 1974, and was back sooner, at 80 months against 90 (MEASUREMENTS §1,
+        // the resources run of the late 1970s). On the US curve it was back at 116. Fitted
+        // under monthly crediting: −54.1 %, trough at 21, back at 80.
+        id: 'equity-au',
+        regime: { returnAdjustment: { EQUITY_AU: -0.468 } },
+        recovery: { profile: 'U_REBOUND', durationMonths: 40, reboundStart: 0.561, reboundPeak: 1.413 },
       },
       {
         id: 'inflation',
@@ -405,17 +420,23 @@ const HISTORICAL_SHOCKS = {
         id: 'equity',
         regime: {
           returnAdjustment: {
-            EQUITY_US: -0.163, EQUITY_INTL_EX_AU: -0.163,
-            EQUITY_INTL_EX_US: -0.118, EQUITY_AU: -0.110,
+            EQUITY_US: -0.163, EQUITY_INTL_EX_AU: -0.163, EQUITY_INTL_EX_US: -0.118,
           },
         },
         // V_REBOUND/27 (design 127, fitted under monthly crediting): the drag is spent within
         // two months and a strong tailwind (2.4 × the drag at its peak) follows. US trough at
         // month 2 (measured 2), back at 13 (measured 7), and +68.2 % at month 56 against the
         // S&P's +68.4 % from Jan 2020 to Sep 2024, the last month on disk. (This comment used
-        // to call that figure "year 5"; it is 56 months.) AU: −24.1 %, back at 18, against a
-        // measured −23.8 % and 14.
+        // to call that figure "year 5"; it is 56 months.) AU has its own leg below.
         recovery: { profile: 'V_REBOUND', durationMonths: 27, reboundStart: 0.065, reboundPeak: 2.433 },
+      },
+      {
+        // Australia's own clock (design 127): a deeper monthly-average fall than the S&P
+        // (−23.8 %) and a slower round trip, 14 months against 7 (MEASUREMENTS §1). Fitted
+        // under monthly crediting: −24.2 %, trough at 2, back at 17.
+        id: 'equity-au',
+        regime: { returnAdjustment: { EQUITY_AU: -0.121 } },
+        recovery: { profile: 'V_REBOUND', durationMonths: 22, reboundStart: 0.102, reboundPeak: 2.498 },
       },
       {
         id: 'markets',

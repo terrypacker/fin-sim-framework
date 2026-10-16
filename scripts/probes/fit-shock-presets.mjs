@@ -21,8 +21,9 @@
  *   - the main `equity` leg: a scale k on its equity adjustments, `durationMonths`, and for a
  *     *_REBOUND profile `reboundStart` / `reboundPeak` — against the S&P targets (depth,
  *     trough month, back-to-peak, and the 10-year cumulative where one is measured);
- *   - then, where MEASUREMENTS §1 has an OECD AU figure, the AU adjustment alone against the AU
- *     depth, on the curve just fitted (AU's own leg in DOTCOM is fitted whole);
+ *   - then, where MEASUREMENTS §1 has an OECD AU figure, AU's own `equity-au` leg fitted whole
+ *     against the AU targets (or, for a preset without one, the AU adjustment alone on the
+ *     shared curve);
  *   - the international sleeves keep their authored ratio to US (no measurement of their own).
  *
  * Weighting: see `loss`. Level breaks are NOT fitted: each is the measured share of the fall that really was
@@ -196,7 +197,9 @@ for (const key of keys) {
   const line = { before: fmt(measure(preset)), after: fmt(measure(fitted)), target: fmtT(target), p: fit.p, loss: +fit.loss.toFixed(2) };
 
   if (au) {
-    if (key === 'DOTCOM_2000_LITE') {
+    // A preset whose AU market ran its own clock carries an `equity-au` leg (dot-com since
+    // design 21; GFC, stagflation and COVID since design 127): fit that leg whole, curve and all.
+    if (preset.legs.some(l => l.id === 'equity-au')) {
       const fa = fitLeg(fitted, 'equity-au', au, { sleeve: 'EQUITY_AU' });
       line.auBefore = fmt(measure(fitted, 'EQUITY_AU'));
       fitted = withLeg(fitted, 'equity-au', fa.p);

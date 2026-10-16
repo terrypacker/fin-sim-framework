@@ -130,11 +130,10 @@ for (const key of presets) {
 emit('');
 emit('### The AU sleeve');
 emit('');
-emit('Each preset\'s `EQUITY_AU` adjustment is fitted to the OECD AU broad index (MEASUREMENTS');
-emit('§1), measured by running the AU legs on the probe\'s one account at AU\'s base rate. Within');
-emit('a leg AU shares the US recovery curve, so its back-to-peak follows the US clock: the GFC');
-emit('and the stagflation miss AU\'s measured recovery for that reason. Dot-com AU has a leg of');
-emit('its own. The international sleeves keep their authored ratio to US; nothing measures them.');
+emit('Where MEASUREMENTS §1 has an OECD AU broad figure, the preset gives AU its own `equity-au`');
+emit('leg, curve and all, fitted to it (design 127): AU ran its own clock in every one of these');
+emit('episodes. Measured by running the AU legs on the probe\'s one account at AU\'s base rate.');
+emit('The international sleeves keep their authored ratio to US; nothing measures them.');
 emit('');
 emit('| preset | | depth | trough | back to peak |');
 emit('|---|---|---|---|---|');

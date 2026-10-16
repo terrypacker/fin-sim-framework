@@ -1,6 +1,6 @@
 # 127 — Time-weighted investment earnings
 
-**Status:** COMPLETE (16 Oct 2026). MONTHLY is the default. Phases 1 (§9), 2 (§10), 2b (§11), 2c (§12), 3 (§13) and 4 (§14) are built. One follow-up is open: AU shares the US recovery curve within a shock leg (§13). Raised by a study flag: "year-end earnings pay a full
+**Status:** COMPLETE (16 Oct 2026). MONTHLY is the default. Phases 1 (§9), 2 (§10), 2b (§11), 2c (§12), 3 (§13) and 4 (§14) are built. The AU-recovery follow-up from §13 is done too (§15). Raised by a study flag: "year-end earnings pay a full
 year's return on the 31-Dec balance".
 
 - **rev 1 (15 Oct):** the problem, options A–D, proposal A with D as a first step.
@@ -594,10 +594,9 @@ January-to-January years like the annual series. Both are monthly averages.
 - **Start month no longer matters.** Every preset's depth is identical whichever month it
   starts in (spread 0.0). Under ANNUAL the same crash ranged over 21 points for the GFC
   and 25 for 1873, depending only on where its curve sat on 31 December.
-- **Not fixed: AU recovers on the US clock.** Within a leg, AU shares the US recovery
-  curve. So the GFC's AU book is back at month 70 against a measured 141, and the
-  stagflation's at 116 against 80. The old calibration had the same limitation. Splitting
-  AU onto its own leg, as dot-com already does, would fix it; that is left as a follow-up.
+- **AU recovered on the US clock.** Within a leg, AU shared the US recovery curve, so the
+  GFC's AU book was back at month 70 against a measured 141, and the stagflation's at 116
+  against 80. The old calibration had the same limitation. Fixed in §15.
 - **Found and fixed:** COVID's comment cited "+68.4% at year 5". That figure is the S&P
   price index from January 2020 to September 2024, the last month on disk, which is 56
   months. It is now a 56-month target.
@@ -639,3 +638,20 @@ January-to-January years like the annual series. Both are monthly averages.
   - AU single homeowner's pension-phase super ends +18%, for the same reason. The
     spouse's accumulating super ends −2.8%, because ANNUAL had credited each year's
     contributions for the whole year.
+
+## 15. AU's own recovery leg (16 Oct 2026)
+
+The GFC, stagflation and COVID presets now give EQUITY_AU an `equity-au` leg of its own, as
+dot-com already did, so Australia runs its own recovery clock. The fitter fits any preset's
+`equity-au` leg whole against the OECD AU broad targets. Only the AU legs moved: the US legs
+and every US row of `CALIBRATION.md` are unchanged. The split itself was checked
+behaviour-identical before the fit.
+
+| AU (OECD broad) | on the US curve | own leg | measured |
+|---|---|---|---|
+| GFC | −50.3%, 17, back 70 | −49.4%, 17, back 141 | −49.3%, 17, 141 |
+| stagflation | −52.0%, 23, back 116 | −54.1%, 21, back 80 | −54.1%, 21, 80 |
+| COVID | −24.1%, 1, back 18 | −24.2%, 2, back 17 | −23.8%, 2, 14 |
+
+The 2018 correction and 1873 have no AU sleeve; 1893 and the lost decade have no AU
+measurement, so they keep AU on the shared curve.
