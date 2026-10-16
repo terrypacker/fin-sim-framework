@@ -260,18 +260,31 @@ stochastic MONTHLY − ANNUAL gap equals the deterministic one. With it on, the 
 doubles. So the extra is this artifact, not the crediting. **MONTHLY must not become the
 default with a straight-line year.**
 
-**Proposed fix: a Brownian bridge inside the year.** Keep the year's draw exactly as it is
-(design 74's tick, design 102's bootstrap, the betas, the drift compensation). Split its
-log return `L = ln(1 + r)` into twelve monthly log returns
+**Fix: give the months inside a year a realistic shape, keeping the year's draw.** Keep
+the year's draw exactly as it is (design 74's tick, design 102's bootstrap, the betas, the
+drift compensation), and split its log return `L = ln(1 + r)` into twelve monthly log
+returns that compound to it exactly. Where the months' shape comes from depends on the
+process (Q6, measured in §10.1):
+
+- **Historical bootstrap: the drawn year's own months (HIST).** The bootstrap already
+  picks a historical year. Take that year's twelve monthly log returns, keep their
+  deviations from the year's mean month, scale them by the bootstrap's vol rescale and
+  by 1/0.85 (the monthly-average correction, §10.1), and add `L/12`. The deviations sum to
+  zero, so the year is exact. The AU sleeve in a year with AU data takes the AU months
+  (the design 102 §6 replay). Gold, and AU before 1958, take a bridge.
+- **Every other process (white noise and the rest): a Brownian bridge (BRIDGE):**
 
     ℓₘ = L/12 + s·(zₘ − z̄),   s = σ_sleeve / √12,   z₁…z₁₂ iid N(0, 1)
 
-The noise sums to zero, so the twelve months compound to exactly `1 + r`, and the year's
-distribution is untouched. Drawn this way, with `L` itself drawn with variance σ², the
-months are an ordinary random walk: the first half no longer predicts the second.
-- The z's are drawn once a year by the tick, for the market factor and per sleeve for
-  the idiosyncratic part, from a keyed stream (`rngStreams`). Adding them does not move
-  any other draw.
+  The noise sums to zero, so the twelve months compound to exactly `1 + r`, and the
+  year's distribution is untouched. Drawn this way, with `L` itself drawn with variance
+  σ², the months are an ordinary random walk: the first half no longer predicts the
+  second.
+
+Either way:
+- A bridge's z's are drawn once a year by the tick, for the market factor and per sleeve
+  for the idiosyncratic part, from a keyed stream (`rngStreams`). Adding them does not
+  move any other draw. HIST draws nothing new: the year is already picked.
 - Each sleeve's monthly rate is its share of the market factor's bridge plus its own
   idiosyncratic bridge, at its beta and idio vol, so markets still move together within
   the year. Gold gets its own z at its correlation.
@@ -366,11 +379,14 @@ emergent path inside each year.
    goldens it moves read separately. It is a bug, not part of this change, and should not
    be hidden inside phase 4's regold.
 
-6. **The intra-year path (§4.7).** Proposed: a Brownian bridge on the year's draw, phase
-   2b, before any default switch. Alternatives: leave the straight line and switch anyway,
-   with a known bias against mid-year rebalancing in MC (rejected: the bias is about as
-   large as the error MONTHLY removes), or draw returns monthly (rejected: it would
-   rewrite the annual bootstrap and every calibration built on annual draws).
+6. **The intra-year path (§4.7).** Decided 16 Oct 2026: fix it in phase 2b, before any
+   default switch. Leaving the straight line was rejected: its bias is about as large as
+   the error MONTHLY removes. The author asked whether rewriting the bootstrap to draw
+   months would be more accurate. Old studies moving is not a reason against it, because
+   they can be re-run. Measured (§10.1), a full monthly block bootstrap is
+   indistinguishable from the drawn year's real months on everything that drives a
+   decision. So the measured answer is HIST for the bootstrap and BRIDGE for the other
+   processes, with the annual machinery unchanged.
 7. **The cost (§4.8).** Proposed: batch the lot deltas (phase 2c) rather than fall back
    to quarterly crediting, which would bring back a third of the timing error.
 
@@ -439,3 +455,25 @@ reinvested, `rngStreams` on. Study files are private; the findings:
   (8 worlds broken, none rescued). The process-by-process decomposition puts all of the
   extra on the stochastic equity path. Turning off drift rebalancing in both cadences
   returns it to the deterministic size. That is §4.7's straight-line artifact.
+
+### 10.1 The shape inside a year, against history (Q6)
+
+Shiller's US real total return (1871–2023) and the OECD AU price index (1958–2023), as
+January-to-January years like the annual series. Both are monthly averages.
+
+- **Averaging** (checked on daily NASDAQ closes, 1971–2025) cuts the monthly sd to 0.85×
+  that of month-end closes. It triples the lag-1 autocorrelation (0.30 against 0.10) and
+  trims the mean in-year drawdown from 14.6% to 12.9%. Month-end is the right target,
+  because the engine acts only at month-ends. Hence the 1/0.85 scale.
+- **In-year shape, US:** history dips 10.0% on average inside a year, and 18.7% of up years
+  dip 10% or more. The straight line gives 3.8% and none, and its first half predicts its
+  second exactly (correlation 1.00; history 0.05). A Gaussian bridge gives 10.5% and
+  19.9%. It under-produces only the rare deep dip inside an up year (0.2% of years
+  against 0.9%), the 1987-style year. AU shows the same pattern.
+- **Decision proxy:** a 60/40 book rebalanced every 1 January, with or without a 1 July
+  rebalance. July's mean effect on the year is −4.0 bp in US history (AU −6.2), −3.7 bp
+  under the bridge (AU −1.5), and **−20.1 bp under the straight line (AU −21.9)**.
+- **Real months vs a full monthly bootstrap** (40-year paths, 5-year blocks, from the same
+  history): identical path drawdowns (median 50.1%, p90 76.8%), annual sd within 5%
+  (which the model's vol rescale absorbs anyway), and July effects within a few bp. The
+  full monthly bootstrap buys nothing measurable over the real months.
