@@ -29,12 +29,12 @@ import { YieldCurveTickHandler }          from '../../finance/economic-regimes/y
 import { EquityReturnReducer }            from '../../finance/economic-regimes/equity-return-reducer.js';
 import { EquityReturnStepReducer }        from '../../finance/economic-regimes/equity-return-step-reducer.js';
 import { EquityReturnTickHandler, EQUITY_RETURN_MODEL_IDS, EQUITY_RETURN_MODEL_LABELS } from '../../finance/economic-regimes/equity-return-tick-handler.js';
-import { InflationTickHandler, INFLATION_MODEL_IDS, INFLATION_MODEL_LABELS, jointInflationActive } from '../../finance/economic-regimes/inflation-tick-handler.js';
+import { InflationTickHandler, INFLATION_MODEL_IDS, INFLATION_MODEL_LABELS, jointInflationActive, inflationProcessConfig } from '../../finance/economic-regimes/inflation-tick-handler.js';
 import { InflationStepReducer }           from '../../finance/economic-regimes/inflation-step-reducer.js';
 import { InflationPathReducer }           from '../../finance/economic-regimes/inflation-path-reducer.js';
 import { PropertyReturnStepReducer }      from '../../finance/economic-regimes/property-return-step-reducer.js';
 import { PropertyReturnTickHandler }      from '../../finance/economic-regimes/property-return-tick-handler.js';
-import { shapeDelta }                     from '../../finance/economic-regimes/yield-curve.js';
+import { shapeDelta, tipsExpectationSpec } from '../../finance/economic-regimes/yield-curve.js';
 import { EconomicShockHandler }           from '../../finance/economic-regimes/economic-shock-handler.js';
 import { EconomicRecoveryTickHandler }    from '../../finance/economic-regimes/economic-recovery-tick-handler.js';
 import { FX_PROCESS_MODEL_IDS }           from '../../finance/fx/fx-process-models.js';
@@ -1136,7 +1136,7 @@ export const ECONOMIC_REGIMES = {
         opt:          false,
         defaultValue: 0.33,
         visibleWhen:  { param: 'inflationStochastic', truthy: true },
-        description:  'How quickly a US inflation surprise fades, per year. This year\'s deviation keeps e^(−k) of last year\'s: 0.33 keeps 0.72, a half-life of about 2 years, matching US CPI 1951–2023. Lower is more persistent. Unlike the equity persistence knob, this runs on a LEVEL, so it genuinely mean-reverts.',
+        description:  'How quickly a US inflation surprise fades, per year. This year\'s deviation keeps e^(−k) of last year\'s: 0.33 keeps 0.72, a half-life of about 2 years, matching US CPI 1951–2023. Lower is more persistent. Unlike the equity persistence knob, this runs on a LEVEL, so it genuinely mean-reverts. A TIPS ladder\'s expected inflation (design 125) fades at this speed too, even with the path off.',
       },
       {
         key:          'inflationReversionSpeedAu',
@@ -1147,7 +1147,7 @@ export const ECONOMIC_REGIMES = {
         opt:          false,
         defaultValue: 0.33,
         visibleWhen:  { param: 'inflationStochastic', truthy: true },
-        description:  'How quickly an AU inflation surprise fades, per year. Defaults to the US value; AU\'s own post-war measurement is 0.46 (half-life about 1.5 years).',
+        description:  'How quickly an AU inflation surprise fades, per year. Defaults to the US value; AU\'s own post-war measurement is 0.46 (half-life about 1.5 years). A TIPS ladder\'s expected inflation (design 125) fades at this speed too, even with the path off.',
       },
       {
         key:          'inflationPathCorrelation',
@@ -1202,7 +1202,7 @@ export const ECONOMIC_REGIMES = {
         opt:          false,
         defaultValue: 0.4,
         visibleWhen:  { param: 'inflationStochastic', truthy: true },
-        description:  'How much of each country\'s inflation swings comes from a slow global cycle shared by the US and AU, from 0 (none) to 1 (all). History has both high together in the 1970s and low together since the 1990s: their inflation LEVELS correlated at 0.59 over 1951–2023, even though their yearly surprises correlated at only 0.26–0.35. 0.4 reproduces that (design 103 §10.2). 0 lets the two countries drift apart for years.',
+        description:  'How much of each country\'s inflation swings comes from a slow global cycle shared by the US and AU, from 0 (none) to 1 (all). History has both high together in the 1970s and low together since the 1990s: their inflation LEVELS correlated at 0.59 over 1951–2023, even though their yearly surprises correlated at only 0.26–0.35. 0.4 reproduces that (design 103 §10.2). 0 lets the two countries drift apart for years. A TIPS ladder\'s expected inflation (design 125) weighs the two speeds by this share too, even with the path off.',
       },
       {
         key:          'inflationGlobalReversionSpeed',
@@ -1213,7 +1213,7 @@ export const ECONOMIC_REGIMES = {
         opt:          false,
         defaultValue: 0.1,
         visibleWhen:  [{ param: 'inflationStochastic', truthy: true }, { param: 'inflationGlobalShare', gt: 0 }],
-        description:  'How quickly the shared global inflation cycle fades, per year: 0.1 keeps 0.90 of it each year, a half-life of about 7 years, so it moves on the scale of decades. Only used when Inflation Path Global Share is above 0.',
+        description:  'How quickly the shared global inflation cycle fades, per year: 0.1 keeps 0.90 of it each year, a half-life of about 7 years, so it moves on the scale of decades. Only used when Inflation Path Global Share is above 0. A TIPS ladder\'s expected inflation (design 125) fades at this speed too, even with the path off.',
       },
       {
         key:          'inflationGlobalShareJoint',
@@ -1864,17 +1864,7 @@ export const ECONOMIC_REGIMES = {
       // Stochastic inflation path (design 103 §4) — only when on.
       ...(p.inflationStochastic
         ? [new InflationTickHandler({
-            vol:            { US: p.inflationPathVolUs ?? 0.028, AU: p.inflationPathVolAu ?? 0.03 },
-            reversionSpeed: { US: p.inflationReversionSpeedUs ?? 0.33, AU: p.inflationReversionSpeedAu ?? 0.33 },
-            correlation:    p.inflationPathCorrelation ?? 0.35,
-            // Design 103 §10: the shared global cycle and the skew's lower bounds.
-            globalShare:          p.inflationGlobalShare          ?? 0.4,
-            globalShareJoint:     p.inflationGlobalShareJoint     ?? 0.2,
-            globalReversionSpeed: p.inflationGlobalReversionSpeed ?? 0.1,
-            lowerBound:     { US: p.inflationLowerBoundUs ?? -0.01, AU: p.inflationLowerBoundAu ?? -0.01 },
-            model:          joint ? 'HISTORICAL_JOINT' : 'GAUSSIAN',
-            floor:          p.inflationPathFloor ?? -0.05,
-            passThrough:    joint,
+            ...inflationProcessConfig(p),
             // Design 104: the prime rate follows inflation — only in that mode.
             prime: p.primeRateModel === 'INFLATION_LINKED'
               ? {
@@ -1960,7 +1950,8 @@ export const ECONOMIC_REGIMES = {
       new InflationPathReducer(),   // design 103 §4.2 — folds the inflation deviation onto effectiveInflationRates (11.5)
       new InflationStepReducer(),   // design 103 §4.2 — stores the inflation deviation, floor and equity pass-through
       new BondPriceAdjustReducer(),
-      new BondMaturityReducer(),
+      // Design 125 — the same expectation spec the BOND_LADDER build carries.
+      new BondMaturityReducer({ inflationExpectation: tipsExpectationSpec(context.parameters ?? {}) }),
       // FX rate composition (design 47): refresh, process, step — when the FX layer is here.
       ...(_fxProcess(context)?.reducers ?? []),
       ...(_hedgeYearEndActive(context) ? [new HedgeYearEndReducer()] : []),

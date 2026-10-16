@@ -9,18 +9,18 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-233 parameters · 33 panels · 12 node types (206 fields) · 179 action types · 89 tools · 320 state field types · 78 topics · 136 design docs
+234 parameters · 33 panels · 12 node types (206 fields) · 179 action types · 89 tools · 320 state field types · 78 topics · 136 design docs
 
 ---
 
-## Parameters (233)
+## Parameters (234)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
 `opt` to the optimizer. `via` names the toolset that contributed it (`SCENARIO` = the
 scenario's own schema), which is where to go to change it.
 
-### Allocation (23)
+### Allocation (24)
 
 - **`allocationClassRestrictions`** — Allocation Class Restrictions · `ClassRestrictions` · default — · conditional · via ECONOMIC_REGIMES
   Account roles, or single accounts by state key, an allocation class may NEVER be placed in, as a map of class → roles/accounts, e.g. {"GOLD":["super"]} or {"EQUITY":["treasuryDirectAccount"]} (an account cannot hold what its role can). Classes: GOLD, BOND, EQUITY, CASH. Unlike the location policy this is hard: a class weight no permitted account can hold is spread over the other classes, and a barred holding is sold at the next rebalance even inside the drift band. Applies to TARGET_ALLOCATION in both location modes. An empty list ({"GOLD":[]}) restricts nothing but records that the placement was considered, which silences the US-citizen super warning. Null ⇒ no restrictions.
@@ -45,7 +45,7 @@ scenario's own schema), which is where to go to change it.
 - **`bondLadderCouponRate`** — Bond Ladder — Coupon Rate (blank = market) · `Number` · default — · range 0…0.15 · conditional · via ECONOMIC_REGIMES
   Fixed coupon stamped on every rung at build. Blank (default) = the prevailing curve yield at each rung's own tenor. For a TIPS ladder this is the REAL yield.
 - **`bondLadderInflationLinked`** — Bond Ladder — TIPS (inflation-linked) · `Boolean` · default `false` · conditional · via ECONOMIC_REGIMES
-  ON = every rung is a TIPS / inflation-linked bond (design 66 §G5): principal indexes to CPI, the accretion is imputed ordinary income, the coupon pays on the adjusted principal and redemption carries the deflation floor. With no coupon set, each rung takes the market REAL yield (design 121 §8): the nominal curve yield at its tenor less the trailing 12 months of inflation, which can be negative.
+  ON = every rung is a TIPS / inflation-linked bond (design 66 §G5): principal indexes to CPI, the accretion is imputed ordinary income, the coupon pays on the adjusted principal and redemption carries the deflation floor. With no coupon set, each rung takes the market REAL yield (design 121 §8): the nominal curve yield at its tenor less the inflation expected over that tenor (see TIPS Expected Inflation), which can be negative.
 - **`bondLadderRole`** — Bond Ladder — Account Role(s) · `EnumMulti` · default `us-stock` · one of `ALL`, `us-savings`, `fixed-income`, `us-stock`, `ira`, `k401`, `roth-ira`, `au-savings`, `au-fixed-income`, `au-stock`, `super`, `us-loan`, `au-loan`, `us-offset`, `au-offset`, `inherited-ira`, `inherited-k401`, `inherited-roth` · conditional · via ECONOMIC_REGIMES
   WHERE the ladder lives: tick the account roles to ladder, or ALL for every account that holds bonds. EVERY account matching a ticked role is laddered, not just the first — a household commonly holds several accounts in one role. Nothing ticked = the default (us-stock). Note there is no SIZE lever here: a ladder is the account's whole BOND sleeve, restruck as N individual bonds, so how much is in it is set by the allocation target (TARGET_ALLOCATION), not by this strategy — this strategy only decides the SHAPE (rungs × spacing) and the LOCATION.
 - **`bondLadderRoll`** — Bond Ladder — Roll Maturing Rungs · `Boolean` · default `true` · conditional · via ECONOMIC_REGIMES
@@ -57,7 +57,9 @@ scenario's own schema), which is where to go to change it.
 - **`bondLadderTaxTreatment`** — Bond Ladder — Tax Treatment · `Enum` · default `state` · one of `none`, `state`, `federal`, `both` · conditional · via ECONOMIC_REGIMES
   Holding tax treatment for every rung (design 66 §G2): none = fully taxable, state = US Treasury (state-exempt, default), federal = municipal, both = muni all-state.
 - **`bondLadderTipsCouponMode`** — Bond Ladder — TIPS Coupon at Roll · `Enum` · default `AUTO` · one of `AUTO`, `MARKET`, `PINNED` · conditional · via ECONOMIC_REGIMES
-  TIPS ladders only: the real yield a rung takes when it rolls (design 121 §8). Market re-locks at the nominal curve yield for the roll term less trailing 12-month inflation, so the ladder reprices as real rates move. Pinned keeps the rung's coupon for good. Automatic is Market when Coupon Rate is blank and Pinned when it is set.
+  TIPS ladders only: the real yield a rung takes when it rolls (design 121 §8). Market re-locks at the nominal curve yield for the roll term less the inflation expected over it, so the ladder reprices as real rates move. Pinned keeps the rung's coupon for good. Automatic is Market when Coupon Rate is blank and Pinned when it is set.
+- **`bondLadderTipsExpectedInflation`** — Bond Ladder — TIPS Expected Inflation · `Enum` · default `TENOR` · one of `TENOR`, `TRAILING`, `CURRENT` · conditional · via ECONOMIC_REGIMES
+  TIPS ladders at the market real yield only: the inflation subtracted from the nominal yield, at build and at each roll (design 125). Over the tenor is a breakeven: today's rate fading to the Inflation Rate anchor at the inflation path's own reversion speeds, so a short rung expects about today's rate and a long one about the anchor. With the stochastic path on it forecasts from the path's current state. Trailing reproduces runs made before design 125; it lags a regime's onset and assumes one hot year lasts the whole tenor.
 - **`rebalanceDriftBandSheltered`** — Rebalance Drift Band — Sheltered · `Number` · default `0.02` · range 0.01…0.2 · sweep: opt · conditional · via ECONOMIC_REGIMES
   Allocation drift (fraction) that triggers a rebalance in a tax-advantaged (401k/IRA/Roth/Super) account. Defaults TIGHT (0.02) — rebalancing there is ~free, so tight banding buys the best risk control at no tax cost (design 61 §OQ3).
 - **`rebalanceDriftBandTaxable`** — Rebalance Drift Band — Taxable · `Number` · default `0.1` · range 0.02…0.2 · sweep: opt · conditional · via ECONOMIC_REGIMES
@@ -209,9 +211,9 @@ scenario's own schema), which is where to go to change it.
 - **`goldReturnVol`** — Gold Return Volatility · `Number` · default `0.15` · sweep: mc · via ECONOMIC_REGIMES
   Annualized standard deviation of gold's own yearly return draw, around Gold Growth Rate (design 121 §6). 0.15 is gold's measured real volatility since 1985. Drawn once a year alongside the equity market, only when Stochastic Equity Returns is on, so a single deterministic run still grows gold at exactly its growth rate. Set 0 for no gold draw.
 - **`inflationGlobalReversionSpeed`** — Inflation Path Global Reversion Speed (k) · `Number` · default `0.1` · conditional · via ECONOMIC_REGIMES
-  How quickly the shared global inflation cycle fades, per year: 0.1 keeps 0.90 of it each year, a half-life of about 7 years, so it moves on the scale of decades. Only used when Inflation Path Global Share is above 0.
+  How quickly the shared global inflation cycle fades, per year: 0.1 keeps 0.90 of it each year, a half-life of about 7 years, so it moves on the scale of decades. Only used when Inflation Path Global Share is above 0. A TIPS ladder's expected inflation (design 125) fades at this speed too, even with the path off.
 - **`inflationGlobalShare`** — Inflation Path Global Share · `Number` · default `0.4` · conditional · via ECONOMIC_REGIMES
-  How much of each country's inflation swings comes from a slow global cycle shared by the US and AU, from 0 (none) to 1 (all). History has both high together in the 1970s and low together since the 1990s: their inflation LEVELS correlated at 0.59 over 1951–2023, even though their yearly surprises correlated at only 0.26–0.35. 0.4 reproduces that (design 103 §10.2). 0 lets the two countries drift apart for years.
+  How much of each country's inflation swings comes from a slow global cycle shared by the US and AU, from 0 (none) to 1 (all). History has both high together in the 1970s and low together since the 1990s: their inflation LEVELS correlated at 0.59 over 1951–2023, even though their yearly surprises correlated at only 0.26–0.35. 0.4 reproduces that (design 103 §10.2). 0 lets the two countries drift apart for years. A TIPS ladder's expected inflation (design 125) weighs the two speeds by this share too, even with the path off.
 - **`inflationGlobalShareJoint`** — Inflation Path Global Share (joint mode) · `Number` · default `0.2` · conditional · via ECONOMIC_REGIMES
   The global cycle's share when inflation is historical and joint with equity (Monte Carlo's default). It is smaller than Inflation Path Global Share because in this mode the global cycle is built from the same historical years as each country's own surprises, so it already moves with them. 0.2 reproduces history's 0.59 US–AU level correlation; 0.4 would give about 0.73 (design 103 §10.4).
 - **`inflationLowerBoundAu`** — Inflation Lower Bound — AU · `Number` · default `-0.01` · conditional · via ECONOMIC_REGIMES
@@ -229,9 +231,9 @@ scenario's own schema), which is where to go to change it.
 - **`inflationPathVolUs`** — Inflation Path Volatility — US · `Number` · default `0.028` · conditional · via ECONOMIC_REGIMES
   How far US inflation wanders from its anchor: the long-run standard deviation of the yearly rate (0.028 = 2.8 points, measured on US CPI 1951–2023, design 103 §2). The swings are skewed, bigger upward than downward, and shrink when the anchor sits close to Inflation Lower Bound (design 103 §10.1).
 - **`inflationReversionSpeedAu`** — Inflation Reversion Speed — AU (k) · `Number` · default `0.33` · conditional · via ECONOMIC_REGIMES
-  How quickly an AU inflation surprise fades, per year. Defaults to the US value; AU's own post-war measurement is 0.46 (half-life about 1.5 years).
+  How quickly an AU inflation surprise fades, per year. Defaults to the US value; AU's own post-war measurement is 0.46 (half-life about 1.5 years). A TIPS ladder's expected inflation (design 125) fades at this speed too, even with the path off.
 - **`inflationReversionSpeedUs`** — Inflation Reversion Speed — US (k) · `Number` · default `0.33` · conditional · via ECONOMIC_REGIMES
-  How quickly a US inflation surprise fades, per year. This year's deviation keeps e^(−k) of last year's: 0.33 keeps 0.72, a half-life of about 2 years, matching US CPI 1951–2023. Lower is more persistent. Unlike the equity persistence knob, this runs on a LEVEL, so it genuinely mean-reverts.
+  How quickly a US inflation surprise fades, per year. This year's deviation keeps e^(−k) of last year's: 0.33 keeps 0.72, a half-life of about 2 years, matching US CPI 1951–2023. Lower is more persistent. Unlike the equity persistence knob, this runs on a LEVEL, so it genuinely mean-reverts. A TIPS ladder's expected inflation (design 125) fades at this speed too, even with the path off.
 - **`inflationStochastic`** — Stochastic Inflation · `Boolean` · default `false` · via ECONOMIC_REGIMES
   When on (design 103), each country's inflation wanders around its anchor (Inflation Rate / AU Inflation Rate) year by year, with post-war persistence: a high-inflation year tends to be followed by another. Everything priced in today's money follows it: expenses, wages, Social Security, tax brackets, TIPS and house running costs. Off by default, so runs stay byte-identical. Monte Carlo turns it on for every path (Monte Carlo: Stochastic Inflation Path); this switch governs single runs.
 - **`mcEquityReturnModel`** — Monte Carlo: Equity Return Process · `Enum` · default `HISTORICAL_BOOTSTRAP` · one of `SCENARIO`, `NONE`, `WHITE_NOISE`, `RANDOM_WALK`, `MEAN_REVERTING`, `HISTORICAL_BOOTSTRAP` · conditional · via ECONOMIC_REGIMES
@@ -2242,7 +2244,7 @@ what the in-app panel keys on.
 | [AU Tax and PAYG Instalments](concepts/au-tax.md) | concept | 236 | 2 panels · 6 params · design 107 |
 | [Behavioral Strategies](concepts/behavioral-strategies.md) | concept | 232 | 2 panels · 5 params · design 29 |
 | [Inheritance](nodes/bequest.md) | node | 233 | 2 panels · design 63 |
-| [Bond Ladders](concepts/bond-ladders.md) | concept | 315 | 1 panel · 8 params · design 66, 121 |
+| [Bond Ladders](concepts/bond-ladders.md) | concept | 385 | 1 panel · 9 params · design 66, 121, 125 |
 | [Chart](panels/chart.md) | panel | 199 | 1 panel |
 | [Collectible](nodes/collectible.md) | node | 205 | 2 panels · design 57, 88 |
 | [Company Equity](nodes/company.md) | node | 214 | 2 panels · design 49, 72, 88 |
@@ -2268,7 +2270,7 @@ what the in-app panel keys on.
 | [Handler](nodes/handler.md) | node | 208 | 2 panels · design 2 |
 | [Help](panels/help.md) | panel | 223 | 1 panel · design 108 |
 | [Holdings](panels/holdings.md) | panel | 232 | 1 panel · design 82 |
-| [Inflation](concepts/inflation.md) | concept | 261 | 2 panels · 18 params · design 103 |
+| [Inflation](concepts/inflation.md) | concept | 289 | 2 panels · 18 params · design 103, 125 |
 | [Edit](panels/inspector.md) | panel | 182 | 1 panel |
 | [Interest Rates and the Yield Curve](concepts/interest-rates.md) | concept | 350 | 2 panels · 23 params · design 56, 67 |
 | [Job](nodes/job.md) | node | 230 | 2 panels · design 116, 50, 73, 119 |

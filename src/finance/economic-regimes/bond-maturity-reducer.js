@@ -86,8 +86,15 @@ export class BondMaturityReducer extends Reducer {
   static type        = 'BondMaturityReducer';
   static description = 'Redeems matured individual bonds (maturityDate reached) at par to cash, or rolls them into a fresh par bond at the current yield when rollAtMaturity is set.';
 
-  constructor() {
+  /**
+   * @param {object} [opts]
+   * @param {{ mode: string, process: object }|null} [opts.inflationExpectation=null] - how a
+   *   MARKET TIPS roll reads expected inflation (design 125, `tipsExpectationSpec`); null is
+   *   design 121's trailing rule.
+   */
+  constructor({ inflationExpectation = null } = {}) {
     super('Bond Maturity', PRIORITY.PRE_PROCESS + 3);
+    this.inflationExpectation = inflationExpectation;
     this.reducedActionTypes = ['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE'];
     this.generatedActionTypes = ['SUPER_CAPITAL_GAIN'];
   }
@@ -130,7 +137,8 @@ export class BondMaturityReducer extends Reducer {
       const nextHoldings = account.holdings.map(h => {
         const inst = instrumentOf(h, securities);
         if (!isMatured(h, inst, asOfMs)) return h;
-        const out = redeem(h, inst, asOfMs, effectiveRates, yieldCurve, spot, securities, state);
+        const out = redeem(h, inst, asOfMs, effectiveRates, yieldCurve, spot, securities, state,
+          this.inflationExpectation);
         if (!isSuper || (h.marketValue ?? 0) <= 0.005) return out;
         // Design 105 §8.6 — the fund's revenue gain on the matured bond, measured against
         // the SAME redemption value `redeem` just paid.
@@ -181,7 +189,8 @@ function redemptionValue(h, inst, securities) {
  * at par to a CASH holding (default). `faceValue ?? marketValue` is the par
  * proceeds.
  */
-function redeem(h, inst, asOfMs, effectiveRates, yieldCurve = {}, spot = null, securities = null, state = null) {
+function redeem(h, inst, asOfMs, effectiveRates, yieldCurve = {}, spot = null, securities = null, state = null,
+                expectation = null) {
   // A TIPS redeems at the greater of its inflation-adjusted principal (its accreted
   // marketValue) and the original face — the Treasury deflation floor (design 66
   // §G5). A zero / plain bond redeems at par (faceValue). Falls back to marketValue
@@ -257,13 +266,14 @@ function redeem(h, inst, asOfMs, effectiveRates, yieldCurve = {}, spot = null, s
     // inflation twice. Which REAL yield it takes is the rung's `tipsCouponMode`, stamped by
     // the ladder that built it (design 121 §8):
     //   - MARKET re-locks at the market real yield for the roll tenor — the nominal curve
-    //     less trailing-12-month inflation — so a TIPS ladder reprices as real rates move.
+    //     less the inflation expected over it (design 125) — so a TIPS ladder reprices as
+    //     real rates move.
     //     Held flat, a ladder pinned at a low real yield stayed there through a decade in
     //     which nominal bonds re-locked at +7 % real.
     //   - PINNED, or no mode (a rung built before design 121, or by the account editor),
     //     keeps the contracted real yield it already carries.
     const marketReal = rollsAsTips && h.tipsCouponMode === 'MARKET' && state != null
-      ? tipsRealYield(state, { rateKey: inst.rateKey, tenorYears: rollTenorYears })
+      ? tipsRealYield(state, { rateKey: inst.rateKey, tenorYears: rollTenorYears, expectation })
       : null;
     const newCoupon = rollsAsTips
       ? (marketReal ?? inst.couponRate ?? null)

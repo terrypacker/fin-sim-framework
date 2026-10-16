@@ -4,7 +4,7 @@ kind: concept
 title: Inflation
 panels: [chart, mc-config]
 params: [inflationRate, auInflationRate, auCpiRate, inflationStochastic, inflationModel, inflationPathVolUs, inflationPathVolAu, inflationReversionSpeedUs, inflationReversionSpeedAu, inflationPathCorrelation, inflationPathFloor, inflationLowerBoundUs, inflationLowerBoundAu, inflationGlobalShare, inflationGlobalReversionSpeed, inflationGlobalShareJoint, mcInflationPath, mcInflationModel]
-design: [103-stochastic-inflation-and-joint-history.md]
+design: [103-stochastic-inflation-and-joint-history.md, 125-tips-expected-inflation.md]
 stamps:
   param:inflationRate: de02d4
   param:auInflationRate: d6b181
@@ -13,14 +13,14 @@ stamps:
   param:inflationModel: 50ac04
   param:inflationPathVolUs: 22355b
   param:inflationPathVolAu: 3cf994
-  param:inflationReversionSpeedUs: b7cef2
-  param:inflationReversionSpeedAu: 395b8b
+  param:inflationReversionSpeedUs: dcbc27
+  param:inflationReversionSpeedAu: 997a54
   param:inflationPathCorrelation: e5448f
   param:inflationPathFloor: 935f7b
   param:inflationLowerBoundUs: 6770c7
   param:inflationLowerBoundAu: 94331f
-  param:inflationGlobalShare: c98326
-  param:inflationGlobalReversionSpeed: f2c8db
+  param:inflationGlobalShare: f2c286
+  param:inflationGlobalReversionSpeed: 6772d8
   param:inflationGlobalShareJoint: 8ac4a0
   param:mcInflationPath: d1d79d
   param:mcInflationModel: b804e9
@@ -48,6 +48,8 @@ Three things about the shape are worth knowing before reading a result:
 - **The two countries are linked**, both directly and through a slow global cycle.
   History has them high together in the 1970s and low together since — an
   uncorrelated pair would give a cross-border plan diversification it does not have.
+- **Its persistence is also the plan's forecast.** A TIPS ladder's expected inflation
+  fades at the same speeds and shares, so those settings matter even with the path off.
 - **The clamp is a backstop**, not the shape. The path approaches its lower bound and
   rarely reaches the hard floor; the floor exists so that shocks and regimes applied
   afterwards cannot drive it somewhere absurd.
