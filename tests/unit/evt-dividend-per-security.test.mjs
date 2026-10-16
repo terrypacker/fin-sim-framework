@@ -191,9 +191,16 @@ function sumAmount(sim, type) {
   return +total.toFixed(2);
 }
 
-/** The reference plan with two securities in the taxable brokerage, and an election. */
+/**
+ * The reference plan with two securities in the taxable brokerage, and an election.
+ *
+ * Run through the FIRST dividend only (the 31 March quarter-end, design 127): every arm starts
+ * from the same book, so the comparisons below are one payment against one payment. Over a
+ * longer window a reinvesting arm compounds a larger book and pays more next quarter, which
+ * is the economics working rather than the tax differing (DRIP-6c's note).
+ */
 const twoSecurityRun = ({ account, bySecurity }) => loadScenarioSim({
-  simStart: '2026-01-01', simEnd: '2027-01-01', stepTo: '2027-01-01',
+  simStart: '2026-01-01', simEnd: '2026-04-01', stepTo: '2026-04-01',
   params: { stockDividendReinvest: false },
   mutateCfg: (cfg) => {
     cfg.securities = [

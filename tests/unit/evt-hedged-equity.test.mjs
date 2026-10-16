@@ -227,19 +227,36 @@ test('EVT-HDG-6: the year-end FX mark', () => {
   const fxOn = { fxProcessModel: 'MEAN_REVERTING', randomSeed: 11 };
   const run  = runGolden(withVgs(AU_SPEC, { hedgeRatio: 0 }, fxOn));
   assert.ok(run.firedActionTypes.has('HEDGE_YEAR_END_APPLY'));
+  // Design 127: under the MONTHLY default the mark is stamped at every month-end, so each
+  // month's f is that month's; the 31 Dec marks are the year-end subset.
   const marks = run.sim.journal.journal.filter(e => e.action?.type === 'HEDGE_YEAR_END_APPLY');
-  assert.equal(marks.length, 5, 'one mark per year-end');
+  assert.equal(marks.length, 60, 'one mark per month-end');
   for (const e of marks) {
     const d = new Date(e.date);
-    assert.deepEqual([d.getUTCMonth(), d.getUTCDate()], [11, 31], 'stamped on 31 Dec');
+    assert.equal(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate(), d.getUTCDate(),
+      'stamped on a month\'s last day');
   }
   assert.deepEqual(run.state.hedgeOverlay.fxMark, marks.at(-1).action.data.rates);
-  // Each mark is a different rate: the year's f is measured from the one before.
-  assert.equal(new Set(marks.map(e => e.action.data.rates.USD_AUD)).size, 5);
+  // Each year-end mark is a different rate: the year's moves are measured from the one before.
+  const yearEnds = marks.filter(e => new Date(e.date).getUTCMonth() === 11);
+  assert.equal(new Set(yearEnds.map(e => e.action.data.rates.USD_AUD)).size, 5);
   // The first year's VGS growth: the silent lot ignores the AUD's move, the unhedged lot
   // takes it. (The plan sells its VGS early, so a terminal balance would not show it.)
-  const vgsGrowth2026 = r => r.sim.journal.journal.find(e => e.action?.type === 'HOLDING_TRANSACT'
-    && e.action.data?.holdingId === 'h-vgs' && e.event?.type === 'INTL_AU_STOCK_EARNINGS').action.data.marketValueDelta;
+  // The VGS lot's 2026 growth credits, summed: one 31 Dec action under ANNUAL, or under
+  // MONTHLY (design 127) twelve legs of the month-end HOLDING_TRANSACT_BATCHes. Summed rather
+  // than the first credit, because January's FX move is zero for every lot (the month-end
+  // mark is stamped before that day's FX tick).
+  const vgsGrowth2026 = r => {
+    let total = 0;
+    for (const e of r.sim.journal.journal) {
+      if (e.event?.type !== 'INTL_AU_STOCK_EARNINGS' || new Date(e.date).getUTCFullYear() !== 2026) continue;
+      const d = e.action?.data;
+      if (e.action?.type === 'HOLDING_TRANSACT' && d?.holdingId === 'h-vgs') total += d.marketValueDelta;
+      const leg = e.action?.type === 'HOLDING_TRANSACT_BATCH' ? d?.legs?.find(l => l.holdingId === 'h-vgs') : null;
+      if (leg) total += leg.marketValueDelta;
+    }
+    return +total.toFixed(2);
+  };
   const silentFx = runGolden(silentAu(AU_SPEC, fxOn));
   assert.notEqual(vgsGrowth2026(run), vgsGrowth2026(silentFx), 'an unhedged lot now carries the AUD move');
 });
@@ -332,7 +349,10 @@ test('EVT-HDG-9: in a run the 31 Dec shock steers the next year; equity is unmov
     const run = runGolden(withVgs(LONG_AU, { hedgeRatio: 0 }, { ...STOCH, randomSeed: seed }));
     const shocks = new Map(journalOf(run, 'EQUITY_RETURN_STEP_APPLY')
       .map(e => [e.action.data.marketShock.year, e.action.data.marketShock.z]));
+    // The 31 Dec marks only: under the MONTHLY default (design 127) the stamp fires every
+    // month-end, and this compares a calendar year's move with the shock that drives it.
     const marks  = journalOf(run, 'HEDGE_YEAR_END_APPLY')
+      .filter(e => new Date(e.date).getUTCMonth() === 11)
       .map(e => [new Date(e.date).getUTCFullYear(), e.action.data.rates.USD_AUD]);
     for (let i = 1; i < marks.length; i++) {
       const [year, rate] = marks[i];
@@ -470,7 +490,9 @@ test('EVT-HDG-14: INCOME in a run — nil distributions carry forward; gains are
   // A US policy rate far above the AU one: the hedge loses ~3.7% a year, more than the
   // yield. (AU Single Homeowner loads US_BANKING through US_BROKERAGE, so its carry runs
   // off the US Prime rather than `hedgeForeignCashRate`.)
-  const lossy = { usPrimeRate: 0.08 };
+  // Pinned to ANNUAL (design 127): the expected ratio below is the annual INCOME formula,
+  // one distribution a year. The quarterly split is covered by CAD-12.
+  const lossy = { usPrimeRate: 0.08, equityEarningsCadence: 'ANNUAL' };
   const al  = runGolden(withVgs(AU_SPEC, { hedgeRatio: 1 }, lossy));
   const inc = runGolden(withVgs(AU_SPEC, INCOME_SEC, lossy));
   assert.ok(unfranked(al) > 0, 'ALIGNED pays the yield');
@@ -480,7 +502,7 @@ test('EVT-HDG-14: INCOME in a run — nil distributions carry forward; gains are
 
   // A US rate of zero: the hedge gains ~4.3% a year, paid on top of the yield and
   // assessed through the unfranked branch, i.e. as ordinary income with no discount.
-  const gainy = { usPrimeRate: 0 };
+  const gainy = { usPrimeRate: 0, equityEarningsCadence: 'ANNUAL' };
   const alG  = runGolden(withVgs(AU_SPEC, { hedgeRatio: 1 }, gainy));
   const incG = runGolden(withVgs(AU_SPEC, INCOME_SEC, gainy));
   const carry = 0.0435 - 0 - 0.00025;

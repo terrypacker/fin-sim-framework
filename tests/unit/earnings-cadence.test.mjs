@@ -210,8 +210,10 @@ const datesOf = (run, type, stateKey) => run.sim.journal.journal
   .map(e => new Date(e.date).toISOString().slice(0, 10));
 
 test('CAD-7: the schedules, by cadence', () => {
-  assert.deepEqual(earningsSchedule({}), { growth: { interval: 'year-end' }, dividend: { interval: 'year-end' } },
+  assert.deepEqual(earningsSchedule({ equityEarningsCadence: 'ANNUAL' }),
+    { growth: { interval: 'year-end' }, dividend: { interval: 'year-end' } },
     'ANNUAL adds no order and no data, so its queue is the pre-127 queue');
+  assert.equal(earningsSchedule({}).growth.interval, 'month-end', 'MONTHLY is the default since phase 4');
   assert.throws(() => earningsSchedule({ equityEarningsCadence: 'WEEKLY' }), /equityEarningsCadence/);
 
   const ev = type => runGolden(monthly(AU)).cfg.events.find(e => e.type === type);
@@ -229,7 +231,8 @@ test('CAD-8: a September start credits four months in its first year', () => {
   const divs = datesOf(run, 'AU_DIVIDEND_FRANKED_RESIDENT_APPLY', 'auStockAccount');
   assert.deepEqual([...new Set(divs)].filter(d => d < '2027'), ['2026-09-30', '2026-12-31']);
   // ANNUAL: one 31 Dec credit for the stub.
-  const annual = datesOf(runGolden(AU), 'SUPER_EARNINGS_APPLY', 'superAccount').filter(d => d < '2027');
+  const annual = datesOf(runGolden({ ...AU, params: { equityEarningsCadence: 'ANNUAL' } }),
+    'SUPER_EARNINGS_APPLY', 'superAccount').filter(d => d < '2027');
   assert.deepEqual(annual, ['2026-12-31']);
 });
 
@@ -242,7 +245,7 @@ test('CAD-9: 31 December keeps ANNUAL\'s sequence', () => {
     .filter(e => new Date(e.date).toISOString().slice(0, 10) === day)
     .map(e => e.action?.type);
   const firstIdx = (seq, re) => seq.findIndex(t => re.test(t ?? ''));
-  for (const run of [runGolden(hedged(AU)), runGolden(hedged(monthly(AU)))]) {
+  for (const run of [runGolden(hedged({ ...AU, params: { equityEarningsCadence: 'ANNUAL' } })), runGolden(hedged(monthly(AU)))]) {
     const seq = seqOn(run, '2026-12-31');
     const growthAt = firstIdx(seq, /^(SUPER|AU_STOCK)_EARNINGS_APPLY$/);
     const divAt    = firstIdx(seq, /^AU_DIVIDEND_/);

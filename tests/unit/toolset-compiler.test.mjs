@@ -468,14 +468,18 @@ test('compiler: monthly expenses reduce savings over 3 months (wages mostly offs
 
 test('compiler: IRA account initialized in state', () => {
   const { sim } = loadNewFormatScenario(NEW_FORMAT_JSON);
-  sim.stepTo(Q1_2026);
+  // Design 127: equity earns at every month-end, so an untouched balance is checked before the
+  // first one (31 Jan), not at the end of the quarter.
+  sim.stepTo(new Date(Date.UTC(2026, 0, 20)));
   assert.ok(sim.state.iraAccount != null);
   assert.strictEqual(sim.state.iraAccount.balance, 200_000);
 });
 
 test('compiler: 401k account initialized in state', () => {
   const { sim } = loadNewFormatScenario(NEW_FORMAT_JSON);
-  sim.stepTo(Q1_2026);
+  // Design 127: equity earns at every month-end, so an untouched balance is checked before the
+  // first one (31 Jan), not at the end of the quarter.
+  sim.stepTo(new Date(Date.UTC(2026, 0, 20)));
   assert.ok(sim.state.k401Account != null);
   assert.strictEqual(sim.state.k401Account.balance, 300_000);
 });

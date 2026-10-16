@@ -778,7 +778,9 @@ test('EVT-63: setting inheritanceDate activates the default example bequest', ()
   const { sim } = loadToolsetScenario(cfg);
   assert.strictEqual(sim.state.inheritedBrokerageAccount.balance, 0, 'seeded at 0 pre-date');
 
-  sim.stepTo(new Date(Date.UTC(2035, 8, 30))); // past 2035-01-15 inheritance, before year-end
+  // Past the 2035-01-15 inheritance and before the first month-end that credits it (design
+  // 127: equity earns monthly, so a later date would see the inheritance plus its growth).
+  sim.stepTo(new Date(Date.UTC(2035, 0, 20)));
   assert.strictEqual(sim.state.inheritedBrokerageAccount.balance, 400_000, 'funded at the date');
   assert.strictEqual(sim.state.inheritedHomeProperty.value, 600_000);
   assert.strictEqual(sim.state.inheritedIraAccount.balance, 300_000);

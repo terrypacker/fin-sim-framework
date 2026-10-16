@@ -55,6 +55,13 @@ export const STATE_INCOME_ROUTING = Object.freeze({
   // so these rows carry `ccy: 'AUD'` to convert the amount before folding it in.
   AU_SAVINGS_EARNINGS_TAX:     { bucket: 'stateOrdinaryIncomeYTD', field: 'amount', ccy: 'AUD' },
   AU_FIXED_INCOME_EARNINGS_TAX:{ bucket: 'stateOrdinaryIncomeYTD', field: 'amount', ccy: 'AUD' },
+  // AU-source dividends to a US person, on the same worldwide-income rule: the AU tax module
+  // books both into federal usOrdinaryIncomeYTD. Missing until design 127, when quarterly
+  // dividends put one inside EVT-STATE-4's early-year reconciliation window; the annual
+  // 31 Dec dividend had always fallen outside it. The residency gate below keeps an AU
+  // resident's (the UNFRANKED_RESIDENT branch's usual payer) out of a state base.
+  AU_DIVIDEND_FRANKED_NONRESIDENT_TAX: { bucket: 'stateOrdinaryIncomeYTD', field: 'amount', ccy: 'AUD' },
+  AU_DIVIDEND_UNFRANKED_RESIDENT_TAX:  { bucket: 'stateOrdinaryIncomeYTD', field: 'amount', ccy: 'AUD' },
 
   // ── Pension / retirement distributions (action.amount), segregated for exclusions ──
   IRA_WITHDRAWAL_CONTRIB_TAX:  { bucket: 'statePensionIncomeYTD', field: 'amount' },

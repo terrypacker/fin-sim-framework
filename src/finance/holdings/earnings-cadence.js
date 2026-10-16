@@ -25,8 +25,12 @@
 
 export const EQUITY_EARNINGS_CADENCES = Object.freeze(['ANNUAL', 'MONTHLY']);
 
-/** Phase 1 lands at ANNUAL; design 127 §6 phase 4 switches it. */
-export const DEFAULT_EQUITY_EARNINGS_CADENCE = 'ANNUAL';
+/**
+ * MONTHLY since design 127 phase 4. ANNUAL stays selectable, for measuring the change on a
+ * plan; with a shock preset it is no longer the pre-127 engine, because the presets are
+ * calibrated under MONTHLY (§7 Q2).
+ */
+export const DEFAULT_EQUITY_EARNINGS_CADENCE = 'MONTHLY';
 
 /**
  * Same-date order of the MONTHLY growth and dividend series (§4.5).

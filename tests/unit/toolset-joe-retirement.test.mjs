@@ -398,16 +398,12 @@ test('joe: $10k/month expenses reduce checking after one month', () => {
 
 test('joe: no wages fire because monthlyWage is 0', () => {
   const { sim } = loadToolsetScenario(JOE_CONFIG);
-  // Run to mid-year — the monthly wages event fires but should produce no actions
-  // (monthlyWage is 0). Sample BEFORE the year-end earnings event so the brokerage
-  // reflects only drawdown; year-end earnings now accrue from 2026-12-31
-  // (startOffset 0), which would otherwise grow the balance and mask the check.
+  // Run to mid-year — the monthly payroll event fires but should produce no wage income
+  // (monthlyWage is 0). Asserted on the actions themselves: since design 127 the brokerage
+  // earns every month-end, so a balance bound can no longer tell wages from growth.
   sim.stepTo(MAY_END_2026);
-  const brokerageTotal = sim.state.brokerageTodAccount.balance + sim.state.brokerageAccount.balance;
-  assert.ok(
-    brokerageTotal <= 2_200_000,
-    'brokerage accounts should not show wage-driven growth (only drawdown before year-end earnings)',
-  );
+  const wages = sim.journal.journal.filter(e => /^WAGES_INCOME/.test(e.action?.type ?? ''));
+  assert.equal(wages.length, 0, 'no wage income should be booked when monthlyWage is 0');
 });
 
 test('joe: brokerage accounts grow by year-end earnings', () => {
@@ -428,14 +424,15 @@ test('joe: brokerage accounts grow by year-end earnings', () => {
   assert.ok(broAfter !== broBefore, 'brokerageAccount balance should change after year-end earnings');
 });
 
-test('joe: IRA accounts hold their initial balances before first year-end earnings', () => {
+test('joe: IRA accounts hold their initial balances before their first earnings', () => {
   const { sim } = loadToolsetScenario(JOE_CONFIG);
-  sim.stepTo(MAY_END_2026);
-  // IRA earnings have startOffset=1 — they don't fire until end of 2027.
+  // Design 127: equity earns at every month-end, so an untouched balance is checked before the
+  // first one (31 Jan), not at the end of the quarter.
+  sim.stepTo(new Date(Date.UTC(2026, 0, 20)));
   assert.strictEqual(sim.state.iraAccount.balance,          100_000,
-    'IRA balance unchanged before first year-end earnings');
+    'IRA balance unchanged before its first earnings');
   assert.strictEqual(sim.state.inheritedIraAccount.balance, 30_000,
-    'Inherited IRA balance unchanged before first year-end earnings');
+    'Inherited IRA balance unchanged before its first earnings');
 });
 
 test('joe: IRA accounts grow after first year-end earnings fire', () => {
