@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-234 parameters · 33 panels · 12 node types (206 fields) · 179 action types · 90 tools · 320 state field types · 78 topics · 136 design docs
+234 parameters · 33 panels · 12 node types (206 fields) · 179 action types · 91 tools · 320 state field types · 78 topics · 137 design docs
 
 ---
 
@@ -1086,7 +1086,7 @@ Explained in [`help/nodes`](nodes/reducer.md). 0 field(s) described by a record 
 
 ---
 
-## Headless tools (90)
+## Headless tools (91)
 
 Command-line entry points under `scripts/`. **Purpose** is harvested from each script's
 docblock, not re-authored here. Arguments come from each script's declarative
@@ -1343,6 +1343,8 @@ docblock, not re-authored here. Arguments come from each script's declarative
     - `--scenario` (string) — base scenario export; omitted ⇒ the synthetic default
     - `--index` (number, default `0`) — scenario index in that file
     - `--json` (flag) — machine-readable output
+- **`scripts/lab/stock-bond-correlation.mjs`**
+  the annual stock–bond correlation by era (design 129 §1)
 - **`scripts/lab/study-report.mjs`**
   read a finished study directory and render it as one HTML page
     - `--dir` (string) — REQUIRED. directory of out-*.json grids and mc-out*/ arm dirs
@@ -2320,7 +2322,7 @@ what the in-app panel keys on.
 
 ---
 
-## Design documents (136)
+## Design documents (137)
 
 Tier 3 — the full argument behind each mechanic, in `design/`. The title is each
 file's own H1, read out of it; there is no summary column, because a one-line precis
@@ -2462,6 +2464,7 @@ between 10 and 11.
 | [`126-regime-study-model-gaps.md`](../design/126-regime-study-model-gaps.md) | 126 — Model gaps that limit regime studies |
 | [`127-time-weighted-investment-earnings.md`](../design/127-time-weighted-investment-earnings.md) | 127 — Time-weighted investment earnings |
 | [`128-ladder-aware-bond-buys.md`](../design/128-ladder-aware-bond-buys.md) | 128 — Ladder-aware bond buys (design 66 §10.5, Phase B) |
+| [`129-stock-bond-correlation.md`](../design/129-stock-bond-correlation.md) | 129 — Stock–bond correlation as a regime property (design 126 G3) |
 | [`bus-unification-plan.md`](../design/bus-unification-plan.md) | Bus Unification Plan |
 | [`inconsistencies.md`](../design/inconsistencies.md) | Inconsistencies, Rework Candidates, and Open Questions |
 | [`requirements.md`](../design/requirements.md) | Requirements Tracker |
