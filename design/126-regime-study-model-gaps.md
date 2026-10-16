@@ -7,7 +7,7 @@ proposed). §8 step 1, G1 `WINDOW` arrival, BUILT 15 Oct 2026; step 3, G1 `RATE`
 macro-regimes study ran into, each of which is a modelling change rather than a fix. The study
 judged the first two (§3, §4) able to change a conclusion; the other three (§5–§7) were recorded
 with a direction only. 15 Oct 2026: G3 has its own design, **129** (§5). G4 was checked against
-design 99's sources and is proposed CLOSED (§6). G5 stays a direction (§7).
+design 99's sources and is CLOSED (§6, the author). G5 stays a direction (§7).
 
 - **rev 2 (15 Oct 2026, review before build):** checked against the code.
   - G1: the arrival draw needs the run's seed at compile, and compile runs *before* the
@@ -300,7 +300,7 @@ Direction: a leg field `stockBondCorrelation` that the stochastic yield-curve ti
 (`YieldCurveTickHandler`) uses to correlate its level shock with the year's equity draw while the
 leg is active. Off by default; no effect on deterministic runs, where the legs already set both.
 
-## 6. G4 — Valuation-conditioned expected returns (checked: proposed CLOSED)
+## 6. G4 — Valuation-conditioned expected returns (CLOSED 15 Oct 2026)
 
 The direction was: a starting valuation (CAPE) lowers the expected equity return for the years
 after it, fading as valuation reverts. It would be an optional `equityValuation` input shifting
@@ -341,7 +341,7 @@ disagreement on the 10-year level itself: about 4 points on the US (Vanguard ≈
 9.0; design 99 §6.6). For the US, one source has returns *falling* after the first decade,
 which is the opposite of the fade a CAPE reversion would impose.
 
-### 6.3 Proposal
+### 6.3 Decision (the author, 15 Oct 2026): closed
 
 **Close G4 with no valuation mechanism.**
 - The level is covered by design 99's sourced inputs.
@@ -369,7 +369,7 @@ that tracks policy and inflation.
 3. **BUILT.** G1 `RATE` arrival (§3.8), with a distinct `shockId` per episode across all
    entries. Tests: `evt-shock-arrival.test.mjs` RATE-1..6.
 4. ~~G2 build~~ — not built: step 0 put the effect under 0.2% of spending (§4.5).
-5. G3 → design 129 (PROPOSED 15 Oct 2026). G4 → proposed CLOSED after checking the sources
+5. G3 → design 129 (PROPOSED 15 Oct 2026). G4 → CLOSED after checking the sources
    (§6). G5 gets its own design when a study needs it.
 
 ## 9. Open questions
