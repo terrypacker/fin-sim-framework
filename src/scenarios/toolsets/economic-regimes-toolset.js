@@ -624,9 +624,27 @@ function _shockArrivals(context) {
   if (context._shockArrivals === undefined) {
     context._shockArrivals = drawShockArrivals(context.parameters?.shocks, {
       seed: context.rngSeed, startDate: context.startDate, endDate: context.endDate,
+      spanMonthsOf: shockSpanMonths,
     });
   }
   return context._shockArrivals;
+}
+
+/**
+ * How long one episode of a shock entry stays in force, in months (design 126 §3.8): the latest
+ * `startMonths + recovery.durationMonths` over its legs, or the shock's own recovery when it has
+ * none. RATE's default gap, so a shock cannot recur on top of itself.
+ *
+ * @param {object} entry — a `shocks[]` entry (preset or custom form)
+ * @returns {number}
+ */
+export function shockSpanMonths(entry) {
+  const shock = entry?.preset ? (SHOCK_LIBRARY[entry.preset] ?? {}) : (entry ?? {});
+  const legs  = Array.isArray(shock.legs) && shock.legs.length ? shock.legs : null;
+  const span  = legs
+    ? Math.max(...legs.map(l => (l.startMonths ?? 0) + (l.recovery?.durationMonths ?? 12)))
+    : (shock.recovery?.durationMonths ?? 12);
+  return Math.max(1, span);
 }
 
 /**
@@ -859,7 +877,7 @@ export const ECONOMIC_REGIMES = {
         opt:          false,
         options:      SHOCK_PRESET_OPTIONS,
         defaultValue: [],
-        description:  'List of financial shocks to apply. Each entry can reference a library preset or define a custom shock, and either lands on its start date or arrives at random: "Random, in a window" gives the years after the run starts that it may arrive in and the chance it happens at all. A random shock arrives once, on the first of a month, drawn from the run\'s seed: the same seed always draws the same month, a Monte Carlo path keeps its month in every arm of a comparison, and a month past the end of the run means it did not arrive.',
+        description:  'List of financial shocks to apply. Each entry can reference a library preset or define a custom shock, and either lands on its start date or arrives at random, on the first of a month drawn from the run\'s seed. "Random, in a window" arrives at most once: give the years after the run starts that it may arrive in and the chance it happens at all; a month past the end of the run means it did not arrive. "Random, at a rate" can recur: give how many times a year it arrives on average (0.1 = about once a decade), optionally a cap on the count, and the years it must wait after each arrival (blank = until the previous episode has run its course, which lowers the realised rate). The same seed always draws the same months, and a Monte Carlo path keeps its months in every arm of a comparison.',
       },
       {
         // Design 104: EITHER the schedule OR the inflation link, never both. The default is
@@ -1700,10 +1718,17 @@ export const ECONOMIC_REGIMES = {
     const shocks    = p.shocks ?? [];
     const strats    = p.behavioralStrategies ?? [];
 
-    // Design 126 §3 — a random-arrival entry is scheduled on its drawn date, or not at all.
+    // Design 126 §3 — a random-arrival entry is scheduled on each drawn date, or not at all.
+    // Each EPISODE gets its own shockId (§3.8): the behavioural strategies fire once per id, so a
+    // second crash sharing the first's would trigger none of them. The first keeps the plain id,
+    // so a plan whose shocks already have distinct ids schedules exactly as before.
+    const usedIds = new Map();
     for (const entry of applyShockArrivals(shocks, _shockArrivals(context))) {
-      const shock = resolveShockEntry(entry);
-      if (!shock) continue;
+      const resolved = resolveShockEntry(entry);
+      if (!resolved) continue;
+      const n = (usedIds.get(resolved.shockId) ?? 0) + 1;
+      usedIds.set(resolved.shockId, n);
+      const shock = n === 1 ? resolved : { ...resolved, shockId: `${resolved.shockId}#${n}` };
       scheduleShock(shock, events, context.endDate, !entry.preset);
     }
 

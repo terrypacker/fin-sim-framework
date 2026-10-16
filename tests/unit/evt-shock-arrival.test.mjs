@@ -22,6 +22,13 @@
  * ARR-9  bad specs throw naming the shock
  * ARR-10 no handler or reducer reads `shocks` from the params, or looks ahead for a shock event
  * ARR-11 the shared cursor is untouched: a run's other draws are identical with and without it
+ *
+ * RATE-1 with no gap or cap the arrival count averages perYear × years
+ * RATE-2 raising perYear only adds arrivals (each month has its own uniform)
+ * RATE-3 the default gap is the episode's span; an explicit gap is honoured; maxCount caps
+ * RATE-4 each arrival is its own episode: plain id, then #2, #3; delayed legs keep their episode's
+ * RATE-5 two FIXED entries of one preset no longer share a shockId; distinct ids are unchanged
+ * RATE-6 a loaded sim stamps the list and schedules every date in it
  */
 
 import { test, beforeEach } from 'node:test';
@@ -30,8 +37,8 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { ServiceRegistry }  from '../../src/services/service-registry.js';
-import { ECONOMIC_REGIMES } from '../../src/scenarios/toolsets/economic-regimes-toolset.js';
-import { drawWindowArrival, drawShockArrivals, shockArrivalKeys } from '../../src/finance/economic-shocks/shock-arrival.js';
+import { ECONOMIC_REGIMES, shockSpanMonths } from '../../src/scenarios/toolsets/economic-regimes-toolset.js';
+import { drawWindowArrival, drawRateArrivals, drawShockArrivals, shockArrivalKeys } from '../../src/finance/economic-shocks/shock-arrival.js';
 import { loadScenarioSim } from '../helpers/scenario-harness.js';
 
 beforeEach(() => ServiceRegistry.resetAll());
@@ -169,7 +176,9 @@ test('ARR-8: an explicit seed wins over randomSeed; rngStreams and other params 
 
 test('ARR-9: bad specs throw naming the shock', () => {
   const bad = (arrival) => () => compile([{ preset: 'DOTCOM_2000_LITE', arrival }]);
-  assert.throws(bad({ mode: 'RATE', perYear: 0.1 }), /DOTCOM_2000_LITE.*RATE is not built yet/);
+  assert.throws(bad({ mode: 'RATE' }), /DOTCOM_2000_LITE.*perYear/);
+  assert.throws(bad({ mode: 'RATE', perYear: 0.1, maxCount: 0 }), /maxCount/);
+  assert.throws(bad({ mode: 'RATE', perYear: 0.1, minGapYears: -1 }), /minGapYears/);
   assert.throws(bad({ mode: 'SOMETIME' }), /mode must be one of/);
   assert.throws(bad(window_({ fromYears: 5, toYears: 5 })), /at least one month/);
   assert.throws(bad(window_({ fromYears: -1 })), /fromYears/);
@@ -216,4 +225,90 @@ test('ARR-11: the draw never touches the shared cursor', () => {
   const none   = run([]);
   const random = run([{ preset: 'DOTCOM_2000_LITE', arrival: window_({ fromYears: 20, toYears: 30 }) }]);
   assert.deepEqual(random, none);
+});
+
+// ── RATE (§3.8) ─────────────────────────────────────────────────────────────────────────────
+
+const rate = (over = {}) => ({ mode: 'RATE', perYear: 0.2, minGapYears: 0, ...over });
+const months = (a, b) => (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + b.getUTCMonth() - a.getUTCMonth();
+
+test('RATE-1: with no gap or cap the count averages perYear × years', () => {
+  const end = new Date('2046-01-01T00:00:00Z');   // 20 years
+  let total = 0;
+  const N = 400;
+  for (let seed = 1; seed <= N; seed++) {
+    const ds = drawRateArrivals(rate(), { seed, key: 'k', startDate: START, endDate: end });
+    for (const d of ds) { assert.equal(d.getUTCDate(), 1); assert.ok(d >= START && d < end); }
+    total += ds.length;
+  }
+  const expected = 240 * (1 - Math.exp(-0.2 / 12));   // ≈ 3.97
+  assert.ok(Math.abs(total / N - expected) < 0.25, `mean ${total / N} vs ${expected.toFixed(2)}`);
+});
+
+test('RATE-2: raising perYear only adds arrivals', () => {
+  for (let seed = 1; seed <= 100; seed++) {
+    const lo = drawRateArrivals(rate({ perYear: 0.1 }), { seed, key: 'k', startDate: START, endDate: END }).map(day);
+    const hi = new Set(drawRateArrivals(rate({ perYear: 0.3 }), { seed, key: 'k', startDate: START, endDate: END }).map(day));
+    for (const d of lo) assert.ok(hi.has(d), `seed ${seed}: ${d} kept at the higher rate`);
+  }
+});
+
+test('RATE-3: default gap is the episode span; explicit gap honoured; maxCount caps', () => {
+  const span = shockSpanMonths({ preset: 'MARKET_CRASH_2008_LITE' });
+  assert.ok(span > 12, `the GFC episode runs for years (${span} months)`);
+  const shocks = [{ preset: 'MARKET_CRASH_2008_LITE', arrival: { mode: 'RATE', perYear: 1 } }];
+  let multi = 0;
+  for (let seed = 1; seed <= 50; seed++) {
+    const ds = drawShockArrivals(shocks, { seed, startDate: START, endDate: END, spanMonthsOf: shockSpanMonths })['MARKET_CRASH_2008_LITE#0']
+      .map(x => new Date(`${x}T00:00:00Z`));
+    for (let i = 1; i < ds.length; i++) assert.ok(months(ds[i - 1], ds[i]) >= span, `seed ${seed}: gap ≥ ${span} months`);
+    if (ds.length > 1) multi++;
+  }
+  assert.ok(multi > 0, 'a 40-year run at once a year recurs');
+
+  for (let seed = 1; seed <= 50; seed++) {
+    const ds = drawRateArrivals(rate({ perYear: 2, minGapYears: 3 }), { seed, key: 'k', startDate: START, endDate: END });
+    for (let i = 1; i < ds.length; i++) assert.ok(months(ds[i - 1], ds[i]) >= 36);
+    assert.ok(drawRateArrivals(rate({ perYear: 2, maxCount: 2 }), { seed, key: 'k', startDate: START, endDate: END }).length <= 2);
+  }
+});
+
+test('RATE-4: each arrival is its own episode; delayed legs keep their episode\'s id', () => {
+  // The stagflation preset has delayed legs (design 121), so one episode is several events.
+  const shocks = [{ preset: 'STAGFLATION_1970S_LITE', arrival: rate({ perYear: 3, minGapYears: 1 }) }];
+  let checked = 0;
+  for (let seed = 1; seed <= 10 && !checked; seed++) {
+    const { events, arrivals } = compile(shocks, seed);
+    const dates = arrivals['STAGFLATION_1970S_LITE#0'];
+    if (dates.length < 3) continue;
+    const ids = [...new Set(events.map(e => e.data.shock.shockId))];
+    assert.deepEqual(ids.slice(0, 3), ['STAGFLATION_1970S_LITE', 'STAGFLATION_1970S_LITE#2', 'STAGFLATION_1970S_LITE#3']);
+    assert.equal(ids.length, dates.length, 'one id per episode, however many groups each splits into');
+    // Every episode's offset-0 group lands on its drawn date.
+    const firstOf = new Map();
+    for (const e of events) if (!firstOf.has(e.data.shock.shockId)) firstOf.set(e.data.shock.shockId, day(e.date));
+    assert.deepEqual([...firstOf.values()], dates);
+    checked++;
+  }
+  assert.equal(checked, 1, 'some seed drew three episodes');
+});
+
+test('RATE-5: two FIXED entries of one preset no longer share a shockId; distinct ids unchanged', () => {
+  const two = compile([{ preset: 'DOTCOM_2000_LITE', startDate: '2030-01-01' },
+                       { preset: 'DOTCOM_2000_LITE', startDate: '2040-01-01' }]).events;
+  assert.deepEqual(two.map(e => e.data.shock.shockId), ['DOTCOM_2000_LITE', 'DOTCOM_2000_LITE#2']);
+  const mixed = compile([{ preset: 'DOTCOM_2000_LITE', startDate: '2030-01-01' },
+                         { preset: 'MARKET_CRASH_2008_LITE', startDate: '2040-01-01' }]).events;
+  assert.deepEqual(mixed.map(e => e.data.shock.shockId), ['DOTCOM_2000_LITE', 'MARKET_CRASH_2008_LITE']);
+});
+
+test('RATE-6: a loaded sim stamps the list and schedules every date in it', () => {
+  const shocks = [{ preset: 'MILD_CORRECTION', arrival: { mode: 'RATE', perYear: 0.5, minGapYears: 1 } }];
+  quiet(() => {
+    const { sim } = loadScenarioSim({ params: { randomSeed: 5, shocks } });
+    const stamp = sim.state.shockArrivals['MILD_CORRECTION#0'];
+    assert.ok(Array.isArray(stamp) && stamp.length > 1, `recurs over the run (${stamp})`);
+    const scheduled = sim.queue.data.filter(e => e.type === 'ECONOMIC_SHOCK').map(e => day(e.date)).sort();
+    assert.deepEqual([...new Set(scheduled)], stamp);
+  });
 });

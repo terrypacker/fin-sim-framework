@@ -63,7 +63,7 @@ import { IntlRetirementMcConfig } from '../../src/finance/monte-carlo/intl-retir
 import { scenarioParamValues }    from '../../src/finance/param-schema-utils.js';
 import { DISTRIBUTION_TYPES }     from '../../src/simulation-framework/distributions.js';
 import { mixSeriesFromRuns }      from '../../src/finance/allocation-reporting/mix-distribution.js';
-import { shockArrivalKeys, isRandomArrival } from '../../src/finance/economic-shocks/shock-arrival.js';
+import { shockArrivalKeys, isRandomArrival, firstArrival } from '../../src/finance/economic-shocks/shock-arrival.js';
 import { quietAsync, quiet } from './run.mjs';
 import { numericParams } from './variant.mjs';
 
@@ -89,13 +89,13 @@ export function mergeArmLevers(baseLevers = {}, armLevers = {}) {
 }
 
 /**
- * `shocks[0]`'s date on one run: the drawn arrival when it has one (design 126 §3.5), else the
- * authored `startDate`.
+ * `shocks[0]`'s date on one run: its first drawn arrival when it has one (design 126 §3.5; a RATE
+ * entry's later arrivals are in the row's `shockArrivals`), else the authored `startDate`.
  */
 function firstShockDate(r) {
   const first = r.params?.shocks?.[0];
   if (!first) return null;
-  if (isRandomArrival(first)) return r.shockArrivals?.[shockArrivalKeys(r.params.shocks)[0]] ?? null;
+  if (isRandomArrival(first)) return firstArrival(r.shockArrivals?.[shockArrivalKeys(r.params.shocks)[0]]);
   return first.startDate ? new Date(first.startDate).toISOString().slice(0, 10) : null;
 }
 
