@@ -1,7 +1,8 @@
 # 126 — Model gaps that limit regime studies
 
 **Status:** rev 2 ACCEPTED (15 Oct 2026, the author: Q1, Q3 and the G2 measurement gate as
-proposed). §8 step 1, G1 `WINDOW` arrival, BUILT 15 Oct 2026. Collects five gaps a
+proposed). §8 step 1, G1 `WINDOW` arrival, BUILT 15 Oct 2026. §8 step 2, the G2 measurement, DONE
+15 Oct 2026: under the threshold in every case, so G2 is CLOSED as measured (§4.5). Collects five gaps a
 macro-regimes study ran into, each of which is a modelling change rather than a fix. The study
 judged the first two (§3, §4) able to change a conclusion; the other three (§5–§7) are recorded
 with a direction and left open.
@@ -216,6 +217,35 @@ has no effect on any preset, which is the honest state.
 **Effort (if built).** Small to moderate: one leg field, one state level, the inflation
 reducer, the bands reducer, the editor, and one preset leg.
 
+### 4.5 The measurement (15 Oct 2026): closed
+
+Sources in `docs/energy-prices/` (`SOURCES.md`); computation in
+`scripts/lab/energy-share-measurement.mjs`. Energy = motor fuel + electricity + gas and other
+household fuels. With base-period weights, `H/CPI − 1 = (s − w)·(R − 1)/(1 − w)` exactly.
+
+- **`s − w`.** US: the Consumer Expenditure Survey share for households aged 65+ minus its share
+  for all households (one survey on both sides), averaged 2013–2022: **+0.24 pp** (75+: +0.16).
+  It moves between −0.04 and +0.45 pp year to year. AU: the ABS self-funded retiree living
+  cost index weights minus the CPI's: **+0.44 pp** on the 2024 set, +0.14 on the 2025 set
+  (whose electricity weights are net of the 2024–25 rebates). The age pensioner index, the
+  highest-share household the ABS publishes, is +2.39 pp.
+- **`R`.** Energy against all items rose **67%** (US, monthly) and **30%** (AU, OECD quarterly)
+  from late 1972 to its peak in 1981–82; 49% and 21% in 2021–23.
+- **The gap.** Peak `H/CPI − 1` through 1973–1982: US 65+ **0.17%**, AU self-funded retiree
+  **0.14%**, AU age pensioner 0.76%. Summed over the decade it is about a tenth of one month's
+  spending. 2021–23 is smaller still.
+- **Break-even.** A 1% peak would need `s − w` of +1.4 pp (US) or +3.2 pp (AU) on the 1970s
+  path — six and seven times the retiree readings.
+
+Energy is a necessity, so its share falls with income: in the CE it runs from 8.3% of spending
+in the lowest income quintile to 4.9% in the highest (2019; 9.6% to 5.6% in 2022). A household
+with more to spend than the survey average sits at or below these readings — for a
+high-income retiree, `s − w` is more likely negative. **G2 is closed:** at its largest, the
+household-specific energy price effect is under a fifth of a percent of spending, inside the
+noise of every other spending assumption. An oil shock's cost to a retiree is the CPI's own
+energy component, which the presets' inflation legs already carry. Re-open only for a plan
+whose household energy share is measured at several points above the CPI's.
+
 ## 5. G3 — Stock–bond correlation as a regime property (direction only)
 
 Today the sign of the stock–bond correlation is an emergent property of the legs in a
@@ -247,9 +277,9 @@ that tracks policy and inflation.
    `shockArrivals`, the structural foresight test, the old MC variable removed, `mc-run`.
    Code: `shock-arrival.js`; tests: `evt-shock-arrival.test.mjs` (ARR-1..11),
    `evt-shock-mc.test.mjs` (EVT-SHOCK-MC-5/6: paired months across arms, the retired row).
-2. G2 step 0: the sources on disk and the `(s − w)·r` measurement. Build or close on its result.
+2. **DONE, G2 CLOSED.** G2 step 0: the sources on disk and the `(s − w)·r` measurement (§4.5).
 3. G1 `RATE` arrival.
-4. G2 build, if step 0 says so.
+4. ~~G2 build~~ — not built: step 0 put the effect under 0.2% of spending (§4.5).
 5. G3–G5: each gets its own design when a study needs it.
 
 ## 9. Open questions
@@ -268,8 +298,7 @@ that tracks policy and inflation.
 4. **Does G1 change existing MC arm files?** Only plans that opt into `arrival`. The removed MC
    date variable is enabled by no saved plan (checked rev 2), so it needs no migration; archived
    study scripts that enable it stop working, and that is acceptable.
-5. **Energy share source** (G2, if built): authored per plan, absent = the CPI household, with
-   the sourced retiree shares in the help topic as suggestions.
+5. **Energy share source** (G2, if built). *Moot: G2 is closed (§4.5).*
 
 ## 10. Test plan (G1 and G2, to be written with the code)
 
