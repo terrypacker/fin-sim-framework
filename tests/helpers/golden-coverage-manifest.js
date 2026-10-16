@@ -46,6 +46,11 @@
 
 /** Action types at least one golden scenario actually fires. */
 export const COVERED = [
+  // MONTHLY equity earnings (design 127): the two wash-sale goldens run MONTHLY since phase 3,
+  // because their crash preset is calibrated under it. The batched lot deltas and the
+  // month-end index step fire there.
+  'HOLDING_TRANSACT_BATCH',
+  'MARKET_INDEX_STEP_APPLY',
   'ASSET_APPRECIATE_APPLY',
   'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY',
   // The cash siblings (design 106 §4a) — both reached by `au-dividend-cash`, which
@@ -198,15 +203,6 @@ export const COVERED = [
  * this file exists to prevent.
  */
 export const KNOWN_GAPS = [
-  // ── MONTHLY equity earnings (design 127)
-  // MarketIndexReducer reduces the month-end index step, and HoldingTransactReducer the
-  // per-account batch of lot deltas (phase 2c), in every scenario, but only a MONTHLY plan
-  // emits either, and every golden runs ANNUAL until phase 4 switches the default.
-  // earnings-cadence.test.mjs covers both (CAD-7, CAD-11, CAD-18, CAD-19).
-  // Phase 4's regold clears them.
-  'HOLDING_TRANSACT_BATCH',
-  'MARKET_INDEX_STEP_APPLY',
-
   // ── MSBS reversion (design 119 phase 5)
   // The only golden with an MSBS pension is a single person who outlives the run, so
   // nothing dies holding one. MSP-10 in msbs-pension.test.mjs covers it in isolation.

@@ -35,10 +35,14 @@ import { REGIME_TAG } from '../economic-regimes/regime-tag.js';
  * is therefore the pair (trough depth, trough year), with back-to-peak checked afterwards.
  *
  * ── Two things that decide what a number here means ──────────────────────────────
- * 1. **Equity growth is applied ANNUALLY**, on a year-end EventSeries, as `balance × rate`.
- *    The recovery factor is recomputed monthly but for equity it is only ever SAMPLED on
- *    31 December. A decline is therefore only expressible in whole years, and the drags
- *    below are large because one year-end has to carry a whole year of decline.
+ * 1. **The presets are calibrated under MONTHLY equity crediting** (design 127). Equity
+ *    grows at every month-end at the rate in force that month, so the engine integrates
+ *    the whole recovery curve, which is recomputed monthly. Before design 127, equity was
+ *    credited once a year and the curve was only SAMPLED on 31 December: a decline could
+ *    only be expressed in whole years, and the drags were sized for one sample a year,
+ *    which under monthly crediting overshoots (the GFC fell 65 % instead of 51 %). Every
+ *    drag and curve below was refitted by `scripts/probes/fit-shock-presets.mjs`; under
+ *    the ANNUAL cadence these presets no longer reproduce their episodes.
  * 2. **A crash that took two years to bottom is a drag, not a level break.** Only 8 % of
  *    the GFC's fall and 17 % of the dot-com's happened in the first three months, against
  *    82 % of COVID's. So the fast episodes are level breaks and the slow ones are mostly
@@ -119,15 +123,18 @@ const HISTORICAL_SHOCKS = {
         id: 'equity',
         regime: {
           returnAdjustment: {
-            EQUITY_US: -0.555, EQUITY_INTL_EX_AU: -0.555,
-            EQUITY_INTL_EX_US: -0.565, EQUITY_AU: -0.527,
+            EQUITY_US: -0.541, EQUITY_INTL_EX_AU: -0.541,
+            EQUITY_INTL_EX_US: -0.551, EQUITY_AU: -0.534,
           },
         },
-        // U_REBOUND/72: full strength through two year-ends (the 17-month slide), spent at
-        // month 25, then a tailwind peaking at 45 % of the drag. The tailwind is what gets
-        // the book back to its prior peak at ~year 5 against a measured 65 months; without
-        // it, compounding at 7 % needs 96 (design 21 §22).
-        recovery: { profile: 'U_REBOUND', durationMonths: 72, reboundStart: 0.35, reboundPeak: 0.45 },
+        // U_REBOUND/101 (design 127, fitted under monthly crediting): full strength for the
+        // first 9 months, spent at month 17 — the measured trough — then a long tailwind
+        // peaking at 30 % of the drag, which brings the book back to its prior peak at
+        // month 69 (measured 65) and +66 % at ten years (measured +66.1 %). Without the
+        // tailwind, compounding at 7 % needs 96 months (design 21 §22). AU's drag is fitted
+        // to its own −49.3 %; it recovers on the US curve, so it is back at month 70, not
+        // the measured 141.
+        recovery: { profile: 'U_REBOUND', durationMonths: 101, reboundStart: 0.172, reboundPeak: 0.299 },
       },
       {
         id: 'markets',
@@ -216,13 +223,17 @@ const HISTORICAL_SHOCKS = {
         id: 'equity',
         regime: {
           returnAdjustment: {
-            EQUITY_US: -0.395, EQUITY_INTL_EX_AU: -0.395,
-            EQUITY_INTL_EX_US: -0.418, EQUITY_AU: -0.473,
+            EQUITY_US: -0.361, EQUITY_INTL_EX_AU: -0.361,
+            EQUITY_INTL_EX_US: -0.382, EQUITY_AU: -0.424,
           },
         },
-        // U_REBOUND/120 with a SMALL rebound (0.15): the 1970s recovery was slow and
-        // nominal, and in real terms never happened inside the decade at all.
-        recovery: { profile: 'U_REBOUND', durationMonths: 120, reboundStart: 0.25, reboundPeak: 0.15 },
+        // U_REBOUND/56 (design 127, fitted under monthly crediting): spent at month 24, then a
+        // moderate tailwind (0.38). Trough at month 23 and back at 89 against a measured 23
+        // and 90; +20 % at ten years against +21.9 %. The 1970s recovery was slow and
+        // nominal, and in real terms never happened inside the decade at all. AU's drag is
+        // fitted to its −54.1 % (it lands at −52 %, trading depth for a less distant
+        // back-to-peak); on the US curve it is back at month 115, not the measured 80.
+        recovery: { profile: 'U_REBOUND', durationMonths: 56, reboundStart: 0.436, reboundPeak: 0.384 },
       },
       {
         id: 'inflation',
@@ -394,15 +405,17 @@ const HISTORICAL_SHOCKS = {
         id: 'equity',
         regime: {
           returnAdjustment: {
-            EQUITY_US: -0.530, EQUITY_INTL_EX_AU: -0.530,
-            EQUITY_INTL_EX_US: -0.383, EQUITY_AU: -0.210,
+            EQUITY_US: -0.163, EQUITY_INTL_EX_AU: -0.163,
+            EQUITY_INTL_EX_US: -0.118, EQUITY_AU: -0.110,
           },
         },
-        // V_REBOUND/36 with reboundStart 0.15: the tailwind starts inside the FIRST year,
-        // which is the only way to reproduce a 7-month round trip when equity growth is
-        // applied once a year. The US leg is back at its prior peak at year 1 and +68 % at
-        // year 5, against a measured +68.4 % (CALIBRATION).
-        recovery: { profile: 'V_REBOUND', durationMonths: 36, reboundStart: 0.15, reboundPeak: 0.55 },
+        // V_REBOUND/27 (design 127, fitted under monthly crediting): the drag is spent within
+        // two months and a strong tailwind (2.4 × the drag at its peak) follows. US trough at
+        // month 2 (measured 2), back at 13 (measured 7), and +68.2 % at month 56 against the
+        // S&P's +68.4 % from Jan 2020 to Sep 2024, the last month on disk. (This comment used
+        // to call that figure "year 5"; it is 56 months.) AU: −24.1 %, back at 18, against a
+        // measured −23.8 % and 14.
+        recovery: { profile: 'V_REBOUND', durationMonths: 27, reboundStart: 0.065, reboundPeak: 2.433 },
       },
       {
         id: 'markets',
@@ -492,9 +505,11 @@ const HISTORICAL_SHOCKS = {
       {
         id: 'equity',
         regime: {
-          returnAdjustment: { EQUITY_US: -0.418, EQUITY_INTL_EX_AU: -0.339 },
+          returnAdjustment: { EQUITY_US: -0.109, EQUITY_INTL_EX_AU: -0.088 },
         },
-        recovery: { profile: 'V_REBOUND', durationMonths: 24, reboundStart: 0.12, reboundPeak: 0.55 },
+        // Design 127, fitted under monthly crediting: −11.8 %, trough at month 2, back at 10,
+        // against a measured −11.5 %, 3 and 7.
+        recovery: { profile: 'V_REBOUND', durationMonths: 14, reboundStart: 0.202, reboundPeak: 2.321 },
       },
     ],
     recovery: { profile: 'V_REBOUND', durationMonths: 24, reboundStart: 0.12, reboundPeak: 0.55 },
@@ -604,13 +619,14 @@ const HISTORICAL_SHOCKS = {
         id: 'equity',
         regime: {
           returnAdjustment: {
-            EQUITY_US: -0.395, EQUITY_INTL_EX_AU: -0.395, EQUITY_INTL_EX_US: -0.350,
+            EQUITY_US: -0.293, EQUITY_INTL_EX_AU: -0.293, EQUITY_INTL_EX_US: -0.259,
           },
         },
-        // U_REBOUND/120: full strength through two year-ends, spent at month 30, then a
-        // MODEST tailwind (0.30). Modest because the 2003-2007 recovery was real but not
-        // violent, and because the decade's second half belongs to LOST_DECADE_2000.
-        recovery: { profile: 'U_REBOUND', durationMonths: 120, reboundStart: 0.25, reboundPeak: 0.30 },
+        // U_REBOUND/95 (design 127, fitted under monthly crediting): spent at month 34, then a
+        // MODEST tailwind (0.45): trough at month 30 and back at 80, against a measured 30 and
+        // 81. Modest because the 2003-2007 recovery was real but not violent, and because the
+        // decade's second half belongs to LOST_DECADE_2000.
+        recovery: { profile: 'U_REBOUND', durationMonths: 95, reboundStart: 0.358, reboundPeak: 0.445 },
       },
       {
         // Australia ran a DIFFERENT episode on a DIFFERENT clock, which is the whole reason
@@ -620,9 +636,11 @@ const HISTORICAL_SHOCKS = {
         // say that and a shared level effect cannot either, so AU gets its own leg.
         id: 'equity-au',
         regime: {
-          returnAdjustment: { EQUITY_AU: -0.557 },
+          returnAdjustment: { EQUITY_AU: -0.256 },
         },
-        recovery: { profile: 'U_REBOUND', durationMonths: 48, reboundStart: 0.30, reboundPeak: 0.65 },
+        // Design 127, fitted under monthly crediting: −18.6 %, trough at month 13, back at 26,
+        // against a measured −18.5 %, 13 and 28.
+        recovery: { profile: 'U_REBOUND', durationMonths: 37, reboundStart: 0.393, reboundPeak: 1.376 },
       },
       {
         id: 'markets',
@@ -837,14 +855,15 @@ const HISTORICAL_SHOCKS = {
         id: 'equity',
         regime: {
           returnAdjustment: {
-            EQUITY_US: -0.135, EQUITY_INTL_EX_AU: -0.135,
-            EQUITY_INTL_EX_US: -0.135, EQUITY_AU: -0.135,
+            EQUITY_US: -0.114, EQUITY_INTL_EX_AU: -0.114,
+            EQUITY_INTL_EX_US: -0.114, EQUITY_AU: -0.114,
           },
         },
-        // U_REBOUND/84: the drag holds through the 1894-96 grind, is spent around year 4.5,
-        // and a STRONG tailwind follows — the 1897-1900 recovery took the index from its
-        // trough to +22 % over the 1893 level in four years.
-        recovery: { profile: 'U_REBOUND', durationMonths: 84, reboundStart: 0.65, reboundPeak: 1.45 },
+        // U_REBOUND/100 (design 127, fitted under monthly crediting): the drag holds through
+        // the 1894-96 grind, is spent around month 66, and a STRONG tailwind follows — the
+        // 1897-1900 recovery took the index from its trough to +22 % over the 1893 level in
+        // four years. Trough at month 47 (measured 48); back at 87, against a measured 76.
+        recovery: { profile: 'U_REBOUND', durationMonths: 100, reboundStart: 0.664, reboundPeak: 1.961 },
       },
       {
         id: 'markets',
@@ -958,12 +977,13 @@ const HISTORICAL_SHOCKS = {
       {
         id: 'equity',
         regime: {
-          returnAdjustment: { EQUITY_US: -0.50, EQUITY_INTL_EX_AU: -0.50 },
+          returnAdjustment: { EQUITY_US: -0.497, EQUITY_INTL_EX_AU: -0.497 },
         },
-        // U_REBOUND/108: full strength while the relief leg lives, then it alone drives the
-        // 1876-77 slide, is spent around month 57, and a moderate tailwind (0.5) takes the
-        // book back to its pre-panic level in year seven against a measured 77 months.
-        recovery: { profile: 'U_REBOUND', durationMonths: 108, reboundStart: 0.525, reboundPeak: 0.5 },
+        // U_REBOUND/83 (design 127, fitted under monthly crediting): full strength while the
+        // relief leg lives, then it alone drives the 1876-77 slide, is spent around month 49,
+        // and a strong tailwind (0.8) takes the book back to its pre-panic level at month 74,
+        // against a measured 77. Trough at month 46, as measured.
+        recovery: { profile: 'U_REBOUND', durationMonths: 83, reboundStart: 0.593, reboundPeak: 0.812 },
       },
       {
         // The 1874 relief rally. Positive, and deliberately almost as large as the drag: net

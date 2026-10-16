@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-235 parameters · 33 panels · 12 node types (206 fields) · 180 action types · 91 tools · 323 state field types · 78 topics · 137 design docs
+235 parameters · 33 panels · 12 node types (206 fields) · 180 action types · 92 tools · 323 state field types · 78 topics · 137 design docs
 
 ---
 
@@ -1088,11 +1088,11 @@ Explained in [`help/nodes`](nodes/reducer.md). 0 field(s) described by a record 
 
 ---
 
-## Headless tools (91)
+## Headless tools (92)
 
 Command-line entry points under `scripts/`. **Purpose** is harvested from each script's
 docblock, not re-authored here. Arguments come from each script's declarative
-`parseFlags` spec: 76 of 76 entry points carry one (design 108 D6 — all of them).
+`parseFlags` spec: 77 of 77 entry points carry one (design 108 D6 — all of them).
 6 scripts carry no docblock naming themselves and show `(undocumented)`.
 
 ### scripts/config-converters/
@@ -1433,6 +1433,11 @@ docblock, not re-authored here. Arguments come from each script's declarative
 
 ### scripts/probes/
 
+- **`scripts/probes/fit-shock-presets.mjs`**
+  refit each equity shock preset's drag and recovery curve so the
+    - `--only` (string) — comma-separated preset keys (default: every preset with a target)
+    - `--cadence` (string, default `MONTHLY`) — equityEarningsCadence to fit under
+    - `--seed` (number, default `127`) — seed for the search's random starts
 - **`scripts/probes/measure-shock-history.mjs`**
   derive the empirical numbers behind SHOCK_LIBRARY
     - `--write` (flag) — write the measured figures back into the source file
@@ -1586,6 +1591,7 @@ docblock, not re-authored here. Arguments come from each script's declarative
   the EMERGENT equity path of every shock preset, measured by running
     - `--write` (flag) — write the generated table back into the source file
     - `--start-sensitivity` (flag) — also report sensitivity to the start date
+    - `--cadence` (string, default `MONTHLY`) — equityEarningsCadence the probe runs (design 127): MONTHLY or ANNUAL
 
 ### scripts/scenario/
 

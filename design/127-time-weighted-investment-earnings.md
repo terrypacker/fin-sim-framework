@@ -1,6 +1,6 @@
 # 127 — Time-weighted investment earnings
 
-**Status:** ACCEPTED rev 2 (16 Oct 2026); phase 1 BUILT (16 Oct, §9); phase 2 MEASURED (16 Oct, §10), which adds §4.7–4.8 and Q6–Q7; phase 2b BUILT (16 Oct, §11); phase 2c BUILT (16 Oct, §12). Raised by a study flag: "year-end earnings pay a full
+**Status:** ACCEPTED rev 2 (16 Oct 2026); phase 1 BUILT (16 Oct, §9); phase 2 MEASURED (16 Oct, §10), which adds §4.7–4.8 and Q6–Q7; phase 2b BUILT (16 Oct, §11); phase 2c BUILT (16 Oct, §12); phase 3 BUILT (16 Oct, §13). Raised by a study flag: "year-end earnings pay a full
 year's return on the 31-Dec balance".
 
 - **rev 1 (15 Oct):** the problem, options A–D, proposal A with D as a first step.
@@ -553,3 +553,60 @@ January-to-January years like the annual series. Both are monthly averages.
   under MONTHLY, none only under ANNUAL. Those 3 were surviving on ANNUAL's over-credit.
   Phase 2's open items are closed. Next is phase 3: recalibrate the shock presets under
   MONTHLY, with the shaped months.
+
+## 13. Phase 3 as built (16 Oct 2026): the shock presets, refitted under MONTHLY
+
+- **Tooling.**
+  - `scripts/lib/shock-path.mjs` now holds the probe scenario, the measured targets, the
+    path summary and `asSleeve`, shared by the probe and a new fitter.
+  - `asSleeve` measures a non-US sleeve: it remaps the sleeve's legs onto EQUITY_US and
+    runs at that sleeve's base rate, the same arithmetic on another key.
+  - `shock-path-engine.mjs` gains `--cadence` (default MONTHLY), AU rows, the COVID
+    56-month row, and the start-date table in `CALIBRATION.md`.
+  - `fit-shock-presets.mjs` refits a preset's main equity leg: the scale of its equity
+    adjustments, `durationMonths`, `reboundStart` and `reboundPeak`. It uses 200 random
+    starts, then Nelder–Mead.
+- **What the fit matches.** The weighting follows the library's own statement of its
+  target: depth (0.5 pp) and trough month (1 month) are primary; back-to-peak (4 months)
+  and the 10-year cumulative (4 pp) are secondary. Where nothing measured constrains the
+  decade, a weak prior pulls it toward the baseline. Without that prior, dot-com AU met
+  its three targets with a +897% decade.
+- **AU** is fitted to the OECD AU broad figures where MEASUREMENTS §1 has them, on its full
+  loss with depth primary. Fitting depth alone shrank COVID AU's drag to nothing: its level
+  break already IS the fall, and the rebound shrank with the drag. The international
+  sleeves keep their authored ratio to US. Level breaks are not refitted: each is the
+  measured instantaneous share, a fact about the episode.
+- **Result (US, under MONTHLY):**
+
+  | preset | depth | trough | back to peak |
+  |---|---|---|---|
+  | GFC | −50.8% (−50.8) | 17 (17) | 69 (65), 10-y +65.6% (+66.1) |
+  | stagflation | −43.4 (−43.4) | 23 (23) | 88 (90) |
+  | COVID | −19.8 (−19.1) | 2 (2) | 13 (7), 56-month +68.3% (+68.4) |
+  | 2018 correction | −11.8 (−11.5) | 2 (3) | 10 (7) |
+  | dot-com | −43.7 (−43.7) | 30 (30) | 80 (81) |
+  | 1893 | −32.3 (−32.2) | 47 (48) | 87 (76) |
+  | 1873 | −45.1 (−45.1) | 46 (46) | 74 (77) |
+
+  Measured figures are in brackets. The lost decade is unchanged, because its L-shaped
+  drag already gives −20.3% at ten years under MONTHLY (−20.1 measured). Under the old
+  values in MONTHLY, the GFC fell 64.6% and took 115 months to return.
+- **Start month no longer matters.** Every preset's depth is identical whichever month it
+  starts in (spread 0.0). Under ANNUAL the same crash ranged over 21 points for the GFC
+  and 25 for 1873, depending only on where its curve sat on 31 December.
+- **Not fixed: AU recovers on the US clock.** Within a leg, AU shares the US recovery
+  curve. So the GFC's AU book is back at month 70 against a measured 141, and the
+  stagflation's at 116 against 80. The old calibration had the same limitation. Splitting
+  AU onto its own leg, as dot-com already does, would fix it; that is left as a follow-up.
+- **Found and fixed:** COVID's comment cited "+68.4% at year 5". That figure is the S&P
+  price index from January 2020 to September 2024, the last month on disk, which is 56
+  months. It is now a 56-month target.
+- **Goldens.** The two wash-sale goldens (the only goldens with a shock) now run MONTHLY,
+  the cadence their preset is fitted to. Their crash moved to January 2030: the refitted
+  GFC recovers by month 69, so a 2029 crash had healed before the final year-end and left
+  no §1091 entry pending.
+  - The twin's "exactly one wash filing" became a rule checked on every wash filing. The
+    two books now harvest past each other in 2030 and 2031, and both filings shrink a
+    carryforward rather than assess a balance due.
+  - The batch and index-step action types moved from KNOWN_GAPS to COVERED.
+  - No other golden moved.
