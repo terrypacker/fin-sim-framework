@@ -89,6 +89,36 @@ export const HISTORICAL_AU_SERIES = (() => {
   return Object.freeze({ firstYear, deviations: Object.freeze(returns.map(x => x - mean)), sd });
 })();
 
+/**
+ * Design 127 §4.7, §10.1 — the monthly sd of a monthly-AVERAGE price series as a share of the
+ * month-end sd. Measured on daily NASDAQ closes, 1971–2025 (0.051 vs 0.060). Shiller's and
+ * the OECD's monthly series are both averages, so a replayed year's months are scaled up by
+ * its inverse to stand in for month-end moves, which is where the engine acts.
+ */
+export const MONTHLY_AVERAGE_SD_RATIO = 0.848;
+
+/**
+ * A year's twelve monthly log returns as deviations from that year's mean month (they sum
+ * to zero), from a flat `months` series where entry 12·i + m is month m of series year i.
+ */
+function monthDeviations(months, i) {
+  const ys = months.slice(12 * i, 12 * i + 12);
+  if (ys.length !== 12) return null;
+  const mean = ys.reduce((a, x) => a + x, 0) / 12;
+  return ys.map(x => x - mean);
+}
+
+/**
+ * A Brownian bridge on a year (design 127 §4.7): twelve monthly log-return deviations with
+ * sd `s` each, pinned to sum to zero, so a year's draw keeps its value and its months are
+ * an ordinary random walk.
+ */
+function bridge(rng, s) {
+  const z = Array.from({ length: 12 }, () => gaussianFrom(rng));
+  const mean = z.reduce((a, x) => a + x, 0) / 12;
+  return z.map(x => s * (x - mean));
+}
+
 /** The AU series' index for a calendar year, or -1 when AU has no data for it. */
 function auIndex(year) {
   const i = year - HISTORICAL_AU_SERIES.firstYear;
@@ -163,7 +193,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
   static type        = 'EquityReturnTickHandler';
   static eventType   = 'EQUITY_RETURN_TICK';
 
-  constructor({ vol = 0.18, model = 'WHITE_NOISE', reversionSpeed = 0.3, beta = {}, idioVol = {}, driftComp = 'GEOMETRIC', blockLength = 5, window = 'FULL', auReplay = true, dt = 1, stampMarketShock = false, gold = null } = {}) {
+  constructor({ vol = 0.18, model = 'WHITE_NOISE', reversionSpeed = 0.3, beta = {}, idioVol = {}, driftComp = 'GEOMETRIC', blockLength = 5, window = 'FULL', auReplay = true, dt = 1, stampMarketShock = false, gold = null, monthShape = false } = {}) {
     super(null, 'Equity Return Tick');
     this.vol                  = vol;             // annualized market-factor sd (rate units)
     this.model                = model;           // one of EQUITY_RETURN_MODEL_IDS
@@ -180,6 +210,9 @@ export class EquityReturnTickHandler extends HandlerEntry {
     this.stampMarketShock     = stampMarketShock;
     // Design 121 §6 — gold's own annual draw, `{ vol, correlation }`, or null for none.
     this.gold                 = gold;
+    // Design 127 §4.7 — under MONTHLY equity earnings, also emit the shape of the months
+    // inside the drawn year. Off under ANNUAL, so its runs gain no draw and no state.
+    this.monthShape           = monthShape;
     this.generatedActionTypes = ['EQUITY_RETURN_STEP_APPLY'];
   }
 
@@ -188,7 +221,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
       vol: d.vol, model: d.model, reversionSpeed: d.reversionSpeed,
       beta: d.beta, idioVol: d.idioVol, driftComp: d.driftComp, blockLength: d.blockLength,
       window: d.window, auReplay: d.auReplay, dt: d.dt, stampMarketShock: d.stampMarketShock ?? false,
-      gold: d.gold ?? null,
+      gold: d.gold ?? null, monthShape: d.monthShape ?? false,
     });
     h.id = d.id;
     return h;
@@ -200,7 +233,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
       vol: this.vol, model: this.model, reversionSpeed: this.reversionSpeed,
       beta: this.beta, idioVol: this.idioVol, driftComp: this.driftComp, blockLength: this.blockLength,
       window: this.window, auReplay: this.auReplay, dt: this.dt, stampMarketShock: this.stampMarketShock,
-      gold: this.gold,
+      gold: this.gold, monthShape: this.monthShape,
     };
   }
 
@@ -242,6 +275,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
     // because the per-security drift compensation (§6.2) needs the variance of the
     // sleeve a security loads on, not the market factor's.
     const sleeveVar = {};
+    const sleeveLoad = {};   // design 127 — each sleeve's beta, idio vol and replay scale, for the month shape
     for (const sleeve of EQUITY_SLEEVES) {
       const beta    = this.beta[sleeve]    ?? DEFAULT_EQUITY_BETA[sleeve] ?? 1.0;
       // Design 90 §7.4 — absent ⇒ the sourced default, not 0. An explicit 0 still skips.
@@ -252,6 +286,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
         // No idio draw, because history supplies AU's own part.
         const sleeveSd = Math.sqrt(beta * beta * this.vol * this.vol + idioVol * idioVol);
         dev = HISTORICAL_AU_SERIES.deviations[auIdx] * (sleeveSd / HISTORICAL_AU_SERIES.sd);
+        sleeveLoad[sleeve] = { replayScale: sleeveSd / HISTORICAL_AU_SERIES.sd };
       } else {
         dev = beta * marketDev;
         // Skip the idio draw entirely when its vol is 0 so the RNG cursor is unadvanced
@@ -260,6 +295,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
           const zIdio = gaussianFrom(rng);
           dev += idioVol * Math.sqrt(this.dt) * zIdio;
         }
+        sleeveLoad[sleeve] = { beta, idioVol };
       }
       deviation[sleeve] = dev;
       // Volatility-drag compensation (design 74 §5.3). Adding a mean-0 shock to a
@@ -354,6 +390,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
     }
 
     const out = { type: 'EQUITY_RETURN_STEP_APPLY', marketDev, deviation, driftComp };
+    if (this.monthShape) out.monthShape = this._monthShape({ sim, bootstrap, auIdx, sleeveLoad });
     // Emitted as a PAIR and only when the registry actually carries a non-identity
     // security, so a scenario whose securities are all identities gains no action field
     // and no state key. Once present they are emitted every tick even when empty, so a
@@ -378,6 +415,62 @@ export class EquityReturnTickHandler extends HandlerEntry {
       out.marketShock = { year, z: bootstrapping ? marketDev / this.vol : zMarket };
     }
     return [out];
+  }
+
+  /**
+   * The shape of the months inside the year just drawn (design 127 §4.7): per sleeve (and
+   * GOLD), twelve monthly log-return deviations that sum to zero. The year's draw is not
+   * touched: `computeHoldingsGrowth` multiplies the month's period factor by `exp(shape[m])`,
+   * so the twelve months compound to exactly the year.
+   *
+   *   - The market factor is the bootstrap year's own months (deviations from their mean,
+   *     at the bootstrap's vol rescale, ÷ MONTHLY_AVERAGE_SD_RATIO), or for every other
+   *     process a Brownian bridge at σ/√12.
+   *   - A sleeve takes β × the market's months plus its own idiosyncratic bridge; an AU
+   *     replay year takes the AU market's own months at the replay's scale.
+   *   - Gold: ρ × (σ_gold/σ) × the market's months plus √(1 − ρ²) × its own bridge.
+   *
+   * Every bridge draws from its own keyed stream, never the shared cursor, so turning the
+   * shape on moves no other draw (the gold precedent, design 121 §6). The bootstrap shape
+   * draws nothing: its year is already picked.
+   *
+   * @private
+   */
+  _monthShape({ sim, bootstrap, auIdx, sleeveLoad }) {
+    const year  = (sim.currentDate ?? new Date()).getUTCFullYear();
+    const keyed = label => sim.keyedRng?.(label, year) ?? sim.rng;
+    const zero  = () => Array(12).fill(0);
+    const scale = (xs, k) => xs.map(x => x * k);
+    const add   = (a, b) => a.map((x, i) => x + b[i]);
+
+    let market = zero();
+    if (bootstrap) {
+      const devs = monthDeviations(HISTORICAL_EQUITY_RETURNS.months, bootstrap.index);
+      if (devs) market = scale(devs, (this.vol / this._window().sd) / MONTHLY_AVERAGE_SD_RATIO);
+    } else if (this.model !== 'NONE' && this.vol > 0) {
+      market = bridge(keyed('equity-shape'), this.vol / Math.sqrt(12));
+    }
+
+    const shape = {};
+    for (const sleeve of EQUITY_SLEEVES) {
+      const load = sleeveLoad[sleeve] ?? {};
+      if (load.replayScale != null && auIdx >= 0) {
+        const devs = monthDeviations(HISTORICAL_EQUITY_RETURNS.au.months, auIdx);
+        shape[sleeve] = devs ? scale(devs, load.replayScale / MONTHLY_AVERAGE_SD_RATIO) : zero();
+        continue;
+      }
+      let s = scale(market, load.beta ?? 1);
+      if (load.idioVol > 0) s = add(s, bridge(keyed(`equity-shape:${sleeve}`), load.idioVol / Math.sqrt(12)));
+      shape[sleeve] = s;
+    }
+    if (this.gold?.vol > 0) {
+      const rho = Math.max(-1, Math.min(1, this.gold.correlation ?? 0));
+      const own = bridge(keyed('gold-shape'), this.gold.vol / Math.sqrt(12));
+      shape[RATE_KEYS.GOLD] = this.vol > 0
+        ? add(scale(market, rho * this.gold.vol / this.vol), scale(own, Math.sqrt(1 - rho * rho)))
+        : own;
+    }
+    return shape;
   }
 
   /**

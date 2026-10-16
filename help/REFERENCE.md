@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-235 parameters · 33 panels · 12 node types (206 fields) · 180 action types · 91 tools · 320 state field types · 78 topics · 137 design docs
+235 parameters · 33 panels · 12 node types (206 fields) · 180 action types · 91 tools · 323 state field types · 78 topics · 137 design docs
 
 ---
 
@@ -1774,7 +1774,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `COMPANY_SALE_APPLY` | salePrice: currency(USD), costBasis: currency(USD), residency: text, stateKey: text, destinationKey: text | US_INCOME |
 | `COMPANY_SALE_TAX` | gain: currency(USD), auGain: currency(USD), auIndexedGain: currency(USD), usShortTermGain: currency(USD), usLongTermGain: currency(USD), auShortTermGain: currency(USD), auLongTermGain: currency(USD), residency: text, ownershipType: text, ownerId: text, owners: any, proceeds: currency(USD), costBasis: currency(USD), description: text | US_INCOME |
 | `CORPORATE_ACTION_APPLY` | kind: text, securityId: text, stateKeys: any, residency: text, spec: any | CORPORATE_ACTIONS |
-| `EQUITY_RETURN_STEP_APPLY` | marketDev: number, deviation: any, driftComp: any, bootstrap: any, marketShock: any | ECONOMIC_REGIMES |
+| `EQUITY_RETURN_STEP_APPLY` | marketDev: number, deviation: any, driftComp: any, bootstrap: any, marketShock: any, monthShape: any | ECONOMIC_REGIMES |
 | `EXPENSE_DEBIT` | amount: number, realizedAmount: number, priceLevel: number, spendCategory: text, capitalFraction: number, targetKey: text, section988: any | AU_RETIREMENT, US_RETIREMENT |
 | `EXPENSE_EVENT_APPLY` | amount: number, category: text, currency: text, propertyKey: text, capitalizeAmount: number, personId: text | AU_RETIREMENT, US_RETIREMENT |
 | `FIXED_INCOME_CONTRIBUTION_APPLY` | amount: currency(USD) | US_BROKERAGE |
@@ -1902,7 +1902,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 
 ---
 
-## State field types (320)
+## State field types (323)
 
 The scenario-INDEPENDENT half of `StateSchemaRegistry`: the globs and exact paths it
 installs in its own constructor, with the value type that decides how each formats.
@@ -2079,12 +2079,14 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `equityInflationPassThrough.*` | rate |
 | `equityMarketShock.year` | integer |
 | `equityMarketShock.z` | decimal |
+| `equityMonthShape.*.*` | decimal |
 | `equityReturnBootstrap.index` | integer |
 | `equityReturnBootstrap.remaining` | integer |
 | `equityReturnBootstrap.year` | integer |
 | `equityReturnDev.*` | rate |
 | `equityReturnDriftComp.*` | rate |
 | `equityReturnMarketDev` | rate |
+| `equityReturnMonthShapeNext.*.*` | decimal |
 | `expenseRebaseRates.*` | fxRate |
 | `expenses.discretionary` | currency(USD) |
 | `expenses.essential` | currency(USD) |
@@ -2107,6 +2109,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `hedgeOverlay.cost` | rate |
 | `hedgeOverlay.foreignCashRate` | rate |
 | `hedgeOverlay.fxMark.*` | fxRate |
+| `hedgeOverlay.fxMarkDist.*` | fxRate |
 | `inflationAccumulator` | decimal |
 | `inflationAccumulator.*` | decimal |
 | `inflationDev.*` | rate |

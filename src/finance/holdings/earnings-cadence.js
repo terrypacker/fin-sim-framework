@@ -100,6 +100,24 @@ export function periodRate(annual, n = 1) {
 }
 
 /**
+ * A month's rate with the year's month shape applied (design 127 §4.7): the period rate of
+ * the annual rate times `exp(shape)`, where the year's twelve shapes sum to zero, so the
+ * twelve months still compound to the year. `shape = 0` is `periodRate` exactly.
+ */
+export function shapedPeriodRate(annual, n, shape = 0) {
+  const p = periodRate(annual, n);
+  if (shape === 0 || p <= -1) return p;
+  return (1 + p) * Math.exp(shape) - 1;
+}
+
+/** The sleeve a rate key belongs to: the key itself, or the part before a per-account `::`. */
+export function sleeveOfRateKey(rateKey) {
+  if (rateKey == null) return null;
+  const i = rateKey.indexOf('::');
+  return i < 0 ? rateKey : rateKey.slice(0, i);
+}
+
+/**
  * The price half of a total return when the yield is paid separately, multiplicatively
  * (§3.2): `(1 + total) = (1 + price)(1 + yield)`, so a lot whose dividends are reinvested
  * through the year ends it at exactly `1 + total`. Rounded to 12 places like `priceOf`.

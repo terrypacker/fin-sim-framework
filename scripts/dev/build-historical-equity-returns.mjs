@@ -31,6 +31,12 @@
  *   - The OECD AU share price index also runs January y → January y+1 (monthly averages).
  *   - AU CPI is the OECD year-on-year change at Q4 of year y.
  *
+ * Design 127 §4.7 adds each year's twelve MONTHLY log returns (`months`, flat, entry
+ * 12·i + m is month m of year `firstYear + i`): the shape the months of a replayed year take
+ * under MONTHLY equity earnings. US: real total return. AU: the nominal price index (a
+ * year's months are only ever used as deviations from that year's mean month, so a steady
+ * monthly inflation cancels).
+ *
  * Usage: node scripts/dev/build-historical-equity-returns.mjs
  */
 
@@ -85,6 +91,22 @@ for (let i = 1; i < trYears.length; i++) {
 const firstYear = trYears[0];
 const lastYear  = firstYear + returns.length - 1;
 
+/** The 12 monthly log returns of year y (January y → January y + 1) of a monthly series. */
+function monthsOf(byMonth, y, label) {
+  const lv = [];
+  for (let m = 0; m <= 12; m++) {
+    const k = `${y + Math.floor(m / 12)}-${String(m % 12 + 1).padStart(2, '0')}`;
+    const v = byMonth.get(k);
+    if (!(v > 0)) throw new Error(`${label}: month ${k} missing`);
+    lv.push(v);
+  }
+  return lv.slice(1).map((v, i) => Number(Math.log(v / lv[i]).toFixed(6)));
+}
+const usByMonth = new Map(readCsv(SHILLER).filter(r => r.real_total_return_price !== '')
+  .map(r => [r.observation_date.slice(0, 7), Number(r.real_total_return_price)]));
+const usMonths = [];
+for (let y = firstYear; y <= lastYear; y++) usMonths.push(...monthsOf(usByMonth, y, 'Shiller real TR'));
+
 // ── 2. AU equity real price return, 1958– (design 102 §6) ────────────────────────
 // Nominal price return January to January, deflated by that year's AU CPI. PRICE only:
 // the OECD index carries no dividends. The replay uses deviations from the mean, so a
@@ -93,6 +115,9 @@ const auJan = new Map(readCsv(AU_PRICE)
   .filter(r => r.observation_date.slice(5, 7) === '01')
   .map(r => [Number(r.observation_date.slice(0, 4)), Number(r.SPASTT01AUM661N)]));
 const AU_FIRST = Math.min(...auJan.keys());
+const auByMonth = new Map(readCsv(AU_PRICE).map(r => [r.observation_date.slice(0, 7), Number(r.SPASTT01AUM661N)]));
+const auMonths = [];
+for (let y = AU_FIRST; y <= lastYear; y++) auMonths.push(...monthsOf(auByMonth, y, 'OECD AU share price'));
 const auReturns = [];
 for (let y = AU_FIRST; y <= lastYear; y++) {
   if (!auJan.has(y) || !auJan.has(y + 1)) throw new Error(`AU share price missing for ${y}`);
@@ -118,6 +143,10 @@ writeFileSync(root + EQUITY_OUT, `${LICENSE}
  * index for Australia, January to January, deflated by AU CPI (OECD, Q4 year-on-year).
  * PRICE only — no dividends — and in AUD. Entry i is the year \`au.firstYear + i\`, the
  * same calendar year as the US entry for that year.
+ *
+ * \`months\` (design 127 §4.7): each year's twelve monthly log returns, flat, entry 12·i + m
+ * being month m (0 = January → February) of year \`firstYear + i\`. US real total return;
+ * AU nominal price. Monthly averages, like the annual series.
  */
 export const HISTORICAL_EQUITY_RETURNS = Object.freeze({
   source:    'Shiller S&P 500 real total return, January to January',
@@ -126,12 +155,18 @@ export const HISTORICAL_EQUITY_RETURNS = Object.freeze({
   returns:   Object.freeze([
 ${rows6(returns)},
   ]),
+  months:    Object.freeze([
+${rows6(usMonths)},
+  ]),
   au: Object.freeze({
     source:    'OECD share prices, Australia (SPASTT01AUM661N), January to January, deflated by OECD AU CPI',
     basis:     'real price (no dividends), AUD',
     firstYear: ${AU_FIRST},
     returns:   Object.freeze([
 ${rows6(auReturns, '      ')},
+    ]),
+    months:    Object.freeze([
+${rows6(auMonths, '      ')},
     ]),
   }),
 });

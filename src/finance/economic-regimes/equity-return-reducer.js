@@ -60,7 +60,7 @@ export class EquityReturnReducer extends Reducer {
     // instant the step reducer stored it, so accounts whose earnings events sat either
     // side of the tick on the same date took different years' draws — measured at ±45
     // percentage points on one 31 Dec. Publishing it here puts it on the sleeve's clock.
-    const overlay = resolveSecurityOverlay(state);
+    const overlay = { ...resolveSecurityOverlay(state), ...resolveMonthShape(state) };
     if (!dev) return this.newState(state, overlay);
     // Design 103 §5.2: in joint mode each market's nominal return also carries its
     // country's inflation deviation (the bootstrap's deviation is REAL). Absent otherwise.
@@ -83,6 +83,15 @@ export class EquityReturnReducer extends Reducer {
     }
     return this.newState(state, { effectiveGrowthRates: nextEff, ...overlay });
   }
+}
+
+/**
+ * Design 127 §4.7 — the month shape the growth path reads, published on the same clock as
+ * the deviation it belongs to (design 94 §6.6). Empty when the tick wrote none (ANNUAL).
+ */
+function resolveMonthShape(state) {
+  const next = state.equityReturnMonthShapeNext;
+  return next == null || state.equityMonthShape === next ? {} : { equityMonthShape: next };
 }
 
 /**

@@ -769,7 +769,7 @@ export const ECONOMIC_REGIMES = {
       // `bootstrap` is the HISTORICAL_BOOTSTRAP block cursor (design 102 §4.3); other models omit it.
       // `marketShock` is the next year's standardized market shock (design 120 §5.4), only
       // when an FX path correlates with it.
-      { type: 'EQUITY_RETURN_STEP_APPLY', fields: { marketDev: ValueType.number(), deviation: ValueType.any(), driftComp: ValueType.any(), bootstrap: ValueType.any(), marketShock: ValueType.any() } },
+      { type: 'EQUITY_RETURN_STEP_APPLY', fields: { marketDev: ValueType.number(), deviation: ValueType.any(), driftComp: ValueType.any(), bootstrap: ValueType.any(), marketShock: ValueType.any(), monthShape: ValueType.any() } },
       { type: 'PROPERTY_RETURN_STEP_APPLY', fields: { marketDev: ValueType.number(), deviation: ValueType.any(), driftComp: ValueType.any() } },
       // Design 103 §4.2. `historicalYear` only in joint mode; `passThrough` only when set.
       // Design 104 adds `primeDeviation` / `primeFloor`, only in "follows inflation" prime mode.
@@ -1986,6 +1986,8 @@ export const ECONOMIC_REGIMES = {
             window:         joint ? 'POSTWAR' : 'FULL',
             // Design 102 §6: the AU market replays its own history where the year has data.
             auReplay:       p.equityReturnBootstrapAuReplay ?? true,
+            // Design 127 §4.7 — the months inside each drawn year, under MONTHLY earnings.
+            monthShape:     isMonthlyEarnings(p),
           })]
         : []),
       // Stochastic property return path (design 75 §4) — only when on. `marketVol` matches

@@ -1,6 +1,6 @@
 # 127 — Time-weighted investment earnings
 
-**Status:** ACCEPTED rev 2 (16 Oct 2026); phase 1 BUILT (16 Oct, §9); phase 2 MEASURED (16 Oct, §10), which adds §4.7–4.8 and two open questions (§7 Q6–Q7). Raised by a study flag: "year-end earnings pay a full
+**Status:** ACCEPTED rev 2 (16 Oct 2026); phase 1 BUILT (16 Oct, §9); phase 2 MEASURED (16 Oct, §10), which adds §4.7–4.8 and Q6–Q7; phase 2b BUILT (16 Oct, §11). Raised by a study flag: "year-end earnings pay a full
 year's return on the 31-Dec balance".
 
 - **rev 1 (15 Oct):** the problem, options A–D, proposal A with D as a first step.
@@ -477,3 +477,43 @@ January-to-January years like the annual series. Both are monthly averages.
   history): identical path drawdowns (median 50.1%, p90 76.8%), annual sd within 5%
   (which the model's vol rescale absorbs anyway), and July effects within a few bp. The
   full monthly bootstrap buys nothing measurable over the real months.
+
+## 11. Phase 2b as built (16 Oct 2026): the shape of the months inside a year
+
+- **Data.** `build-historical-equity-returns.mjs` now also writes each year's twelve
+  monthly log returns (`months`, flat, beside `returns`): US Shiller real total return, AU
+  OECD nominal price. The annual series are byte-identical.
+- **The tick** (`EquityReturnTickHandler`, `monthShape: true` under MONTHLY) emits
+  `monthShape`: per sleeve and GOLD, twelve log-return deviations that sum to zero.
+  - The bootstrap uses the drawn year's own months, at the vol rescale and
+    ÷ `MONTHLY_AVERAGE_SD_RATIO` (0.848).
+  - Other processes use a Brownian bridge at σ/√12.
+  - Each sleeve takes β × the market factor's months plus its own idiosyncratic bridge.
+    An AU replay year takes AU's own months.
+  - Gold takes ρ·(σ_gold/σ) × the market's months plus its own bridge.
+  - Every bridge draws from its own keyed stream (`equity-shape`, `equity-shape:<sleeve>`,
+    `gold-shape`), so the year's deviations are identical with the shape on or off.
+  - `NONE` and a zero vol draw a zero shape.
+- **Clock.** `EquityReturnStepReducer` stores the shape as `equityReturnMonthShapeNext`.
+  `EquityReturnReducer` publishes it as `equityMonthShape` at the same fold as the
+  deviation, so a year's months and its return go live together (design 94 §6.6).
+- **Consumers.** `computeHoldingsGrowth` (`monthIndex`, the credited calendar month) and
+  the market index step use `shapedPeriodRate`: the period rate × `exp(shape[month])`.
+  Twelve months compound to exactly the year. A per-account key takes its sleeve's shape.
+- **Not shaped** (period rates, as phase 1):
+  - the MSBS funded benefit, which is one blended balance that nothing trades;
+  - the `INCOME` hedge split's price term, which is second order;
+  - a year with no draw yet (the first year of a run): a deterministic anchor year has
+    nothing to shape.
+- **Measured** on the real plan, terminal real net worth, MONTHLY ÷ ANNUAL − 1, 20 seeds:
+
+  | case | straight line (phase 2) | shaped (2b) | shaped, no drift rebalancing |
+  |---|---|---|---|
+  | deterministic | −6.0% | −6.0% | — |
+  | stochastic equity, bootstrap (the plan's model) | −12.5% | **−6.1%** | −5.5% |
+  | stochastic equity, white noise (bridge) | — | **−6.0%** | −6.2% |
+  | as saved | −11.3% | **−6.3%** | — |
+
+  The stochastic gap is now the deterministic one, with or without rebalancing. The
+  artifact is gone, and what remains is §2's crediting correction.
+- **Tests:** CAD-14 to CAD-17.

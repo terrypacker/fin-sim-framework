@@ -61,6 +61,9 @@ const periodsOf = (data) => data?.periodsPerYear ?? 1;
 /** Design 127 §3.3 — the floor's count, on the apply action only when it was hit. */
 const flooredField = (n) => (n > 0 ? { flooredLots: n } : {});
 
+/** Design 127 §4.7 — the calendar month a monthly credit is for, or null otherwise. */
+const monthOf = (data, date) => (periodsOf(data) === 12 && date != null ? new Date(date).getUTCMonth() : null);
+
 /**
  * Handles INTL_ROTH_EARNINGS events.
  * Computes annual growth as: balance × growthRate, dispatches ROTH_EARNINGS_APPLY.
@@ -95,7 +98,7 @@ export class IntlRothEarningsHandler extends HandlerEntry {
     return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, growthRate: this.growthRate, dividendYield: this.dividendYield };
   }
 
-  call({ data, state }) {
+  call({ data, state, date }) {
     const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
     const { amount, derivedAmount, holdingActions, flooredLots } = computeHoldingsGrowth({
       state, stateKey,
@@ -103,6 +106,7 @@ export class IntlRothEarningsHandler extends HandlerEntry {
       fallbackRateKey: this.rateKey,
       dividendYield:   this.dividendYield,
       periodsPerYear:  periodsOf(data),
+      monthIndex:      monthOf(data, date),
     });
     // A LOSS is applied, not discarded (design 84 G12). Only an exactly-flat year
     // short-circuits. See the file header.
@@ -149,7 +153,7 @@ export class IntlIraEarningsHandler extends HandlerEntry {
     return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, growthRate: this.growthRate, dividendYield: this.dividendYield };
   }
 
-  call({ data, state }) {
+  call({ data, state, date }) {
     const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
     const { amount, derivedAmount, holdingActions, flooredLots } = computeHoldingsGrowth({
       state, stateKey,
@@ -157,6 +161,7 @@ export class IntlIraEarningsHandler extends HandlerEntry {
       fallbackRateKey: this.rateKey,
       dividendYield:   this.dividendYield,
       periodsPerYear:  periodsOf(data),
+      monthIndex:      monthOf(data, date),
     });
     // A LOSS is applied, not discarded (design 84 G12). Only an exactly-flat year
     // short-circuits. See the file header.
@@ -203,7 +208,7 @@ export class IntlK401EarningsHandler extends HandlerEntry {
     return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, growthRate: this.growthRate, dividendYield: this.dividendYield };
   }
 
-  call({ data, state }) {
+  call({ data, state, date }) {
     const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
     const { amount, derivedAmount, holdingActions, flooredLots } = computeHoldingsGrowth({
       state, stateKey,
@@ -211,6 +216,7 @@ export class IntlK401EarningsHandler extends HandlerEntry {
       fallbackRateKey: this.rateKey,
       dividendYield:   this.dividendYield,
       periodsPerYear:  periodsOf(data),
+      monthIndex:      monthOf(data, date),
     });
     // A LOSS is applied, not discarded (design 84 G12). Only an exactly-flat year
     // short-circuits. See the file header.
@@ -272,6 +278,7 @@ export class IntlUsStockEarningsHandler extends HandlerEntry {
       periodsPerYear:  n,
       // Design 127 §4.3 — the month-end that shares a date with the quarter's dividend.
       distributionDue: n !== 1 && isQuarterEnd(date),
+      monthIndex:      monthOf(data, date),
     });
     // A LOSS is applied, not discarded (design 84 G12). Only an exactly-flat year
     // short-circuits. See the file header.
@@ -350,6 +357,7 @@ export class IntlAuStockEarningsHandler extends HandlerEntry {
       periodsPerYear:  n,
       // Design 127 §4.3 — the month-end that shares a date with the quarter's dividend.
       distributionDue: n !== 1 && isQuarterEnd(date),
+      monthIndex:      monthOf(data, date),
     });
     // A LOSS is applied, not discarded (design 84 G12). Only an exactly-flat year
     // short-circuits. See the file header.
@@ -784,6 +792,7 @@ export class SuperEarningsHandler extends HandlerEntry {
       fallbackRate:    this.defaultRate,
       fallbackRateKey: this.rateKey,
       periodsPerYear:  periodsOf(data),
+      monthIndex:      monthOf(data, date),
     };
     const gross = computeHoldingsGrowth(growthArgs);
     // The yield slice of that total, per lot, and the franking credit on its AU part

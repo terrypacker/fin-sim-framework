@@ -12,7 +12,7 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { priceOf }           from '../holdings/holdings-earnings.js';
 import { HandlerEntry }      from '../../simulation-framework/handlers.js';
 import { EventSeries }       from '../../simulation-framework/events/event-series.js';
-import { periodRate, multiplicativePrice } from '../holdings/earnings-cadence.js';
+import { shapedPeriodRate, multiplicativePrice } from '../holdings/earnings-cadence.js';
 
 /**
  * Market and security index levels — design 101 §6 (M1).
@@ -121,24 +121,27 @@ function grow(level, rate, n) {
  * A market with no effective rate keeps its level.
  *
  * Design 127: `periodsPerYear` above 1 makes each of the `n` steps one period, at the
- * period rate of the lots' sub-annual split (see the file header).
+ * period rate of the lots' sub-annual split (see the file header); `monthIndex` applies that
+ * month of the year's shape (§4.7), as the lots do.
  */
-export function stepIndexLevels(state, n, periodsPerYear = 1) {
+export function stepIndexLevels(state, n, periodsPerYear = 1, monthIndex = null) {
   const eff     = state.effectiveGrowthRates ?? {};
   const yields  = state.marketDividendYields ?? {};
   const overlay = state.securityReturnOverlay ?? {};
   const sub     = periodsPerYear !== 1;
-  const priceR  = (total, yld, o = 0) => sub
-    ? periodRate(multiplicativePrice(total, yld) + o, periodsPerYear)
+  const shapes  = sub && periodsPerYear === 12 && monthIndex != null ? state.equityMonthShape ?? null : null;
+  const shapeOf = k => shapes?.[k]?.[monthIndex] ?? 0;
+  const priceR  = (total, yld, o = 0, k = null) => sub
+    ? shapedPeriodRate(multiplicativePrice(total, yld) + o, periodsPerYear, shapeOf(k))
     : priceOf(total, yld) + o;
-  const totalR  = (total, o = 0) => sub ? periodRate(total + o, periodsPerYear) : total + o;
+  const totalR  = (total, o = 0, k = null) => sub ? shapedPeriodRate(total + o, periodsPerYear, shapeOf(k)) : total + o;
 
   const marketIndex = { ...state.marketIndex };
   for (const [k, lv] of Object.entries(state.marketIndex ?? {})) {
     const total = eff[k];
     if (total == null) continue;
     marketIndex[k] = sub
-      ? { price: grow(lv.price, priceR(total, yields[k] ?? 0), n), total: grow(lv.total, totalR(total), n) }
+      ? { price: grow(lv.price, priceR(total, yields[k] ?? 0, 0, k), n), total: grow(lv.total, totalR(total, 0, k), n) }
       : { price: grow(lv.price, priceOf(total, yields[k] ?? 0), n), total: grow(lv.total, total, n) };
   }
 
@@ -150,8 +153,8 @@ export function stepIndexLevels(state, n, periodsPerYear = 1) {
     const o   = overlay[id] ?? 0;
     const yld = sec.dividendYield ?? yields[sec.rateKey] ?? 0;
     securityIndex[id] = {
-      price: grow(lv.price, priceR(total, yld, o), n),
-      total: grow(lv.total, totalR(total, o), n),
+      price: grow(lv.price, priceR(total, yld, o, sec.rateKey), n),
+      total: grow(lv.total, totalR(total, o, sec.rateKey), n),
     };
   }
   return { marketIndex, securityIndex };
@@ -201,7 +204,7 @@ export class MarketIndexReducer extends Reducer {
     // Design 127 — one sub-annual period, then the as-of moves to today.
     if (action?.type === 'MARKET_INDEX_STEP_APPLY') {
       return this.newState(state, {
-        ...stepIndexLevels(state, 1, action.periodsPerYear ?? 12),
+        ...stepIndexLevels(state, 1, action.periodsPerYear ?? 12, new Date(nowMs).getUTCMonth()),
         marketIndexAsOfMs: nowMs,
       });
     }

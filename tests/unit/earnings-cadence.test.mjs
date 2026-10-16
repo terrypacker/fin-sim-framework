@@ -41,6 +41,16 @@
  *        the same value at every quarter-end.
  * CAD-13 Super: the month's income is taxed at the month's rate, so a draw date in April
  *        taxes January to March at 15% and April onward at 0%.
+ *
+ * The shape of the months inside a year (§4.7, phase 2b):
+ * CAD-14 The tick's month shape is drawn off its own keyed streams: the year's deviations
+ *        are identical with it on or off, every sleeve and gold get twelve months summing to
+ *        zero, and the same seed draws the same shape.
+ * CAD-15 A bootstrap year's market shape is that historical year's own months, at the
+ *        bootstrap's rescale and the monthly-average correction.
+ * CAD-16 A lot credited through a shaped year still ends it at exactly 1 + T, and a
+ *        per-account rate key takes its sleeve's shape.
+ * CAD-17 The market index steps through the same shaped months as the lots.
  */
 
 import { test } from 'node:test';
@@ -59,6 +69,10 @@ import {
 } from '../../src/finance/economic-regimes/market-index.js';
 import { intervalFns, startSnapFns } from '../../src/simulation-framework/simulation/simulation-adapter.js';
 import { runGolden, buildGoldenCfg } from '../helpers/golden-harness.js';
+import { EquityReturnTickHandler, MONTHLY_AVERAGE_SD_RATIO, HISTORICAL_BOOTSTRAP_SERIES } from '../../src/finance/economic-regimes/equity-return-tick-handler.js';
+import { HISTORICAL_EQUITY_RETURNS } from '../../src/finance/economic-regimes/historical-equity-returns.js';
+import { EQUITY_SLEEVES } from '../../src/finance/economic-regimes/rate-keys.js';
+import { keyedRng } from '../../src/simulation-framework/simulation.js';
 import { runReducer, assertStateUnchanged } from '../helpers/reducer-postconditions.js';
 import { makeAction } from '../helpers/reducer-fixtures.js';
 import { AuSingleHomeownerScenario } from '../../src/scenarios/au-single-homeowner-scenario.js';
@@ -369,4 +383,72 @@ test('CAD-13: super — each month\'s income at that month\'s tax rate', () => {
   assert.equal(rateOn(at(2026, 4, 30)), 0, 'pension phase from it');
   const [apply] = h.call({ state, data: { periodsPerYear: 12 }, date: at(2026, 3, 31) });
   assert.ok(near(apply.grossAmount, 100_000 * periodRate(Y, 12), 0.01), 'a month of income');
+});
+
+// ── The shape of the months inside a year (§4.7) ────────────────────────────────────
+
+/** A tick `sim` stub: a seeded cursor, the run's keyed streams, and a 31 Dec draw date. */
+const tickSim = (seed = 7) => ({ rng: keyedRng(seed, 'cursor', 0), keyedRng: (l, y) => keyedRng(seed, l, y), currentDate: at(2026, 12, 31) });
+const sum = xs => xs.reduce((a, x) => a + x, 0);
+
+test('CAD-14: the tick\'s month shape — its own streams, zero-sum, reproducible', () => {
+  const opts = { model: 'WHITE_NOISE', vol: 0.18, gold: { vol: 0.15, correlation: 0.2 } };
+  const off = new EquityReturnTickHandler(opts).call({ sim: tickSim(), state: {} })[0];
+  const on  = new EquityReturnTickHandler({ ...opts, monthShape: true }).call({ sim: tickSim(), state: {} })[0];
+  assert.equal(off.monthShape, undefined, 'ANNUAL draws no shape');
+  assert.deepEqual(on.deviation, off.deviation, 'the year\'s draws do not move');
+  for (const k of [...EQUITY_SLEEVES, 'GOLD']) {
+    assert.equal(on.monthShape[k].length, 12, k);
+    assert.ok(Math.abs(sum(on.monthShape[k])) < 1e-12, `${k} sums to zero`);
+    assert.ok(on.monthShape[k].some(x => Math.abs(x) > 1e-3), `${k} is not a straight line`);
+  }
+  const again = new EquityReturnTickHandler({ ...opts, monthShape: true }).call({ sim: tickSim(), state: {} })[0];
+  assert.deepEqual(again.monthShape, on.monthShape);
+  const other = new EquityReturnTickHandler({ ...opts, monthShape: true }).call({ sim: tickSim(8), state: {} })[0];
+  assert.notDeepEqual(other.monthShape, on.monthShape, 'another seed, another shape');
+});
+
+test('CAD-15: a bootstrap year\'s shape is that year\'s real months', () => {
+  const { sd } = HISTORICAL_BOOTSTRAP_SERIES;
+  const h = new EquityReturnTickHandler({ model: 'HISTORICAL_BOOTSTRAP', vol: 0.18, monthShape: true,
+    beta: { EQUITY_US: 1 }, idioVol: { EQUITY_US: 0 }, auReplay: false });
+  const a = h.call({ sim: tickSim(), state: {} })[0];
+  const i = a.bootstrap.index;
+  const ys = HISTORICAL_EQUITY_RETURNS.months.slice(12 * i, 12 * i + 12);
+  const mean = sum(ys) / 12;
+  const k = (0.18 / sd) / MONTHLY_AVERAGE_SD_RATIO;
+  ys.forEach((y, m) => assert.ok(near(a.monthShape.EQUITY_US[m], (y - mean) * k, 1e-12), `month ${m}`));
+});
+
+test('CAD-16: a shaped year compounds to exactly 1 + T', () => {
+  const shape = [0.06, -0.02, 0.03, -0.09, 0.01, 0.04, -0.05, 0.02, 0.0, 0.03, -0.04, 0.01];
+  for (const [rateKey, label] of [['EQUITY_US', 'sleeve key'], ['EQUITY_US::acct', 'per-account key']]) {
+    const s = oneLot(100_000, { rateKey });
+    s.effectiveGrowthRates[rateKey] = T;
+    s.equityMonthShape = { EQUITY_US: shape };
+    const credits = [];
+    for (let m = 0; m < 12; m++) {
+      const g = growth(s, { periodsPerYear: 12, monthIndex: m }).amount;
+      credits.push(g); credit(s, g);
+    }
+    assert.ok(near(mvOf(s), 100_000 * (1 + T), 0.10), `${label}: ${mvOf(s)}`);
+    assert.ok(credits[3] < 0 && credits[0] > credits[1], `${label}: the months move`);
+  }
+});
+
+test('CAD-17: the index steps through the same shaped months', () => {
+  const shape = [0.06, -0.02, 0.03, -0.09, 0.01, 0.04, -0.05, 0.02, 0.0, 0.03, -0.04, 0.01];
+  const base = { baseGrowthRates: { EQUITY_US: T }, effectiveGrowthRates: { EQUITY_US: T },
+                 marketDividendYields: { EQUITY_US: 0 }, securities: {}, equityMonthShape: { EQUITY_US: shape } };
+  let s = { ...base, ...seedIndexLevels(base, ms(2026)) };
+  const lot = oneLot(100, { rateKey: 'EQUITY_US' });
+  lot.marketDividendYields.EQUITY_US = 0;
+  lot.equityMonthShape = { EQUITY_US: shape };
+  const r = new MarketIndexReducer();
+  for (let m = 1; m <= 12; m++) {
+    s = runReducer(r, s, makeAction('MARKET_INDEX_STEP_APPLY', { periodsPerYear: 12 }), new Date(Date.UTC(2026, m, 0)));
+    lot.acct.holdings[0].marketValue += computeHoldingsGrowth({ state: lot, stateKey: 'acct', fallbackRateKey: 'EQUITY_US',
+      periodsPerYear: 12, monthIndex: m - 1 }).amount;
+    assert.ok(near(s.marketIndex.EQUITY_US.total, lot.acct.holdings[0].marketValue, 0.01), `month ${m}`);
+  }
 });

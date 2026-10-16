@@ -18,7 +18,7 @@ import { addValue, isUnitised } from './holding-utils.js';
 import { RATE_KEYS }                from '../economic-regimes/rate-keys.js';
 import { frankingCreditOn }         from '../tax/au/franking.js';
 import { currencyOverlay, incomeHedgeSplit, fxExposureOf } from './currency-overlay.js';
-import { periodRate, multiplicativePrice, DIVIDENDS_PER_YEAR } from './earnings-cadence.js';
+import { periodRate, shapedPeriodRate, sleeveOfRateKey, multiplicativePrice, DIVIDENDS_PER_YEAR } from './earnings-cadence.js';
 
 /**
  * Whether a BOND holding's coupon is EXEMPT from US FEDERAL income tax
@@ -164,6 +164,11 @@ export function priceOf(total, yld) {
  *                                            at −1; a taxable lot's price rate is the
  *                                            multiplicative split `(1 + T)/(1 + y) − 1`; and
  *                                            the currency overlay reads the period's FX move.
+ * @param {number|null} [opts.monthIndex=null] - Design 127 §4.7. Under the monthly cadence,
+ *                                            the calendar month credited (0 = January): the
+ *                                            lot's sleeve takes that month of the year's
+ *                                            shape (`state.equityMonthShape`), so the months
+ *                                            inside a stochastic year move like a market's.
  * @param {boolean} [opts.distributionDue=false] - Design 127 §4.3. Under a sub-annual cadence,
  *                                            true on the firing that coincides with a dividend
  *                                            payment: an `INCOME` hedged lot's price then
@@ -184,8 +189,13 @@ export function computeHoldingsGrowth({
   yieldPaidSeparately = false,
   periodsPerYear = 1,
   distributionDue = false,
+  monthIndex = null,
 }) {
   const sub        = periodsPerYear !== 1;
+  // Design 127 §4.7 — the month's shape, by sleeve; absent (no draw yet, ANNUAL, or a
+  // deterministic run) means the straight line.
+  const shapes     = sub && periodsPerYear === 12 && monthIndex != null ? state?.equityMonthShape ?? null : null;
+  const shapeOf    = rk => shapes?.[sleeveOfRateKey(rk)]?.[monthIndex] ?? 0;
   const account    = state?.[stateKey];
   const holdings   = account?.holdings ?? [];
   const ratesMap   = state?.[rateSource] ?? {};
@@ -241,7 +251,8 @@ export function computeHoldingsGrowth({
     const total0  = requireRate(fbRate, fallbackRateKey);
     if (sub) {
       const annual  = yieldPaidSeparately ? multiplicativePrice(total0, y0) : total0;
-      const amount  = +(balance * periodRate(annual, periodsPerYear) * factor).toFixed(2);
+      const shaped  = isGrowthPath ? shapedPeriodRate(annual, periodsPerYear, shapeOf(fallbackRateKey)) : periodRate(annual, periodsPerYear);
+      const amount  = +(balance * shaped * factor).toFixed(2);
       const derivedAmount = !yieldPaidSeparately && y0
         ? +(balance * periodRate(y0, periodsPerYear) * factor).toFixed(2) : 0;
       return { amount, derivedAmount, holdingActions: [], flooredLots: annual <= -1 ? 1 : 0 };
@@ -347,7 +358,9 @@ export function computeHoldingsGrowth({
     //
     // Design 127 — under a sub-annual cadence the overlay composes on the PERIOD's rate,
     // with the period's FX move (the mark is stamped every period) and the period's carry.
-    const gRate   = sub ? periodRate(schedRate, periodsPerYear) : schedRate;
+    const gRate   = !sub ? schedRate
+      : useCoupon ? periodRate(schedRate, periodsPerYear)
+      : shapedPeriodRate(schedRate, periodsPerYear, shapeOf(inst.rateKey ?? fallbackRateKey));
     const fx      = useCoupon ? null : currencyOverlay({
       state, account, inst, rateKey: inst.rateKey ?? fallbackRateKey, g: gRate, periodsPerYear,
     });
