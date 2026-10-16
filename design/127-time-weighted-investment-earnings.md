@@ -1,6 +1,6 @@
 # 127 — Time-weighted investment earnings
 
-**Status:** ACCEPTED rev 2 (16 Oct 2026); phase 1 BUILT (16 Oct, §9); phase 2 MEASURED (16 Oct, §10), which adds §4.7–4.8 and Q6–Q7; phase 2b BUILT (16 Oct, §11). Raised by a study flag: "year-end earnings pay a full
+**Status:** ACCEPTED rev 2 (16 Oct 2026); phase 1 BUILT (16 Oct, §9); phase 2 MEASURED (16 Oct, §10), which adds §4.7–4.8 and Q6–Q7; phase 2b BUILT (16 Oct, §11); phase 2c BUILT (16 Oct, §12). Raised by a study flag: "year-end earnings pay a full
 year's return on the 31-Dec balance".
 
 - **rev 1 (15 Oct):** the problem, options A–D, proposal A with D as a first step.
@@ -387,8 +387,9 @@ emergent path inside each year.
    indistinguishable from the drawn year's real months on everything that drives a
    decision. So the measured answer is HIST for the bootstrap and BRIDGE for the other
    processes, with the annual machinery unchanged.
-7. **The cost (§4.8).** Proposed: batch the lot deltas (phase 2c) rather than fall back
-   to quarterly crediting, which would bring back a third of the timing error.
+7. **The cost (§4.8).** Decided 16 Oct 2026: batch the lot deltas (phase 2c) rather than
+   fall back to quarterly crediting, which would bring back a third of the timing error.
+   Built (§12): MONTHLY runs at 1.4–1.5× ANNUAL, down from 2.35×.
 
 ## 8. Test plan (phase 1: `tests/unit/earnings-cadence.test.mjs`, CAD-1 to CAD-13)
 
@@ -517,3 +518,38 @@ January-to-January years like the annual series. Both are monthly averages.
   The stochastic gap is now the deterministic one, with or without rebalancing. The
   artifact is gone, and what remains is §2's crediting correction.
 - **Tests:** CAD-14 to CAD-17.
+
+## 12. Phase 2c as built (16 Oct 2026): batched lot deltas
+
+- **`HOLDING_TRANSACT_BATCH`** `{ stateKey, legs: [{ holdingId, marketValueDelta,
+  costBasisDelta, valueKind?, cpiIndexRatioFactor? }] }`. `HoldingTransactReducer` reduces
+  it: every leg goes through `_transactLeg`, the same arithmetic a `HOLDING_TRANSACT` uses
+  (zero floors, `valueKind`, index ratio), in order, then one `_syncBalance`. Each leg
+  touches only its own lot, and the balance is a function of the final holdings. So the
+  account comes out identical to the legs as separate actions.
+- **Only under a sub-annual cadence** (`batchHoldingActions(actions, periodsPerYear)`).
+  An exported plan carries its compiled graph, and the serializer restores each reducer's
+  `reducedActionTypes` from the JSON. So a plan saved before the batch would not reduce
+  one: its holdings would stop moving while its balance kept growing. Its earnings events
+  are annual, though, and annual events stay unbatched. Every monthly graph is compiled by
+  code that knows the batch. ANNUAL is untouched, journal included.
+- **Emitters:** the six growth handlers (Roth, IRA, 401(k), US stock, AU stock, super). A
+  single lot's action stays a `HOLDING_TRANSACT`.
+- **Measured** on the real plan, telemetry off, median of three runs:
+
+  | | ANNUAL | MONTHLY before | MONTHLY after |
+  |---|---|---|---|
+  | deterministic | 794 ms | 1,837 ms | 1,124 ms (1.42×) |
+  | as saved | 856 ms | 2,100 ms | 1,267 ms (1.48×) |
+
+  Final state, hashed whole: identical before and after in all four runs. What is left of
+  the extra cost is the monthly apply and `RECORD_BALANCE` actions, one per account per
+  month. Those feed the balance history, and coarsening them would cost chart detail.
+- **Tests:** CAD-18 (a batch equals its legs, including two legs on one lot, an unknown lot
+  and the zero floor) and CAD-19 (handlers batch under MONTHLY only).
+- **Monte Carlo after 2b + 2c** (the same plan, 400 paths, paired): MONTHLY against ANNUAL
+  costs 1.46× the wall time (2.33× before). The median paired gap is −6.4%, the
+  deterministic size (−12.2% before). Failures go from 4.5% to 5.3%: 3 worlds fail only
+  under MONTHLY, none only under ANNUAL. Those 3 were surviving on ANNUAL's over-credit.
+  Phase 2's open items are closed. Next is phase 3: recalibrate the shock presets under
+  MONTHLY, with the shaped months.
