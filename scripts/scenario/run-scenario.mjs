@@ -154,12 +154,14 @@ function summarize(state, currentDate) {
   };
   const accounts = {};
   const assets = {};
+  // Design 126 §3.4: a random shock is ONE draw from this run's seed, so the run says which.
+  const arrivals = state.shockArrivals ?? {};
   for (const [k, v] of Object.entries(state)) {
     if (!v || typeof v !== 'object') continue;
     if (typeof v.balance === 'number') accounts[k] = v.balance;
     else if (typeof v.value === 'number' && (v.kind === 'real-property' || v.kind === 'collectible')) assets[k] = v.value;
   }
-  return { summary: row, accounts, assets };
+  return { summary: row, accounts, assets, arrivals };
 }
 
 // ─── Formatting ───────────────────────────────────────────────────────────────
@@ -202,6 +204,16 @@ function printReport(scenarios, { params, real }) {
   printTable('Run summary', labels, SUMMARY_ROWS.map(([key, label]) => ({
     label, values: scenarios.map(s => s.result.summary[key]),
   })));
+
+  const arrivalKeys = unionKeys(scenarios.map(s => s.result.arrivals));
+  if (arrivalKeys.length) {
+    printTable('Random shock arrivals (drawn from the run\'s seed; one draw, not a typical one)',
+      labels, arrivalKeys.map(k => ({
+        label: k,
+        values: scenarios.map(s => !(k in s.result.arrivals) ? ''
+          : (s.result.arrivals[k] ?? 'did not arrive')),
+      })));
+  }
 
   const acctKeys = unionKeys(scenarios.map(s => s.result.accounts));
   if (acctKeys.length) {

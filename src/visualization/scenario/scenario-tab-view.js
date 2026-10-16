@@ -1136,7 +1136,10 @@ export class ScenarioTabView {
  *
  * Each entry in `param.value` (an array) is rendered as a row with:
  *   - a preset <select> populated from `param.options`
- *   - a date <input type="date"> for startDate
+ *   - a "when" <select>: on a date, or a random arrival in a window (design 126 §3)
+ *   - on a date: a date <input type="date"> for startDate
+ *   - random: from / to (years from the run's start) and the chance it happens at all,
+ *     written to `arrival: { mode: 'WINDOW', fromYears, toYears, probability }`
  *   - a remove button
  *
  * An "Add Shock" button appends a blank entry `{ preset: 'none', startDate: '' }`.
@@ -1173,16 +1176,61 @@ function _buildShockListEditor(param) {
       presetSel.addEventListener('change', () => { shock.preset = presetSel.value; });
       row.appendChild(presetSel);
 
-      // Start date
-      const dateInput = document.createElement('input');
-      dateInput.type = 'date';
-      dateInput.className = 'shock-date-input';
-      const rawDate = shock.startDate;
-      dateInput.value = rawDate
-        ? (rawDate instanceof Date ? rawDate.toISOString() : String(rawDate)).slice(0, 10)
-        : '';
-      dateInput.addEventListener('change', () => { shock.startDate = dateInput.value; });
-      row.appendChild(dateInput);
+      // When: an authored date, or a random arrival (design 126 §3). Switching keeps the other
+      // mode's fields off the entry, so a saved row says exactly one thing about its timing.
+      const random = shock.arrival?.mode === 'WINDOW';
+      const whenSel = document.createElement('select');
+      whenSel.className = 'shock-when-select';
+      for (const [value, label] of [['FIXED', 'On a date'], ['WINDOW', 'Random, in a window']]) {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = label;
+        whenSel.appendChild(opt);
+      }
+      whenSel.value = random ? 'WINDOW' : 'FIXED';
+      whenSel.addEventListener('change', () => {
+        if (whenSel.value === 'WINDOW') {
+          delete shock.startDate;
+          shock.arrival = { mode: 'WINDOW', fromYears: 0, toYears: 15, probability: 1 };
+        } else {
+          delete shock.arrival;
+          shock.startDate = '';
+        }
+        render();
+      });
+      row.appendChild(whenSel);
+
+      if (random) {
+        const num = (field, label, step, min, max) => {
+          const input = document.createElement('input');
+          input.type = 'number';
+          input.step = step;
+          input.min = min;
+          if (max != null) input.max = max;
+          input.className = `shock-arrival-${field}`;
+          input.title = label;
+          input.placeholder = label;
+          input.value = shock.arrival[field] ?? '';
+          input.addEventListener('change', () => {
+            const v = Number(input.value);
+            if (input.value !== '' && Number.isFinite(v)) shock.arrival[field] = v;
+          });
+          return input;
+        };
+        row.appendChild(num('fromYears', 'From (years after the start)', '1', '0'));
+        row.appendChild(num('toYears', 'To (years after the start)', '1', '0'));
+        row.appendChild(num('probability', 'Chance it happens at all (0–1)', '0.05', '0', '1'));
+      } else {
+        const dateInput = document.createElement('input');
+        dateInput.type = 'date';
+        dateInput.className = 'shock-date-input';
+        const rawDate = shock.startDate;
+        dateInput.value = rawDate
+          ? (rawDate instanceof Date ? rawDate.toISOString() : String(rawDate)).slice(0, 10)
+          : '';
+        dateInput.addEventListener('change', () => { shock.startDate = dateInput.value; });
+        row.appendChild(dateInput);
+      }
 
       // Remove button
       const rmBtn = document.createElement('button');

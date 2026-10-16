@@ -63,6 +63,7 @@ import { IntlRetirementMcConfig } from '../../src/finance/monte-carlo/intl-retir
 import { scenarioParamValues }    from '../../src/finance/param-schema-utils.js';
 import { DISTRIBUTION_TYPES }     from '../../src/simulation-framework/distributions.js';
 import { mixSeriesFromRuns }      from '../../src/finance/allocation-reporting/mix-distribution.js';
+import { shockArrivalKeys, isRandomArrival } from '../../src/finance/economic-shocks/shock-arrival.js';
 import { quietAsync, quiet } from './run.mjs';
 import { numericParams } from './variant.mjs';
 
@@ -85,6 +86,17 @@ export function mergeArmLevers(baseLevers = {}, armLevers = {}) {
     levers.params = { ...(baseLevers.params ?? {}), ...(armLevers.params ?? {}) };
   }
   return levers;
+}
+
+/**
+ * `shocks[0]`'s date on one run: the drawn arrival when it has one (design 126 §3.5), else the
+ * authored `startDate`.
+ */
+function firstShockDate(r) {
+  const first = r.params?.shocks?.[0];
+  if (!first) return null;
+  if (isRandomArrival(first)) return r.shockArrivals?.[shockArrivalKeys(r.params.shocks)[0]] ?? null;
+  return first.startDate ? new Date(first.startDate).toISOString().slice(0, 10) : null;
 }
 
 /** The configured shock array, in the shape `runner.run()` needs (TRAP 2). */
@@ -120,25 +132,64 @@ export function recentreOnScenario(mcConfig, cfg, shocks) {
 }
 
 /**
+ * `shocks[0]` turned into a random arrival (design 126 §3.7): once, uniformly over the window,
+ * which defaults to the whole run. Replaces the old `shocks[0].startDate` MC variable, whose
+ * window was a fixed 2028–2035 and which drew from the parameter sampler.
+ *
+ * @param {Array<object>} shocks
+ * @param {object} cfg  for the run's dates
+ * @param {?{fromYears:number, toYears:number}} [window]
+ * @returns {Array<object>} a new array; the cfg's own is untouched
+ */
+export function withRandomFirstShock(shocks, cfg, window = null) {
+  if (!shocks?.[0]) {
+    throw new Error('--shock needs a shocks[0] in the plan or arm: there is no shock to make random');
+  }
+  const months = (d) => d.getUTCFullYear() * 12 + d.getUTCMonth();
+  const runYears = (months(new Date(cfg.simEnd)) - months(new Date(cfg.simStart))) / 12;
+  const { fromYears = 0, toYears = runYears } = window ?? {};
+  const { startDate: _authored, ...rest } = shocks[0];
+  return [{ ...rest, arrival: { mode: 'WINDOW', fromYears, toYears, probability: 1 } }, ...shocks.slice(1)];
+}
+
+/**
+ * Parse `--shock-window <from>-<to>` (years from the run's start).
+ *
+ * @param {?string} text
+ * @returns {?{fromYears:number, toYears:number}}
+ */
+export function parseShockWindow(text) {
+  if (text == null) return null;
+  const m = String(text).match(/^\s*(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*$/);
+  if (!m) throw new Error(`--shock-window must be <from>-<to> in years, e.g. 0-15; got "${text}"`);
+  return { fromYears: Number(m[1]), toYears: Number(m[2]) };
+}
+
+/** Whether any shock in the list draws its date (design 126). */
+export function hasRandomArrival(shocks) {
+  return (shocks ?? []).some(isRandomArrival);
+}
+
+/**
  * Build an MC config for an arm.
  *
  * @param {object}  cfg
  * @param {object}  [opts]
- * @param {boolean} [opts.shock]     enable the manufactured single crash (severity + date)
+ * @param {boolean} [opts.shock]     enable the manufactured single crash: severity sampled, and
+ *                                   `shocks[0]` arriving at a random month (design 126 §3.7)
+ * @param {?object} [opts.shockWindow] `{ fromYears, toYears }` for that arrival; default the run
  * @param {object}  [opts.overrides] extra `applyOverride` calls, `{paramKey: override}`
  * @param {boolean} [opts.recentre]  default true — verify centers match the scenario
  *                                   (TRAP 1). The returned `recentred` list is now a
  *                                   list of centers that DON'T match; normally empty.
  */
-export function buildMcConfig(cfg, { shock = false, overrides = {}, recentre = true } = {}) {
-  const shocks = extractShocks(cfg);
+export function buildMcConfig(cfg, { shock = false, shockWindow = null, overrides = {}, recentre = true } = {}) {
+  const authored = extractShocks(cfg);
+  const shocks = shock ? withRandomFirstShock(authored, cfg, shockWindow) : authored;
   const mcConfig = new IntlRetirementMcConfig();
 
-  // Both ship enabled:false; a sequence-risk probe needs them on.
-  if (shock) {
-    mcConfig.applyOverride('shocks[0].severity',  { enabled: true });
-    mcConfig.applyOverride('shocks[0].startDate', { enabled: true });
-  }
+  // Severity ships enabled:false; a sequence-risk probe needs it on. The date is the arrival.
+  if (shock) mcConfig.applyOverride('shocks[0].severity', { enabled: true });
   for (const [k, v] of Object.entries(overrides)) mcConfig.applyOverride(k, v);
 
   const recentred = recentre ? recentreOnScenario(mcConfig, cfg, shocks) : [];
@@ -252,7 +303,10 @@ export async function runArm({ cfg, n, mcConfig, shocks, mix = false, spending =
     inflation:  r.params?.inflationRate           ?? null,
     auInflation: r.params?.auInflationRate        ?? null,
     bondYield:  r.params?.fixedIncomeInterestRate ?? null,
-    shockDate: r.params?.shocks?.[0]?.startDate ? String(r.params.shocks[0].startDate).slice(0, 10) : null,
+    // `shocks[0]`'s date AS RUN. A random arrival (design 126) is not in the params: the run
+    // stamps it, and null there means the shock did not arrive on this path.
+    shockDate: firstShockDate(r),
+    shockArrivals: r.shockArrivals ?? null,
     shockSev:  r.params?.shocks?.[0]?.severity ?? null,
     // realized path shape (populated only when stochastic paths are on)
     netWorthCagr: r.pathShape?.netWorthCagr ?? null,

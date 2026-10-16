@@ -232,8 +232,16 @@ export const DEFAULT_MC_VARIABLE_CONFIGS = [
   // UNSET row (`sweepUnset`). `fromVariableConfigs` maps a saved legacy key.
 ];
 
+/** A saved shock-date sweep row, retired by design 126 §3.7 (the legacy flat key included). */
+const RETIRED_SHOCK_DATE_KEY = /^(shockStartDate|shocks\[\d+\]\.startDate)$/;
+
 /**
  * Build one set of MC variables per configured shock.
+ *
+ * Severity only. The `shocks[i].startDate` UNIFORM_DATE row is gone (design 126 §3.7): its
+ * window was a fixed 2028–2035 whatever the plan's dates, and it drew from the parameter
+ * sampler, so enabling it in one arm shifted every other variable that arm sampled. A shock
+ * whose date should vary says so itself, with an `arrival` spec drawn on its own keyed stream.
  *
  * For preset-form entries ({ preset, startDate }), severity is read from the
  * library template so the distribution has a meaningful default center even
@@ -260,16 +268,6 @@ function buildShockMcConfigs(params) {
         // that mean IS the effective value — not an unanchored default worth flagging
         // (see CENTER_SOURCES). Without a preset, 0.4 is arbitrary and stays flagged.
         effectiveDefault: (entry.severity ?? libraryShock.severity) != null,
-      },
-      {
-        paramKey: `shocks[${i}].startDate`,
-        label:    `${label}: start date`,
-        type:     DISTRIBUTION_TYPES.UNIFORM_DATE,
-        min:      '2028-01-01',
-        max:      '2035-01-01',
-        group:    'Economic Shocks',
-        enabled:  false,
-        synthetic: true,
       },
     ];
   });
@@ -533,9 +531,10 @@ export class IntlRetirementMcConfig {
    * Create an IntlRetirementMcConfig with user states loaded from a flat
    * variableConfigs array (as produced by McConfigPanel).
    *
-   * Rewrites legacy flat shock keys to nested paths:
+   * Rewrites the legacy flat shock key to its nested path:
    *   shockSeverity  → shocks[0].severity
-   *   shockStartDate → shocks[0].startDate
+   * A saved shock-DATE row (`shockStartDate`, `shocks[i].startDate`) is retired (design 126
+   * §3.7) and skipped, with a warning when it was enabled.
    *
    * And a legacy scenario-default alias to the toolset key the compiler reads (the MC
    * variable was a silent no-op under the old key), so a saved MC config keeps the
@@ -558,11 +557,17 @@ export class IntlRetirementMcConfig {
   static fromVariableConfigs(variableConfigs) {
     const ALIASES = {
       shockSeverity:        'shocks[0].severity',
-      shockStartDate:       'shocks[0].startDate',
       usInflationRate:      'inflationRate',
     };
     const config = new IntlRetirementMcConfig();
     for (const saved of variableConfigs) {
+      // Design 126 §3.7: a saved shock-date row no longer has a variable to land on. Dropping it
+      // silently would run the arm with every shock on its authored date, so an enabled one says so.
+      if (saved?.enabled && RETIRED_SHOCK_DATE_KEY.test(saved.paramKey ?? '')) {
+        console.warn(`[IntlRetirementMcConfig] "${saved.paramKey}" is no longer an MC variable `
+          + '(design 126): give the shock an arrival window instead. Its shock runs on its authored date.');
+        continue;
+      }
       // Design 117: a saved sale-YEAR row (generated or legacy flat key) becomes its
       // sale-DATE row, distribution converted so the saved sweep keeps its shape.
       const v   = migrateMcVariableConfig(saved);

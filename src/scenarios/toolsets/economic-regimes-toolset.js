@@ -47,6 +47,7 @@ import { FxStepApplyReducer }             from '../../finance/fx/fx-step-apply-r
 import { HedgeYearEndHandler, HedgeYearEndReducer, buildHedgeYearEndSeries } from '../../finance/fx/hedge-year-end.js';
 import { DEFAULT_HEDGE_FOREIGN_CASH_RATE, DEFAULT_HEDGE_COST } from '../../finance/holdings/currency-overlay.js';
 import { SHOCK_LIBRARY, SHOCK_PRESET_OPTIONS } from '../../finance/economic-shocks/shock-library.js';
+import { drawShockArrivals, applyShockArrivals } from '../../finance/economic-shocks/shock-arrival.js';
 import { BEHAVIORAL_STRATEGY_REGISTRY }       from '../../finance/behavioral/behavioral-strategy-registry.js';
 
 /**
@@ -612,6 +613,23 @@ function _fxProcess(context) {
 }
 
 /**
+ * The plan's random shock arrivals (design 126 §3), drawn once per compile and shared by
+ * `state()` and `schedules()` so the stamped dates are the scheduled ones. Null when no entry
+ * draws.
+ *
+ * @param {object} context — compile context
+ * @returns {?Object<string, ?string>}
+ */
+function _shockArrivals(context) {
+  if (context._shockArrivals === undefined) {
+    context._shockArrivals = drawShockArrivals(context.parameters?.shocks, {
+      seed: context.rngSeed, startDate: context.startDate, endDate: context.endDate,
+    });
+  }
+  return context._shockArrivals;
+}
+
+/**
  * Whether any lot can carry a currency overlay (design 120 §5.1): an authored security
  * declares a hedge ratio. Until one does, the plan gets no `hedgeOverlay` state and no mark
  * event, and every lot grows exactly as before.
@@ -841,7 +859,7 @@ export const ECONOMIC_REGIMES = {
         opt:          false,
         options:      SHOCK_PRESET_OPTIONS,
         defaultValue: [],
-        description:  'List of financial shocks to apply. Each entry can reference a library preset or define a custom shock.',
+        description:  'List of financial shocks to apply. Each entry can reference a library preset or define a custom shock, and either lands on its start date or arrives at random: "Random, in a window" gives the years after the run starts that it may arrive in and the chance it happens at all. A random shock arrives once, on the first of a month, drawn from the run\'s seed: the same seed always draws the same month, a Monte Carlo path keeps its month in every arm of a comparison, and a month past the end of the run means it did not arrive.',
       },
       {
         // Design 104: EITHER the schedule OR the inflation link, never both. The default is
@@ -1670,6 +1688,9 @@ export const ECONOMIC_REGIMES = {
       ...(_fxProcess(context)?.statePatches ?? {}),
       ...(_hedgeOverlayActive(context) || _goldFxActive(context)
         ? { hedgeOverlay: _hedgeOverlayState(context) } : {}),
+      // Design 126 §3.5 — the drawn arrival dates, for the run's readers (MC rows, the run
+      // summary). Absent unless some entry draws, so a plan without one is byte-identical.
+      ...(_shockArrivals(context) ? { shockArrivals: _shockArrivals(context) } : {}),
     };
   },
 
@@ -1679,7 +1700,8 @@ export const ECONOMIC_REGIMES = {
     const shocks    = p.shocks ?? [];
     const strats    = p.behavioralStrategies ?? [];
 
-    for (const entry of shocks) {
+    // Design 126 §3 — a random-arrival entry is scheduled on its drawn date, or not at all.
+    for (const entry of applyShockArrivals(shocks, _shockArrivals(context))) {
       const shock = resolveShockEntry(entry);
       if (!shock) continue;
       scheduleShock(shock, events, context.endDate, !entry.preset);

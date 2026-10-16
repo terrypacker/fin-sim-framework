@@ -283,7 +283,7 @@ scenario's own schema), which is where to go to change it.
 - **`rngStreams`** — Paired RNG Streams · `Boolean` · default `false` · via ECONOMIC_REGIMES
   Draw each stochastic process from its OWN year-keyed stream instead of one shared cursor, so that two scenarios differing in policy experience the SAME realised path. Off (the default) every process draws from `sim.rng` in whatever order the event queue runs them, which is fine for one run and misleading for a comparison: measured on a paycheck-vs-no-paycheck pair, both arms drew the identical 1,862 values in the identical order and still diverged, because the same value landed on a different DATE in each — a z that is 2035's equity shock in one arm is 2036's in the other. On, a draw is a pure function of (seed, process, year), so nothing another process does can shift it and the difference between two arms is causal. Turning it on CHANGES the path a given seed produces, so it is a property of a STUDY, not a better setting: switch it on for every arm of a comparison, or none.
 - **`shocks`** — Economic Shocks · `ShockList` · default `` · one of `[object Object]`, `[object Object]`, `[object Object]`, `[object Object]`, `[object Object]`, `[object Object]`, `[object Object]`, `[object Object]`, `[object Object]`, `[object Object]`, `[object Object]`, `[object Object]`, `[object Object]`, `[object Object]` · via ECONOMIC_REGIMES
-  List of financial shocks to apply. Each entry can reference a library preset or define a custom shock.
+  List of financial shocks to apply. Each entry can reference a library preset or define a custom shock, and either lands on its start date or arrives at random: "Random, in a window" gives the years after the run starts that it may arrive in and the chance it happens at all. A random shock arrives once, on the first of a month, drawn from the run's seed: the same seed always draws the same month, a Monte Carlo path keeps its month in every arm of a comparison, and a month past the end of the run means it did not arrive.
 - **`usYieldCurveShape`** — US Yield Curve Shape · `YieldCurveShape` · default — · via ECONOMIC_REGIMES
   Optional US term-structure overlay (design 67): an array of { tenor, spread } anchor points added to the FIXED_INCOME_US level, linearly interpolated and clamped to the endpoints. The 5-year point is the level anchor (spread 0). Absent/empty ⇒ a flat curve (every tenor = the level), identical to a single fixed-income rate.
 - **`yieldCurveReversionSpeed`** — Yield Curve Mean-Reversion Speed · `Number` · default `0.3` · via ECONOMIC_REGIMES
@@ -1403,7 +1403,8 @@ docblock, not re-authored here. Arguments come from each script's declarative
     - `--vol` (number, default `0.18`) — equity return vol when --paths
     - `--drift` (string, default `GEOMETRIC`, one of GEOMETRIC|NONE) — return anchor reading
     - `--property-paths` (flag) — stochastic property appreciation path
-    - `--shock` (flag) — manufactured single crash (severity + date)
+    - `--shock` (flag) — manufactured single crash: shocks[0]'s severity sampled, date drawn over the run
+    - `--shock-window` (string) — with --shock: arrival window in years from the start, e.g. 0-15
     - `--no-recentre` (flag) — skip the check that MC centers match the scenario
     - `--mix` (flag) — also record the per-year asset mix
     - `--spending` (flag) — also record classified spending — forces FULL telemetry, ~7.5x
@@ -2260,7 +2261,7 @@ what the in-app panel keys on.
 | [DG Results](panels/dg-results.md) | panel | 162 | 1 panel · design 30 |
 | [Drawdown Order](concepts/drawdown-order.md) | concept | 316 | 2 panels · 22 params · design 44, 65, 97 |
 | [Early Withdrawal](concepts/early-withdrawal.md) | concept | 228 | 1 panel · 8 params |
-| [Economic Shocks](concepts/economic-shocks.md) | concept | 367 | 2 panels · 3 params |
+| [Economic Shocks](concepts/economic-shocks.md) | concept | 363 | 2 panels · 3 params |
 | [Editing Liquidity Pools](workflows/editing-liquidity-pools.md) | workflow | 570 | 1 panel · 3 params · design 114, 110, 109, 123 |
 | [Event](nodes/event.md) | node | 220 | 2 panels · design 2 |
 | [Event Sourcing](concepts/event-sourcing.md) | concept | 381 | 3 panels · design 2, 16, 91 |

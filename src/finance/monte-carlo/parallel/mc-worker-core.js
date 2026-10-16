@@ -306,6 +306,9 @@ export function buildIterationRunner(ctx) {
       // The rates the terminal figures above were measured at (design 79 §9): a real
       // display restates THIS path's terminal wealth by THIS path's inflation and FX.
       terminalRates:     realRatesOf(sim.state),
+      // Design 126 §3.5 — each random shock's drawn arrival on this path (null = it did not
+      // arrive); absent when no shock draws.
+      shockArrivals:     sim.state.shockArrivals ?? null,
       // Lifetime stochastic house-repair spend (design 75 §6.4 C), native property currency
       // summed across properties. Already accumulated in state by HouseRepairApplyReducer.
       lifetimeRepairSpend: sim.state.houseRepairSpendingTotal ?? 0,

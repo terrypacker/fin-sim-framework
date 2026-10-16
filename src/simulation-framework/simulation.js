@@ -55,6 +55,36 @@ function _heuristicPickPayload(action) {
  * Thrown (not as a real error) when the simulation hits a breakpoint.
  * Caught inside stepTo() — never surfaces to user code.
  */
+/**
+ * The (seed, label, year) substream as a pure function, for a draw made where no live
+ * `Simulation` cursor exists yet — design 126 §3.3: a shock's random arrival is drawn at
+ * compile. `Simulation.keyedRng` delegates here, so the two can never disagree.
+ *
+ * @param {number} seed   the run's ORIGINAL seed (`sim.rngSeed`), not the moving cursor
+ * @param {string} label  the drawing process
+ * @param {number} year   the calendar year the draw belongs to
+ * @returns {() => number} a uniform [0,1) generator
+ */
+export function keyedRng(seed, label, year) {
+  // FNV-1a over the three inputs: cheap, stable across platforms, and — unlike seed+year
+  // arithmetic — it does not put adjacent years on adjacent states, which for this
+  // generator would make consecutive years visibly correlated.
+  let h = 0x811c9dc5;
+  for (const ch of `${seed}|${label}|${year}`) {
+    h ^= ch.charCodeAt(0);
+    h = Math.imul(h, 0x01000193);
+  }
+  let st = h | 0;
+  return () => {
+    let s = Math.trunc(st);
+    s = Math.trunc(s + 0x6D2B79F5);
+    let t = Math.imul(s ^ s >>> 15, 1 | s);
+    t ^= t + Math.imul(t ^ t >>> 7, 61 | t);
+    st = s;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
 export class BreakpointSignal extends Error {
   constructor(context) {
     super('Simulation paused at breakpoint');
@@ -560,23 +590,7 @@ export class Simulation {
    * @returns {() => number} a uniform [0,1) generator
    */
   keyedRng(label, year) {
-    // FNV-1a over the three inputs: cheap, stable across platforms, and — unlike seed+year
-    // arithmetic — it does not put adjacent years on adjacent states, which for this
-    // generator would make consecutive years visibly correlated.
-    let h = 0x811c9dc5;
-    for (const ch of `${this.rngSeed}|${label}|${year}`) {
-      h ^= ch.charCodeAt(0);
-      h = Math.imul(h, 0x01000193);
-    }
-    let st = h | 0;
-    return () => {
-      let s = Math.trunc(st);
-      s = Math.trunc(s + 0x6D2B79F5);
-      let t = Math.imul(s ^ s >>> 15, 1 | s);
-      t ^= t + Math.imul(t ^ t >>> 7, 61 | t);
-      st = s;
-      return ((t ^ t >>> 14) >>> 0) / 4294967296;
-    };
+    return keyedRng(this.rngSeed, label, year);
   }
 
   createRNG(seed) {
