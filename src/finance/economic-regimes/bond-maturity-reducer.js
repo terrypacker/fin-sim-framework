@@ -305,6 +305,12 @@ function redeem(h, inst, asOfMs, effectiveRates, yieldCurve = {}, spot = null, s
       // behavior for a bond that never carried a basis at all.
       costBasis:    h.costBasis ?? par,
       couponRate:   newCoupon,           // lock in the current yield at re-issue (G1)
+      // Design 128 — a LADDER rung re-issues as a bond of the roll tenor, so its issue
+      // duration is that tenor, as `materializeLadder` stamps a fresh rung's. Carrying the
+      // old one left a 1-year rung rolled into a 5-year bond marking (`min(duration, ttm)`)
+      // as a 1-year bond for life, and kept two rolled lots that are now the same bond from
+      // ever compacting. A lone bond keeps its authored duration.
+      ...(h.rollTermYears != null ? { duration: +rollTenorYears.toFixed(2) } : {}),
       purchaseDate: new Date(matMs),     // the roll date is the new acquisition date
       maturityDate: new Date(matMs + termMs),
       // Roll into a fresh plain (cash-coupon) par bond — a LONE accreting instrument is

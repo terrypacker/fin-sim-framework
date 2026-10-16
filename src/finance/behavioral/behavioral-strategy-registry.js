@@ -21,7 +21,7 @@ import { CashBucketDrawdownReducer }           from './cash-bucket-drawdown-redu
 import { RebalanceToTargetReducer, TAX_ADVANTAGED_ROLES, TAXABLE_ROLES, ALLOCATION_SCHEDULE, ALLOCATION_LOCATION, countryForRole, assertAuthoredMixes } from './rebalance-to-target-reducer.js';
 import { RebalanceToTargetApplyReducer, REBALANCE_LOT_STRATEGIES } from './rebalance-to-target-apply-reducer.js';
 import { normalizeClassRestrictions, collectClassRestrictionProblems, RESTRICTABLE_CLASSES } from './allocation-location.js';
-import { BondLadderReducer }                   from './bond-ladder-reducer.js';
+import { BondLadderReducer, DEFAULT_MIN_SLOT_BUY } from './bond-ladder-reducer.js';
 import { tipsExpectationSpec, TIPS_EXPECTED_INFLATION_MODES } from '../economic-regimes/yield-curve.js';
 import { ACCOUNT_ROLES }                       from '../state/account-roles.js';
 import { PoolFlowReducer }                     from '../pools/pool-flow-reducer.js';
@@ -488,6 +488,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
         tipsCouponMode:  p.bondLadderTipsCouponMode ?? 'AUTO',
         // Design 125 — the toolset hands BondMaturityReducer the same spec for the roll.
         inflationExpectation: tipsExpectationSpec(p),
+        minSlotBuy:      p.bondLadderMinSlotBuy ?? DEFAULT_MIN_SLOT_BUY,
       }));
     },
     paramSchema: () => [
@@ -582,6 +583,17 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
         defaultValue: true,
         description: 'ON (default) = each maturing rung rolls into a fresh rung at the ladder tail, so the ' +
           'ladder self-perpetuates (accumulation). OFF = maturing rungs fall to cash (spend-down).',
+        visibleWhen: { param: 'behavioralStrategies', includes: 'BOND_LADDER' },
+      },
+      {
+        key: 'bondLadderMinSlotBuy', label: 'Bond Ladder — Minimum Buy per Rung',
+        type: 'Number', group: 'Allocation', mc: false, opt: false,
+        min: 0, max: 100000, step: 100, defaultValue: DEFAULT_MIN_SLOT_BUY,
+        description: 'New money joining the ladder (a rebalance bond buy, or reinvested coupons and ' +
+          'deposits picked up at the next ladder pass) is spread equally across the ladder\'s next ' +
+          'maturities, one new lot per rung (design 128). When the share per rung would be below this ' +
+          'amount, in the account\'s currency, the whole amount buys the longest rung instead, so small ' +
+          'sums do not open a lot on every rung. 0 always spreads.',
         visibleWhen: { param: 'behavioralStrategies', includes: 'BOND_LADDER' },
       },
       {

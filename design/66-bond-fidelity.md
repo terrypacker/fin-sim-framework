@@ -4,8 +4,9 @@
 (zero-coupon/OID) IMPLEMENTED** (2026-07-16); **G8 (bond ladders) Phases A/B/C
 IMPLEMENTED** (2026-07-17) — see §10: Phase A (rollTermYears roll-to-tail + editor
 builder), Phase B ladder-aware drawdown (`drawdownLotStrategy: 'LADDER'`, §10.9), and
-Phase C (ladder-length optimizer + MPC lever via `BondLadderReducer`, §10.6). Only the
-G8 buy-side inflow-aware tail extension (§10.5) + barbells + G9/G10 remain proposed; G7
+Phase C (ladder-length optimizer + MPC lever via `BondLadderReducer`, §10.6). The G8
+buy side (§10.5) is BUILT as design 128 (2026-10-16: `bondLadderIntent`, rebalance buys
+spread over the ladder's maturity grid). Barbells + G9/G10 remain proposed; G7
 out of scope (rate-risk only, open-question #5). Scope:
 catalog the gaps between how bonds behave in the real world and what the simulation
 models today, and lay out a phased plan to make `BOND` holdings a realistic,
@@ -482,6 +483,11 @@ change beyond §10.3**. A **barbell** (§G8 "barbells") is the same builder with
 `skipMiddle` option (emit only the shortest + longest rungs) — cheap follow-on.
 
 ### 10.5 Phase B (optional, larger) — allocation-lever integration
+
+> **BUILT as design 128 (2026-10-16).** The intent is `account.bondLadderIntent`; a
+> rebalance BOND buy buys the ladder's instrument spread EQUALLY over its next N maturity
+> dates rather than seeding the tail (a lump in the tail stays a lump through every roll).
+> See `design/128-ladder-aware-bond-buys.md`.
 
 Phase A ladders are correct and self-maintaining, but the design-61 allocation lever
 does not *know* they are ladders:

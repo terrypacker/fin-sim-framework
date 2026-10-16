@@ -9,6 +9,7 @@
  */
 
 import { Reducer, PRIORITY }    from '../../simulation-framework/reducers.js';
+import { buyIntoLadder }        from './bond-ladder-reducer.js';
 import { ALLOCATION }           from '../holdings/allocation.js';
 import { consumeHoldings }      from '../holdings/holdings-fifo.js';
 import { LOT_STRATEGIES }       from '../holdings/holdings-selection.js';
@@ -320,6 +321,15 @@ export class RebalanceToTargetApplyReducer extends Reducer {
       }
       if (delta <= 0.01) continue;
       const buyAmt   = +delta.toFixed(2);
+      // Design 128 §3.2 — a bond buy into a laddered account buys the LADDER: its instrument
+      // (TIPS or nominal), spread over its next maturity slots, today. As a fund lot it sat
+      // nominal until the next ladder pass and was then absorbed as one lump rung.
+      if (allocation === ALLOCATION.BOND && account.bondLadderIntent) {
+        holdings = buyIntoLadder(holdings, buyAmt, account.bondLadderIntent, {
+          state, stateKey, purchaseMs, priceLevel: auLevel,
+        });
+        continue;
+      }
       const matching = holdings.filter(h => h.allocation === allocation);
       // CASH realizes no capital gain and so has no holding period worth splitting a
       // lot for (design 87 §11) — merge it and keep the sleeve one lot.

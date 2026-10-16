@@ -575,6 +575,16 @@ export class StateSchemaRegistry {
     this.registerPattern('*.targetBand',            ParameterValueType.percentage());
     this.registerPattern('*.targetComposition.*',   ParameterValueType.percentage());
     this.registerPattern('*._bondLadderRungs',      ParameterValueType.integer());
+    // Design 128 — the ladder's intent, read by the rebalance buy leg.
+    this.registerPattern('*.bondLadderIntent.rungs',        ParameterValueType.integer());
+    this.registerPattern('*.bondLadderIntent.spacingYears', ParameterValueType.decimal(2));
+    this.registerPattern('*.bondLadderIntent.anchorMs',     ParameterValueType.date());
+    this.registerPattern('*.bondLadderIntent.couponRate',   ParameterValueType.rate());
+    this.registerPattern('*.bondLadderIntent.minSlotBuy',   ParameterValueType.currency());
+    // The design 125 inflation-process config the ladder's TIPS yield reads (rates, speeds,
+    // shares and correlations: plain fractions, some keyed by country).
+    this.registerPattern('*.bondLadderIntent.inflationExpectation.process.*',   ParameterValueType.decimal(4));
+    this.registerPattern('*.bondLadderIntent.inflationExpectation.process.*.*', ParameterValueType.decimal(4));
     this.registerPattern('*.fxBasisRate',           ParameterValueType.fxRate());
     this.registerPattern('*.fxBasisUsd',            ParameterValueType.currency('USD'));
     this.registerPattern('*.bookingFxRate',         ParameterValueType.fxRate());

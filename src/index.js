@@ -66,7 +66,7 @@ import { RealProperty } from './finance/assets/real-property.js';
 import { DEFAULT_LOCATION_POLICY, GOLD_PREFERENCE_BY_RESIDENCY, resolveLocationPolicy, planLocatedTargets } from './finance/behavioral/allocation-location.js';
 import { BehavioralPanicSellApplyReducer } from './finance/behavioral/behavioral-panic-sell-apply-reducer.js';
 import { BEHAVIORAL_STRATEGY_REGISTRY } from './finance/behavioral/behavioral-strategy-registry.js';
-import { BondLadderReducer, materializeLadder, ladderCarryover, absorbAsTailRung, _compactLadderLots } from './finance/behavioral/bond-ladder-reducer.js';
+import { BondLadderReducer, materializeLadder, ladderCarryover, absorbIntoLadder, buyIntoLadder, ladderSlots, ladderSlotYield, _compactLadderLots } from './finance/behavioral/bond-ladder-reducer.js';
 import { CashBucketDrawdownReducer } from './finance/behavioral/cash-bucket-drawdown-reducer.js';
 import { ContributionSuspensionToggleReducer } from './finance/behavioral/contribution-suspension-toggle-reducer.js';
 import { DownturnRothConversionReducer } from './finance/behavioral/downturn-roth-conversion-reducer.js';
@@ -952,7 +952,10 @@ export const Finance = {
   BondLadderReducer,
   materializeLadder,
   ladderCarryover,
-  absorbAsTailRung,
+  absorbIntoLadder,
+  buyIntoLadder,
+  ladderSlots,
+  ladderSlotYield,
   _compactLadderLots,
   CashBucketDrawdownReducer,
   ContributionSuspensionToggleReducer,

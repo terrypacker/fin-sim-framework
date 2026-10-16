@@ -334,80 +334,77 @@ test('LADDER-E2E: selecting BOND_LADDER materializes the brokerage bonds into a 
 
 // ─── Absorbing un-laddered fund sleeves (§10.5, crude form) ────────────────────
 
-describe('BondLadderReducer — absorbs new bond FUND sleeves as a tail rung', () => {
-  // Drawdown eats an account's rungs; the design-61 rebalancer's next bond buy into an
-  // account holding no bonds spawns a PERPETUAL FUND sleeve (`_newSleeve`), and nothing
-  // converted one back into a dated rung. Over a long horizon the "ladder" became a
-  // minority of the account's bonds. Absorbing keeps every bond dollar in a dated rung
-  // WITHOUT resetting the maturity spacing that a full rebuild would destroy.
+describe('BondLadderReducer — absorbs new bond FUND sleeves onto the ladder slots (design 128 §3.3)', () => {
+  // Reinvested coupons, deposits and pool-flow purchases still reach a laddered account as
+  // undated PERPETUAL FUND lots. Absorbing keeps every bond dollar in a dated rung WITHOUT
+  // resetting the maturity spacing that a full rebuild would destroy.
   //
-  // design 93 §5.0a — the absorbed money opens its OWN rung at the ladder tail rather
-  // than being folded into the standing ones. A purchase is a lot: blending made the new
-  // dollars inherit an acquisition date they were never bought on, and it forced a choice
-  // about what par the blend carries that has no good answer. The standing rungs are now
-  // untouched, which is the property the assertions below check.
+  // design 93 §5.0a — the absorbed money opens lots of its OWN rather than being folded into
+  // the standing rungs. Design 128 — those lots are spread equally over the ladder's next N
+  // grid dates (one lump in the tail stayed a lump through every roll), and a sum whose
+  // per-slot share is below `minSlotBuy` goes to the longest slot alone.
   const laddered = (asOfY = 2030, rungs = 4) => {
     const acct = stockAccount([bondSleeve(100_000, 'seed')]);
     const next = new BondLadderReducer({ stateKey: 'acct', targetRungs: rungs, spacingYears: 1 })
       .reduce(stateWith(acct, { asOfY }), { type: 'US_PERIOD_ADVANCE' });
     return next.acct;
   };
+  const absorb = (a, asOfY = 2031) => new BondLadderReducer({ stateKey: 'acct', targetRungs: 4, spacingYears: 1 })
+    .reduce(stateWith(a, { asOfY }), { type: 'US_PERIOD_ADVANCE' }).acct;
 
-  test('a fund sleeve becomes a new tail rung, conserving value and basis', () => {
+  test('a fund sleeve is spread over the next N grid dates, conserving value and basis', () => {
     const before = laddered();
     const rungsBefore = before.holdings.filter(h => h.allocation === ALLOCATION.BOND);
     const maturitiesBefore = rungsBefore.map(h => new Date(h.maturityDate).getTime()).sort();
 
-    // A rebalance buy lands as an undated fund sleeve carrying a basis below its value.
     const withFund = { ...before, holdings: [...before.holdings, { id: 'fund', allocation: ALLOCATION.BOND, marketValue: 40_000, costBasis: 30_000 }] };
-    const after = new BondLadderReducer({ stateKey: 'acct', targetRungs: 4, spacingYears: 1 })
-      .reduce(stateWith(withFund, { asOfY: 2031 }), { type: 'US_PERIOD_ADVANCE' }).acct;
+    const after = absorb(withFund);
 
     const bonds = after.holdings.filter(h => h.allocation === ALLOCATION.BOND);
-    assert.equal(bonds.length, 5, 'four standing rungs plus the tail rung the money bought');
+    assert.equal(bonds.length, 8, 'four standing rungs plus one new lot per slot');
     assert.ok(bonds.every(h => h.maturityDate != null), 'no undated bond survives');
     assert.equal(+bonds.reduce((s, h) => s + h.marketValue, 0).toFixed(2), 140_000, 'market value conserved');
     assert.equal(+bonds.reduce((s, h) => s + h.costBasis,   0).toFixed(2), 130_000, 'cost basis conserved — NOT re-based at market');
-    assert.equal(+bonds.reduce((s, h) => s + h.faceValue,   0).toFixed(2), 140_000, 'the new rung is issued at par for the cash it holds');
+    assert.equal(+bonds.reduce((s, h) => s + h.faceValue,   0).toFixed(2), 140_000, 'the new lots are issued at par');
 
-    // The standing rungs are BYTE-identical. Nothing about them — value, par, basis,
-    // acquisition date — may move, because nothing happened to them.
+    // The standing rungs are BYTE-identical: nothing happened to them.
     for (const b of rungsBefore) {
       assert.deepEqual(bonds.find(h => h.id === b.id), b, `standing rung ${b.id} untouched`);
     }
-    const tail = bonds.find(h => !rungsBefore.some(b => b.id === h.id));
-    assert.equal(tail.marketValue, 40_000);
-    assert.equal(tail.faceValue,   40_000, 'issued at par today');
-    assert.equal(tail.costBasis,   30_000, 'carries the absorbed lot\'s basis — no step-up without a disposal');
-    assert.ok(!maturitiesBefore.includes(new Date(tail.maturityDate).getTime()),
-      'the tail rung matures at the ladder tail, beyond every standing rung');
-    assert.deepEqual(
-      bonds.filter(h => h.id !== tail.id).map(h => new Date(h.maturityDate).getTime()).sort(),
-      maturitiesBefore,
-      'maturity spacing untouched — this is an absorption, not a rebuild');
+    const added = bonds.filter(h => !rungsBefore.some(b => b.id === h.id));
+    assert.ok(added.every(h => h.marketValue === 10_000 && h.costBasis === 7_500), 'equal shares, basis face-weighted');
+    // On the grid: the first rung matures six hours after the 2031 advance (365.25-day
+    // years), so the next four grid dates are exactly the four standing maturities — the
+    // same milliseconds, so each new lot rolls with its rung.
+    const mats = added.map(h => new Date(h.maturityDate).getTime()).sort();
+    assert.deepEqual(mats, maturitiesBefore, 'lands on the standing rungs\' own maturity dates');
   });
 
-  test('a second absorption in the same year merges into the same vintage lot', () => {
-    // Bounded lot growth: one added rung per tail-maturity YEAR, the same convention
-    // `mergeCouponReinvestLots` uses. Same instrument, same maturity, same year — no
-    // holding-period test can distinguish the halves, so merging is not the blend §5.0a
-    // forbids.
-    const before   = laddered();
-    const addFund  = (a, mv) => ({ ...a, holdings: [...a.holdings, { id: `f${mv}`, allocation: ALLOCATION.BOND, marketValue: mv, costBasis: mv }] });
-    const run = (a) => new BondLadderReducer({ stateKey: 'acct', targetRungs: 4, spacingYears: 1 })
-      .reduce(stateWith(a, { asOfY: 2031 }), { type: 'US_PERIOD_ADVANCE' }).acct;
+  test('a sum below the per-slot floor goes to the longest slot alone', () => {
+    const before = laddered();
+    const tail = (a) => a.holdings.filter(h => h.allocation === ALLOCATION.BOND);
+    const after = absorb({ ...before, holdings: [...before.holdings, { id: 'cpn', allocation: ALLOCATION.BOND, marketValue: 3_000, costBasis: 3_000 }] });
+    const added = tail(after).filter(h => !tail(before).some(b => b.id === h.id));
+    assert.equal(added.length, 1, '$750 a slot is below the $1,000 floor');
+    assert.equal(added[0].marketValue, 3_000);
+    assert.equal(new Date(added[0].maturityDate).getTime(), Math.max(...tail(before).map(h => new Date(h.maturityDate).getTime())),
+      'the longest slot');
+  });
 
-    const once  = run(addFund(before, 20_000));
-    const twice = run(addFund(once,   20_000));
+  test('a second absorption opens its own lots — no back-dating merge', () => {
+    const before  = laddered();
+    const addFund = (a, mv, ms) => ({ ...a, holdings: [...a.holdings, { id: `f${mv}`, allocation: ALLOCATION.BOND, marketValue: mv, costBasis: mv, purchaseDate: new Date(ms) }] });
+    const once  = absorb(addFund(before, 20_000, ms(2030, 6, 1)));
+    const twice = absorb(addFund(once,   20_000, ms(2030, 11, 1)));
     const bonds = twice.holdings.filter(h => h.allocation === ALLOCATION.BOND);
-    assert.equal(bonds.length, 5, 'still one tail rung, not two');
     assert.equal(+bonds.reduce((s, h) => s + h.marketValue, 0).toFixed(2), 140_000);
+    const dates = new Set(bonds.filter(h => h.id.includes('-absorb-')).map(h => new Date(h.purchaseDate).getTime()));
+    assert.deepEqual([...dates].sort(), [ms(2030, 6, 1), ms(2030, 11, 1)], 'each absorption keeps its own vintage');
   });
 
   test('no fund sleeve ⇒ still a no-op (the roll self-maintains the ladder)', () => {
     const before = laddered();
-    const after = new BondLadderReducer({ stateKey: 'acct', targetRungs: 4, spacingYears: 1 })
-      .reduce(stateWith(before, { asOfY: 2031 }), { type: 'US_PERIOD_ADVANCE' }).acct;
+    const after = absorb(before);
     assert.equal(after, before, 'unchanged state object — no churn');
   });
 });
@@ -522,7 +519,10 @@ describe('BondLadderReducer — absorption cannot touch a TIPS rung\'s deflation
     const bonds = new BondLadderReducer({ stateKey: 'acct', targetRungs: 2, spacingYears: 1 })
       .reduce(stateWith(acct, { asOfY: 2031 }), { type: 'US_PERIOD_ADVANCE' })
       .acct.holdings.filter(x => x.allocation === ALLOCATION.BOND);
-    return { rung: bonds.find(x => x.id === 'r1'), tail: bonds.find(x => x.id !== 'r1'), bonds };
+    // The cash buys lots of its own (design 128 splits it over the slots); sum them.
+    const added = bonds.filter(x => x.id !== 'r1');
+    const tail  = { marketValue: added.reduce((t, x) => t + x.marketValue, 0), faceValue: added.reduce((t, x) => t + x.faceValue, 0) };
+    return { rung: bonds.find(x => x.id === 'r1'), tail, bonds };
   };
 
   test('a TIPS rung is left exactly as it was; the cash buys its own rung at par', () => {

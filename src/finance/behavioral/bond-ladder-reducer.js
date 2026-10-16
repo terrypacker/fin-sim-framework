@@ -13,7 +13,7 @@ import { ALLOCATION }         from '../holdings/allocation.js';
 import { _syncBalance }       from '../holdings/holding-reducers.js';
 import { resolveRateKey }     from '../holdings/default-allocations.js';
 import { resolveYield, tipsRealYield } from '../economic-regimes/yield-curve.js';
-import { unitiseBond, addValue, instrumentOf } from '../holdings/holding-utils.js';
+import { unitiseBond, instrumentOf } from '../holdings/holding-utils.js';
 import { compactLots, LOT_POLICIES } from '../holdings/holding-utils.js';
 
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
@@ -70,11 +70,13 @@ export class BondLadderReducer extends Reducer {
    * @param {{ mode: string, process: object }|null} [opts.inflationExpectation=null] - TIPS only:
    *   how the market real yield reads expected inflation (design 125, `tipsExpectationSpec`);
    *   null is design 121's trailing rule.
+   * @param {number} [opts.minSlotBuy=1000] - design 128: a buy whose per-slot share is below this
+   *   goes to the longest slot alone rather than opening N tiny lots (`bondLadderMinSlotBuy`).
    */
   constructor({ stateKey, country = 'US', targetRungs = 5, spacingYears = 1,
                 roll = true, taxExemption = 'state',
                 inflationLinked = false, couponRate = null, tipsCouponMode = 'AUTO',
-                inflationExpectation = null } = {}) {
+                inflationExpectation = null, minSlotBuy = DEFAULT_MIN_SLOT_BUY } = {}) {
     super('Bond Ladder', PRIORITY.PRE_PROCESS + 5); // after maturity (+3) and rebalance detect (+4)
     this.reducedActionTypes = ['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE'];
     this.stateKey     = stateKey;
@@ -87,6 +89,7 @@ export class BondLadderReducer extends Reducer {
     this.couponRate      = couponRate;
     this.tipsCouponMode  = tipsCouponMode;
     this.inflationExpectation = inflationExpectation; // design 125; null = trailing (design 121)
+    this.minSlotBuy      = minSlotBuy;
   }
 
   /**
@@ -95,9 +98,31 @@ export class BondLadderReducer extends Reducer {
    * CPI-indexed principal paid for inflation twice.
    */
   _marketYield(state, rateKey, tenorYears) {
-    return this.inflationLinked === true
-      ? tipsRealYield(state, { rateKey, tenorYears, expectation: this.inflationExpectation })
-      : resolveYield(state, { rateKey, tenorYears });
+    return ladderMarketYield(state, {
+      rateKey, inflationLinked: this.inflationLinked, inflationExpectation: this.inflationExpectation,
+    }, tenorYears);
+  }
+
+  /**
+   * The ladder's shape as an intent other reducers can read (design 128 §3.1) — what a
+   * rebalance needs to buy MORE of this ladder rather than a bond fund. Not a copy of the
+   * rungs: `anchorMs` fixes the maturity grid (`anchorMs + m × spacing`), so the slots exist
+   * even when drawdown has consumed every standing rung.
+   */
+  _intent(N, rateKey, anchorMs) {
+    return {
+      rungs:          N,
+      spacingYears:   this.spacingYears > 0 ? this.spacingYears : 1,
+      anchorMs,
+      roll:           this.roll !== false,
+      taxExemption:   this.taxExemption ?? 'state',
+      inflationLinked: this.inflationLinked === true,
+      tipsCouponMode: this._tipsMode(),
+      couponRate:     this.couponRate ?? null,
+      rateKey,
+      inflationExpectation: this.inflationExpectation ?? null,
+      minSlotBuy:     this.minSlotBuy ?? DEFAULT_MIN_SLOT_BUY,
+    };
   }
 
   /** The roll rule stamped on every TIPS rung, resolved from AUTO; null for a nominal ladder. */
@@ -128,42 +153,41 @@ export class BondLadderReducer extends Reducer {
     if (!account || !Array.isArray(account.holdings)) return this.newState(state);
 
     const N = Math.max(2, Math.min(30, Math.round(this._targetRungsOf(state) ?? 5)));
+    const rateKey = resolveRateKey(this.country === 'AU' ? 'AU' : 'US', ALLOCATION.BOND, null);
 
     const bondHoldings = account.holdings.filter(h => h?.allocation === ALLOCATION.BOND);
     const bondValue    = +bondHoldings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
-    if (bondValue <= 0.01) return this.newState(state); // nothing to ladder ⇒ inert
+    // Nothing to ladder ⇒ inert, but the intent is still stamped (design 128 §3.1), so the
+    // first bond buy into this account is routed into the ladder's instrument. With no anchor
+    // yet, that buy dates its grid from itself; the next pass re-materializes it anyway.
+    if (bondValue <= 0.01) {
+      return this._withIntent(state, account, this._intent(N, rateKey, account.bondLadderIntent?.anchorMs ?? null));
+    }
 
     // Already laddered at this length ⇒ let the Phase-A roll self-maintain the spacing.
     // This makes the reducer fire the (re)materialization exactly once at bootstrap and
     // once per lever change, not every period (no journal churn, no basis reset drift).
     //
-    // The one thing the roll CANNOT self-maintain is new money. When design 61 rebalances
-    // INTO bonds it grows the existing sleeves pro rata, but drawdown consumes rungs, and
-    // an account whose rungs have all been spent takes its next bond buy as a fresh
-    // PERPETUAL FUND sleeve (`_newSleeve`). Left alone those funds accumulate until the
-    // "ladder" is a minority of the account's bonds — measured at 100% of the taxable
-    // brokerage's $1.29M by year 20. Absorbing them into the standing rungs is the crude
-    // form of design 66 §10.5's buy-side tail routing: it keeps every bond dollar inside a
-    // dated rung without resetting the maturity spacing a full rebuild would destroy.
+    // The one thing the roll CANNOT self-maintain is new money. A rebalance buy now buys the
+    // ladder directly (`buyIntoLadder`, design 128), but reinvested coupons, deposits and
+    // pool-flow purchases still arrive as undated PERPETUAL FUND lots. Left alone those
+    // accumulate until the "ladder" is a minority of the account's bonds — measured at 100%
+    // of the taxable brokerage's $1.29M by year 20. Absorbing them onto the ladder's slots
+    // keeps every bond dollar inside a dated rung without resetting the maturity spacing a
+    // full rebuild would destroy.
     // "Dated rung or perpetual fund?" is an INSTRUMENT question (design 94 §5.1).
     const isDated = h => instrumentOf(h, state.securities ?? null)?.maturityDate != null;
     const standingRungs = bondHoldings.filter(h => h && isDated(h));
     if (account._bondLadderRungs === N && standingRungs.length > 0) {
+      // The grid this ladder was built on. A state from before design 128 carries no intent;
+      // any standing rung's maturity is a point on the grid, which is all an anchor is.
+      const intent = this._intent(N, rateKey,
+        account.bondLadderIntent?.anchorMs ?? _maturityMs(instrumentOf(standingRungs[0], state.securities ?? null)) ?? asOfMs);
       const funds = bondHoldings.filter(h => h && !isDated(h));
       const fundValue = +funds.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
-      if (fundValue <= 0.01) return this.newState(state);
-      const spacing = this.spacingYears > 0 ? this.spacingYears : 1;
-      const ladderTermYears = +(N * spacing).toFixed(4);
-      const rateKeyA = resolveRateKey(this.country === 'AU' ? 'AU' : 'US', ALLOCATION.BOND, null);
-      const absorbed = absorbAsTailRung(standingRungs, funds, {
-        asOfMs, ladderTermYears, stateKey: this.stateKey, rateKey: rateKeyA,
-        roll: this.roll !== false,
-        taxExemption: this.taxExemption ?? 'state',
-        inflationLinked: this.inflationLinked === true,
-        tipsCouponMode:  this._tipsMode(),
-        couponRate: this.couponRate
-          ?? this._marketYield(state, rateKeyA, ladderTermYears)
-          ?? null,
+      if (fundValue <= 0.01) return this._withIntent(state, account, intent);
+      const absorbed = absorbIntoLadder(standingRungs, funds, {
+        asOfMs, intent, state, stateKey: this.stateKey,
         levelNow: state.cpiAccumulator?.AU ?? state.inflationAccumulator?.AU ?? 1,
       });
       const others   = account.holdings.filter(h => h?.allocation !== ALLOCATION.BOND);
@@ -171,11 +195,10 @@ export class BondLadderReducer extends Reducer {
         [this.stateKey]: _syncBalance({
           ...account,
           holdings: [...others, ..._compactLadderLots(absorbed, asOfMs)],
+          bondLadderIntent: intent,
         }),
       });
     }
-
-    const rateKey = resolveRateKey(this.country === 'AU' ? 'AU' : 'US', ALLOCATION.BOND, null);
     // The AU CPI level is the indexation base wherever the ladder lives — only AU
     // indexes a cost base, so the level is read from AU regardless of this.country.
     const auLevel = state.cpiAccumulator?.AU ?? state.inflationAccumulator?.AU ?? 1;
@@ -202,9 +225,171 @@ export class BondLadderReducer extends Reducer {
     });
 
     const nonBond     = account.holdings.filter(h => h?.allocation !== ALLOCATION.BOND);
-    const nextAccount = _syncBalance({ ...account, holdings: [...nonBond, ...rungs], _bondLadderRungs: N });
+    const nextAccount = _syncBalance({
+      ...account, holdings: [...nonBond, ...rungs], _bondLadderRungs: N,
+      // A (re)materialization re-anchors the grid: rung k matures at asOf + (k+1)·spacing.
+      bondLadderIntent: this._intent(N, rateKey, asOfMs),
+    });
     return this.newState(state, { [this.stateKey]: nextAccount });
   }
+
+  /** Stamp `intent` on the account, or return state untouched when it is already there. */
+  _withIntent(state, account, intent) {
+    if (JSON.stringify(account.bondLadderIntent ?? null) === JSON.stringify(intent)) return this.newState(state);
+    return this.newState(state, { [this.stateKey]: { ...account, bondLadderIntent: intent } });
+  }
+}
+
+/** Design 128 Q2 default for `bondLadderMinSlotBuy`: a slot share below this goes to the tail. */
+export const DEFAULT_MIN_SLOT_BUY = 1000;
+
+/**
+ * The market yield a ladder rung takes at `tenorYears`: for a TIPS ladder the market REAL
+ * yield (design 121 §8, nominal less expected inflation per design 125), else the nominal
+ * curve. Shared by `BondLadderReducer` and `buyIntoLadder` so there is one rule.
+ */
+export function ladderMarketYield(state, { rateKey, inflationLinked = false, inflationExpectation = null }, tenorYears) {
+  return inflationLinked === true
+    ? tipsRealYield(state, { rateKey, tenorYears, expectation: inflationExpectation })
+    : resolveYield(state, { rateKey, tenorYears });
+}
+
+/**
+ * The coupon a new lot in a ladder slot takes (design 128 §3.1): the ladder's pinned coupon
+ * when it has one, else the market yield at the slot's own tenor. Null when the market has no
+ * rate, which leaves the lot floating exactly as an unpinned rung does.
+ */
+export function ladderSlotYield(state, intent, tenorYears) {
+  if (intent?.couponRate != null) return intent.couponRate;
+  if (intent?.rateKey == null) return null;
+  return ladderMarketYield(state, intent, tenorYears) ?? null;
+}
+
+/**
+ * The ladder's next slots after `asOfMs` (design 128 §3.2): the first `rungs` dates on the grid
+ * `anchorMs + m × spacing`, strictly after `asOfMs`. Written with the same expression
+ * `materializeLadder` uses for rung k (`asOfMs + yearsOut × YEAR_MS`, yearsOut = (k+1)·spacing),
+ * and the roll adds `N·spacing` to a maturity, so a bought lot lands on exactly the millisecond a
+ * rung does and the two become the same bond after a roll. With no anchor the grid starts at
+ * `asOfMs`.
+ *
+ * @returns {Array<{ m: number, maturityMs: number, tenorYears: number }>}
+ */
+export function ladderSlots(intent, asOfMs) {
+  const n       = Math.max(1, Math.round(intent?.rungs ?? 1));
+  const spacing = intent?.spacingYears > 0 ? intent.spacingYears : 1;
+  const anchor  = intent?.anchorMs ?? asOfMs;
+  const at      = (m) => anchor + (m * spacing) * YEAR_MS;
+  let m = Math.floor((asOfMs - anchor) / (spacing * YEAR_MS)) + 1;
+  while (at(m) <= asOfMs) m++;
+  while (at(m - 1) > asOfMs) m--;
+  return Array.from({ length: n }, (_, i) => {
+    const maturityMs = at(m + i);
+    return { m: m + i, maturityMs, tenorYears: (maturityMs - asOfMs) / YEAR_MS };
+  });
+}
+
+/**
+ * Split `amount` over the ladder's slots (design 128 §3.2): equally, the last slot taking the
+ * rounding remainder (`materializeLadder`'s rule); or, when a slot's share would be below the
+ * intent's `minSlotBuy` (§5 Q2), all of it in the longest slot.
+ *
+ * @returns {Array<{ slot: object, face: number }>}
+ */
+function _splitOverSlots(amount, intent, asOfMs) {
+  const slots = ladderSlots(intent, asOfMs);
+  const floor = intent?.minSlotBuy ?? DEFAULT_MIN_SLOT_BUY;
+  if (amount / slots.length < floor) return [{ slot: slots[slots.length - 1], face: amount }];
+  const base = Math.floor((amount / slots.length) * 100) / 100;
+  let allocated = 0;
+  return slots.map((slot, k) => {
+    const face = k === slots.length - 1 ? +(amount - allocated).toFixed(2) : base;
+    allocated = +(allocated + face).toFixed(2);
+    return { slot, face };
+  });
+}
+
+/**
+ * One new lot in a ladder slot, issued at par today (design 93 §5b): the ladder's instrument,
+ * roll rule and tax treatment from the intent, the coupon at the slot's own tenor. The caller
+ * supplies the tax identity — a purchase's own (basis = cash paid) or absorbed money's carried one.
+ */
+function _slotLot({ id, face, slot, intent, state, purchaseMs, costBasis, costBaseByCountry = null,
+                    acquisitionPriceLevel = null, acquisitionDateByCountry = null, label }) {
+  const inflationLinked = intent.inflationLinked === true;
+  const ladderTermYears = +(Math.max(1, Math.round(intent.rungs)) * intent.spacingYears).toFixed(4);
+  const maturity = new Date(slot.maturityMs);
+  // par-reviewed: CONSTRUCTS a lot. As `materializeLadder` — the spread is `unitiseBond`'s
+  // derived fields, issued at par for this exact market value.
+  return {
+    id,
+    allocation:     ALLOCATION.BOND,
+    marketValue:    face,
+    costBasis,
+    costBaseByCountry,
+    purchaseDate:   new Date(purchaseMs),
+    acquisitionPriceLevel,
+    acquisitionDateByCountry,
+    rateKey:        intent.rateKey ?? null,
+    label:          `${label} ${maturity.getUTCFullYear()}`,
+    dividendYield:  null,
+    couponRate:     ladderSlotYield(state, intent, slot.tenorYears),
+    appreciationSchedule: null,
+    duration:       +slot.tenorYears.toFixed(2),
+    taxLossPartner: null,
+    taxExemption:   intent.taxExemption ?? 'state',
+    issuingState:   null,
+    maturityDate:   maturity,
+    faceValue:      face,
+    rollAtMaturity: intent.roll !== false,
+    rollTermYears:  intent.roll !== false ? ladderTermYears : null,
+    zeroCoupon:      false,
+    inflationLinked,
+    ...(intent.tipsCouponMode ? { tipsCouponMode: intent.tipsCouponMode } : {}),
+    ...unitiseBond({ faceValue: face, inflationLinked }),
+  };
+}
+
+/** `base`, or `base-2`, `base-3`… — the first id not already in `holdings`. */
+function _freshLotId(holdings, base) {
+  const existing = new Set((holdings ?? []).map(h => h?.id).filter(Boolean));
+  if (!existing.has(base)) return base;
+  let i = 2;
+  while (existing.has(`${base}-${i}`)) i++;
+  return `${base}-${i}`;
+}
+
+/**
+ * A bond PURCHASE into a laddered account (design 128 §3.2): `amount` of cash buys the
+ * ladder's own instrument, spread equally over its next N maturity slots, rather than a
+ * nominal bond fund the ladder would absorb into one lump at its next pass.
+ *
+ * Each share opens its OWN lot (`ladder-<key>-buy-<purchaseMs>-<m>`), never joining an
+ * existing one: a slot is reached by purchases made in N different years, so a lot keyed on
+ * the slot would blend acquisition dates (design 62 §9). `_compactLadderLots` merges them
+ * once they have rolled onto the same grid date and seasoned.
+ *
+ * @param {Array<object>} holdings - the account's holdings (the new lots are appended)
+ * @param {number} amount          - cash spent, in the account's currency
+ * @param {object} intent          - the account's `bondLadderIntent`
+ * @param {object} opts            - `{ state, stateKey, purchaseMs, priceLevel }`
+ * @returns {Array<object>} holdings plus the new lots
+ */
+export function buyIntoLadder(holdings, amount, intent, { state = null, stateKey = 'ladder', purchaseMs, priceLevel = null } = {}) {
+  const amt = +(+amount).toFixed(2);
+  if (!(amt > 0.005) || !intent || purchaseMs == null) return holdings;
+  let out = [...holdings];
+  for (const { slot, face } of _splitOverSlots(amt, intent, purchaseMs)) {
+    if (!(face > 0)) continue;
+    out = [...out, _slotLot({
+      id: _freshLotId(out, `ladder-${stateKey}-buy-${purchaseMs}-${slot.m}`),
+      face, slot, intent, state, purchaseMs,
+      costBasis: face,                           // a purchase: basis is the cash paid
+      acquisitionPriceLevel: priceLevel,         // the AU indexation base at THIS acquisition
+      label: 'Ladder buy',
+    })];
+  }
+  return out;
 }
 
 /**
@@ -413,111 +598,64 @@ function _carrySplitter(carry, bondValue, n) {
 }
 
 /**
- * Convert un-laddered BOND *fund* sleeves into a NEW rung at the ladder tail, and return
- * the replacement rung list (the funds are dropped by the caller, which rebuilds the
- * account's holdings from this).
+ * Convert un-laddered BOND *fund* sleeves into new lots on the ladder's slots, and return the
+ * replacement rung list (the funds are dropped by the caller, which rebuilds the account's
+ * holdings from this).
  *
- * The crude form of design 66 §10.5's buy-side tail routing. It exists because the
- * design-61 rebalancer spawns a perpetual fund sleeve whenever it buys bonds into an
- * account that currently holds none — which happens routinely once drawdown has eaten
- * an account's rungs — and nothing else ever converts one back into a dated rung.
+ * The fallback for money that reaches a laddered account without knowing about the ladder
+ * (design 128 §3.3): reinvested coupons and dividends and wrapper deposits
+ * (`distributeHoldingsCredit` vintages), and pool-flow BOND purchases. A rebalance buy no
+ * longer lands here — `buyIntoLadder` buys the ladder directly.
  *
- * **This used to fold the money INTO the standing rungs, and design 93 §5.0a is why it no
- * longer does.** A lot is the unit of tax accounting: it has one purchase date, one basis
- * and — once par is per-unit — one `parPerUnit`. Blending new money into an existing rung
- * made the absorbed dollars inherit that rung's acquisition date, and it forced a choice
- * about what par the blend carries which has no good answer (§5.0's three withdrawn
- * options). Design 62 §9 already settled the rule for the rebalancer's buy leg — *"a buy
- * is what it actually is: a purchase made TODAY, in its own lot"* — and never reached the
- * other money-in paths. This is that migration finished.
+ * **The same split as a purchase.** It used to put all of the money in ONE tail rung, so a
+ * large sum became one rung many times the size of the others and stayed that way through
+ * every roll, and its maturity was dated from the absorbing advance rather than the ladder's
+ * grid. It now follows `buyIntoLadder`'s rule: equal shares over the next N grid dates, or
+ * the longest slot alone below `minSlotBuy` — so a year's coupon vintage still goes to the tail.
  *
- * Opening a lot rather than blending also deletes the approximation the old form had to
- * document: it grew each rung's `faceValue` by the MARKET value of the absorbed money, so
- * a rung trading away from par had its redemption amount moved by a price no purchase set.
- * A fresh rung is issued at par, so nothing is approximated.
+ * **A lot per pass, never a merge.** Folding money into a standing rung made it inherit that
+ * rung's acquisition date (design 93 §5.0a), and merging into an earlier absorption of the
+ * same year kept the earlier date — a 1 July absorption credited with six months it was not
+ * held. Each pass opens `ladder-<key>-absorb-<asOfMs>-<m>`; `_compactLadderLots` merges
+ * seasoned lots that have become the same bond.
  *
- * **Vintage, not per-firing.** The new rung's id keys on the tail's maturity YEAR, so
- * repeated absorptions that target the same tail merge into the same lot — one added rung
- * per year at worst, the same bound `mergeCouponReinvestLots` uses for coupon vintages.
- * Merging within a vintage is not the blend the rule forbids: same instrument, same
- * maturity, same year, so no holding-period test can tell the halves apart.
- *
- * **Basis is CARRIED, not re-based.** No lot is disposed of — the money simply changes
- * which lot holds it — so the new rung takes the funds' aggregate `costBasis`, per-country
- * bases, latest acquisition dates and blended indexation level, exactly as `ladderCarryover`
- * defines them for a rebuild. Re-basing at market would be a step-up with no disposal.
+ * **Basis is CARRIED, not re-based.** No lot is disposed of — the money simply changes which
+ * lot holds it — so the new lots share the funds' aggregate `costBasis`, per-country bases,
+ * latest acquisition dates and blended indexation level (`ladderCarryover`), split face-
+ * weighted with the remainder on the last lot (`_carrySplitter`) so every sum is exact.
  *
  * @param {Array<object>} rungs - BOND holdings carrying a maturityDate (at least one)
  * @param {Array<object>} funds - BOND holdings with no maturityDate
- * @param {object} opts
- * @returns {Array<object>} the rungs, plus (or merged into) the tail rung
+ * @param {object} opts         - `{ asOfMs, intent, state, stateKey, levelNow }`
+ * @returns {Array<object>} the rungs, plus the new lots
  */
-export function absorbAsTailRung(rungs, funds, {
-  asOfMs, ladderTermYears, stateKey = 'ladder', rateKey = null, roll = true,
-  taxExemption = 'state', inflationLinked = false, couponRate = null, levelNow = 1,
-  tipsCouponMode = null,
-} = {}) {
+export function absorbIntoLadder(rungs, funds, { asOfMs, intent, state = null, stateKey = 'ladder', levelNow = 1 } = {}) {
   const addMv = +(funds ?? []).reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
   if (!(addMv > 0.005)) return rungs;
 
-  const carry     = ladderCarryover(funds, levelNow) ?? {};
-  const maturity  = new Date(asOfMs + ladderTermYears * YEAR_MS);
-  const lotId     = `ladder-${stateKey}-absorb-${maturity.getUTCFullYear()}`;
-  const idx       = rungs.findIndex(h => h?.id === lotId);
-
-  if (idx >= 0) {
-    // Same vintage, same instrument — more units of the bond this lot already holds.
-    // `addValue` owns the money-and-par rule; the carried basis replaces the basis it
-    // would have assumed (absorbed money brings its OWN basis, not the cash it is worth).
-    const cur    = rungs[idx];
-    const merged = addValue(cur, addMv);
-    const next   = {
-      ...merged,
-      costBasis: +((cur.costBasis ?? 0) + (carry.costBasis ?? addMv)).toFixed(2),
-    };
-    if (cur.costBaseByCountry || carry.costBaseByCountry) {
-      const bases = { ...(cur.costBaseByCountry ?? {}) };
-      for (const [c, v] of Object.entries(carry.costBaseByCountry ?? {})) {
-        bases[c] = +((bases[c] ?? cur.costBasis ?? 0) + (v ?? 0)).toFixed(2);
-      }
-      next.costBaseByCountry = bases;
-    }
-    return rungs.map((h, i) => (i === idx ? next : h));
-  }
-
-  // par-reviewed: CONSTRUCTS the tail rung. As `materializeLadder` above — the spread is
-  // `unitiseBond`'s derived fields, issued at par for this exact market value.
-  return [...rungs, {
-    id:             lotId,
-    allocation:     ALLOCATION.BOND,
-    marketValue:    addMv,
-    costBasis:      +(carry.costBasis ?? addMv).toFixed(2),
-    costBaseByCountry: carry.costBaseByCountry ?? null,
-    // The absorbed money's OWN vintage, not today: it was already invested, and the
-    // latest-wins rule is `ladderCarryover`'s (never credits a ≥12-month holding period
-    // to money demonstrably bought later).
-    purchaseDate:   carry.purchaseMs != null ? new Date(carry.purchaseMs) : new Date(asOfMs),
-    acquisitionPriceLevel:    carry.priceLevel ?? levelNow,
-    acquisitionDateByCountry: carry.acquisitionDateByCountry ?? null,
-    rateKey,
-    label:          `Ladder tail ${maturity.getUTCFullYear()}`,
-    dividendYield:  null,
-    couponRate,
-    appreciationSchedule: null,
-    duration:       +ladderTermYears.toFixed(2),
-    taxLossPartner: null,
-    taxExemption,
-    issuingState:   null,
-    maturityDate:   maturity,
-    faceValue:      addMv,
-    rollAtMaturity: roll,
-    rollTermYears:  roll ? ladderTermYears : null,
-    zeroCoupon:      false,
-    inflationLinked: inflationLinked === true,
-    ...(tipsCouponMode ? { tipsCouponMode } : {}),
-    // Issued at par today, like every other rung (design 93 §5b).
-    ...unitiseBond({ faceValue: addMv, inflationLinked: inflationLinked === true }),
-  }];
+  const carry  = ladderCarryover(funds, levelNow) ?? {};
+  const shares = _splitOverSlots(addMv, intent, asOfMs).filter(x => x.face > 0);
+  const split  = _carrySplitter({ costBasis: carry.costBasis ?? addMv, costBaseByCountry: carry.costBaseByCountry },
+                                addMv, shares.length);
+  let out = [...rungs];
+  shares.forEach(({ slot, face }, k) => {
+    out = [...out, _slotLot({
+      id: _freshLotId(out, `ladder-${stateKey}-absorb-${asOfMs}-${slot.m}`),
+      face, slot, intent, state,
+      // The absorbed money's OWN vintage, not today: it was already invested, and the
+      // latest-wins rule is `ladderCarryover`'s (never credits a ≥12-month holding period
+      // to money demonstrably bought later).
+      purchaseMs: carry.purchaseMs ?? asOfMs,
+      costBasis:  split('costBasis', k, face),
+      costBaseByCountry: carry.costBaseByCountry
+        ? _mapValues(carry.costBaseByCountry, (_v, c) => split(`costBaseByCountry.${c}`, k, face))
+        : null,
+      acquisitionPriceLevel:    carry.priceLevel ?? levelNow,
+      acquisitionDateByCountry: carry.acquisitionDateByCountry ?? null,
+      label: 'Ladder absorb',
+    })];
+  });
+  return out;
 }
 
 /**
@@ -545,6 +683,13 @@ export function absorbAsTailRung(rungs, funds, {
  */
 export function _compactLadderLots(rungs, asOfMs) {
   return compactLots(rungs, { asOfMs, policy: LOT_POLICIES.LADDER });
+}
+
+/** Milliseconds of an instrument's maturityDate, or null when it carries none / an invalid one. */
+function _maturityMs(inst) {
+  if (!inst?.maturityDate) return null;
+  const t = inst.maturityDate instanceof Date ? inst.maturityDate.getTime() : new Date(inst.maturityDate).getTime();
+  return Number.isNaN(t) ? null : t;
 }
 
 /** Milliseconds of a lot's purchaseDate, or null when it carries none / an invalid one. */
