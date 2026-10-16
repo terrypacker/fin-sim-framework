@@ -1,6 +1,6 @@
 # 127 — Time-weighted investment earnings
 
-**Status:** ACCEPTED rev 2 (16 Oct 2026); phase 1 BUILT (16 Oct, §9); phase 2 MEASURED (16 Oct, §10), which adds §4.7–4.8 and Q6–Q7; phase 2b BUILT (16 Oct, §11); phase 2c BUILT (16 Oct, §12); phase 3 BUILT (16 Oct, §13). Raised by a study flag: "year-end earnings pay a full
+**Status:** COMPLETE (16 Oct 2026). MONTHLY is the default. Phases 1 (§9), 2 (§10), 2b (§11), 2c (§12), 3 (§13) and 4 (§14) are built. One follow-up is open: AU shares the US recovery curve within a shock leg (§13). Raised by a study flag: "year-end earnings pay a full
 year's return on the 31-Dec balance".
 
 - **rev 1 (15 Oct):** the problem, options A–D, proposal A with D as a first step.
@@ -610,3 +610,32 @@ January-to-January years like the annual series. Both are monthly averages.
     carryforward rather than assess a balance due.
   - The batch and index-step action types moved from KNOWN_GAPS to COVERED.
   - No other golden moved.
+
+## 14. Phase 4 as built (16 Oct 2026): MONTHLY is the default
+
+- `DEFAULT_EQUITY_EARNINGS_CADENCE = 'MONTHLY'`. ANNUAL stays selectable. With a shock
+  preset it is no longer the pre-127 engine, because the presets are fitted under MONTHLY
+  (§7 Q2).
+- **Found by the switch, fixed:**
+  - The serializer's fallback class list (used when no type registry is available) lacked
+    `MarketIndexStepHandler`, `EquityYearOpenHandler` and design 120's hedge-stamp classes.
+    A saved MONTHLY graph would not have loaded there; 18 round-trip tests caught it.
+  - **A pre-existing state-tax gap.** AU dividends paid to a US resident
+    (`AU_DIVIDEND_FRANKED_NONRESIDENT_TAX`, `AU_DIVIDEND_UNFRANKED_RESIDENT_TAX`) fed the
+    federal ordinary base but not the state's. EVT-STATE-4's early-year state-vs-federal
+    reconciliation caught it once a quarterly dividend fell inside its window; the annual
+    31 Dec dividend never had. It affected ANNUAL runs too.
+- **Tests that encoded annual timing** now either read before the first monthly credit (the
+  "initial balance" checks, the level-break checks), compare one dividend payment rather
+  than one year (the dividend-election invariants), read the year-end subset of a monthly
+  stamp (the hedge FX tests), or are pinned to ANNUAL with the reason stated, because they
+  assert one year's exact figures from one 31 Dec event (super franking, super draw start,
+  the annual INCOME-hedge ratio).
+- **Goldens.** All 13 regolded. Terminal net worth moves from −0.75% to +2.85%. No golden
+  changed its failure, out-of-funds or deficit state, and only two accounts moved more
+  than 10%, both explained:
+  - US single homeowner's IRA ends +41% (+\$98k). It takes a large rollover in 2046 and is
+    drawn down for twenty years; under MONTHLY each withdrawal earns until it leaves (§1).
+  - AU single homeowner's pension-phase super ends +18%, for the same reason. The
+    spouse's accumulating super ends −2.8%, because ANNUAL had credited each year's
+    contributions for the whole year.
