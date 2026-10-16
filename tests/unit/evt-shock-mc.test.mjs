@@ -20,7 +20,8 @@
  *   EVT-SHOCK-MC-2: Varying growth rates under a shock produce spread outcomes (p10 < p50 < p90)
  *   EVT-SHOCK-MC-3: Shock scenario p50 is lower than no-shock scenario p50
  *   EVT-SHOCK-MC-4: Variable shocks[0].severity as sole varying param produces spread outcomes
- *   EVT-SHOCK-MC-5: Variable shocks[0].startDate as sole varying param produces spread outcomes
+ *   EVT-SHOCK-MC-5: a random-arrival shock spreads outcomes; path i keeps its month across arms (design 126)
+ *   EVT-SHOCK-MC-6: a saved shock-date sweep row is retired with a warning
  */
 
 import { test } from 'node:test';
@@ -158,38 +159,41 @@ test('EVT-SHOCK-MC-4b: baseParams.shocks unmutated after full run with severity 
   assert.strictEqual(baseShocks[0].severity, undefined, 'baseShocks[0].severity must remain undefined');
 });
 
-test('EVT-SHOCK-MC-5: Variable shocks[0].startDate produces spread outcomes', async () => {
-  const mcConfig = IntlRetirementMcConfig.fromVariableConfigs([
-    {
-      paramKey: 'shocks[0].startDate',
-      label:    'Shock Start Date',
-      type:     DISTRIBUTION_TYPES.UNIFORM_DATE,
-      min:      '2027-01-01',
-      max:      '2031-01-01',
-      enabled:  true,
-    },
-  ]);
-  const runner = new IntlRetirementMcRunner({
-    n:        N,
-    mcConfig,
-    simStart: SIM_START,
-    simEnd:   SIM_END,
-  });
+test('EVT-SHOCK-MC-5: a random-arrival shock (design 126) spreads outcomes, and keeps its month per path across arms', async () => {
+  const shocks = [{ preset: 'MARKET_CRASH_2008_LITE',
+    arrival: { mode: 'WINDOW', fromYears: 0, toYears: 4, probability: 1 } }];
+  const run = (mcConfig) => new IntlRetirementMcRunner({ n: N, mcConfig, simStart: SIM_START, simEnd: SIM_END })
+    .run({ shocks });
 
-  const { runs, summary } = await runner.run({ shocks: [SHOCK_2028] });
-
-  // All runs should complete without error regardless of when the shock fires
-  for (const r of runs) {
+  const plain = await run(new IntlRetirementMcConfig());
+  for (const r of plain.runs) {
     assert.ok(Number.isFinite(r.finalNetWorthUsd), `run ${r.seed}: finalNetWorthUsd should be finite`);
+    assert.match(r.shockArrivals?.['MARKET_CRASH_2008_LITE#0'] ?? '', /^\d{4}-\d{2}-01$/, 'each path stamps its drawn month');
   }
+  const months = new Set(plain.runs.map(r => r.shockArrivals['MARKET_CRASH_2008_LITE#0']));
+  assert.ok(months.size > 1, 'paths draw different months');
+  assert.ok(plain.summary.p10 < plain.summary.p50 && plain.summary.p50 < plain.summary.p90);
 
-  // Earlier shocks → more time under depressed returns → wider net-worth spread
-  assert.ok(
-    summary.p10 < summary.p50,
-    `p10 (${summary.p10.toFixed(0)}) should be < p50 (${summary.p50.toFixed(0)})`
-  );
-  assert.ok(
-    summary.p50 < summary.p90,
-    `p50 (${summary.p50.toFixed(0)}) should be < p90 (${summary.p90.toFixed(0)})`
-  );
+  // A second arm that samples one MORE variable: the parameter sampler's draws shift, the
+  // arrival (on its own keyed stream) does not — path i meets the crash in the same month.
+  const withSeverity = await run(IntlRetirementMcConfig.fromVariableConfigs([
+    { paramKey: 'shocks[0].severity', enabled: true, type: DISTRIBUTION_TYPES.NORMAL, mean: 0.40, stdDev: 0.15 },
+  ]));
+  const bySeed = new Map(withSeverity.runs.map(r => [r.seed, r.shockArrivals]));
+  for (const r of plain.runs) assert.deepEqual(bySeed.get(r.seed), r.shockArrivals, `seed ${r.seed}`);
+});
+
+test('EVT-SHOCK-MC-6: a saved shock-date sweep row is retired with a warning, not silently dropped', () => {
+  const warnings = [];
+  const w = console.warn; console.warn = (m) => warnings.push(String(m));
+  let vars;
+  try {
+    vars = IntlRetirementMcConfig.fromVariableConfigs([
+      { paramKey: 'shocks[0].startDate', type: DISTRIBUTION_TYPES.UNIFORM_DATE,
+        min: '2027-01-01', max: '2031-01-01', enabled: true },
+      { paramKey: 'shockStartDate', enabled: false },
+    ]).buildVariables({ shocks: [SHOCK_2028] });
+  } finally { console.warn = w; }
+  assert.equal(warnings.filter(m => m.includes('design 126')).length, 1, 'the enabled row warns; the disabled one does not');
+  assert.ok(!vars.some(v => /startDate$/.test(v.paramKey) && v.paramKey.startsWith('shocks')), 'no shock-date variable');
 });

@@ -86,18 +86,14 @@ test('buildVariables: no shocks key emits no shock rows', () => {
 
 // ── buildVariables: 1 shock ───────────────────────────────────────────────────
 
-test('buildVariables: 1-shock scenario emits 2 shock rows', () => {
+test('buildVariables: 1-shock scenario emits 1 shock row (severity; the date row retired by design 126)', () => {
   const cfg  = new IntlRetirementMcConfig();
   const vars = cfg.buildVariables({
     ...FLAT_PARAMS,
     shocks: [{ preset: 'MARKET_CRASH_2008_LITE', startDate: '2030-01-01' }],
   });
   const shockVars = vars.filter(v => v.group === 'Economic Shocks');
-  assert.strictEqual(shockVars.length, 2);
-
-  const keys = shockVars.map(v => v.paramKey);
-  assert.ok(keys.includes('shocks[0].severity'),  'severity variable missing');
-  assert.ok(keys.includes('shocks[0].startDate'), 'startDate variable missing');
+  assert.deepEqual(shockVars.map(v => v.paramKey), ['shocks[0].severity']);
 });
 
 test('buildVariables: shock severity variable uses library default as mean', () => {
@@ -125,7 +121,7 @@ test('buildVariables: shock variables are disabled by default', () => {
 
 // ── buildVariables: 2 shocks ──────────────────────────────────────────────────
 
-test('buildVariables: 2-shock scenario emits 4 shock rows', () => {
+test('buildVariables: 2-shock scenario emits 2 shock rows', () => {
   const cfg  = new IntlRetirementMcConfig();
   const vars = cfg.buildVariables({
     ...FLAT_PARAMS,
@@ -135,13 +131,7 @@ test('buildVariables: 2-shock scenario emits 4 shock rows', () => {
     ],
   });
   const shockVars = vars.filter(v => v.group === 'Economic Shocks');
-  assert.strictEqual(shockVars.length, 4);
-
-  const keys = shockVars.map(v => v.paramKey);
-  assert.ok(keys.includes('shocks[0].severity'));
-  assert.ok(keys.includes('shocks[0].startDate'));
-  assert.ok(keys.includes('shocks[1].severity'));
-  assert.ok(keys.includes('shocks[1].startDate'));
+  assert.deepEqual(shockVars.map(v => v.paramKey), ['shocks[0].severity', 'shocks[1].severity']);
 });
 
 // ── resolveRecordCenters ──────────────────────────────────────────────────────
@@ -284,18 +274,20 @@ test('fromVariableConfigs: legacy shockSeverity rewritten to shocks[0].severity'
   assert.strictEqual(sev.enabled, true, 'override enabled:true should be applied');
 });
 
-test('fromVariableConfigs: legacy shockStartDate rewritten to shocks[0].startDate', () => {
-  const cfg = IntlRetirementMcConfig.fromVariableConfigs([
-    { paramKey: 'shockStartDate', enabled: true, type: 'uniformDate', min: '2028-01-01', max: '2033-01-01' },
-  ]);
+test('fromVariableConfigs: legacy shockStartDate is retired (design 126), not rewritten', () => {
+  const w = console.warn; console.warn = () => {};
+  let cfg;
+  try {
+    cfg = IntlRetirementMcConfig.fromVariableConfigs([
+      { paramKey: 'shockStartDate', enabled: true, type: 'uniformDate', min: '2028-01-01', max: '2033-01-01' },
+    ]);
+  } finally { console.warn = w; }
 
   const vars = cfg.buildVariables({
     ...FLAT_PARAMS,
     shocks: [{ preset: 'MARKET_CRASH_2008_LITE', startDate: '2030-01-01' }],
   });
-  const sd = vars.find(v => v.paramKey === 'shocks[0].startDate');
-  assert.ok(sd, 'shocks[0].startDate should be present');
-  assert.strictEqual(sd.enabled, true, 'override enabled:true should be applied');
+  assert.equal(vars.find(v => v.paramKey === 'shocks[0].startDate'), undefined);
 });
 
 test('fromVariableConfigs: non-shock overrides are applied correctly', () => {

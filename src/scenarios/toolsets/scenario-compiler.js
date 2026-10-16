@@ -204,6 +204,8 @@ export class ScenarioCompiler {
     return {
       startDate:      new Date(definition.simStart),
       endDate:        new Date(definition.simEnd),
+      // Design 126 §3.3 — the seed a compile-time draw (a shock's random arrival) keys on.
+      rngSeed:        resolveRunSeed(services.simulationRegistry?.getPrimary?.(), parameters),
       people,
       jobs,
       spellsByPerson: buildSpellsByPerson(jobs, people, new Date(definition.simStart)),
@@ -310,4 +312,24 @@ function _mergeStatePatches(acc, patches) {
       acc[key] = value;
     }
   }
+}
+
+/**
+ * The seed this run will draw from, resolved at COMPILE (design 126 §3.3).
+ *
+ * `ScenarioLoader` compiles before `_applyRandomSeed` reseeds the sim from the `randomSeed`
+ * parameter — the parameters do not exist any earlier — so `sim.rngSeed` here is still the
+ * `buildSim()` fallback for a single run with an authored seed. This applies the loader's own
+ * precedence instead: an explicit `buildSim({ seed })` (Monte Carlo's per-iteration seed)
+ * wins, then a valid `randomSeed`, then the fallback; and `Simulation.reseed`'s coercion.
+ *
+ * @param {?object} sim
+ * @param {object} parameters
+ * @returns {?number}
+ */
+export function resolveRunSeed(sim, parameters) {
+  if (!sim) return null;
+  if (sim.seedWasExplicit) return sim.rngSeed;
+  const s = parameters?.randomSeed;
+  return (s != null && Number.isFinite(Number(s))) ? Math.trunc(Number(s)) : sim.rngSeed;
 }

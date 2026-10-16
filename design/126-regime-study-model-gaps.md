@@ -1,8 +1,10 @@
 # 126 — Model gaps that limit regime studies
 
-**Status:** PROPOSED, rev 2 (15 Oct 2026). Collects five gaps a macro-regimes study ran into, each
-of which is a modelling change rather than a fix. The study judged the first two (§3, §4) able to
-change a conclusion; the other three (§5–§7) are recorded with a direction and left open.
+**Status:** rev 2 ACCEPTED (15 Oct 2026, the author: Q1, Q3 and the G2 measurement gate as
+proposed). §8 step 1, G1 `WINDOW` arrival, BUILT 15 Oct 2026. Collects five gaps a
+macro-regimes study ran into, each of which is a modelling change rather than a fix. The study
+judged the first two (§3, §4) able to change a conclusion; the other three (§5–§7) are recorded
+with a direction and left open.
 
 - **rev 2 (15 Oct 2026, review before build):** checked against the code.
   - G1: the arrival draw needs the run's seed at compile, and compile runs *before* the
@@ -241,8 +243,10 @@ that tracks policy and inflation.
 
 ## 8. Phasing
 
-1. G1 `WINDOW` arrival: the spec and editor, the keyed draw with the compile seed,
+1. **BUILT.** G1 `WINDOW` arrival: the spec and editor, the keyed draw with the compile seed,
    `shockArrivals`, the structural foresight test, the old MC variable removed, `mc-run`.
+   Code: `shock-arrival.js`; tests: `evt-shock-arrival.test.mjs` (ARR-1..11),
+   `evt-shock-mc.test.mjs` (EVT-SHOCK-MC-5/6: paired months across arms, the retired row).
 2. G2 step 0: the sources on disk and the `(s − w)·r` measurement. Build or close on its result.
 3. G1 `RATE` arrival.
 4. G2 build, if step 0 says so.
@@ -250,13 +254,13 @@ that tracks policy and inflation.
 
 ## 9. Open questions
 
-1. **Deterministic runs with a random arrival.** *Proposed (rev 2): drawn from the run's seed*
-   (§3.4), replacing rev 1's midpoint.
+1. **Deterministic runs with a random arrival.** *Decided (the author): drawn from the run's
+   seed* (§3.4), replacing rev 1's midpoint. `run-scenario` prints the drawn month per shock.
 2. **Several random shocks in one plan.** Independent draws, or one regime process that chooses
    which kind arrives? (Proposed: independent for `WINDOW`, each on its own key; a single
    process is what `RATE` would need, decide then.) Independent windows can overlap; two busts
    in force at once compose as two shocks do today.
-3. **What the window counts from.** `simStart` (proposed), or the household's retirement date?
+3. **What the window counts from.** *Decided (the author): `simStart`.* Or the household's retirement date?
    Sequence risk is about the first years of retirement, and plans start at different
    distances from it; but a retirement anchor needs one date per household and the design 116
    job spells only give one per person. `simStart` now; a `from: 'RETIREMENT'` anchor later if a

@@ -34,7 +34,9 @@
  *   --vol <n>           equity return vol when --paths (default 0.18)
  *   --drift <mode>      GEOMETRIC (default) | NONE — see below
  *   --property-paths    stochastic property appreciation path
- *   --shock             enable the manufactured single crash (severity + date)
+ *   --shock             the manufactured single crash: shocks[0]'s severity sampled, and
+ *                       its date drawn once per path, uniformly over the run (design 126)
+ *   --shock-window <a>-<b>  narrow that arrival to years a..b from the run's start, e.g. 0-15
  *   --no-recentre       skip the check that MC centers match the scenario. The runner
  *                       re-centres itself now, so this only silences the verification.
  *
@@ -61,13 +63,18 @@
  * wrong for "could a bad decade ruin me".
  *
  * `--shock` adds one crash of random severity at a random date: a partial, and
- * frankly crude, sequence-risk proxy aimed at the early window where a crash does
- * the most damage. It was the best available before stochastic paths existed.
+ * frankly crude, sequence-risk proxy. It was the best available before stochastic paths
+ * existed. Since design 126 the date is the plan's own `shocks[0]` made a random arrival
+ * (`WINDOW`, probability 1), drawn on its own keyed stream, so path i's crash month is the
+ * same in every arm; `--shock-window` narrows it (the old variable's fixed 2028–2035 window
+ * is gone). A plan can instead author `arrival` on any shock and skip the flag.
  *
  * `--paths` is the real thing: each year draws its own return, so bad decades happen
  * endogenously. Prefer it. Note that combining `--paths` with `--shock` DOUBLE-COUNTS
  * the downside — with real paths a crash year is already in the process — so
- * `--shock` should normally be off when `--paths` is on.
+ * `--shock` should normally be off when `--paths` is on. Since design 98 M3 the paths are
+ * on unless the plan sets `mcSequenceRisk: false`, so the warning fires on the plan's
+ * setting, and for any authored random arrival too.
  *
  * `--drift GEOMETRIC` reads the return anchor as a CAGR and compensates by σ²/2, so
  * adding volatility widens the spread WITHOUT quietly lowering the central outcome.
@@ -89,7 +96,7 @@ import { join } from 'node:path';
 
 import { loadBaseConfig, describeSource } from '../lib/scenario-source.mjs';
 import { buildVariant } from '../lib/variant.mjs';
-import { buildMcConfig, runArm, mergeArmLevers, stochasticFromFlags } from '../lib/mc.mjs';
+import { buildMcConfig, runArm, mergeArmLevers, stochasticFromFlags, parseShockWindow, hasRandomArrival } from '../lib/mc.mjs';
 import { pct } from '../lib/format.mjs';
 import { parseFlags } from '../lib/cli.mjs';
 import { MC_SAMPLER_CADENCE } from '../../src/finance/monte-carlo/intl-retirement-mc-runner.js';
@@ -115,7 +122,8 @@ const opts = parseFlags(argv, {
   vol:      { type: 'number', default: 0.18, help: 'equity return vol when --paths' },
   drift:    { type: 'string', default: 'GEOMETRIC', choices: ['GEOMETRIC', 'NONE'], help: 'return anchor reading' },
   propertyPaths: { type: 'flag', help: 'stochastic property appreciation path' },
-  shock:    { type: 'flag', help: 'manufactured single crash (severity + date)' },
+  shock:    { type: 'flag', help: "manufactured single crash: shocks[0]'s severity sampled, date drawn over the run" },
+  shockWindow: { type: 'string', default: null, help: 'with --shock: arrival window in years from the start, e.g. 0-15' },
   noRecentre: { type: 'flag', help: 'skip the check that MC centers match the scenario' },
   mix:      { type: 'flag', help: 'also record the per-year asset mix' },
   spending: { type: 'flag', help: 'also record classified spending — forces FULL telemetry, ~7.5x' },
@@ -134,6 +142,8 @@ const drift = opts.drift;
 const paths = opts.paths;
 const propertyPaths = opts.propertyPaths;
 const shock = opts.shock;
+const shockWindow = parseShockWindow(opts.shockWindow);
+if (shockWindow && !shock) { console.error('--shock-window needs --shock'); process.exit(2); }
 const recentre = !opts.noRecentre;
 const mix = opts.mix;
 const spending = opts.spending;
@@ -156,7 +166,7 @@ const stochastic = stochasticFromFlags({ paths, vol, drift, propertyPaths });
 const planPaths = paths || scenarioParamValues(base.cfg).mcSequenceRisk !== false;
 
 const riskModel = {
-  paths: planPaths, pathsFlag: paths, propertyPaths, shock,
+  paths: planPaths, pathsFlag: paths, propertyPaths, shock, shockWindow,
   vol: paths ? vol : null, drift: paths ? drift : null,
   recentre, mix, spending,
 };
@@ -164,8 +174,8 @@ const riskModel = {
 console.log(`\n${describeSource(base)}`);
 console.log(`arms: ${armKeys.join(', ')}`);
 console.log(`n=${n}/arm  risk model: ${describeRisk()}`);
-if (paths && shock) {
-  console.log('** --paths WITH --shock double-counts the downside; see the header note.');
+if (planPaths && shock) {
+  console.log('** stochastic paths WITH --shock double-counts the downside; see the header note.');
 }
 console.log('');
 
@@ -175,7 +185,7 @@ function describeRisk() {
     : planPaths ? `stochastic equity paths (MC default: ${scenarioParamValues(base.cfg).mcEquityReturnModel ?? 'HISTORICAL_BOOTSTRAP'}, plan settings — mcSequenceRisk / mcEquityReturnModel)`
     : 'constant sampled return (plan sets mcSequenceRisk: false)');
   if (propertyPaths) parts.push('stochastic property path');
-  if (shock) parts.push('manufactured crash');
+  if (shock) parts.push(`manufactured crash (shocks[0], arriving ${shockWindow ? `in years ${shockWindow.fromYears}-${shockWindow.toYears}` : 'any month of the run'})`);
   if (mix) parts.push('recording asset mix');
   if (spending) parts.push('recording classified spending (FULL telemetry, ~7.5x)');
   if (!recentre) parts.push('** CENTER CHECK SKIPPED **');
@@ -217,7 +227,10 @@ for (const [order, key] of armKeys.entries()) {
   if (stochastic) levers.stochastic = { ...(levers.stochastic ?? {}), ...stochastic };
 
   const cfg = buildVariant(base.cfg, levers);
-  const { mcConfig, shocks, recentred } = buildMcConfig(cfg, { shock, recentre });
+  const { mcConfig, shocks, recentred } = buildMcConfig(cfg, { shock, shockWindow, recentre });
+  if (planPaths && !shock && hasRandomArrival(shocks)) {
+    console.log(`** ${key}: a random-arrival shock on top of stochastic paths double-counts the downside`);
+  }
   const { rows, mixSeries, spendingRuns, pathShape, provenance, sequenceRisk, ms } =
     await runArm({ cfg, n, mcConfig, shocks, mix, spending });
 
