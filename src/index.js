@@ -122,6 +122,7 @@ import { RevalueAssetReducer } from './finance/economic-regimes/revalue-asset-re
 import { YieldCurveReducer } from './finance/economic-regimes/yield-curve-reducer.js';
 import { YieldCurveStepReducer } from './finance/economic-regimes/yield-curve-step-reducer.js';
 import { YieldCurveTickHandler } from './finance/economic-regimes/yield-curve-tick-handler.js';
+import { stockBondCorrelationOf, stockBondCorrelationActive, stockBondCorrelationWarnings } from './finance/economic-regimes/stock-bond-correlation.js';
 import { countryOfRateKey, interpolateSpread, resolveYield, composeYieldCurve, shapeDelta } from './finance/economic-regimes/yield-curve.js';
 import { SHOCK_LIBRARY, SHOCK_PRESET_OPTIONS } from './finance/economic-shocks/shock-library.js';
 import { CurrencyConverter } from './finance/fx/currency-converter.js';
@@ -1090,6 +1091,9 @@ export const Finance = {
   YieldCurveReducer,
   YieldCurveStepReducer,
   YieldCurveTickHandler,
+  stockBondCorrelationOf,
+  stockBondCorrelationActive,
+  stockBondCorrelationWarnings,
   countryOfRateKey,
   interpolateSpread,
   resolveYield,

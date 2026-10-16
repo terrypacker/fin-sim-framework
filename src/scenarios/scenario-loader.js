@@ -15,6 +15,7 @@ import { ScenarioCompiler }        from './toolsets/scenario-compiler.js';
 import { ScenarioParamGenerator, isGeneratedParamKey, decodeGeneratedParamKey } from './params/scenario-param-generator.js';
 import { retireRateParams }        from './retired-rate-params.js';
 import { retireBehavioralStrategies } from './retired-strategies.js';
+import { stockBondCorrelationWarnings } from '../finance/economic-regimes/stock-bond-correlation.js';
 import { StateRegistry }          from '../finance/services/state-registry.js';
 import { IntlRetirementScenario }  from './intl-retirement-scenario.js';
 import { BlankScenario }           from './blank-scenario.js';
@@ -98,6 +99,9 @@ export { synthesizeWeightedPriorities } from './params/lever-weights.js';
  * (design 97 §12), so a copy in a saved `initialState` is a cache, never an authority.
  */
 const TOOLSET_DERIVED_STATE_KEYS = Object.freeze(['liquidityGraph', 'drawdownSequence']);
+
+/** Loader warnings already printed this process (design 129 §3.3: one per message, not per MC path). */
+const _warnedOnce = new Set();
 
 /**
  * ScenarioLoader — single entry point for restoring a scenario configuration
@@ -702,6 +706,13 @@ export class ScenarioLoader {
     retireRateParams(cfg);
     // Design 115 §12 — a retired behavioral strategy would otherwise compile to nothing, silently.
     retireBehavioralStrategies(cfg);
+    // Design 129 §3.3 — an authored stock–bond ρ that cannot move this plan says so. Once per
+    // message per process, so a Monte Carlo batch that loads the plan per path prints it once.
+    for (const msg of stockBondCorrelationWarnings(cfg.parameters)) {
+      if (_warnedOnce.has(msg)) continue;
+      _warnedOnce.add(msg);
+      console.warn(msg);
+    }
   }
 
   /**

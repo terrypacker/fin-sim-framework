@@ -3,8 +3,8 @@ id: stochastic-return-paths
 kind: concept
 title: Stochastic Return Paths
 panels: [mc-config, mc-results]
-params: [equityReturnStochastic, equityReturnModel, equityReturnVol, equityReturnReversionSpeed, equityReturnBeta, equityReturnIdioVol, equityReturnDriftComp, equityReturnBootstrapBlock, equityReturnBootstrapAuReplay, propertyReturnStochastic, propertyReturnBeta, propertyReturnIdioVol, propertyReturnIdioScale, mcSequenceRisk, mcEquityReturnModel, goldReturnVol, goldEquityCorrelation]
-design: [74-stochastic-return-paths.md, 90-equity-fidelity-and-capital-losses.md, 102-historical-bootstrap-equity-returns.md, 121-shock-leg-offset-and-stagflation-calibration.md]
+params: [equityReturnStochastic, equityReturnModel, equityReturnVol, equityReturnReversionSpeed, equityReturnBeta, equityReturnIdioVol, equityReturnDriftComp, equityReturnBootstrapBlock, equityReturnBootstrapAuReplay, propertyReturnStochastic, propertyReturnBeta, propertyReturnIdioVol, propertyReturnIdioScale, mcSequenceRisk, mcEquityReturnModel, goldReturnVol, goldEquityCorrelation, stockBondCorrelation]
+design: [74-stochastic-return-paths.md, 90-equity-fidelity-and-capital-losses.md, 102-historical-bootstrap-equity-returns.md, 121-shock-leg-offset-and-stagflation-calibration.md, 129-stock-bond-correlation.md]
 stamps:
   param:equityReturnStochastic: 635a9b
   param:equityReturnModel: 613513
@@ -23,6 +23,7 @@ stamps:
   param:mcEquityReturnModel: 012b08
   param:goldReturnVol: e74662
   param:goldEquityCorrelation: 578ce4
+  param:stockBondCorrelation: 45d03d
   panel:mc-config: ad4956
   panel:mc-results: cc2f55
 ---
@@ -50,6 +51,10 @@ year. Without it, gold returned exactly its growth rate on every path: a riskles
 paying more than the default bond, which flatters any allocation that holds it.
 Measured gold swings nearly as much as the share market and barely moves with it, so
 it is a diversifier with real drawdowns, not a safe harbour.
+
+Bond noise can share that yearly draw too. Independent, the default, sits between eras:
+bonds fell with shares in the 1970s and hedged them after 2000, so the correlation picks a
+world. Within a year the bond move shows first.
 
 Property gets its own version, because a house is one asset with a sale date rather
 than a diversified position — the variance that matters is what it is worth on the

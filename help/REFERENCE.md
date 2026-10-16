@@ -9,11 +9,11 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-236 parameters · 33 panels · 12 node types (206 fields) · 180 action types · 92 tools · 330 state field types · 78 topics · 137 design docs
+237 parameters · 33 panels · 12 node types (206 fields) · 180 action types · 92 tools · 330 state field types · 78 topics · 137 design docs
 
 ---
 
-## Parameters (236)
+## Parameters (237)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
@@ -186,7 +186,7 @@ scenario's own schema), which is where to go to change it.
 - **`earlyWithdrawalStartYear`** — Early Withdrawal Optimization Start Year · `Number` · default — · via US_EARLY_WITHDRAWAL
   First year of the opt-in optimization window. Set with the end year to let the MPC cockpit tune/discover early withdrawals. null = no window (manual schedule only).
 
-### Economic Shocks (54)
+### Economic Shocks (55)
 
 - **`auYieldCurveShape`** — AU Yield Curve Shape · `YieldCurveShape` · default — · via ECONOMIC_REGIMES
   Optional AU term-structure overlay (design 67): an array of { tenor, spread } anchor points added to the FIXED_INCOME_AU level, linearly interpolated and clamped to the endpoints. Independent of the US shape. Absent/empty ⇒ a flat curve.
@@ -286,6 +286,8 @@ scenario's own schema), which is where to go to change it.
   Draw each stochastic process from its OWN year-keyed stream instead of one shared cursor, so that two scenarios differing in policy experience the SAME realised path. Off (the default) every process draws from `sim.rng` in whatever order the event queue runs them, which is fine for one run and misleading for a comparison: measured on a paycheck-vs-no-paycheck pair, both arms drew the identical 1,862 values in the identical order and still diverged, because the same value landed on a different DATE in each — a z that is 2035's equity shock in one arm is 2036's in the other. On, a draw is a pure function of (seed, process, year), so nothing another process does can shift it and the difference between two arms is causal. Turning it on CHANGES the path a given seed produces, so it is a property of a STUDY, not a better setting: switch it on for every arm of a comparison, or none.
 - **`shocks`** — Economic Shocks · `ShockList` · default `` · one of `[object Object]`, `[object Object]`, `[object Object]`, `[object Object]`, `[object Object]`, `[object Object]`, `[object Object]`, `[object Object]`, `[object Object]`, `[object Object]`, `[object Object]`, `[object Object]`, `[object Object]`, `[object Object]` · via ECONOMIC_REGIMES
   List of financial shocks to apply. Each entry can reference a library preset or define a custom shock, and either lands on its start date or arrives at random, on the first of a month drawn from the run's seed. "Random, in a window" arrives at most once: give the years after the run starts that it may arrive in and the chance it happens at all; a month past the end of the run means it did not arrive. "Random, at a rate" can recur: give how many times a year it arrives on average (0.1 = about once a decade), optionally a cap on the count, and the years it must wait after each arrival (blank = until the previous episode has run its course, which lowers the realised rate). The same seed always draws the same months, and a Monte Carlo path keeps its months in every arm of a comparison.
+- **`stockBondCorrelation`** — Stock–Bond Correlation · `Number` · default `0` · sweep: mc · conditional · via ECONOMIC_REGIMES
+  Correlation (−1 to 1) between the random parts of the yearly stock and bond returns (design 129): positive means bonds fall in the years stocks fall, negative means bonds hedge them. US equity against the 10-year measured +0.42 over 1973–82 and −0.53 over 2000–20; 0, the default, keeps the two draws independent. Needs both Stochastic Yield Curve and Stochastic Equity Returns, and is ignored in HISTORICAL_JOINT inflation mode, whose yields carry their own era's correlation. Monte Carlo runs that mode by default whenever equity uses the historical bootstrap (Monte Carlo: Inflation Process = AUTO), so to sweep this in such a Monte Carlo set the inflation process to GAUSSIAN. The realised value comes out near 0.93× this one, because the mean-reverting pull adds noise of its own.
 - **`usYieldCurveShape`** — US Yield Curve Shape · `YieldCurveShape` · default — · via ECONOMIC_REGIMES
   Optional US term-structure overlay (design 67): an array of { tenor, spread } anchor points added to the FIXED_INCOME_US level, linearly interpolated and clamped to the endpoints. The 5-year point is the level anchor (spread 0). Absent/empty ⇒ a flat curve (every tenor = the level), identical to a single fixed-income rate.
 - **`yieldCurveReversionSpeed`** — Yield Curve Mean-Reversion Speed · `Number` · default `0.3` · via ECONOMIC_REGIMES
@@ -2334,7 +2336,7 @@ what the in-app panel keys on.
 | [Spending](panels/spending.md) | panel | 209 | 1 panel · design 89 |
 | [The Spending Rule](concepts/spending-rule.md) | concept | 296 | 1 panel · 17 params · design 89 |
 | [State](panels/state-panel.md) | panel | 181 | 1 panel |
-| [Stochastic Return Paths](concepts/stochastic-return-paths.md) | concept | 339 | 2 panels · 17 params · design 74, 90, 102, 121 |
+| [Stochastic Return Paths](concepts/stochastic-return-paths.md) | concept | 379 | 2 panels · 18 params · design 74, 90, 102, 121, 129 |
 | [Superannuation Access](concepts/superannuation.md) | concept | 399 | 1 panel · 4 actions · design 119, 77 |
 | [Tax Harvesting and Asset Location](concepts/tax-harvesting.md) | concept | 235 | 2 panels · 3 params · design 29, 94 |
 | [Timeline](panels/timeline.md) | panel | 203 | 1 panel |
