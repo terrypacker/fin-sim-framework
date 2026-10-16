@@ -219,7 +219,7 @@ measure.
 
 1. **The gate threshold.** Proposed: 3 points of failure rate, paired, under stagflation. *Deferred (the author, 15 Oct 2026): reviewed when step 0 starts.*
 2. **The crash presets.** *Decided (the author, 15 Oct 2026): left without ρ.* The alternative was their own era's negative
-   value? The second is historically right but makes every MC crash milder, a behaviour change
+   value: historically right, but it makes every MC crash milder, a behaviour change
    for every stochastic plan that uses one.
 3. **Joint mode.** Ignore ρ and warn (proposed), or blend?
 4. **The inflation channel** (§5). *Decided (the author, 15 Oct 2026): its own design, after step 0.*
