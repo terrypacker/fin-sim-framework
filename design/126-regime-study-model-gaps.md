@@ -1,7 +1,8 @@
 # 126 — Model gaps that limit regime studies
 
 **Status:** rev 2 ACCEPTED (15 Oct 2026, the author: Q1, Q3 and the G2 measurement gate as
-proposed). §8 step 1, G1 `WINDOW` arrival, BUILT 15 Oct 2026. §8 step 2, the G2 measurement, DONE
+proposed). §8 step 1, G1 `WINDOW` arrival, BUILT 15 Oct 2026; step 3, G1 `RATE` arrival (§3.8), BUILT
+15 Oct 2026. §8 step 2, the G2 measurement, DONE
 15 Oct 2026: under the threshold in every case, so G2 is CLOSED as measured (§4.5). Collects five gaps a
 macro-regimes study ran into, each of which is a modelling change rather than a fix. The study
 judged the first two (§3, §4) able to change a conclusion; the other three (§5–§7) are recorded
@@ -75,8 +76,8 @@ style bust, some time in the first fifteen years, maybe not at all".
 - `WINDOW`: with `probability`, the shock happens once, on the first of a uniformly drawn month
   in `[simStart + fromYears, simStart + toYears)`. Relative to the plan, so a plan that starts
   later shifts with it. A `startDate` on a `WINDOW` entry is ignored and the editor hides it.
-- `RATE` (later): arrivals as a Poisson process at `perYear`, with `maxCount` and a `minGapYears`
-  so two busts cannot overlap absurdly.
+- `RATE`: arrivals as a Poisson process at `perYear`, with `maxCount` and a `minGapYears`
+  so two busts cannot overlap absurdly. Specified in §3.8.
 
 `resolveShockEntry` today drops an entry without a valid `startDate`; with `arrival` it takes
 the drawn date instead, and an entry that does not arrive resolves to nothing, exactly like an
@@ -152,6 +153,40 @@ that pair; the warning extends to any `arrival` entry when equity paths are on.
 
 **Effort.** Moderate: entry normalization and the editor, the keyed draw and the compile seed,
 state stamping, the MC variable's removal, `mc-run` flags, reporting.
+
+### 3.8 `RATE` arrival (§8 step 3)
+
+```
+{ preset: 'MARKET_CRASH_2008_LITE', arrival: { mode: 'RATE', perYear: 0.1, maxCount: 3 } }
+```
+
+"A crash of this kind about once a decade, any number of times up to three."
+
+- **Fields.** `perYear` (> 0, required); `fromYears` (default 0) and `toYears` (default the
+  run's end) bound where arrivals may fall, as in `WINDOW`; `maxCount` (default unlimited);
+  `minGapYears` (default: the episode's own span, below).
+- **The process.** On the same month grid as `WINDOW` (the firsts of the months in the
+  window), month *k* arrives when its uniform is below `1 − e^(−perYear/12)` — a Poisson
+  process at `perYear`, discretised to one arrival a month at most — unless it falls inside
+  the gap after the previous arrival or `maxCount` is reached. Month *k*'s uniform is
+  `keyedRng(seed, 'shock-rate:<key>', k)`: a pure function of the month, so raising `perYear`
+  only adds arrivals (without a binding gap or cap), and the same path index sees the same
+  months in every arm.
+- **The gap.** A shock cannot recur while its previous episode is still in force, so the default
+  `minGapYears` is the episode's span: the latest `startMonths + recovery.durationMonths` over
+  its legs (the shock's own recovery when it has none), at least one month. `minGapYears: 0`
+  allows the next month. A gap makes the realised rate lower than `perYear`; the help says so.
+- **Episodes are distinct.** Each arrival is its own episode with its own `shockId`: the first
+  keeps the preset's, later ones are `<shockId>#2`, `#3`, … The behavioural strategies (panic
+  sell, downturn Roth conversion, opportunistic and target rebalancing) fire once per
+  `shockId`, so a shared id would let only the first crash trigger them. The same rule now
+  applies across entries: two entries of one preset used to share an id, and the second
+  episode was silently invisible to those strategies. A plan whose shocks all have distinct ids
+  is unchanged.
+- **Severity.** Every arrival of an entry carries the entry's severity (swept or authored).
+  Per-arrival severity draws are not built.
+- **Recording.** `shockArrivals[<key>]` is the list of drawn dates (`[]` when none); MC rows'
+  `shockDate` is the first, and `shockArrivals` carries the rest.
 
 ## 4. G2 — Household energy prices (proposed second, after a measurement)
 
@@ -278,7 +313,8 @@ that tracks policy and inflation.
    Code: `shock-arrival.js`; tests: `evt-shock-arrival.test.mjs` (ARR-1..11),
    `evt-shock-mc.test.mjs` (EVT-SHOCK-MC-5/6: paired months across arms, the retired row).
 2. **DONE, G2 CLOSED.** G2 step 0: the sources on disk and the `(s − w)·r` measurement (§4.5).
-3. G1 `RATE` arrival.
+3. **BUILT.** G1 `RATE` arrival (§3.8), with a distinct `shockId` per episode across all
+   entries. Tests: `evt-shock-arrival.test.mjs` RATE-1..6.
 4. ~~G2 build~~ — not built: step 0 put the effect under 0.2% of spending (§4.5).
 5. G3–G5: each gets its own design when a study needs it.
 

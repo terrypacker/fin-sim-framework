@@ -1138,8 +1138,11 @@ export class ScenarioTabView {
  *   - a preset <select> populated from `param.options`
  *   - a "when" <select>: on a date, or a random arrival in a window (design 126 §3)
  *   - on a date: a date <input type="date"> for startDate
- *   - random: from / to (years from the run's start) and the chance it happens at all,
- *     written to `arrival: { mode: 'WINDOW', fromYears, toYears, probability }`
+ *   - random in a window: from / to (years from the run's start) and the chance it happens at
+ *     all, written to `arrival: { mode: 'WINDOW', fromYears, toYears, probability }`
+ *   - random at a rate (§3.8): times per year, an optional from / to, a cap on the count and the
+ *     gap between arrivals (blank = the episode's own span), written to
+ *     `arrival: { mode: 'RATE', perYear, fromYears, toYears, maxCount, minGapYears }`
  *   - a remove button
  *
  * An "Add Shock" button appends a blank entry `{ preset: 'none', startDate: '' }`.
@@ -1178,20 +1181,25 @@ function _buildShockListEditor(param) {
 
       // When: an authored date, or a random arrival (design 126 §3). Switching keeps the other
       // mode's fields off the entry, so a saved row says exactly one thing about its timing.
-      const random = shock.arrival?.mode === 'WINDOW';
+      const mode = shock.arrival?.mode === 'WINDOW' || shock.arrival?.mode === 'RATE'
+        ? shock.arrival.mode : 'FIXED';
       const whenSel = document.createElement('select');
       whenSel.className = 'shock-when-select';
-      for (const [value, label] of [['FIXED', 'On a date'], ['WINDOW', 'Random, in a window']]) {
+      for (const [value, label] of [['FIXED', 'On a date'], ['WINDOW', 'Random, in a window'],
+        ['RATE', 'Random, at a rate']]) {
         const opt = document.createElement('option');
         opt.value = value;
         opt.textContent = label;
         whenSel.appendChild(opt);
       }
-      whenSel.value = random ? 'WINDOW' : 'FIXED';
+      whenSel.value = mode;
       whenSel.addEventListener('change', () => {
         if (whenSel.value === 'WINDOW') {
           delete shock.startDate;
           shock.arrival = { mode: 'WINDOW', fromYears: 0, toYears: 15, probability: 1 };
+        } else if (whenSel.value === 'RATE') {
+          delete shock.startDate;
+          shock.arrival = { mode: 'RATE', perYear: 0.1 };
         } else {
           delete shock.arrival;
           shock.startDate = '';
@@ -1200,7 +1208,10 @@ function _buildShockListEditor(param) {
       });
       row.appendChild(whenSel);
 
-      if (random) {
+      if (mode !== 'FIXED') {
+        // Blank is meaningful for RATE's optional fields (no cap, the default gap, the run's
+        // end), so clearing one removes it rather than leaving the last value behind.
+        const optional = mode === 'RATE' ? new Set(['fromYears', 'toYears', 'maxCount', 'minGapYears']) : new Set();
         const num = (field, label, step, min, max) => {
           const input = document.createElement('input');
           input.type = 'number';
@@ -1213,13 +1224,22 @@ function _buildShockListEditor(param) {
           input.value = shock.arrival[field] ?? '';
           input.addEventListener('change', () => {
             const v = Number(input.value);
-            if (input.value !== '' && Number.isFinite(v)) shock.arrival[field] = v;
+            if (input.value === '' && optional.has(field)) delete shock.arrival[field];
+            else if (input.value !== '' && Number.isFinite(v)) shock.arrival[field] = v;
           });
           return input;
         };
-        row.appendChild(num('fromYears', 'From (years after the start)', '1', '0'));
-        row.appendChild(num('toYears', 'To (years after the start)', '1', '0'));
-        row.appendChild(num('probability', 'Chance it happens at all (0–1)', '0.05', '0', '1'));
+        if (mode === 'RATE') {
+          row.appendChild(num('perYear', 'Times per year on average (0.1 = once a decade)', '0.01', '0'));
+          row.appendChild(num('fromYears', 'From (years after the start; blank = 0)', '1', '0'));
+          row.appendChild(num('toYears', 'To (years after the start; blank = the end of the run)', '1', '0'));
+          row.appendChild(num('maxCount', 'At most this many times (blank = no limit)', '1', '1'));
+          row.appendChild(num('minGapYears', 'Years between arrivals (blank = until the last one has run its course)', '0.5', '0'));
+        } else {
+          row.appendChild(num('fromYears', 'From (years after the start)', '1', '0'));
+          row.appendChild(num('toYears', 'To (years after the start)', '1', '0'));
+          row.appendChild(num('probability', 'Chance it happens at all (0–1)', '0.05', '0', '1'));
+        }
       } else {
         const dateInput = document.createElement('input');
         dateInput.type = 'date';

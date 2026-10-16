@@ -211,7 +211,9 @@ function printReport(scenarios, { params, real }) {
       labels, arrivalKeys.map(k => ({
         label: k,
         values: scenarios.map(s => !(k in s.result.arrivals) ? ''
-          : (s.result.arrivals[k] ?? 'did not arrive')),
+          : Array.isArray(s.result.arrivals[k])
+            ? (s.result.arrivals[k].join(', ') || 'did not arrive')
+            : (s.result.arrivals[k] ?? 'did not arrive')),
       })));
   }
 

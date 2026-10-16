@@ -5,7 +5,7 @@ title: Economic Shocks
 panels: [mc-config, chart]
 params: [shocks, repairSeverityScale, repairFreqScale]
 stamps:
-  param:shocks: b6473d
+  param:shocks: 2c4a39
   param:repairSeverityScale: f1741c
   param:repairFreqScale: 74df07
   panel:mc-config: ad4956
@@ -24,8 +24,9 @@ events for the same plan.
 Choosing the year is also its weakness. A timing lever — a sale year, a refill gate, a
 conversion schedule — gets scored partly on dodging the date you picked, with foresight
 the household lacks. To ask whether a lever helps *whenever* the bust comes, give the
-shock a random arrival and read the answer across Monte Carlo paths. One run of such a
-plan is one draw, not a representative one. Nothing in the run reacts to the shock
+shock a random arrival and read the answer across Monte Carlo paths; a rate lets the
+same kind of bust recur, and each arrival is its own episode, so strategies that react
+to a crash react to every one. One run of such a plan is one draw, not a typical one. Nothing in the run reacts to the shock
 before it arrives, though cockpit projections, which look ahead along the run's own
 path, do see it.
 
