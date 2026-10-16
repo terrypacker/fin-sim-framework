@@ -5,8 +5,9 @@ proposed). §8 step 1, G1 `WINDOW` arrival, BUILT 15 Oct 2026; step 3, G1 `RATE`
 15 Oct 2026. §8 step 2, the G2 measurement, DONE
 15 Oct 2026: under the threshold in every case, so G2 is CLOSED as measured (§4.5). Collects five gaps a
 macro-regimes study ran into, each of which is a modelling change rather than a fix. The study
-judged the first two (§3, §4) able to change a conclusion; the other three (§5–§7) are recorded
-with a direction and left open.
+judged the first two (§3, §4) able to change a conclusion; the other three (§5–§7) were recorded
+with a direction only. 15 Oct 2026: G3 has its own design, **129** (§5). G4 was checked against
+design 99's sources and is proposed CLOSED (§6). G5 stays a direction (§7).
 
 - **rev 2 (15 Oct 2026, review before build):** checked against the code.
   - G1: the arrival draw needs the run's seed at compile, and compile runs *before* the
@@ -281,7 +282,15 @@ noise of every other spending assumption. An oil shock's cost to a retiree is th
 energy component, which the presets' inflation legs already carry. Re-open only for a plan
 whose household energy share is measured at several points above the CPI's.
 
-## 5. G3 — Stock–bond correlation as a regime property (direction only)
+## 5. G3 — Stock–bond correlation as a regime property → design 129
+
+**Designed in 129** (15 Oct 2026, PROPOSED). That design keeps this section's direction: the
+yield tick's level shock correlates with the year's equity shock while a leg says so. It adds a
+run-level base ρ, a measurement gate before the regime half, and the annual correlation by era
+(1973–82 +0.42, 2000–2020 −0.53). It also records a gap this section did not name: under
+`GAUSSIAN` stochastic inflation an inflation surprise does not move nominal yields (129 §5).
+
+The original direction, kept for the record:
 
 Today the sign of the stock–bond correlation is an emergent property of the legs in a
 deterministic run and of the bootstrap window in MC. A regime should be able to say "while this
@@ -291,13 +300,57 @@ Direction: a leg field `stockBondCorrelation` that the stochastic yield-curve ti
 (`YieldCurveTickHandler`) uses to correlate its level shock with the year's equity draw while the
 leg is active. Off by default; no effect on deterministic runs, where the legs already set both.
 
-## 6. G4 — Valuation-conditioned expected returns (direction only)
+## 6. G4 — Valuation-conditioned expected returns (checked: proposed CLOSED)
 
-A starting valuation (CAPE) should be able to lower the expected equity return for the years
-after it, fading as valuation reverts. Direction: an optional `equityValuation` input that shifts
-the design 99 anchor by a calibrated function of log CAPE, decaying at a stated speed. This is a
-capital-market-assumption change, not a regime, and needs its own calibration against the
-sources design 99 uses.
+The direction was: a starting valuation (CAPE) lowers the expected equity return for the years
+after it, fading as valuation reverts. It would be an optional `equityValuation` input shifting
+the design 99 anchor by a function of log CAPE.
+
+### 6.1 The level is already valuation-conditioned
+
+Design 99's anchors are the equal-weighted mean of three providers' 10-year forecasts (§6.6
+there). All three condition on today's prices. In the sources on disk in `docs/market-returns/data/`:
+
+- **Vanguard.** The VCMM "takes into account current macroeconomic conditions and equity and bond
+  valuations to forecast distributions of future returns" (AU asset-allocation report,
+  methodology note). The US forecast page attributes its latest cut to valuation: "Valuations
+  increased from already elevated levels. As a result, our 10-year expected annualized return
+  for U.S. equities declined from a range of 4.9%–6.9% to a range of 4.2%–6.2%."
+- **J.P. Morgan.** The LTCMA builds each equity forecast from blocks that include a valuation
+  term (Exhibit 6, "Contributions to equity return forecasts": revenue, margins, dilution,
+  buybacks, valuations, dividends, FX). Its text: "A better revenue and margin outlook balances
+  richer multiples".
+- **BlackRock.** The figures are the "Starting point" sheet: expected returns from current
+  prices.
+
+A CAPE input on top of these would count valuation twice over the first decade.
+
+### 6.2 What is left: the horizon
+
+The anchors are 10-year numbers, applied to every year of a run that may last 40. BlackRock
+publishes the same assumptions out to 30 years ("Starting point" sheet, geometric, gross of fees):
+
+| market (currency) | 5 yr | 10 yr | 20 yr | 30 yr |
+|---|---|---|---|---|
+| US large cap (USD) | 9.4% | 9.0% | 8.6% | 8.4% |
+| Global ex-US large cap (USD) | 7.5% | 7.8% | 8.4% | 8.7% |
+| Australia large cap (AUD) | 6.2% | 6.9% | 6.9% | 6.9% |
+
+Beyond year 10 the change is within about 1 point either way. That is smaller than the providers'
+disagreement on the 10-year level itself: about 4 points on the US (Vanguard ≈ 5.2, BlackRock
+9.0; design 99 §6.6). For the US, one source has returns *falling* after the first decade,
+which is the opposite of the fade a CAPE reversion would impose.
+
+### 6.3 Proposal
+
+**Close G4 with no valuation mechanism.**
+- The level is covered by design 99's sourced inputs.
+- Uncertainty about the level is already an MC axis: `equityAnchorShift` (design 98 M2) moves
+  every equity market's total return together.
+
+If a study ever needs the horizon shape, the tool is a dated per-market total-return schedule
+(anchors by year) sourced from a provider's horizon columns. That is not a CAPE model, and it is
+not designed here.
 
 ## 7. G5 — Term premium and fiscal dominance (direction only)
 
@@ -316,7 +369,8 @@ that tracks policy and inflation.
 3. **BUILT.** G1 `RATE` arrival (§3.8), with a distinct `shockId` per episode across all
    entries. Tests: `evt-shock-arrival.test.mjs` RATE-1..6.
 4. ~~G2 build~~ — not built: step 0 put the effect under 0.2% of spending (§4.5).
-5. G3–G5: each gets its own design when a study needs it.
+5. G3 → design 129 (PROPOSED 15 Oct 2026). G4 → proposed CLOSED after checking the sources
+   (§6). G5 gets its own design when a study needs it.
 
 ## 9. Open questions
 
