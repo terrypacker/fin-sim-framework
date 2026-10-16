@@ -284,7 +284,7 @@ whose household energy share is measured at several points above the CPI's.
 
 ## 5. G3 — Stock–bond correlation as a regime property → design 129
 
-**Designed in 129** (15 Oct 2026, PROPOSED). That design keeps this section's direction: the
+**Designed in 129** (15 Oct 2026; ACCEPTED rev 2, 16 Oct). That design keeps this section's direction: the
 yield tick's level shock correlates with the year's equity shock while a leg says so. It adds a
 run-level base ρ, a measurement gate before the regime half, and the annual correlation by era
 (1973–82 +0.42, 2000–2020 −0.53). It also records a gap this section did not name: under
@@ -369,7 +369,7 @@ that tracks policy and inflation.
 3. **BUILT.** G1 `RATE` arrival (§3.8), with a distinct `shockId` per episode across all
    entries. Tests: `evt-shock-arrival.test.mjs` RATE-1..6.
 4. ~~G2 build~~ — not built: step 0 put the effect under 0.2% of spending (§4.5).
-5. G3 → design 129 (PROPOSED 15 Oct 2026). G4 → CLOSED after checking the sources
+5. G3 → design 129 (ACCEPTED rev 2, 16 Oct 2026). G4 → CLOSED after checking the sources
    (§6). G5 gets its own design when a study needs it.
 
 ## 9. Open questions
