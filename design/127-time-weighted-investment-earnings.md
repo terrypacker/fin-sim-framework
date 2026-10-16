@@ -1,6 +1,6 @@
 # 127 — Time-weighted investment earnings
 
-**Status:** ACCEPTED rev 2 (16 Oct 2026); phase 1 BUILT (16 Oct, §9). Raised by a study flag: "year-end earnings pay a full
+**Status:** ACCEPTED rev 2 (16 Oct 2026); phase 1 BUILT (16 Oct, §9); phase 2 MEASURED (16 Oct, §10), which adds §4.7–4.8 and two open questions (§7 Q6–Q7). Raised by a study flag: "year-end earnings pay a full
 year's return on the 31-Dec balance".
 
 - **rev 1 (15 Oct):** the problem, options A–D, proposal A with D as a first step.
@@ -243,6 +243,54 @@ There are twelve growth events per equity account a year, each emitting one
 design 62 §9) pay most. Measure MC wall time and peak memory on a real plan at n = 1000,
 under `diffs` and `off` telemetry, before choosing between monthly and quarterly (§7 Q1).
 
+### 4.7 A straight-line year under a stochastic path (found in phase 2)
+
+MONTHLY spreads the year's single draw evenly, so inside a year the price path is a
+straight line, and the first half's move predicts the second half's exactly. A trade that
+reacts to price inside the year therefore always trades against a known trend. The 1 July
+drift rebalance, after a rise, sells equity just before the rest of the rise. After a fall
+it buys just before the rest of the fall. The loss is about (share traded) × (half-year
+move), which grows with the square of the year's return. It is zero in a deterministic
+run, and real at an 18% volatility. ANNUAL has the mirror artifact: no price moves inside
+a year, so a July rebalance sees none of the year. Neither matches a market, where the
+first half does not predict the second.
+
+Measured on a real plan (§10): with drift rebalancing switched off in both cadences, the
+stochastic MONTHLY − ANNUAL gap equals the deterministic one. With it on, the gap
+doubles. So the extra is this artifact, not the crediting. **MONTHLY must not become the
+default with a straight-line year.**
+
+**Proposed fix: a Brownian bridge inside the year.** Keep the year's draw exactly as it is
+(design 74's tick, design 102's bootstrap, the betas, the drift compensation). Split its
+log return `L = ln(1 + r)` into twelve monthly log returns
+
+    ℓₘ = L/12 + s·(zₘ − z̄),   s = σ_sleeve / √12,   z₁…z₁₂ iid N(0, 1)
+
+The noise sums to zero, so the twelve months compound to exactly `1 + r`, and the year's
+distribution is untouched. Drawn this way, with `L` itself drawn with variance σ², the
+months are an ordinary random walk: the first half no longer predicts the second.
+- The z's are drawn once a year by the tick, for the market factor and per sleeve for
+  the idiosyncratic part, from a keyed stream (`rngStreams`). Adding them does not move
+  any other draw.
+- Each sleeve's monthly rate is its share of the market factor's bridge plus its own
+  idiosyncratic bridge, at its beta and idio vol, so markets still move together within
+  the year. Gold gets its own z at its correlation.
+- They are stored per month on state. `computeHoldingsGrowth` reads the month's factor
+  in place of `periodRate(r, 12)`. A deterministic run draws nothing and keeps the
+  straight line, which is correct there.
+- The security overlay and the regime adjustments stay as monthly period rates (they
+  are not volatility).
+
+### 4.8 The cost is per-action overhead (found in phase 2)
+
+MONTHLY runs 2.3–2.4× as long, deterministic and in MC alike. Peak memory is unchanged,
+and the lot count barely moves (§10). A profile puts about half of a MONTHLY run in the
+generic action pipeline: one `HoldingTransactAction` per lot per month-end, each through
+every reducer pass with a state copy. The growth arithmetic is about 1%. So quarterly
+crediting would divide the overhead by three, but **batching** would remove most of it at
+any cadence: one action per earnings event carrying every lot's delta, applied in one
+reducer pass.
+
 ## 5. What it touches
 
 - **`computeHoldingsGrowth`, `computeHoldingsDividends`, `computeFundIncome`:** a
@@ -289,7 +337,16 @@ under `diffs` and `off` telemetry, before choosing between monthly and quarterly
 4. **Switch the default to MONTHLY.** Regenerate the goldens, read the diffs, and restamp the
    help.
 
-## 7. Decisions (all accepted, 16 Oct 2026)
+Phase 2 (§10) adds two steps before phase 4, in this order:
+
+- **2b. The intra-year bridge (§4.7).** Without it, a MONTHLY Monte Carlo is biased
+  against every plan that rebalances mid-year.
+- **2c. Batched lot deltas (§4.8)**, if Q7 says the 2.3× matters. Re-measure after.
+
+Phase 3 (preset recalibration) must run after 2b, because the bridge changes the
+emergent path inside each year.
+
+## 7. Decisions (Q1–Q5 accepted 16 Oct 2026; Q6–Q7 open)
 
 1. **Monthly or quarterly growth?** Decided: monthly, which matches design 107's twelve JIT
    sales, unless phase 2's cost measurement says otherwise. Dividends are quarterly either
@@ -308,6 +365,14 @@ under `diffs` and `off` telemetry, before choosing between monthly and quarterly
    in a separate commit after phase 1, floored at −1 as under MONTHLY, with whatever
    goldens it moves read separately. It is a bug, not part of this change, and should not
    be hidden inside phase 4's regold.
+
+6. **The intra-year path (§4.7).** Proposed: a Brownian bridge on the year's draw, phase
+   2b, before any default switch. Alternatives: leave the straight line and switch anyway,
+   with a known bias against mid-year rebalancing in MC (rejected: the bias is about as
+   large as the error MONTHLY removes), or draw returns monthly (rejected: it would
+   rewrite the annual bootstrap and every calibration built on annual draws).
+7. **The cost (§4.8).** Proposed: batch the lot deltas (phase 2c) rather than fall back
+   to quarterly crediting, which would bring back a third of the timing error.
 
 ## 8. Test plan (phase 1: `tests/unit/earnings-cadence.test.mjs`, CAD-1 to CAD-13)
 
@@ -356,3 +421,21 @@ under `diffs` and `off` telemetry, before choosing between monthly and quarterly
 - **For phase 2:** reinvested dividends open a vintage lot per security per payment
   (design 106 §5), so quarterly dividends open four lots a year where ANNUAL opens one.
   Measure the lot count beside the wall time.
+
+## 10. Phase 2 measured (16 Oct 2026)
+
+On a real plan: a 43-year two-country retirement, starting in September, dividends
+reinvested, `rngStreams` on. Study files are private; the findings:
+
+- **Cost:** 2.35× deterministic, 2.33× in MC (400 paths). Peak memory unchanged. Lots
+  +1% at the end, +4% at the peak: quarterly reinvestment does not multiply vintages in
+  practice. See §4.8.
+- **Deterministic:** terminal real net worth −6.0% under MONTHLY. About half is the stub
+  year: the run starts in September, and ANNUAL credited a full year on 31 December.
+  The rest is a steady drift. Measured per year, MONTHLY's credits ÷ time-weighted equity
+  hold at the rate monthly crediting must give. ANNUAL's wander 0.05–0.25 points above
+  it with the year's flow timing. ANNUAL was over-crediting; MONTHLY is the correct one.
+- **Monte Carlo:** the median paired gap is −12%, and failures rise from 4.5% to 6.5%
+  (8 worlds broken, none rescued). The process-by-process decomposition puts all of the
+  extra on the stochastic equity path. Turning off drift rebalancing in both cadences
+  returns it to the deterministic size. That is §4.7's straight-line artifact.
