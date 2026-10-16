@@ -198,6 +198,13 @@ export const COVERED = [
  * this file exists to prevent.
  */
 export const KNOWN_GAPS = [
+  // ── MONTHLY equity earnings (design 127)
+  // MarketIndexReducer reduces the month-end index step in every scenario, but only a
+  // MONTHLY plan schedules it, and every golden runs ANNUAL until phase 4 switches the
+  // default. earnings-cadence.test.mjs covers it in isolation and in a run (CAD-11, CAD-7).
+  // Phase 4's regold clears it.
+  'MARKET_INDEX_STEP_APPLY',
+
   // ── MSBS reversion (design 119 phase 5)
   // The only golden with an MSBS pension is a single person who outlives the run, so
   // nothing dies holding one. MSP-10 in msbs-pension.test.mjs covers it in isolation.

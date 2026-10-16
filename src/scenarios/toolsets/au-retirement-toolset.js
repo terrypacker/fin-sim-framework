@@ -9,6 +9,7 @@
  */
 
 import { EventBuilder }               from '../../simulation-framework/builders/event-builder.js';
+import { earningsSchedule, withEarningsCadence } from '../../finance/holdings/earnings-cadence.js';
 import { ReducerBuilder }             from '../../simulation-framework/builders/reducer-builder.js';
 import { OneOffEvent }                from '../../simulation-framework/events/one-off-event.js';
 import { ACCOUNT_ROLES }              from '../../finance/state/account-roles.js';
@@ -196,7 +197,7 @@ export const AU_RETIREMENT = {
       // is the pre-tax base and `taxRate` the rate applied (0 in pension phase). All three
       // must be declared or pickPayload drops them and the journal cannot explain the split.
       // `frankingCredit` (design 90 §8.4) is the GROSS credit on the fund's AU dividends.
-      { type: 'SUPER_EARNINGS_APPLY',              fields: { amount: ValueType.currency('AUD'), grossAmount: ValueType.currency('AUD'), frankingCredit: ValueType.currency('AUD'), stateKey: ValueType.text(), taxRate: ValueType.number() } },
+      { type: 'SUPER_EARNINGS_APPLY',              fields: { amount: ValueType.currency('AUD'), grossAmount: ValueType.currency('AUD'), frankingCredit: ValueType.currency('AUD'), stateKey: ValueType.text(), taxRate: ValueType.number(), flooredLots: ValueType.number() } },
       // design 119 §6.4 — a year's net Balanced return on a preserved MSBS funded benefit.
       { type: 'MSBS_FUNDED_EARNINGS_APPLY',       fields: { stateKey: ValueType.text(), amount: ValueType.currency('AUD'), rate: ValueType.number() } },
       // design 119 phase 5 — the election, each month's pension and its tax facts, and the
@@ -445,6 +446,8 @@ export const AU_RETIREMENT = {
     const superAccts   = accounts.filter(a => a.role === ACCOUNT_ROLES.SUPER);
     const auStockAccts = accounts.filter(a => a.role === ACCOUNT_ROLES.AU_STOCK);
     const withSS       = people.filter(p => (p.socialSecurityMonthly ?? 0) > 0);
+    // Design 127 — see the US toolset.
+    const cadence      = earningsSchedule(context.parameters);
 
     const schedules = [];
 
@@ -477,9 +480,9 @@ export const AU_RETIREMENT = {
 
     if (superAccts.length > 0) {
       schedules.push(
-        EventBuilder.eventSeries()
-          .name('Super Earnings').type('INTL_SUPER_EARNINGS')
-          .interval('year-end').startOffset(0).enabled(true).color('#9C27B0').build()
+        withEarningsCadence(EventBuilder.eventSeries()
+          .name('Super Earnings').type('INTL_SUPER_EARNINGS'), cadence.growth)
+          .startOffset(0).enabled(true).color('#9C27B0').build()
       );
     }
     // Design 119 phase 5 — an MSBS benefit's election and its monthly pension.
@@ -509,14 +512,14 @@ export const AU_RETIREMENT = {
 
     if (auStockAccts.length > 0) {
       schedules.push(
-        EventBuilder.eventSeries()
-          .name('AU Stock Earnings').type('INTL_AU_STOCK_EARNINGS')
-          .interval('year-end').startOffset(0).enabled(true).color('#66BB6A').build()
+        withEarningsCadence(EventBuilder.eventSeries()
+          .name('AU Stock Earnings').type('INTL_AU_STOCK_EARNINGS'), cadence.growth)
+          .startOffset(0).enabled(true).color('#66BB6A').build()
       );
       schedules.push(
-        EventBuilder.eventSeries()
-          .name('AU Stock Dividend').type('INTL_AU_STOCK_DIVIDEND')
-          .interval('year-end').startOffset(0).enabled(true).color('#FFA726').build()
+        withEarningsCadence(EventBuilder.eventSeries()
+          .name('AU Stock Dividend').type('INTL_AU_STOCK_DIVIDEND'), cadence.dividend)
+          .startOffset(0).enabled(true).color('#FFA726').build()
       );
     }
 

@@ -1,6 +1,6 @@
-    # 127 — Time-weighted investment earnings
-    
-    **Status:** ACCEPTED rev 2 (16 Oct 2026); phase 1 in progress. Raised by a study flag: "year-end earnings pay a full
+# 127 — Time-weighted investment earnings
+
+**Status:** ACCEPTED rev 2 (16 Oct 2026); phase 1 BUILT (16 Oct, §9). Raised by a study flag: "year-end earnings pay a full
 year's return on the 31-Dec balance".
 
 - **rev 1 (15 Oct):** the problem, options A–D, proposal A with D as a first step.
@@ -168,18 +168,22 @@ June would credit the previous year's draw and July to December the new one. Eac
 year would then blend two draws, which cuts the yearly volatility by about 30% and makes
 consecutive years correlated.
 
-**Fix:** under MONTHLY the fold needs a 1-January carrier in every plan. The cleanest is a
-`PERIOD_ADVANCE_EQUITY` on 1 January (`PERIOD_ADVANCE_ORDER`), scheduled only under MONTHLY
-and only when no US advance exists. `RegimeApplyReducer` and `EquityReturnReducer` reduce it
-like the other advances. The design 94 §6.6 property survives: every account still sees one
-rate for the calendar year.
+**Fix:** under MONTHLY the fold needs a 1-January carrier in every plan. As built (§9): an
+`EQUITY_YEAR_OPEN` event on 1 January at order −0.9 that emits `RECOMPUTE_REGIMES`.
+Every reducer that refolds a deviation onto the effective rates already reduces that action
+for the monthly recovery ticks: regime apply, equity, inflation, yield curve, FX and prime
+relink. A new action type would have needed every one of them to learn it. The event is
+scheduled under MONTHLY with a stochastic equity path. In a plan with a US advance it runs
+just after that advance and recomputes the same values. The design 94 §6.6 property
+survives: every account still sees one rate for the calendar year.
 
 ### 4.2 The market index steps once per 31 December
 
 `MarketIndexReducer` counts 31-December year-ends since `marketIndexAsOfMs` and steps by
-whole years at the period advance after each. Under MONTHLY it steps by month-ends: it
-counts month-ends, grows by `n / 12` years at the period rate (§3.2), and moves to the
-monthly carrier (the same month-end order band as the earnings, §4.5). Design 101's
+whole years at the period advance after each. Under MONTHLY a month-end
+`MARKET_INDEX_STEP` (order 0.5, after the month's growth and dividends) steps it one
+period at the period rates (§3.2) and moves the as-of date to that month-end. The period
+advances then find no 31 December after the as-of date, so the annual path needs no flag. Design 101's
 watchlists read the index, so it must track the lots month by month or a watchlist alert
 fires on a stale level.
 
@@ -192,8 +196,17 @@ Design 120's overlay measures `f`, the move in the exchange rate since the last
   that fall on the same date;
 - the carry and the cost are converted to a period amount with the same geometric
   conversion;
-- an `INCOME` fund's carried loss stays annual, because that loss is about the fund's
-  distribution year. The stamp keeps a 31-December branch for it.
+- an `INCOME` fund's split (design 120 §5.7) runs once per **distribution** period, the
+  quarter: the same formula on the quarter's yield, price and FX move, measured from a
+  second mark (`fxMarkDist`) that the stamp moves only at quarter-ends. The carried loss
+  moves from payment to payment. On the quarter-end month, the growth event adds the
+  quarter's D − D′ to the price, and the dividend pays D′. ALIGNED and INCOME lots
+  therefore still hold the same value at every payment date.
+  (Changed in phase 1 from "the carried loss stays annual". An annual true-up would
+  have had to claw back quarterly payments already made, and the per-period rule reuses
+  the existing formula unchanged. It differs only in netting: a hedge gain early in the
+  year is distributed before a later loss could absorb it, as a fund paying quarterly
+  does.)
 
 ### 4.4 The shock presets are calibrated to a 31-December sample
 
@@ -296,7 +309,7 @@ under `diffs` and `off` telemetry, before choosing between monthly and quarterly
    goldens it moves read separately. It is a bug, not part of this change, and should not
    be hidden inside phase 4's regold.
 
-## 8. Test plan (to be written with the code)
+## 8. Test plan (phase 1: `tests/unit/earnings-cadence.test.mjs`, CAD-1 to CAD-13)
 
 - **ANNUAL byte-identical:** every golden unchanged in phase 1.
 - **Buy-and-hold:** under MONTHLY, a wrapper lot ends the year at exactly `(1 + T)`, and a
@@ -321,3 +334,25 @@ under `diffs` and `off` telemetry, before choosing between monthly and quarterly
   MONTHLY as under ANNUAL.
 - **Quarter-end interval:** it fires on 31 Mar, 30 Jun, 30 Sep and 31 Dec from any start
   date.
+
+## 9. Phase 1 as built (16 Oct 2026)
+
+- **`earnings-cadence.js`** holds the parameter values, the order bands, `periodRate`
+  (floored at −1), `multiplicativePrice`, `isQuarterEnd` and `earningsSchedule`. Under
+  ANNUAL that last returns exactly the old series (a year-end interval, no order, no
+  data), so the queue is unchanged. The goldens pass untouched.
+- **The cadence travels on the event**, as `data.periodsPerYear`, the way coupons carry
+  `firingsPerYear`. No handler gained state, and a saved plan's queue carries it.
+- **Order bands (§4.5):** growth −0.5, dividends −0.4. Under ANNUAL, a 31-December year-end
+  instance was queued a year earlier than any month-end one, so FIFO ran the earnings and
+  dividends before that day's order-0 events, the RMDs included (they read the post-growth
+  balance). A month-end instance is queued on 30 November, so FIFO would have flipped
+  that. The bands keep it. The hedge stamp (0.5) and the index step (0.5) run after.
+- **The first month is a whole month.** A run starting mid-month credits its first
+  month-end in full, an error of at most a month's return on the opening book. That is
+  small next to the twelve-for-four months ANNUAL credits on a September start.
+- **The floor is recorded** as `flooredLots` on the six growth apply actions, declared
+  so the payload keeps it.
+- **For phase 2:** reinvested dividends open a vintage lot per security per payment
+  (design 106 §5), so quarterly dividends open four lots a year where ANNUAL opens one.
+  Measure the lot count beside the wall time.

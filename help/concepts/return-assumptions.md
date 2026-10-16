@@ -3,8 +3,8 @@ id: return-assumptions
 kind: concept
 title: Return Assumptions
 panels: [allocation, holdings]
-params: [usEquityGrowthRate, usEquityDividendYield, auEquityGrowthRate, auEquityDividendYield, intlExUsEquityGrowthRate, intlExUsEquityDividendYield, intlExAuEquityGrowthRate, intlExAuEquityDividendYield, equityAnchorShift, goldGrowthRate, dividendReinvest, auDividendReinvest, superFrankedPercent]
-design: [99-market-total-return-model.md, 106-dividend-reinvestment-election.md]
+params: [usEquityGrowthRate, usEquityDividendYield, auEquityGrowthRate, auEquityDividendYield, intlExUsEquityGrowthRate, intlExUsEquityDividendYield, intlExAuEquityGrowthRate, intlExAuEquityDividendYield, equityAnchorShift, goldGrowthRate, dividendReinvest, auDividendReinvest, superFrankedPercent, equityEarningsCadence]
+design: [99-market-total-return-model.md, 106-dividend-reinvestment-election.md, 127-time-weighted-investment-earnings.md]
 stamps:
   param:usEquityGrowthRate: ebebda
   param:usEquityDividendYield: 3ab1d3
@@ -19,6 +19,7 @@ stamps:
   param:dividendReinvest: 9db9f3
   param:auDividendReinvest: 551114
   param:superFrankedPercent: 07a227
+  param:equityEarningsCadence: 75b74e
   panel:allocation: 762dd9
   panel:holdings: 962055
 ---
@@ -47,6 +48,12 @@ quietly accumulates idle cash.
 One shift lever moves every equity market together in a single systematic draw, which
 is the honest way to sample uncertainty about long-run returns: markets that rise and
 fall as one rather than cancelling each other out.
+
+**When** the return is credited is a separate choice from how much. Crediting the year
+on the balance held at its end rewards money for months it was not invested and
+ignores months it was, which biases any comparison of timing: a lump sum deployed in
+November, a sale in June. The monthly cadence compounds to the same annual figure, so
+an account nobody touches ends the year in the same place either way.
 
 Gold is deliberately independent of both equities and policy rates, and carries its
 own disposal treatment. For franking credits on Australian shares, see the franked

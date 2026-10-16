@@ -9,11 +9,11 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-234 parameters · 33 panels · 12 node types (206 fields) · 179 action types · 91 tools · 320 state field types · 78 topics · 137 design docs
+235 parameters · 33 panels · 12 node types (206 fields) · 180 action types · 91 tools · 320 state field types · 78 topics · 137 design docs
 
 ---
 
-## Parameters (234)
+## Parameters (235)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
@@ -329,7 +329,7 @@ scenario's own schema), which is where to go to change it.
 - **`poolFlowsEnabled`** — Pool Refill Flows Enabled · `Boolean` · default `true` · conditional · via ECONOMIC_REGIMES
   Authors the graph's TOPOLOGY without its BEHAVIOUR: pools, targets, capacity and the spend order stay live, refill flows do not fire. This is the arm-vs-control switch a study of the refill rule needs — the alternative is deleting the flows in one arm, which also changes the pool sizing and makes the two arms differ in two ways at once.
 
-### Market Rates (9)
+### Market Rates (10)
 
 - **`auEquityDividendYield`** — AU Equity Dividend Yield · `Number` · default `0.0343` · sweep: mc · via ECONOMIC_REGIMES
   The part of the AU Equity total return paid as dividends. Changes how the return is TAXED, not its size: a taxable account pays it out as a dividend and grows by the rest. A security or lot that names its own yield overrides this.
@@ -337,6 +337,8 @@ scenario's own schema), which is where to go to change it.
   Expected annual TOTAL return of the AU Equity market — price growth plus dividends. Every equity holding tracking this market earns it, in any account: a taxable account grows by this minus the dividend yield and pays the yield out as a dividend; a retirement account or super grows by the whole of it.
 - **`equityAnchorShift`** — Equity Return Shift (all markets) · `Number` · default `0` · sweep: mc · via ECONOMIC_REGIMES
   Added to every equity market's total return at once — one systematic draw, so the markets rise and fall together rather than cancelling out. Monte Carlo samples it; leave it at 0 for a single run. Reaches every holding that tracks a market; not an authored appreciation schedule, and not gold, bonds or cash.
+- **`equityEarningsCadence`** — Equity Earnings Cadence · `Enum` · default `ANNUAL` · one of `ANNUAL`, `MONTHLY` · via ECONOMIC_REGIMES
+  How often equity, gold and super holdings are credited with their return. Annual credits the whole year on the balance held on 31 December, so money that arrived in November earns a full year and money spent in June earns nothing for the months it was invested. Monthly credits each month-end at the rate that compounds to the same annual return, pays dividends each quarter-end, and lets prices move during the year. The year's return is still decided once a year. Annual reproduces runs made before design 127.
 - **`intlExAuEquityDividendYield`** — International ex-AU Equity Dividend Yield · `Number` · default `0.0147` · sweep: mc · via ECONOMIC_REGIMES
   The part of the International ex-AU Equity total return paid as dividends. Changes how the return is TAXED, not its size: a taxable account pays it out as a dividend and grows by the rest. A security or lot that names its own yield overrides this.
 - **`intlExAuEquityGrowthRate`** — International ex-AU Equity Total Return · `Number` · default `0.075` · sweep: mc · via ECONOMIC_REGIMES
@@ -1033,7 +1035,7 @@ Explained in [`help/nodes`](nodes/event.md). 0 field(s) described by a record pa
 - **`enabled`** — Enabled · `checkbox` · topic
   Off suppresses every firing of this event without deleting it, which is the safe way to A/B a mechanic: the node, its handlers and its history all stay where they are.
 - **`interval`** — Interval · `select` · topic
-  How often a series repeats: monthly, quarterly, semiannual, annually, month-end or year-end. Only on a recurring series.
+  How often a series repeats: monthly, quarterly, semiannual, annually, month-end, quarter-end or year-end. Quarterly counts three months from the start; quarter-end lands on 31 March, 30 June, 30 September and 31 December. Only on a recurring series.
 - **`startOffset`** — Start Offset · `number` · topic
   Whole years after the simulation start before the series begins firing. 0 starts immediately; 5 waits five years, which is how a rhythm that begins at retirement is expressed without naming a calendar date.
 - **`date`** — Date · `date` · topic
@@ -1708,7 +1710,7 @@ docblock, not re-authored here. Arguments come from each script's declarative
 
 ---
 
-## Journal action types (179)
+## Journal action types (180)
 
 Every action a toolset declares, with its payload shape. A type declared by more than
 one toolset is one row: the toolsets compose into a single run, so it is one action in
@@ -1746,7 +1748,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `AU_SAVINGS_EARNINGS_TAX` | amount: currency(AUD), residency: text, stateKey: text | AU_BANKING |
 | `AU_SAVINGS_WITHDRAWAL_APPLY` | amount: currency(AUD) | AU_BANKING |
 | `AU_SE_INCOME_TAX` | amount: currency(AUD), residency: text, personKey: text, workCountry: text | AU_INCOME |
-| `AU_STOCK_EARNINGS_APPLY` | amount: currency(AUD), stateKey: text | AU_BROKERAGE |
+| `AU_STOCK_EARNINGS_APPLY` | amount: currency(AUD), stateKey: text, flooredLots: number | AU_BROKERAGE |
 | `AU_STOCK_WITHDRAWAL_APPLY` | salePrice: currency(AUD), costBasis: currency(AUD), residency: text | AU_BROKERAGE |
 | `AU_STOCK_WITHDRAWAL_TAX` | gain: currency(AUD), auGain: currency(AUD), auIndexedGain: currency(AUD), auDiscountableGain: currency(AUD), usShortTermGain: currency(AUD), usLongTermGain: currency(AUD), auShortTermGain: currency(AUD), auLongTermGain: currency(AUD), residency: text, proceeds: currency(AUD), costBasis: currency(AUD), description: text, stateKey: text | AU_BROKERAGE |
 | `AU_TAX_INSTALMENT_DEBIT` | amount: currency(AUD), quarter: number | AU_TAX |
@@ -1783,7 +1785,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `FX_TRANSFER_APPLY` | from: text, to: text, fromAmount: number, toAmount: number, rate: number, fee: currency(USD), section988: any | US_AU_CROSS_BORDER |
 | `GUARDRAIL_ADJUST_APPLY` | multiplier: number, cause: text, date: any | AU_RETIREMENT, US_RETIREMENT |
 | `GUARDRAIL_BASELINE_APPLY` | initialWithdrawalRate: number, portfolioValue: number, annualSpending: number, date: any | AU_RETIREMENT, US_RETIREMENT |
-| `HEDGE_YEAR_END_APPLY` | rates: any, carriedLoss: any | ECONOMIC_REGIMES |
+| `HEDGE_YEAR_END_APPLY` | rates: any, distRates: any, carriedLoss: any | ECONOMIC_REGIMES |
 | `HOUSE_REPAIR_APPLY` | stateKey: text, amount: number, capitalize: number | US_RETIREMENT |
 | `INFLATION_STEP_APPLY` | deviation: any, latent: any, floor: number, historicalYear: number, passThrough: any, primeDeviation: any, primeFloor: any | ECONOMIC_REGIMES |
 | `INHERIT_APPLY` | stateKey: text, name: text, category: text, country: text, inheritedValue: number, usCitizen: text, auResident: text, inheritanceDateMs: number | INHERITANCE |
@@ -1793,7 +1795,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `INTL_TRANSFER_RECORD` | direction: text, srcKey: text, dstKey: text, from: text, to: text, fromAmount: number, toAmount: number, fee: number | US_AU_CROSS_BORDER |
 | `IRA_CONTRIBUTION_APPLY` | amount: currency(USD), stateKey: text | US_RETIREMENT |
 | `IRA_CONTRIBUTION_TAX` | amount: currency(USD) | US_RETIREMENT |
-| `IRA_EARNINGS_APPLY` | amount: currency(USD), stateKey: text, derivedAmount: number | US_RETIREMENT |
+| `IRA_EARNINGS_APPLY` | amount: currency(USD), stateKey: text, derivedAmount: number, flooredLots: number | US_RETIREMENT |
 | `IRA_RMD_APPLY` | amount: currency(USD), residency: text, stateKey: text | US_RETIREMENT |
 | `IRA_RMD_TAX` | amount: currency(USD), residency: text, stateKey: text | US_RETIREMENT |
 | `IRA_ROLLOVER_WITHDRAWAL_APPLY` | amount: currency(USD), residency: text | US_RETIREMENT |
@@ -1804,7 +1806,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `IRA_WITHDRAWAL_EARNINGS_TAX` | amount: currency(USD), penaltyAmount: number, residency: text, stateKey: text | US_RETIREMENT |
 | `K401_CONTRIBUTION_APPLY` | amount: currency(USD), stateKey: text, employerFunded: boolean, personKey: text, nonElective: boolean, clamps: any | US_RETIREMENT |
 | `K401_CONTRIBUTION_TAX` | amount: currency(USD) | US_RETIREMENT |
-| `K401_EARNINGS_APPLY` | amount: currency(USD), stateKey: text, derivedAmount: number | US_RETIREMENT |
+| `K401_EARNINGS_APPLY` | amount: currency(USD), stateKey: text, derivedAmount: number, flooredLots: number | US_RETIREMENT |
 | `K401_RMD_APPLY` | amount: currency(USD), residency: text, stateKey: text | US_RETIREMENT |
 | `K401_RMD_TAX` | amount: currency(USD), residency: text, stateKey: text | US_RETIREMENT |
 | `K401_TO_IRA_CONVERSION_APPLY` | amount: currency(USD) | US_RETIREMENT |
@@ -1812,6 +1814,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `K401_WITHDRAWAL_TAX` | amount: currency(USD), penaltyAmount: number | US_RETIREMENT |
 | `LATE_LIFE_CARE_APPLY` | active: boolean, factor: number, personId: text | AU_RETIREMENT, US_RETIREMENT |
 | `LOAN_PAYMENT_APPLY` | loanKey: text, payment: number, interest: number, cashDue: number, section988: any, fixedStamps: any | AU_REAL_PROPERTY, US_REAL_PROPERTY |
+| `MARKET_INDEX_STEP_APPLY` | periodsPerYear: number | ECONOMIC_REGIMES |
 | `MSBS_ELECTION_APPLY` | stateKey: text, personKey: text, electionMs: any, annual: currency(AUD), taxedShare: number, converted: currency(AUD), lumpTaxed: currency(AUD), lumpUntaxed: currency(AUD), lumpTo: text, cpiLevel: number | AU_RETIREMENT |
 | `MSBS_FUNDED_EARNINGS_APPLY` | stateKey: text, amount: currency(AUD), rate: number | AU_RETIREMENT |
 | `MSBS_PENSION_APPLY` | stateKey: text, personKey: text, amount: currency(AUD), taxedShare: number, age: number, preservationAge: number, fullRate: boolean | AU_RETIREMENT |
@@ -1832,7 +1835,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `ROTH_CONTRIBUTION_APPLY` | amount: currency(USD), stateKey: text | US_RETIREMENT |
 | `ROTH_CONVERSION_APPLY` | amount: currency(USD), residency: text | US_ROTH_CONVERSION |
 | `ROTH_CONVERSION_TAX` | amount: currency(USD), residency: text | US_ROTH_CONVERSION |
-| `ROTH_EARNINGS_APPLY` | amount: currency(USD), stateKey: text, derivedAmount: number | US_RETIREMENT |
+| `ROTH_EARNINGS_APPLY` | amount: currency(USD), stateKey: text, derivedAmount: number, flooredLots: number | US_RETIREMENT |
 | `ROTH_ROLLOVER_CONTRIBUTION_APPLY` | amount: currency(USD) | US_RETIREMENT |
 | `ROTH_ROLLOVER_EARNINGS_APPLY` | amount: currency(USD) | US_RETIREMENT |
 | `ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_APPLY` | amount: currency(USD), penaltyAmount: number, auAssessableAmount: number, residency: text, rolloverConversions: any | US_RETIREMENT |
@@ -1861,7 +1864,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `STOCK_DIVIDEND_APPLY` | amount: currency(USD), residency: text, stateKey: text | US_BROKERAGE |
 | `STOCK_DIVIDEND_CASH_APPLY` | amount: currency(USD), residency: text, stateKey: text | US_RETIREMENT |
 | `STOCK_DIVIDEND_TAX` | amount: currency(USD), residency: text, stateKey: text | US_BROKERAGE |
-| `STOCK_EARNINGS_APPLY` | amount: currency(USD), stateKey: text | US_BROKERAGE |
+| `STOCK_EARNINGS_APPLY` | amount: currency(USD), stateKey: text, flooredLots: number | US_BROKERAGE |
 | `STOCK_HARVEST_APPLY` | stateKey: text, sellAmount: number, sourceHoldingId: text, substituteHoldingId: text, substituteSecurityId: text, purpose: text, residency: text | ECONOMIC_REGIMES |
 | `STOCK_WITHDRAWAL_APPLY` | salePrice: currency(USD), costBasis: currency(USD), residency: text | US_BROKERAGE |
 | `STOCK_WITHDRAWAL_TAX` | currency: text, gain: currency(USD), auGain: currency(USD), auIndexedGain: currency(USD), auDiscountableGain: currency(USD), usShortTermGain: currency(USD), usLongTermGain: currency(USD), auShortTermGain: currency(USD), auLongTermGain: currency(USD), residency: text, proceeds: currency(USD), costBasis: currency(USD), description: text, stateKey: text, washDisallowed: currency(USD) | US_BROKERAGE |
@@ -1871,7 +1874,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `SUPER_DEATH_BENEFIT_APPLY` | stateKey: text, taxable: number, paidViaEstate: boolean | AU_RETIREMENT, US_RETIREMENT |
 | `SUPER_DEATH_BENEFIT_TAX` | amount: currency(AUD) | INHERITANCE |
 | `SUPER_DOWNSIZER_CONTRIBUTION_APPLY` | personKey: text, amount: number, reason: text, section988: any | AU_REAL_PROPERTY |
-| `SUPER_EARNINGS_APPLY` | amount: currency(AUD), grossAmount: currency(AUD), frankingCredit: currency(AUD), stateKey: text, taxRate: number | AU_RETIREMENT |
+| `SUPER_EARNINGS_APPLY` | amount: currency(AUD), grossAmount: currency(AUD), frankingCredit: currency(AUD), stateKey: text, taxRate: number, flooredLots: number | AU_RETIREMENT |
 | `SUPER_EARNINGS_TAX` | amount: currency(AUD), frankingCredit: currency(AUD), stateKey: text, taxRate: number | AU_RETIREMENT |
 | `SUPER_NON_CONCESSIONAL_APPLY` | amount: currency(AUD), stateKey: text, personKey: text, clamps: any, carriedForward: currency(AUD), section988: any | AU_RETIREMENT |
 | `SUPER_PERSONAL_DEDUCTION` | amount: currency(AUD), stateKey: text, personKey: text | AU_RETIREMENT |
@@ -2259,7 +2262,7 @@ what the in-app panel keys on.
 | [Cost Basis and Company Equity](concepts/cost-basis-and-equity.md) | concept | 333 | 2 panels · 3 params · design 94, 72 |
 | [Field × Action](panels/cross-action-query.md) | panel | 196 | 1 panel |
 | [Cross-Border Residency](concepts/cross-border-residency.md) | concept | 265 | 2 panels · 4 params · design 36, 52 |
-| [Currency Hedging](concepts/currency-hedging.md) | concept | 397 | 3 params · 1 action · design 120, 121 |
+| [Currency Hedging](concepts/currency-hedging.md) | concept | 394 | 3 params · 1 action · design 120, 121 |
 | [Dashboard](panels/dashboard.md) | panel | 183 | 1 panel |
 | [Decision Graph](panels/dg-config.md) | panel | 168 | 1 panel · design 30 |
 | [DG Results](panels/dg-results.md) | panel | 162 | 1 panel · design 30 |
@@ -2302,7 +2305,7 @@ what the in-app panel keys on.
 | [Real vs Nominal Dollars](concepts/real-vs-nominal.md) | concept | 398 | 12 panels · design 79, 89 |
 | [Recorded MPC Runs](concepts/recorded-mpc-runs.md) | concept | 400 | 1 panel · 3 params · design 81, 80 |
 | [Reducer](nodes/reducer.md) | node | 195 | 3 panels · design 2, 16 |
-| [Return Assumptions](concepts/return-assumptions.md) | concept | 266 | 2 panels · 13 params · design 99, 106 |
+| [Return Assumptions](concepts/return-assumptions.md) | concept | 340 | 2 panels · 14 params · design 99, 106, 127 |
 | [Roth Conversions](concepts/roth-conversions.md) | concept | 291 | 2 panels · 10 params · design 29 |
 | [Scenario](panels/scenario.md) | panel | 201 | 1 panel |
 | [Scenario Compare](panels/scenario-compare.md) | panel | 205 | 1 panel |

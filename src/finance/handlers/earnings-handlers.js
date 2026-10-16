@@ -50,6 +50,16 @@ import { computeHoldingsGrowth, computeHoldingsDividends, computeFundIncome } fr
 import { HoldingTransactAction, VALUE_KIND } from '../holdings/holding-actions.js';
 import { superEarningsTaxRate } from '../tax/au/super-tax-rate.js';
 import { superDrawStartIn } from '../account-rules/au/super-release.js';
+import { isQuarterEnd } from '../holdings/earnings-cadence.js';
+
+/**
+ * Design 127 — how many times a year this event credits, from the event's own data (the
+ * MONTHLY series carry `periodsPerYear: 12`); 1, the annual model, when it says nothing.
+ */
+const periodsOf = (data) => data?.periodsPerYear ?? 1;
+
+/** Design 127 §3.3 — the floor's count, on the apply action only when it was hit. */
+const flooredField = (n) => (n > 0 ? { flooredLots: n } : {});
 
 /**
  * Handles INTL_ROTH_EARNINGS events.
@@ -85,19 +95,20 @@ export class IntlRothEarningsHandler extends HandlerEntry {
     return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, growthRate: this.growthRate, dividendYield: this.dividendYield };
   }
 
-  call({ state }) {
+  call({ data, state }) {
     const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const { amount, derivedAmount, holdingActions } = computeHoldingsGrowth({
+    const { amount, derivedAmount, holdingActions, flooredLots } = computeHoldingsGrowth({
       state, stateKey,
       fallbackRate:    this.growthRate,
       fallbackRateKey: this.rateKey,
       dividendYield:   this.dividendYield,
+      periodsPerYear:  periodsOf(data),
     });
     // A LOSS is applied, not discarded (design 84 G12). Only an exactly-flat year
     // short-circuits. See the file header.
     if (amount === 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
-      { type: 'ROTH_EARNINGS_APPLY', amount, derivedAmount, stateKey },
+      { type: 'ROTH_EARNINGS_APPLY', amount, derivedAmount, stateKey, ...flooredField(flooredLots) },
       ...holdingActions,
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
@@ -138,19 +149,20 @@ export class IntlIraEarningsHandler extends HandlerEntry {
     return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, growthRate: this.growthRate, dividendYield: this.dividendYield };
   }
 
-  call({ state }) {
+  call({ data, state }) {
     const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const { amount, derivedAmount, holdingActions } = computeHoldingsGrowth({
+    const { amount, derivedAmount, holdingActions, flooredLots } = computeHoldingsGrowth({
       state, stateKey,
       fallbackRate:    this.growthRate,
       fallbackRateKey: this.rateKey,
       dividendYield:   this.dividendYield,
+      periodsPerYear:  periodsOf(data),
     });
     // A LOSS is applied, not discarded (design 84 G12). Only an exactly-flat year
     // short-circuits. See the file header.
     if (amount === 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
-      { type: 'IRA_EARNINGS_APPLY', amount, derivedAmount, stateKey },
+      { type: 'IRA_EARNINGS_APPLY', amount, derivedAmount, stateKey, ...flooredField(flooredLots) },
       ...holdingActions,
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
@@ -191,19 +203,20 @@ export class IntlK401EarningsHandler extends HandlerEntry {
     return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, growthRate: this.growthRate, dividendYield: this.dividendYield };
   }
 
-  call({ state }) {
+  call({ data, state }) {
     const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const { amount, derivedAmount, holdingActions } = computeHoldingsGrowth({
+    const { amount, derivedAmount, holdingActions, flooredLots } = computeHoldingsGrowth({
       state, stateKey,
       fallbackRate:    this.growthRate,
       fallbackRateKey: this.rateKey,
       dividendYield:   this.dividendYield,
+      periodsPerYear:  periodsOf(data),
     });
     // A LOSS is applied, not discarded (design 84 G12). Only an exactly-flat year
     // short-circuits. See the file header.
     if (amount === 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
-      { type: 'K401_EARNINGS_APPLY', amount, derivedAmount, stateKey },
+      { type: 'K401_EARNINGS_APPLY', amount, derivedAmount, stateKey, ...flooredField(flooredLots) },
       ...holdingActions,
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
@@ -245,9 +258,10 @@ export class IntlUsStockEarningsHandler extends HandlerEntry {
     return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, stateKey: this._stateKeyFixed, growthRate: this.growthRate };
   }
 
-  call({ state }) {
+  call({ data, state, date }) {
     const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const { amount, holdingActions } = computeHoldingsGrowth({
+    const n = periodsOf(data);
+    const { amount, holdingActions, flooredLots } = computeHoldingsGrowth({
       state, stateKey,
       fallbackRate:    this.growthRate,
       fallbackRateKey: this.rateKey,
@@ -255,12 +269,15 @@ export class IntlUsStockEarningsHandler extends HandlerEntry {
       // Design 99 §2 — the dividend handler beside this one pays the yield, so the
       // price moves by the market's total return minus it.
       yieldPaidSeparately: true,
+      periodsPerYear:  n,
+      // Design 127 §4.3 — the month-end that shares a date with the quarter's dividend.
+      distributionDue: n !== 1 && isQuarterEnd(date),
     });
     // A LOSS is applied, not discarded (design 84 G12). Only an exactly-flat year
     // short-circuits. See the file header.
     if (amount === 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
-      { type: 'STOCK_EARNINGS_APPLY', amount, stateKey },
+      { type: 'STOCK_EARNINGS_APPLY', amount, stateKey, ...flooredField(flooredLots) },
       ...holdingActions,
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
@@ -319,9 +336,10 @@ export class IntlAuStockEarningsHandler extends HandlerEntry {
     return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, stateKey: this._stateKeyFixed, growthRate: this.growthRate };
   }
 
-  call({ state }) {
+  call({ data, state, date }) {
     const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const { amount, holdingActions } = computeHoldingsGrowth({
+    const n = periodsOf(data);
+    const { amount, holdingActions, flooredLots } = computeHoldingsGrowth({
       state, stateKey,
       fallbackRate:    this.growthRate,
       fallbackRateKey: this.rateKey,
@@ -329,6 +347,9 @@ export class IntlAuStockEarningsHandler extends HandlerEntry {
       // Design 99 §2 — the dividend handler beside this one pays the yield, so the
       // price moves by the market's total return minus it.
       yieldPaidSeparately: true,
+      periodsPerYear:  n,
+      // Design 127 §4.3 — the month-end that shares a date with the quarter's dividend.
+      distributionDue: n !== 1 && isQuarterEnd(date),
     });
     // A LOSS is applied, not discarded (design 84 G12). Only an exactly-flat year
     // short-circuits. See the file header.
@@ -340,7 +361,7 @@ export class IntlAuStockEarningsHandler extends HandlerEntry {
       // scalar balance while its own lots grew correctly — money in the balance with no
       // asset behind it, which is where F7's phantom starts. The US sibling
       // (`STOCK_EARNINGS_APPLY`) has stamped it since design 76; this one never did.
-      { type: 'AU_STOCK_EARNINGS_APPLY', amount, stateKey },
+      { type: 'AU_STOCK_EARNINGS_APPLY', amount, stateKey, ...flooredField(flooredLots) },
       ...holdingActions,
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
@@ -424,6 +445,8 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
       state, stateKey,
       fallbackYield:   this.dividendRate,
       fallbackRateKey: this.rateKey,
+      // Design 127 — a quarter's payment under MONTHLY earnings; 1 (the year's) otherwise.
+      periodsPerYear:  periodsOf(data),
     });
     // One-directional by nature: a dividend/interest receipt cannot be negative, and
     // crediting one would book negative TAXABLE income. The G12 fix deliberately does
@@ -760,6 +783,7 @@ export class SuperEarningsHandler extends HandlerEntry {
       rateOverride:    data?.rate ?? null,
       fallbackRate:    this.defaultRate,
       fallbackRateKey: this.rateKey,
+      periodsPerYear:  periodsOf(data),
     };
     const gross = computeHoldingsGrowth(growthArgs);
     // The yield slice of that total, per lot, and the franking credit on its AU part
@@ -767,6 +791,9 @@ export class SuperEarningsHandler extends HandlerEntry {
     const income = computeFundIncome({
       state, stateKey, fallbackRateKey: this.rateKey, fallbackYield: this.defaultYield,
       frankedPercent: this.frankedPercent,
+      // Design 127 — the month's income under MONTHLY, taxed at the month's rate below,
+      // so a mid-year move into pension phase is honoured to the month.
+      periodsPerYear: periodsOf(data),
     });
     if (gross.amount === 0 && income.dividend === 0 && income.credit === 0) {
       return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
@@ -822,7 +849,7 @@ export class SuperEarningsHandler extends HandlerEntry {
     }
     return [
       { type: 'SUPER_EARNINGS_APPLY', amount: +amount.toFixed(2), grossAmount: income.dividend,
-        frankingCredit: income.credit, stateKey, taxRate },
+        frankingCredit: income.credit, stateKey, taxRate, ...flooredField(gross.flooredLots) },
       ...holdingActions,
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];

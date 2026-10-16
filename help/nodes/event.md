@@ -10,7 +10,7 @@ stamps:
   panel:config-list: c29391
   panel:config-graph: 82a0c7
   node:event: 7c3ccb
-  src/simulation-framework/events/event-series.js: 456eeb
+  src/simulation-framework/events/event-series.js: 3395d4
 ---
 
 A dated moment at which something is due to happen: a payday, a month boundary, a
@@ -41,6 +41,6 @@ to one; a set of irregular dates needs one type each.
 - `type` — The event type handlers subscribe to. This, not the name, is the wiring: a handler fires when an event of its declared type does, so two events sharing a type are one trigger with two dates. Series sharing a type are also collapsed to one.
 - `color` — Node colour in the graph. Presentation only — useful when a family of related events should read as a family.
 - `enabled` — Off suppresses every firing of this event without deleting it, which is the safe way to A/B a mechanic: the node, its handlers and its history all stay where they are.
-- `interval` — How often a series repeats: monthly, quarterly, semiannual, annually, month-end or year-end. Only on a recurring series.
+- `interval` — How often a series repeats: monthly, quarterly, semiannual, annually, month-end, quarter-end or year-end. Quarterly counts three months from the start; quarter-end lands on 31 March, 30 June, 30 September and 31 December. Only on a recurring series.
 - `startOffset` — Whole years after the simulation start before the series begins firing. 0 starts immediately; 5 waits five years, which is how a rhythm that begins at retirement is expressed without naming a calendar date.
 - `date` — The single calendar date a one-off event fires on. Outside the run's span it simply never fires — that is not an error, and it is the usual cause of an event whose node never lights up during playback.

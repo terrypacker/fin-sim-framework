@@ -31,6 +31,10 @@ export const intervalFns = {
   'semiannual': d => (d.getUTCMonth() <= 5
     ? new Date(Date.UTC(d.getUTCFullYear(), 11, 31))       // first half  → Dec 31 this year
     : new Date(Date.UTC(d.getUTCFullYear() + 1, 5, 30))),  // second half → Jun 30 next year
+  // The calendar quarter-ends (Mar 31 / Jun 30 / Sep 30 / Dec 31), design 127 §3.1: the next
+  // quarter-end after the one containing `d`. `'quarterly'` is three months from the run's
+  // start day, which is not a quarter-end unless the run happens to start on one.
+  'quarter-end': d => new Date(Date.UTC(d.getUTCFullYear(), Math.floor(d.getUTCMonth() / 3) * 3 + 6, 0)),
 };
 
 /** Snap the start date to the end of the period for period-end intervals. */
@@ -46,6 +50,8 @@ export const startSnapFns = {
     if (d <= dec31) return dec31;
     return new Date(Date.UTC(y + 1, 5, 30));
   },
+  // The quarter-end at or after the start (design 127).
+  'quarter-end': d => new Date(Date.UTC(d.getUTCFullYear(), Math.floor(d.getUTCMonth() / 3) * 3 + 3, 0)),
 };
 
 /**
