@@ -1,6 +1,8 @@
 # 129 — Stock–bond correlation as a regime property (design 126 G3)
 
-**Status:** ACCEPTED, rev 3 (16 Oct 2026). Step 0 is BUILT (603b7d5c). Rev 3 corrects §1:
+**Status:** COMPLETE at step 0 (16 Oct 2026). **Step 1, the regime half, is not built: it failed
+its gate on a short and on a long bond sleeve (§6.1), and the author closed it.** Step 0 (the base
+ρ, 603b7d5c) and the MC runner warning (§3.4) stay. Rev 3 corrects §1:
 Monte Carlo's *default* is joint mode, not independent noise. Step 0's first gate run on the
 study plan gave byte-identical arms, because MC's `mcInflationModel: AUTO` runs
 `HISTORICAL_JOINT` whenever equity uses the bootstrap. The fix is in §1, §3.4 (now "joint mode
@@ -10,7 +12,7 @@ the runner-side MC warning (§3.4) was built. Rev 2, the same day, re-checked th
 against the code before building: it corrected the first-year case, the TIPS check, the +0.45
 arm and the Q6 cross-reference, and added the timing, cross-country and allow-list notes. The
 author settled Q2 and Q4 on 15 Oct, and Q3, Q5 and the MC axis's move into step 0 on 16 Oct.
-Q1 keeps 3 points as the working gate, to be confirmed when the MC is read. Q6 is open. Expands design 126 §5, which recorded only a direction. It
+Q1's 3-point gate was confirmed when the MC was read. Q6 is open. Expands design 126 §5, which recorded only a direction. It
 opens with a measurement step that decides whether the regime half is built (§6).
 
 **Related:** design 126 §5 (the gap), design 67 §6 (the stochastic yield-curve level), design 74
@@ -264,8 +266,8 @@ price loss. That missing Fisher link is the structural reason the 1970s correlat
 positive. G3 states the correlation in reduced form; it does not supply the cause.
 
 Tying the yield innovation to the inflation surprise is a separate gap, recorded here and in
-design 126 §5 (Q4). If step 0 shows G3 matters, the inflation link is the next thing to
-measure.
+design 126 §5 (Q4). It was to be measured next if step 0 showed G3 mattered. It did not (§6.1),
+so the link waits for its own reason.
 
 ## 6. Phasing
 
@@ -284,9 +286,33 @@ measure.
    - The base parameter stays either way: "which world" is a study question on its own.
    - Following the deferred-reruns practice, the code and tooling ship first; the MC can run
      later.
-1. **The regime half** (if the gate passes): the leg field, the entry override, the composition
+1. ~~**The regime half**~~ (if the gate passes): the leg field, the entry override, the composition
    (§3.2), the stagflation preset value (§3.8), the editor field and help, and Q7 (b)'s
-   joint-mode override with its keyed ε stream.
+   joint-mode override with its keyed ε stream. **Not built: the gate failed (§6.1).**
+
+### 6.1 The gate result (16 Oct 2026)
+
+Measured on the regime study's plan as §6 specifies (n = 400, paired, GAUSSIAN in every ρ arm).
+The runs and tables live with the study, not here.
+
+- **ρ 0 → +0.4 under stagflation moved the failure rate by +0.25 points**, against a gate of 3.
+  Only 5 of 400 worlds changed outcome, and they split both ways. The +0.16 → +0.4 step, which is
+  what step 1 would change in the default MC, moved one world. ρ did nothing under the baseline.
+- **Why so small: the plan's bond sleeve is short.** A trace of the worlds showed that the sleeve
+  is sold continually as the spending buffer, so marks are realised. But its effective duration is
+  about 2 years, so a year's rate mark is about 0.5% of liquid wealth. ρ does reach the marks
+  (realised correlation +0.26 at ρ +0.4). The term is simply small next to equity risk.
+- **On a long sleeve the gate fails too.** The same pair with a 20-rung ladder (effective duration
+  about 11, marks about 10× larger) moved the failure rate by +0.5 points, and 12 worlds changed
+  outcome, splitting 5 rescued to 7 broken. The reading, which was not checked: stagflation's damage comes
+  from the regime's scripted path (its inflation centre and yield level), which ρ does not touch. ρ
+  only reshapes the noise around that path, and the OU level reverts.
+- **The joint-mode reference arms differed from GAUSSIAN by far more than any ρ.** That is the
+  inflation and yield process changing, not correlation, and it is a separate question.
+
+**Closed (the author, 16 Oct 2026): step 1 is not built.** The base ρ stays as a "which world"
+setting and an MC row. Q7 (b) remains the answer should the regime half ever be reopened, for
+instance by a regime whose damage is noise-driven rather than scripted.
 
 ## 7. Open questions
 
@@ -320,7 +346,8 @@ measure.
      on top of the leg's own equity cut. It would need per-era re-centring.
 
    Proposed: (b). It keeps "a regime states its correlation" true in every MC mode, at the cost
-   of one keyed draw. *Decided (the author, 16 Oct 2026): (b).*
+   of one keyed draw. *Decided (the author, 16 Oct 2026): (b).* Not built, because step 1 failed
+   its gate (§6.1).
 
 ## 8. Test plan
 
