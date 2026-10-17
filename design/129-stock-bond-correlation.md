@@ -1,10 +1,15 @@
 # 129 — Stock–bond correlation as a regime property (design 126 G3)
 
-**Status:** ACCEPTED, rev 2 (16 Oct 2026: re-checked against the code before building. The
-first-year case, the TIPS check, the +0.45 arm and the Q6 cross-reference were corrected, and
-the timing, cross-country and allow-list notes were added). The author settled Q2 and Q4 on
-15 Oct, and Q3, Q5 and the MC axis's move into step 0 on 16 Oct. Q1 keeps 3 points as the
-working gate, to be confirmed when the MC is read. Q6 is deferred. Expands design 126 §5, which recorded only a direction. It
+**Status:** ACCEPTED, rev 3 (16 Oct 2026). Step 0 is BUILT (603b7d5c). Rev 3 corrects §1:
+Monte Carlo's *default* is joint mode, not independent noise. Step 0's first gate run on the
+study plan gave byte-identical arms, because MC's `mcInflationModel: AUTO` runs
+`HISTORICAL_JOINT` whenever equity uses the bootstrap. The fix is in §1, §3.4 (now "joint mode
+is the MC default"), §6 (the measurement now forces GAUSSIAN, with joint-mode reference arms)
+and the new Q7 (what step 1 means under joint mode). Rev 2, the same day, re-checked the design
+against the code before building: it corrected the first-year case, the TIPS check, the +0.45
+arm and the Q6 cross-reference, and added the timing, cross-country and allow-list notes. The
+author settled Q2 and Q4 on 15 Oct, and Q3, Q5 and the MC axis's move into step 0 on 16 Oct.
+Q1 keeps 3 points as the working gate, to be confirmed when the MC is read. Q6 and Q7 are open. Expands design 126 §5, which recorded only a direction. It
 opens with a measurement step that decides whether the regime half is built (§6).
 
 **Related:** design 126 §5 (the gap), design 67 §6 (the stochastic yield-curve level), design 74
@@ -20,13 +25,22 @@ A regime study needs to say "while this regime is active, stocks and bonds fall 
 
 - **Deterministic runs** already express it. A regime leg sets the centre of both: the
   stagflation preset raises the fixed-income rate and cuts equity in the same window.
-- **Monte Carlo** cannot. The random parts are independent. The yield-curve tick draws its
-  level shock from its own stream, and the equity tick draws the market factor (or replays a
-  historical year) from another. The correlation of the noise is 0 in every year, whatever
+- **Monte Carlo, by default, replays history's correlation.** `mcInflationModel` defaults to
+  `AUTO`, and AUTO resolves to `HISTORICAL_JOINT` whenever the MC equity model is the historical
+  bootstrap. The bootstrap is also the default (`mcEquityReturnModel`). In joint mode
+  (design 103 §5.1) the yield shock is the US 10-year change of the year the equity bootstrap
+  replayed. So the noise carries the correlation of whichever era each 5-year block came from:
+  +0.16 across the 1951–2023 window, the same as the table below on the model's own series.
+  Nobody can set it, and no regime moves it. A stagflation regime drawn in the default MC gets
+  blocks from random eras, 2000–2020 hedging years included.
+- **Everywhere else the noise is independent**: a single seeded stochastic run (whose
+  `inflationModel` is GAUSSIAN unless set), and any MC with a Gaussian equity model or a
+  non-joint inflation process. There the yield tick draws its level shock from its own stream
+  and the equity tick draws from another, so the correlation is 0 in every year, whatever
   regime is active.
-- **The one exception** is `HISTORICAL_JOINT` inflation (design 103 §5.1). There the yield
-  shock is the US 10-year change of the historical year the equity bootstrap replayed, so the
-  correlation is that of whichever era the block came from. Nobody can set it.
+
+(Rev 1 said MC was always at 0, with joint mode as an exception. It is the other way round for
+default MC, and step 0's first gate run, which came out byte-identical, is how that was found.)
 
 What history says, on the model's own horizon (annual), from series already packaged:
 
@@ -44,9 +58,11 @@ Shiller S&P 500 real total return against −Δ(US 10-year yield), January to Ja
 `scripts/lab/stock-bond-correlation.mjs`. Ten points are noisy: +0.42 on n = 10 has a 95%
 interval of about −0.3 to +0.8.
 
-The model's 0 sits between the eras. In an inflationary regime its noise diversifies better
-than history did, so it understates the risk. In a 2000–2020-like world it diversifies worse,
-so it overstates it. **G3 can move a result either way.**
+Both of the model's values sit between the eras: 0 outside joint mode, and +0.16 on average
+inside it. In an inflationary regime the noise diversifies better than history did, so it
+understates the risk. In a 2000–2020-like world it diversifies worse, so it overstates it.
+**G3 can move a result either way.** For the default MC the gap is smaller than rev 1 assumed:
+a stagflation regime would move the correlation from about +0.16 to +0.4, not from 0.
 
 ## 2. What exists (confirmed in code, 15 Oct 2026)
 
@@ -144,11 +160,22 @@ the lever is tagged inert (the lever-hygiene rule: a lever that does nothing mus
 CLI tools swallow loader warnings, so a test calls the warning function directly rather than
 reading CLI output.
 
-### 3.4 Joint mode
+### 3.4 Joint mode, the MC default
 
 Under `HISTORICAL_JOINT`, yields come from the replayed year, and history already carries that
-era's correlation. ρ is **ignored there, with a loader warning**. Blending an authored ρ into a
-historical change would double-impose co-movement. See Q3.
+era's correlation. The base ρ is **ignored there**. Blending an authored ρ into a historical
+change would double-impose co-movement (Q3, decided).
+
+**This is the default MC** (§1), so in the default MC the base ρ does nothing. Two
+consequences:
+
+- **The loader warning cannot see it.** The MC runner resolves `AUTO` per iteration, after the
+  load, so the plan the loader checks still says GAUSSIAN. The parameter description says so
+  and tells the reader to set the MC inflation process to GAUSSIAN to sweep ρ. A runner-side
+  warning (the MC sees ρ ≠ 0 and resolves joint) would close the hole. It is a small follow-up,
+  not built in step 0.
+- **What a regime ρ should do here is open** (Q7). Ignoring it leaves the regime half with no
+  effect on the study's default MC, which is the run the regime study reads.
 
 ### 3.5 Australia
 
@@ -241,17 +268,21 @@ measure.
 0. **Base ρ and the measurement.**
    - Build: the run parameter (with `mc: true` and a disabled MC row, §3.9), plus §3.1, §3.3
      (stamp, order, in-play gate, inert warning) and §3.4. Tests per §8. (The TIPS question this step used to carry is answered in §2.)
-   - Measure: a paired MC on the regime study's plan, n = 400, `rngStreams` on. Arms: base ρ ∈
-     {−0.5, 0, +0.4}, under the baseline and stagflation regimes. +0.4 is the value step 1
-     would put on the preset, so the gate measures what it would build. Read the paired
-     discordant counts.
+   - Measure: a paired MC on the regime study's plan, n = 400, `rngStreams` on, with
+     **`mcInflationModel: GAUSSIAN` in every ρ arm**, since the default joint mode ignores ρ
+     (§3.4). Arms: base ρ ∈ {−0.5, 0, +0.16, +0.4}, under the baseline and stagflation regimes.
+     +0.4 is the value step 1 would put on the preset. +0.16 is what joint mode replays on
+     average, so the +0.16 → +0.4 step is the size of the gap in the default MC. Two reference
+     arms run the same regimes under the default (joint). Read the paired discordant counts.
    - **Gate:** build step 1 if stagflation's failure rate moves by **3 points or more** between
-     ρ = 0 and +0.4, paired (Q1).
+     ρ = 0 and +0.4, paired (Q1). Report the +0.16 → +0.4 move beside it, because that is what
+     step 1 would change in the study's default MC, if Q7 lets it act there at all.
    - The base parameter stays either way: "which world" is a study question on its own.
    - Following the deferred-reruns practice, the code and tooling ship first; the MC can run
      later.
 1. **The regime half** (if the gate passes): the leg field, the entry override, the composition
-   (§3.2), the stagflation preset value (§3.8), the editor field and help.
+   (§3.2), the stagflation preset value (§3.8), the editor field and help, and whatever Q7
+   decides for joint mode.
 
 ## 7. Open questions
 
@@ -265,6 +296,27 @@ measure.
 5. **Per-country ρ.** *Decided (the author, 16 Oct 2026): no.* One global value, AU through its β.
 6. **The default base.** *Deferred (the author, 15 Oct 2026).* 0 (proposed: changing it moves every stochastic plan), or the post-2000
    −0.33 / −0.53? A study can set it either way.
+7. **A regime ρ under joint mode (rev 3).** The default MC replays history's yields (§3.4).
+   What should a leg's `stockBondCorrelation` do there?
+   - **(a) Nothing, as for the base ρ.** This is consistent with Q3, but the regime half then
+     never touches the default MC, the run the regime study reads.
+   - **(b) The regime overrides history while it is in force** (proposed). While a leg with the
+     field has `currentFactor > 0`, the yield tick swaps the replayed change for
+     `−ρ_r·z_eq + √(1 − ρ_r²)·ε`, scaled to the same `yieldCurveVol`. It blends back to the
+     replayed change by `currentFactor`, and outside the regime joint mode is untouched. This
+     doesn't double-count, because nothing is added to the historical change. Inflation keeps
+     replaying, so yield and inflation stop sharing a year for the regime's window, but the
+     leg already sets the inflation centre there. It needs an ε. That has to come from the
+     yield stream, which joint mode doesn't draw today, so the draw must come from a keyed
+     stream (the gold precedent) to leave every other draw unchanged.
+   - **(c) The regime picks the era.** While a leg names an era (say 1966–1982), the bootstrap
+     draws its blocks from that era, and equity, inflation and yields all follow coherently.
+     This is the most faithful option and the largest change. It also double-counts: era
+     deviations are re-centred on the post-war mean, so 1970s blocks are negative on average,
+     on top of the leg's own equity cut. It would need per-era re-centring.
+
+   Proposed: (b). It keeps "a regime states its correlation" true in every MC mode, at the cost
+   of one keyed draw.
 
 ## 8. Test plan
 
