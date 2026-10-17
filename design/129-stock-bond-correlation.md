@@ -5,11 +5,12 @@ Monte Carlo's *default* is joint mode, not independent noise. Step 0's first gat
 study plan gave byte-identical arms, because MC's `mcInflationModel: AUTO` runs
 `HISTORICAL_JOINT` whenever equity uses the bootstrap. The fix is in §1, §3.4 (now "joint mode
 is the MC default"), §6 (the measurement now forces GAUSSIAN, with joint-mode reference arms)
-and the new Q7 (what step 1 means under joint mode). Rev 2, the same day, re-checked the design
+and the new Q7 (what step 1 means under joint mode). Later on 16 Oct the author decided Q7 = (b), and
+the runner-side MC warning (§3.4) was built. Rev 2, the same day, re-checked the design
 against the code before building: it corrected the first-year case, the TIPS check, the +0.45
 arm and the Q6 cross-reference, and added the timing, cross-country and allow-list notes. The
 author settled Q2 and Q4 on 15 Oct, and Q3, Q5 and the MC axis's move into step 0 on 16 Oct.
-Q1 keeps 3 points as the working gate, to be confirmed when the MC is read. Q6 and Q7 are open. Expands design 126 §5, which recorded only a direction. It
+Q1 keeps 3 points as the working gate, to be confirmed when the MC is read. Q6 is open. Expands design 126 §5, which recorded only a direction. It
 opens with a measurement step that decides whether the regime half is built (§6).
 
 **Related:** design 126 §5 (the gap), design 67 §6 (the stochastic yield-curve level), design 74
@@ -171,11 +172,14 @@ consequences:
 
 - **The loader warning cannot see it.** The MC runner resolves `AUTO` per iteration, after the
   load, so the plan the loader checks still says GAUSSIAN. The parameter description says so
-  and tells the reader to set the MC inflation process to GAUSSIAN to sweep ρ. A runner-side
-  warning (the MC sees ρ ≠ 0 and resolves joint) would close the hole. It is a small follow-up,
-  not built in step 0.
-- **What a regime ρ should do here is open** (Q7). Ignoring it leaves the regime half with no
-  effect on the study's default MC, which is the run the regime study reads.
+  and tells the reader to set the MC inflation process to GAUSSIAN to sweep ρ. **The runner
+  warns too (built 16 Oct).** It applies MC's own process switches to the batch's base (the
+  step `perturbParams` takes per path, now `applyMcPaths`) and runs the §3.3 check on that. A ρ
+  that every path ignores is reported in `summary.provenance.inertWarnings`, printed by
+  `mc-run` and `mc-report`, and shown in the results panel's banner. A sampled ρ row counts as
+  set even with a 0 centre.
+- **A regime ρ overrides history while it is in force** (Q7 (b), decided). Only the base is
+  ignored. Step 1 builds the override.
 
 ### 3.5 Australia
 
@@ -276,13 +280,13 @@ measure.
      arms run the same regimes under the default (joint). Read the paired discordant counts.
    - **Gate:** build step 1 if stagflation's failure rate moves by **3 points or more** between
      ρ = 0 and +0.4, paired (Q1). Report the +0.16 → +0.4 move beside it, because that is what
-     step 1 would change in the study's default MC, if Q7 lets it act there at all.
+     step 1 would change in the study's default MC, where Q7 (b) lets a regime ρ act.
    - The base parameter stays either way: "which world" is a study question on its own.
    - Following the deferred-reruns practice, the code and tooling ship first; the MC can run
      later.
 1. **The regime half** (if the gate passes): the leg field, the entry override, the composition
-   (§3.2), the stagflation preset value (§3.8), the editor field and help, and whatever Q7
-   decides for joint mode.
+   (§3.2), the stagflation preset value (§3.8), the editor field and help, and Q7 (b)'s
+   joint-mode override with its keyed ε stream.
 
 ## 7. Open questions
 
@@ -316,7 +320,7 @@ measure.
      on top of the leg's own equity cut. It would need per-era re-centring.
 
    Proposed: (b). It keeps "a regime states its correlation" true in every MC mode, at the cost
-   of one keyed draw.
+   of one keyed draw. *Decided (the author, 16 Oct 2026): (b).*
 
 ## 8. Test plan
 
@@ -334,9 +338,15 @@ measure.
 6. **No stamp.** The handler is driven directly with no `equityMarketShock`, or with one for the
    wrong year: the yield draw equals the uncorrelated one. With equity stochastic off the run
    is not in play (§3.3), which test 5 covers.
-7. **Warnings.** Inert (a flag off), and joint mode.
+7. **Warnings.** Inert (a flag off), and joint mode. The MC runner: MC `AUTO` ⇒ joint reports
+   ρ ignored and names the MC setting; GAUSSIAN is silent; the yield curve off is inert even
+   though MC turns equity on; a sampled row with a 0 centre warns; the base is not mutated.
 8. **Step 1: composition.** Two overlapping legs, a fading `currentFactor`, a rebound factor
    below 0, and the clip. The entry override replaces the preset's value.
 9. **Step 1: a scheduled stagflation shock.** ρ moves to the preset's value at arrival and back
    to the base as the leg recovers. Under random arrival (design 126 G1) it follows the drawn
    date.
+10. **Step 1: joint mode (Q7 (b)).** Under HISTORICAL_JOINT with no regime carrying ρ, the run
+    is byte-identical to today's. With a leg in force, the yield shock is the blend of the
+    replayed change and the correlated draw by `currentFactor`; the keyed ε stream leaves every
+    other draw unchanged; outside the leg's window the replayed change is used as is.

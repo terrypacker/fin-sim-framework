@@ -88,24 +88,37 @@ export function perturbParams(baseParams, i, variables) {
     }
   }
 
+  return applyMcPaths(perturbed);
+}
+
+/**
+ * Write Monte Carlo's own process choices into a param bag (mutates and returns it): the
+ * switches a path runs under whatever the single-run settings say. Split out of
+ * `perturbParams` so the runner can check a lever against the processes a path will
+ * ACTUALLY run (design 129 §3.4: `AUTO` turns into joint mode only here, after the load).
+ *
+ * @param {object} p  an iteration's params, or a copy of the batch's base
+ * @returns {object} `p`
+ */
+export function applyMcPaths(p) {
   // Design 98 M3 — Monte Carlo runs the stochastic return path (sequence risk and design
   // 90 §7.4's market dispersion) whatever a single run does, so the anchor's sd can mean
   // estimation uncertainty alone. Opt out with `mcSequenceRisk: false`. Written into the
   // iteration's params, so `r.params` records it and a replay runs the same path.
-  if (perturbed.mcSequenceRisk !== false) {
-    perturbed.equityReturnStochastic = true;
+  if (p.mcSequenceRisk !== false) {
+    p.equityReturnStochastic = true;
     // Design 102 §7 Q3 — and runs it under Monte Carlo's own process choice.
-    perturbed.equityReturnModel = mcEquityModel(perturbed);
+    p.equityReturnModel = mcEquityModel(p);
   }
   // Design 103 §6 — and the stochastic inflation path, on its own switch.
-  if (perturbed.mcInflationPath !== false) {
-    perturbed.inflationStochastic = true;
-    perturbed.inflationModel      = mcInflationModel(perturbed);
+  if (p.mcInflationPath !== false) {
+    p.inflationStochastic = true;
+    p.inflationModel      = mcInflationModel(p);
   }
   // Design 104 — the prime rate mode (fixed/scheduled OR following inflation).
-  perturbed.primeRateModel = mcPrimeModel(perturbed);
+  p.primeRateModel = mcPrimeModel(p);
 
-  return perturbed;
+  return p;
 }
 
 /**

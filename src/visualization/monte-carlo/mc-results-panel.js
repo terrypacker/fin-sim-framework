@@ -289,8 +289,11 @@ export class McResultsPanel extends BaseComponent {
    * rather than left to the reader's assumption. Returns null when nothing to say.
    */
   _buildProvenanceBanner(provenance) {
-    if (!provenance || provenance.fromScenario) return null;
-    const notes = [];
+    if (!provenance) return null;
+    // A lever every path ignored (design 129 §3.4) is worth saying even on a plan-centred run.
+    const inert = provenance.inertWarnings ?? [];
+    if (provenance.fromScenario && inert.length === 0) return null;
+    const notes = [...inert];
     if (provenance.syntheticCenters?.length) {
       notes.push(`${provenance.syntheticCenters.length} variable(s) sampled around FRAMEWORK DEFAULTS `
         + `(not in this scenario): ${provenance.syntheticCenters.join(', ')}`);
@@ -303,7 +306,9 @@ export class McResultsPanel extends BaseComponent {
 
     const el = document.createElement('div');
     el.className = 'mc-provenance-banner';
-    el.textContent = `⚠ Not centered on the plan as written — ${notes.join('; ')}.`;
+    el.textContent = provenance.fromScenario
+      ? `⚠ ${notes.join(' ')}`
+      : `⚠ Not centered on the plan as written — ${notes.join('; ')}.`;
     el.title = notes.join('\n');
     return el;
   }

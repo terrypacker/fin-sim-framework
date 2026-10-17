@@ -9,7 +9,8 @@
  */
 
 /**
- * Design 129 step 0 — the base stock–bond correlation (§8 tests 1–7).
+ * Design 129 step 0 — the base stock–bond correlation (§8 tests 1–7), and the MC runner's
+ * warning when Monte Carlo's joint mode makes ρ inert (§3.4).
  *
  *   z_yield = −ρ·z_eq + √(1 − ρ²)·ε
  *
@@ -28,6 +29,8 @@ import {
   stockBondCorrelationOf, stockBondCorrelationActive, stockBondCorrelationWarnings,
 } from '../../src/finance/economic-regimes/stock-bond-correlation.js';
 import { loadScenarioSim }        from '../helpers/scenario-harness.js';
+import { IntlRetirementMcRunner, mcInertWarnings } from '../../src/finance/monte-carlo/intl-retirement-mc-runner.js';
+import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
 
 // Final state and the queue only — no journal or history reads (see yield-curve-dynamics).
 const loadSim = (opts = {}) => loadScenarioSim({ telemetry: 'off', ...opts });
@@ -211,5 +214,55 @@ describe('stock-bond correlation — compile (e2e)', () => {
       loadSim({ params: { stockBondCorrelation: 0.37 }, simEnd: END });
     } finally { console.warn = orig; }
     assert.equal(seen.filter(m => m.includes('Stock–Bond Correlation is 0.37')).length, 1);
+  });
+});
+
+// Design 129 §3.4 — the MC resolves AUTO to joint mode per path, after the load, so only the
+// runner can see that ρ is dead there.
+describe('stock-bond correlation — MC runner warning', () => {
+  const runner = (params) => {
+    const simEnd = new Date(Date.UTC(2036, 0, 1));
+    return new IntlRetirementMcRunner({ n: 2, simEnd,
+      cfgTemplate: IntlRetirementScenario.buildDefaultConfig(params, undefined, simEnd) });
+  };
+  const prepare = (params, base = {}) => {
+    const orig = console.warn;
+    console.warn = () => {};
+    try { return runner(params)._prepare(base).provenance.inertWarnings; }
+    finally { console.warn = orig; }
+  };
+
+  test('MC AUTO ⇒ joint: a set ρ is reported ignored on every path, naming the MC setting', () => {
+    const [w, ...rest] = prepare({ yieldCurveStochastic: true, stockBondCorrelation: 0.4 });
+    assert.equal(rest.length, 0);
+    assert.match(w, /Monte Carlo runs inflation in HISTORICAL_JOINT/);
+    assert.match(w, /GAUSSIAN/);
+  });
+
+  test('MC GAUSSIAN ⇒ in play, silent; ρ 0 ⇒ silent', () => {
+    assert.deepEqual(prepare({ yieldCurveStochastic: true, stockBondCorrelation: 0.4, mcInflationModel: 'GAUSSIAN' }), []);
+    assert.deepEqual(prepare({ yieldCurveStochastic: true }), []);
+  });
+
+  test('the yield curve off ⇒ inert, even though MC turns equity paths on', () => {
+    const [w] = prepare({ stockBondCorrelation: 0.4, mcInflationModel: 'GAUSSIAN' });
+    assert.match(w, /Stochastic Yield Curve is off/);
+  });
+
+  test('a sampled ρ row warns under joint even with a 0 centre', () => {
+    const r = runner({ yieldCurveStochastic: true });
+    r.mcConfig.applyOverride('stockBondCorrelation', { enabled: true });
+    const orig = console.warn; console.warn = () => {};
+    try {
+      const [w] = r._prepare({}).provenance.inertWarnings;
+      assert.match(w, /Stock–Bond Correlation is sampled but Monte Carlo runs inflation in HISTORICAL_JOINT/);
+    } finally { console.warn = orig; }
+  });
+
+  test('mcInertWarnings checks MC\'s processes without touching the base', () => {
+    const base = { yieldCurveStochastic: true, stockBondCorrelation: 0.4 };
+    const orig = console.warn; console.warn = () => {};
+    try { assert.equal(mcInertWarnings(base, []).length, 1); } finally { console.warn = orig; }
+    assert.deepEqual(base, { yieldCurveStochastic: true, stockBondCorrelation: 0.4 });
   });
 });
