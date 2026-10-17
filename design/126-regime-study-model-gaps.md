@@ -6,7 +6,7 @@ proposed). §8 step 1, G1 `WINDOW` arrival, BUILT 15 Oct 2026; step 3, G1 `RATE`
 15 Oct 2026: under the threshold in every case, so G2 is CLOSED as measured (§4.5). Collects five gaps a
 macro-regimes study ran into, each of which is a modelling change rather than a fix. The study
 judged the first two (§3, §4) able to change a conclusion; the other three (§5–§7) were recorded
-with a direction only. 15 Oct 2026: G3 has its own design, **129** (§5). G4 was checked against
+with a direction only. 15 Oct 2026: G3 has its own design, **129** (§5), closed by measurement on 16 Oct (step 0 built; the regime half failed its gate). G4 was checked against
 design 99's sources and is CLOSED (§6, the author). G5 stays a direction (§7).
 
 - **rev 2 (15 Oct 2026, review before build):** checked against the code.
@@ -284,7 +284,7 @@ whose household energy share is measured at several points above the CPI's.
 
 ## 5. G3 — Stock–bond correlation as a regime property → design 129
 
-**Designed in 129** (15 Oct 2026, PROPOSED). That design keeps this section's direction: the
+**Designed in 129** (15 Oct 2026; ACCEPTED rev 3, 16 Oct: default MC is joint mode, which already replays history's correlation, +0.16 on average). **Closed by measurement, 16 Oct 2026:** step 0 (a base ρ) is built. The regime half failed its gate, moving stagflation failure by +0.25 points on the plan's short bond sleeve and +0.5 on a long one, against 3, so it is not built (129 §6.1). That design keeps this section's direction: the
 yield tick's level shock correlates with the year's equity shock while a leg says so. It adds a
 run-level base ρ, a measurement gate before the regime half, and the annual correlation by era
 (1973–82 +0.42, 2000–2020 −0.53). It also records a gap this section did not name: under
@@ -369,7 +369,7 @@ that tracks policy and inflation.
 3. **BUILT.** G1 `RATE` arrival (§3.8), with a distinct `shockId` per episode across all
    entries. Tests: `evt-shock-arrival.test.mjs` RATE-1..6.
 4. ~~G2 build~~ — not built: step 0 put the effect under 0.2% of spending (§4.5).
-5. G3 → design 129 (PROPOSED 15 Oct 2026). G4 → CLOSED after checking the sources
+5. G3 → design 129: CLOSED 16 Oct 2026. Step 0 (base ρ) is built; the regime half failed its gate on short and long bond sleeves (129 §6.1). G4 → CLOSED after checking the sources
    (§6). G5 gets its own design when a study needs it.
 
 ## 9. Open questions

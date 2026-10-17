@@ -32,6 +32,7 @@ import { EquityReturnReducer }            from '../../finance/economic-regimes/e
 import { EquityReturnStepReducer }        from '../../finance/economic-regimes/equity-return-step-reducer.js';
 import { EquityReturnTickHandler, EQUITY_RETURN_MODEL_IDS, EQUITY_RETURN_MODEL_LABELS } from '../../finance/economic-regimes/equity-return-tick-handler.js';
 import { InflationTickHandler, INFLATION_MODEL_IDS, INFLATION_MODEL_LABELS, jointInflationActive, inflationProcessConfig } from '../../finance/economic-regimes/inflation-tick-handler.js';
+import { stockBondCorrelationOf, stockBondCorrelationActive } from '../../finance/economic-regimes/stock-bond-correlation.js';
 import { InflationStepReducer }           from '../../finance/economic-regimes/inflation-step-reducer.js';
 import { InflationPathReducer }           from '../../finance/economic-regimes/inflation-path-reducer.js';
 import { PropertyReturnStepReducer }      from '../../finance/economic-regimes/property-return-step-reducer.js';
@@ -734,13 +735,14 @@ function _sleeveRebased(context) {
 }
 
 /**
- * Whether the equity tick stamps its market shock for the FX tick (design 120 §5.4): the
- * FX process runs here and correlates with equity.
+ * Whether the equity tick stamps its market shock (design 120 §5.4): the FX process runs here
+ * and correlates with equity, or the yield tick does (design 129 §3.3).
  */
 function _stampMarketShock(context) {
   const p = context.parameters;
-  return (p.fxProcessModel ?? 'NONE') !== 'NONE' && _fxProcess(context) != null
-    && (p.fxEquityCorrelation ?? DEFAULT_FX_EQUITY_CORRELATION) !== 0;
+  return ((p.fxProcessModel ?? 'NONE') !== 'NONE' && _fxProcess(context) != null
+    && (p.fxEquityCorrelation ?? DEFAULT_FX_EQUITY_CORRELATION) !== 0)
+    || stockBondCorrelationActive(p);
 }
 
 /**
@@ -1080,6 +1082,17 @@ export const ECONOMIC_REGIMES = {
         opt:          false,
         defaultValue: 0.3,
         description:  'Ornstein-Uhlenbeck pull-back speed per year toward the anchor level. Higher ⇒ the level snaps back faster. Only used when Stochastic Yield Curve is on.',
+      },
+      {
+        key:          'stockBondCorrelation',
+        label:        'Stock–Bond Correlation',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           true,
+        opt:          false,
+        defaultValue: 0,
+        visibleWhen:  { param: 'yieldCurveStochastic', truthy: true },
+        description:  'Correlation (−1 to 1) between the random parts of the yearly stock and bond returns (design 129): positive means bonds fall in the years stocks fall, negative means bonds hedge them. US equity against the 10-year measured +0.42 over 1973–82 and −0.53 over 2000–20; 0, the default, keeps the two draws independent. Needs both Stochastic Yield Curve and Stochastic Equity Returns, and is ignored in HISTORICAL_JOINT inflation mode, whose yields carry their own era\'s correlation. Monte Carlo runs that mode by default whenever equity uses the historical bootstrap (Monte Carlo: Inflation Process = AUTO), so to sweep this in such a Monte Carlo set the inflation process to GAUSSIAN. The realised value comes out near 0.93× this one, because the mean-reverting pull adds noise of its own.',
       },
       {
         key:          'equityReturnStochastic',
@@ -1775,8 +1788,8 @@ export const ECONOMIC_REGIMES = {
     // drives the seeded-RNG level walk. Scheduled only when on, so default runs draw
     // no randomness and stay byte-identical.
     // Design 103 §5.1: in joint mode the yield tick reads the equity bootstrap's year, so
-    // it must fire AFTER the equity tick (order 0). Only in joint mode, so every other run
-    // keeps its exact event order.
+    // it must fire AFTER the equity tick (order 0). Design 129 §3.3: so must a yield tick that
+    // correlates with the equity shock. Only then, so every other run keeps its exact event order.
     const joint = jointInflationActive(p);
     if (p.yieldCurveStochastic) {
       events.push(new EventSeries({
@@ -1784,7 +1797,7 @@ export const ECONOMIC_REGIMES = {
         type:     'YIELD_CURVE_TICK',
         interval: 'year-end',
         startOffset: 1,
-        ...(joint ? { order: 3 } : {}),
+        ...(joint || stockBondCorrelationActive(p) ? { order: 3 } : {}),
         enabled:  true,
         color:    '#7E57C2',
       }));
@@ -1940,7 +1953,11 @@ export const ECONOMIC_REGIMES = {
       // Stochastic curve evolution (design 67 §6) — only when on, so the sim.rng is
       // untouched otherwise and runs stay byte-identical.
       ...(p.yieldCurveStochastic
-        ? [new YieldCurveTickHandler({ vol: p.yieldCurveVol ?? 0.01, reversionSpeed: p.yieldCurveReversionSpeed ?? 0.3, historical: joint })]
+        ? [new YieldCurveTickHandler({
+            vol: p.yieldCurveVol ?? 0.01, reversionSpeed: p.yieldCurveReversionSpeed ?? 0.3, historical: joint,
+            // Design 129 — only when in play: off in joint mode and without stochastic equity.
+            equityCorrelation: stockBondCorrelationActive(p) ? stockBondCorrelationOf(p) : 0,
+          })]
         : []),
       // Stochastic inflation path (design 103 §4) — only when on.
       ...(p.inflationStochastic

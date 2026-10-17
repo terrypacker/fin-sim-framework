@@ -15,7 +15,8 @@ import { resolveAliasCenters, resolveRecordCenters } from '../../scenarios/scena
 import { resolveLiquidityAxisCenters } from '../pools/pool-target-scale.js';
 import { IntlRetirementMcConfig, CENTER_SOURCES, refineCenterSource, variablesMissingCenter } from './intl-retirement-mc-config.js';
 import { scenarioParamValues, paramSchemaDefaults } from '../param-schema-utils.js';
-import { buildIterationRunner, perturbParams, samplingSignature, mcEquityModel, mcInflationModel, mcPrimeModel } from './parallel/mc-worker-core.js';
+import { buildIterationRunner, perturbParams, samplingSignature, mcEquityModel, mcInflationModel, mcPrimeModel, applyMcPaths } from './parallel/mc-worker-core.js';
+import { stockBondCorrelationWarnings } from '../economic-regimes/stock-bond-correlation.js';
 import { McWorkerPool }              from './parallel/mc-worker-pool.js';
 import { migrateYearFieldsToDates, migrateParamBag } from '../../scenarios/year-date-migration.js';
 
@@ -99,6 +100,25 @@ export function summarizeProvenance(variables, { ownParams = null, schemaDefault
     /** True when every sampled center traces to the loaded scenario. */
     fromScenario: syntheticCenters.length === 0 && divergentCenters.length === 0,
   };
+}
+
+/**
+ * Levers that every path of this batch ignores, as messages (design 129 §3.4). The loader
+ * checks the plan as written, but Monte Carlo swaps in its own processes per path (most
+ * often `mcInflationModel: AUTO` ⇒ HISTORICAL_JOINT), so only the runner can see that a lever
+ * is dead under them. Checked on the base with MC's switches applied; a lever the MC samples
+ * counts as set. Also warned to the console, the way `summarizeProvenance` warns.
+ *
+ * @param {object} base       the batch's layered base params
+ * @param {Array}  variables  resolved variables from buildVariables()
+ * @returns {string[]}
+ */
+export function mcInertWarnings(base, variables) {
+  const sampled  = (key) => variables.some(v => v.enabled && v.paramKey === key);
+  const warnings = stockBondCorrelationWarnings(applyMcPaths({ ...base }),
+    { mc: true, sampled: sampled('stockBondCorrelation') });
+  for (const w of warnings) console.warn(`[IntlRetirementMcRunner] ${w}`);
+  return warnings;
 }
 
 /**
@@ -245,6 +265,7 @@ export class IntlRetirementMcRunner {
         + '. The plan leaves it unset — type a mean to sample around, or disable it.');
     }
     const provenance = summarizeProvenance(variables, { ownParams: templateParams, schemaDefaults });
+    provenance.inertWarnings = mcInertWarnings(base, variables);
 
     return {
       ctx: { cfgTemplate, base, variables, simStart, simEnd, mix: this.mix, spending: this.spending },

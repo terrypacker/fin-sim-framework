@@ -243,6 +243,9 @@ for (const [order, key] of armKeys.entries()) {
     drift: sequenceRisk.on > 0 ? sequenceRisk.drift : null,
     sequenceRisk,
   };
+  // Levers every path ignores (design 129 §3.4): the runner names them, since only it sees
+  // the processes MC swaps in after the load.
+  for (const w of provenance?.inertWarnings ?? []) console.log(`** ${key}: ${w}`);
   if (sequenceRisk.on > 0 && sequenceRisk.on < sequenceRisk.n) {
     console.log(`** ${key}: only ${sequenceRisk.on}/${sequenceRisk.n} runs drew a stochastic path — mixed arm`);
   }

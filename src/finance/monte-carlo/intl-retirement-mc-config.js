@@ -166,6 +166,14 @@ export const DEFAULT_MC_VARIABLE_CONFIGS = [
     type: DISTRIBUTION_TYPES.NORMAL,   mean: 0,    stdDev: 0.15,
     group: 'Return Paths',             enabled: false,
   },
+  // Design 129 §3.9 — "which world are we in": each path draws its own stock–bond ρ across the
+  // measured eras (2000–20 −0.53, 1973–82 +0.42). Uniform, so it stays inside [−1, 1]. Inert
+  // unless both the yield and the equity paths run.
+  {
+    paramKey: 'stockBondCorrelation',  label: 'Stock–Bond Correlation',
+    type: DISTRIBUTION_TYPES.UNIFORM,  min: -0.5, max: 0.5,
+    group: 'Return Paths',             enabled: false,
+  },
 
   // ── House path & running-cost MC scalers (design 75 §6.4 B) ───────────────
   // The per-property return/repair inputs live in cfg.realProperties (not cfg.parameters), so

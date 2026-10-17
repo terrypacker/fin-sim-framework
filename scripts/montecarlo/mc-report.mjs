@@ -169,6 +169,8 @@ if (rm.recentre === false) {
 // printed here is a reason to distrust the rates below.
 for (const k of keys) {
   const p = arms[k].provenance;
+  // A lever every path ignored (design 129 §3.4): an arm that differs only by it is a copy.
+  for (const w of (p?.inertWarnings ?? [])) console.log(`** ${k}: ${w}`);
   if (!p || p.fromScenario) continue;
   if (p.syntheticCenters?.length) {
     console.log(`** ${k}: sampled around FRAMEWORK DEFAULTS (absent from the scenario): `
