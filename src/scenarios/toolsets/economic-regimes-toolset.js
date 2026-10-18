@@ -1865,6 +1865,9 @@ export const ECONOMIC_REGIMES = {
         name:     'Tax-Gain Harvest',
         type:     'TAX_GAIN_HARVEST',
         interval: 'year-end',
+        // After 31 Dec's income (order 0), before the tax settle (100): the handler's
+        // band room reads the year-to-date totals, which are only the year's from here.
+        order:    50,
         startOffset: 1,
         enabled:  true,
         color:    '#66BB6A',

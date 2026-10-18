@@ -30,6 +30,7 @@ import { StockHarvestApplyReducer } from '../../src/finance/behavioral/stock-har
 import { TaxLossHarvestHandler }    from '../../src/finance/behavioral/tax-loss-harvest-handler.js';
 import { TaxGainHarvestHandler }    from '../../src/finance/behavioral/tax-gain-harvest-handler.js';
 import { resolveSubstitute }        from '../../src/finance/behavioral/substitute-holding.js';
+import { TaxSettleService }         from '../../src/finance/tax-settle-service.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -402,13 +403,11 @@ describe('TaxGainHarvestHandler', () => {
     assert.strictEqual(handler.call({ state }).length, 0);
   });
 
-  test('TGH-3: no-op when income already exceeds ceiling', () => {
+  test('TGH-3: no-op when taxable income (gross less the standard deduction) already exceeds ceiling', () => {
     const h1 = holding({ id: 'h1', mv: 2000, basis: 1000 });
-    const state = {
-      usStockAccount: account({ holdings: [h1] }),
-      usOrdinaryIncomeYTD: 50000, usCapitalGainsYTD: 0,
-      people: { primary: { residency: 'US' } },
-    };
+    const base = { usStockAccount: account({ holdings: [h1] }), usCapitalGainsYTD: 0, people: { primary: { residency: 'US' } } };
+    const ded = new TaxSettleService().usStandardDeduction(base);
+    const state = { ...base, usOrdinaryIncomeYTD: 47000 + ded + 1 };
 
     const handler = new TaxGainHarvestHandler({ taxableStateKeys: ['usStockAccount'], taxGainHarvestBracketCeiling: 47000 });
     assert.strictEqual(handler.call({ state }).length, 0);
@@ -428,6 +427,52 @@ describe('TaxGainHarvestHandler', () => {
 
     assert.ok(actions.every(a => a.sourceHoldingId !== 'h1'), 'loss holding must not be harvested');
     assert.ok(actions.some(a => a.sourceHoldingId === 'h2'), 'gain holding must be harvested');
+  });
+
+  // The study flag 26 residual (macro-regimes study, Oct 2026): the band is in TAXABLE income,
+  // short-term gains are ordinary, a lot held a year or less is not long-term, and a gain
+  // realised against a capital loss spends the loss.
+  const ceiling = 98900;
+  const tgh = () => new TaxGainHarvestHandler({ taxableStateKeys: ['usStockAccount'], taxGainHarvestBracketCeiling: ceiling });
+  const big = () => holding({ id: 'h1', mv: 500000, basis: 100000 });   // 400k of gain: never the limit
+  const gainOf = (actions, mv = 500000, basis = 100000) =>
+    actions.reduce((g, a) => g + a.sellAmount * (1 - basis / mv), 0);
+
+  test('TGH-5: room = ceiling − (ordinary + short-term − standard deduction) − long-term so far', () => {
+    const base = { usStockAccount: account({ holdings: [big()] }), people: { primary: { residency: 'US' } } };
+    const ded  = new TaxSettleService().usStandardDeduction(base);
+    const state = { ...base, usOrdinaryIncomeYTD: 57000, usShortTermCapitalGainsYTD: 16000, usCapitalGainsYTD: 37000 };
+    const want  = ceiling - (57000 + 16000 - ded) - 37000;
+    assert.ok(Math.abs(gainOf(tgh().call({ state })) - want) < 1, `realises exactly the band's room (${want})`);
+  });
+
+  test('TGH-6: income under the deduction leaves the whole ceiling as room', () => {
+    const state = { usStockAccount: account({ holdings: [big()] }), people: { primary: { residency: 'US' } },
+      usOrdinaryIncomeYTD: 1000, usCapitalGainsYTD: 0 };
+    assert.ok(Math.abs(gainOf(tgh().call({ state })) - ceiling) < 1);
+  });
+
+  test('TGH-7: a lot held one year or less is not harvested (§1222: its gain is ordinary)', () => {
+    const date  = new Date(Date.UTC(2027, 11, 31));
+    const young = new Holding({ id: 'young', allocation: ALLOCATION.EQUITY, marketValue: 2000, costBasis: 1000,
+      rateKey: 'EQUITY_US', purchaseDate: new Date(Date.UTC(2027, 0, 15)) });
+    const old   = new Holding({ id: 'old', allocation: ALLOCATION.EQUITY, marketValue: 2000, costBasis: 1000,
+      rateKey: 'EQUITY_US', purchaseDate: new Date(Date.UTC(2026, 0, 15)) });
+    const state = { usStockAccount: account({ holdings: [young, old] }), people: { primary: { residency: 'US' } },
+      usOrdinaryIncomeYTD: 0, usCapitalGainsYTD: 0 };
+    const ids = tgh().call({ state, date }).map(a => a.sourceHoldingId);
+    assert.deepEqual(ids, ['old']);
+  });
+
+  test('TGH-8: no harvest while a capital loss is on hand (this year or carried)', () => {
+    const state = extra => ({ usStockAccount: account({ holdings: [big()] }), people: { primary: { residency: 'US' } },
+      usOrdinaryIncomeYTD: 0, usCapitalGainsYTD: 0, ...extra });
+    assert.strictEqual(tgh().call({ state: state({ usCapitalGainsYTD: -12864 }) }).length, 0, 'net loss this year');
+    assert.strictEqual(tgh().call({ state: state({ usCapitalGainsYTD: 5000, usShortTermCapitalGainsYTD: -6000 }) }).length, 0,
+      'short-term loss outweighs long-term gain');
+    assert.strictEqual(tgh().call({ state: state({ usLongTermCapitalLossCarryforward: 2000 }) }).length, 0, 'carryforward');
+    assert.ok(tgh().call({ state: state({ usCapitalGainsYTD: 5000, usShortTermCapitalGainsYTD: -1000 }) }).length > 0,
+      'a net gain still harvests');
   });
 
 });

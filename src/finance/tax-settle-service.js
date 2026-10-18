@@ -494,6 +494,19 @@ export class TaxSettleService {
   }
 
   /**
+   * The US standard deduction the settle will apply for the tax year in `state`: the
+   * same module and inflation indexing as `_getModule`, MFJ unless `state.usFilingSingle`.
+   * For handlers that must measure income in taxable-income space before the settle runs.
+   *
+   * @param {object} state Simulation state snapshot
+   * @returns {number}
+   */
+  usStandardDeduction(state) {
+    const m = this._getModule('US', state);
+    return (state?.usFilingSingle ? m._stdDeduction_single : m._stdDeduction_mfj) ?? 0;
+  }
+
+  /**
    * Gross ordinary income (usOrdinaryIncomeYTD) at the TOP of the MFJ bracket
    * with the given marginal rate, for the given year.
    *
