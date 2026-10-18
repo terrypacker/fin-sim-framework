@@ -251,6 +251,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
           poolYears: (Number.isFinite(p.poolCashYears) || Number.isFinite(p.poolBondYears))
             ? { CASH: p.poolCashYears ?? 0, BOND: p.poolBondYears ?? 0 }
             : null,
+          poolYearsMaxFraction: Number.isFinite(p.poolYearsMaxFraction) ? p.poolYearsMaxFraction : null,
           // What `state.monthlyExpenses` is a price IN — the same param the expense handler
           // reads. Passed rather than re-derived so the target and the debit cannot disagree
           // about the currency of the spend line.
@@ -294,6 +295,19 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
           + 'the default LOCATED policy bonds go to the tax-favoured wrappers, which for a pre-60 '
           + 'household are age-gated and are not cover for anyone. For accessible cover, also author '
           + 'allocationLocationPolicy with the taxable roles first for BOND and CASH.',
+        visibleWhen: { param: 'allocationSchedule', equals: 'YEARS_OF_SPEND' },
+      },
+      {
+        key: 'poolYearsMaxFraction', label: 'Pools: Max of Book',
+        type: 'Number', group: 'Behavioral', mc: false, opt: true,
+        min: 0, max: 1, step: 0.05, defaultValue: null,
+        description: 'YEARS_OF_SPEND only. A cap on the cash and bond pools together, as a share of '
+          + 'the book: "N years of spending, but at most this much of what we hold". Cash fills first '
+          + 'under the cap, then bonds; gold and equity share what is left. Without it a years target '
+          + 'is a fixed dollar figure, so as the book shrinks after a crash or late in life the pools '
+          + 'take a rising share of it and the rebalancer sells equity into bonds until the book is '
+          + 'almost all bonds (measured: 93 % on a reference plan). Blank = uncapped. The liquidity '
+          + 'graph\'s pool targets have the same cap per pool (Max of book).',
         visibleWhen: { param: 'allocationSchedule', equals: 'YEARS_OF_SPEND' },
       },
       {

@@ -9,11 +9,11 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-237 parameters · 33 panels · 12 node types (206 fields) · 180 action types · 92 tools · 330 state field types · 78 topics · 137 design docs
+238 parameters · 33 panels · 12 node types (206 fields) · 180 action types · 92 tools · 330 state field types · 78 topics · 137 design docs
 
 ---
 
-## Parameters (237)
+## Parameters (238)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
@@ -96,7 +96,7 @@ scenario's own schema), which is where to go to change it.
 - **`auCpiRate`** — AU CGT Indexation (CPI) Rate · `Number` · default — · sweep: mc · via AU_TAX
   Annual ATO CPI rate used to index AU capital-gains cost bases (FY2027+). Leave unset to track the AU inflation rate.
 
-### Behavioral (12)
+### Behavioral (13)
 
 - **`behavioralStrategies`** — Behavioral Strategies · `EnumMulti` · default `` · one of `PANIC_SELL`, `CONTRIBUTION_SUSPENSION`, `TAX_LOSS_HARVEST`, `OPPORTUNISTIC_REBALANCE`, `TARGET_ALLOCATION`, `BOND_LADDER`, `DOWNTURN_ROTH_CONVERSION`, `CASH_BUCKET_DRAWDOWN`, `TAX_GAIN_HARVEST`, `LIQUIDITY_POOLS` · sweep: opt · via ECONOMIC_REGIMES
   Active behavioral strategies: portfolio reactions to regimes and tax opportunities (design/29). PANIC_SELL rotates equity to cash on crash entry; TAX_LOSS_HARVEST realizes losses at year-end; CONTRIBUTION_SUSPENSION halts contributions under stress; and more.
@@ -112,6 +112,8 @@ scenario's own schema), which is where to go to change it.
   YEARS_OF_SPEND only (design 97 §9). Size of the BOND pool in years of current annual spending. Filled after the cash pool and before gold, with EQUITY taking whatever is left — so a book too small for both pools ends up all cash and no equity rather than a shrunken copy of a mix it cannot afford. NOTE this sizes the MIX, not where it sits: with the default LOCATED policy bonds go to the tax-favoured wrappers, which for a pre-60 household are age-gated and are not cover for anyone. For accessible cover, also author allocationLocationPolicy with the taxable roles first for BOND and CASH.
 - **`poolCashYears`** — Cash Pool (years of spend) · `Number` · default — · sweep: opt · conditional · via ECONOMIC_REGIMES
   YEARS_OF_SPEND only (design 97 §9). Size of the CASH pool as a number of years of CURRENT annual spending, resolved every period against the live, inflated spend line rather than authored as a percentage. A percentage cannot hold a number of years: measured on the reference plan a fixed BOND percentage ran 3.5 years of cover in 2027 to 13.6 by 2042 with no crash, and fell to 4.5 with one — it over-provisions as the book grows and under-provisions after a crash, which is inverted from what a reserve is for. Blank ⇒ the mode falls back to the authored mix.
+- **`poolYearsMaxFraction`** — Pools: Max of Book · `Number` · default — · range 0…1 · sweep: opt · conditional · via ECONOMIC_REGIMES
+  YEARS_OF_SPEND only. A cap on the cash and bond pools together, as a share of the book: "N years of spending, but at most this much of what we hold". Cash fills first under the cap, then bonds; gold and equity share what is left. Without it a years target is a fixed dollar figure, so as the book shrinks after a crash or late in life the pools take a rising share of it and the rebalancer sells equity into bonds until the book is almost all bonds (measured: 93 % on a reference plan). Blank = uncapped. The liquidity graph's pool targets have the same cap per pool (Max of book).
 - **`rebalanceDriftBand`** — Rebalance Drift Band · `Number` · default `0.05` · sweep: opt · conditional · via ECONOMIC_REGIMES
   Allocation drift threshold that triggers a rebalance (default 0.05 = 5 percentage points)
 - **`rebalanceTargetAllocation`** — Rebalance Target Allocation · `MixList` · default — · conditional · via ECONOMIC_REGIMES
@@ -2304,7 +2306,7 @@ what the in-app panel keys on.
 | [Job](nodes/job.md) | node | 230 | 2 panels · design 116, 50, 73, 119 |
 | [Journal Report](panels/journal-report.md) | panel | 193 | 1 panel · design 16 |
 | [Lineage](panels/lineage.md) | panel | 196 | 1 panel · design 30 |
-| [Liquidity Pools](concepts/liquidity-pools.md) | concept | 385 | 1 panel · 6 params · design 97 |
+| [Liquidity Pools](concepts/liquidity-pools.md) | concept | 397 | 1 panel · 7 params · design 97 |
 | [Monte Carlo](panels/mc-config.md) | panel | 239 | 1 panel · design 100 |
 | [MC Results](panels/mc-results.md) | panel | 202 | 1 panel · design 100, 89 |
 | [MC Runs](panels/mc-runs.md) | panel | 196 | 1 panel · design 100 |

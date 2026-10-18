@@ -21,6 +21,7 @@
  * YOS-4: the target TRACKS the spend line and IGNORES the book — the percentage's failure
  * YOS-5: an explicit AUD-denominated spend figure is converted before the years arithmetic
  * YOS-6: unselected / other schedule modes are untouched
+ * YOS-7: poolYearsMaxFraction caps the two pools together; blank is uncapped
  */
 
 import { test } from 'node:test';
@@ -111,4 +112,20 @@ test('YOS-6: the other schedule modes are untouched', () => {
     accounts: [], targetAllocation: AUTHORED, poolYears: { CASH: 2, BOND: 4 },
   });
   assert.deepEqual(stat.resolveScheduledTarget(spending(), null, 3_000_000), AUTHORED);
+});
+
+test('YOS-7: poolYearsMaxFraction caps cash + bond together at a share of the book', () => {
+  // $1M book, 720k of pools authored (72 %). Capped at 30 %: cash takes its 24 %, bonds the 6 %
+  // left under the cap, gold its authored 1 %, equity the rest — not the 27 % / 0 % equity of
+  // an uncapped shrunken book.
+  const mix = make({ poolYearsMaxFraction: 0.30 })._resolveYearsTarget(spending(), 1_000_000);
+  assert.ok(Math.abs(mix.CASH - 0.24) < 1e-9, `cash ${mix.CASH}`);
+  assert.ok(Math.abs(mix.BOND - 0.06) < 1e-9, `bond ${mix.BOND}`);
+  assert.ok(Math.abs(mix.GOLD - 0.01) < 1e-9, `gold ${mix.GOLD}`);
+  assert.ok(Math.abs(mix.EQUITY - 0.69) < 1e-9, `equity ${mix.EQUITY}`);
+  // A cap that does not bind changes nothing; blank is the uncapped mix byte for byte.
+  assert.deepEqual(make({ poolYearsMaxFraction: 0.9 })._resolveYearsTarget(spending(), 3_000_000),
+    make()._resolveYearsTarget(spending(), 3_000_000));
+  assert.deepEqual(make({ poolYearsMaxFraction: null })._resolveYearsTarget(spending(), 500_000),
+    make()._resolveYearsTarget(spending(), 500_000));
 });

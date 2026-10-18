@@ -287,6 +287,8 @@ export class RebalanceToTargetReducer extends Reducer {
    * @param {string}   [opts.scheduleMode]         - ALLOCATION_SCHEDULE mode (design 61 Lever B)
    * @param {Array}    [opts.glidepath]            - GLIDEPATH anchors [{ age, weights }]
    * @param {object}   [opts.poolYears]            - YEARS_OF_SPEND pools { CASH, BOND } in years
+   * @param {number}   [opts.poolYearsMaxFraction] - cap on the two pools together, as a share of
+   *                                                 the book (`poolYearsMaxFraction`). Null ⇒ uncapped.
    * @param {string}   [opts.expensesCurrency]     - what `state.monthlyExpenses` is a price in
    * @param {string}   [opts.baseCurrency]         - valuation base for the years arithmetic
    * @param {object}   [opts.regimeTargets]        - REGIME_CONDITIONED map { <REGIME_TAG>|NORMAL: weights }
@@ -301,7 +303,7 @@ export class RebalanceToTargetReducer extends Reducer {
   constructor({ accounts = [], targetAllocation = { EQUITY: 0.60, BOND: 0.40 },
                 driftBandTaxable = 0.10, driftBandSheltered = 0.02,
                 scheduleMode = ALLOCATION_SCHEDULE.STATIC, glidepath = null, regimeTargets = null,
-                poolYears = null, expensesCurrency = 'RESIDENCE', baseCurrency = 'USD',
+                poolYears = null, poolYearsMaxFraction = null, expensesCurrency = 'RESIDENCE', baseCurrency = 'USD',
                 locationMode = ALLOCATION_LOCATION.LOCATED, locationPolicy = null,
                 poolGraph = null, locationEligibility = null, classRestrictions = null,
                 intlShare = null } = {}) {
@@ -318,6 +320,9 @@ export class RebalanceToTargetReducer extends Reducer {
     // current annual spending; `expensesCurrency` says what currency `state.monthlyExpenses`
     // is a price in (see `_annualSpendBase`).
     this.poolYears            = poolYears;
+    // "N years, at most X of the book" (macro-regimes study flag 5): without it a years
+    // reserve ratchets the book into cash and bonds as the book shrinks (§23.2's 90 % case).
+    this.poolYearsMaxFraction = poolYearsMaxFraction;
     this.expensesCurrency     = expensesCurrency;
     this.baseCurrency         = baseCurrency;
     this.regimeTargets        = regimeTargets;
@@ -657,7 +662,8 @@ export class RebalanceToTargetReducer extends Reducer {
     if (!(S > 0) || !(bookBase > 0)) return null;   // no spend line / empty book ⇒ fall back
 
     const years = this.poolYears ?? {};
-    let room = 1;
+    const cap   = Number.isFinite(this.poolYearsMaxFraction) ? Math.min(1, Math.max(0, this.poolYearsMaxFraction)) : 1;
+    let room = cap;
     const take = (y) => {
       const want = Number(y);
       if (!Number.isFinite(want) || want <= 0) return 0;
@@ -668,6 +674,7 @@ export class RebalanceToTargetReducer extends Reducer {
 
     const CASH   = take(years[ALLOCATION.CASH]);
     const BOND   = take(years[ALLOCATION.BOND]);
+    room = 1 - CASH - BOND;                       // the cap binds the pools only, not gold
     const GOLD   = Math.min(room, Math.max(0, Number(this._targetAllocationOf(state)?.[ALLOCATION.GOLD]) || 0));
     room -= GOLD;
     const EQUITY = Math.max(0, room);

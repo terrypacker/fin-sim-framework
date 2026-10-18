@@ -3,7 +3,7 @@ id: liquidity-pools
 kind: concept
 title: Liquidity Pools
 panels: [pools]
-params: [liquidityGraph, liquidityGraphEnabled, poolFlowsEnabled, poolCashYears, poolBondYears, cashBucketDrawdownMinSeverity]
+params: [liquidityGraph, liquidityGraphEnabled, poolFlowsEnabled, poolCashYears, poolBondYears, poolYearsMaxFraction, cashBucketDrawdownMinSeverity]
 design: [97-liquidity-pools-and-drawdown-sequence.md]
 stamps:
   param:liquidityGraph: 346c4e
@@ -11,6 +11,7 @@ stamps:
   param:poolFlowsEnabled: 8b8123
   param:poolCashYears: 92629a
   param:poolBondYears: 13afb2
+  param:poolYearsMaxFraction: 46cd41
   param:cashBucketDrawdownMinSeverity: b361c8
   panel:pools: 78458e
 ---
@@ -33,7 +34,7 @@ portfolio is drawn down, so a reserve of many years can come to ask for more tha
 portfolio holds; its class then crowds every other one out of the mix, and the plan ends up
 almost all bonds without anyone choosing that. A target can carry a ceiling for this — "this
 many years, but never more than this share of the portfolio" — set as **Max of book** in the
-bucket table.
+bucket table; the older pool years outside the graph take one for both together.
 
 Three switches, which are not the same switch:
 
