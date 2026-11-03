@@ -623,3 +623,44 @@ describe('_compactLadderLots — absorption growth has a ceiling', () => {
     assert.equal(_compactLadderLots(hs, asOf), hs);
   });
 });
+
+// ─── Design 130 §10 — the tax treatment is a US fact ───────────────────────────
+
+describe('BondLadderReducer — an AU ladder never carries a US exemption (design 130 §10)', () => {
+  test('the constructor ignores the treatment for an AU ladder and keeps it for a US one', () => {
+    assert.equal(new BondLadderReducer({ stateKey: 'super', country: 'AU', taxExemption: 'state' }).taxExemption, 'none');
+    assert.equal(new BondLadderReducer({ stateKey: 'brk', country: 'US', taxExemption: 'federal' }).taxExemption, 'federal');
+    assert.equal(new BondLadderReducer({ stateKey: 'brk' }).taxExemption, 'state', 'the US default is unchanged');
+  });
+
+  test('an AU account\'s bond sleeve is struck into AU-market rungs with no exemption', () => {
+    const reducer = new BondLadderReducer({ stateKey: 'acct', country: 'AU', targetRungs: 3, taxExemption: 'state' });
+    const account = { role: 'super', country: 'AU', balance: 30_000, holdings: [bondSleeve(30_000)] };
+    const next = reducer.reduce({
+      effectiveInterestRates: { [RATE_KEYS.FIXED_INCOME_AU]: 0.05 },
+      currentPeriods:         { AU: { startMs: ms(2030, 6) } },
+      acct: account,
+    }, { type: 'AU_PERIOD_ADVANCE' });
+    const rungs = next.acct.holdings.filter(h => h.allocation === ALLOCATION.BOND);
+    assert.equal(rungs.length, 3);
+    assert.ok(rungs.every(h => h.taxExemption === 'none' && h.rateKey === RATE_KEYS.FIXED_INCOME_AU));
+    assert.equal(next.acct.bondLadderIntent.taxExemption, 'none');
+  });
+
+  test('E2E: the toolset builds super\'s ladder with none and the brokerage\'s with the param', () => {
+    const { sim } = loadScenarioSim({
+      telemetry: 'off',
+      params: { behavioralStrategies: ['BOND_LADDER'], bondLadderRole: ['super', 'us-stock'],
+                bondLadderTaxTreatment: 'state' },
+      stepTo: new Date(Date.UTC(2028, 0, 2)),
+    });
+    const rungsOf = (acct) => (acct?.holdings ?? []).filter(h => typeof h.id === 'string' && h.id.startsWith('ladder-'));
+    const auAccts = Object.values(sim.state).filter(e => e?.role === 'super' && e?.bondLadderIntent);
+    assert.ok(auAccts.length > 0, 'a super account was laddered');
+    // The default super holds no bonds, so its ladder is an intent with no rungs yet; the
+    // intent is what every later buy and absorb strikes rungs from.
+    for (const a of auAccts) assert.equal(a.bondLadderIntent.taxExemption, 'none');
+    const us = rungsOf(sim.state.usStockAccount);
+    assert.ok(us.length > 0 && us.every(h => h.taxExemption === 'state'));
+  });
+});

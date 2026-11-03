@@ -57,7 +57,7 @@ scenario's own schema), which is where to go to change it.
 - **`bondLadderSpacingYears`** — Bond Ladder Spacing (years) · `Number` · default `1` · range 0.25…5 · conditional · via ECONOMIC_REGIMES
   Years between adjacent rung maturities. Ladder term = rungs × spacing. 0.25 is a quarterly ladder — four rungs of it cover a year of spending in three-month steps, which is the shape a liquidity pool wants; the reducer has always accepted it, the control just could not express it.
 - **`bondLadderTaxTreatment`** — Bond Ladder — Tax Treatment · `Enum` · default `state` · one of `none`, `state`, `federal`, `both` · conditional · via ECONOMIC_REGIMES
-  Holding tax treatment for every rung (design 66 §G2): none = fully taxable, state = US Treasury (state-exempt, default), federal = municipal, both = muni all-state.
+  Holding tax treatment for every rung of a US ladder (design 66 §G2): none = fully taxable, state = US Treasury (state-exempt, default), federal = municipal, both = muni all-state. A ladder in an AU account buys AU bonds, so its rungs are always fully taxable whatever this says.
 - **`bondLadderTipsCouponMode`** — Bond Ladder — TIPS Coupon at Roll · `Enum` · default `AUTO` · one of `AUTO`, `MARKET`, `PINNED` · conditional · via ECONOMIC_REGIMES
   TIPS ladders only: the real yield a rung takes when it rolls (design 121 §8). Market re-locks at the nominal curve yield for the roll term less the inflation expected over it, so the ladder reprices as real rates move. Pinned keeps the rung's coupon for good. Automatic is Market when Coupon Rate is blank and Pinned when it is set.
 - **`bondLadderTipsExpectedInflation`** — Bond Ladder — TIPS Expected Inflation · `Enum` · default `TENOR` · one of `TENOR`, `TRAILING`, `CURRENT` · conditional · via ECONOMIC_REGIMES
@@ -2275,7 +2275,7 @@ what the in-app panel keys on.
 | [AU Tax and PAYG Instalments](concepts/au-tax.md) | concept | 236 | 2 panels · 6 params · design 107 |
 | [Behavioral Strategies](concepts/behavioral-strategies.md) | concept | 232 | 2 panels · 5 params · design 29 |
 | [Inheritance](nodes/bequest.md) | node | 233 | 2 panels · design 63 |
-| [Bond Ladders](concepts/bond-ladders.md) | concept | 393 | 1 panel · 10 params · design 66, 121, 125, 128 |
+| [Bond Ladders](concepts/bond-ladders.md) | concept | 399 | 1 panel · 10 params · design 66, 121, 125, 128 |
 | [Bonds](panels/bonds.md) | panel | 246 | 1 panel · design 130, 66 |
 | [Chart](panels/chart.md) | panel | 199 | 1 panel |
 | [Collectible](nodes/collectible.md) | node | 205 | 2 panels · design 57, 88 |

@@ -614,8 +614,9 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
         key: 'bondLadderTaxTreatment', label: 'Bond Ladder — Tax Treatment',
         type: 'Enum', group: 'Allocation', mc: false, opt: false,
         options: ['none', 'state', 'federal', 'both'], defaultValue: 'state',
-        description: 'Holding tax treatment for every rung (design 66 §G2): none = fully taxable, ' +
-          'state = US Treasury (state-exempt, default), federal = municipal, both = muni all-state.',
+        description: 'Holding tax treatment for every rung of a US ladder (design 66 §G2): none = fully taxable, ' +
+          'state = US Treasury (state-exempt, default), federal = municipal, both = muni all-state. ' +
+          'A ladder in an AU account buys AU bonds, so its rungs are always fully taxable whatever this says.',
         visibleWhen: { param: 'behavioralStrategies', includes: 'BOND_LADDER' },
       },
     ],

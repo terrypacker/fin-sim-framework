@@ -263,10 +263,62 @@ would mean the build touched something it shouldn't have.
   sticks), and the warning folds to a collapsed `<details>` grouped by account, which stays
   open or closed across steps.
 
-## 10. Open: the ladder stamps a US tax treatment on AU accounts
+## 10. Fixed: the ladder stamped a US tax treatment on AU accounts
 
 `BOND_LADDER` takes one `bondLadderTaxTreatment` (default `'state'`) and applies it to every
 account `bondLadderRole` selects, including AU super. An AU-market rung should be `'none'`.
-Not fixed here, because it changes rung lots in state (golden-visible). Open questions: does
-any tax path read the exemption on an AU account (it may be cosmetic), and should the
-reducer force `'none'` for an AU-market intent or take the treatment per account?
+
+### 10.1 Trace (2 Nov 2026)
+
+**Where the value comes from.** `behavioral-strategy-registry.js` builds one
+`BondLadderReducer` per selected account with `country: countryForRole(role)` and
+`taxExemption: p.bondLadderTaxTreatment ?? 'state'`. The country picks the market
+(`resolveRateKey(country, BOND)`, so `FIXED_INCOME_AU` for super and au-stock). The tax
+treatment is not country-aware, so an AU ladder gets an AU-market rung with a US Treasury
+exemption. `_intent` stamps it on `bondLadderIntent` and `_slotLot` on every rung.
+
+**What reads it for tax.** Only `computeHoldingsCoupons` and `computeHoldingsAccretion`, via
+`couponFederalExempt` / `couponStateExempt`, which produce `federalTaxableAmount` and
+`stateTaxableAmount`. Those two fields are used only by `taxMode: 'us'`
+(`BOND_COUPON_TAX`). The AU toolset wires `BondSleeveCouponHandler` and
+`BondAccretionHandler` with `taxMode: 'super'` (super, which goes to `SUPER_EARNINGS_TAX`
+on the full amount) and `taxMode: 'au'` (au-stock, which goes to
+`AU_SAVINGS_EARNINGS_TAX` on the full amount). Neither reads the split.
+
+**Could an AU rung reach a US-taxed account?** No. A ladder's market comes from its own
+account's role, so AU-market rungs only exist in AU accounts.
+
+**What else reads it (not tax).** Each of these copies the value forward or compares it
+within one account:
+- the coupon reinvest bucket key (the reinvest lot inherits `'state'`);
+- the lot compaction key in `holding-utils.js` (only lots with matching exemptions merge);
+- the rebalance buy's inherited traits (`unanimous('taxExemption')`).
+
+None changes a number.
+
+**Verdict: no tax or balance effect today; the bad value is only a label.** The real costs:
+1. A wrong fact in state. Any future US-side treatment of AU income (for example a US
+   citizen's super) would read `'state'` and exempt it from US state tax.
+2. The Bonds panel warning fires on every AU rung, which makes the warning noise and hides
+   real authoring slips.
+
+**Golden exposure.** None. Both ladder goldens (`golden-specs.js`) ladder `['k401', 'ira']`
+only.
+
+### 10.2 Fix (2 Nov 2026)
+
+At the source: the `BondLadderReducer` constructor sets `taxExemption` to `'none'` when
+`country === 'AU'`, whatever it was passed. That covers the toolset, a deserialised reducer
+and any direct construction. The intent, every rung, and everything downstream (the
+reinvest lots and the rebalance's inherited traits) take the value from there. The
+`bondLadderTaxTreatment` description and the Bond Ladders help topic now say the setting
+applies to US ladders. Tests in `tests/unit/bond-ladder-reducer.test.mjs`: the constructor
+rule, an AU bond sleeve struck into `'none'` AU-market rungs, and a toolset run laddering
+super and the brokerage together (super's intent is `'none'`, the brokerage's rungs keep the
+param). No golden moved.
+
+A rung already in a saved state keeps `'state'` until the ladder restrikes it. That's
+harmless, because nothing reads it (§10.1).
+
+The account editor's hand-built "+ Bond ladder" still lets an author pick any treatment on
+an AU account. The Bonds panel warning (§8 Q1) is what catches that case.

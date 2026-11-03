@@ -57,7 +57,8 @@ export class BondLadderReducer extends Reducer {
    * @param {number}  [opts.targetRungs=5]     - number of rungs (the searchable lever)
    * @param {number}  [opts.spacingYears=1]    - years between adjacent maturities
    * @param {boolean} [opts.roll=true]         - roll each maturing rung to the tail (self-perpetuate)
-   * @param {string}  [opts.taxExemption='state'] - Holding.taxExemption for every rung (default Treasury)
+   * @param {string}  [opts.taxExemption='state'] - Holding.taxExemption for every rung (default Treasury).
+   *   US ladders only: an AU ladder's rungs are always 'none' (design 130 §10).
    * @param {boolean} [opts.inflationLinked=false] - every rung is a TIPS (design 66 §G5): CPI-indexed
    *   principal, imputed accretion income, coupon on the adjusted principal. Pair with `couponRate`
    *   set to the REAL yield — the market anchor is a NOMINAL yield and stamping it on a CPI-indexed
@@ -84,7 +85,11 @@ export class BondLadderReducer extends Reducer {
     this.targetRungs  = targetRungs;
     this.spacingYears = spacingYears;
     this.roll         = roll;
-    this.taxExemption = taxExemption;
+    // Design 130 §10: the exemptions are US ones (Treasury, muni), and an AU ladder buys an
+    // AU-market bond. One `bondLadderTaxTreatment` used to stamp a US Treasury exemption on
+    // every AU super rung. No tax read it (super and au-stock coupons are taxed on the full
+    // amount), but it was a wrong fact in state waiting for the first US-side reader.
+    this.taxExemption = country === 'AU' ? 'none' : taxExemption;
     this.inflationLinked = inflationLinked;
     this.couponRate      = couponRate;
     this.tipsCouponMode  = tipsCouponMode;

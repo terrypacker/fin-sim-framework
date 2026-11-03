@@ -9,7 +9,7 @@ stamps:
   param:bondLadderRungs: ac8710
   param:bondLadderSpacingYears: 218e34
   param:bondLadderRoll: 1beb56
-  param:bondLadderTaxTreatment: 611cb5
+  param:bondLadderTaxTreatment: 843e62
   param:bondLadderRole: 95dbbc
   param:bondLadderInflationLinked: 0faa3b
   param:bondLadderCouponRate: 134598
@@ -37,8 +37,7 @@ that is an accumulation instrument. With it off, maturing rungs fall to cash, wh
 is a spend-down instrument that steadily converts itself into money to live on.
 Those are opposite plans, and it is one switch.
 
-Placement takes account roles, and **every** matching account is laddered, not the
-first one found.
+Placement takes account roles, and **every** matching account is laddered.
 
 **New money buys more of the same ladder**, spread across its upcoming maturities:
 a rebalance into bonds on the day, reinvested coupons at the next review. Small sums
@@ -46,7 +45,8 @@ go to the longest rung alone.
 
 Tax treatment is stated per ladder, because whether a rung is fully taxable,
 state-exempt like a Treasury, or municipal changes the after-tax yield without
-changing the coupon.
+changing the coupon. These are US treatments: an AU ladder's bonds
+are fully taxable.
 
 **An inflation-linked ladder earns a real yield, not a nominal one.** Its principal
 already rises with prices, so the coupon is what is left of the market yield after
