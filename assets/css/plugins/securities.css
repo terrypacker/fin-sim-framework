@@ -129,3 +129,36 @@
 
 .sec-pos { color: var(--diff-added); }
 .sec-neg { color: var(--diff-removed); }
+
+/* ── Bonds Plugin (design 130) ──────────────────────────────────────────────
+   Wears the securities grid (`sec-*`) so the two portfolio rollups read as one family;
+   only what the bonds view adds is styled here. */
+
+.bond-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 3px; overflow: hidden; }
+.bond-seg button {
+  background: none; border: 0; color: var(--text-muted); cursor: pointer;
+  font-size: 10px; padding: 2px 6px; font-family: inherit;
+}
+.bond-seg button + button { border-left: 1px solid var(--border); }
+.bond-seg button.on { background: var(--bg-subtle); color: var(--blue-text); }
+
+.bond-warn {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--warning);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.bond-warn summary { cursor: pointer; }
+.bond-warn ul { margin: 2px 0 0 16px; padding: 0; }
+
+.bond-chart-wrap { border-bottom: 1px solid var(--border); }
+.bond-chart { height: 200px; }
+.bond-caption { color: var(--text-muted); font-size: 10px; padding: 0 10px 6px; font-style: italic; }
+
+.bond-acct-row td { font-size: 11px; }
+.bond-lot-row td { font-size: 10px; color: var(--text-muted); }
+.bond-lot-name { padding-left: 44px !important; white-space: nowrap; }
+.bond-hl td { background: var(--bg-subtle); color: var(--text); }
+.bond-roll { color: var(--blue-text); }
+.bond-sup { color: var(--text-muted); margin-left: 1px; cursor: help; }

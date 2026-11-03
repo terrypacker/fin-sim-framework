@@ -13,7 +13,7 @@ import { ALLOCATION }         from '../holdings/allocation.js';
 import { resolveYield, tipsRealYield } from './yield-curve.js';
 import { _syncBalance }       from '../holdings/holding-reducers.js';
 import { section988ForRedemption } from '../account-rules/bond-currency-basis.js';
-import { unitiseBond, indexedRedemptionValue, instrumentOf } from '../holdings/holding-utils.js';
+import { unitiseBond, redemptionValue, instrumentOf } from '../holdings/holding-utils.js';
 import { ACCOUNT_ROLES }      from '../state/account-roles.js';
 
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
@@ -142,7 +142,7 @@ export class BondMaturityReducer extends Reducer {
         if (!isSuper || (h.marketValue ?? 0) <= 0.005) return out;
         // Design 105 §8.6 — the fund's revenue gain on the matured bond, measured against
         // the SAME redemption value `redeem` just paid.
-        const par = redemptionValue(h, inst, securities);
+        const par = redemptionValue(h, securities);
         revenueGain += par - (h.costBasis ?? par);
         return h.rollAtMaturity ? { ...out, costBasis: par } : out;
       });
@@ -170,18 +170,6 @@ function isMatured(h, inst, asOfMs) {
   if (!h || h.allocation !== ALLOCATION.BOND || inst?.maturityDate == null) return false;
   const matMs = inst.maturityDate instanceof Date ? inst.maturityDate.getTime() : new Date(inst.maturityDate).getTime();
   return Number.isFinite(matMs) && matMs <= asOfMs;
-}
-
-/**
- * What a matured bond redeems for: its indexed principal for a unitised lot, the greater of
- * accreted value and face for a scalar TIPS (the deflation floor), otherwise its face. One
- * function, so `redeem` and super's revenue gain (design 105 §8.6) can never measure
- * different proceeds. Callers handle a drained lot (value ≤ 0.005) before asking.
- */
-function redemptionValue(h, inst, securities) {
-  return indexedRedemptionValue(h, securities) ?? (inst.inflationLinked
-    ? Math.max(h.marketValue ?? 0, h.faceValue ?? 0)
-    : (h.faceValue ?? h.marketValue ?? 0));
 }
 
 /**
@@ -226,7 +214,7 @@ function redeem(h, inst, asOfMs, effectiveRates, yieldCurve = {}, spot = null, s
   // appear. `indexedRedemptionValue` returns null for a scalar holding, which keeps the
   // old expression for a bond that was never promoted — a UI preview, a unit test —
   // rather than silently redeeming it at un-indexed par.
-  const par = redemptionValue(h, inst, securities);
+  const par = redemptionValue(h, securities);
 
   if (h.rollAtMaturity) {
     // A LONE inflation-linked bond re-issues as a plain par bond (`rollsAsTips` below), so

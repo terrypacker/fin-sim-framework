@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-238 parameters · 33 panels · 12 node types (206 fields) · 180 action types · 92 tools · 330 state field types · 78 topics · 137 design docs
+238 parameters · 34 panels · 12 node types (206 fields) · 180 action types · 92 tools · 330 state field types · 79 topics · 138 design docs
 
 ---
 
@@ -564,7 +564,7 @@ scenario's own schema), which is where to go to change it.
 
 ---
 
-## Workbench panels (33)
+## Workbench panels (34)
 
 From `FINANCE_PLUGINS`. **Pane** is where the default layout opens the tab, and where
 the header's Panels menu re-opens it after a close. **Category** is the heading that
@@ -588,6 +588,7 @@ menu files it under.
 | `holdings` | Holdings | portfolio | center | `src/visualization/workbench/plugins/finance/holdings-plugin.js` |
 | `allocation` | Allocation | portfolio | center | `src/visualization/workbench/plugins/finance/allocation-plugin.js` |
 | `securities` | Securities | portfolio | center | `src/visualization/workbench/plugins/finance/securities-plugin.js` |
+| `bonds` | Bonds | portfolio | center | `src/visualization/workbench/plugins/finance/bonds-plugin.js` |
 | `spending` | Spending | portfolio | center | `src/visualization/workbench/plugins/finance/spending-plugin.js` |
 | `pools` | Liquidity Pools | portfolio | center | `src/visualization/workbench/plugins/finance/liquidity-pools-plugin.js` |
 | `paycheque` | Paycheque | portfolio | center | `src/visualization/workbench/plugins/finance/paycheque-plugin.js` |
@@ -2256,7 +2257,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 
 ---
 
-## Topics (78)
+## Topics (79)
 
 Tier 2 — the hand-written prose under `help/`, listed by what it CITES rather than
 summarised. A topic may not restate a param description (design 108 §3), so there is
@@ -2275,6 +2276,7 @@ what the in-app panel keys on.
 | [Behavioral Strategies](concepts/behavioral-strategies.md) | concept | 232 | 2 panels · 5 params · design 29 |
 | [Inheritance](nodes/bequest.md) | node | 233 | 2 panels · design 63 |
 | [Bond Ladders](concepts/bond-ladders.md) | concept | 393 | 1 panel · 10 params · design 66, 121, 125, 128 |
+| [Bonds](panels/bonds.md) | panel | 246 | 1 panel · design 130, 66 |
 | [Chart](panels/chart.md) | panel | 199 | 1 panel |
 | [Collectible](nodes/collectible.md) | node | 205 | 2 panels · design 57, 88 |
 | [Company Equity](nodes/company.md) | node | 214 | 2 panels · design 49, 72, 88 |
@@ -2332,7 +2334,7 @@ what the in-app panel keys on.
 | [Scenario](panels/scenario.md) | panel | 201 | 1 panel |
 | [Scenario Compare](panels/scenario-compare.md) | panel | 205 | 1 panel |
 | [Searching Pool Levers](concepts/searching-pool-levers.md) | concept | 399 | design 110, 97 |
-| [Securities](panels/securities.md) | panel | 188 | 1 panel · design 94 |
+| [Securities](panels/securities.md) | panel | 212 | 1 panel · design 94 |
 | [Security](nodes/security.md) | node | 209 | 3 panels · design 94, 66, 93 |
 | [Social Security](concepts/social-security.md) | concept | 391 | 2 panels · 3 actions · design 118, 30 |
 | [Spending](panels/spending.md) | panel | 209 | 1 panel · design 89 |
@@ -2347,7 +2349,7 @@ what the in-app panel keys on.
 
 ---
 
-## Design documents (137)
+## Design documents (138)
 
 Tier 3 — the full argument behind each mechanic, in `design/`. The title is each
 file's own H1, read out of it; there is no summary column, because a one-line precis
@@ -2490,6 +2492,7 @@ between 10 and 11.
 | [`127-time-weighted-investment-earnings.md`](../design/127-time-weighted-investment-earnings.md) | 127 — Time-weighted investment earnings |
 | [`128-ladder-aware-bond-buys.md`](../design/128-ladder-aware-bond-buys.md) | 128 — Ladder-aware bond buys (design 66 §10.5, Phase B) |
 | [`129-stock-bond-correlation.md`](../design/129-stock-bond-correlation.md) | 129 — Stock–bond correlation as a regime property (design 126 G3) |
+| [`130-bonds-panel.md`](../design/130-bonds-panel.md) | 130 — Bonds panel: holdings by bond type, and the maturity ladder |
 | [`bus-unification-plan.md`](../design/bus-unification-plan.md) | Bus Unification Plan |
 | [`inconsistencies.md`](../design/inconsistencies.md) | Inconsistencies, Rework Candidates, and Open Questions |
 | [`requirements.md`](../design/requirements.md) | Requirements Tracker |

@@ -110,6 +110,16 @@ function _isAccount(entry) {
 }
 
 /**
+ * The state entries the cube reads as ACCOUNTS — an account shape that is not a loan.
+ * Exported so a view that has to walk lots the cube folds away (the Bonds panel's rungs,
+ * design 130 §3.1) walks exactly the accounts the cube does, and the two cannot disagree
+ * about which accounts exist.
+ */
+export function isCubeAccount(entry) {
+  return entry != null && typeof entry === 'object' && entry.type !== 'loan' && _isAccount(entry);
+}
+
+/**
  * Build the fact rows for one point in time.
  *
  * @param {object} state                         - a simulation state (live or a history snapshot)

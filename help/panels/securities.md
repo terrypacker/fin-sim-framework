@@ -25,6 +25,9 @@ Open it for concentration questions, for vesting and employer-stock exposure, or
 whenever the same ticker lives in more than one account and you need the whole
 position.
 
+Bond ladder rungs and bond funds name no instrument, so they are not here: the
+[Bonds](bonds.md) panel shows them by kind, account and maturity.
+
 Needs a scenario built and stepped.
 
 The numbers come from the same allocation cube the other panels read, at the current

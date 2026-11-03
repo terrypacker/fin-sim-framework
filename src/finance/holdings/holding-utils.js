@@ -266,6 +266,20 @@ export function indexedRedemptionValue(h, securities = null) {
 }
 
 /**
+ * What a dated bond redeems for: its indexed principal for a unitised lot, the greater of
+ * accreted value and face for a scalar TIPS (the deflation floor), otherwise its face. One
+ * function, so the maturity reducer's `redeem`, super's revenue gain (design 105 §8.6) and
+ * the Bonds panel's principal column (design 130 §3.4) can never measure different
+ * proceeds. Callers handle a drained lot (value ≤ 0.005) before asking.
+ */
+export function redemptionValue(h, securities = null) {
+  const inst = instrumentOf(h, securities);
+  return indexedRedemptionValue(h, securities) ?? (inst.inflationLinked
+    ? Math.max(h.marketValue ?? 0, h.faceValue ?? 0)
+    : (h.faceValue ?? h.marketValue ?? 0));
+}
+
+/**
  * Promote a SCALAR position to the unitised representation, value-preserving.
  *
  * Two instruments reach here. An individual BOND (design 93 §5b) is unitised at its par;

@@ -33,6 +33,7 @@ import { CrossActionQueryPlugin }  from './cross-action-query-plugin.js';
 import { HoldingsPlugin }          from './holdings-plugin.js';
 import { AllocationPlugin }        from './allocation-plugin.js';
 import { SecuritiesPlugin }        from './securities-plugin.js';
+import { BondsPlugin }             from './bonds-plugin.js';
 import { SpendingPlugin }          from './spending-plugin.js';
 import { LiquidityPoolsPlugin }    from './liquidity-pools-plugin.js';
 import { PaychequePlugin }         from './paycheque-plugin.js';
@@ -47,7 +48,7 @@ export { ScenarioPlugin, ParametersPlugin, ConfigGraphPlugin, ConfigListPlugin, 
          ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin,
          JournalReportPlugin, ScenarioComparePlugin,
          DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, HoldingsPlugin,
-         AllocationPlugin, SecuritiesPlugin, SpendingPlugin, LiquidityPoolsPlugin, PaychequePlugin, MpcCockpitPlugin, HelpPlugin };
+         AllocationPlugin, SecuritiesPlugin, BondsPlugin, SpendingPlugin, LiquidityPoolsPlugin, PaychequePlugin, MpcCockpitPlugin, HelpPlugin };
 
 /**
  * All finance plugin descriptors — pass directly to WorkbenchShell `plugins` option.
@@ -70,6 +71,7 @@ export const FINANCE_PLUGINS = [
   { id: 'holdings',     title: 'Holdings',      component: HoldingsPlugin,    category: C.PORTFOLIO },
   { id: 'allocation',   title: 'Allocation',    component: AllocationPlugin,  category: C.PORTFOLIO },
   { id: 'securities',   title: 'Securities',    component: SecuritiesPlugin,  category: C.PORTFOLIO },
+  { id: 'bonds',        title: 'Bonds',         component: BondsPlugin,       category: C.PORTFOLIO },
   { id: 'spending',     title: 'Spending',      component: SpendingPlugin,    category: C.PORTFOLIO },
   { id: 'pools',        title: 'Liquidity Pools', component: LiquidityPoolsPlugin, category: C.PORTFOLIO },
   { id: 'paycheque',    title: 'Paycheque',     component: PaychequePlugin,   category: C.PORTFOLIO },
@@ -99,7 +101,7 @@ export const FINANCE_DEFAULT_LAYOUT = {
     active: 'scenario',
   },
   center: {
-    tabs: ['config-graph', 'parameters', 'timeline', 'chart', 'allocation', 'securities', 'spending', 'pools', 'paycheque', 'holdings', 'mpc-cockpit', 'mc-results', 'opt-results', 'dg-results'],
+    tabs: ['config-graph', 'parameters', 'timeline', 'chart', 'allocation', 'securities', 'bonds', 'spending', 'pools', 'paycheque', 'holdings', 'mpc-cockpit', 'mc-results', 'opt-results', 'dg-results'],
     active: 'config-graph',
   },
   right: {
@@ -151,7 +153,7 @@ export const FINANCE_VIEW_TEMPLATES = {
   Results: {
     sizes: [1, 3, 1],
     left:   { tabs: ['scenario', 'watchlist'],                         active: 'scenario' },
-    center: { tabs: ['chart', 'timeline', 'spending', 'allocation', 'pools', 'paycheque', 'holdings', 'securities'],
+    center: { tabs: ['chart', 'timeline', 'spending', 'allocation', 'pools', 'paycheque', 'holdings', 'securities', 'bonds'],
               active: 'chart' },
     right:  { tabs: ['state-panel', 'help'],                           active: 'state-panel' },
     bottom: { tabs: ['journal-report', 'dashboard'],                   active: 'journal-report' },
