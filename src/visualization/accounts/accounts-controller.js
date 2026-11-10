@@ -202,6 +202,9 @@ export class AccountsController {
     // the field for other types. A new account has no generated param yet, so the
     // flag rides the create payload rather than the param cascade.
     if ('isTransactionAccount' in data) account.isTransactionAccount = !!data.isTransactionAccount;
+    // Hold only (never rebalanced). Stored only when true, so an unticked account carries
+    // no field and serializes as before.
+    if (data.rebalanceExcluded === true) account.rebalanceExcluded = true;
     // Dividend-reinvestment election (design 106 §4). Tri-state, so `!!` would be the
     // wrong coercion: null means "follow the plan-wide default" and must not become
     // false. Brokerage only — the editor omits the field for every other type, and a
@@ -274,6 +277,9 @@ export class AccountsController {
       n.drawdownPriority = (dp === '' || dp == null) ? null : Number(dp);
     }
     if ('isTransactionAccount' in n) n.isTransactionAccount = !!n.isTransactionAccount;
+    // Hold only: false must reach the record so unticking clears it; the serializer and the
+    // state projection both write the field only when it is true.
+    if ('rebalanceExcluded' in n) n.rebalanceExcluded = n.rebalanceExcluded === true;
     // Dividend-reinvestment election (design 106 §4) — null clears back to the
     // plan-wide default; true/false are elections. Same null-vs-false discipline as
     // the nullable numbers below.

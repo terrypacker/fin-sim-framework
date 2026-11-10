@@ -22,7 +22,7 @@ stamps:
   param:rebalanceLotStrategy: cf4f95
   param:rebalanceIntlShareUs: 7edf07
   param:rebalanceIntlShareAu: 017138
-  param:allocationClassRestrictions: e61dbe
+  param:allocationClassRestrictions: 221b09
   panel:allocation: 762dd9
   panel:holdings: 962055
 ---
@@ -41,12 +41,13 @@ is as aggressive at eighty as at fifty, which nobody would choose deliberately.
 account holds the bonds, and that placement is worth real money — putting the
 tax-inefficient class in the sheltered account and letting equity compound where
 gains are never taxed. The placement preference is soft: it spills when an account
-is full rather than refusing. Inside equity, the home/international split can carry its
+is full rather than refusing. Equity is placed last, as the remainder, so cash and bonds
+get their preferred homes first. Inside equity, the home/international split can carry its
 own target; without one it is whatever the holdings happen to be.
 
 Some placements are things you cannot do. Gold in Australian super is the motivating
-case: for a US citizen it usually means a self-managed fund, which the US is likely to
-treat as a foreign grantor trust. Class restrictions never bend, so when every permitted
+case: for a US citizen it usually means a self-managed fund, likely a foreign grantor
+trust to the US. Class restrictions never bend, so when every permitted
 account is full the model holds less of that class, and the shortfall shows in the
 realised mix. A restriction can name one account as well as a kind (a TreasuryDirect
 account can never own a share fund). Nothing is restricted unless you say so; a plan
@@ -54,7 +55,8 @@ where a US citizen owns super gets a warning until you decide.
 
 **Rebalancing** is separate again, and the band is the lever. The taxable band
 defaults *wider* than the sheltered one, because a taxable rebalance realises gains,
-and a wide band gives up little tracking accuracy for a large saving in tax.
+and a wide band gives up little tracking accuracy for a large saving in tax. A hold-only
+account is never rebalanced.
 
 *Which* lots go matters as much: the same sale from a decade-old fund or from last
 year's purchase can differ tenfold in realised gain, for the same final mix.

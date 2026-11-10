@@ -297,6 +297,8 @@ export class InvestmentAccount extends Account {
    * @param {number} balance - Starting balance (default 0)
    * @param {object} [opts]  - All Account opts, plus:
    * @param {number}      [opts.loanBalance=0]           - Outstanding loan (AR-5, AR-8 if applicable)
+   * @param {boolean}     [opts.rebalanceExcluded]       - hold only: the target-allocation rebalancer
+   *                                                       never trades this account
    */
   constructor(balance = 0, opts = {}) {
     super(balance, opts);
@@ -307,6 +309,11 @@ export class InvestmentAccount extends Account {
     // (design 53 Phase 1 retired the account-level snapshot). Always null.
     this.costBaseStepUpByCountry  = null;
     this.loanBalance              = opts.loanBalance          ?? 0;
+    // Hold only (house-sale study, flag A): the target-allocation rebalancer leaves this
+    // account out of its book and never trades it. A TreasuryDirect account is the case that
+    // asked for it: an I bond cannot be cashed in its first 12 months. Set only when true, so
+    // every existing account serializes and snapshots exactly as before.
+    if (opts.rebalanceExcluded === true) this.rebalanceExcluded = true;
   }
 }
 

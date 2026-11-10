@@ -66,6 +66,9 @@ export function accountToStatePlain(account) {
   // only when the household has an opinion, so an unelected account is byte-identical
   // and the handler's own default (the toolset param) still applies.
   if (account.reinvestDividends != null) plain.reinvestDividends = account.reinvestDividends;
+  // Hold only (never rebalanced): the rebalancer reads it from the STATE entry, for the same
+  // reason. Projected only when set.
+  if (account.rebalanceExcluded === true) plain.rebalanceExcluded = true;
   // Super draw date (design 119 §6.1): the release gate and the earnings tax read it from
   // the STATE entry, for the same reason. Projected only when set.
   if (account.drawStartDate != null) plain.drawStartDate = account.drawStartDate;

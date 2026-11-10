@@ -200,6 +200,8 @@ export class AccountEditor extends BaseComponent {
     el.querySelector('[data-id="ownershipType"]').value  = this._node?.ownershipType ?? 'sole';
     el.querySelector('[data-id="minimumBalance"]').value = this._node?.minimumBalance ?? 0;
     el.querySelector('[data-id="isTransactionAccount"]').checked = !!this._node?.isTransactionAccount;
+    const holdOnly = el.querySelector('[data-id="rebalanceExcluded"]');
+    if (holdOnly) holdOnly.checked = this._node?.rebalanceExcluded === true;
     // Dividend-reinvestment election (design 106 §4). Tri-state: '' is "no opinion",
     // which is why the record's null must map to '' and not to 'false'.
     const reinvestSel = el.querySelector('[data-id="reinvestDividends"]');
@@ -1224,6 +1226,11 @@ export class AccountEditor extends BaseComponent {
     if (CASH_TYPES.has(type)) {
       data.isTransactionAccount = el.querySelector('[data-id="isTransactionAccount"]').checked;
     }
+    // Hold only (never rebalanced) — investment accounts. false is sent as false so that
+    // clearing the box on an existing account removes the flag.
+    if (INVESTMENT_TYPES.has(type)) {
+      data.rebalanceExcluded = !!el.querySelector('[data-id="rebalanceExcluded"]')?.checked;
+    }
     // Dividend-reinvestment election (design 106 §4) — only for the roles that can act
     // on it. '' ⇒ null ⇒ follow the plan-wide default. When param-linked the generic
     // drop at the end of this method removes it, the same as isTransactionAccount.
@@ -1528,6 +1535,8 @@ export class AccountEditor extends BaseComponent {
     // The transaction-account flag only applies to cash accounts (§7).
     const txnRow = el.querySelector('[data-id="transactionAccountRow"]');
     if (txnRow) txnRow.style.display = CASH_TYPES.has(type) ? '' : 'none';
+    const holdOnlyRow = el.querySelector('[data-id="rebalanceExcludedRow"]');
+    if (holdOnlyRow) holdOnlyRow.style.display = INVESTMENT_TYPES.has(type) ? '' : 'none';
     // The DRIP election is gated on ROLE, not type: every brokerage is the same TYPE,
     // but only a us-stock account today has a dividend that is separated from price
     // return and a cash branch to route it to (design 106 §4 / DIVIDEND_ELECTION_ROLES).

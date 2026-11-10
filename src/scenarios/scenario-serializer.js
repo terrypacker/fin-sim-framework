@@ -861,6 +861,8 @@ export class ScenarioSerializer {
     // be the `minimumAge` mistake — persisting a value nobody chose, which then stops
     // tracking the thing it was copied from.
     if (account.reinvestDividends != null) d.reinvestDividends = account.reinvestDividends;
+    // Hold only (never rebalanced). Emitted only when set, so other accounts round-trip unchanged.
+    if (account.rebalanceExcluded === true) d.rebalanceExcluded = true;
     // Super draw date (design 119 §6.1) — a household choice, so it is saved, unlike
     // `minimumAge`. Emitted only when set: blank means "from the release date".
     if (account.drawStartDate != null) d.drawStartDate = account.drawStartDate;
@@ -1417,6 +1419,7 @@ export class ScenarioSerializer {
     // i.e. inherit the household default, which is what every saved scenario did before
     // the field existed.
     if (d.reinvestDividends !== undefined) opts.reinvestDividends = d.reinvestDividends;
+    if (d.rebalanceExcluded === true) opts.rebalanceExcluded = true;
     if (d.drawStartDate !== undefined) opts.drawStartDate = d.drawStartDate;
     if (d.__type === 'MsbsAccount') {
       for (const f of MSBS_FIELDS) if (d[f] !== undefined) opts[f] = d[f];

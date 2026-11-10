@@ -2479,3 +2479,96 @@ test('POOL-CAP-3: maxFraction is a TARGET field, a fraction, and not on PERCENT'
       target: { mode: 'PERCENT', value: 0.2, maxFraction: 0.5 } }] } }, ACCOUNTS);
   assert.deepEqual(problems.map(p => p.field), ['target']);
 });
+
+// ─── POOL-HELD: a pool's target is netted of what it holds outside the rebalanced book ──
+//
+// House-sale study, flag B (Nov 2026). The cash pool claimed a savings account (never
+// rebalanced) and the brokerage's CASH sleeve. Savings already held the whole year of cash,
+// yet the rebalancer asked for the whole target again inside its own book, and the planner
+// put that phantom cash in super.
+
+function heldOutsideFixture() {
+  const graph = normalizeLiquidityGraph({
+    pools: [
+      { id: 'cash', spendOrder: 10, target: { mode: 'YEARS_OF_SPEND', value: 1 },
+        claims: [{ key: 'usSavingsAccount' }, { key: 'usStockAccount', sleeves: ['CASH'] }] },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+  }, ACCOUNTS);
+  const state = {
+    monthlyExpenses: 10_000, effectiveExchangeRates: { USD_AUD: 1 },
+    liquidityPools: { cash: { target: 120_000 }, growth: {} },
+    usSavingsAccount: { balance: 90_000, currency: { code: 'USD' },
+      holdings: [{ id: 's', allocation: 'CASH', marketValue: 90_000 }] },
+    usStockAccount: { balance: 1_000_000, currency: { code: 'USD' },
+      holdings: [{ id: 'e', allocation: 'EQUITY', marketValue: 1_000_000 }] },
+  };
+  return { graph, state };
+}
+
+test('POOL-HELD-1: a claim outside the rebalanced book counts toward its pool\'s target', async () => {
+  const { RebalanceToTargetReducer } = await import('../../src/finance/behavioral/rebalance-to-target-reducer.js');
+  const { graph, state } = heldOutsideFixture();
+  const r = new RebalanceToTargetReducer({
+    accounts: [{ stateKey: 'usStockAccount', role: 'us-stock' }],
+    targetAllocation: { EQUITY: 1 }, poolGraph: graph,
+  });
+  const traded = new Set(['usStockAccount']);
+  // 120k target − 90k already in savings = 30k of a 1m book.
+  const mix = r.resolveScheduledTarget(state, { type: 'US_PERIOD_ADVANCE' }, 1_000_000, null, null, traded);
+  assert.equal(+mix.CASH.toFixed(4), 0.03);
+  // Without the traded set (a direct caller) the gross target is kept: 12%.
+  const gross = r.resolveScheduledTarget(state, { type: 'US_PERIOD_ADVANCE' }, 1_000_000);
+  assert.equal(+gross.CASH.toFixed(4), 0.12);
+  // Savings holding more than the target asks for nothing, not a negative share.
+  const full = { ...state, usSavingsAccount: { ...state.usSavingsAccount,
+    holdings: [{ id: 's', allocation: 'CASH', marketValue: 200_000 }] } };
+  const none = r.resolveScheduledTarget(full, { type: 'US_PERIOD_ADVANCE' }, 1_000_000, null, null, traded);
+  assert.equal(+(none.CASH ?? 0).toFixed(6), 0);
+});
+
+test('POOL-HELD-2: reduce() nets the target, so a full savings account triggers no cash buy', async () => {
+  const { RebalanceToTargetReducer } = await import('../../src/finance/behavioral/rebalance-to-target-reducer.js');
+  const { graph, state } = heldOutsideFixture();
+  const full = { ...state, activeRegimes: [], regimeActions: {}, people: { p1: { residency: 'US' } },
+    usSavingsAccount: { ...state.usSavingsAccount,
+      holdings: [{ id: 's', allocation: 'CASH', marketValue: 120_000 }] } };
+  const r = new RebalanceToTargetReducer({
+    accounts: [{ stateKey: 'usStockAccount', role: 'us-stock' }],
+    targetAllocation: { EQUITY: 1 }, poolGraph: graph, driftBandTaxable: 0.02,
+  });
+  const res = r.reduce(full, { type: 'US_PERIOD_ADVANCE' });
+  const legs = (res.next ?? []).flatMap(a => a.legs ?? []);
+  assert.deepEqual(legs, [], 'the pool is full; nothing to sell');
+});
+
+test('POOL-HELD-3: a hold-only account is never traded, and its holdings still fill its pool', async () => {
+  const { RebalanceToTargetReducer } = await import('../../src/finance/behavioral/rebalance-to-target-reducer.js');
+  const graph = normalizeLiquidityGraph({
+    pools: [
+      { id: 'buffer', spendOrder: 10, target: { mode: 'AMOUNT', value: 100_000 },
+        claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }, { key: 'tdAccount', sleeves: ['BOND'] }] },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+  }, [...ACCOUNTS, { stateKey: 'tdAccount', type: ACCOUNT_TYPE.BROKERAGE }]);
+  // A TreasuryDirect-style account: in the rebalancer's account list, but hold-only.
+  const state = {
+    activeRegimes: [], regimeActions: {}, people: { p1: { residency: 'US' } },
+    monthlyExpenses: 10_000, effectiveExchangeRates: { USD_AUD: 1 },
+    liquidityPools: { buffer: { target: 100_000 }, growth: {} },
+    tdAccount: { balance: 20_000, currency: { code: 'USD' }, rebalanceExcluded: true,
+      holdings: [{ id: 'ib', allocation: 'BOND', marketValue: 20_000 }] },
+    usStockAccount: { balance: 1_000_000, currency: { code: 'USD' },
+      holdings: [{ id: 'e', allocation: 'EQUITY', marketValue: 1_000_000 }] },
+  };
+  const r = new RebalanceToTargetReducer({
+    accounts: [{ stateKey: 'usStockAccount', role: 'us-stock' }, { stateKey: 'tdAccount', role: 'us-stock' }],
+    targetAllocation: { EQUITY: 1 }, poolGraph: graph, driftBandTaxable: 0.02,
+  });
+  const res = r.reduce(state, { type: 'US_PERIOD_ADVANCE' });
+  const actions = res.next ?? [];
+  assert.ok(!actions.some(a => a.stateKey === 'tdAccount'), 'the hold-only account is not traded');
+  const bond = actions.find(a => a.stateKey === 'usStockAccount')?.legs.find(l => l.allocation === 'BOND');
+  // 100k target − the 20k it already holds = 80k bought in the traded account.
+  assert.equal(Math.round(bond.delta), 80_000);
+});

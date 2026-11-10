@@ -413,7 +413,45 @@ export class RebalanceToTargetReducer extends Reducer {
     return state?.liquidityGraph ?? this.poolGraph;
   }
 
-  _resolvePoolTarget(state, bookBase, fallbackMix, clamped = null) {
+  /**
+   * What a pool's claims already hold OUTSIDE the book this reducer trades, in base currency.
+   *
+   * A pool's `target` is the whole pool, and its claims may name accounts the rebalancer
+   * never touches: a savings account in the cash bucket, or a hold-only TreasuryDirect
+   * account in the bond buffer. Those dollars count toward the pool, but they are not in
+   * `bookBase`. Without this, the rebalancer asks for the WHOLE target again inside its own
+   * book. Plan (30) of the house-sale study did exactly that: AU Savings already held its
+   * year of cash, the rebalancer targeted a second year inside the investment accounts, and
+   * the planner, which fills CASH last, put it in the only capacity left, which was super.
+   *
+   * A claim with sleeves counts its account's holdings in those sleeves; a whole-account
+   * claim counts the holdings in the pool's class, or the balance of an account with no
+   * holdings when that class is CASH.
+   */
+  _heldOutside(state, pool, cls, traded) {
+    let held = 0;
+    for (const claim of pool.claims ?? []) {
+      if (!claim?.key || traded.has(claim.key)) continue;
+      const account = state[claim.key];
+      if (!account) continue;
+      const sleeves = Array.isArray(claim.sleeves) && claim.sleeves.length ? claim.sleeves : [cls];
+      let local = 0;
+      if (Array.isArray(account.holdings)) {
+        for (const h of account.holdings) if (sleeves.includes(h?.allocation)) local += h?.marketValue ?? 0;
+      } else if (cls === ALLOCATION.CASH) {
+        local = Number(account.balance) || 0;
+      }
+      if (local > 0) held += toBaseCurrency(local, currencyOf(account, this.baseCurrency), this.baseCurrency, state);
+    }
+    return held;
+  }
+
+  /**
+   * @param {?Set<string>} [traded] - the state keys this evaluation rebalances. When given, each
+   *   pool's target is netted of what its claims hold outside them (`_heldOutside`). Null (direct
+   *   callers, tests) keeps the gross target.
+   */
+  _resolvePoolTarget(state, bookBase, fallbackMix, clamped = null, traded = null) {
     const cube = state?.liquidityPools;
     if (!cube || !(bookBase > 0)) return null;
     const pools = [...(this._poolGraphOf(state).pools ?? [])]
@@ -430,7 +468,8 @@ export class RebalanceToTargetReducer extends Reducer {
       // Finite, not positive: zero is an authored policy (see the note above), while null,
       // undefined and NaN mean the pool resolved no target at all and must fall through.
       if (!Number.isFinite(targetBase)) continue;
-      const want = targetBase / bookBase;
+      const outside = traded ? this._heldOutside(state, pool, cls, traded) : 0;
+      const want = Math.max(0, targetBase - outside) / bookBase;
       const frac = Math.max(0, Math.min(room, want));
       // Only a target the ROOM cut short is a clamp. A target of zero, or one that simply
       // fits, is the feature working.
@@ -710,13 +749,13 @@ export class RebalanceToTargetReducer extends Reducer {
    * age; REGIME_CONDITIONED ⇒ pick the per-regime mix from state.activeRegimes.
    * Both time-varying modes fall back to the static target when unconfigured.
    */
-  resolveScheduledTarget(state, action, bookBase = 0, actualFractions = null, clamped = null) {
+  resolveScheduledTarget(state, action, bookBase = 0, actualFractions = null, clamped = null, traded = null) {
     // Design 97 §12.2 — ONE authority. A graph target governs the classes its pools claim
     // and `allocationSchedule` governs the rest; authoring both a graph target and
     // poolCashYears/poolBondYears throws at config time, because one would silently win.
     if (this._poolGraphOf(state)) {
       const base = this._scheduledMix(state, action, bookBase);
-      const mix  = this._resolvePoolTarget(state, bookBase, base, clamped) ?? base;
+      const mix  = this._resolvePoolTarget(state, bookBase, base, clamped, traded) ?? base;
       return this._applyVeto(mix, state, actualFractions, bookBase);
     }
     return this._scheduledMix(state, action, bookBase);
@@ -763,6 +802,11 @@ export class RebalanceToTargetReducer extends Reducer {
     for (const { stateKey, role } of this.accounts) {
       const account = state[stateKey];
       if (!account || !Array.isArray(account.holdings)) continue;
+      // A hold-only account (`rebalanceExcluded`) is never traded and is not part of the
+      // book. Read from the STATE entry, not at construction, so the record stays the
+      // authority on a loaded plan. Its holdings still count toward any pool that claims it
+      // (see `_heldOutside`), which is what keeps a TreasuryDirect I bond in the buffer.
+      if (account.rebalanceExcluded === true) continue;
       const total = account.holdings.reduce((s, h) => s + (h?.marketValue ?? 0), 0);
       if (total <= 0) continue;
       present.push({ stateKey, role, total });
@@ -796,7 +840,8 @@ export class RebalanceToTargetReducer extends Reducer {
 
     // The portfolio target in effect this period (Lever B time variation).
     const poolClamps = [];
-    const scheduledTarget = this.resolveScheduledTarget(state, action, bookBase, actualFractions, poolClamps);
+    const traded = new Set(present.map(p => p.stateKey));
+    const scheduledTarget = this.resolveScheduledTarget(state, action, bookBase, actualFractions, poolClamps, traded);
 
     // Lever D — locate the portfolio target across accounts (design 61 §4-D). The
     // plan assigns each account a composition summing to its own total, so each

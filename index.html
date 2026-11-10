@@ -722,6 +722,13 @@
           <label>Transaction Account</label>
           <input type="checkbox" data-id="isTransactionAccount"/>
         </div>
+        <!-- Hold only: the target-allocation rebalancer never trades this account (e.g. a
+             TreasuryDirect account, whose I bonds cannot be cashed in their first year).
+             Investment accounts only. -->
+        <div class="node-field" data-id="rebalanceExcludedRow" style="display:none">
+          <label>Hold Only (never rebalance)</label>
+          <input type="checkbox" data-id="rebalanceExcluded"/>
+        </div>
         <!-- Dividend reinvestment election (design 106 §4). Shown only for the roles
              where a dividend is actually separated from price return and there is a
              cash branch to route it to (DIVIDEND_ELECTION_ROLES). Three states, not a

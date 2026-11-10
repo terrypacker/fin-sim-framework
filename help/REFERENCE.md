@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-238 parameters · 34 panels · 12 node types (206 fields) · 180 action types · 92 tools · 330 state field types · 79 topics · 138 design docs
+238 parameters · 34 panels · 12 node types (207 fields) · 180 action types · 92 tools · 330 state field types · 79 topics · 138 design docs
 
 ---
 
@@ -23,7 +23,7 @@ scenario's own schema), which is where to go to change it.
 ### Allocation (25)
 
 - **`allocationClassRestrictions`** — Allocation Class Restrictions · `ClassRestrictions` · default — · conditional · via ECONOMIC_REGIMES
-  Account roles, or single accounts by state key, an allocation class may NEVER be placed in, as a map of class → roles/accounts, e.g. {"GOLD":["super"]} or {"EQUITY":["treasuryDirectAccount"]} (an account cannot hold what its role can). Classes: GOLD, BOND, EQUITY, CASH. Unlike the location policy this is hard: a class weight no permitted account can hold is spread over the other classes, and a barred holding is sold at the next rebalance even inside the drift band. Applies to TARGET_ALLOCATION in both location modes. An empty list ({"GOLD":[]}) restricts nothing but records that the placement was considered, which silences the US-citizen super warning. Null ⇒ no restrictions.
+  Account roles, or single accounts by state key, an allocation class may NEVER be placed in, as a map of class → roles/accounts, e.g. {"GOLD":["super"]} or {"EQUITY":["treasuryDirectAccount"]} (an account cannot hold what its role can). Classes: GOLD, BOND, CASH, EQUITY. Unlike the location policy this is hard: a class weight no permitted account can hold is spread over the other classes, and a barred holding is sold at the next rebalance even inside the drift band. Applies to TARGET_ALLOCATION in both location modes. An empty list ({"GOLD":[]}) restricts nothing but records that the placement was considered, which silences the US-citizen super warning. Null ⇒ no restrictions.
 - **`allocationGlidepath`** — Allocation Glidepath · `AllocationGlidepath` · default — · conditional · via ECONOMIC_REGIMES
   GLIDEPATH anchors: an array of { age, weights } where weights is a mix map, e.g. [{"age":50,"weights":{"EQUITY":0.8,"BOND":0.2}},{"age":75,"weights":{"EQUITY":0.4,"BOND":0.6}}]. The target is linearly interpolated by the primary's age. Null ⇒ falls back to the static mix.
 - **`allocationLocation`** — Allocation Location · `Enum` · default `LOCATED` · one of `LOCATED`, `PER_ACCOUNT` · conditional · via ECONOMIC_REGIMES
@@ -609,7 +609,7 @@ menu files it under.
 
 ---
 
-## Node types (12 kinds · 206 fields)
+## Node types (12 kinds · 207 fields)
 
 Every kind of record the Nodes panel can open, and every control its edit form offers.
 The inventory is read from the FORM — the `<template>` in `index.html` the editor
@@ -707,7 +707,7 @@ Explained in [`help/nodes`](nodes/job.md). 4 field(s) described by a record para
 - **`superAccountKey`** — Super Fund · `select` · topic
   The super fund this job's Super Guarantee, salary sacrifice and personal contributions go into, picked from the person's own funds. "First fund" uses the first one they own. A preserved MSBS benefit is never offered. Only that person's funds are offered, and a scenario that names someone else's fund refuses to load. A person with an Australian job and no fund of their own gets no AU contributions, and loading warns about it.
 
-### Accounts — `account` (44 fields)
+### Accounts — `account` (45 fields)
 
 Explained in [`help/nodes`](nodes/account.md). 7 field(s) described by a record parameter.
 
@@ -731,6 +731,8 @@ Explained in [`help/nodes`](nodes/account.md). 7 field(s) described by a record 
   The interest rate the bank quotes, as an absolute decimal (0.03 = 3%). It is stored as a spread over the central-bank Prime rate, so a Prime move fans out to every linked account at once instead of being re-authored here.
 - **`isTransactionAccount`** — Transaction Account · `checkbox` · param
   When on, this is the cash account that expenses debit and cross-border transfers replenish for its country of residence. Flag exactly one account per country.
+- **`rebalanceExcluded`** — Hold Only (never rebalance) · `checkbox` · topic
+  Keeps the rebalancer away from this account: it is left out of the book being balanced, and nothing in it is bought or sold to fix the mix. Its holdings still count toward any pool that claims them, and spending can still draw on it. Use it for money that cannot be traded at will, such as a TreasuryDirect account, whose I bonds cannot be cashed in their first year.
 - **`reinvestDividends`** — Reinvest Dividends · `select` · param
   When on, this account's dividends buy more of its holdings; when off, they are paid out as cash to the country's transaction account. Leave unset to follow the plan-wide Reinvest Dividends default.
 - **`fxBasisRate`** — §988 FX Basis · `number` · topic
@@ -2271,7 +2273,7 @@ what the in-app panel keys on.
 | [Action](nodes/action.md) | node | 200 | 3 panels · design 2, 91 |
 | [Action Detail](panels/action-detail.md) | panel | 172 | 1 panel · design 91 |
 | [Allocation](panels/allocation.md) | panel | 185 | 1 panel · design 82 |
-| [Allocation and Rebalancing](concepts/allocation-and-rebalancing.md) | concept | 381 | 2 panels · 17 params · design 61, 82, 115 |
+| [Allocation and Rebalancing](concepts/allocation-and-rebalancing.md) | concept | 399 | 2 panels · 17 params · design 61, 82, 115 |
 | [AU Tax and PAYG Instalments](concepts/au-tax.md) | concept | 236 | 2 panels · 6 params · design 107 |
 | [Behavioral Strategies](concepts/behavioral-strategies.md) | concept | 232 | 2 panels · 5 params · design 29 |
 | [Inheritance](nodes/bequest.md) | node | 233 | 2 panels · design 63 |

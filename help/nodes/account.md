@@ -10,7 +10,7 @@ stamps:
   panel:config-graph: 82a0c7
   panel:holdings: 962055
   panel:pools: 78458e
-  node:account: f4309e
+  node:account: 7bc712
 ---
 
 Every pot of money in the plan, and every debt: cash, brokerage, the four retirement
@@ -49,6 +49,7 @@ fund tax; see [Superannuation Access](../concepts/superannuation.md).
 - `fxBasisRate` — Foreign units per USD at which this pool's currency was acquired. Spending foreign cash is a disposition of non-functional currency and realises ordinary gain or loss against this rate. For a balance built up over years it is the balance-weighted average of the rates it came in at, so a long-accumulated pool is not at today's rate. Blank stamps the rate at the first disposition, which understates the exposure rather than inventing one.
 - `cashDeductibleFraction` — The share of this pool put to an income-producing use, 0 to 1. It drives two tests at once: whether §988 applies to the expense at all, and whether a currency loss is deductible as a transaction entered into for profit. Blank means fully personal, which is the safe default — a personal currency loss is disallowed while the matching gain is still taxed. An offset backing a rental should be set explicitly.
 - `drawdownPriority` — Where this account sits in the liquidation order, 1 first. BLANK EXCLUDES IT from the drawdown chain entirely: the balance still earns and still counts in net worth, but no spending shortfall will ever reach it, and it is not counted as reserve. That is the right setting for money that is genuinely not available, and the wrong one for an account you expected to fund retirement.
+- `rebalanceExcluded` — Keeps the rebalancer away from this account: it is left out of the book being balanced, and nothing in it is bought or sold to fix the mix. Its holdings still count toward any pool that claims them, and spending can still draw on it. Use it for money that cannot be traded at will, such as a TreasuryDirect account, whose I bonds cannot be cashed in their first year.
 - `earningsBasis` — The earnings half of a retirement account's balance, computed as the balance less the contribution basis. Read-only: it is derived, and the two halves matter because a withdrawal takes basis out tax-free and earnings out taxable.
 - `superScheme` — An ordinary fund, or a preserved MSBS (MilitarySuper) benefit for a member who has left the ADF. Fixed once created. On MSBS, the balance and holdings are the member benefit, ancillary benefit included. Draw Start Date is the election, kept between 55 (or leaving the ADF, if later) and 65. On it, Pension Share of the employer benefit becomes a CPI-indexed pension and the rest a lump sum, rolled into your other fund unless you are already released.
 - `unfundedEmployerBenefit` — The unfunded part of the employer benefit, as the CSC statement shows it. It rises each 1 July with CPI and never falls, but it is not invested and is not in net worth. If the statement shows only an employer benefit total, enter the total less the funded part here. A former DFRDB member's unfunded productivity benefit is indexed the same way, so it goes here too.

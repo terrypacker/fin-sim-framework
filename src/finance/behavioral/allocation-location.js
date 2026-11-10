@@ -36,8 +36,18 @@ import { ACCOUNT_ROLES } from '../state/account-roles.js';
  * there is no move-date-specific forced trade here.
  */
 
-/** Processing order: most-eligibility-constrained first (GOLD), then by tax-sensitivity. */
-const LOCATION_FILL_ORDER = [ALLOCATION.GOLD, ALLOCATION.BOND, ALLOCATION.EQUITY, ALLOCATION.CASH];
+/**
+ * Processing order: most-eligibility-constrained first (GOLD), then BOND and CASH, with EQUITY
+ * last as the residual.
+ *
+ * CASH used to come last. A class placed last gets no preference at all: it fills whatever
+ * capacity the others left, and the last account in EQUITY's list is super. So a household
+ * cash target landed in a preserved super fund, where it covers no spending, even though
+ * CASH's own list puts the taxable brokerage first (house-sale study, flag B, Nov 2026).
+ * EQUITY is the one class every role is happy to hold, so it is the right one to absorb what
+ * is left.
+ */
+const LOCATION_FILL_ORDER = [ALLOCATION.GOLD, ALLOCATION.BOND, ALLOCATION.CASH, ALLOCATION.EQUITY];
 /** Where a capped class's excess goes when no uncapped class has a target to spread it by. */
 const EXCESS_FALLBACK_ORDER = [ALLOCATION.EQUITY, ALLOCATION.BOND, ALLOCATION.CASH, ALLOCATION.GOLD];
 

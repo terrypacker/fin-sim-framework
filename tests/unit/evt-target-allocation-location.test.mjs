@@ -271,3 +271,16 @@ test('LOC-12: an account permitted NOTHING is a real statement, not an absent on
   assert.ok(near(sumComp(plan.get('rothAccount')), 100000), 'value not conserved in a nothing-permitted account');
   assert.ok(near(stats.relaxed, 100000), `expected the whole account relaxed, got ${stats.relaxed}`);
 });
+
+test('LOC-13: CASH is placed before EQUITY, so it takes its preferred home and not the last free one', () => {
+  // House-sale study, flag B (Nov 2026). With CASH placed last it filled whatever capacity
+  // equity left, which was super (the last role in EQUITY's list). Equity is the residual.
+  const accts = [
+    { stateKey: 'usStockAccount', role: ACCOUNT_ROLES.US_STOCK, total: 100000 },
+    { stateKey: 'superAccount',   role: ACCOUNT_ROLES.SUPER,    total: 100000 },
+  ];
+  const plan = planLocatedTargets({ accounts: accts, portfolioTarget: { EQUITY: 0.9, CASH: 0.1 } });
+  assert.ok(near(plan.get('usStockAccount')[ALLOCATION.CASH] ?? 0, 20000), 'cash in the taxable brokerage');
+  assert.equal(plan.get('superAccount')[ALLOCATION.CASH] ?? 0, 0, 'no cash in super');
+  for (const a of accts) assert.ok(near(sumComp(plan.get(a.stateKey)), a.total), 'still conserved');
+});

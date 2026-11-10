@@ -185,9 +185,13 @@ class BaseInvestmentBuilder extends BaseAccountBuilder {
 
   loanBalance(v) { this._loanBalance = v; return this; }
 
+  /** Hold only: the target-allocation rebalancer never trades this account. */
+  rebalanceExcluded(v = true) { this._rebalanceExcluded = v === true; return this; }
+
   _investmentOpts() {
     const opts = this._baseOpts();
     opts.loanBalance = this._loanBalance;
+    if (this._rebalanceExcluded) opts.rebalanceExcluded = true;
     return opts;
   }
 }
