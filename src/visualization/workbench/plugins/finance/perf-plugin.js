@@ -156,6 +156,7 @@ export class PerfPlugin extends WorkbenchComponent {
     const H = canvas.height || 60;
     canvas.width = W;
     const ctx = canvas.getContext('2d');
+    if (!ctx) return;   // no 2D context (jsdom, or a browser that refused one)
     ctx.clearRect(0, 0, W, H);
     if (!events.length) return;
 

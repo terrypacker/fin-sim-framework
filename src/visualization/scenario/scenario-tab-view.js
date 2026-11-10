@@ -119,7 +119,7 @@ export class ScenarioTabView {
     // Bind immediately when DOM elements already exist (test environment).
     // In production the ScenarioPlugin hasn't mounted yet, so bind() must be
     // called explicitly from WorkbenchApp.initView() after the shell mounts.
-    if (document.getElementById('scenarioSelect')) {
+    if (this._el('scenarioSelect')) {
       this._init();
       this._bound = true;
     }
@@ -132,6 +132,26 @@ export class ScenarioTabView {
    * Must be called after ScenarioPlugin has mounted (elements exist in DOM).
    * Safe to call multiple times — wires only once.
    */
+  /**
+   * The runtime-owned hosts this view's markup lives in (Scenario and Parameters panels).
+   * While a tab is closed its host is detached from the document, so every lookup goes
+   * through `_el()`. Call before `bind()`. Unit tests skip it and use the document.
+   *
+   * @param {HTMLElement[]} hosts
+   */
+  setHosts(hosts = []) {
+    this._hosts = hosts.filter(Boolean);
+  }
+
+  /** An element of this view: inside one of its hosts, else the document. */
+  _el(id) {
+    for (const h of this._hosts ?? []) {
+      const el = h.querySelector(`#${id}`);
+      if (el) return el;
+    }
+    return document.getElementById(id);
+  }
+
   bind() {
     if (this._bound) return;
     this._bound = true;
@@ -139,48 +159,48 @@ export class ScenarioTabView {
   }
 
   _init() {
-    document.getElementById('scenarioSelect')?.addEventListener('change', (e) => {
+    this._el('scenarioSelect')?.addEventListener('change', (e) => {
       if(this.onOpen) this.onOpen(e.target.value || '')
     });
 
-    document.getElementById('loadScenarioBtn')?.addEventListener('click', () => {
+    this._el('loadScenarioBtn')?.addEventListener('click', () => {
       if(this.onRebuild) this.onRebuild();
     });
 
-    document.getElementById('newScenarioBtn')?.addEventListener('click', () => {
+    this._el('newScenarioBtn')?.addEventListener('click', () => {
       if(this.onNew) this.onNew();
     });
 
-    document.getElementById('newBlankScenarioBtn')?.addEventListener('click', () => {
+    this._el('newBlankScenarioBtn')?.addEventListener('click', () => {
       if(this.onNewBlank) this.onNewBlank();
     });
 
-    document.getElementById('deleteScenarioBtn')?.addEventListener('click', () => {
+    this._el('deleteScenarioBtn')?.addEventListener('click', () => {
       if(this.onDelete) this.onDelete();
     });
 
-    document.getElementById('resetDefaultsBtn')?.addEventListener('click', () => {
+    this._el('resetDefaultsBtn')?.addEventListener('click', () => {
       if(this.onResetDefaults) this.onResetDefaults();
     });
 
-    document.getElementById('scenarioName')?.addEventListener('input', (e) => {
+    this._el('scenarioName')?.addEventListener('input', (e) => {
       if(this.onNameChange) this.onNameChange(e.target.value);
     });
 
-    document.getElementById('simStartInput')?.addEventListener('change', (e) => {
+    this._el('simStartInput')?.addEventListener('change', (e) => {
       if(this.onStartChange) this.onStartChange(e.target.value);
     });
 
-    document.getElementById('simEndInput')?.addEventListener('change', (e) => {
+    this._el('simEndInput')?.addEventListener('change', (e) => {
       if(this.onEndChange) this.onEndChange(e.target.value);
     });
 
-    document.getElementById('paramsFilter')?.addEventListener('input', (e) => {
+    this._el('paramsFilter')?.addEventListener('input', (e) => {
       this._paramFilter = normalizeFilter(e.target.value);
       if (this._activeScenario) this._renderParamsList(this._activeScenario);
     });
 
-    this._buildFilterFieldSelect(document.getElementById('paramsFilterFields'));
+    this._buildFilterFieldSelect(this._el('paramsFilterFields'));
 
     // The recorded-run guard re-checks after ANY edit in the list. Delegated from the document,
     // not bound to #paramsList: the Parameters panel mounts on its own schedule, and the
@@ -192,19 +212,19 @@ export class ScenarioTabView {
     };
     for (const type of ['input', 'change', 'click']) document.addEventListener(type, recheck);
 
-    document.getElementById('addParamBtn')?.addEventListener('click', () => {
+    this._el('addParamBtn')?.addEventListener('click', () => {
       if(this.onAddParameter) this.onAddParameter({ name: '', type: 'Number', value: 0 });
     });
 
-    document.getElementById('saveScenarioBtn')?.addEventListener('click', () => {
+    this._el('saveScenarioBtn')?.addEventListener('click', () => {
       if(this.onSave) this.onSave();
     });
 
-    document.getElementById('downloadJsonBtn')?.addEventListener('click', () => {
+    this._el('downloadJsonBtn')?.addEventListener('click', () => {
       if(this.onDownloadJson) this.onDownloadJson();
     });
 
-    document.getElementById('uploadJsonFileInput')?.addEventListener('change', async (e) => {
+    this._el('uploadJsonFileInput')?.addEventListener('change', async (e) => {
       if(this.onUploadJson) {
         const file = e.target.files[0];
         if (!file) return;
@@ -217,11 +237,11 @@ export class ScenarioTabView {
       }
     });
 
-    document.getElementById('downloadCsvBtn')?.addEventListener('click', () => {
+    this._el('downloadCsvBtn')?.addEventListener('click', () => {
       if(this.onDownloadCsv) this.onDownloadCsv();
     });
 
-    document.getElementById('uploadCsvFileInput')?.addEventListener('change', async (e) => {
+    this._el('uploadCsvFileInput')?.addEventListener('change', async (e) => {
       if(this.onUploadCsv) {
         const file = e.target.files[0];
         if (!file) return;
@@ -236,12 +256,12 @@ export class ScenarioTabView {
   }
 
   updateSelectOption(name) {
-    const sel = document.getElementById('scenarioSelect');
+    const sel = this._el('scenarioSelect');
     if (sel?.selectedIndex >= 0) sel.options[sel.selectedIndex].textContent = name || 'Unnamed';
   }
 
   _refreshScenarioSelect(scenarios, active) {
-    const sel = document.getElementById('scenarioSelect');
+    const sel = this._el('scenarioSelect');
     if (!sel) return;
     sel.innerHTML = '';
 
@@ -280,7 +300,7 @@ export class ScenarioTabView {
   }
 
   _populateScenarioForm(scenario) {
-    const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+    const set = (id, val) => { const el = this._el(id); if (el) el.value = val; };
 
     // Registry / cfg invariant (Design 15): simStart/simEnd are full ISO strings.
     // <input type="date"> only accepts YYYY-MM-DD, so slice the first 10 chars.
@@ -296,7 +316,7 @@ export class ScenarioTabView {
     set('simStartInput', simStart);
     set('simEndInput',   simEnd);
 
-    const addBtn = document.getElementById('addParamBtn');
+    const addBtn = this._el('addParamBtn');
     if (addBtn) addBtn.disabled = !!scenario?.prebuilt;
 
     this._renderParamsList(scenario);
@@ -310,12 +330,12 @@ export class ScenarioTabView {
   revealParam(param, scenario) {
     if (!param) return;
     this._paramFilter = '';
-    const filterInput = document.getElementById('paramsFilter');
+    const filterInput = this._el('paramsFilter');
     if (filterInput) filterInput.value = '';
     if (param.group) this._expandedGroups.add(param.group);
     this._renderParamsList(scenario);
 
-    const row = document.querySelector(`#paramsList .param-row[data-param-name="${CSS.escape(param.name)}"]`);
+    const row = this._el('paramsList')?.querySelector(`.param-row[data-param-name="${CSS.escape(param.name)}"]`);
     if (row) {
       row.scrollIntoView({ block: 'center' });
       row.classList.add('param-row--revealed');
@@ -324,7 +344,7 @@ export class ScenarioTabView {
   }
 
   _renderParamsList(scenario) {
-    const container = document.getElementById('paramsList');
+    const container = this._el('paramsList');
     if (!container) return;
     container.innerHTML = '';
     this._activeScenario = scenario;
@@ -465,7 +485,7 @@ export class ScenarioTabView {
    * (`mpcRunEnabled: false`, which keeps the run and its selection).
    */
   _refreshRunGuard(scenario) {
-    const box = document.getElementById('paramsRunGuard');
+    const box = this._el('paramsRunGuard');
     if (!box) return;
     box.innerHTML = '';
     const bag = Object.fromEntries((scenario?.params ?? []).map(p => [p.name, p.value]));

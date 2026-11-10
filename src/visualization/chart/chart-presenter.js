@@ -84,7 +84,10 @@ export class ChartPresenter extends BaseComponent {
 
   /** Render the active-series chip strip into #chartActiveSeries (R7.3). */
   _renderChips() {
-    const host = (typeof document !== 'undefined') && document.getElementById('chartActiveSeries');
+    // Inside the chart's own host first: it is runtime-owned and detached from the
+    // document while the Chart tab is closed (see chartHost in chart-plugin.js).
+    const host = this._view?.container?.parentElement?.querySelector('#chartActiveSeries')
+      ?? ((typeof document !== 'undefined') && document.getElementById('chartActiveSeries'));
     if (!host) return;
     host.replaceChildren();
     for (const path of this._activePaths) {

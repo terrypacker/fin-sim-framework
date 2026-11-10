@@ -97,9 +97,15 @@ export class WorkbenchRuntime {
    * @param {object} [opts]
    * @param {string} [opts.outerClass='wb-plugin-fill']
    * @param {string} [opts.innerClass='wb-plugin-fill']
+   * @param {string} [opts.template]  markup for `inner`, written ONCE when the host is
+   *   created. For a panel whose controls are static markup rather than a component's
+   *   output (State, Dashboard). The markup then lives as long as the session. Its
+   *   readers must look inside `inner` (`inner.querySelector`), never in the document:
+   *   while the tab is closed the host is detached and `getElementById` finds nothing.
+   *   Whoever calls first creates the host, so every caller passes the same template.
    * @returns {{ outer: HTMLElement, inner: HTMLElement }} the same pair on every call
    */
-  paneHost(id, { outerClass = 'wb-plugin-fill', innerClass = 'wb-plugin-fill' } = {}) {
+  paneHost(id, { outerClass = 'wb-plugin-fill', innerClass = 'wb-plugin-fill', template = null } = {}) {
     let host = this._paneHosts.get(id);
     if (!host) {
       const outer = document.createElement('div');
@@ -107,6 +113,7 @@ export class WorkbenchRuntime {
       const inner = document.createElement('div');
       inner.id = id;
       if (innerClass) inner.className = innerClass;
+      if (template) inner.innerHTML = template;
       outer.appendChild(inner);
       host = { outer, inner };
       this._paneHosts.set(id, host);

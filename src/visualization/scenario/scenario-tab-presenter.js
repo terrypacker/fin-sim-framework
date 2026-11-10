@@ -490,12 +490,12 @@ export class ScenarioTabPresenter {
 
   //TODO These should go away, this information will be tracked on change elsewhere
   getSimStart() {
-    const simStartString = document.getElementById('simStartInput')?.value; //this.getSimulationStartDate();
+    const simStartString = this._view._el('simStartInput')?.value; //this.getSimulationStartDate();
     return (simStartString) ? new Date(simStartString) : undefined;
   }
 
   getSimEnd() {
-    const simEndString = document.getElementById('simEndInput')?.value; //this.getSimulationEndDate();
+    const simEndString = this._view._el('simEndInput')?.value; //this.getSimulationEndDate();
     return (simEndString) ? new Date(simEndString) : undefined;
   }
 

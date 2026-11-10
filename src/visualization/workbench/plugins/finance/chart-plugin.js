@@ -10,26 +10,33 @@ import { WorkbenchComponent } from '../../component.js';
  * was permanently dead for the session — silently, and even after reopening the tab. Same
  * root cause as the boot crash, milder symptom.
  */
-export class ChartPlugin extends WorkbenchComponent {
-  constructor(runtime) {
-    super();
-    this._runtime = runtime;
-  }
+/**
+ * The chart's host, with its chip strip and failure banner, created with the host.
+ *
+ * Owned by the runtime for the same reason as the viz div: `ChartPresenter` renders the
+ * chips and `StatePanelView` raises the banner whether or not this tab is open. They used
+ * to be added on the panel's first mount, so a run that failed while the tab was closed
+ * never showed the banner, even after reopening. Readers look inside `outer`; while the
+ * tab is closed it is not in the document.
+ *
+ * @param {import('../../workbench-runtime.js').WorkbenchRuntime} runtime
+ * @returns {{ outer: HTMLElement, inner: HTMLElement }} inner is the viz div
+ */
+export function chartHost(runtime) {
+  const host = runtime.paneHost('chartContainer', { outerClass: 'wb-chart-root', innerClass: 'wb-chart-viz' });
+  const root = host.outer;
+  if (root.querySelector('#chartActiveSeries')) return host;
 
-  render() {
-    const { outer: root, inner: vizWrap } =
-      this._runtime.paneHost('chartContainer', { outerClass: 'wb-chart-root', innerClass: 'wb-chart-viz' });
+  // Active-series chip strip (R7.3) — shows charted paths with click-to-remove.
+  const activeSeries = document.createElement('div');
+  activeSeries.id = 'chartActiveSeries';
+  activeSeries.className = 'wb-chart-active-series';
 
-    // Active-series chip strip (R7.3) — shows charted paths with click-to-remove.
-    const activeSeries = document.createElement('div');
-    activeSeries.id = 'chartActiveSeries';
-    activeSeries.className = 'wb-chart-active-series';
-
-    const failureBanner = document.createElement('div');
-    failureBanner.id = 'failureBanner';
-    failureBanner.className = 'failure-banner';
-    failureBanner.style.cssText = 'display:none';
-    failureBanner.innerHTML = `
+  const failureBanner = document.createElement('div');
+  failureBanner.id = 'failureBanner';
+  failureBanner.className = 'failure-banner';
+  failureBanner.style.cssText = 'display:none';
+  failureBanner.innerHTML = `
       <span class="failure-banner-icon">&#x26A0;</span>
       <span>SCENARIO FAILED &#x2014; OUT OF FUNDS</span>
       <span class="failure-banner-deficit">
@@ -39,11 +46,19 @@ export class ChartPlugin extends WorkbenchComponent {
       <span id="failureBannerDate" class="failure-banner-date"></span>
     `;
 
-    // Prepended so the order stays chips → banner → viz: the viz div is already the
-    // host's child. Idempotent because the host outlives this panel's mounts.
-    if (!root.querySelector('#chartActiveSeries')) root.prepend(activeSeries, failureBanner);
+  // Prepended so the order stays chips → banner → viz: the viz div is already the host's child.
+  root.prepend(activeSeries, failureBanner);
+  return host;
+}
 
-    return root;
+export class ChartPlugin extends WorkbenchComponent {
+  constructor(runtime) {
+    super();
+    this._runtime = runtime;
+  }
+
+  render() {
+    return chartHost(this._runtime).outer;
   }
 
   onActivate() {

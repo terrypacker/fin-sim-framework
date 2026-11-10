@@ -103,7 +103,7 @@ test('every panel the app reaches for is owned by the runtime, not the document'
   const ids = ['graphRoot', 'configGroupNodes', 'graphNodeEditPane', 'graphNodeHistoryPane',
     'graphNodeLineagePane', 'mcConfigPane', 'mcResultsPane', 'mcRunsPane', 'optConfigPane',
     'optResultsPane', 'optRunsPane', 'dgConfigPane', 'dgResultsPane', 'scenarioComparePane',
-    'chartContainer', 'timelineContainer'];
+    'chartContainer', 'timelineContainer', 'liveStatePanel', 'dashCards', 'actionPanelDetails'];
   for (const id of ids) {
     const { inner } = runtime.paneHost(id);
     expect(inner).toBeTruthy();

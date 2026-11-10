@@ -32,7 +32,7 @@ const PLAYBACK_THROTTLE_MS = 1000;
 
 export class SimulationAnimator {
 
-  constructor({ scenario, timeControls, statePanelView, chartView, graphRenderer, accountsPresenter, displaySettings, appBus }) {
+  constructor({ scenario, timeControls, statePanelView, chartView, graphRenderer, accountsPresenter, displaySettings, appBus, dashCardsRoot }) {
     this._scenario          = scenario;
     this._timeControls      = timeControls;
     this._statePanelView    = statePanelView;
@@ -42,6 +42,7 @@ export class SimulationAnimator {
     this._displaySettings   = displaySettings ?? null;
     this._appBus            = appBus ?? null;
     this._dashCards         = null;   // created in wireSimBus
+    this._dashCardsRoot     = dashCardsRoot ?? null;   // runtime-owned host; see DashCardsComponent
     // The timeline renders off the journal, which grows all run — it is the most
     // expensive view to repaint and was the only one missing from the throttle
     // list below (design 78 §6). TimeControls owns it, and drives it via
@@ -166,6 +167,7 @@ export class SimulationAnimator {
     this._dashCards = new DashCardsComponent({
       displaySettings: this._displaySettings,
       appBus:          this._appBus,
+      root:            this._dashCardsRoot,
     });
     this._dashCards.wireSimBus(bus, this._scenario?.sim);
 

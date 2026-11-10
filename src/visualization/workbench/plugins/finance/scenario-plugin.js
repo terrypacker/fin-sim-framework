@@ -1,15 +1,15 @@
-import { WorkbenchComponent } from '../../component.js';
+import { hostPanePlugin } from './host-pane-plugin.js';
 
 /**
  * Scenario panel — scenario selection, identity, simulation period, and
  * whole-scenario storage. The parameter list lives in ParametersPlugin.
+ *
+ * The RUNTIME owns this markup (see `WorkbenchRuntime.paneHost`). `ScenarioTabView` wires
+ * it once at boot and renders into it for the whole session, so with the markup minted in
+ * `render()` a reader whose layout had this tab closed at boot got controls that stayed dead
+ * after reopening it: an empty scenario dropdown, buttons that did nothing.
  */
-export class ScenarioPlugin extends WorkbenchComponent {
-  constructor(_runtime) { super(); }
-  render() {
-    const root = document.createElement('div');
-    root.className = 'wb-plugin-fill';
-    root.innerHTML = `
+export const SCENARIO_PANEL_TEMPLATE = `
     <div class="node-header">Scenario</div>
     <div class="node-field">
       <select id="scenarioSelect" class="wb-full-width"></select>
@@ -50,6 +50,8 @@ export class ScenarioPlugin extends WorkbenchComponent {
       </label>
     </div>
     `;
-    return root;
-  }
-}
+
+/** Host options: one place, because the app and the plugin both ask. */
+export const SCENARIO_PANEL_HOST = { template: SCENARIO_PANEL_TEMPLATE };
+
+export const ScenarioPlugin = hostPanePlugin('scenarioPane', SCENARIO_PANEL_HOST);

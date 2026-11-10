@@ -21,6 +21,12 @@ import { WorkbenchShell }              from '../visualization/workbench/workbenc
 import { PanelMenu }                   from '../visualization/workbench/panel-menu.js';
 import { BaseComponent }               from '../visualization/components/base-component.js';
 import { $, fmtUTC }                   from '../visualization/ui-utils.js';
+import { STATE_PANEL_HOST }             from '../visualization/workbench/plugins/finance/state-panel-plugin.js';
+import { DASHBOARD_HOST }               from '../visualization/workbench/plugins/finance/dashboard-plugin.js';
+import { chartHost }                    from '../visualization/workbench/plugins/finance/chart-plugin.js';
+import { ACTION_DETAIL_HOST }           from '../visualization/workbench/plugins/finance/action-detail-plugin.js';
+import { SCENARIO_PANEL_HOST }          from '../visualization/workbench/plugins/finance/scenario-plugin.js';
+import { PARAMETERS_PANEL_HOST }        from '../visualization/workbench/plugins/finance/parameters-plugin.js';
 import { AppDisplaySettings, APP_EVENTS } from '../visualization/app-display-settings.js';
 import { EventBus }                      from '../simulation-framework/event-bus.js';
 import { ScenarioLoader }             from '../scenarios/scenario-loader.js';
@@ -216,6 +222,18 @@ export class WorkbenchApp extends BaseComponent {
     // Give the tax modal access to the workbench runtime so drill-down buttons work.
     this._taxDocModal.runtime = this._wbShell.runtime;
 
+    // The State view renders on every sim step and is cleared on every rebuild, whether
+    // or not the State, Chart or Action Detail tabs are open, so it gets the RUNTIME's
+    // hosts (see WorkbenchRuntime.paneHost), never document lookups. Before initLiveState()
+    // below, so the filter and collapse controls are wired even when the State tab starts
+    // closed.
+    const rt = this._wbShell.runtime;
+    this._statePanelView.setHosts({
+      state:        rt.paneHost('liveStatePanel', STATE_PANEL_HOST).inner,
+      actionDetail: rt.paneHost('actionPanelDetails', ACTION_DETAIL_HOST).inner,
+      chart:        chartHost(rt).outer,
+    });
+
     // Activate the journal-report plugin pane whenever a drill-down fires.
     this._wbShell.runtime.bus.subscribe(WB_EVENTS.JOURNAL_REPORT_OPEN, () => {
       this._wbShell.activatePlugin('journal-report');
@@ -278,12 +296,19 @@ export class WorkbenchApp extends BaseComponent {
     }
 
     // Bind scenario tab view now that ScenarioPlugin DOM exists
+    // Runtime-owned hosts, so the Scenario and Parameters controls are wired even when
+    // those tabs start closed (see WorkbenchRuntime.paneHost).
+    this._scenarioTabView.setHosts([
+      this._wbShell.runtime.paneHost('scenarioPane', SCENARIO_PANEL_HOST).inner,
+      this._wbShell.runtime.paneHost('parametersPane', PARAMETERS_PANEL_HOST).inner,
+    ]);
     this._scenarioTabView.bind();
 
     this._wireSimControls();
     this._wireTemplates();
 
-    // Initialize the live state DOM now that StatePanelPlugin is mounted
+    // Wire the State panel's controls. They live in the runtime's host (setHosts above),
+    // so this works whether or not the State tab is open.
     this._statePanelView.initLiveState();
   }
 
@@ -929,7 +954,7 @@ export class WorkbenchApp extends BaseComponent {
     const chartController = new ChartController();
     const chartView = new ChartView({
       formatter: fieldFormatter,
-      container: this._paneHost('chartContainer', { outerClass: 'wb-chart-root', innerClass: 'wb-chart-viz' }),
+      container: chartHost(this._wbShell.runtime).inner,
       simStart:  this.scenario.simStart,
       simEnd:    this.scenario.simEnd,
       series:    this.chartSeries ?? undefined,
@@ -1028,6 +1053,7 @@ export class WorkbenchApp extends BaseComponent {
       graphRenderer:   this.configPresenter._graphRenderer,
       displaySettings: this.displaySettings,
       appBus:          this.appBus,
+      dashCardsRoot:   this._paneHost('dashCards', DASHBOARD_HOST),
     });
 
     this._animator.toggleBreakpoint();
@@ -1196,7 +1222,7 @@ export class WorkbenchApp extends BaseComponent {
     registry?.graph.clearLayer('config');
     ServiceRegistry.reset();
 
-    $('currentStateContent').innerHTML = '';
+    this._statePanelView.clearStateContent();   // safe with the State tab closed
     this._statePanelView.clearFieldHistory();
 
     this._editModal?.close();
@@ -1298,8 +1324,8 @@ export class WorkbenchApp extends BaseComponent {
       }, 60);
     });
 
-    // rebuildBtn is inside ScenarioPlugin — wired once it's mounted
-    $('rebuildBtn')?.addEventListener('click', () => {
+    // rebuildBtn is in the Scenario panel's runtime-owned host, so this works with the tab closed
+    this._scenarioTabView._el('rebuildBtn')?.addEventListener('click', () => {
       this.destroyScenario();
       this.initScenario();
     });

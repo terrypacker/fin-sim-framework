@@ -35,6 +35,11 @@ export class StatePanelView extends BaseComponent {
 
   constructor({ displaySettings, appBus } = {}) {
     super();
+    // Runtime-owned hosts (WorkbenchRuntime.paneHost), set by the app once the shell
+    // exists. Null in unit tests, which put the elements straight into the document.
+    this._stateHost        = null;
+    this._actionDetailHost = null;
+    this._chartHost        = null;
     this._formatDate        = displaySettings?.formatDate ?? (d => d.toDateString());
     this._schemaRegistry    = null;
     this._pendingDate       = null;
@@ -180,7 +185,7 @@ export class StatePanelView extends BaseComponent {
    * row then creates a list.
    */
   setWatchlists(lists, activeId) {
-    const sel = document.getElementById('lsp-watchlist-select');
+    const sel = this._el('lsp-watchlist-select');
     if (!sel) return;
     sel.replaceChildren();
     sel.disabled = !lists?.length;
@@ -252,6 +257,42 @@ export class StatePanelView extends BaseComponent {
   }
 
   /** Drop every captured field series (a new scenario is a new history). */
+  /**
+   * Give the view the hosts it renders into. They are owned by the runtime and outlive
+   * the panels: while a tab is CLOSED its host is detached from the document, so
+   * `getElementById` would return null there — and the state view renders on every sim
+   * step, open or not. Every lookup below goes through `_el()` for that reason.
+   *
+   * @param {{ state?: HTMLElement, actionDetail?: HTMLElement, chart?: HTMLElement }} hosts
+   *   `chart` is the chart host's OUTER element, which holds the failure banner.
+   */
+  setHosts({ state = null, actionDetail = null, chart = null } = {}) {
+    this._stateHost        = state;
+    this._actionDetailHost = actionDetail;
+    this._chartHost        = chart;
+  }
+
+  /** An element of the chart's chrome (the failure banner): inside its host, else the document. */
+  _chartEl(id) {
+    return this._chartHost?.querySelector(`#${id}`) ?? document.getElementById(id);
+  }
+
+  /** An element of the State panel: inside its host when there is one, else the document. */
+  _el(id) {
+    return this._stateHost?.querySelector(`#${id}`) ?? document.getElementById(id);
+  }
+
+  /** The Action Detail host: the runtime's when set, else the document's (unit tests). */
+  _actionDetailEl() {
+    return this._actionDetailHost ?? $('actionPanelDetails');
+  }
+
+  /** Empty the State panel, e.g. on a rebuild. Safe with the panel closed. */
+  clearStateContent() {
+    const content = this._el('currentStateContent');
+    if (content) content.innerHTML = '';
+  }
+
   clearFieldHistory() {
     this._fieldSeriesStore?.clear();
     this._filterLabels.clear();   // a new scenario names different records
@@ -259,15 +300,15 @@ export class StatePanelView extends BaseComponent {
 
   /** Wire the collapse toggle for the State section. Called once from WorkbenchApp.initView(). */
   initLiveState() {
-    const filter = document.getElementById('lsp-panel-filter');
+    const filter = this._el('lsp-panel-filter');
     if (filter) filter.addEventListener('input', e => this.setFilter(e.target.value));
-    const showText = document.getElementById('lsp-show-text');
+    const showText = this._el('lsp-show-text');
     if (showText) showText.addEventListener('change', e => this.setShowText(e.target.checked));
-    const picker = document.getElementById('lsp-watchlist-select');
+    const picker = this._el('lsp-watchlist-select');
     if (picker) picker.addEventListener('change', e => this._onWatchlistSelect?.(e.target.value));
 
-    const header  = document.getElementById('stateSectionHeader');
-    const content = document.getElementById('currentStateContent');
+    const header  = this._el('stateSectionHeader');
+    const content = this._el('currentStateContent');
     if (!header || !content) return;
     header.addEventListener('click', () => {
       this._stateCollapsed = !this._stateCollapsed;
@@ -283,8 +324,8 @@ export class StatePanelView extends BaseComponent {
     const oofDate = stateSnapshot?.outOfFundsDate ?? null;
 
     if (oofDate !== this._lastOutOfFundsDate) {
-      const banner   = $('failureBanner');
-      const dateSpan = $('failureBannerDate');
+      const banner   = this._chartEl('failureBanner');
+      const dateSpan = this._chartEl('failureBannerDate');
 
       if (oofDate && !this._lastOutOfFundsDate) {
         if (banner)   banner.style.display = '';
@@ -304,8 +345,8 @@ export class StatePanelView extends BaseComponent {
     }
 
     if (oofDate) {
-      const defSpan    = $('failureBannerDeficit');
-      const monthsSpan = $('failureBannerMonths');
+      const defSpan    = this._chartEl('failureBannerDeficit');
+      const monthsSpan = this._chartEl('failureBannerMonths');
       if (defSpan)    defSpan.textContent    = this._fmtChange('cumulativeDeficit', stateSnapshot.cumulativeDeficit ?? 0);
       if (monthsSpan) monthsSpan.textContent = stateSnapshot.deficitMonths ?? 0;
     }
@@ -316,7 +357,8 @@ export class StatePanelView extends BaseComponent {
     // `metrics` is an ordinary branch of the tree (design 101 W-D9). What makes a field
     // first-class now is a watchlist, not a section of its own.
     const newStateDetails = this.createStateDetails('tpl-state-details', date, state);
-    const stateDetails = $('currentStateContent');
+    const stateDetails = this._el('currentStateContent');
+    if (!stateDetails) return;
     stateDetails.replaceChildren(newStateDetails);
     stateDetails.style.display = this._stateCollapsed ? 'none' : '';
   }
@@ -558,9 +600,9 @@ export class StatePanelView extends BaseComponent {
     const clone = templateContent.content.firstElementChild.cloneNode(true);
     const stateChangesGrid = clone.querySelector('[data-state-change-grid]');
     this._populateStateChanges(stateChangesGrid, changes);
-    const actionDetails = $('actionPanelDetails');
+    const actionDetails = this._actionDetailEl();
     clone.appendChild(stateChangesGrid);
-    actionDetails.replaceChildren(clone);
+    actionDetails?.replaceChildren(clone);
   }
 
   showNodeDetail(entry, { reveal = true } = {}) {
@@ -569,7 +611,7 @@ export class StatePanelView extends BaseComponent {
     const parentInfo = this._getParentInfo(entry);
     const el = this._buildActionDetailEl({ entry, changes, emitted, actionPayload, parentInfo });
     if (reveal) this._onShowActionDetail?.();
-    $('actionPanelDetails')?.replaceChildren(el);
+    this._actionDetailEl()?.replaceChildren(el);
   }
 
   _buildActionDetailEl({ entry, changes, emitted, actionPayload, parentInfo }) {

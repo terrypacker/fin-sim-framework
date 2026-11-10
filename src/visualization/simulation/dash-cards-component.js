@@ -27,8 +27,12 @@ export class DashCardsComponent extends BaseComponent {
   /**
    * @param {{ displaySettings?: import('../app-display-settings.js').AppDisplaySettings, formatDate?: function }} opts
    */
-  constructor({ displaySettings, formatDate, appBus } = {}) {
+  constructor({ displaySettings, formatDate, appBus, root = null } = {}) {
     super();
+    // The cards' runtime-owned host (WorkbenchRuntime.paneHost('dashCards')). It is detached
+    // from the document while the Dashboard tab is closed, so lookups go inside it. Null in
+    // unit tests, which put the cards straight into the document.
+    this._root = root;
     this._formatDate = displaySettings?.formatDate ?? formatDate ?? (d => d?.toDateString() ?? '');
     this._sim        = null;
     this._pendingDate = null;
@@ -87,10 +91,14 @@ export class DashCardsComponent extends BaseComponent {
     if (!this._pendingDate) return;
 
     const sim = this._sim;
-    $('cardCurrentDate').innerText       = this._formatDate(this._pendingDate);
-    $('cardEventExecutions').innerText   = sim?.eventExecutions   ?? 0;
-    $('cardHandlerExecutions').innerText = sim?.handlerExecutions ?? 0;
-    $('cardActionExecutions').innerText  = sim?.actionExecutions  ?? 0;
-    $('cardReducerExecutions').innerText = sim?.reducerExecutions ?? 0;
+    const set = (id, v) => {
+      const el = this._root?.querySelector(`#${id}`) ?? $(id);
+      if (el) el.innerText = v;
+    };
+    set('cardCurrentDate',       this._formatDate(this._pendingDate));
+    set('cardEventExecutions',   sim?.eventExecutions   ?? 0);
+    set('cardHandlerExecutions', sim?.handlerExecutions ?? 0);
+    set('cardActionExecutions',  sim?.actionExecutions  ?? 0);
+    set('cardReducerExecutions', sim?.reducerExecutions ?? 0);
   }
 }
