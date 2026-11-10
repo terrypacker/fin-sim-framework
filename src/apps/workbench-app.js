@@ -92,7 +92,8 @@ import { scenarioParamValues, primeRatesOf, marketRatesOf } from '../finance/par
 import { scenarioSecurityRegistry } from '../finance/holdings/security.js';
 import { listScenarioSecurities, upsertScenarioSecurity, deleteScenarioSecurity, scenarioSecurityUsage }
   from '../scenarios/scenario-securities.js';
-import { listScenarioJobs, listPersonJobs, replacePersonJobs, deletePersonJobs }
+import { listScenarioJobs, listPersonJobs, replacePersonJobs, deletePersonJobs,
+  listPersonBonuses, replacePersonBonuses }
   from '../scenarios/scenario-jobs.js';
 import { ScenarioComparePresenter }  from '../visualization/scenario-compare/scenario-compare-presenter.js';
 import { DecisionGraphPresenter }    from '../visualization/decision-graph/decision-graph-presenter.js';
@@ -452,9 +453,11 @@ export class WorkbenchApp extends BaseComponent {
           // the next Rebuild.
           jobs:            node?.id
             ? listPersonJobs(registry.scenarioService?.getActive?.(), node.id) : [],
+          bonuses:         node?.id
+            ? listPersonBonuses(registry.scenarioService?.getActive?.(), node.id) : [],
           ...paramLinkProps(),
           onSave: (data) => {
-            const { jobs = [], ...personData } = data;
+            const { jobs = [], bonuses = [], ...personData } = data;
             const scenario = registry.scenarioService?.getActive?.() ?? null;
             // Validate the jobs BEFORE touching the person, so a refused edit commits
             // nothing. The person id is not known yet for a new person, so a placeholder
@@ -467,6 +470,18 @@ export class WorkbenchApp extends BaseComponent {
               window.alert(`Jobs:\n${e.message}`);
               return;
             }
+            // Bonuses are checked against the jobs as they will be saved, for the same
+            // reason: a bonus outside every USD job would stop the scenario loading.
+            try {
+              if (scenario && bonuses.length > 0) {
+                replacePersonBonuses({ bonuses: [] },
+                  { ...(node ?? {}), ...personData, id: personData.id ?? '__new__' },
+                  bonuses, jobs);
+              }
+            } catch (e) {
+              window.alert(`Bonuses:\n${e.message}`);
+              return;
+            }
             let personId = personData.id;
             if (personId) {
               const { id, ...changes } = personData;
@@ -474,7 +489,11 @@ export class WorkbenchApp extends BaseComponent {
             } else {
               personId = peopleController.create(personData)?.id ?? null;
             }
-            if (scenario && personId) replacePersonJobs(scenario, personId, jobs);
+            if (scenario && personId) {
+              replacePersonJobs(scenario, personId, jobs);
+              replacePersonBonuses(scenario, { ...(node ?? {}), ...personData, id: personId },
+                bonuses, jobs);
+            }
             this._persistRecordEdits();
             this._editModal.close();
             this.configList?.render();

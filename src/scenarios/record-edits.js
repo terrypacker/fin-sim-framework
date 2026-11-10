@@ -21,7 +21,8 @@
  *
  * So a node Save writes only the slice it owns into the STORED copy:
  *   - the record lists themselves, plus `deletedDefaults` (which records the user removed),
- *     `jobs` (the Person editor's Jobs table) and `securities` (the Security editor);
+ *     `jobs` and `bonuses` (the Person editor's Jobs and Bonuses tables) and `securities`
+ *     (the Security editor);
  *   - the generated params of those records. They are the cascade authority the loader
  *     writes ONTO the records at every load, so a record persisted without them would be
  *     overwritten by the stale stored value on the next reload.
@@ -33,7 +34,7 @@ import { GENERATED_KEY_PREFIXES } from './params/generated-param-keys.js';
 /** Top-level record fields a config-node Save owns. */
 export const RECORD_FIELDS = Object.freeze([
   'persons', 'accounts', 'realProperties', 'collectibles', 'companyEquities', 'bequests',
-  'deletedDefaults', 'jobs', 'securities',
+  'deletedDefaults', 'jobs', 'bonuses', 'securities',
 ]);
 
 /**

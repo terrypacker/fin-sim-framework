@@ -341,6 +341,66 @@ export function jobDateRangeConflicts(rows, jobs) {
 }
 
 /**
+ * Why `bonus` cannot be paid by the job its person holds on its date, or null when it
+ * can. A bonus is a one-off payment from that job, so the job must exist, pay USD (the
+ * bonus path is W-2 wages: US cash, US ordinary income, Social Security wages) and not be
+ * self-employment, which has no employer to pay one.
+ *
+ * @param {object} bonus   `{ personId, date, ... }`
+ * @param {object} person  the person record, or a Person (a person with no jobs is read
+ *        through its flat wage fields)
+ * @param {Array<object>|null} spells  the person's spells (`buildSpells`), null for none
+ * @returns {string|null}
+ */
+export function bonusJobProblem(bonus, person, spells) {
+  const day = String(bonus?.date).slice(0, 10);
+  const job = spellAt(spells ? { ...person, spells } : person, toMs(bonus?.date));
+  if (job == null || !(job.baseMonthlyWage > 0)) return `"${bonus.personId}" holds no paid job on ${day}`;
+  if (job.wageCurrency === 'AUD') return `the job on ${day} pays AUD; only a USD job's bonus is modelled`;
+  if (job.selfEmployed) return `the job on ${day} is self-employment, which has no employer to pay a bonus`;
+  return null;
+}
+
+/**
+ * Every reason the scenario's `bonus` records cannot run.
+ *
+ * With `checkJobs` (the editor), a bonus no USD job can pay is an error too. The loader
+ * passes false and only warns about one: a swept job or retire date can move a job's end
+ * past a bonus, and that run should simply not pay it — `US_INCOME` skips such a bonus —
+ * rather than fail.
+ *
+ * @param {Array<object>} bonuses  cfg `bonus` records `{ id, personId, date, amount }`
+ * @param {Array<object>} persons  cfg person records
+ * @param {Array<object>} jobs     cfg `job` records
+ * @param {{ checkJobs?: boolean }} [o]
+ * @returns {string[]} empty when the records are valid
+ */
+export function validateBonuses(bonuses, persons, jobs, { checkJobs = true } = {}) {
+  const errors = [];
+  if (!Array.isArray(bonuses) || bonuses.length === 0) return errors;
+  const byId = new Map((persons ?? []).map(p => [p?.id, p]));
+  const seen = new Set();
+  for (const b of bonuses) {
+    const label = `Bonus "${b?.id ?? '?'}"`;
+    if (b?.id == null || b.id === '') errors.push('Bonus: `id` is required.');
+    else if (seen.has(b.id)) errors.push(`${label}: duplicate id.`);
+    seen.add(b?.id);
+    const person = byId.get(b?.personId);
+    if (person == null) {
+      errors.push(`${label}: personId "${b?.personId}" names no person.`);
+      continue;
+    }
+    if (toMs(b.date) == null) { errors.push(`${label}: date "${b.date}" is not a date.`); continue; }
+    if (!(Number(b.amount) > 0)) errors.push(`${label}: amount must be greater than 0.`);
+    if (checkJobs) {
+      const problem = bonusJobProblem(b, person, buildSpells(jobs, person, null));
+      if (problem) errors.push(`${label}: ${problem}.`);
+    }
+  }
+  return errors;
+}
+
+/**
  * Every reason the scenario's `job` records cannot run (§4.6). Errors, not warnings: an
  * inert spell is a silent wrong answer.
  *

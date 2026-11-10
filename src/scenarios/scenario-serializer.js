@@ -506,6 +506,9 @@ export class ScenarioSerializer {
       // `personId`. Plain authored data like `corporateActions`; emitted only when present,
       // so a scenario without jobs round-trips byte-for-byte.
       ...(scenario.jobs?.length ? { jobs: scenario.jobs.map(j => ({ ...j })) } : {}),
+      // Dated one-off bonuses, joined to their person by `personId`; the job in force on
+      // the date is the one paying it. Emitted only when present, like `jobs`.
+      ...(scenario.bonuses?.length ? { bonuses: scenario.bonuses.map(b => ({ ...b })) } : {}),
       bequests:       (scenario.bequests ?? []).map(n => ScenarioSerializer._serializeBequest(n)),
       events:   (scenario.events ?? []).map(n => ScenarioSerializer._serializeEvent(n)),
       handlers: (scenario.handlers ?? []).map(n => ScenarioSerializer._serializeHandler(n)),

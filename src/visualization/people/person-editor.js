@@ -12,6 +12,7 @@ import { BaseComponent } from '../components/base-component.js';
 import { bindParamLinkedField } from '../scenario/param-linked-field.js';
 import { PayrollSection } from './payroll-section.js';
 import { JobsSection, superFundOptions } from './jobs-section.js';
+import { BonusesSection } from './bonuses-section.js';
 import { defaultCurrencyForCountry } from '../../finance/country-codes.js';
 import { usStateOptionPairs } from '../../finance/tax/state/us-states.js';
 import { SS_CLAIM_AGES, fullRetirementAge } from '../../finance/account-rules/us/us-social-security-rules.js';
@@ -39,7 +40,7 @@ export class PersonEditor extends BaseComponent {
    */
   constructor({ parent, container, node, onSave, onDelete,
                 links = null, onParamChange = null, onOpenParam = null,
-                householdParams = null, accounts = null, jobs = null }) {
+                householdParams = null, accounts = null, jobs = null, bonuses = null }) {
     super({ parent });
     this._container = container;
     this._node      = node;
@@ -60,6 +61,9 @@ export class PersonEditor extends BaseComponent {
     // writes the edited list back to the scenario record on Save.
     this._jobsIn          = jobs ?? [];
     this._jobs            = null;
+    // This person's `cfg.bonuses` rows, written back the same way.
+    this._bonusesIn       = bonuses ?? [];
+    this._bonuses         = null;
   }
 
   render() {
@@ -156,6 +160,12 @@ export class PersonEditor extends BaseComponent {
     });
     this._jobs.render();
     if (this._jobsIn.length > 0) el.querySelector('[data-id="jobsSection"]').open = true;
+    this._bonuses = new BonusesSection({
+      container: el.querySelector('[data-id="bonusesBody"]'),
+      bonuses:   this._bonusesIn,
+    });
+    this._bonuses.render();
+    if (this._bonusesIn.length > 0) el.querySelector('[data-id="bonusesSection"]').open = true;
     this._syncJobLock(el);
     this.listen(el.querySelector('[data-id="wageCurrency"]'), 'change',
                 () => this._payroll.refreshSplitDestinations());
@@ -229,6 +239,11 @@ export class PersonEditor extends BaseComponent {
     return this._jobs?.readJobs() ?? [];
   }
 
+  /** This person's edited bonus rows, for the host to write to `cfg.bonuses`. */
+  readBonuses() {
+    return this._bonuses?.readBonuses() ?? [];
+  }
+
   /** Route param-backed person fields through their param (design/32). */
   _bindParamLinks(el) {
     this._linkedFields = new Set();
@@ -291,6 +306,7 @@ export class PersonEditor extends BaseComponent {
     // stale single-job wage. The retire date is kept (a Person always carries one) but is
     // ignored while jobs exist, and the box shows the derived end, not it.
     data.jobs = this.readJobs();
+    data.bonuses = this.readBonuses();
     if (data.jobs.length > 0) {
       data.monthlyWage  = 0;
       data.selfEmployed = false;

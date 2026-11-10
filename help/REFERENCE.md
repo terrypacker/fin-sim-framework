@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-238 parameters · 34 panels · 12 node types (207 fields) · 180 action types · 92 tools · 330 state field types · 79 topics · 138 design docs
+238 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 92 tools · 330 state field types · 80 topics · 138 design docs
 
 ---
 
@@ -609,7 +609,7 @@ menu files it under.
 
 ---
 
-## Node types (12 kinds · 207 fields)
+## Node types (13 kinds · 209 fields)
 
 Every kind of record the Nodes panel can open, and every control its edit form offers.
 The inventory is read from the FORM — the `<template>` in `index.html` the editor
@@ -706,6 +706,15 @@ Explained in [`help/nodes`](nodes/job.md). 4 field(s) described by a record para
   The Super Guarantee rate this employer pays on AUD wages. Blank inherits the person's rate, then the household's. Each employer has its own maximum contributions base, so a new job in the same year starts its base again.
 - **`superAccountKey`** — Super Fund · `select` · topic
   The super fund this job's Super Guarantee, salary sacrifice and personal contributions go into, picked from the person's own funds. "First fund" uses the first one they own. A preserved MSBS benefit is never offered. Only that person's funds are offered, and a scenario that names someone else's fund refuses to load. A person with an Australian job and no fund of their own gets no AU contributions, and loading warns about it.
+
+### Bonuses — `bonus` (2 fields)
+
+Explained in [`help/nodes`](nodes/bonus.md). 0 field(s) described by a record parameter.
+
+- **`date`** — Date · `date` · topic
+  The day the bonus is paid. It must fall inside a USD job that is not self-employment.
+- **`amount`** — Amount · `number` · topic
+  The bonus in today's money, the same basis as a job's wage. It is scaled by US inflation from the run's start to the date, so a 20,000 bonus five years out pays what 20,000 buys now.
 
 ### Accounts — `account` (45 fields)
 
@@ -2259,7 +2268,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 
 ---
 
-## Topics (79)
+## Topics (80)
 
 Tier 2 — the hand-written prose under `help/`, listed by what it CITES rather than
 summarised. A topic may not restate a param description (design 108 §3), so there is
@@ -2279,6 +2288,7 @@ what the in-app panel keys on.
 | [Inheritance](nodes/bequest.md) | node | 233 | 2 panels · design 63 |
 | [Bond Ladders](concepts/bond-ladders.md) | concept | 399 | 1 panel · 10 params · design 66, 121, 125, 128 |
 | [Bonds](panels/bonds.md) | panel | 246 | 1 panel · design 130, 66 |
+| [Bonus](nodes/bonus.md) | node | 169 | design 116 |
 | [Chart](panels/chart.md) | panel | 199 | 1 panel |
 | [Collectible](nodes/collectible.md) | node | 205 | 2 panels · design 57, 88 |
 | [Company Equity](nodes/company.md) | node | 214 | 2 panels · design 49, 72, 88 |

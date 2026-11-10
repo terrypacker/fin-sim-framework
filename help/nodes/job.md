@@ -10,7 +10,7 @@ stamps:
   panel:config-list: c29391
   panel:paycheque: d4e25c
   node:job: ded547
-  src/finance/payroll/employment.js: 82a7ee
+  src/finance/payroll/employment.js: 239e1e
   src/visualization/people/jobs-section.js: b4f3e3
 ---
 

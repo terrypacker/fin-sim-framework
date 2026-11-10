@@ -88,7 +88,7 @@ const BUILT_IN_TOOLSETS = [
  */
 import { synthesizeWeightedPriorities, resolveOwnerBanding } from './params/lever-weights.js';
 import { migrateYearFieldsToDates } from './year-date-migration.js';
-import { validateJobs } from '../finance/payroll/employment.js';
+import { validateJobs, validateBonuses, bonusJobProblem, buildSpells } from '../finance/payroll/employment.js';
 import { validateMsbsAccounts } from '../finance/account-rules/au/msbs.js';
 import { JOB_DATE_PARAM_FIELDS } from './params/record-param-templates.js';
 export { synthesizeWeightedPriorities } from './params/lever-weights.js';
@@ -177,6 +177,11 @@ export class ScenarioLoader {
     if (jobErrors.length > 0) {
       throw new Error(`Scenario jobs are invalid:\n  ${jobErrors.join('\n  ')}`);
     }
+    const bonusErrors = validateBonuses(cfg.bonuses, cfg.persons, cfg.jobs, { checkJobs: false });
+    if (bonusErrors.length > 0) {
+      throw new Error(`Scenario bonuses are invalid:\n  ${bonusErrors.join('\n  ')}`);
+    }
+    this._warnUnpaidBonuses(cfg);
     this._warnAuJobsWithoutFund(cfg);
     const msbsErrors = validateMsbsAccounts(cfg.accounts);
     if (msbsErrors.length > 0) {
@@ -217,6 +222,14 @@ export class ScenarioLoader {
    *
    * @private
    */
+  _warnUnpaidBonuses(cfg) {
+    for (const b of cfg.bonuses ?? []) {
+      const person = (cfg.persons ?? []).find(p => p?.id === b.personId);
+      const problem = bonusJobProblem(b, person, buildSpells(cfg.jobs, person, null));
+      if (problem) console.warn(`Bonus "${b.id}" is not paid: ${problem}.`);
+    }
+  }
+
   _warnAuJobsWithoutFund(cfg) {
     const accounts = cfg.accounts ?? [];
     const onePerson = (cfg.persons ?? []).length <= 1;

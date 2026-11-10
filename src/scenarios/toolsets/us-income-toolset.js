@@ -15,6 +15,8 @@ import {
   SeIncomeUsHandler, BonusHandler, CompanySaleHandler,
 } from '../../finance/account-rules/us/us-income-classes.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
+import { OneOffEvent } from '../../simulation-framework/events/one-off-event.js';
+import { bonusJobProblem } from '../../finance/payroll/employment.js';
 
 /**
  * US_INCOME toolset — US income event mechanics (SS, wages, SE, bonus, company sale).
@@ -78,7 +80,31 @@ export const US_INCOME = {
 
   paramSchema(context) { return []; },
   state(context) { return {}; },
-  schedules(context) { return []; },
+  /**
+   * One BONUS event per authored `cfg.bonuses` row inside the run. A row dated before
+   * the run's start is history (the money is already in the accounts) and one after its
+   * end can never fire, so neither is scheduled. Nor is one no USD job pays on its date —
+   * a swept job or retire date can move the job's end past it (the loader warns). The
+   * amount is in today's money: BonusHandler scales it by US CPI on the date, as a job's
+   * wage is.
+   */
+  schedules(context) {
+    const start  = context?.startDate?.getTime?.() ?? -Infinity;
+    const end    = context?.endDate?.getTime?.()   ??  Infinity;
+    const person = id => (context?.people ?? []).find(p => p?.id === id);
+    return (context?.bonuses ?? [])
+      .filter(b => { const t = Date.parse(b.date); return t >= start && t <= end; })
+      .filter(b => person(b.personId) != null
+        && bonusJobProblem(b, person(b.personId), context?.spellsByPerson?.[b.personId] ?? null) == null)
+      .map(b => new OneOffEvent({
+        name:    `Bonus — ${person(b.personId).name ?? b.personId}`,
+        type:    'BONUS',
+        date:    new Date(b.date),
+        data:    { amount: Number(b.amount), personId: b.personId, todaysMoney: true, bonusId: b.id },
+        enabled: true,
+        color:   '#2E7D32',
+      }));
+  },
 
   handlers(context) {
     return [

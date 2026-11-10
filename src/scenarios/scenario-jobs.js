@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { validateJobs } from '../finance/payroll/employment.js';
+import { validateJobs, validateBonuses } from '../finance/payroll/employment.js';
 import { JOB_PARAM_TEMPLATE, JOB_DATE_PARAM_FIELDS } from './params/record-param-templates.js';
 
 /**
@@ -105,10 +105,66 @@ function _syncJobParams(scenario, jobs) {
 }
 
 /**
- * Remove a deleted person's jobs. Without this the loader rejects the scenario on its
- * next load: a job naming no person is an error, not a warning (§4.6).
+ * Remove a deleted person's jobs and bonuses. Without this the loader rejects the
+ * scenario on its next load: a job or bonus naming no person is an error (§4.6).
  */
 export function deletePersonJobs(scenario, personId) {
-  if (!scenario || listPersonJobs(scenario, personId).length === 0) return;
+  if (!scenario) return;
+  if (listPersonBonuses(scenario, personId).length > 0) _writeBonuses(scenario, personId, []);
+  if (listPersonJobs(scenario, personId).length === 0) return;
   replacePersonJobs(scenario, personId, []);
+}
+
+// ─── bonuses ─────────────────────────────────────────────────────────────────
+//
+// `cfg.bonuses`: dated one-off payments, one flat row `{ id, personId, date, amount }`
+// each. Joined to the PERSON, not to a job id: the job in force on the date is the one
+// paying it (its currency and self-employment decide whether the bonus can run), and a
+// job added in the same edit has no id yet to join on. Same store discipline as jobs.
+
+/** Every bonus the scenario authors; empty when it has none. */
+export function listScenarioBonuses(scenario) {
+  return Array.isArray(scenario?.bonuses) ? scenario.bonuses : [];
+}
+
+/** One person's bonuses, in authored order. */
+export function listPersonBonuses(scenario, personId) {
+  return listScenarioBonuses(scenario).filter(b => b?.personId === personId);
+}
+
+/**
+ * Replace one person's bonuses with `rows`, validated against `jobs` — the person's
+ * job rows AS THEY WILL BE SAVED, so a bonus on a job added in the same edit checks
+ * against it. Rows without an id are given `<personId>-bonus-<n>`.
+ *
+ * @param {object}        scenario  the active scenario record; its `bonuses` key is replaced
+ * @param {object}        person    the person record (`id`, plus the flat wage fields a
+ *                                  person with no jobs is paid through)
+ * @param {Array<object>} rows      this person's complete bonus list (may be empty)
+ * @param {Array<object>} jobs      this person's job rows
+ * @returns {Array<object>} the new scenario-wide list
+ * @throws {Error} naming every problem, when the rows cannot run
+ */
+export function replacePersonBonuses(scenario, person, rows, jobs = []) {
+  if (!scenario) throw new Error('replacePersonBonuses: no scenario record.');
+  const personId = person?.id;
+  const others = listScenarioBonuses(scenario).filter(b => b?.personId !== personId);
+  const taken  = new Set(others.map(b => b.id));
+  const mine   = (rows ?? []).map(r => {
+    let id = r.id;
+    for (let n = 1; id == null; n++) if (!taken.has(`${personId}-bonus-${n}`)) id = `${personId}-bonus-${n}`;
+    taken.add(id);
+    return { ...r, id, personId };
+  });
+  const errors = validateBonuses(mine, [person],
+    (jobs ?? []).map(j => ({ ...j, personId })));
+  if (errors.length > 0) throw new Error(errors.join('\n'));
+  return _writeBonuses(scenario, personId, mine);
+}
+
+function _writeBonuses(scenario, personId, mine) {
+  const next = [...listScenarioBonuses(scenario).filter(b => b?.personId !== personId), ...mine];
+  if (next.length > 0) scenario.bonuses = next;
+  else delete scenario.bonuses;
+  return next;
 }

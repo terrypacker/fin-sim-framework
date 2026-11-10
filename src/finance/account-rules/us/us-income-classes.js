@@ -408,9 +408,12 @@ export class BonusHandler extends HandlerEntry {
     // it decides whether Australia assesses this bonus at all.
     const residency = state.people?.[personKey]?.residency
       ?? state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null;
+    // An authored bonus (`cfg.bonuses`) is in today's money, like a job's wage, and is
+    // paid in the money of its date. A bonus scheduled directly carries a nominal amount.
+    const amount = data.todaysMoney ? data.amount * (state.inflationAccumulator?.US ?? 1) : data.amount;
     return [
-      { type: 'BONUS_APPLY', amount: data.amount, residency, personKey },
-      new FieldValueAction('bonus', 'Bonus', data.amount),
+      { type: 'BONUS_APPLY', amount, residency, personKey },
+      new FieldValueAction('bonus', 'Bonus', amount),
       new RecordBalanceAction(`${cashKey}.balance`, cashKey),
     ];
   }

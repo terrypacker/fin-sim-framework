@@ -208,6 +208,9 @@ export class ScenarioCompiler {
       rngSeed:        resolveRunSeed(services.simulationRegistry?.getPrimary?.(), parameters),
       people,
       jobs,
+      // Dated one-off bonuses, `cfg.bonuses`: scenario data like `jobs`, already
+      // validated by ScenarioLoader. US_INCOME turns each into a BONUS event.
+      bonuses:        Array.isArray(definition?.bonuses) ? definition.bonuses : [],
       spellsByPerson: buildSpellsByPerson(jobs, people, new Date(definition.simStart)),
       accounts:       services.accountService?.getAll()      ?? [],
       realProperties: services.realPropertyService?.getAll() ?? [],

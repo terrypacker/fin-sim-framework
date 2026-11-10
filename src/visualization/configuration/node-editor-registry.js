@@ -52,6 +52,13 @@ export const NODE_EDITORS = Object.freeze({
     specs: [{ module: 'src/visualization/people/jobs-section.js#JOB_FORM_FIELDS',
               idPrefix: 'job_' }],
   },
+  // Dated one-off bonuses. Scenario data (`cfg.bonuses`), edited in their person's
+  // Bonuses table, whose columns `BONUS_FORM_FIELDS` declares.
+  bonus: {
+    label: 'Bonuses',
+    specs: [{ module: 'src/visualization/people/bonuses-section.js#BONUS_FORM_FIELDS',
+              idPrefix: 'bonus_' }],
+  },
   account: {
     label: 'Accounts',
     templates: ['tpl-account-editor'],
