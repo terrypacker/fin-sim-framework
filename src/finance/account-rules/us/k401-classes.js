@@ -16,6 +16,7 @@ import { getBirthDate } from '../../residency-utils.js';
 import { scaleHoldings, lotVintage } from '../../holdings/holding-utils.js';
 import { resolveCashKey } from '../cash-routing.js';
 import { debitLedgerForLoss, drawDerivedProRata } from '../../assets/investment-account.js';
+import { proRataIraSplit } from './ira-rollover-classes.js';
 
 /** Resolve the US cash pool (legacy tail; prefer resolveCashKey for routing). */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
@@ -270,7 +271,11 @@ export class K401RmdApplyReducer extends AccountServiceReducer {
     const { amount, residency } = action;
     const stateKey     = action.stateKey ?? 'k401Account';
     const ka           = state[stateKey];
-    const fromEarnings = Math.min(amount, ka.earningsBasis);
+    // See IraRmdApplyReducer: under ART18_EARNINGS_ONLY the draw is split pro rata and
+    // the earnings share is stamped for the AU return; otherwise earnings-first, as before.
+    const earningsOnly = state.auRmdTreatment === 'ART18_EARNINGS_ONLY';
+    const split        = earningsOnly ? proRataIraSplit(ka, amount) : null;
+    const fromEarnings = split ? split.fromEarnings : Math.min(amount, ka.earningsBasis);
     const fromContrib  = amount - fromEarnings;
     const newBalance   = ka.balance - amount;
     this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], amount, null);
@@ -288,7 +293,8 @@ export class K401RmdApplyReducer extends AccountServiceReducer {
         },
       },
       // Design 76 Gap B: stamp the account so the AU return attributes to its owner.
-      [{ type: 'K401_RMD_TAX', amount, residency, stateKey }]
+      [{ type: 'K401_RMD_TAX', amount, residency, stateKey,
+         ...(split ? { auAssessableAmount: split.fromEarnings } : {}) }]
     );
   }
 }

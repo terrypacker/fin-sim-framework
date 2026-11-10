@@ -9,11 +9,11 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-238 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 92 tools · 330 state field types · 80 topics · 138 design docs
+239 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 92 tools · 330 state field types · 80 topics · 138 design docs
 
 ---
 
-## Parameters (238)
+## Parameters (239)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
@@ -154,10 +154,12 @@ scenario's own schema), which is where to go to change it.
 - **`withholdingMethod`** — Payroll Withholding · `Enum` · default `FICA_ONLY` · one of `FICA_ONLY`, `NONE` · via US_RETIREMENT
   How much of a US paycheque is withheld before it reaches the household. FICA_ONLY withholds Social Security and Medicare exactly — they are a rate times a base, so no estimate is involved — and leaves income tax to settle annually with the withholding credited against it. NONE credits the wage gross and settles everything annually (pre-design-95 behaviour). Income-tax withholding is not modelled: real withholding follows the Form W-4 / Pub 15-T tables, which this model does not carry.
 
-### Cross Border (6)
+### Cross Border (7)
 
 - **`auInflationRate`** — AU Inflation Rate (cross-border) · `Number` · default `0.03` · sweep: mc · via US_AU_CROSS_BORDER
   AU inflation rate when running combined US+AU scenario
+- **`auRmdTreatment`** — AU Treatment of US RMDs · `Enum` · default `ART18_FULL` · one of `ART18_FULL`, `ART18_EARNINGS_ONLY`, `ART21`, `NO_RELIEF` · via US_AU_CROSS_BORDER
+  How an AU resident's US IRA or 401(k) required minimum distribution is taxed, a treaty question the model takes a position on rather than settles. ART18_FULL (default): an Art. 18(1) pension; the whole distribution is AU income and the US credits the Australian tax (design 83 §17). ART18_EARNINGS_ONLY: the same, but Australia assesses only the earnings share, split pro rata from the account's contribution and earnings ledger, which the draw then consumes pro rata. ART21: treated like a discretionary withdrawal, with the US taxing as source country and Australia crediting it (FITO). NO_RELIEF: a stress bound, taxed on both returns with no foreign-income room created on either; the treaty should not produce it.
 - **`exchangeRateUsdToAud`** — Exchange Rate USD→AUD · `Number` · default `1.55` · sweep: mc · via US_AU_CROSS_BORDER
   USD to AUD exchange rate applied on international transfers
 - **`intlTransferFeeUsd`** — International Transfer Fee (USD) · `Number` · default `15` · sweep: mc · via US_AU_CROSS_BORDER
@@ -2297,7 +2299,7 @@ what the in-app panel keys on.
 | [Contributions and Payroll](concepts/contributions-and-payroll.md) | concept | 242 | 1 panel · 13 params · design 95 |
 | [Cost Basis and Company Equity](concepts/cost-basis-and-equity.md) | concept | 333 | 2 panels · 3 params · design 94, 72 |
 | [Field × Action](panels/cross-action-query.md) | panel | 196 | 1 panel |
-| [Cross-Border Residency](concepts/cross-border-residency.md) | concept | 265 | 2 panels · 4 params · design 36, 52 |
+| [Cross-Border Residency](concepts/cross-border-residency.md) | concept | 351 | 2 panels · 5 params · design 36, 52 |
 | [Currency Hedging](concepts/currency-hedging.md) | concept | 394 | 3 params · 1 action · design 120, 121 |
 | [Dashboard](panels/dashboard.md) | panel | 183 | 1 panel |
 | [Decision Graph](panels/dg-config.md) | panel | 168 | 1 panel · design 30 |

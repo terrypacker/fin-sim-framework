@@ -133,11 +133,19 @@ export class IraRmdApplyReducer extends AccountServiceReducer {
     const { amount, residency } = action;
     const stateKey = action.stateKey ?? 'iraAccount';
     this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], amount, null);
+    // `auRmdTreatment: ART18_EARNINGS_ONLY` assesses only the earnings share in AU, so
+    // the draw must consume the ledger in the same proportion it was assessed in — the
+    // default contribution-first debit would exhaust the exempt basis years early.
+    // Other modes are untouched (no stamp, contribution-first), so a default run is
+    // byte-identical.
+    const earningsOnly = state.auRmdTreatment === 'ART18_EARNINGS_ONLY';
+    const taxAction = { type: 'IRA_RMD_TAX', amount, residency, stateKey };
+    if (earningsOnly) taxAction.auAssessableAmount = proRataIraSplit(state[stateKey], amount).fromEarnings;
     return this.newState(
       state,
-      { [stateKey]: debitIra(state[stateKey], amount) },
+      { [stateKey]: debitIra(state[stateKey], amount, { proRata: earningsOnly }) },
       // Design 76 Gap B: stamp the account so the AU return attributes to its owner.
-      [{ type: 'IRA_RMD_TAX', amount, residency, stateKey }]
+      [taxAction]
     );
   }
 }

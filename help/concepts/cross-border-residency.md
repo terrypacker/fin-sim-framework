@@ -3,13 +3,14 @@ id: cross-border-residency
 kind: concept
 title: Cross-Border Residency
 panels: [journal-report, scenario-compare]
-params: [moveDate, startingResidency, usFeieElected, intlTransferFeeUsd]
+params: [moveDate, startingResidency, usFeieElected, intlTransferFeeUsd, auRmdTreatment]
 design: [36-au-move-tax-effect-analysis.md, 52-true-foreign-tax-credit.md]
 stamps:
   param:moveDate: 6a4e42
   param:startingResidency: 598a5f
   param:usFeieElected: 00dd02
   param:intlTransferFeeUsd: e53b1e
+  param:auRmdTreatment: 278379
   panel:journal-report: b2eedb
   panel:scenario-compare: 25eee7
 ---
@@ -33,6 +34,13 @@ may have no counterpart on the other.
 The foreign earned income exclusion is a US election on foreign-source earned income.
 It is off by default and worth treating carefully — it is not free to turn on and off,
 because electing it binds you for several years.
+
+Required distributions from a US IRA or 401(k) are where the treaty is least settled
+once you live in Australia. The model takes one position by default and lets you swap in
+the alternatives, which is how to find out whether a decision rests on that position at
+all. Roth conversions are the case that matters: whether converting pays depends on how the
+traditional account is taxed when it is *not* converted, so run the conversion question
+under more than one position before trusting its answer.
 
 Transfer costs are the small, real friction of running a two-currency household: a
 fixed fee per international wire. Small per event, and a plan that moves money

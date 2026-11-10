@@ -162,6 +162,51 @@ function bookArt18Pension(state, next, action, canonicalKey, amount) {
 }
 
 /**
+ * An AU resident's own IRA / 401(k) RMD under the `auRmdTreatment` position. Design 83
+ * §17 built ART18_FULL and recorded its doubts (§17.6); the other three exist so a
+ * study can bound how much a decision depends on that position, not because any of
+ * them is believed. The US side is identical in every mode: the caller has already
+ * booked the gross as US ordinary income.
+ *
+ *   · ART18_FULL          — `bookArt18Pension` on the gross, unchanged.
+ *   · ART18_EARNINGS_ONLY — the same booking on the earnings share the apply reducer
+ *                           stamped as `auAssessableAmount` (pro rata from the ledger).
+ *   · ART21               — the discretionary-withdrawal booking (Art. 21(3)): US
+ *                           source, so the gross joins the Art. 22(2) removal set and
+ *                           Australia relieves it by FITO, as IRA_ROLLOVER_WITHDRAWAL_TAX.
+ *   · NO_RELIEF           — AU income on the gross and nothing else: no removal set for
+ *                           a FITO and no §904 general room for a US credit. A stress
+ *                           bound only — the AU tax still enters the US foreign-tax pool
+ *                           and may be credited against OTHER general income's room.
+ */
+function bookAuRmd(state, next, action, canonicalKey, amount) {
+  switch (state.auRmdTreatment ?? 'ART18_FULL') {
+    case 'ART18_EARNINGS_ONLY': {
+      const assessable = Number.isFinite(action.auAssessableAmount) ? action.auAssessableAmount : amount;
+      return bookArt18Pension(state, next, action, canonicalKey, assessable);
+    }
+    case 'ART21': {
+      const aud = toAUD(amount, 'USD', state);
+      const patched = {
+        ...next,
+        usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
+        usSourceGeneralUsdYTD:  (state.usSourceGeneralUsdYTD  ?? 0) + amount,
+      };
+      return bookAuResident(state, patched, action, canonicalKey, {
+        auOrdinaryIncomeYTD:    aud,
+        usSourceOrdinaryAudYTD: aud,
+      });
+    }
+    case 'NO_RELIEF':
+      return bookAuResident(state, next, action, canonicalKey, {
+        auOrdinaryIncomeYTD: toAUD(amount, 'USD', state),
+      });
+    default:
+      return bookArt18Pension(state, next, action, canonicalKey, amount);
+  }
+}
+
+/**
  * Is a gain on PERSONAL property foreign-source for this taxpayer? — design 83 G10.
  *
  * §865(a) sources gain on the sale of personal property by the **residence of the
@@ -348,7 +393,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
         if (residency !== 'AU') return next;
         // Design 76 Gap B — attributed to the 401k the RMD came from, rather than
         // halved across the household by computeAuTaxPerPerson at settle.
-        return bookArt18Pension(state, next, action, 'k401Account', amount);
+        return bookAuRmd(state, next, action, 'k401Account', amount);
       }],
     ];
   }
@@ -1145,7 +1190,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
         if (residency !== 'AU') return next;
         // Design 76 Gap B — attributed to the IRA the RMD came from, rather than
         // halved across the household by computeAuTaxPerPerson at settle.
-        return bookArt18Pension(state, next, action, 'iraAccount', amount);
+        return bookAuRmd(state, next, action, 'iraAccount', amount);
       }],
     ];
   }

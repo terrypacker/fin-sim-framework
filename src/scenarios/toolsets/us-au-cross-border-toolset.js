@@ -205,6 +205,21 @@ export const US_AU_CROSS_BORDER = {
           + 'and pro-rata cannot supply — at the cost of publishing a lot array on every pool. '
           + 'The choice is locked at adoption and binds all future years (design 87 G6).',
       },
+      {
+        key: 'auRmdTreatment', label: 'AU Treatment of US RMDs',
+        type: 'Enum', group: 'Cross Border', mc: false, opt: false,
+        options: ['ART18_FULL', 'ART18_EARNINGS_ONLY', 'ART21', 'NO_RELIEF'],
+        defaultValue: 'ART18_FULL',
+        description: 'How an AU resident\'s US IRA or 401(k) required minimum distribution is '
+          + 'taxed, a treaty question the model takes a position on rather than settles. '
+          + 'ART18_FULL (default): an Art. 18(1) pension; the whole distribution is AU income and '
+          + 'the US credits the Australian tax (design 83 §17). ART18_EARNINGS_ONLY: the same, '
+          + 'but Australia assesses only the earnings share, split pro rata from the account\'s '
+          + 'contribution and earnings ledger, which the draw then consumes pro rata. ART21: '
+          + 'treated like a discretionary withdrawal, with the US taxing as source country and '
+          + 'Australia crediting it (FITO). NO_RELIEF: a stress bound, taxed on both returns '
+          + 'with no foreign-income room created on either; the treaty should not produce it.',
+      },
     ];
   },
 
@@ -239,6 +254,12 @@ export const US_AU_CROSS_BORDER = {
       // later year, so a run that silently reverted to the default would be filing a
       // different method than the taxpayer elected.
       fxBasisMethod:        p.fxBasisMethod ?? 'pro-rata',
+      // Projected into state for the same reason as `fxBasisMethod`: the RMD reducers
+      // that read it are pure functions of (state, action) and never see the params.
+      // Absent ⇒ ART18_FULL, so it is projected only when it differs: a default plan's
+      // state, and every whole-state golden, stays exactly as it was.
+      ...(p.auRmdTreatment && p.auRmdTreatment !== 'ART18_FULL'
+        ? { auRmdTreatment: p.auRmdTreatment } : {}),
       ...fxPatches,
     };
 

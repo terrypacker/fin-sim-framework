@@ -59,6 +59,7 @@ function makeIraConfig({
   iraEarningsBasis = 0,
   birthDate        = '1966-01-01',
   startingResidency = 'US',
+  auRmdTreatment    = undefined,
 } = {}) {
   return {
     toolsets: ['US_RETIREMENT', 'AU_RETIREMENT', 'US_AU_CROSS_BORDER'],
@@ -71,6 +72,7 @@ function makeIraConfig({
       usSavingsInterestRate: 0, auSavingsInterestRate: 0,
       auEquityGrowthRate: 0, auEquityDividendYield: 0, intlExAuEquityGrowthRate: 0, intlExAuEquityDividendYield: 0,
       startingResidency,
+      ...(auRmdTreatment ? { auRmdTreatment } : {}),
     },
     persons: [{
       __type: 'Person', id: 'primary', name: 'Primary', birthDate,
@@ -448,4 +450,60 @@ test('EVT-40: IRA RMD is AU ordinary income if AU resident', () => {
   // This assertion used to require `usSourceOrdinaryUsdYTD > 0`.
   assert.strictEqual(sim.state.usSourceOrdinaryUsdYTD ?? 0, 0);
   assert.strictEqual(sim.state.foreignGeneralIncomeYTD, 20000);
+});
+
+// ── auRmdTreatment: the four AU positions on an RMD (design 83 §17.6 bounds) ─────────
+// 40% contributions / 60% earnings, AU resident, one $20,000 RMD.
+function rmdUnder(auRmdTreatment) {
+  const { sim } = loadToolsetScenario(makeIraConfig({
+    iraBalance: 500000, iraContribBasis: 200000, iraEarningsBasis: 300000,
+    birthDate: '1954-01-01', startingResidency: 'AU', auRmdTreatment,
+  }));
+  sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_RMD', data: { amount: 20000 } });
+  sim.stepTo(new Date(2026, 1, 28));
+  return sim.state;
+}
+
+test('auRmdTreatment: default leaves the state shape and Art. 18 booking unchanged', () => {
+  const s = rmdUnder(undefined);
+  assert.equal('auRmdTreatment' in s, false);   // not projected ⇒ whole-state goldens hold
+  assert.strictEqual(auOrdinaryFor(s), 20000 * s.effectiveExchangeRates.USD_AUD);
+  assert.strictEqual(s.foreignGeneralIncomeYTD, 20000);
+  // contribution-first debit, as before
+  assert.strictEqual(s.iraAccount.contributionBasis, 180000);
+  assert.strictEqual(s.iraAccount.earningsBasis, 300000);
+});
+
+test('auRmdTreatment ART18_FULL explicitly is identical to the default', () => {
+  const a = rmdUnder(undefined), b = rmdUnder('ART18_FULL');
+  assert.strictEqual(auOrdinaryFor(b), auOrdinaryFor(a));
+  assert.strictEqual(b.foreignGeneralIncomeYTD, a.foreignGeneralIncomeYTD);
+  assert.equal('auRmdTreatment' in b, false);
+});
+
+test('auRmdTreatment ART18_EARNINGS_ONLY assesses only the pro-rata earnings share', () => {
+  const s = rmdUnder('ART18_EARNINGS_ONLY');
+  assert.strictEqual(s.usOrdinaryIncomeYTD, 20000);                       // US: gross, unchanged
+  assert.strictEqual(auOrdinaryFor(s), 12000 * s.effectiveExchangeRates.USD_AUD);
+  assert.strictEqual(s.foreignGeneralIncomeYTD, 12000);                   // §904 room = what AU taxed
+  assert.strictEqual(s.usSourceOrdinaryUsdYTD ?? 0, 0);
+  // the ledger is consumed in the proportion it was assessed in
+  assert.strictEqual(s.iraAccount.contributionBasis, 192000);
+  assert.strictEqual(s.iraAccount.earningsBasis, 288000);
+});
+
+test('auRmdTreatment ART21 books the Art. 22(2) removal set (AU FITO), not §904 general room', () => {
+  const s = rmdUnder('ART21');
+  assert.strictEqual(auOrdinaryFor(s), 20000 * s.effectiveExchangeRates.USD_AUD);
+  assert.strictEqual(s.usSourceOrdinaryUsdYTD, 20000);
+  assert.strictEqual(s.usSourceGeneralUsdYTD, 20000);
+  assert.strictEqual(s.foreignGeneralIncomeYTD ?? 0, 0);
+});
+
+test('auRmdTreatment NO_RELIEF books AU income with neither relief path', () => {
+  const s = rmdUnder('NO_RELIEF');
+  assert.strictEqual(s.usOrdinaryIncomeYTD, 20000);
+  assert.strictEqual(auOrdinaryFor(s), 20000 * s.effectiveExchangeRates.USD_AUD);
+  assert.strictEqual(s.usSourceOrdinaryUsdYTD ?? 0, 0);
+  assert.strictEqual(s.foreignGeneralIncomeYTD ?? 0, 0);
 });
