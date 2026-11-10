@@ -157,3 +157,10 @@ Two lessons worth carrying, both found here:
    to be typed in by hand rather than converted, find a second ATO publication that states it
    and cite both — see [`published-base-guard`]: a rate that reaches a test must come from the
    authority, and one hand-typed number is exactly the failure mode that guard exists for.
+
+## `Domicile-Act-1982/` and `ato-rulings/` — added 10 Nov 2026 (residency on leaving Australia)
+
+| file | source | route |
+|---|---|---|
+| `Domicile-Act-1982/C2019C00077.{pdf,txt}` | *Domicile Act 1982*, titleId `C2004A02560`, compilation No. 4, start 25 Jan 2019. Defines the "domicile" that the ITAA 1936 s6(1) domicile test reads (s10: a domicile of choice needs the intention to make one's home *indefinitely* in that country; s7: a domicile continues until a different one is acquired). | Federal Register scripted route (see `TAA-1953/` above): `/v1/Versions` → `https://www.legislation.gov.au/C2004A02560/2019-01-25/2019-01-25/text/original/pdf` (single volume). Asserted `application/pdf`; `pdftotext -layout`. |
+| `ato-rulings/ATO-TR-2023-1-Residency-Tests-Individuals.{pdf,txt}` | **TR 2023/1** *Income tax: residency tests for individuals*, the Commissioner's public ruling (legally binding), 27 pages incl. Examples 1–11. Permanent place of abode ¶63–82 (2-year rule of thumb ¶77; moving country to country keeps you resident ¶68); 183-day test ¶83–95; part-year residency ¶105–107; dual residency ¶108. | Downloaded by hand from the ATO Legal database (cover sheet generated 10 Nov 2026), converted with `pdftotext -layout`. Text layer, verbatim. |

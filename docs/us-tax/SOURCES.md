@@ -71,3 +71,16 @@ unit trust), and Reg. §1.1291/§1.1297. Design 115 flags the PFIC question as o
 
 eCFR route for part 301: same renderer as part 1, with `subchapter=F&part=301`.
 Form 8621: `https://www.irs.gov/pub/irs-pdf/i8621.pdf` → `pdftotext -layout`.
+
+## Added 10 Nov 2026 — FTC on an Australian exit tax (CGT event I1) and sourcing of a citizen's gain
+
+| file | section | why it is here |
+|---|---|---|
+| `USCODE-2024-title26-subtitleA-chap1-subchapN-partI-sec865.txt` | **§865** source of income from sales of personal property | (a) seller-residence rule; (g)(1)(A)(i)(I) a citizen with a foreign tax home is a "nonresident"; (g)(2) only if foreign tax of ≥10% of the gain is actually paid; (h) treaty resourcing is for stock of a FOREIGN corporation only. |
+| `USCODE-2024-title26-subtitleA-chap1-subchapN-partIII-subpartA-sec905.txt` | **§905** applicable rules (timing of the credit) | Fetched alongside §904; companion to the carryover rule in §904(c). |
+| `CFR-26-1.861-20-Allocation-And-Apportionment-Of-Foreign-Income-Taxes.txt` | **Reg. §1.861-20** | (b)(2) "corresponding U.S. item"; (d)(2)(ii)(C) a foreign-law (deemed) disposition with no U.S. recognition is assigned as if sold for U.S. purposes in the year the foreign tax is paid; Example 2. |
+| `CFR-26-1.904-6-Allocation-Of-Foreign-Taxes-To-Categories.txt` | **Reg. §1.904-6** | Category assignment layered on §1.861-20; (b)(1) base differences. |
+| `CFR-26-1.901-2-Income-War-Profits-Excess-Profits-Tax.txt` | **Reg. §1.901-2** | (a)(1)(iii) treaty coordination; (b)(2)(i)(C) pre-realization timing-difference events are creditable only if no "second tax" later. |
+
+All five by the scripted routes above (govinfo granule; eCFR renderer with `curl -L`), converted by stripping tags + `html.unescape` (named entities included) and collapsing blank lines.
+| `Treaty-Australia-Convention-TE-1982-08-06.txt` | **Treasury Technical Explanation of the 1982 Convention** ("an official guide to the Convention") | Art 22(4) + Art 27(1)(c): for a US citizen resident in Australia the US re-sources "enough U.S.-source income as Australian-source income" to credit the Australian tax, floored at the US tax the treaty allows on a source basis. Fetched from `https://www.irs.gov/pub/irs-trty/austtech.pdf` (10 pp, text layer), `pdftotext -layout`. The treas.gov archive copy at UNT returned an HTML shell, not the PDF. |

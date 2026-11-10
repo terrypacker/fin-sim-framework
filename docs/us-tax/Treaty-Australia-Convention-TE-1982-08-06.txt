@@ -1,0 +1,1253 @@
+     UNITED STATES TREASURY DEPARTMENT TECHNICAL EXPLANATION
+ OF THE CONVENTION BETWEEN THE GOVERNMENT OF THE UNITED STATES OF
+  AMERICA AND THE GOVERNMENT OF AUSTRALIA FOR THE AVOIDANCE OF
+        DOUBLE TAXATION AND THE PREVENTION OF FISCAL EVASION
+                  WITH RESPECT TO TAXES ON INCOME
+
+         GENERAL EFFECTIVE DATE UNDER ARTICLE 28: 1 DECEMBER 1983
+
+        This Convention, signed at Sydney, Australia on August 6, 1982, was negotiated on the
+basis of the U.S. Model Convention for the Avoidance of Double Taxation and the Prevention of
+Fiscal Evasion with Respect to Taxes on Income and Capital, published in May 1977, the revised
+U.S. Model published in draft form in June 1981 (also referred to as the "U.S. Model"), and the
+Model Double Taxation Convention on Income and Capital published by the Organization for
+Economic Cooperation and Development (OECD) in January 1977.
+
+        The technical explanation is an official guide to the Convention. It reflects policies
+behind particular Convention provisions, as well as understandings reached with respect to the
+interpretation and application of the Convention.
+
+                                     TABLE OF ARTICLES
+
+Article 1---------------------------------Personal Scope
+Article 2---------------------------------Taxes Covered
+Article 3---------------------------------General Definitions
+Article 4---------------------------------Residence
+Article 5---------------------------------Permanent Establishment
+Article 6---------------------------------Income from Real Property
+Article 7---------------------------------Business Profits
+Article 8---------------------------------Shipping and Air Transport
+Article 9---------------------------------Associated Enterprises
+Article 10--------------------------------Dividends
+Article 11--------------------------------Interest
+Article 12--------------------------------Royalties
+Article 13--------------------------------Alienation of Property
+Article 14--------------------------------Independent Personal Services
+Article 15--------------------------------Dependent Personal Services
+Article 16--------------------------------Limitation on Benefits
+Article 17--------------------------------Entertainers
+Article 18--------------------------------Pensions, Annuities, Alimony and Child Support
+Article 19--------------------------------Governmental Remuneration
+Article 20--------------------------------Students
+Article 21--------------------------------Income Not Expressly Mentioned
+Article 22--------------------------------Relief from Double Taxation
+Article 23--------------------------------Non-Discrimination
+Article 24--------------------------------Mutual Agreement Procedure
+Article 25--------------------------------Exchange of Information
+Article 26--------------------------------Diplomatic and Consular Privileges
+Article 27--------------------------------Miscellaneous
+Article 28--------------------------------Entry into Force
+Article 29--------------------------------Termination
+
+
+                                            ARTICLE 1
+                                           Personal Scope
+
+        This Article identifies the persons who come within the scope of the Convention (also
+referred to as “the Treaty”) and establishes the relationship between it and domestic law.
+
+       Paragraph 1 states that, except where the Convention specifically provides otherwise, the
+Convention applies to residents of the United States and/or Australia. Certain provisions of the
+Convention may apply to residents of third counties, for example, paragraph 5 of Article 10
+(Dividends), paragraph 6 of Article 11 (Interest), and Article 25 (Exchange of Information). The
+term “resident” is defined in Article 4 (Residence).
+
+        Paragraph 2 provides that the Convention may not increase tax above the liability that
+would result under domestic law or under other agreements between the Contracting States. If
+domestic law provides a more favorable treatment than the Convention, the taxpayer may apply
+the provisions of domestic law. For example, if certain interest income derived by nonresidents is
+exempt from tax by statute, but the Treaty authorizes a tax at source of not more than 10 percent,
+the statutory exemption will apply. A taxpayer, however, may not make inconsistent choices
+between the rules of the Internal Revenue Code and the Convention rules.
+
+        Paragraph 3 contains the traditional "saving clause" under which each Contracting State
+reserved the right to tax its residents, as defined in Article 4 (Residence), as if the Convention
+had not come into effect. The two States also reserve the right so to tax their citizens, individuals
+electing under their respective domestic laws to be taxed as residents, and in the case of the
+United States, former citizens whose loss of citizenship had as one of its principal purposes the
+avoidance of tax. Such former citizens are taxable in accordance with section 877 of the Internal
+Revenue Code for 10 years following the loss of citizenship.
+
+        Paragraph 4 sets forth certain exceptions to the application of the saving clause where
+other provisions of the Convention present overriding policies. The saving clause does not
+override the benefits provided under paragraph 2 of Article 9 (Associated Enterprises), relating to
+correlative adjustments of tax liability, or the benefits of paragraphs 2 or 6 of Article 18
+(Pensions, Annuities, Alimony and Child Support), relating to social security payments, alimony
+and child support. Social security payments and similar public pensions paid by Australia and
+alimony, child support and similar maintenance payments arising in Australia are taxable only by
+Australia even though the recipient may be a resident of the United States; similarly, social
+security payments by Australia to a citizen of the United States, wherever resident, are taxable
+only in Australia. The benefits provided in Articles 22 (Relief from Double Taxation), 23 (Non-
+Discrimination), and 24 (Mutual Agreement Procedure), and the source rules of paragraph 1 of
+Article 27 (Miscellaneous) are also available to residents and citizens of the Contracting States,
+notwithstanding the saving clause.
+
+        In some cases, the saving clause overrides benefits otherwise conferred by the United
+States on citizens or persons having immigrant status in the United States and benefits otherwise
+conferred by Australia on citizens or persons ordinarily resident in Australia, but does not
+override those benefits when conferred on other residents of the respective States. This second
+category of exceptions to the saving clause concerns the benefits provided under Article 19
+(Governmental Remuneration), 20 (Students) and 26 (Diplomatic and Consular Privileges). The
+term “immigrant status” means a person admitted to the United States as a permanent resident
+under U.S. immigration laws (i.e., holding a "green card").
+
+
+                                           ARTICLE 2
+                                          Taxes Covered
+
+       Paragraph 1 enumerates the existing taxes to which the Convention applies in each
+Contracting State.
+
+        In the United States these are the Federal income taxes imposed by the Internal Revenue
+Code, but excluding the accumulated earnings tax and the personal holding company tax. Social
+security taxes and excise taxes, such as those on private foundations and foreign insurers, are not
+covered by the Convention.
+
+        In Australia the Convention covers the income tax, including the additional tax on
+undistributed income of private (closely held) companies.
+
+       Paragraph 2 provides that taxes enacted after the date of signature of the Convention
+(August 6, 1982) are also covered if they are substantially similar to the taxes referred to in
+paragraph 1. The competent authorities agree to notify each other at the end of each calendar year
+of substantial changes in their income tax laws or in the official interpretation of those laws or of
+the Convention.
+
+
+                                           ARTICLE 3
+                                        General Definitions
+
+        Paragraph 1 defines some of the principal terms used throughout the Convention. Unless
+the context otherwise requires, the terms defined in this paragraph have a uniform meaning
+throughout. A number of other important terms are defined in other Treaty articles. For example,
+the term "resident" is defined in Article 4 (Residence), the term "permanent establishment" is
+defined in Article 5 (Permanent Establishment), and the term "royalties" is defined in Article 12
+(Royalties).
+        The definitions of the terms "person", "company", "enterprise of a Contracting State", and
+"international traffic" are similar to the definitions in the U.S. Model.
+
+       The "competent authority" for the United States is the Secretary of the Treasury or his
+delegate, and for Australia the Commissioner of Taxation or his authorized representative.
+
+         The definitions of a United States corporation and an Australian corporation, respectively,
+exclude corporations which under the laws of the Contracting States are residents of both States.
+A corporation created and organized under the laws of a state of the United States is considered
+by the United States to be a United States corporation. Such a corporation could also be
+considered by Australia to be an Australian corporation if it is managed and controlled in
+Australia or if it does business there and its voting power is controlled by Australian resident
+shareholders. Typically, a corporation can avoid being a dual resident. If such a situation does
+arise, the dual resident corporation is not considered a resident of either country for purposes of
+the Treaty and is therefore not entitled to benefits granted by either State under the Treaty to
+residents of the other State.
+
+        The terms "United States" and "Australia" are defined to include the continental shelf
+areas of the two countries with respect to exploration and exploitation of their natural resources.
+For the United States, the definition of the continental shelf is interpreted in accordance with
+section 638 of the Internal Revenue Code and the regulations thereunder. The term "United
+States" does not include Puerto Rico, the Virgin Islands, Guam, or any other United States
+possession. The term "Australia" does include the Territories of Norfolk Island, Christmas Island,
+the Cocos Islands, Ashmore and Cartier Islands and the Coral Sea Islands; however, see also the
+discussion of paragraph 1(a)(iii) of Article 4 (Residence).
+
+        Definitions are provided for the terms "Contracting State," "State," "United States tax,''
+''Australian tax,'' and “resident of one of the Contracting States." The covered taxes do not
+include penalty or interest charges. For example, the ceiling rate of tax at source of 15 percent on
+dividends under Article 10 (Dividends) does not include any penalty or interest charge for late
+payment of tax.
+
+       Paragraph 2 provides that terms not defined in the Convention shall have the meaning
+which they have under the laws of the Contracting State concerning the taxes to which the
+Convention applies, unless the context of the Convention requires a different interpretation.
+Under the terms of Article 24 (Mutual Agreement Procedure), the competent authorities may
+agree on a common definition of an otherwise undefined term. The term "context" includes the
+purpose and background of the provision in which the term appears. An agreement by the
+competent authorities with respect to the meaning of a term used in the Convention would
+supersede conflicting meanings in the domestic laws of the Contracting States.
+
+
+                                           ARTICLE 4
+                                            Residence
+        This Article sets forth rules for determining the residence of individuals, corporations,
+and other persons for purposes of the Convention. A definition of residence is important because,
+for the most part, only residents of the Contracting States may claim benefits under the
+Convention. The Convention definition is of course, exclusively for purposes of the Convention.
+
+        Paragraph 1 of this Article describes those persons who, for purposes of the Convention,
+are residents of Australia or the United States.
+
+         Subparagraph (a) provides that a resident of Australia means an Australian corporation
+and any other person (except a company that is not an Australian corporation) that is resident in
+Australia for purposes of its tax. However, if such a person is subject to Australian tax on income
+from Australian sources (but not on income from U.S. sources or other sources outside
+Australia), that person is not a resident of Australia for purposes of this Convention except to the
+extent that the income is subject to tax in Australia as the income of a resident or is exempt from
+Australian tax solely because it is subject to U.S. tax. This provision excludes residents of certain
+territories included within the definition of Australia in paragraph 1(k) of Article 3 (General
+Definitions) from claiming any Treaty reductions in United States tax on United States source
+income under the Treaty; although subject to Australian tax on their Australian source income,
+such persons are not subject to Australian tax on their United States source income and the
+reason is not solely because they are subject to U.S. tax. Similarly, a partnership, estate or trust is
+a resident of Australia for purposes of the Convention only to the extent that the income it
+derives is subject to Australian tax as the income of a resident either at the level of the
+partnership, estate or trust or in the hands of a partner or beneficiary, or, if that income is exempt
+from Australian tax under the Treaty, it is exempt solely because it is subject to U.S. tax.
+However, an Australian trust will be considered a resident of Australia, notwithstanding that its
+income is exempt from Australian tax, if the trust qualifies as a tax exempt organization under
+Australian law because it is established for public charitable purposes or scientific research.
+Thus, a dividend paid by a U.S. corporation to an Australian partnership comprised equally of an
+Australian resident partner and an Indonesian resident partner would be treated as paid one half
+to an Australian resident and that half would enjoy the reduced rate of U.S. tax provided for in
+Article 10 (Dividends).
+
+        Subparagraph (b) provides that a resident of the United States means a U.S. corporation
+and any other person resident in the United States for purposes of its tax. However, a partnership,
+estate or trust is a resident of the United States for purposes of the Convention only to the extent
+that the income it derives either is subject to U.S. tax as the income of a resident (either at the
+level of the entity or in the hands of a partner or beneficiary), or is exempt from U.S. tax for
+reasons other than the recipient's not being a U.S. person. Thus, a U.S. person that qualifies as a
+tax-exempt organization under U.S. law qualifies as a resident, and a recipient of tax-exempt
+income does not lose its status as a resident with respect to that income. The rule in paragraph 1
+that tax-exempt organizations and recipients of tax-exempt income qualify as residents,
+notwithstanding that the income they derive is not subject to tax, is meant to be a clarification
+and not to imply that such tax-exempt organizations and other persons are not entitled to Treaty
+benefits under conventions which do not include this or similar language.
+       Paragraph 2 provides a series of tie-breakers for assigning a single residence to an
+individual who, by the criteria of paragraph 1, would be a resident of both countries.
+
+         The first test is where the individual has a permanent home. If that test is inconclusive
+because the individual has a permanent home in both countries or in neither of them, the second
+test is where he has his habitual abode. If that test also fails to establish a single country of
+residence, because the individual has a habitual abode in both countries or in neither of them, he
+is deemed to be a resident of the country with which his personal and economic relations are
+closer. Citizenship, per se, is not recognized by Australia as a tie breaker, but if the individual is
+a citizen of one of the Contracting States, that factor will be taken into account in determining
+where his personal and economic relations are closer. If these tests do not establish a single
+residence, the competent authorities will attempt to settle the question by mutual agreement
+under Article 24 (Mutual Agreement Procedure). Once an individual is assigned a residence
+under this paragraph for a taxable year, he is a resident only of that State for all purposes of the
+Convention for that year.
+
+        The residence of persons other than individuals is determined under the respective laws
+of the Contracting States. A dual resident company is treated as a resident of neither Contracting
+State for purposes of the convention. (See paragraph 1(g) of Article 3 (General Definitions).)
+
+
+                                           ARTICLE 5
+                                      Permanent Establishment
+
+        The rule governing the taxation by a Contracting State of business income derived by a
+resident of the other State utilize the concept of a "permanent establishment." Paragraph 1 of this
+Article defines in general terms the "permanent establishment" concept, and the following
+paragraphs give some specific illustrations of the meaning of the term.
+
+        A place of management, branch, office, factory, workshop and a place of extraction of
+natural resources, such as a well or quarry, are examples of a permanent establishment. Since a
+place of management would in most cases require an office, which is specifically noted in
+paragraph 2, the addition of that term will not generally cause a permanent establishment to exist
+where there would not otherwise be one.
+
+        A building site or construction or installation project will only be considered a permanent
+establishment if it lasts longer than 9 months, and an installation, drilling rig or ship used for
+dredging or exploring or exploiting offshore natural resources is a permanent establishment only
+if so used for at least 6 months in any 24-month period. In such a case, the site, project,
+installation, rig or ship constitutes a permanent establishment from the first day when work
+physically begins within the territory of a Contracting State. A series of contracts or projects
+which are interdependent both commercially and geographically are to be treated as a single
+project for the purpose of applying the 9- month and 6-month tests.
+
+       Paragraph 3 enumerates certain activities which may be undertaken singly or in
+combination without creating a permanent establishment. Although subparagraph (f) of this
+paragraph of the U.S. Model was deleted, the same effect is obtained by the insertion of the
+reference to "one or more" in the introductory language of paragraph 3.
+
+        Paragraphs 4(a) and 5 consider the use of agents. A dependent agent who habitually
+exercises an authority to conclude contracts in the name of an enterprise is deemed to be a
+permanent establishment of that enterprise except to the extent that his activities are limited to
+those mentioned in paragraph 3 which would not constitute a permanent establishment under that
+paragraph. An enterprise of a Contracting State will not be considered to have a permanent
+establishment in the other State merely because it uses the services of an independent agent
+acting in the ordinary course of business in that other State.
+
+         Subparagraphs (b), (c) and (d) of paragraph 4 specify certain activities which constitute a
+permanent establishment even if not carried on through a fixed place of business like those
+enumerated in paragraph 2. Maintaining substantial equipment in a Contracting State for rental or
+other purposes for longer than 12 months constitutes a permanent establishment unless the
+equipment is leased under a “hire-purchase” agreement. Under Australian law the lessee under a
+“hire-purchase” agreement (a lease accompanied by certain lessee purchase options or rights) is
+treated for tax purposes as the owner of the leased property. The exception for hire-purchase
+agreements in this Article and elsewhere in the Convention (see Article 12 (Royalties)) was
+inserted at the request of Australia to distinguish such agreements from leases respected as such
+for tax purposes. Such a distinction is also made in the Commentary to Article 12 of the OECD
+Model Convention. Similarly, under the Internal Revenue Code, the terms of a “lease” may be
+such that for U.S. income tax purposes the lessee is treated as the owner of the property. For
+purposes of United States tax the exception for “hire-purchase” agreements simply confirms such
+treatment, which would also apply in the absence of such an explicit exception. See paragraph 2
+of Article 3 (General Definitions). Engaging in supervisory activities at a building site or
+construction, assembly or installation project for more than 9 months in a 24-month period
+constitutes a permanent establishment. And, an enterprise which maintains goods in the other
+Contracting State which goods were either purchased there (and not previously processed
+elsewhere) or produced there by it or in its behalf, and are then substantially processed there by a
+related enterprise is deemed to have a permanent establishment in that other State. This provision
+was added at the request of Australia to permit it to tax a portion of the sale profit when goods
+are produced or purchased in Australia, processed there at cost by a related enterprise, and then
+sold. It is an alternative approach to allocating part of the profit to the processing operation in
+such a case, as the United States could do under section 482.
+
+        Paragraph 6 provides that control of one company by another does not of itself constitute
+either company a permanent establishment of the other. The determination as to whether a
+subsidiary is a permanent establishment of its parent corporation, or the converse, or whether two
+or more subsidiaries of the same corporation are permanent establishments of the parent or of
+each other is made by reference to the tests set out in paragraphs 1 through 5.
+
+        These same principles apply in determining whether an enterprise of a Contracting State
+has a permanent establishment in a third State or whether an enterprise of a third State has a
+permanent establishment in a Contracting State. Such a determination may be relevant, for
+example, in deciding the source of interest (paragraph 7 of Article 11 (Interest)) or royalties
+(paragraph 6 of Article 12 (Royalties)).
+
+
+                                          ARTICLE 6
+                                    Income from Real Property
+
+        This Article provides that income from real property may be taxed by the Contracting
+State where the property is located. This rule does not confer an exclusive right of taxation on the
+State where the property is located. It simply provides that the situs State has the primary right to
+tax such income, regardless of whether the income is derived through a permanent establishment
+in that State or not. The provision in the U.S. Model for a binding election to be taxed on a net
+basis was deleted. Such an election is available under U.S. law and Australia taxes income from
+real estate on a net basis. The Article incorporates the rule that a leasehold interest in land and
+rights to exploit or explore for natural resources constitute real property situated where the land
+or resources, respectively, are situated. Except for those cases, the definition of real property is
+governed by the internal law of the Contracting State where the property is situated.
+
+
+                                           ARTICLE 7
+                                          Business Profits
+
+       This Article provides rules for the taxation by a Contracting State of income from
+business activity carried on by a resident of the other State.
+
+        Paragraph 1 provides that business profits of an enterprise of one Contracting State shall
+be taxable only in that State except to the extent that such profits are attributable to a permanent
+establishment through which the enterprise carries on business in the other Contracting State.
+(The term "enterprise of one of the Contracting States," used here and elsewhere in this
+Convention, excludes dual-resident corporations that are treated as residents of neither
+Contracting State for purposes of the Convention.)
+
+         Paragraph 2 provides that the profits to be attributed to a permanent establishment are
+those which it might be expected to make if it were an independent enterprise engaged in similar
+activities under similar conditions. The profits must reflect arm’s length prices. The profits so
+attributed may be from income described in section 864(c)(4)(B) of the Internal Revenue Code
+which are attributable to a permanent establishment in the United States may be subject to tax by
+the United States. In addition, the limited "force of attraction" rule in I.R.C. section 864(c)(3)
+does not apply for U.S. tax purposes under the Convention.
+
+        Paragraph 3 provides that deductions shall be allowed for expenses incurred for the
+purposes of the permanent establishment, including, inter alia, executive and general
+administrative expenses, wherever incurred, if such expenses are reasonably connected with the
+profits of the permanent establishment and would be deductible if it were an independent entity.
+Australia and the United States will each allow an allocation to a permanent establishment of a
+portion of research and development and interest expenses incurred by the U.S. home office or
+elsewhere, provided that the expenses are reasonably connected with the profits of the permanent
+establishment.
+
+       Paragraph 4 states that no profits shall be attributed to a permanent establishment by
+reason of the mere purchase by it of goods or merchandise for the enterprise.
+
+       Paragraph 5 provides that, unless there is good and sufficient reason to the contrary, the
+same method of determining profits attributable to the permanent establishment shall be used
+each year.
+
+        Paragraph 6 provides that, where business profits include items of income dealt within
+other articles of the Convention, the provisions of those other articles override the provisions of
+this Article. For example, the taxation of income of international shipping and aircraft operations
+is governed by Article 8 (Shipping and Air Transport) and not by this Article. Similarly, the
+taxation of dividends, interest, and royalties is controlled by Articles 10, 11, and 12, respectively;
+however, the terms of those Articles provide that where dividends, interest, or royalties derived
+by a resident of a Contracting State are attributable to a permanent establishment in the other
+Contracting State, the provisions of this Article do apply and the item of income is taxed as
+business profits.
+
+          Paragraph 7 was inserted at the request of Australia to permit the tax authorities of a
+Contracting State to apply the provisions of internal law in determining tax liability in cases
+where the information available to the competent authority is not adequate to measure accurately
+the profits of a permanent establishment. The Internal Revenue Service would have this power
+even in the absence of such a specific provision. The determination of profits in such cases,
+based on the available information, must be done consistently with the principles of this Article,
+i.e., it must seek to reflect arm’s length pricing and appropriate deductions of expenses.
+
+        Notwithstanding the other provisions of this Article, paragraph 8 allows each State to
+apply its domestic law in taxing income from the insurance business, provided that such law
+remains the same as on the date the Convention was signed or is modified only in minor respects.
+In the case of a nonresident general insurance company which insures risks in Australia,
+Australia imposes its ordinary corporate tax rate (now 46 percent) on a deemed profit equal to 10
+percent of the gross premiums from such insurance. The company may elect instead to be taxed
+on a net basis. The United States will apply its excise tax on insurance and reinsurance premiums
+of Australian insurers or will tax the net income of a U.S. trade or business of an Australian
+insurer, as appropriate.
+
+        Unlike the U.S. Model, this Convention does not provide that business profits include
+income from the rental of tangible personal property and films. In this Convention those types of
+rentals are treated as royalties under Article 12 (Royalties). However, the maintenance of
+substantial equipment in the other Contracting State for more than 12 months (other than
+equipment leased under a "hire-purchase" agreement) constitutes a permanent establishment
+covered by this Article.
+
+
+                                            ARTICLE 8
+                                     Shipping and Air Transport
+
+        Paragraph 1 provides that each of the Contracting States shall exempt from tax profits
+derived by an enterprise of the other Contracting State from the international operation of ships
+or aircraft, including:
+                 (a) profits from the rental on a full basis of ships and aircraft operated in
+        international traffic by the lessee (provided that the lessor also engages in the
+        international operation of ships or aircraft or in the regular leasing of ships or aircraft on a
+        full basis), and
+                 (b) profits from the rental of ships and aircraft on a bareboat basis and of
+        containers and related equipment operated or used in international traffic by the lessee,
+        provided in each case that the leasing activity is incidental to the operation of ships or
+        aircraft in international traffic by the lessor. Rental on a full or bareboat basis refers to
+        whether the ships or aircraft are leased fully equipped, manned and supplied.
+
+        For example, if a U.S. airline which operates internationally leases a plane on a bareboat
+basis to an Australian airline for use on its international routes, the rental income derived by the
+U.S. company is exempt from Australian tax under this Article. However, if the U.S. airline
+operates only within the United States, or if the leased plane is used only within Australia, the
+rental income is not exempt under this Article. Moreover, if a U.S. bank leases a plane on a
+bareboat basis to the Australian airline, either for use internationally or within Australia, that
+rental income is not exempt under this Article.
+
+        Income from the rental of ships, aircraft or containers which is not exempt from tax under
+this Article is taxable in accordance with Article 12 (Royalties). Australian law imposes tax on
+the net income after deducting expenses, subject to a maximum tax under Article 12 of 10
+percent of the gross rental.
+
+        Paragraph 2 states that the provisions of this Article apply to the share of an enterprise of
+a Contracting State in the profits of a pool or joint venture, even though the other participants
+may be enterprises of third States not covered by this Convention. The profit shares of such third
+country participants are not affected by this Convention, but are taxable in accordance with
+internal law or under the provisions of another international agreement, if applicable.
+
+         Paragraph 3 merely clarifies that profits from the transport of goods or passengers picked
+up and discharged within the same Contracting State are not within the definition of international
+traffic and may be taxed by that State.
+
+
+                                           ARTICLE 9
+                                       Associated Enterprises
+       This Article provides that, where related persons engage in transactions which are not at
+arm’s length, the Contracting States may make appropriate adjustments to their taxable income
+and tax liability.
+
+       Paragraph 1 states the general rule that where an enterprise of one Contracting State and
+an enterprise of the other Contracting State are related through management, control, or capital
+and their commercial or financial relations differ from those which would prevail between
+independent enterprises, the profits of the enterprises may be adjusted to reflect the profits which
+would have accrued if the two enterprises had been independent.
+
+        Paragraph 2 provides that where one of the Contracting States has increased the profits of
+an enterprise of that State to reflect the amount that would have accrued to the enterprise had it
+been independent of an enterprise in the other Contracting State, the second State shall make an
+appropriate adjustment, decreasing the amount of tax which it has imposed on those profits. In
+determining such adjustments, due regard is to be had to the other provisions of the Convention.
+The competent authorities of the two States shall consult each other if necessary in implementing
+this provision.
+
+         Paragraph 3 clarifies that each Contracting State may apply its internal law in determining
+liability for its tax. For example, although paragraphs 1 and 2 refer to allocations of “profits” and
+“taxes,” it is understood that such terms also include the components of the tax base and of the
+tax liability, such as income, deductions, credits, and allowances. The United States will apply its
+rules and procedures under section 482 of the Internal Revenue Code. Australia will apply the
+provisions of its income tax legislation, particularly with respect to the determination of taxable
+income in cases where the information available is inadequate to measure net income under the
+ordinary rules. Such determinations must be consistent in each case with the principles of arm’s
+length transactions.
+
+
+                                           ARTICLE 10
+                                            Dividends
+
+        This Article limits the rate of tax which may be imposed by a Contracting State on
+dividends paid by a company which is a resident of that State for purposes of its tax to a resident
+of the other Contracting State. A dual resident corporation is a resident of each Contracting State
+“for purposes of its tax,” but is a resident of neither State for purposes of the Convention.
+
+        Paragraph 1 states that such dividends may be taxed in the State of residence of the
+recipient. This provision, which is based on the OECD Model, confirms the provision of
+paragraph 3 of Article 1 (Personal Scope) that each Contracting State reserves the right to tax its
+residents.
+.
+        Paragraph 2 provides that such dividends may also be taxed in the Contracting State of
+which the paying company is a resident for the purposes of its tax, but such tax may not exceed
+15 percent of the gross amount of the dividends when the beneficial owner is a resident of the
+other State. This limitation applies to the tax imposed by either State on dividends paid by a dual
+resident company to a resident of the other Contracting State; but since a dual resident company
+is not a resident of either State under Article 4 (Residence), it does not apply to dividends
+received by such a company. In the absence of a Treaty, Australia, like the United States,
+imposes a tax of 30 percent on gross dividends paid to nonresidents. By Treaty, Australia is
+willing to reduce that the tax to, but not below, 15 percent. The reciprocal 15 percent limit of
+taxation at source provided in this paragraph also applied in the 1953 Convention.
+
+        Paragraph 3 defines dividends as income from shares and income which under domestic
+law is assimilated to income from shares.
+
+       Paragraph 4 provides that when dividends beneficially owned by a resident of one
+Contracting State are attributable to a permanent establishment or a fixed base which that
+resident maintains in the other State, of which the company paying the dividends is a resident,
+such dividends are not taxable in accordance with this Article, but in accordance with the
+provisions of Article 7 (Business Profits) or Article 14 (Independent Personal Services).
+
+      Paragraph 5 provides that a Contracting State may not impose tax on dividends paid by a
+company which is a resident of the other State, with three exceptions:
+              (a) to the extent that the dividends are paid to a resident of the first State;
+              (b) to the extent that the dividends are attributable to a permanent establishment or
+      fixed base of the beneficial owner in the first State; or
+              (c) to the extent that 50 percent or more of the gross income of the company
+      paying the dividends is attributable to one or more of permanent establishments of that
+      company in the first State and the dividends are paid out of the profits of such permanent
+      establishment.
+
+Subparagraph (c) applies only if the taxing State does not impose branch profits tax of the kind
+described in paragraph 6. For this purpose, the U.S. accumulated earnings and personal holding
+company taxes are not taxes of the kind described in paragraph 6. If only subparagraph (c)
+applies, the tax is limited to 15 percent. The United States may also tax dividends received by
+U.S. citizens under paragraph 3 of Article 1 (Personal Scope).
+
+        Paragraph 6 authorizes the imposition of a branch profits tax in addition to the ordinary
+corporate tax on profits of a permanent establishment of a resident of the other Contracting State.
+Australia's ordinary corporate income tax rate is 46 percent, but the rate of tax on permanent
+establishments of nonresident corporations is 51 percent. Dividends distributed by Australian
+corporations to a U.S. corporation are subject to a tax of 15 percent. Distributions by an
+Australian branch of a U.S. company are not subject to a further tax. Thus, the additional 5
+percentage points of tax on the branch profits serves as a substitute for a withholding tax on
+distributed profits. Under paragraph 6, Australia's additional tax may not exceed the amount
+which would result if the 15 percent dividend withholding tax were to be applied to the profits of
+the permanent establishment net of the corporate tax at the rate applicable to domestic
+corporations. For example, if a permanent establishment has taxable income of 100 in Australia
+and the ordinary corporate income tax rate is 46 percent, the additional tax on the branch profits
+may not exceed 15 percent of 54, or 8.1; i.e., the total tax on the branch may not exceed 54.1
+percent (46 plus 8.1). The Australian tax of 51 percent is within this limit.
+
+        Paragraph 6 also provides that, if a nonresident company is liable to a tax on its
+undistributed profits, the amount of undistributed profits shall be calculated as if that company
+had paid the corporate income tax applicable to a domestic corporation and had distributed
+dividends of an amount such that the 15 percent tax on those dividends imposed in accordance
+with paragraph 2 of this Article would have equaled the additional tax. For example, with an
+Australian tax on domestic corporations of 46 percent and on permanent establishments of
+foreign corporations of 51 percent, a permanent establishment of a U.S. corporation would, for
+purposes of any Australian tax on undistributed profits, be deemed to have distributed profits of
+33.33 and undistributed profits of 20.67 for each 100 of taxable income. (Profit of 100 after basic
+corporate tax of 46 leaves 54 available for distribution. Additional tax of 5 is equivalent to a 15
+percent withholding tax on 33.33; 15% x 331/3 = 5. Therefore, distributed profits are deemed to
+be 33.33 and the remainder of the after-tax profit of 54, or 20.67 is deemed to be undistributed.)
+
+
+                                           ARTICLE 11
+                                             Interest
+
+       This Article limits the tax which may be imposed by either Contracting State on interest
+derived and beneficially owned by a resident of the other Contracting State. There is no
+corresponding provision in the 1953 Convention.
+
+       Paragraph 1 states that such interest may be taxed in the State of residence of the
+beneficial owner. This provision, which comes from the OECD Model, confirms the provision of
+paragraph 3 of Article 1 (Personal Scope) that each Contracting State reserves the right to tax its
+residents.
+
+        Paragraph 2 provides that such interest may also be taxed by the State in which it has its
+source, but the tax is limited to 10 percent of the gross amount of the interest. Australia's
+statutory rate of tax on interest paid to nonresidents is generally 10 percent.
+
+       Paragraph 3 provides that, when interest beneficially owned by a resident of one
+Contracting State is attributable to a permanent establishment or fixed base which that resident
+maintains in the other State, that interest is not taxable in accordance with this Article but in
+accordance with the provisions of Article 7 (Business Profits) or Article 14 (Independent
+Personal Services).
+
+        Paragraph 4 states that the provisions of this Article shall not apply to interest payments
+between related persons in excess of the amount which would have been agreed upon at arm’s
+length. Such excess amount shall be taxed according to the laws of each Contracting State, with
+regard also to the other provisions of this Convention.
+       Paragraph 5 defines interest as income assimilated to income from money lent under the
+tax law of the Contracting State where the income arises.
+
+        Paragraph 6 provides that a Contracting State may not tax interest paid by a resident of
+the other State, with three exceptions:
+        (1) to the extent that the interest has its source in that State;
+        (2) to the extent that the beneficial owner of the interest is a resident of that State; or
+        (3) to the extent that the interest is attributable to a permanent establishment or fixed base
+of the owner in that State.
+
+Under these rules the United States may tax interest paid by an Australian company if the interest
+has its source in the United States in accordance with paragraph 7 of this Article, and in
+accordance with the Internal Revenue Code. Where such interest is beneficially owned by a
+resident of Australia, the U.S. tax will be reduced to 10 percent, in accordance with paragraph 2
+of this Article. The United States may also tax interest received by U.S. citizens, pursuant to
+paragraph 3 of Article 1 (Personal Scope).
+
+        Paragraph 7 defines the source of interest. Interest has its source in a Contracting State if
+paid by that State, a political subdivision or local authority thereof, or a person who is a resident
+of that State for purposes of its tax, including a corporation which under the respective internal
+laws is a resident of both States. (Thus, interest paid by such a dual resident company may be
+eligible for the reduced rate provided in paragraph 2, although interest beneficially owned by
+such a company is not.) An exception to this general rule, which looks to the payer of the
+interest, provides that when the indebtedness is incurred in connection with and the interest is
+borne (deducted in computing taxable income) by a permanent establishment or fixed base which
+the payer has in a Contracting State, the interest has its source in that State.
+
+        The Convention does not provide for exemption at a source of interest derived and
+beneficially owned by the Government of the other State or by a government instrumentality.
+Under Australian law, such interest, e.g., interest derived by the U.S. Government or the Export-
+Import Bank, is currently exempt from tax in Australia. Similarly, under U.S. law (I.R.C. section
+892) interest derived by the Australian government would generally be exempt from U.S. tax.
+
+
+                                            ARTICLE 12
+                                             Royalties
+
+       This Article limits the tax which may be imposed by either Contracting State on royalties
+derived and beneficially owned by a resident of the other Contracting State.
+
+       Paragraph 1 states that such royalties may be taxed in the State of residence of the
+beneficial owner. This provision, which comes from the OECD Model, confirms the provision of
+paragraph 2 of Article 1 (Personal Scope) that each Contracting State reserves the right to tax its
+residents.
+        Paragraph 2 provides that such royalties may also be taxed by the State in which they
+have their source, but the tax is limited to 10 percent of the gross amount of the royalties. Under
+the 1953 Convention, copyright royalties (other than those related to films) are exempt from tax
+at source, but other royalties are taxable at the statutory rates. Australia's statutory tax on
+royalties paid to nonresidents, other than for films or video tapes, is withheld by the payer at the
+full corporate or individual tax rate on the gross amount less allowable expenses necessarily
+incurred in deriving the royalty. The Convention preserves the net basis of taxation by Australia,
+except that the amount of tax liability may not exceed 10 percent of the gross amount of the
+royalty paid. Payments for the use of films and video tapes are taxed by Australia at 10 percent of
+the gross amount. This practice is confirmed by this Article. On the U.S. side the statutory rate of
+10 percent will be reduced to 10 percent.
+
+        Paragraph 3 provides that when royalties beneficially owned by a resident of one
+Contracting State are attributable to a permanent establishment or fixed base maintained by that
+resident in the other State, the royalties will not be taxed in accordance with the provisions of this
+Article but in accordance with the provisions of Article 7 (Business Profits) or Article 14
+(Independent Personal Services).
+
+        Paragraph 4 contains a definition of the term "royalties." The definition is broader than
+the one in the U.S. Model. For purposes of this Convention, payments for the use of, or right to
+use, industrial, commercial or scientific equipment are treated as royalties, except when such
+equipment is leased under a "hire-purchase" agreement. Payments for the use of, or right to use,
+motion picture films and certain tapes are also taxed as royalties. And royalties, for purposes of
+this Article, include payments or credits for scientific, technical, industrial or commercial
+knowledge or information owned by any person, and payments or credits for ancillary assistance
+furnished to enable the application of any property or right to which this Article applies. The
+reference to knowledge or information "owned" is meant to indicate that the term "royalties"
+implies a property right as distinguished from personal services. An engineer or architect who
+prepares a design for a customer is considered to perform personal services, the remuneration for
+which is covered under Article 14 (Independent Personal Services) or 15 (Dependent Personal
+Services).
+
+        An engineer or architect who supplies a preexisting design or blueprint is considered to
+be furnishing knowledge or information, the payment for which constitutes a royalty governed by
+this Article. The supply of ancillary services does not give rise to a royalty when supplied in
+connection with the sale of property, but does give rise to a royalty when supplied in connection
+with the leasing of any of the property or rights covered by this Article.
+
+        In some cases, income covered by this Article gives rise to a permanent establishment if
+the income-producing activity continues long enough. For example, payments for the leasing of
+industrial, scientific or commercial equipment (other than under a "hire-purchase" agreement) are
+taxable as royalties, but if the enterprise deriving the royalties maintains the equipment for rental
+in the other State for longer than 12 months, it is considered to have a permanent establishment
+in that other State under paragraph 4(b) of Article 5 (Permanent Establishment). In such a case
+the income is taxable from the beginning in accordance with Article 7 (Business Profits), as
+provided in paragraph 3 of this Article. Similarly, payments for the supply of supervisory
+services could in some cases constitute royalties; but if the services are furnished for more than 9
+months in a 24-month period, the enterprise has a permanent establishment under paragraph 4(c)
+of Article 5 (Permanent Establishment), and the income is taxable in accordance with Article 7
+(Business Profits), as provided in paragraph 3 of this Article.
+
+        Subparagraph (b)(iii) of paragraph 4 provides a special rule to deal with the situation of a
+disguised lease of a property right of the type covered by this paragraph. If, for example, an
+Australian company were to use in Australia a copyright or patent held by a U.S. company
+without paying a royalty to the U.S. company and the U.S. company were to forebear from
+selling the protected products in Australia in return for payment, the U.S. company would be
+treated as having received a royalty from the Australian company.
+
+        Subparagraph (c) of paragraph 4 provides that, to the extent that income from the
+disposition of any property or right described in this paragraph is contingent on the productivity
+or use or further disposition of such property or right, it is a royalty.
+
+        Paragraph 5 states that the provisions of this Article shall not apply to royalty payments
+between related persons in excess of the amount which would have been agreed upon at arm’s
+length. Such excess amount shall be taxed according to the laws of each Contracting State, with
+regard also to the other provisions of this Convention.
+
+        Paragraph 6 defines the source of royalties. In general, a royalty is considered to have its
+source in a Contracting State if paid by the Government or a resident of that State or by a
+company which under internal law is a resident of that State. (Thus, a royalty paid by a dual
+resident company may be eligible for the reduced rate provided in paragraph 2, although a royalty
+beneficially owned by such a company is not.) However, if a permanent establishment or fixed
+base in one of the Contracting States or in a third State incurs the liability to pay the royalties and
+bear the payment (deducts it in computing taxable income), the royalty is considered to have its
+source in the State where the permanent establishment or fixed base is located. Moreover, if
+under these rules a royalty is not considered to have a source in either State but it relates to the
+use of property or the right to use property in one of them, the royalty is considered to have its
+source where the property is used or where there is a right to use it. Thus, for example, if an
+Australian resident were to license a patent to a third country company, which in turn sub-
+licenses the patent for use in the United States, the United States would tax the sub-license
+payment by the U.S. user to the third country company in accordance with U.S. law, or with the
+provisions of a U.S. Treaty with that country, if applicable, and would also tax the license
+payment by the third country company to the Australian resident, subject to the limitation in
+paragraph 2. Third country residents cannot obtain the rate reduction provided in paragraph 2,
+since this Article applies only to royalties derived by residents of a Contracting State.
+
+
+                                           ARTICLE 13
+                                       Alienation of Property
+        This Article provides rules for the taxation of certain gains derived by a resident of a
+Contracting State. In general, it provides that:
+        (1) gains from the alienation of real property may be taxed where the real property is
+located;
+        (2) gains derived from the alienation of ships or aircraft or related property may be taxed
+only by the State of which the enterprise is a resident, except to the extent that the enterprise has
+been allowed depreciation of the property in computing taxable income in the other State; and
+        (3) gains from the alienation of property referred to in paragraph 4 (c) of Article 12
+(Royalties) are taxable under Article 12.
+
+Gains with respect to any other property are covered by Article 21 (Income Not Expressly
+Mentioned), which provides that gains effectively connected with a permanent establishment are
+taxable where the permanent establishment is located, in accordance with Article 7 (Business
+Profits), and that other gains may be taxed by both the State of source of the gain and the State of
+residence of the owner. Double taxation is avoided under the provisions of Article 22 (Relief
+from Double Taxation).
+
+       Paragraph 1 of Article 13 states the rule that gains derived from the alienation of real
+property situated in a Contracting State may be taxed by that State.
+
+         Paragraph 2 defines real property in each of the Contracting States. In the case of the
+United States, paragraph 2(a) explains that the term "real property situated in the other
+Contracting State" includes a United States real property interest as defined under the Foreign
+Investment in Real Property Tax Act, as amended. Thus, the United States retains its full taxing
+right under the law. In the case of Australia, paragraph 2(b) provides that real property has the
+meaning it has under Australian law and includes an interest in a company, partnership, trust or
+estate, the assets of which consist wholly or principally of real property situated in Australia.
+
+         Paragraph 3 provides that when an enterprise of a Contracting State derives gains with
+respect to the alienation of ships, aircraft, or containers operated or used by it in international
+traffic, the gain shall be taxable only in the State of residence of the enterprise, except to the
+extent that the enterprise has been allowed depreciation on that property in the other Contracting
+State. To the extent that depreciation deductions have reduced the tax on income from the
+operation of such ships, aircraft, or containers in the other State, that other State may recapture
+those depreciation deductions (but not in excess of the gain realized) when the property is
+disposed of. This paragraph also provides a cross-reference to paragraph 4(c) of Article 12
+(Royalties) and states that gain on royalties described in that paragraph (royalties which are
+contingent on the use or productivity of the right or property) are taxable in accordance with that
+Article.
+
+       Paragraph 4 clarifies that real property consisting of shares in a company or interests in a
+partnership, estate or trust referred to in paragraph 2(b) is deemed to be situated in Australia.
+
+
+                                            ARTICLE 14
+                                   Independent Personal Services
+
+       This Article concerns the taxation of income derived by a resident of one of the
+Contracting States from independent personal services.
+
+         The rule established in this Article is that, if an individual who is a resident of one
+Contracting State performs independent personal services in the other Contracting State, the
+income from those services may be taxed by that other State if the individual either is present in
+that other State for an aggregate of more than 183 days in the taxable year (or income year) or has
+a fixed base regularly available to him in that other State for the purpose of performing his
+activities. In the latter case, the other State may tax the income for services performed in that
+other State which is attributable to that fixed base.
+
+        It is understood that the term "fixed base" is analogous to the term "permanent
+establishment." Independent personal services include all personal services performed by an
+individual for his own account, including services performed as a partner in a partnership, where
+he receives the income and bears the losses arising from such services, except that services
+performed as a director of a company are covered by Article 15 (Dependent Personal Services).
+
+
+                                         ARTICLE 15
+                                   Dependent Personal Services
+
+       This Article concerns the taxation of remuneration derived by a resident of one of the
+Contracting States as an employee or as a director of a company.
+
+       Pensions, annuities and remuneration of government employees are covered by Articles
+18 and 19. Other remuneration of a resident of one of the Contracting States for employee
+services or for services performed as a director of a company may be taxed only in the State of
+residence unless the employment is exercised or the services are performed in the other State, in
+which case that other State may tax the remuneration for the services performed there, subject to
+the conditions set forth in paragraph 2.
+
+       Paragraph 2 provides that, even where a resident of one Contracting State performs
+services in the other State, that other State may not tax the income for such services if three
+conditions are met:
+                (a) the recipient is present in that State for not more than 183 days in the taxable
+       year (or income year);
+                (b) the remuneration is paid by or on behalf of an employer, or, in the case of
+       remuneration of directors, a company, that is not a resident of that State; and
+                (c) the remuneration is not deductible in determining taxable profits of a
+       permanent establishment, fixed base, or a trade or business of the employer or company
+       in that State.
+
+If any one of these conditions is not met, e.g., if the employer is a resident of the State where the
+services are performed, the income may be taxed by that State. The insertion of the reference to a
+trade or business means that if, for example, an Australian resident is employed in the United
+States by a Bermuda company and his salary is deducted in determining the profits of the U.S.
+trade or business of that company, the salary is taxable in the United States even if the Bermuda
+company does not have a permanent establishment in the United States.
+
+         Paragraph 3 provides that remuneration derived for employment aboard a ship or aircraft
+operated in international traffic by a resident of a Contracting State may be taxed by that State.
+Under this provision, Australia may tax the remuneration of employees for services aboard ships
+or aircraft operated internationally by Australian residents. Similarly, the United States may tax
+such remuneration when the operator is a U.S. resident. However, under U.S. law, the United
+States taxes such income of a nonresident alien only to the extent it is derived from U.S. sources
+(i.e., within U.S. territorial waters). This paragraph does not confer an exclusive taxing right.
+Both Contracting States retain the right to tax their residents and citizens under paragraph 3 of
+Article 1 (Personal Scope).
+
+
+                                            ARTICLE 16
+                                        Limitation on Benefits
+
+        This Article limits the benefits of the Convention to bona fide residents of the
+Contracting States. It is intended to prevent residents of third countries from inappropriately
+using a company which is a resident of one of the Contracting States as a conduit or similar
+vehicle to obtain Treaty benefits. Specifically, a person (other than an individual) which is a
+resident of one of the Contracting States is entitled to relief from taxation from the other
+Contracting State only if any of three alternative tests is met.
+
+        The first two tests are objective tests relating to the entity in question. If more than 75
+percent of the beneficial interest in the person receiving the income is owned, directly or
+indirectly, by any combination of individuals who are residents of the Contracting States, citizens
+of the United States, the Contracting States themselves, or publicly traded companies which are
+residents of the Contracting States, the first test is met.
+
+        Under the second test a publicly traded company that is a resident of Australia or the
+United States is considered to have a sufficient nexus with Australia or the United States,
+respectively, so as to entitle it to Treaty benefits. Under this test, Treaty benefits are not denied if
+there is substantial and regular trading of the principal class of shares of such a company on a
+recognized stock exchange in one of the Contracting States. A recognized stock exchange
+includes the NASDAQ system in the United States.
+
+        The third test recognizes that ownership of an entity that is a resident of the United States
+or Australia by persons resident in third countries is not uncommon. In view of the factors
+discussed below, granting Treaty benefits to such an entity often is consistent with the goals of
+the Treaty. Accordingly, under the third test, Treaty benefits are allowed if the establishment,
+acquisition and maintenance of the person and the conduct of its operations did not have as a
+principal purpose the purpose of obtaining Treaty benefits. This test would be met, for example,
+if an Australian company owned by third country residents conducts business operations in
+Australia and its U.S. investments are related or incidental to those business activities, or if the
+Australian tax burden equals or exceeds the tax reduction claimed under the Convention. It could
+also be met in other situations.
+
+        Paragraph 3, inserted at the request of Australia, provides a special rule concerning
+certain trust situations. The benefits of the Treaty do not apply to income derived by a trustee
+which under the Convention is treated as income of a resident of one of the Contracting States if
+a principal purpose of the use of the trust was to obtain a benefit under the Convention. For
+example, if an Australian resident establishes one or more U.S. accumulation trusts with
+Australian beneficiaries to receive dividends from Australian corporations in order to reduce the
+Australian tax on those dividends, the reduced rate provided in paragraph 2 of Article 10
+(Dividends) will not apply.
+
+       This Article is not meant to impose any added burden on withholding agents, and
+withholding agents will not be required to verify a person's ownership or purposes.
+
+       In applying this Article the normal burden of proof rules apply. For example, under
+present U.S. procedures an entity that is a resident of Australia and that believes it is entitled,
+under one of the alternative tests of this Article, to the 10 percent U.S. tax rate on interest
+provided by Article 11 (Interest) would merely file a U.S. Form 1001 with the appropriate
+withholding agent to claim the benefit. Of course, the Internal Revenue Service could, on audit,
+examine the transaction.
+
+        In view of a combination of factors - the tax burden imposed by both the United States
+and Australia; the fact that, even under treaties, Australia imposes source taxation on income of
+nonresidents of Australia at a level that is not insignificant; the fact that the Treaty’s rate
+reductions on source taxation of passive income are not as great as those accorded by the United
+States in many other treaties; and the concerns of both countries about tax avoidance and evasion
+- this Convention is not expected to be the subject of abuse. It is, therefore, anticipated that
+residents of the Contracting States will typically satisfy at least one of the three exceptions.
+Consequently, it should rarely be necessary to deny Treaty’s benefits under this Article.
+
+
+                                           ARTICLE 17
+                                           Entertainers
+
+       This Article provides certain exceptions to the rules otherwise governing income from
+personal services in the case of income derived by entertainers and athletes.
+
+         Paragraph 1 provides that a Contracting State may tax income derived by a resident of the
+other State from the performance of personal services in the first State as an entertainer or athlete
+if the gross receipts for such services, including expenses reimbursed or paid on his behalf,
+exceeds $10,000 (or the equivalent in Australian dollars) for the income year or taxable year
+concerned. In that case the full amount may be taxed by the first State, subject to any deductions
+allowable under its laws. This rule overrides the provisions of Article 14 (Independent Personal
+Services) and 15 (Dependent Personal Services) by adding another basis for taxation at source.
+However, if the income does not exceed $10,000, whether the income may be taxed by the State
+where the services are performed is determined in accordance with Article 14 or 15, as the case
+may be.
+
+       Income derived from services rendered by producers, directors, technicians and others
+who are not artistes or athletes is taxable in accordance with Article 14 or 15, as appropriate.
+
+        Paragraph 2 corresponds to the provisions in the U.S. Model. Where income for services
+performed by an entertainer or athlete accrues not to the entertainer or athlete but to another
+person, it may be taxed in the State where the activities are performed, without regard to the
+provisions of the Convention concerning business profits or income from personal services,
+unless it is established that neither the entertainer or athlete nor any related person participates in
+those profits in any manner.
+
+
+                                          ARTICLE 18
+                         Pensions, Annuities, Alimony and Child Support
+
+        This Article deals with the taxation of pensions, social security payments, annuities,
+alimony and child support derived by individuals who are residents of a Contracting State or
+citizens of the United States.
+
+        Paragraph 1 provides that pensions derived and beneficially owned by a resident of one of
+the Contracting States in consideration of past employment, other than pensions covered in
+Article 19 (Governmental Remuneration), shall be taxable only in that State.
+
+        Paragraph 2 provides that public pensions, such as social security benefits, paid by one
+Contracting State to a resident of the other State or to a citizen of the United States are taxable
+only in the paying State. The reference to U.S. citizens is to ensure that a social security payment
+by Australia to a U.S. citizen resident in Australia shall be taxable only in Australia and not in
+the United States. The exemption of such income provided by this paragraph is excepted from
+the saving clause under paragraph 4 of Article 1 (Personal Scope).
+
+       Paragraph 3 provides that annuities paid to a resident of a Contracting State shall be
+taxable only in that State.
+
+       Paragraph 4 defines "pensions and similar remuneration" and paragraph 5 defines
+"annuities."
+
+        Paragraph 6 provides that alimony and other maintenance payments, including child
+support payments, are taxable only in the State where they arise. The definitions and source rules
+relating to alimony and child support payments are determined under the internal laws of the
+Contracting States. Under Australian law alimony and child support payments are exempt to the
+recipient and not deductible by the payer. Thus, under this provision, alimony arising in the
+United States and paid to a resident of Australia will be deductible by the payer but taxed to the
+recipient by the United States. Alimony arising in Australia and paid to a U.S. resident, and child
+support payments arising in either State and paid to a resident of the other State, will not be
+deductible by the payer and will not be taxed to the recipient. These exemptions are available to
+residents and citizens of the respective States as a result of paragraph 4 of Article 1 (Personal
+Scope).
+
+
+                                         ARTICLE 19
+                                   Governmental Remuneration
+
+        This Article provides that remuneration, including pensions, paid by one of the
+Contracting States or a political subdivision, local authority or agency thereof to a citizen of that
+State for the performance of governmental functions is exempt from tax by the other State. If
+such remuneration is paid to an individual who is a resident, but not a citizen, of the employing
+State, whether it may be taxed by the other Contracting State is determined in accordance with
+the provisions of Articles 14 (Independent Personal Services), 15 (Dependent Personal Services),
+17 (Entertainers) or 18 (Pensions, Annuities, Alimony and Child Support), as the case may be. If
+such remuneration is paid by one of the States to an individual who is a resident of the other
+State (or by Australia to a citizen of the United States), it may be taxed by that other State (or by
+the United States in the case of U.S. citizens) in accordance with paragraph 3 of Article 1
+(Personal Scope). If such remuneration is paid to an individual who is not a resident of either
+State (and is not a citizen of the United States), it is not covered by this Convention.
+
+       Whether functions are of a governmental nature is determined by reference to the concept
+of a governmental function in the State in which the income arises.
+
+
+                                           ARTICLE 20
+                                            Students
+
+        This Article provides that, when a resident of one of the Contracting States goes to the
+other State for the purpose of full-time education, that other State may not tax payments received
+by the student for the purpose of his maintenance or education from sources outside that State.
+
+
+                                         ARTICLE 21
+                                 Income Not Expressly Mentioned
+
+        This Article provides that items of income derived by a resident of one of the Contracting
+States and not covered in the preceding articles may be taxed by the country of residence of the
+recipient. If from sources in the other State, such income may also be taxed by that other State.
+However, Article 7 (Business Profits) governs the taxation of such income to the extent it is
+effectively connected with a permanent establishment in that other State.
+
+        Among the items covered by this Article are prizes and income from the insurance
+business, which is specifically excluded from the provisions of Article 7 (Business Profits) by
+paragraph 8 of that Article. The source of such items of income is determined under the
+respective domestic laws of the two countries. Any difficulties or doubts in applying this Article,
+as in other cases, may be addressed in accordance with the provisions of Article 24 (Mutual
+Agreement Procedure).
+
+
+                                            ARTICLE 22
+                                    Relief from Double Taxation
+
+        Paragraph 1 provides that the United States shall give a foreign tax credit for income
+taxes paid to Australia, subject to the limitations provided in U.S. law. The credit is allowed for
+taxes paid directly by or on behalf of the U.S. resident or citizen. In addition, in the case of a U.S.
+corporation owning at least 10 percent of the voting stock of an Australian corporation, credit is
+allowed for the underlying Australian corporate tax on the profits of the Australian corporation
+out of which dividends are paid to the U.S. corporation. The Australian taxes referred to in
+paragraphs 1(b) and 2 of Article 2 (Taxes Covered) are considered income taxes for purposes of
+the credit.
+
+        This guarantee of a foreign tax credit is independent of the statutory grant of a credit
+under the Internal Revenue Code, but the amount of the credit to be allowed is determined in
+accordance with the limitations provided in the Internal Revenue Code. Since the Convention
+does not provide credit for a tax which is believed not to be creditable under the Internal Revenue
+Code, no special per-country limitation is contained in the Convention. However, paragraph 1
+provides that the Convention source rules may be used only for purposes of determining U.S.
+foreign tax credits for the Australian taxes covered by the Convention, i.e., not for taxes of other
+foreign countries.
+
+        In paragraph 2, Australia agrees to allow Australian residents a credit against Australian
+income tax equal to the income tax paid in the United States other than solely by reason of U.S.
+citizenship (i.e., the amount of tax which the United States is authorized under the Convention to
+impose at source on residents of Australia who are not U.S. citizens), subject to the limitations in
+Australian law which limit the credit to the Australian income tax payable on the income or any
+class thereof or on income from sources outside Australia.
+
+        Paragraph 3 confirms that an Australian corporation that owns at least 10 percent of the
+voting stock of a U.S. corporation is entitled to a rebate in its assessment, at the average rate of
+Australian tax payable by it, on dividends it receives from the U.S. corporation which are
+included in its taxable income in Australia. If Australian law providing this relief from tax on
+intercorporate dividends should change so that the rebate is no longer allowable, Australia agrees
+to allow credit for the underlying U.S. tax on the profits out of which such dividends are paid
+(similar to the U.S. credit allowed under section 902 of the Internal Revenue Code) in addition to
+the direct credit referred to in paragraph 3.
+
+          Paragraph 4 provides a special rule for avoiding double taxation of a U.S. citizen who is a
+resident of Australia. Both the United States and Australia tax the worldwide income of such a
+person. The special rule provides that, in such a case, the United States will credit against the
+U.S. tax the Australian tax paid, net of the Australian foreign tax credit provided for in paragraph
+2 (i.e., the Australian foreign tax credit for United States source basin taxation). For purposes of
+computing the foreign tax credit limitation under this paragraph, the United States will re-
+characterize enough U.S.- source income as Australian-source income to allow this special credit
+to be utilized, but without reducing the U.S. tax below the amount the United States may impose
+under this Convention other than by reason of citizenship (i.e., the amount of U.S. tax that may
+be imposed on a source basis under this Convention on residents of Australia who are not U.S.
+citizens). This source rule is provided by paragraph 1(c) of Article 27 (Miscellaneous), subject to
+the limitation provided in this paragraph.
+
+
+                                           ARTICLE 23
+                                         Non-Discrimination
+
+       This Article provides certain criteria of non-discriminatory application of the taxes
+covered by the Convention.
+
+        Paragraph 1 provides, first, that citizens of a Contracting State who are residents of the
+other State shall not be taxed less favorably in that other State than resident citizens of that other
+State who are in the same circumstances. It is understood that United States citizens who are not
+residents of the United States and Australian citizens who are not residents of the United States
+are not in the same circumstances with respect to the U.S. income tax, which is generally
+imposed on the worldwide income of U.S. citizens but not of Australian citizens.
+
+       Paragraph 1 also provides, in subparagraph (b), that interest, royalties, and other
+disbursements paid by a resident of a Contracting State to a resident of the other State shall be
+deductible for determining taxable profits under the same conditions as if they had been paid to a
+resident of the first-mentioned State. The term "other disbursements" is understood to include a
+reasonable allocation of executive and administrative expenses, research and development
+expenses, and other expenses incurred for a group of related enterprises.
+
+       Subparagraph (c) is the same as the corresponding paragraph in the U.S. Model. It
+requires that a Contracting State not impose more burdensome taxation on a subsidiary
+corporation owned by residents of the other Contracting State than it imposes on similar
+corporations which are locally owned.
+
+        Subparagraph (d) provides that a Contracting State may not impose more burdensome
+taxes on a permanent establishment of an enterprise of the other State than it imposes on its own
+enterprises carrying on the same activities in the same circumstances.
+        Paragraph 2 states that this Article does not affect the taxes of either Contracting State as
+in force on the date of signature of the Convention or tax laws subsequently enacted which are
+substantially similar to the existing taxes in purpose or are reasonably designed to prevent
+avoidance or evasion of tax. However, any subsequent tax measure must treat residents or
+citizens of the other State no less favorably than residents or citizens of a third State (except
+where the treatment of residents or citizens of third States is governed by an international
+agreement rather than by internal law).
+
+        Both Australia and the United States allow certain exemptions, deductions or rate
+reductions to residents taxed on their worldwide income which they do not extend to
+nonresidents not taxed on their worldwide income. For example, Australia imposes a 5 percent
+additional corporate tax on the profits of Australian branches of foreign corporations in lieu of a
+withholding tax on their profit remittances to the home office, denies to such branches the rebate
+on intercorporate dividends available to Australian corporations, and limits certain exemptions
+from the withholding tax on interest to funds borrowed abroad by domestic corporations owned
+and controlled by Australian residents. The United States does not extend to U.S. branches of
+foreign corporations the same deductions for dividends received from U.S. corporations which is
+available to U.S. corporations nor does it allow inclusion of income of foreign corporations in a
+consolidated return. Under this Article, those practices will not be in violation of the Convention;
+however, paragraph 2 in this regard is merely clarifying as neither Australia nor the United States
+would consider the foregoing provisions of its respective law to violate to non-discrimination
+provisions even in the absence of the rule of paragraph 2.
+
+        Paragraph 3 states that differentiating in taxation laws between residents and nonresidents
+does not of itself constitute discrimination contrary to this Article. This is merely an elaboration
+of the principles contained in paragraph 1, which require equal treatment of residents in the same
+circumstances. Residents and nonresidents are not in the same circumstances, reflecting the fact
+that in both countries residents are taxable on their worldwide income whereas nonresidents in
+general are taxable only on income from sources in that country.
+
+        Paragraph 4 provides that the competent authorities will attempt to resolve any instances
+of discriminatory taxation which might arise as a result of the tax measures of either country.
+Taxpayers may also take advantage of the provisions of Article 24 (Mutual Agreement
+Procedure) in such cases.
+
+
+                                          ARTICLE 24
+                                   Mutual Agreement Procedure
+
+       This Article provides for cooperation between the competent authorities to resolve
+problems of double taxation.
+
+        Paragraph 1 (a) provides that a taxpayer who considers that the actions of one or both of
+the Contracting States may result in taxation not in accordance with the Convention may present
+his case to the competent authority of the State of which he is a resident or citizen. However, he
+must present his case within three years from the first notification of the action giving rise to the
+potential double taxation.
+
+        Paragraph 1(b) provides that the competent authority, if it considers the claim to be
+justified, shall endeavor to resolve the case by mutual agreement with the competent authority of
+the other Contracting State. Any agreement reached shall be implemented without regard to any
+statutory time limits of the Contracting States. Thus, for example, if it is agreed that tax liability
+should be adjusted downward, a refund of the excess tax paid will be made even though the
+statute of limitations may have expired. However, no additional tax may be imposed if the statute
+of limitations has expired in the taxing State.
+
+        Paragraph 2 provides that the competent authorities shall endeavor by mutual agreement
+to resolve any difficulties or doubts which may arise in the interpretation or application of the
+Treaty. For example, the competent authorities may agree on the same allocation of income,
+deductions, credits or allowances; to the same determination of the source of particular items of
+income; on a common meaning of a term; and they may decide, for purposes of paragraph 2(c) of
+Article 4 (Residence) to which State an individual has closer personal and economic relations.
+They may also discuss the application of the provisions of domestic law regarding penalties,
+fines and interest in a manner consistent with the purposes of the Convention.
+
+        Paragraph 3 provides that the competent authorities may communicate with each other
+directly for the purpose of reaching agreements in accordance with this Article.
+
+
+                                           ARTICLE 25
+                                      Exchange of Information
+
+        This Article provides for the exchange of information between the competent authorities
+of the Contracting States for the purposes of implementing the provisions of the Convention or
+administering statutory provisions concerning taxes covered by the Convention. Its terms are
+substantially similar to the corresponding provisions of the U.S. Model.
+
+         Paragraph 1 provides that the competent authorities shall exchange such information as is
+necessary for carrying out the provisions of the Convention or for administering statutory
+provisions concerning taxes covered by the Convention provided the information can be obtained
+under domestic laws and administrative practices with respect to each State's own taxes. Thus,
+provided that the information could be obtained in administering a domestic tax covered by the
+Convention, the competent authorities agree to exchange such information without regard to
+whether there is a domestic liability in the case in question. The information furnished could
+relate to a tax not covered by the Convention if it is relevant to enforcing a tax which is so
+covered. For example, it is possible that information relating to sales taxes or estate taxes could
+be needed to verify an item of income or expense for income tax purposes.
+
+      Paragraph 2 provides guarantees that the information exchanged shall be kept secret and
+may be disclosed only to persons, including a court or administrative body, concerned with the
+assessment, collection, administration or enforcement of the taxes covered by the convention or
+with litigation with respect to those taxes. Persons involved in the administration of taxes
+covered by the Convention include legislative bodies involved in the administration of taxes and
+their agents such as, for example, the United States General Accounting Office; therefore,
+information may be disclosed to them, subject to the limitations of this Article and the internal
+law of the respective Contracting State.
+
+        Paragraph 3 provides that neither State will furnish information to the other State under
+this Article if it would be contrary to its public policy to do so.
+
+       Paragraph 4 states that, when specifically requested by the competent authority of the
+other Contracting State, and provided that such documents could be obtained in enforcing its
+own taxes, copies of unedited original documents shall be provided.
+
+        In paragraph 5 the competent authorities of the two Contracting States agree to endeavor
+to collect taxes on behalf of the other State to the extent necessary to ensure that any exemption
+or reduction in rate of tax provided in the Convention is not enjoyed by persons not entitled to
+the benefits of the Convention.
+
+
+                                         ARTICLE 26
+                               Diplomatic and Consular Privileges
+
+        This Article corresponds to Article 27 of the U.S. Model. It provides that the Convention
+shall not affect taxation privileges of diplomatic consular officials under other special agreements
+of international law.
+
+
+                                          ARTICLE 27
+                                          Miscellaneous
+
+       This Article provides certain miscellaneous rules of taxation under the Convention.
+
+        Paragraph 1 provides source rules. Income derived by a resident of the United States
+which, under the Convention, may be taxed by Australia, is deemed to have its source in
+Australia. Income derived by a resident of Australia which may be taxed by the United States
+under the Convention, other than solely by reason of citizenship or because the individual elected
+under U.S. law to be taxed as a resident of the United States, is deemed to have its source in the
+United States. With respect to U.S. citizens who are residents of Australia, to the extent that
+income which they derive is taxed by the United States by virtue of paragraph 3 of Article 1
+(Personal Scope), such income is deemed to have its source in Australia for purposes of giving
+affect to paragraph 4 of Article 22 (Relief from Double Taxation).
+
+       Paragraph 2 provides that certain exemptions granted with respect to earned income by
+the source country, in accordance with Articles 14 (Independent Personal Services), 15
+(Dependent Personal Services), 17 (Entertainers), or 19 (Governmental Remuneration), will be
+inapplicable to the extent that such income is not taxed by the residence country. For example, a
+United States resident who performs services in Australia as a self-employed person and who
+neither remains in Australia for 183 days nor has a fixed base in Australia, nevertheless may be
+taxed by Australia on the remuneration for the services performed there, notwithstanding Article
+14 (Independent Personal Services), to the extent with such remuneration is exempt from U.S.
+income tax under section 911 of the Internal Revenue Code. The purpose of the exemption at
+source provided in the articles listed in this paragraph is to avoid double taxation, not to provide
+double exemption.
+
+
+                                           ARTICLE 28
+                                          Entry into Force
+
+       The Convention is subject to ratification in accordance with the applicable procedures of
+each Contracting State. The instruments of ratification will be exchanged at Washington, D.C.
+
+        The Convention enters into force on the date on which the instruments of ratification are
+exchanged. Its provisions take effect, with respect to dividends, interest and royalties paid,
+credited or otherwise derived, on or after the first day of the second month following the
+exchange of instruments of ratification and, with respect to all other income, for taxable years (or
+income years) beginning on or after the first day of the second month following the exchange of
+instruments of ratification.
+
+        The 1953 Convention shall cease to have effect with respect to taxes to which this
+Convention applies in accordance with the above provisions and shall terminate on the expiration
+of the last date on which it has effect.
+
+
+                                           ARTICLE 29
+                                           Termination
+
+        The Convention shall remain in force indefinitely unless terminated by one of the
+Contracting States. Either State may terminate the Convention after five years from the date on
+which it enters into force by giving at least six months prior notice through diplomatic channels.
+In that event, the Convention will cease to have effect with respect to dividends, interest and
+royalties paid, credited or otherwise derived on or after January 1 following the expiration of the
+six-month period and, with respect to all other income, for taxable years (or income years)
+beginning on or after January 1 following the expiration of the six-month period.
+
+        As an exception to those general rules, the provisions of the Convention concerning
+social security benefits and similar public pensions provided in paragraph 2 of Article 18
+(Pensions, Annuities, Alimony and Child Support) may be terminated by either Contracting State
+at any time by giving prior notice to the other State through diplomatic channels.
+May 24, 1983
+
