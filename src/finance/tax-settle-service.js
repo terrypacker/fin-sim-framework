@@ -533,6 +533,24 @@ export class TaxSettleService {
     if (idx < 0 || idx + 1 >= base._brackets_mfj.length) return Infinity;
     return (base._brackets_mfj[idx + 1][0] + base._stdDeduction_mfj) * factor;
   }
+
+  /**
+   * Gross income (ordinary + long-term gains, before the standard deduction) at the TOP of the
+   * MFJ 0% long-term capital-gains band for `year`: the band's taxable-income threshold plus the
+   * standard deduction, indexed like {@link usBracketGrossIncomeCeiling}. Below it, a long-term
+   * gain is taxed at 0%. Ordinary income stacks UNDER gains (IRC §1(h)), so each ordinary dollar
+   * added while gains sit in the band pushes one gain dollar from 0% to 15%.
+   * @param {number} year
+   * @param {number} [annualInflation=0.03]
+   * @returns {number}
+   */
+  usLtcgZeroBandGrossCeiling(year, annualInflation = 0.03) {
+    const base   = this.ratesForYear('US', year);
+    const factor = Math.pow(1 + annualInflation, year - this.usBracketBaseYear);
+    const top    = base._ltcg_mfj?.[1]?.[0];
+    if (!Number.isFinite(top)) return Infinity;
+    return (top + base._stdDeduction_mfj) * factor;
+  }
 }
 
 /** Shared read-only instance for the module-level bracket helpers below. */
@@ -567,6 +585,11 @@ export function usRatesForYear(year) {
  */
 export function usBracketGrossIncomeCeiling(rate, year, annualInflation = 0.03) {
   return _shared().usBracketGrossIncomeCeiling(rate, year, annualInflation);
+}
+
+/** Free-function form of `TaxSettleService.usLtcgZeroBandGrossCeiling`. */
+export function usLtcgZeroBandGrossCeiling(year, annualInflation = 0.03) {
+  return _shared().usLtcgZeroBandGrossCeiling(year, annualInflation);
 }
 
 /**

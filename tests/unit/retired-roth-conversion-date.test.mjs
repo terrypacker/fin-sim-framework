@@ -81,3 +81,24 @@ test('RCD-5: the loader drops a saved 1 Dec, warns, and the plan converts on 31 
     .map(e => new Date(e.date).toISOString().slice(5, 10));
   assert.ok(dates.length > 0 && dates.every(d => d === '12-31'), dates.join(','));
 });
+
+test('RCD-6 (gain-aware, through the loader): the switch reaches the compiled conversion events', () => {
+  const start = new Date(Date.UTC(2026, 0, 1)), end = new Date(Date.UTC(2030, 0, 1));
+  const queueFor = (aware) => {
+    const params = { rothConversionEnabled: true, rothConversionStartYear: 2027, rothConversionEndYear: 2028,
+      rothConversionOwner: 'both', rothConversionLtcgAware: aware };
+    const log = console.log, warn = console.warn; console.log = () => {}; console.warn = () => {};
+    try {
+      const registry = new ServiceRegistry();
+      const scenario = new IntlRetirementScenario({ context: registry.simulationContext, params, simStart: start, simEnd: end });
+      scenario.buildSim({ telemetry: 'off' });
+      const cfg = ScenarioSerializer.serializeScenario(IntlRetirementScenario.buildDefaultConfig({}, start, end));
+      cfg.params = [];
+      applyParamBagToConfig(cfg, params);
+      new ScenarioLoader().load(cfg, registry);
+      return scenario.sim.cloneQueue().filter(e => e.type === 'ROTH_CONVERSION_POLICY_EVALUATE');
+    } finally { console.log = log; console.warn = warn; }
+  };
+  assert.ok(queueFor(true).every(e => Number.isFinite(e.data.ltcgCeiling)), 'on ⇒ every event is band-capped');
+  assert.ok(queueFor(false).every(e => e.data.ltcgCeiling === undefined), 'off ⇒ unchanged');
+});

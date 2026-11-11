@@ -156,6 +156,21 @@ export class RothConversionHandler extends HandlerEntry {
 }
 
 /**
+ * Room left in the 0% long-term-gain band, in gross-income space: `ltcgCeiling` minus ordinary
+ * income YTD, positive net short-term gains (taxed as ordinary) and the long-term gains already
+ * realised (net of a short-term loss). Zero when the year's gains already reach the band's top.
+ * @param {object} state
+ * @param {number} ltcgCeiling - gross ceiling from usLtcgZeroBandGrossCeiling
+ * @returns {number}
+ */
+export function ltcgBandRoom(state, ltcgCeiling) {
+  const shortTerm = state.usShortTermCapitalGainsYTD ?? 0;
+  const ordinary  = (state.usOrdinaryIncomeYTD ?? 0) + Math.max(0, shortTerm);
+  const longTerm  = Math.max(0, (state.usCapitalGainsYTD ?? 0) + Math.min(0, shortTerm));
+  return Math.max(0, ltcgCeiling - ordinary - longTerm);
+}
+
+/**
  * Bracket-fill policy handler — fires on ROTH_CONVERSION_POLICY_EVALUATE.
  * Reads live usOrdinaryIncomeYTD to compute remaining bracket room, then
  * converts up to that amount (further capped by the IRA balance).
@@ -163,7 +178,7 @@ export class RothConversionHandler extends HandlerEntry {
  */
 export class RothConversionPolicyHandler extends HandlerEntry {
   static type        = 'RothConversionPolicyHandler';
-  static description = 'Bracket-fill policy: converts up to (targetIncome − usOrdinaryIncomeYTD), capped at IRA balance.';
+  static description = 'Bracket-fill policy: converts up to (targetIncome − usOrdinaryIncomeYTD), capped at IRA balance and, when gain-aware, at the room left in the 0% long-term-gain band.';
   static eventType   = 'ROTH_CONVERSION_POLICY_EVALUATE';
 
   constructor() {
@@ -172,8 +187,14 @@ export class RothConversionPolicyHandler extends HandlerEntry {
   }
 
   call({ state, data }) {
-    const { targetIncome, iraKey, rothKey } = data;
-    const room       = Math.max(0, targetIncome - state.usOrdinaryIncomeYTD);
+    const { targetIncome, iraKey, rothKey, ltcgCeiling } = data;
+    let room = Math.max(0, targetIncome - state.usOrdinaryIncomeYTD);
+    // Gain-aware fill (rothConversionLtcgAware, Roth study F3): ordinary income stacks under
+    // long-term gains, so while the year's gains sit in the 0% band each converted dollar
+    // pushes a gain dollar to 15% — a "10%" conversion costs 25%. Convert only the room left
+    // above ordinary income + net short-term + long-term gains, measured in the same gross space
+    // as the ceiling (same shape as the tax-gain harvest's band room).
+    if (Number.isFinite(ltcgCeiling)) room = Math.min(room, ltcgBandRoom(state, ltcgCeiling));
     const iraBalance = state[iraKey]?.balance ?? 0;
     const amount     = Math.min(room, iraBalance);
     if (amount <= 0) return [];

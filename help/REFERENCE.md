@@ -9,11 +9,11 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-237 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 92 tools · 330 state field types · 80 topics · 138 design docs
+238 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 92 tools · 330 state field types · 80 topics · 138 design docs
 
 ---
 
-## Parameters (237)
+## Parameters (238)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
@@ -399,12 +399,14 @@ scenario's own schema), which is where to go to change it.
 - **`terminalWealthTargetPenalty`** — Terminal Wealth Penalty (λ) · `Number` · default `10` · via SCENARIO
   Penalty weight on missing the terminal wealth target; larger makes the target binding (Die With Target objective).
 
-### Roth Conversion (7)
+### Roth Conversion (8)
 
 - **`rothConversionEnabled`** — Roth Conversion Enabled · `Boolean` · default `false` · via US_ROTH_CONVERSION
   Enable bracket-fill Roth conversion policy
 - **`rothConversionEndYear`** — Roth Conversion End Year · `Number` · default — · sweep: opt · via US_ROTH_CONVERSION
   Last year to convert; null = year before RMD start at primary age 73
+- **`rothConversionLtcgAware`** — Roth Conversion Gain-Aware · `Boolean` · default `false` · via US_ROTH_CONVERSION
+  Also cap each year's conversion so ordinary income plus the year's realised long-term gains stays inside the 0% capital-gains band. Ordinary income stacks under gains, so converting while gains sit in that band pushes them to 15% and a 10% conversion costs about 25%. A year with large gains then converts less or nothing
 - **`rothConversionMaxBracket`** — Roth Conversion Max Bracket Rate · `Number` · default `0.22` · sweep: opt · via US_ROTH_CONVERSION
   Fill ordinary income up to top of this marginal bracket
 - **`rothConversionOwner`** — Roth Conversion Owner · `Enum` · default `primary` · one of `primary`, `spouse`, `both` · via US_ROTH_CONVERSION
@@ -2340,7 +2342,7 @@ what the in-app panel keys on.
 | [Recorded MPC Runs](concepts/recorded-mpc-runs.md) | concept | 400 | 1 panel · 3 params · design 81, 80 |
 | [Reducer](nodes/reducer.md) | node | 195 | 3 panels · design 2, 16 |
 | [Return Assumptions](concepts/return-assumptions.md) | concept | 340 | 2 panels · 14 params · design 99, 106, 127 |
-| [Roth Conversions](concepts/roth-conversions.md) | concept | 365 | 2 panels · 8 params · design 29 |
+| [Roth Conversions](concepts/roth-conversions.md) | concept | 374 | 2 panels · 9 params · design 29 |
 | [Scenario](panels/scenario.md) | panel | 201 | 1 panel |
 | [Scenario Compare](panels/scenario-compare.md) | panel | 205 | 1 panel |
 | [Searching Pool Levers](concepts/searching-pool-levers.md) | concept | 399 | design 110, 97 |

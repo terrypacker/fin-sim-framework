@@ -10,7 +10,7 @@
 
 import { OneOffEvent }  from '../../simulation-framework/events/one-off-event.js';
 import { ACCOUNT_ROLES } from '../../finance/state/account-roles.js';
-import { usBracketGrossIncomeCeiling, US_BRACKET_BASE_YEAR } from '../../finance/tax-settle-service.js';
+import { usBracketGrossIncomeCeiling, usLtcgZeroBandGrossCeiling, US_BRACKET_BASE_YEAR } from '../../finance/tax-settle-service.js';
 import {
   RothConversionApplyReducer,
   RothConversionHandler, RothConversionPolicyHandler,
@@ -163,6 +163,12 @@ export const US_ROTH_CONVERSION = {
         description: "Whose IRA to convert: 'primary', 'spouse', or 'both'",
       },
       {
+        key: 'rothConversionLtcgAware', label: 'Roth Conversion Gain-Aware',
+        type: 'Boolean', group: 'Roth Conversion', mc: false, opt: false,
+        defaultValue: false,
+        description: 'Also cap each year\'s conversion so ordinary income plus the year\'s realised long-term gains stays inside the 0% capital-gains band. Ordinary income stacks under gains, so converting while gains sit in that band pushes them to 15% and a 10% conversion costs about 25%. A year with large gains then converts less or nothing',
+      },
+      {
         // Design 39 control form (design 38 §6.3, Q6): a per-year bracket-ceiling
         // schedule — the EXPLICIT_BANDS analog for conversions — so the MPC
         // controller can re-decide each year's ceiling from realized state
@@ -235,7 +241,8 @@ export const US_ROTH_CONVERSION = {
           // which read the bracket room a conversion uses, and the settle (100). At order 0
           // the 31 Dec accretion lost the tie and the "10%" fill landed in the 12% bracket.
           order:   ROTH_CONVERSION_ORDER,
-          data:    { targetIncome, iraKey: iraAcct.stateKey, rothKey: rothAcct.stateKey },
+          data:    { targetIncome, iraKey: iraAcct.stateKey, rothKey: rothAcct.stateKey,
+                     ...(p.rothConversionLtcgAware ? { ltcgCeiling: usLtcgZeroBandGrossCeiling(year, inflationRate) } : {}) },
           enabled: true,
           color:   '#7E57C2',
         }));

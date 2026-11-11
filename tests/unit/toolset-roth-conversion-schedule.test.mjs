@@ -26,7 +26,8 @@ import assert   from 'node:assert/strict';
 
 import { US_ROTH_CONVERSION, BRACKET_BASE_YEAR, ROTH_CONVERSION_ORDER, rothConversionDate } from '../../src/scenarios/toolsets/us-roth-conversion-toolset.js';
 import { ACCOUNT_ROLES }               from '../../src/finance/state/account-roles.js';
-import { usBracketGrossIncomeCeiling } from '../../src/finance/tax-settle-service.js';
+import { usBracketGrossIncomeCeiling, usLtcgZeroBandGrossCeiling } from '../../src/finance/tax-settle-service.js';
+import { RothConversionPolicyHandler, ltcgBandRoom } from '../../src/finance/account-rules/us/roth-conversion-classes.js';
 
 
 
@@ -147,4 +148,36 @@ test('the policy always fires on 31 Dec at the year-end order band (Roth study F
 test('the month/day inputs are gone from the schema (retired on load)', () => {
   const keys = US_ROTH_CONVERSION.paramSchema({}).map(p => p.key);
   assert.ok(!keys.includes('rothConversionMonth') && !keys.includes('rothConversionDay'), keys.join(','));
+});
+
+// ── Gain-aware fill (rothConversionLtcgAware, Roth study F3) ─────────────────────
+
+test('gain-aware: events carry the 0% band ceiling only when the switch is on', () => {
+  const win = { ...baseParams, rothConversionStartYear: 2031, rothConversionEndYear: 2031, rothConversionMaxBracket: 0.12 };
+  const [off] = US_ROTH_CONVERSION.schedules(makeContext(win));
+  const [on]  = US_ROTH_CONVERSION.schedules(makeContext({ ...win, rothConversionLtcgAware: true }));
+  assert.equal(off.data.ltcgCeiling, undefined, 'off ⇒ the event is unchanged');
+  assert.ok(Math.abs(on.data.ltcgCeiling - usLtcgZeroBandGrossCeiling(2031, 0.03)) < 1e-6);
+  // 2026 MFJ: 0% band to 98,900 taxable + 32,200 standard deduction.
+  assert.equal(usLtcgZeroBandGrossCeiling(2026, 0.03), 131_100);
+});
+
+test('gain-aware: the band room nets ordinary, short-term and long-term gains', () => {
+  assert.equal(ltcgBandRoom({ usOrdinaryIncomeYTD: 40_000, usCapitalGainsYTD: 50_000 }, 131_100), 41_100);
+  // a short-term gain is ordinary; a short-term loss nets the long-term gain first
+  assert.equal(ltcgBandRoom({ usOrdinaryIncomeYTD: 40_000, usShortTermCapitalGainsYTD: 10_000, usCapitalGainsYTD: 50_000 }, 131_100), 31_100);
+  assert.equal(ltcgBandRoom({ usOrdinaryIncomeYTD: 40_000, usShortTermCapitalGainsYTD: -10_000, usCapitalGainsYTD: 50_000 }, 131_100), 51_100);
+  assert.equal(ltcgBandRoom({ usOrdinaryIncomeYTD: 40_000, usCapitalGainsYTD: 200_000 }, 131_100), 0);
+});
+
+test('gain-aware: the policy converts the smaller of the bracket room and the band room', () => {
+  const h = new RothConversionPolicyHandler();
+  const state = { usOrdinaryIncomeYTD: 40_000, usCapitalGainsYTD: 80_000, iraAccount: { balance: 500_000 }, people: {} };
+  const amt = (data) => (h.call({ state, data: { iraKey: 'iraAccount', rothKey: 'rothAccount', ...data } })
+    .find(a => a.type === 'ROTH_CONVERSION_APPLY')?.amount) ?? 0;
+  assert.equal(amt({ targetIncome: 133_000 }), 93_000, 'bracket room alone');
+  assert.equal(amt({ targetIncome: 133_000, ltcgCeiling: 131_100 }), 11_100, 'capped where the gains would leave the 0% band');
+  assert.equal(amt({ targetIncome: 50_000, ltcgCeiling: 131_100 }), 10_000, 'bracket room is still the cap when smaller');
+  state.usCapitalGainsYTD = 150_000;
+  assert.equal(amt({ targetIncome: 133_000, ltcgCeiling: 131_100 }), 0, 'gains already past the band ⇒ no conversion');
 });
