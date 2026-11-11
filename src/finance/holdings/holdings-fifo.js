@@ -184,7 +184,7 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
   for (const h of holdings) {
     if (h?.costBaseByCountry) for (const c of Object.keys(h.costBaseByCountry)) countries.add(c);
   }
-  const sorted = [...holdings].sort(buildHoldingsComparator(selection, securities));
+  const sorted = [...holdings].sort(buildHoldingsComparator(selection, securities, terms));
   let remaining     = amount;
   let realizedBasis = 0;
   let consumed      = 0;

@@ -146,10 +146,59 @@ test('Lever B LOSS_FIRST realizes the loss lot first', () => {
   assert.ok(r.consumed - r.realizedBasis < 0); // realized a loss
 });
 
-test('Lever B SPECIFIC behaves as MIN_GAIN today (HIFO proxy)', () => {
+test('Lever B SPECIFIC without a sale date is MIN_GAIN (HIFO)', () => {
   const specific = consumeHoldings(equityLots(), 1000, { selection: { lotStrategy: LOT_STRATEGY.SPECIFIC } });
   const hifo     = consumeHoldings(equityLots(), 1000, { selection: { lotStrategy: LOT_STRATEGY.HIFO } });
   assert.deepEqual(specific, hifo);
+});
+
+// SPECIFIC with the sale's date: least TAXED gain per dollar, so the holding period counts.
+const SALE  = D(2034, 0, 1);
+const TERMS = { asOfMs: SALE.getTime(), countries: ['US', 'AU'] };
+const pick  = (lots, amt, lotStrategy, terms = TERMS) =>
+  consumeHoldings(lots, amt, { selection: { lotStrategy }, terms }).newHoldings;
+const left  = (lots, id) => lots.find(h => h.id === id)?.marketValue ?? 0;
+
+test('Lever B SPECIFIC sells an old lot over a slightly higher-basis lot bought 6 months ago', () => {
+  const lots = () => [
+    holding({ id: 'new', mv: 1000, basis: 900, date: D(2033, 6, 1) }),   // 10% gain, short-term
+    holding({ id: 'old', mv: 1000, basis: 850, date: D(2020) }),         // 15% gain, long-term
+  ];
+  assert.equal(left(pick(lots(), 1000, LOT_STRATEGY.HIFO), 'new'), 0, 'HIFO takes the higher basis: the 6-month lot');
+  const s = pick(lots(), 1000, LOT_STRATEGY.SPECIFIC);
+  assert.equal(left(s, 'old'), 0, 'SPECIFIC takes the long-term lot: 15% × ½ < 10% × 1');
+  assert.equal(left(s, 'new'), 1000, 'the short-term lot is kept');
+});
+
+test('Lever B SPECIFIC still takes a short-term lot when its gain is under half the long-term one', () => {
+  const lots = [
+    holding({ id: 'new', mv: 1000, basis: 900, date: D(2033, 6, 1) }),   // 10% short-term
+    holding({ id: 'old', mv: 1000, basis: 700, date: D(2020) }),         // 30% long-term ⇒ 15% weighted
+  ];
+  assert.equal(left(pick(lots, 1000, LOT_STRATEGY.SPECIFIC), 'new'), 0);
+});
+
+test('Lever B SPECIFIC sells losses first, short-term losses before long-term', () => {
+  const lots = [
+    holding({ id: 'gain',    mv: 1000, basis: 990,  date: D(2020) }),
+    holding({ id: 'ltLoss',  mv: 1000, basis: 1200, date: D(2020) }),
+    holding({ id: 'stLoss',  mv: 1000, basis: 1150, date: D(2033, 8, 1) }),
+  ];
+  const s = pick(lots, 1000, LOT_STRATEGY.SPECIFIC);
+  assert.equal(left(s, 'stLoss'), 0, 'a 15% short-term loss beats a 20% long-term one (−0.15 < −0.10)');
+  assert.equal(left(s, 'ltLoss'), 1000);
+});
+
+test('Lever B SPECIFIC reads each country\'s own cost base and acquisition date', () => {
+  // US view alone: usShort 8% × 1 = 0.08 vs usLong 12% × ½ = 0.06, so usLong would go.
+  // AU (arrival step-up in 2031, long-term on both): usShort's AU base is its value (no gain),
+  // usLong's AU base is 700 (30% × ½ = 0.15). Averaged: usShort 0.04 < usLong 0.105.
+  const mk = (id, basis, date, auBase) => Object.assign(holding({ id, mv: 1000, basis, date }), {
+    costBaseByCountry: { AU: auBase }, acquisitionDateByCountry: { AU: D(2031).getTime() } });
+  const lots = () => [mk('usShort', 920, D(2033, 6, 1), 1000), mk('usLong', 880, D(2020), 700)];
+  assert.equal(left(pick(lots(), 1000, LOT_STRATEGY.SPECIFIC), 'usShort'), 0, 'both countries weigh in');
+  assert.equal(left(pick(lots(), 1000, LOT_STRATEGY.SPECIFIC, { ...TERMS, countries: ['US'] }), 'usLong'), 0,
+    'with only the US taxing it, the US view decides');
 });
 
 // ─── Lever A + B compose; value conservation invariant ───────────────────────

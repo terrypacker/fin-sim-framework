@@ -332,8 +332,10 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
         type: 'Enum', group: 'Allocation', mc: false, opt: true,
         options: REBALANCE_LOT_STRATEGIES, defaultValue: 'FIFO',
         description: 'Which lots a rebalance sells in a TAXABLE account, and so how much gain it ' +
-          'realizes. FIFO (default) sells oldest first, which is usually the largest gain. HIFO and ' +
-          'SPECIFIC sell the highest cost basis first; LOSS_FIRST sells losing lots first; LADDER sells ' +
+          'realizes. FIFO (default) sells oldest first, which is usually the largest gain. HIFO sells the ' +
+          'highest cost basis first. SPECIFIC sells the least taxed gain: a long-term gain counts half a ' +
+          'short-term one, so recent lots are kept unless their gain is far smaller, and losses go first. ' +
+          'LOSS_FIRST sells losing lots first; LADDER sells ' +
           'the nearest-maturity bond rung first. DRAWDOWN follows Drawdown Lot Strategy. Under any ' +
           'strategy but FIFO an equity sale is split across markets (US, international) by value and ' +
           'lots are picked within each, so the account keeps its market split. Sheltered ' +

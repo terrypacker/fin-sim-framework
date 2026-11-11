@@ -10,6 +10,7 @@
 
 import { ALLOCATION } from './allocation.js';
 import { instrumentOf } from './holding-utils.js';
+import { isLongTerm } from './holding-period.js';
 
 /**
  * ALLOCATION-AWARE HOLDING SELECTION (design 65).
@@ -53,10 +54,11 @@ export const LOT_STRATEGY = Object.freeze({
   HIFO:       'HIFO',        // highest cost basis first ⇒ least realized gain per dollar.
   MIN_GAIN:   'MIN_GAIN',    // synonym for HIFO — least realized gain per dollar.
   LOSS_FIRST: 'LOSS_FIRST',  // realize lots at a loss first (banks losses; coordinates with TLH).
-  // SPECIFIC — a bracket-aware pick (design 61 §OQ3). Not yet implemented; the
-  // primitive is intentionally tax-agnostic (it tallies, the caller taxes), so a
-  // bracket-aware SPECIFIC needs caller-side rate context. Until then it behaves as
-  // MIN_GAIN, the closest gain-minimizing proxy. See design 65 OQ3.
+  // SPECIFIC — the tax-cost pick: least TAXED gain per dollar, which weighs the holding
+  // period as well as the basis (see `taxCostKey`). Losses first (short-term before
+  // long-term), then long-term gains, then short-term gains. Needs the sale's as-of date
+  // and taxing countries (`terms`). Without them it is MIN_GAIN. Still not bracket-aware
+  // (design 61 §OQ3): it weighs the two holding periods, not the household's rates.
   SPECIFIC:   'SPECIFIC',
   // LADDER — ladder-aware drawdown (design 66 §G8, sell side / §10.9): raise cash the
   // way a ladder investor does — spend already-liquid CASH (a redeemed/matured rung)
@@ -247,6 +249,38 @@ function basisRatio(h) {
   return (h?.costBasis ?? 0) / mv;
 }
 
+/**
+ * The weight on a LONG-term gain dollar relative to a short-term one, for the SPECIFIC pick.
+ * One half is roughly the ratio in both countries this model taxes:
+ *   - US: a short-term gain is ordinary income; a long-term one goes in the 0/15/20% bands.
+ *   - AU: a gain held at least 12 months has half its amount discounted (Div 115).
+ * A model of the household's actual rates would replace this constant (design 61 §OQ3).
+ */
+export const LONG_TERM_GAIN_WEIGHT = 0.5;
+
+/**
+ * SPECIFIC's sort key: a lot's gain per dollar sold, weighted by its holding period, averaged
+ * across the taxing countries. Ascending ⇒ sold first. Each country uses its own cost base
+ * (`costBaseByCountry`, e.g. the AU step-up at arrival) and its own holding-period test and
+ * date (`acquisitionDateByCountry`, falling back to `purchaseDate`), as the term tally does.
+ * A loss is negative, and a short-term loss more so, so it goes first: it offsets the gains
+ * taxed hardest. A lot that is long-term in AU but not yet in the US sits between the two.
+ */
+function taxCostKey(h, terms) {
+  const mv = h?.marketValue ?? 0;
+  if (mv <= 0) return Number.POSITIVE_INFINITY;   // empty lots last
+  const countries = terms.countries;
+  let sum = 0;
+  for (const c of countries) {
+    const basis = h?.costBaseByCountry?.[c] ?? h?.costBasis ?? 0;
+    const acq   = h?.acquisitionDateByCountry?.[c] ?? purchaseTs(h);
+    const acqMs = acq instanceof Date ? acq.getTime() : (typeof acq === 'string' ? new Date(acq).getTime() : acq);
+    const w     = isLongTerm(c, terms.asOfMs - acqMs) ? LONG_TERM_GAIN_WEIGHT : 1;
+    sum += (1 - basis / mv) * w;
+  }
+  return sum / countries.length;
+}
+
 /** A lot's absolute unrealized gain (marketValue − costBasis). */
 function unrealizedGain(h) {
   return (h?.marketValue ?? 0) - (h?.costBasis ?? 0);
@@ -341,11 +375,17 @@ function buildSecurityRanker(selection) {
 }
 
 /** Build a (a, b) lot comparator for Lever B (within a sleeve). */
-function buildLotComparator(lotStrategy, securities = null) {
+function buildLotComparator(lotStrategy, securities = null, terms = null) {
   switch (lotStrategy) {
+    case LOT_STRATEGY.SPECIFIC:
+      // Least taxed gain per dollar: basis AND holding period. Without a sale date there is
+      // no holding period to weigh, so it falls through to MIN_GAIN.
+      if (terms?.asOfMs != null && Array.isArray(terms.countries) && terms.countries.length > 0) {
+        return (a, b) => cmpNum(taxCostKey(a, terms), taxCostKey(b, terms));
+      }
+      // falls through
     case LOT_STRATEGY.HIFO:
     case LOT_STRATEGY.MIN_GAIN:
-    case LOT_STRATEGY.SPECIFIC:   // MIN_GAIN proxy until bracket-awareness lands (OQ3)
       // Highest basis ratio first ⇒ least gain (or a loss) realized per dollar raised.
       return (a, b) => basisRatio(b) - basisRatio(a);
     case LOT_STRATEGY.LOSS_FIRST:
@@ -372,13 +412,16 @@ function buildLotComparator(lotStrategy, securities = null) {
  * @param {{ sleeveOrder?: string[], sleeveWeights?: Object<string,number>,
  *           sleeveScore?: (allocation: string) => number,
  *           lotStrategy?: string }|null} [selection=null]
+ * @param {?object} [securities=null] - the security registry (instrument view)
+ * @param {?{ asOfMs: number, countries: string[] }} [terms=null] - the sale's date and taxing
+ *   countries; SPECIFIC weighs each lot's holding period with them
  * @returns {(a: object, b: object) => number}
  */
-export function buildHoldingsComparator(selection = null, securities = null) {
+export function buildHoldingsComparator(selection = null, securities = null, terms = null) {
   if (!selection) return (a, b) => purchaseTs(a) - purchaseTs(b);
   const sleeveRank = buildSleeveRanker(selection);
   const secRank    = buildSecurityRanker(selection);
-  const lotCmp     = buildLotComparator(selection.lotStrategy, securities);
+  const lotCmp     = buildLotComparator(selection.lotStrategy, securities, terms);
   return (a, b) => {
     const sr = sleeveRank(a) - sleeveRank(b);
     if (sr !== 0) return sr;

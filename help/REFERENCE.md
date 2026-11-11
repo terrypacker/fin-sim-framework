@@ -71,7 +71,7 @@ scenario's own schema), which is where to go to change it.
 - **`rebalanceIntlShareUs`** — International Share — US Accounts · `Number` · default — · range 0…1 · sweep: opt · conditional · via ECONOMIC_REGIMES
   Target share of international (ex-US) equity inside each US account's equity. Sheltered accounts (401k, IRA, Roth) rebalance to it whenever it drifts past the sheltered band. Taxable accounts never sell only to fix it: each rebalance sale comes out of the over-weight market first and each buy goes into the under-weight one. Spending sales and deposits do not steer it. Blank = no target, and the split is whatever the holdings are.
 - **`rebalanceLotStrategy`** — Rebalance Lot Strategy · `Enum` · default `FIFO` · one of `FIFO`, `HIFO`, `LOSS_FIRST`, `SPECIFIC`, `LADDER`, `DRAWDOWN` · sweep: opt · conditional · via ECONOMIC_REGIMES
-  Which lots a rebalance sells in a TAXABLE account, and so how much gain it realizes. FIFO (default) sells oldest first, which is usually the largest gain. HIFO and SPECIFIC sell the highest cost basis first; LOSS_FIRST sells losing lots first; LADDER sells the nearest-maturity bond rung first. DRAWDOWN follows Drawdown Lot Strategy. Under any strategy but FIFO an equity sale is split across markets (US, international) by value and lots are picked within each, so the account keeps its market split. Sheltered accounts and cash legs sell pro rata, so this does not affect them.
+  Which lots a rebalance sells in a TAXABLE account, and so how much gain it realizes. FIFO (default) sells oldest first, which is usually the largest gain. HIFO sells the highest cost basis first. SPECIFIC sells the least taxed gain: a long-term gain counts half a short-term one, so recent lots are kept unless their gain is far smaller, and losses go first. LOSS_FIRST sells losing lots first; LADDER sells the nearest-maturity bond rung first. DRAWDOWN follows Drawdown Lot Strategy. Under any strategy but FIFO an equity sale is split across markets (US, international) by value and lots are picked within each, so the account keeps its market split. Sheltered accounts and cash legs sell pro rata, so this does not affect them.
 
 ### AU Banking (3)
 
@@ -433,7 +433,7 @@ scenario's own schema), which is where to go to change it.
 - **`discretionarySharePct`** — Discretionary Share · `Number` · default `0.3` · sweep: opt · via US_RETIREMENT
   Fraction of monthly expenses treated as discretionary (0.30 = 30%)
 - **`drawdownLotStrategy`** — Drawdown Lot Strategy · `Enum` · default `FIFO` · one of `FIFO`, `HIFO`, `LOSS_FIRST`, `SPECIFIC`, `LADDER` · sweep: opt · via SCENARIO
-  Which lots within a sleeve to sell for a spending debit. FIFO sells oldest first (maximizes AU 12-month CGT-discount eligibility). HIFO sells highest-cost-basis first (least realized gain per dollar). LOSS_FIRST realizes losing lots first (banks losses). SPECIFIC is a gain-minimizing pick (behaves as HIFO until bracket-awareness lands). LADDER draws a bond ladder the natural way — liquid cash first, then the nearest-maturity rung (≈ par, least mark-to-market deviation), sparing funds/equity (design 66 §G8).
+  Which lots within a sleeve to sell for a spending debit. FIFO sells oldest first (maximizes AU 12-month CGT-discount eligibility). HIFO sells highest-cost-basis first (least realized gain per dollar). LOSS_FIRST realizes losing lots first (banks losses). SPECIFIC sells the least TAXED gain per dollar: like HIFO, but a long-term gain counts half a short-term one, so a lot bought months ago is kept unless its gain is far smaller; losses go first. LADDER draws a bond ladder the natural way — liquid cash first, then the nearest-maturity rung (≈ par, least mark-to-market deviation), sparing funds/equity (design 66 §G8).
 - **`drawdownOwnerOrdering`** — Drawdown Owner Ordering · `Enum` · default `PRIMARY_FIRST` · one of `PRIMARY_FIRST`, `SPOUSE_FIRST`, `POOLED` · via SCENARIO
   How accounts owned by different people are ordered within a drawdown strategy. PRIMARY_FIRST: drain the primary's accounts entirely before the spouse's. SPOUSE_FIRST: the reverse. POOLED: same-role accounts across owners share one priority tier (e.g. both Roths drawn together in the strategy's role order).
 - **`drawdownRebalanceWeight`** — Drawdown Rebalance Coupling · `Number` · default `0` · range 0…3 · sweep: opt · conditional · via SCENARIO
@@ -2302,7 +2302,7 @@ what the in-app panel keys on.
 | [Dashboard](panels/dashboard.md) | panel | 183 | 1 panel |
 | [Decision Graph](panels/dg-config.md) | panel | 168 | 1 panel · design 30 |
 | [DG Results](panels/dg-results.md) | panel | 162 | 1 panel · design 30 |
-| [Drawdown Order](concepts/drawdown-order.md) | concept | 316 | 2 panels · 22 params · design 44, 65, 97 |
+| [Drawdown Order](concepts/drawdown-order.md) | concept | 334 | 2 panels · 22 params · design 44, 65, 97 |
 | [Early Withdrawal](concepts/early-withdrawal.md) | concept | 284 | 1 panel · 8 params |
 | [Economic Shocks](concepts/economic-shocks.md) | concept | 390 | 2 panels · 3 params |
 | [Editing Liquidity Pools](workflows/editing-liquidity-pools.md) | workflow | 570 | 1 panel · 3 params · design 114, 110, 109, 123 |

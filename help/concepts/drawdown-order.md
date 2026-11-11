@@ -11,7 +11,7 @@ stamps:
   param:crossBorderDrawdown: 708272
   param:withinTierDraw: 6c01f9
   param:drawdownSleeveOrder: f4b262
-  param:drawdownLotStrategy: 1ccf64
+  param:drawdownLotStrategy: 6d2947
   param:drawdownSecurityOrder: 3c8884
   param:drawdownSequence: 706f92
   param:drawdownRebalanceWeight: 9c7b34
@@ -44,8 +44,9 @@ levers are separate because the questions are.
 3. **Which asset class inside the account** — the sleeve order, with `sleeveWeight::*`
    supplying it in the weighted case. Selling bonds first and selling equities first
    are different plans with the same net worth on day one.
-4. **Which lots** — oldest, highest-basis, or losses first. This is where realised
-   gains are decided, so it is where tax is decided.
+4. **Which lots** — oldest, highest-basis, losses first, or least taxed. This is where
+   realised gains are decided, so it is where tax is decided. Only the last weighs how
+   long a lot has been held, which both countries tax differently.
 5. **Which instrument** — an order over securities, for "sell the employer stock
    before the index fund".
 

@@ -542,7 +542,8 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
       'FIFO sells oldest first (maximizes AU 12-month CGT-discount eligibility). ' +
       'HIFO sells highest-cost-basis first (least realized gain per dollar). ' +
       'LOSS_FIRST realizes losing lots first (banks losses). ' +
-      'SPECIFIC is a gain-minimizing pick (behaves as HIFO until bracket-awareness lands). ' +
+      'SPECIFIC sells the least TAXED gain per dollar: like HIFO, but a long-term gain counts half a ' +
+      'short-term one, so a lot bought months ago is kept unless its gain is far smaller; losses go first. ' +
       'LADDER draws a bond ladder the natural way — liquid cash first, then the ' +
       'nearest-maturity rung (≈ par, least mark-to-market deviation), sparing funds/equity (design 66 §G8).',
   },

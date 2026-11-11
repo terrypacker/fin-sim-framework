@@ -19,7 +19,7 @@ stamps:
   param:rebalanceDriftBand: f8d8e6
   param:rebalanceDriftBandTaxable: 102a66
   param:rebalanceDriftBandSheltered: 960cb2
-  param:rebalanceLotStrategy: cf4f95
+  param:rebalanceLotStrategy: e4196e
   param:rebalanceIntlShareUs: 7edf07
   param:rebalanceIntlShareAu: 017138
   param:allocationClassRestrictions: 221b09
