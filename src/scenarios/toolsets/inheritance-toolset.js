@@ -194,8 +194,9 @@ export const INHERITANCE = {
       }));
     }
     // One shared year-end distribution stream if any inherited RA exists. Order 50:
-    // after the year's income / RMDs / design-58 drawdowns / Roth conversions
-    // (order 0) so usOrdinaryIncomeYTD is complete, but before the tax settle (100).
+    // after the year's income / RMDs / design-58 drawdowns (order 0) and Roth
+    // conversions (order 40) so usOrdinaryIncomeYTD is complete, but before the tax
+    // settle (100).
     if (_inheritedRaAccounts(context).length > 0) {
       events.push(new EventSeries({
         name:     'Inherited RA Distribution',

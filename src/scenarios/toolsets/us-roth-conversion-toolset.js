@@ -25,6 +25,22 @@ import { lastWorkDate } from '../../finance/payroll/employment.js';
 // a literal, so the two cannot drift apart when a new tax year is added.
 export const BRACKET_BASE_YEAR = US_BRACKET_BASE_YEAR;
 
+/** After 31 Dec's order-0 income, before tax-gain harvest / inherited-RA (50) and the settle (100). */
+export const ROTH_CONVERSION_ORDER = 40;
+
+/**
+ * The UTC date the conversion policy fires in `year`: always 31 December. Year-end income (TIPS /
+ * zero-coupon accretion, the last coupon and dividend) is booked on 31 Dec at order 0, so only a
+ * 31 Dec evaluation at {@link ROTH_CONVERSION_ORDER} sizes the bracket fill on the whole year's
+ * income. On 1 Dec a plan with a TIPS ladder in taxable missed up to ~90% of its US ordinary
+ * income (Roth study F6), which is why the month/day inputs were retired
+ * (`retired-roth-conversion-date.js`). Shared by the toolset and the MPC cockpit, so "has this
+ * year's conversion fired yet" is answered on the same date.
+ */
+export function rothConversionDate(year) {
+  return new Date(Date.UTC(year, 11, 31));
+}
+
 /**
  * Forward-effective re-target of queued Roth-conversion events from a per-year
  * income-target schedule (design 42). Roth conversions are scheduled
@@ -87,8 +103,6 @@ export function retargetRothConversionEvents(queue, schedule, { inflationRate = 
  *   rothConversionEndYear    — null → year before primary turns 73 (RMD start)
  *   rothConversionMaxBracket — fill ordinary income to top of this marginal rate
  *   rothConversionOwner      — 'primary' | 'spouse' | 'both'
- *   rothConversionMonth      — month (1–12) when the policy fires each year
- *   rothConversionDay        — day of month when the policy fires
  */
 export const US_ROTH_CONVERSION = {
   id: 'US_ROTH_CONVERSION',
@@ -149,18 +163,6 @@ export const US_ROTH_CONVERSION = {
         description: "Whose IRA to convert: 'primary', 'spouse', or 'both'",
       },
       {
-        key: 'rothConversionMonth', label: 'Roth Conversion Month',
-        type: 'Number', group: 'Roth Conversion', mc: false, opt: false,
-        defaultValue: 12,
-        description: 'Month (1–12) when the policy fires each year',
-      },
-      {
-        key: 'rothConversionDay', label: 'Roth Conversion Day',
-        type: 'Number', group: 'Roth Conversion', mc: false, opt: false,
-        defaultValue: 1,
-        description: 'Day of month when the policy fires',
-      },
-      {
         // Design 39 control form (design 38 §6.3, Q6): a per-year bracket-ceiling
         // schedule — the EXPLICIT_BANDS analog for conversions — so the MPC
         // controller can re-decide each year's ceiling from realized state
@@ -209,8 +211,6 @@ export const US_ROTH_CONVERSION = {
         ? [spouse].filter(Boolean)
         : [primary].filter(Boolean);
 
-    const month = (p.rothConversionMonth ?? 12) - 1;
-    const day   = p.rothConversionDay   ?? 1;
     const inflationRate = p.inflationRate ?? 0.03;
 
     // Emit one ROTH_CONVERSION_POLICY_EVALUATE per (year, owner) at the given
@@ -228,7 +228,13 @@ export const US_ROTH_CONVERSION = {
         events.push(new OneOffEvent({
           name:    `Roth Conversion (${person.name}, ${year})`,
           type:    'ROTH_CONVERSION_POLICY_EVALUATE',
-          date:    new Date(Date.UTC(year, month, day)),
+          date:    rothConversionDate(year),
+          // Order 40: after every order-0 income event on the same date (31 Dec TIPS / OID
+          // accretion, the last coupon and dividend), so usOrdinaryIncomeYTD is the year's
+          // whole income, and before tax-gain harvest / inherited-RA distributions (50),
+          // which read the bracket room a conversion uses, and the settle (100). At order 0
+          // the 31 Dec accretion lost the tie and the "10%" fill landed in the 12% bracket.
+          order:   ROTH_CONVERSION_ORDER,
           data:    { targetIncome, iraKey: iraAcct.stateKey, rothKey: rothAcct.stateKey },
           enabled: true,
           color:   '#7E57C2',

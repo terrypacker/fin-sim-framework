@@ -339,8 +339,6 @@ export const INTL_RETIREMENT_DEFAULTS = {
   rothConversionEndYear:    null,      // null = year before primary turns 73 (RMD start)
   rothConversionMaxBracket: 0.22,      // fill up to top of this marginal bracket
   rothConversionOwner:      'primary', // 'primary' | 'spouse' | 'both'
-  rothConversionMonth:      12,        // month of policy evaluation (1–12)
-  rothConversionDay:        1,         // day of policy evaluation
 
   // US Retirement — Social Security. An alias of the generated person.primary.ssClaimAge
   // (design 118 D5): whole years 62–70, null = at full retirement age.
@@ -981,8 +979,6 @@ export class IntlRetirementScenario extends BaseScenario {
       rothConversionEndYear:    p.rothConversionEndYear,
       rothConversionMaxBracket: p.rothConversionMaxBracket,
       rothConversionOwner:      p.rothConversionOwner,
-      rothConversionMonth:      p.rothConversionMonth,
-      rothConversionDay:        p.rothConversionDay,
     };
 
     // Faithfully forward toolset-contributed params that the enumerated block

@@ -15,8 +15,8 @@ import { createSolver }            from '../optimization/solvers/solver-registry
 import { OPT_PARAM_TYPES }         from '../optimization/optimization-objectives.js';
 import { rollForwardWithControls, recordDecisionRecord } from './apply-forward.js';
 import { repinExpensesIfChanged }  from '../spending/strategies/explicit-bands-spending-reducer.js';
-import { retargetRothConversionEvents, BRACKET_BASE_YEAR } from '../../scenarios/toolsets/us-roth-conversion-toolset.js';
-import { retargetEarlyWithdrawalEvents } from '../../scenarios/toolsets/us-early-withdrawal-toolset.js';
+import { retargetRothConversionEvents, BRACKET_BASE_YEAR, rothConversionDate } from '../../scenarios/toolsets/us-roth-conversion-toolset.js';
+import { retargetEarlyWithdrawalEvents, earlyWithdrawalDate } from '../../scenarios/toolsets/us-early-withdrawal-toolset.js';
 import { set }                     from '../monte-carlo/mc-param-paths.js';
 import { DateUtils }               from '../../simulation-framework/date-utils.js';
 import { usRatesForYear, usBracketGrossIncomeCeiling } from '../tax-settle-service.js';
@@ -1979,7 +1979,7 @@ function _priorTargetMix(baseParams) {
 
 /**
  * The next ACTIONABLE Roth-conversion year at `asOf` (design 42): the earliest
- * year that (a) whose conversion date (rothConversionMonth/Day, default Dec 1) is
+ * year that (a) whose conversion date (always 31 Dec, `rothConversionDate`) is
  * still in the future AND (b) is actually a conversion year for this scenario — a
  * scheduled year, or within the legacy window [start, end]. Without (a) the lever
  * tunes an event that already fired (e.g. at Dec 31); without (b) it tunes a year
@@ -1987,11 +1987,9 @@ function _priorTargetMix(baseParams) {
  * — either way an inert, confusing flat result. Falls back to the date-only year.
  */
 function _nextConversionYear(asOf, baseParams) {
-  const month = (baseParams?.rothConversionMonth ?? 12) - 1;   // 0-based
-  const day   = baseParams?.rothConversionDay ?? 1;
   const now   = new Date(asOf);
   let year = now.getUTCFullYear();
-  if (Date.UTC(year, month, day) <= now.getTime()) year += 1;   // this year's already fired
+  if (rothConversionDate(year).getTime() <= now.getTime()) year += 1;   // this year's already fired
 
   // (b) If standing before the legacy window opens, jump to its start — keyed off
   // the STABLE window param, not the schedule (which prepareBaseParams mutates, so
@@ -2195,17 +2193,15 @@ function _convertibleRealCap(state, baseParams, year) {
 
 /**
  * The next ACTIONABLE early-withdrawal year at `asOf` (design 45 Phase 3): the
- * earliest year whose withdrawal date (earlyWithdrawalMonth/Day, default Dec 1) is
+ * earliest year whose withdrawal date (earlyWithdrawalMonth/Day, default Dec 31) is
  * still in the future, clamped up to the opt-in optimization window's start so the
  * lever tunes a year the toolset actually seeded an event for. Mirrors
  * `_nextConversionYear`.
  */
 function _nextEarlyWithdrawalYear(asOf, baseParams) {
-  const month = (baseParams?.earlyWithdrawalMonth ?? 12) - 1;
-  const day   = baseParams?.earlyWithdrawalDay ?? 1;
   const now   = new Date(asOf);
   let year = now.getUTCFullYear();
-  if (Date.UTC(year, month, day) <= now.getTime()) year += 1;   // this year's already fired
+  if (earlyWithdrawalDate(year, baseParams ?? {}).getTime() <= now.getTime()) year += 1;   // this year's already fired
   const start = baseParams?.earlyWithdrawalStartYear;
   if (Number.isFinite(start) && year < start) year = start;
   return year;
@@ -2218,9 +2214,7 @@ function _ownerDecimalAgeAt(state, baseParams, year) {
   const keys = Object.keys(people);
   if (keys.length === 0 || !Number.isFinite(year)) return null;
   const owner = baseParams?.earlyWithdrawalOwner ?? 'primary';
-  const month = (baseParams?.earlyWithdrawalMonth ?? 12) - 1;
-  const day   = baseParams?.earlyWithdrawalDay ?? 1;
-  const atMs  = Date.UTC(year, month, day);
+  const atMs  = earlyWithdrawalDate(year, baseParams ?? {}).getTime();
   const msPerYear = 365.25 * 24 * 60 * 60 * 1000;
   const ageOf = (k) => {
     const bd = people[k]?.birthDate;

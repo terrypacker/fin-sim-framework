@@ -3,7 +3,7 @@ id: roth-conversions
 kind: concept
 title: Roth Conversions
 panels: [paycheque, journal-report]
-params: [rothConversionEnabled, rothConversionStartYear, rothConversionEndYear, rothConversionMaxBracket, rothConversionOwner, rothConversionMonth, rothConversionDay, rothConversionSchedule, rothConversionScheduleMode, k401ToIraConversionEnabled]
+params: [rothConversionEnabled, rothConversionStartYear, rothConversionEndYear, rothConversionMaxBracket, rothConversionOwner, rothConversionSchedule, rothConversionScheduleMode, k401ToIraConversionEnabled]
 design: [29-behavioral-layer.md]
 stamps:
   param:rothConversionEnabled: dd5059
@@ -11,8 +11,6 @@ stamps:
   param:rothConversionEndYear: 673c75
   param:rothConversionMaxBracket: 811862
   param:rothConversionOwner: 9b12f2
-  param:rothConversionMonth: 8df28e
-  param:rothConversionDay: 60869a
   param:rothConversionSchedule: b17ede
   param:rothConversionScheduleMode: ab7ce6
   param:k401ToIraConversionEnabled: 7a93d4
@@ -30,7 +28,11 @@ filling the brackets on their own.
 
 Two ways to express it. **Bracket filling** converts as much as fits below a marginal
 bracket ceiling each year — the standard rule, and it adapts automatically as other
-income moves. **A schedule** states an income target per year, in real base-year
+income moves. It can only count income already booked when it runs, which is why it
+always runs last thing on New Year's Eve, and the date is not a setting: inflation
+uplift on TIPS and zero-coupon growth arrive that day, and a rule that ran a month
+earlier would fill a bracket it could not see. A plan saved with an earlier date
+is moved to New Year's Eve when it opens, with a note. **A schedule** states an income target per year, in real base-year
 dollars compounded to nominal, which is what the closed-loop controller produces and
 what you want when the amounts came out of a solve rather than a rule. The two also
 combine: a schedule can override single years of the bracket-filling window and leave the

@@ -24,7 +24,7 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { US_ROTH_CONVERSION, BRACKET_BASE_YEAR } from '../../src/scenarios/toolsets/us-roth-conversion-toolset.js';
+import { US_ROTH_CONVERSION, BRACKET_BASE_YEAR, ROTH_CONVERSION_ORDER, rothConversionDate } from '../../src/scenarios/toolsets/us-roth-conversion-toolset.js';
 import { ACCOUNT_ROLES }               from '../../src/finance/state/account-roles.js';
 import { usBracketGrossIncomeCeiling } from '../../src/finance/tax-settle-service.js';
 
@@ -46,8 +46,6 @@ function makeContext(parameters) {
 const baseParams = {
   rothConversionEnabled: true,
   rothConversionOwner:   'primary',
-  rothConversionMonth:   12,
-  rothConversionDay:     1,
   inflationRate:         0.03,
 };
 
@@ -134,4 +132,19 @@ test('a non-empty schedule overrides the window entirely', () => {
   };
   const events = US_ROTH_CONVERSION.schedules(makeContext(params));
   assert.deepEqual(events.map(yearOf), [2031], 'window is ignored when a schedule is present');
+});
+
+test('the policy always fires on 31 Dec at the year-end order band (Roth study F6)', () => {
+  const events = US_ROTH_CONVERSION.schedules(makeContext({ ...baseParams,
+    rothConversionStartYear: 2031, rothConversionEndYear: 2032, rothConversionMaxBracket: 0.12 }));
+  assert.deepEqual(events.map(e => new Date(e.date).toISOString().slice(0, 10)), ['2031-12-31', '2032-12-31']);
+  // After 31 Dec's order-0 income (accretion), before harvest / inherited RA (50) and settle (100).
+  assert.ok(events.every(e => e.order === ROTH_CONVERSION_ORDER));
+  assert.ok(ROTH_CONVERSION_ORDER > 0 && ROTH_CONVERSION_ORDER < 50);
+  assert.equal(rothConversionDate(2032).toISOString().slice(0, 10), '2032-12-31');
+});
+
+test('the month/day inputs are gone from the schema (retired on load)', () => {
+  const keys = US_ROTH_CONVERSION.paramSchema({}).map(p => p.key);
+  assert.ok(!keys.includes('rothConversionMonth') && !keys.includes('rothConversionDay'), keys.join(','));
 });

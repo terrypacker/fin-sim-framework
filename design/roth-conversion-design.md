@@ -257,7 +257,7 @@ rothConversionStartYear:        null,   // null = retirement year
 rothConversionEndYear:          null,   // null = RMD start age - 1
 rothConversionMaxBracket:       0.22,   // Fill to top of this marginal bracket
 rothConversionOwner:            'primary',  // 'primary' | 'spouse' | 'both'
-rothConversionDayOfYear:        { month: 12, day: 1 },  // When in year the policy fires
+// (rothConversionDayOfYear retired: always 31 Dec, see Q7)
 ```
 
 Add corresponding `PARAM_SCHEMA` entries:
@@ -269,8 +269,8 @@ Add corresponding `PARAM_SCHEMA` entries:
 | `rothConversionEndYear` | `number` | Roth Conversion End Year |
 | `rothConversionMaxBracket` | `number` | Roth Conversion Max Bracket Rate |
 | `rothConversionOwner` | `select` | Roth Conversion Owner |
-| `rothConversionMonth` | `number` | Roth Conversion Month (1–12) |
-| `rothConversionDay` | `number` | Roth Conversion Day of Month |
+| ~~`rothConversionMonth`~~ | `number` | Retired — always 31 Dec (Q7) |
+| ~~`rothConversionDay`~~ | `number` | Retired — always 31 Dec (Q7) |
 
 ### Optimization levers
 
@@ -296,7 +296,7 @@ for (let year = startYear; year <= endYear; year++) {
   const targetIncome = bracketCeiling(params.rothConversionMaxBracket, year);
   for (const owner of owners) {
     sim.addEvent({
-      date: LocalDate.of(year, params.rothConversionMonth, params.rothConversionDay),
+      date: LocalDate.of(year, 12, 31),   // was month/day params; fixed per Q7
       type: 'ROTH_CONVERSION_POLICY_EVALUATE',
       data: { owner, targetIncome, iraKey: iraKeyFor(owner), rothKey: rothKeyFor(owner) },
     });
@@ -387,6 +387,6 @@ Bracket-fill policy — spouse conversion uses spouseIraAccount
 | Q4 | EVT numbering | **EVT-52** (one event; no withholding variant needed) |
 | Q5 | Strategy mode | **Bracket-fill (Option B)** — policy handler reads live `usOrdinaryIncomeYTD` |
 | Q6 | `bracketCeiling` implementation | **Export from `us-tax-module-2026.js`** — bracket data in one place |
-| Q7 | Conversion date configurable? | **Yes** — `rothConversionMonth` + `rothConversionDay` params |
+| Q7 | Conversion date configurable? | ~~**Yes** — `rothConversionMonth` + `rothConversionDay` params~~ **Superseded 11 Nov 2026: No.** The bracket fill is only right once the year's income is booked, so the policy always fires on 31 Dec at order 40, after that day's order-0 income (TIPS / zero-coupon accretion) and before tax-gain harvest / inherited RA (50) and the settle (100). On 1 Dec it missed the year-end accretion and over-filled the bracket. The params are retired on load (`retired-roth-conversion-date.js`, warning when a converting plan had another date). |
 | Q8 | `'both'` owner scheduling | **Two independent events, same date** — second sees YTD from first |
 | Q9 | `debitIra()` sharing | **Export from `ira-rollover-classes.js`** and import in conversion file |

@@ -11,17 +11,29 @@
 import { OneOffEvent }   from '../../simulation-framework/events/one-off-event.js';
 import { ACCOUNT_ROLES } from '../../finance/state/account-roles.js';
 import { ValueType }     from '../../simulation-framework/type-registry.js';
-import { BRACKET_BASE_YEAR } from './us-roth-conversion-toolset.js';
+import { BRACKET_BASE_YEAR, ROTH_CONVERSION_ORDER } from './us-roth-conversion-toolset.js';
 import {
   ScheduledEarlyWithdrawalApplyReducer,
   EarlyWithdrawalPolicyHandler,
 } from '../../finance/account-rules/us/early-withdrawal-classes.js';
 
 // Same-date ordering (design 45 Q2 / design 34 §13): when a year holds both a
-// Roth conversion (order 0) and a scheduled early withdrawal, conversions must
-// apply FIRST so the withdrawal draws against the post-conversion balances.
-// A higher `order` sorts later in the queue's (date, then order) comparator.
-const EARLY_WITHDRAWAL_ORDER = 10;
+// Roth conversion and a scheduled early withdrawal, conversions must apply FIRST
+// so the withdrawal draws against the post-conversion balances. A higher `order`
+// sorts later in the queue's (date, then order) comparator. The conversion moved to
+// 31 Dec at order 40 (Roth study F6), so the withdrawal follows it on 31 Dec at 45:
+// still before tax-gain harvest / inherited RA (50) and the settle (100).
+export const EARLY_WITHDRAWAL_ORDER = ROTH_CONVERSION_ORDER + 5;
+export const EARLY_WITHDRAWAL_DEFAULT_MONTH = 12;
+export const EARLY_WITHDRAWAL_DEFAULT_DAY   = 31;
+
+/** UTC date the scheduled withdrawal fires in `year`, the day clamped to the month's last day. */
+export function earlyWithdrawalDate(year, params = {}) {
+  const month = (params.earlyWithdrawalMonth ?? EARLY_WITHDRAWAL_DEFAULT_MONTH) - 1;
+  const day   = params.earlyWithdrawalDay   ?? EARLY_WITHDRAWAL_DEFAULT_DAY;
+  const last  = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(year, month, Math.min(Math.max(1, day), last)));
+}
 
 /**
  * Resolve a schedule entry's `destinationKey` for one owner (design 84 G6).
@@ -154,14 +166,14 @@ export const US_EARLY_WITHDRAWAL = {
       {
         key: 'earlyWithdrawalMonth', label: 'Early Withdrawal Month',
         type: 'Number', group: 'Early Withdrawal', mc: false, opt: false,
-        defaultValue: 12,
+        defaultValue: EARLY_WITHDRAWAL_DEFAULT_MONTH,
         description: 'Month (1–12) the withdrawal fires each scheduled year',
       },
       {
         key: 'earlyWithdrawalDay', label: 'Early Withdrawal Day',
         type: 'Number', group: 'Early Withdrawal', mc: false, opt: false,
-        defaultValue: 1,
-        description: 'Day of month the withdrawal fires',
+        defaultValue: EARLY_WITHDRAWAL_DEFAULT_DAY,
+        description: 'Day of month the withdrawal fires (clamped to the month\'s last day). The default, 31 December, follows that day\'s Roth conversion, so the withdrawal draws on the post-conversion balance',
       },
       {
         // (B) drawdown-ordering variant (design 45 §7). Independent of the
@@ -227,8 +239,6 @@ export const US_EARLY_WITHDRAWAL = {
         ? [spouse].filter(Boolean)
         : [primary].filter(Boolean);
 
-    const month = (p.earlyWithdrawalMonth ?? 12) - 1;
-    const day   = p.earlyWithdrawalDay   ?? 1;
     const infl  = p.inflationRate ?? 0.03;
 
     const keyOf = (role, ownerId) => accounts.find(a => a.role === role && a.ownerId === ownerId)?.stateKey ?? null;
@@ -267,7 +277,7 @@ export const US_EARLY_WITHDRAWAL = {
         events.push(new OneOffEvent({
           name:  `Early Withdrawal (${person.name}, ${year})`,
           type:  'SCHEDULED_EARLY_WITHDRAWAL',
-          date:  new Date(Date.UTC(year, month, day)),
+          date:  earlyWithdrawalDate(year, p),
           order: EARLY_WITHDRAWAL_ORDER,
           data: {
             taxDeferredAmount: tdReal   * factor,

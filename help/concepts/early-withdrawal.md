@@ -8,7 +8,7 @@ stamps:
   param:earlyWithdrawalEnabled: d3cd3d
   param:earlyWithdrawalOwner: 6e3a9f
   param:earlyWithdrawalMonth: 422a2a
-  param:earlyWithdrawalDay: fb12d3
+  param:earlyWithdrawalDay: 01368d
   param:earlyWithdrawalBeforeBrokerage: cee05d
   param:earlyWithdrawalStartYear: 5049e5
   param:earlyWithdrawalEndYear: 89f1d7
@@ -38,3 +38,8 @@ exists for rather than left running.
 As with conversions, there is a scheduled form: per-year gross amounts in real
 base-year dollars, routed to a destination, which is what a solver produces. Use the
 window for a policy; use the schedule when the amounts are an answer.
+
+In a year that also converts, the conversion goes first on the shared year-end date, so
+the withdrawal draws on what the conversion left behind. Unlike a conversion, a withdrawal
+can be moved to an earlier day. It then runs before that year's conversion, and the
+conversion fills the bracket on top of the withdrawal's income.

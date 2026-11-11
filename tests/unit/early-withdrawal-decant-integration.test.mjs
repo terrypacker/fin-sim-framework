@@ -62,6 +62,9 @@ function makeConfig({
   earlyWithdrawalBeforeBrokerage = false,
   earlyWithdrawalStartYear = null,
   earlyWithdrawalEndYear   = null,
+  // Pinned to 1 Dec: most tests here stop at 15 Dec to read the decant BEFORE the 31 Dec
+  // settle. null = the toolset default (31 Dec, after that day's Roth conversion).
+  earlyWithdrawalDay       = 1,
 } = {}) {
   return {
     toolsets: ['US_EARLY_WITHDRAWAL', 'US_ROTH_CONVERSION', 'AU_RETIREMENT', 'US_AU_CROSS_BORDER'],
@@ -81,7 +84,7 @@ function makeConfig({
       rothConversionEnabled, rothConversionSchedule, rothConversionOwner: 'primary',
       earlyWithdrawalEnabled: true, earlyWithdrawalOwner: 'primary', earlyWithdrawalSchedule,
       earlyWithdrawalBeforeBrokerage,
-      earlyWithdrawalStartYear, earlyWithdrawalEndYear,
+      earlyWithdrawalStartYear, earlyWithdrawalEndYear, earlyWithdrawalDay,
     },
     persons: [{
       __type: 'Person', id: 'primary', name: 'Primary', birthDate: '1980-01-01',
@@ -160,6 +163,7 @@ test('integration: a same-year conversion applies BEFORE the withdrawal (Q2 orde
     rothConversionEnabled:  true,
     rothConversionSchedule: [{ year: 2027, incomeTarget: 60_000 }],   // converts 60k IRA→Roth
     earlyWithdrawalSchedule: [{ year: 2027, taxDeferredAmount: 60_000 }],
+    earlyWithdrawalDay:      null,   // both on their defaults: 31 Dec, conversion (40) then withdrawal (45)
   }));
   sim.stepTo(new Date('2027-12-31'));
 

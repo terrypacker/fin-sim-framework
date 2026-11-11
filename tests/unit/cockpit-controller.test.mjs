@@ -47,7 +47,7 @@ function makeController(graph, parentId) {
 }
 
 describe('COCKPIT_CONTROLS.ROTH — next actionable conversion year (design 42)', () => {
-  const bp = { rothConversionMonth: 12, rothConversionDay: 1 };   // Dec 1 conversions
+  const bp = {};   // conversions always fire 31 Dec (rothConversionDate)
 
   test('at Dec 31 (this year already fired) the lever targets NEXT year', () => {
     const asOf = new Date(Date.UTC(2027, 11, 31));
@@ -59,7 +59,7 @@ describe('COCKPIT_CONTROLS.ROTH — next actionable conversion year (design 42)'
   });
 
   test('early in the year (before the conversion date) targets THIS year', () => {
-    const asOf = new Date(Date.UTC(2027, 0, 15));   // Jan 15 — Dec 1 still ahead
+    const asOf = new Date(Date.UTC(2027, 0, 15));   // Jan 15 — 31 Dec still ahead
     const vars = COCKPIT_CONTROLS.ROTH.buildVariables({
       baseParams: COCKPIT_CONTROLS.ROTH.prepareBaseParams({ baseParams: bp, asOf }), asOf });
     assert.equal(vars[0]._year, 2027);
@@ -75,8 +75,8 @@ describe('COCKPIT_CONTROLS.ROTH — next actionable conversion year (design 42)'
 });
 
 describe('COCKPIT_CONTROLS.ROTH — cap the fill to the reachable IRA (no unreachable suggestions)', () => {
-  const bp = { rothConversionMonth: 12, rothConversionDay: 1, rothConversionOwner: 'both', inflationRate: 0.03 };
-  const asOf = new Date(Date.UTC(2032, 0, 1));   // before Dec 1 → targets 2032
+  const bp = { rothConversionOwner: 'both', inflationRate: 0.03 };
+  const asOf = new Date(Date.UTC(2032, 0, 1));   // before 31 Dec → targets 2032
 
   test('no state ⇒ range is preserved (back-compat)', () => {
     const vars = COCKPIT_CONTROLS.ROTH.buildVariables({ baseParams: bp, asOf, range: { min: 0, max: 500_000, step: 5_000 } });
@@ -253,12 +253,12 @@ describe('COCKPIT_CONTROLS.EARLY_WITHDRAWAL.actuate — persists both classes + 
 describe('CockpitController — multi-lever set (design 45 §8 / Phase 4)', () => {
   const M_START = new Date(Date.UTC(2026, 0, 1));
   const M_END   = new Date(Date.UTC(2040, 0, 1));
-  const M_NOW   = new Date(Date.UTC(2029, 0, 1));   // before Dec 1 → conversion/withdrawal year 2029
+  const M_NOW   = new Date(Date.UTC(2029, 0, 1));   // before 31 Dec → conversion/withdrawal year 2029
   const M_BASE = {
     spendingStrategy: ['EXPLICIT_BANDS'],
     spendingExpenseBands: [{ startAge: 48, monthlyAmount: 5000 }],
-    rothConversionEnabled: true, rothConversionMonth: 12, rothConversionDay: 1,
-    earlyWithdrawalEnabled: true, earlyWithdrawalMonth: 12, earlyWithdrawalDay: 1, earlyWithdrawalOwner: 'primary',
+    rothConversionEnabled: true,
+    earlyWithdrawalEnabled: true, earlyWithdrawalOwner: 'primary',   // both on 31 Dec: conversion (40), then withdrawal (45)
     inflationRate: 0.03,
   };
   function ctrl(controls) {

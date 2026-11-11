@@ -24,6 +24,7 @@ import { auOrdinaryFor, auGainsFor } from '../helpers/assert.js';
 import { ServiceRegistry } from '../../src/services/service-registry.js';
 import { ScenarioLoader }  from '../../src/scenarios/scenario-loader.js';
 import { BaseScenario }    from '../../src/index.js';
+import { US_ROTH_CONVERSION, ROTH_CONVERSION_ORDER } from '../../src/scenarios/toolsets/us-roth-conversion-toolset.js';
 
 beforeEach(() => ServiceRegistry.resetAll());
 
@@ -455,4 +456,36 @@ test('EVT-52: Roth conversion updates Roth holdings so subsequent earnings are n
   const iraSum = iraHoldings.reduce((s, h) => s + (h?.marketValue ?? 0), 0);
   assert.ok(Math.abs(iraSum - sim.state.iraAccount.balance) < 1,
     `IRA holdings sum ${iraSum} must match IRA balance ${sim.state.iraAccount.balance}`);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Year-end ordering (Roth study F6): the policy must size on the WHOLE year's income
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('EVT-53: a 31 Dec conversion sees income booked the same day at order 0', () => {
+  // The defect: TIPS accretion is booked on 31 Dec at order 0. The policy event was also
+  // order 0 and ran on 1 Dec, so it never saw that income and a "10%" fill landed in the 12%
+  // bracket. Here the toolset's own event is queued FIRST (lower instanceId), so FIFO alone
+  // would run it before the income; only the order band puts it after.
+  const { sim } = loadToolsetScenario(makeConversionConfig({
+    iraBalance: 100_000, iraContribBasis: 100_000,
+  }));
+  const [policy] = US_ROTH_CONVERSION.schedules({
+    parameters: { rothConversionEnabled: true, rothConversionOwner: 'primary',
+      rothConversionSchedule: [{ year: 2026, incomeTarget: 50_000 }], inflationRate: 0 },
+    people: [{ id: 'primary', name: 'Pat', birthDate: '1965-01-01' }],
+    accounts: [{ role: 'ira', ownerId: 'primary', stateKey: 'iraAccount' },
+               { role: 'roth-ira', ownerId: 'primary', stateKey: 'rothAccount' }],
+    startDate: new Date(Date.UTC(2026, 0, 1)),
+  });
+  assert.equal(policy.order, ROTH_CONVERSION_ORDER);
+  assert.equal(new Date(policy.date).toISOString().slice(0, 10), '2026-12-31');
+  sim.schedule({ ...policy });
+  sim.schedule({ date: new Date(Date.UTC(2026, 0, 15)), type: 'WAGES_INCOME', data: { amount: 30_000 } });
+  sim.schedule({ date: policy.date, type: 'WAGES_INCOME', data: { amount: 20_000 } });   // same day, order 0
+  sim.stepTo(new Date(Date.UTC(2027, 0, 2)));
+
+  // 30k + 20k = 50k = the target: no room left, so nothing converts.
+  assert.strictEqual(sim.state.iraAccount.balance, 100_000);
+  assert.strictEqual(sim.state.rothAccount.balance, 0);
 });

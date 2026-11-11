@@ -9,11 +9,11 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-239 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 92 tools · 330 state field types · 80 topics · 138 design docs
+237 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 92 tools · 330 state field types · 80 topics · 138 design docs
 
 ---
 
-## Parameters (239)
+## Parameters (237)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
@@ -175,8 +175,8 @@ scenario's own schema), which is where to go to change it.
 
 - **`earlyWithdrawalBeforeBrokerage`** — Early Withdrawal Before Brokerage · `Boolean` · default `false` · via US_EARLY_WITHDRAWAL
   When covering a spending shortfall, tap penalty early withdrawal BEFORE selling taxable brokerage (avoid realizing capital gains), rather than strictly last. Default off.
-- **`earlyWithdrawalDay`** — Early Withdrawal Day · `Number` · default `1` · via US_EARLY_WITHDRAWAL
-  Day of month the withdrawal fires
+- **`earlyWithdrawalDay`** — Early Withdrawal Day · `Number` · default `31` · via US_EARLY_WITHDRAWAL
+  Day of month the withdrawal fires (clamped to the month's last day). The default, 31 December, follows that day's Roth conversion, so the withdrawal draws on the post-conversion balance
 - **`earlyWithdrawalEnabled`** — Early Withdrawal Enabled · `Boolean` · default `false` · via US_EARLY_WITHDRAWAL
   Enable the scheduled early-withdrawal decant lever (design 45)
 - **`earlyWithdrawalEndYear`** — Early Withdrawal Optimization End Year · `Number` · default — · via US_EARLY_WITHDRAWAL
@@ -399,18 +399,14 @@ scenario's own schema), which is where to go to change it.
 - **`terminalWealthTargetPenalty`** — Terminal Wealth Penalty (λ) · `Number` · default `10` · via SCENARIO
   Penalty weight on missing the terminal wealth target; larger makes the target binding (Die With Target objective).
 
-### Roth Conversion (9)
+### Roth Conversion (7)
 
-- **`rothConversionDay`** — Roth Conversion Day · `Number` · default `1` · via US_ROTH_CONVERSION
-  Day of month when the policy fires
 - **`rothConversionEnabled`** — Roth Conversion Enabled · `Boolean` · default `false` · via US_ROTH_CONVERSION
   Enable bracket-fill Roth conversion policy
 - **`rothConversionEndYear`** — Roth Conversion End Year · `Number` · default — · sweep: opt · via US_ROTH_CONVERSION
   Last year to convert; null = year before RMD start at primary age 73
 - **`rothConversionMaxBracket`** — Roth Conversion Max Bracket Rate · `Number` · default `0.22` · sweep: opt · via US_ROTH_CONVERSION
   Fill ordinary income up to top of this marginal bracket
-- **`rothConversionMonth`** — Roth Conversion Month · `Number` · default `12` · via US_ROTH_CONVERSION
-  Month (1–12) when the policy fires each year
 - **`rothConversionOwner`** — Roth Conversion Owner · `Enum` · default `primary` · one of `primary`, `spouse`, `both` · via US_ROTH_CONVERSION
   Whose IRA to convert: 'primary', 'spouse', or 'both'
 - **`rothConversionSchedule`** — Roth Conversion Schedule (per-year income targets) · `RothScheduleList` · default `` · via US_ROTH_CONVERSION
@@ -2305,7 +2301,7 @@ what the in-app panel keys on.
 | [Decision Graph](panels/dg-config.md) | panel | 168 | 1 panel · design 30 |
 | [DG Results](panels/dg-results.md) | panel | 162 | 1 panel · design 30 |
 | [Drawdown Order](concepts/drawdown-order.md) | concept | 316 | 2 panels · 22 params · design 44, 65, 97 |
-| [Early Withdrawal](concepts/early-withdrawal.md) | concept | 228 | 1 panel · 8 params |
+| [Early Withdrawal](concepts/early-withdrawal.md) | concept | 284 | 1 panel · 8 params |
 | [Economic Shocks](concepts/economic-shocks.md) | concept | 390 | 2 panels · 3 params |
 | [Editing Liquidity Pools](workflows/editing-liquidity-pools.md) | workflow | 570 | 1 panel · 3 params · design 114, 110, 109, 123 |
 | [Event](nodes/event.md) | node | 220 | 2 panels · design 2 |
@@ -2344,7 +2340,7 @@ what the in-app panel keys on.
 | [Recorded MPC Runs](concepts/recorded-mpc-runs.md) | concept | 400 | 1 panel · 3 params · design 81, 80 |
 | [Reducer](nodes/reducer.md) | node | 195 | 3 panels · design 2, 16 |
 | [Return Assumptions](concepts/return-assumptions.md) | concept | 340 | 2 panels · 14 params · design 99, 106, 127 |
-| [Roth Conversions](concepts/roth-conversions.md) | concept | 291 | 2 panels · 10 params · design 29 |
+| [Roth Conversions](concepts/roth-conversions.md) | concept | 365 | 2 panels · 8 params · design 29 |
 | [Scenario](panels/scenario.md) | panel | 201 | 1 panel |
 | [Scenario Compare](panels/scenario-compare.md) | panel | 205 | 1 panel |
 | [Searching Pool Levers](concepts/searching-pool-levers.md) | concept | 399 | design 110, 97 |

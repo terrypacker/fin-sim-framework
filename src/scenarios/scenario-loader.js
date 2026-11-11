@@ -15,6 +15,7 @@ import { ScenarioCompiler }        from './toolsets/scenario-compiler.js';
 import { ScenarioParamGenerator, isGeneratedParamKey, decodeGeneratedParamKey } from './params/scenario-param-generator.js';
 import { retireRateParams }        from './retired-rate-params.js';
 import { retireBehavioralStrategies } from './retired-strategies.js';
+import { retireRothConversionDate } from './retired-roth-conversion-date.js';
 import { stockBondCorrelationWarnings } from '../finance/economic-regimes/stock-bond-correlation.js';
 import { StateRegistry }          from '../finance/services/state-registry.js';
 import { IntlRetirementScenario }  from './intl-retirement-scenario.js';
@@ -719,6 +720,8 @@ export class ScenarioLoader {
     retireRateParams(cfg);
     // Design 115 §12 — a retired behavioral strategy would otherwise compile to nothing, silently.
     retireBehavioralStrategies(cfg);
+    // Roth study F6 — the conversion always runs on 31 Dec, so its saved month/day are dropped.
+    retireRothConversionDate(cfg);
     // Design 129 §3.3 — an authored stock–bond ρ that cannot move this plan says so. Once per
     // message per process, so a Monte Carlo batch that loads the plan per path prints it once.
     for (const msg of stockBondCorrelationWarnings(cfg.parameters)) {

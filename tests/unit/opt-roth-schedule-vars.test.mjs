@@ -89,7 +89,9 @@ describe('roth schedule variable drives the simulation end-to-end', () => {
     });
 
     const off = problem.evaluate({ 'rothConversionSchedule[0].incomeTarget': 0 });
-    const on  = problem.evaluate({ 'rothConversionSchedule[0].incomeTarget': 150_000 });
+    // 200k real (~225k nominal in 2030) clears the year's ~165k of wages. 150k no longer did once
+    // the policy moved to 31 Dec (Roth study F6) and stopped missing December's income.
+    const on  = problem.evaluate({ 'rothConversionSchedule[0].incomeTarget': 200_000 });
 
     assert.ok(on.result.rothFinalBalance > off.result.rothFinalBalance,
       `conversion should raise the terminal Roth balance: on=${on.result.rothFinalBalance} off=${off.result.rothFinalBalance}`);
