@@ -303,7 +303,7 @@ export class K401RmdApplyReducer extends AccountServiceReducer {
  * Auto-scheduled annual 401(k) Required Minimum Distribution handler.
  *
  * Fires on the K401_ANNUAL_RMD event (year-end) for a specific 401(k) account / owner.
- * Applies the same SECURE 2.0 rules as IRA RMDs: starts at age 73, uses the IRS
+ * Applies the same SECURE 2.0 rules as IRA RMDs: starts at 73 (75 if born 1960+), uses the IRS
  * Uniform Lifetime Table.
  *
  * TODO: Support delayFirstRmd=true (April 1 grace period) — same caveat as IRA RMDs.
@@ -319,7 +319,7 @@ export class K401RmdApplyReducer extends AccountServiceReducer {
  */
 export class K401AnnualRmdHandler extends HandlerEntry {
   static type        = 'K401AnnualRmdHandler';
-  static description = 'Auto-calculates and dispatches the annual 401(k) RMD for the account owner once they reach age 73.';
+  static description = 'Auto-calculates and dispatches the annual 401(k) RMD for the account owner once they reach the RMD age (73, or 75 if born 1960+).';
   static eventType   = 'K401_ANNUAL_RMD';
 
   constructor({ stateRegistry, role, ownerId, stateKey, accountRulesEngine } = {}) {
@@ -344,11 +344,11 @@ export class K401AnnualRmdHandler extends HandlerEntry {
     if (!k401 || k401.balance <= 0) return [];
 
     const year  = date.getUTCFullYear();
-    const rules = this.accountRulesEngine?.get('US', year)?.getIraRmdRules?.();
-    if (!rules) return [];
-
     const person = state.people?.[this.ownerId];
     if (!person?.birthDate) return [];
+
+    const rules = this.accountRulesEngine?.get('US', year)?.getIraRmdRules?.(person);
+    if (!rules) return [];
 
     const birthDate = person.birthDate instanceof Date ? person.birthDate : new Date(person.birthDate);
     const age = _getAge(birthDate, date);

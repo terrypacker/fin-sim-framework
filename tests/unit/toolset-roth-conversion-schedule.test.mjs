@@ -181,3 +181,15 @@ test('gain-aware: the policy converts the smaller of the bracket room and the ba
   state.usCapitalGainsYTD = 150_000;
   assert.equal(amt({ targetIncome: 133_000, ltcgCeiling: 131_100 }), 0, 'gains already past the band ⇒ no conversion');
 });
+
+test('default window end is the year before the primary\'s RMD age (75 if born 1960+, else 73)', () => {
+  const window = { ...baseParams, rothConversionStartYear: 2030, rothConversionEndYear: null, rothConversionMaxBracket: 0.12 };
+  const lastYear = (birthDate) => {
+    const ctx = makeContext(window);
+    ctx.people = [{ ...ctx.people[0], birthDate }];
+    const ev = US_ROTH_CONVERSION.schedules(ctx);
+    return Math.max(...ev.map(yearOf));
+  };
+  assert.equal(lastYear('1965-01-01'), 1965 + 74, 'born 1965 → RMDs at 75 → last conversion year at 74');
+  assert.equal(lastYear('1958-06-01'), 1958 + 72, 'born 1958 → RMDs at 73 → last conversion year at 72');
+});

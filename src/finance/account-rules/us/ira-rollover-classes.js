@@ -112,7 +112,7 @@ export class IraRolloverWithdrawalApplyReducer extends AccountServiceReducer {
 }
 
 /**
- * EVT-40: IRA RMD — credit US cash pool, debit IRA (required at age 73+, SECURE 2.0).
+ * EVT-40: IRA RMD — credit US cash pool, debit IRA (required from age 73, or 75 if born 1960+; SECURE 2.0).
  * No penalty.  Chains IRA_RMD_TAX (ordinary income).
  * Accepts optional action.stateKey to support multiple IRA accounts per person.
  */
@@ -231,7 +231,7 @@ export class IraRmdHandler extends HandlerEntry {
  */
 export class IraAnnualRmdHandler extends HandlerEntry {
   static type        = 'IraAnnualRmdHandler';
-  static description = 'Auto-calculates and dispatches the annual IRA RMD for the account owner once they reach age 73.';
+  static description = 'Auto-calculates and dispatches the annual IRA RMD for the account owner once they reach the RMD age (73, or 75 if born 1960+).';
   static eventType   = 'IRA_ANNUAL_RMD';
 
   constructor({ stateRegistry, role, ownerId, stateKey, accountRulesEngine } = {}) {
@@ -256,11 +256,11 @@ export class IraAnnualRmdHandler extends HandlerEntry {
     if (!ira || ira.balance <= 0) return [];
 
     const year   = date.getUTCFullYear();
-    const rules  = this.accountRulesEngine?.get('US', year)?.getIraRmdRules?.();
-    if (!rules) return [];
-
     const person = state.people?.[this.ownerId];
     if (!person?.birthDate) return [];
+
+    const rules  = this.accountRulesEngine?.get('US', year)?.getIraRmdRules?.(person);
+    if (!rules) return [];
 
     const birthDate = person.birthDate instanceof Date ? person.birthDate : new Date(person.birthDate);
     const age = _getAge(birthDate, date);

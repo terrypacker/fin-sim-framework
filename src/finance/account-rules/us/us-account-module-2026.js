@@ -10,6 +10,7 @@
 
 import { BaseAccountModule } from '../base-account-module.js';
 import { getUsEarlyWithdrawalRules } from './us-early-withdrawal-rules.js';
+import { usRmdApplicableAge } from './us-rmd-uniform-table.js';
 
 
 /**
@@ -26,8 +27,12 @@ export class UsAccountModule2026 extends BaseAccountModule {
     return getUsEarlyWithdrawalRules(accountType, this.year);
   }
 
-  /** SECURE 2.0 Act raised the RMD starting age from 72 to 73 (effective 2023). */
-  getIraRmdRules() {
-    return { rmdAge: 73 };
+  /**
+   * SECURE 2.0: the RMD age is 73, or 75 for an owner born in 1960 or later
+   * (`usRmdApplicableAge`, §401(a)(9)(C)(v)). Pass the owner; without one, 73.
+   * @param {{ birthDate?: Date|string|number }} [person]
+   */
+  getIraRmdRules(person) {
+    return { rmdAge: usRmdApplicableAge(person?.birthDate) };
   }
 }

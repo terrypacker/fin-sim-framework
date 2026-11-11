@@ -249,7 +249,7 @@ export class UsSingleHomeownerScenario extends BaseScenario {
    * bequest, ECONOMIC_REGIMES so the Prime-linked cash rate and the shock/regime
    * levers are available. US_ROTH_CONVERSION and US_EARLY_WITHDRAWAL are here
    * because both are off by default and are exactly the levers someone would reach
-   * for in the low-income window between retiring at 65 and RMDs at 73.
+   * for in the low-income window between retiring at 65 and RMDs (73, or 75 if born 1960+).
    *
    * INHERITANCE pulls AU_TAX (and AU_BANKING behind it) in through its dependency
    * list. Harmless with no AU person or account, but it is why an AU return appears

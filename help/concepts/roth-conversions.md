@@ -8,7 +8,7 @@ design: [29-behavioral-layer.md]
 stamps:
   param:rothConversionEnabled: dd5059
   param:rothConversionStartYear: 3e889c
-  param:rothConversionEndYear: 673c75
+  param:rothConversionEndYear: 80bcca
   param:rothConversionMaxBracket: 811862
   param:rothConversionOwner: 9b12f2
   param:rothConversionLtcgAware: bbe047

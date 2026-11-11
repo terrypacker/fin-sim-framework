@@ -17,6 +17,7 @@ import {
 } from '../../finance/account-rules/us/roth-conversion-classes.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
 import { lastWorkDate } from '../../finance/payroll/employment.js';
+import { usRmdApplicableAge } from '../../finance/account-rules/us/us-rmd-uniform-table.js';
 
 // Base year for the per-year income-target schedule (design 39 §12.3): real
 // targets are quoted in this year's USD and compounded by inflation, matching
@@ -100,7 +101,7 @@ export function retargetRothConversionEvents(queue, schedule, { inflationRate = 
  * Parameters:
  *   rothConversionEnabled    — master switch; if false nothing is scheduled
  *   rothConversionStartYear  — null → primary person's retirement year
- *   rothConversionEndYear    — null → year before primary turns 73 (RMD start)
+ *   rothConversionEndYear    — null → year before the primary's RMD age (73, or 75 if born 1960+)
  *   rothConversionMaxBracket — fill ordinary income to top of this marginal rate
  *   rothConversionOwner      — 'primary' | 'spouse' | 'both'
  */
@@ -143,7 +144,7 @@ export const US_ROTH_CONVERSION = {
         key: 'rothConversionEndYear', label: 'Roth Conversion End Year',
         type: 'Number', group: 'Roth Conversion', mc: false, opt: true,
         defaultValue: null,
-        description: 'Last year to convert; null = year before RMD start at primary age 73',
+        description: 'Last year to convert; null = the year before the primary person\'s RMDs start (age 73, or 75 if born in 1960 or later)',
       },
       {
         key: 'rothConversionMaxBracket', label: 'Roth Conversion Max Bracket Rate',
@@ -280,7 +281,9 @@ export const US_ROTH_CONVERSION = {
     const defaultStartYear = primaryWorkEnd
       ? new Date(primaryWorkEnd).getUTCFullYear()
       : context.startDate.getUTCFullYear();
-    const defaultEndYear = new Date(primary?.birthDate ?? context.startDate).getUTCFullYear() + 72;
+    // The year before the primary's first RMD year (73, or 75 if born 1960+).
+    const defaultEndYear = new Date(primary?.birthDate ?? context.startDate).getUTCFullYear()
+      + usRmdApplicableAge(primary?.birthDate) - 1;
 
     const convStartYear = toFiniteYear(p.rothConversionStartYear, defaultStartYear);
     const convEndYear   = toFiniteYear(p.rothConversionEndYear,   defaultEndYear);

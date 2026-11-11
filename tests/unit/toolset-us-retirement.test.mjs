@@ -719,11 +719,11 @@ function makeRmdConfig({ birthDate, iraBalance = 500_000, iraContribBasis = 500_
 }
 
 test('EVT-40: IRA RMD does not fire before person turns 73', () => {
-  // Born 1960-01-01 → turns 73 in 2033; simulating only through end of 2032
-  const config = makeRmdConfig({ birthDate: '1960-01-01', iraBalance: 500_000 });
+  // Born 1959-01-01 → turns 73 in 2032; simulating only through end of 2031
+  const config = makeRmdConfig({ birthDate: '1959-01-01', iraBalance: 500_000 });
   const { sim } = loadToolsetScenario(config);
-  const endOf2032 = new Date(Date.UTC(2032, 11, 31));
-  sim.stepTo(endOf2032);
+  const endOf2031 = new Date(Date.UTC(2031, 11, 31));
+  sim.stepTo(endOf2031);
   // IRA balance should be unchanged (zero growth, no RMD yet)
   assert.strictEqual(sim.state.iraAccount.balance, 500_000,
     'IRA balance should be untouched before RMD age');
@@ -732,12 +732,12 @@ test('EVT-40: IRA RMD does not fire before person turns 73', () => {
 });
 
 test('EVT-40: IRA RMD fires at year-end when person turns 73', () => {
-  // Born 1960-01-01 → turns 73 on Jan 1, 2033; first RMD due Dec 31, 2033
+  // Born 1959-01-01 → turns 73 on Jan 1, 2032; first RMD due Dec 31, 2032
   const iraBalance = 500_000;
-  const config = makeRmdConfig({ birthDate: '1960-01-01', iraBalance });
+  const config = makeRmdConfig({ birthDate: '1959-01-01', iraBalance });
   const { sim } = loadToolsetScenario(config);
-  const endOf2033 = new Date(Date.UTC(2033, 11, 31));
-  sim.stepTo(endOf2033);
+  const endOf2032 = new Date(Date.UTC(2032, 11, 31));
+  sim.stepTo(endOf2032);
 
   // IRS Uniform Lifetime Table: age 73 → distribution period 26.5
   const expectedRmd = Math.round(iraBalance / 26.5 * 100) / 100;
@@ -749,11 +749,11 @@ test('EVT-40: IRA RMD fires at year-end when person turns 73', () => {
 
 test('EVT-40: IRA RMD credits US savings account', () => {
   const iraBalance     = 500_000;
-  const config = makeRmdConfig({ birthDate: '1960-01-01', iraBalance });
+  const config = makeRmdConfig({ birthDate: '1959-01-01', iraBalance });
   const { sim } = loadToolsetScenario(config);
   const savingsBefore  = sim.state.usSavingsAccount.balance;
-  const endOf2033      = new Date(Date.UTC(2033, 11, 31));
-  sim.stepTo(endOf2033);
+  const endOf2032      = new Date(Date.UTC(2032, 11, 31));
+  sim.stepTo(endOf2032);
 
   const expectedRmd = Math.round(iraBalance / 26.5 * 100) / 100;
   // The year-end settle runs after the RMD in the same tick and debits the tax from
@@ -772,18 +772,18 @@ test('EVT-40: IRA RMD credits US savings account', () => {
 
 test('EVT-40: IRA RMD amount is taxable as ordinary income', () => {
   const iraBalance = 500_000;
-  const config = makeRmdConfig({ birthDate: '1960-01-01', iraBalance });
+  const config = makeRmdConfig({ birthDate: '1959-01-01', iraBalance });
   const { sim } = loadToolsetScenario(config);
-  // Period-advance resets YTD at start of 2033; step to Dec 31 2033
-  const endOf2033 = new Date(Date.UTC(2033, 11, 31));
-  sim.stepTo(endOf2033);
+  // Period-advance resets YTD at start of 2032; step to Dec 31 2032
+  const endOf2032 = new Date(Date.UTC(2032, 11, 31));
+  sim.stepTo(endOf2032);
 
   // The year-end settle (order band, design 34 §13) now runs AFTER the RMD and
   // resets usOrdinaryIncomeYTD, so the RMD's taxability is asserted on the
   // settlement's captured gross ordinary income rather than the post-reset YTD.
   const expectedRmd = Math.round(iraBalance / 26.5 * 100) / 100;
   const settle = sim.journal.journal.find(e =>
-    e.action?.type === 'US_TAX_SETTLE_APPLY' && new Date(e.date).getUTCFullYear() === 2033);
+    e.action?.type === 'US_TAX_SETTLE_APPLY' && new Date(e.date).getUTCFullYear() === 2032);
   assert.strictEqual(settle?.action?.data?.taxDetail?.inputs?.grossOrdinaryIncome, expectedRmd,
     'RMD should be fully taxed as US ordinary income in its year (no exclusions for traditional IRA)');
 });
@@ -791,17 +791,17 @@ test('EVT-40: IRA RMD amount is taxable as ordinary income', () => {
 test('EVT-40: IRA RMD uses age-73 distribution period in first year and age-74 in second', () => {
   // Zero growth rate — each year the RMD depletes the balance, so next year's basis is lower
   const iraBalance = 500_000;
-  const config = makeRmdConfig({ birthDate: '1960-01-01', iraBalance });
+  const config = makeRmdConfig({ birthDate: '1959-01-01', iraBalance });
   const { sim } = loadToolsetScenario(config);
 
-  // End of 2033 — person is 73 (distribution period 26.5)
-  sim.stepTo(new Date(Date.UTC(2033, 11, 31)));
+  // End of 2032 — person is 73 (distribution period 26.5)
+  sim.stepTo(new Date(Date.UTC(2032, 11, 31)));
   const rmd73 = Math.round(iraBalance / 26.5 * 100) / 100;
   const balAfter73 = iraBalance - rmd73;
   assert.strictEqual(sim.state.iraAccount.balance, balAfter73);
 
-  // End of 2034 — person is 74 (distribution period 25.5)
-  sim.stepTo(new Date(Date.UTC(2034, 11, 31)));
+  // End of 2033 — person is 74 (distribution period 25.5)
+  sim.stepTo(new Date(Date.UTC(2033, 11, 31)));
   const rmd74 = Math.round(balAfter73 / 25.5 * 100) / 100;
   assert.strictEqual(sim.state.iraAccount.balance, balAfter73 - rmd74,
     'second RMD should use age-74 distribution period');
@@ -874,10 +874,10 @@ function makeK401RmdConfig({ birthDate, k401Balance = 400_000, k401ContribBasis 
 }
 
 test('EVT-40 (401k): 401(k) RMD does not fire before person turns 73', () => {
-  // Born 1960-01-01 → turns 73 in 2033; only run through end of 2032
-  const config = makeK401RmdConfig({ birthDate: '1960-01-01', k401Balance: 400_000 });
+  // Born 1959-01-01 → turns 73 in 2032; only run through end of 2031
+  const config = makeK401RmdConfig({ birthDate: '1959-01-01', k401Balance: 400_000 });
   const { sim } = loadToolsetScenario(config);
-  sim.stepTo(new Date(Date.UTC(2032, 11, 31)));
+  sim.stepTo(new Date(Date.UTC(2031, 11, 31)));
   assert.strictEqual(sim.state.k401Account.balance, 400_000,
     '401(k) balance should be untouched before RMD age');
   assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 0,
@@ -886,9 +886,9 @@ test('EVT-40 (401k): 401(k) RMD does not fire before person turns 73', () => {
 
 test('EVT-40 (401k): 401(k) RMD fires at year-end when person turns 73', () => {
   const k401Balance = 400_000;
-  const config = makeK401RmdConfig({ birthDate: '1960-01-01', k401Balance });
+  const config = makeK401RmdConfig({ birthDate: '1959-01-01', k401Balance });
   const { sim } = loadToolsetScenario(config);
-  sim.stepTo(new Date(Date.UTC(2033, 11, 31)));
+  sim.stepTo(new Date(Date.UTC(2032, 11, 31)));
 
   // IRS Uniform Lifetime Table: age 73 → distribution period 26.5
   const expectedRmd = Math.round(k401Balance / 26.5 * 100) / 100;
@@ -898,10 +898,10 @@ test('EVT-40 (401k): 401(k) RMD fires at year-end when person turns 73', () => {
 
 test('EVT-40 (401k): 401(k) RMD credits US savings account', () => {
   const k401Balance = 400_000;
-  const config = makeK401RmdConfig({ birthDate: '1960-01-01', k401Balance });
+  const config = makeK401RmdConfig({ birthDate: '1959-01-01', k401Balance });
   const { sim } = loadToolsetScenario(config);
   const savingsBefore = sim.state.usSavingsAccount.balance;
-  sim.stepTo(new Date(Date.UTC(2033, 11, 31)));
+  sim.stepTo(new Date(Date.UTC(2032, 11, 31)));
   const expectedRmd = Math.round(k401Balance / 26.5 * 100) / 100;
   assert.strictEqual(sim.state.usSavingsAccount.balance, savingsBefore + expectedRmd,
     'RMD proceeds should be credited to US savings');
@@ -909,32 +909,64 @@ test('EVT-40 (401k): 401(k) RMD credits US savings account', () => {
 
 test('EVT-40 (401k): 401(k) RMD is fully taxable as ordinary income', () => {
   const k401Balance = 400_000;
-  const config = makeK401RmdConfig({ birthDate: '1960-01-01', k401Balance });
+  const config = makeK401RmdConfig({ birthDate: '1959-01-01', k401Balance });
   const { sim } = loadToolsetScenario(config);
-  sim.stepTo(new Date(Date.UTC(2033, 11, 31)));
+  sim.stepTo(new Date(Date.UTC(2032, 11, 31)));
   const expectedRmd = Math.round(k401Balance / 26.5 * 100) / 100;
   // Settle runs after the RMD and resets YTD (design 34 §13) — assert taxability
   // on the settlement's captured gross ordinary income.
   const settle = sim.journal.journal.find(e =>
-    e.action?.type === 'US_TAX_SETTLE_APPLY' && new Date(e.date).getUTCFullYear() === 2033);
+    e.action?.type === 'US_TAX_SETTLE_APPLY' && new Date(e.date).getUTCFullYear() === 2032);
   assert.strictEqual(settle?.action?.data?.taxDetail?.inputs?.grossOrdinaryIncome, expectedRmd,
     '401(k) RMD should be fully taxed as US ordinary income in its year');
 });
 
 test('EVT-40 (401k): 401(k) RMD uses age-73 period in first year and age-74 in second', () => {
   const k401Balance = 400_000;
-  const config = makeK401RmdConfig({ birthDate: '1960-01-01', k401Balance });
+  const config = makeK401RmdConfig({ birthDate: '1959-01-01', k401Balance });
   const { sim } = loadToolsetScenario(config);
 
-  // End of 2033 — person is 73 (distribution period 26.5)
-  sim.stepTo(new Date(Date.UTC(2033, 11, 31)));
+  // End of 2032 — person is 73 (distribution period 26.5)
+  sim.stepTo(new Date(Date.UTC(2032, 11, 31)));
   const rmd73      = Math.round(k401Balance / 26.5 * 100) / 100;
   const balAfter73 = k401Balance - rmd73;
   assert.strictEqual(sim.state.k401Account.balance, balAfter73);
 
-  // End of 2034 — person is 74 (distribution period 25.5)
-  sim.stepTo(new Date(Date.UTC(2034, 11, 31)));
+  // End of 2033 — person is 74 (distribution period 25.5)
+  sim.stepTo(new Date(Date.UTC(2033, 11, 31)));
   const rmd74 = Math.round(balAfter73 / 25.5 * 100) / 100;
   assert.strictEqual(sim.state.k401Account.balance, balAfter73 - rmd74,
     'second RMD should use age-74 distribution period');
+});
+
+// ─── RMD applicable age by birth year (SECURE 2.0, §401(a)(9)(C)(v)) ──────────
+
+test('usRmdApplicableAge: 73 through the 1959 cohort, 75 from 1960, 73 when unknown', async () => {
+  const { usRmdApplicableAge } = await import('../../src/finance/account-rules/us/us-rmd-uniform-table.js');
+  assert.equal(usRmdApplicableAge('1951-03-01'), 73);
+  assert.equal(usRmdApplicableAge('1959-12-31'), 73, '1959 meets both clauses on the text; the model uses 73');
+  assert.equal(usRmdApplicableAge('1960-01-01'), 75);
+  assert.equal(usRmdApplicableAge(new Date(Date.UTC(1978, 3, 15))), 75);
+  assert.equal(usRmdApplicableAge(null), 73);
+  assert.equal(usRmdApplicableAge('not a date'), 73);
+});
+
+test('EVT-40: an owner born 1960 takes no IRA RMD at 73 or 74; the first is at 75 (period 24.6)', () => {
+  // Born 1960-01-01 → 73 in 2033, 74 in 2034, 75 in 2035.
+  const iraBalance = 500_000;
+  const { sim } = loadToolsetScenario(makeRmdConfig({ birthDate: '1960-01-01', iraBalance }));
+  sim.stepTo(new Date(Date.UTC(2034, 11, 31)));
+  assert.strictEqual(sim.state.iraAccount.balance, iraBalance, 'no RMD at 73 or 74');
+  sim.stepTo(new Date(Date.UTC(2035, 11, 31)));
+  assert.strictEqual(sim.state.iraAccount.balance, iraBalance - Math.round(iraBalance / 24.6 * 100) / 100,
+    'first RMD at 75 uses the age-75 Uniform Lifetime period');
+});
+
+test('EVT-40 (401k): an owner born 1960 takes no 401(k) RMD at 73 or 74; the first is at 75', () => {
+  const k401Balance = 400_000;
+  const { sim } = loadToolsetScenario(makeK401RmdConfig({ birthDate: '1960-01-01', k401Balance }));
+  sim.stepTo(new Date(Date.UTC(2034, 11, 31)));
+  assert.strictEqual(sim.state.k401Account.balance, k401Balance, 'no RMD at 73 or 74');
+  sim.stepTo(new Date(Date.UTC(2035, 11, 31)));
+  assert.strictEqual(sim.state.k401Account.balance, k401Balance - Math.round(k401Balance / 24.6 * 100) / 100);
 });

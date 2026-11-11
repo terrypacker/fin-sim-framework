@@ -25,6 +25,27 @@ const IRS_UNIFORM_LIFETIME_TABLE = Object.freeze({
 });
 
 /**
+ * The RMD "applicable age" for an owner, from their birth date (IRC §401(a)(9)(C)(v), SECURE 2.0;
+ * §408(a)(6) applies it to IRAs). Text on disk: docs/us-tax/…-sec401.txt:89–91.
+ *   (I)  attains 72 after 31 Dec 2022 and 73 before 1 Jan 2033 → 73
+ *   (II) attains 74 after 31 Dec 2032                          → 75
+ * So born 1960 or later → 75. Born 1959 satisfies BOTH clauses on the statute's text (73 in
+ * 2032, 74 in 2033); we use 73, the earlier start. Confirm against the final regulations, which are
+ * not on disk. Born before 1951 had an older age (72 / 70½), but those owners are already past it
+ * in any run starting 2026 or later, and the table below starts at 73, so 73 is returned for them too.
+ *
+ * @param {Date|string|number|null|undefined} birthDate
+ * @returns {number} 73 or 75 (73 when the birth date is unknown)
+ */
+export function usRmdApplicableAge(birthDate) {
+  if (birthDate == null) return 73;
+  const d = birthDate instanceof Date ? birthDate : new Date(birthDate);
+  const y = d.getUTCFullYear();
+  if (!Number.isFinite(y)) return 73;
+  return y >= 1960 ? 75 : 73;
+}
+
+/**
  * Returns the IRS Uniform Lifetime distribution period for a given whole age.
  * Ages above 120 are capped at the age-120 factor (2.0).
  * Returns null for ages below the RMD threshold (73).

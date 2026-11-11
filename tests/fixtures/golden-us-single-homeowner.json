@@ -445,7 +445,7 @@
  "cumulativeConsumptionUtility": 948.52580535,
  "cumulativeConsumptionUtilityCount": 480,
  "cumulativeDeficit": 0,
- "cumulativeTaxesPaid": 1700191.20351,
+ "cumulativeTaxesPaid": 1700272.9515,
  "currentPeriods": {
   "AU": {
    "endMs": 3045168000000,
@@ -553,7 +553,7 @@
  },
  "iraAccount": {
   "allowsEarlyWithdrawal": true,
-  "balance": 335538.20423,
+  "balance": 340179.378869,
   "balanceAtResidencyChange": null,
   "contributionBasis": 0,
   "costBaseStepUpByCountry": null,
@@ -562,9 +562,9 @@
    "code": "USD",
    "symbol": "$"
   },
-  "derivedIncomeBasis": 84217.48,
+  "derivedIncomeBasis": 81739.38,
   "drawdownPriority": 2,
-  "earningsBasis": 335537.838088,
+  "earningsBasis": 340179.000094,
   "holdings": [
    {
     "acquisitionDateByCountry": null,
@@ -572,7 +572,7 @@
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 16.5031526423,
+    "costBasis": 16.7361357843,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -583,9 +583,9 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 63.5936425247,
+    "marketValue": 64.4280420048,
     "maturityDate": null,
-    "pricePerUnit": 1457.1142414,
+    "pricePerUnit": 1456.13614622,
     "purchaseDate": null,
     "rateKey": "EQUITY_US",
     "rollAtMaturity": false,
@@ -593,7 +593,7 @@
     "securityId": "sec-auto-EQUITY_US",
     "taxExemption": "none",
     "taxLossPartner": null,
-    "units": 0.0436407239033,
+    "units": 0.0442443557992,
     "zeroCoupon": false
    },
    {
@@ -660,7 +660,7 @@
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 89675.002677,
+    "costBasis": 90915.4045119,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -670,9 +670,9 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "Reinvested income",
-    "marketValue": 335474.620588,
+    "marketValue": 340114.950827,
     "maturityDate": null,
-    "pricePerUnit": 1455.21388593,
+    "pricePerUnit": 1455.21391486,
     "purchaseDate": "2046-01-01T00:00:00.000Z",
     "rateKey": "EQUITY_US",
     "rollAtMaturity": false,
@@ -680,7 +680,7 @@
     "securityId": "sec-auto-EQUITY_US",
     "taxExemption": "none",
     "taxLossPartner": null,
-    "units": 230.532861515,
+    "units": 233.721617596,
     "zeroCoupon": false
    }
   ],
@@ -846,8 +846,8 @@
  },
  "marketIndexAsOfMs": 3029443200000,
  "metrics": {
-  "netLiquidity": 982799.45,
-  "netWorth": 4262584.29,
+  "netLiquidity": 987440.63,
+  "netWorth": 4267225.47,
   "offsetAppliedCapacity": 0,
   "offsetIdleCapacity": 0
  },
@@ -1155,7 +1155,7 @@
  },
  "stateCapitalGainsYTD": 0,
  "stateOrdinaryIncomeYTD": 0,
- "statePensionIncomeYTD": 7846.33920182,
+ "statePensionIncomeYTD": 7846.11652405,
  "stateSsIncomeYTD": 0,
  "taxBasis": {
   "AU": {
@@ -1165,8 +1165,8 @@
    }
   },
   "US": {
-   "agi": 282557.84,
-   "tax": 34211.18,
+   "agi": 282586.33,
+   "tax": 34217.45,
    "year": 2065
   }
  },
@@ -1259,7 +1259,7 @@
  "usLongTermCapitalLossCarryforward": 0,
  "usNegativeIncomeYTD": 0,
  "usNetInvestmentIncomeYTD": 0,
- "usOrdinaryIncomeYTD": 23724.0657697,
+ "usOrdinaryIncomeYTD": 23453.4911312,
  "usPassiveLossCarryforward": 0,
  "usPenaltyYTD": 0,
  "usPersonHousehold": true,

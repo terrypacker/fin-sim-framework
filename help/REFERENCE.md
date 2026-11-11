@@ -404,7 +404,7 @@ scenario's own schema), which is where to go to change it.
 - **`rothConversionEnabled`** — Roth Conversion Enabled · `Boolean` · default `false` · via US_ROTH_CONVERSION
   Enable bracket-fill Roth conversion policy
 - **`rothConversionEndYear`** — Roth Conversion End Year · `Number` · default — · sweep: opt · via US_ROTH_CONVERSION
-  Last year to convert; null = year before RMD start at primary age 73
+  Last year to convert; null = the year before the primary person's RMDs start (age 73, or 75 if born in 1960 or later)
 - **`rothConversionLtcgAware`** — Roth Conversion Gain-Aware · `Boolean` · default `false` · via US_ROTH_CONVERSION
   Also cap each year's conversion so ordinary income plus the year's realised long-term gains stays inside the 0% capital-gains band. Ordinary income stacks under gains, so converting while gains sit in that band pushes them to 15% and a 10% conversion costs about 25%. A year with large gains then converts less or nothing
 - **`rothConversionMaxBracket`** — Roth Conversion Max Bracket Rate · `Number` · default `0.22` · sweep: opt · via US_ROTH_CONVERSION

@@ -42,9 +42,10 @@ export class BaseAccountModule {
    * Returns IRA Required Minimum Distribution rules for this country and year.
    * Returns null for countries where IRA RMDs do not apply.
    *
+   * @param {{ birthDate?: Date|string|number }} [person] - the account owner (the age can depend on birth year)
    * @returns {{ rmdAge: number } | null}
    */
-  getIraRmdRules() {
+  getIraRmdRules(person) { // eslint-disable-line no-unused-vars
     return null;
   }
 }

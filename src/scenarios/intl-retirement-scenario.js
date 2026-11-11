@@ -336,7 +336,7 @@ export const INTL_RETIREMENT_DEFAULTS = {
   // Roth conversion strategy — bracket-fill policy
   rothConversionEnabled:    false,     // master switch
   rothConversionStartYear:  null,      // null = primary retirement year
-  rothConversionEndYear:    null,      // null = year before primary turns 73 (RMD start)
+  rothConversionEndYear:    null,      // null = year before the primary's RMD age (73, or 75 if born 1960+)
   rothConversionMaxBracket: 0.22,      // fill up to top of this marginal bracket
   rothConversionOwner:      'primary', // 'primary' | 'spouse' | 'both'
 
