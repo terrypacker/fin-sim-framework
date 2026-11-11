@@ -809,7 +809,13 @@ export class RebalanceToTargetReducer extends Reducer {
       if (account.rebalanceExcluded === true) continue;
       const total = account.holdings.reduce((s, h) => s + (h?.marketValue ?? 0), 0);
       if (total <= 0) continue;
-      present.push({ stateKey, role, total });
+      // What it holds now, by class: the located planner gives a same-role tie to the current
+      // holder, so a class does not shuttle between two brokerage accounts at each rebalance.
+      const held = {};
+      for (const h of account.holdings) {
+        if (h?.allocation) held[h.allocation] = (held[h.allocation] ?? 0) + (h.marketValue ?? 0);
+      }
+      present.push({ stateKey, role, total, held });
       // FX-normalised, unlike `total` itself. The years arithmetic compares a spend figure
       // against a book, so the two have to be in one currency or "4 years" means nothing.
       // Note the located planner downstream still sums raw per-account totals — a

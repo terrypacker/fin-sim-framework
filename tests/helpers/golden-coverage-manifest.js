@@ -155,9 +155,6 @@ export const COVERED = [
   // `washSaleLedger` appeared in NO fixture, so the whole path — two writing reducers, the
   // resolver and the filing — was guarded by unit tests alone.
   'STOCK_HARVEST_APPLY',
-  // Design 101 §7.1: the harvester's journal-only record of lots it skipped for want of a
-  // substitute (was `metrics.tlh_skipped_no_substitute`). The same golden reaches it.
-  'TLH_NO_SUBSTITUTE',
   'US_TAX_FILE_APPLY',
   // The same golden's dated crash, which is what puts a loss in the book to harvest. The
   // shock family came along with it: the regime is added and recomputed, and the level
@@ -203,6 +200,15 @@ export const COVERED = [
  * this file exists to prevent.
  */
 export const KNOWN_GAPS = [
+  // ── Harvest skipped for want of a substitute (design 101 §7.1)
+  // `wash-sale-two-books` reached it only by accident. The located rebalance used to shuttle a
+  // class between its two brokerage books every half-year, and on 31 Dec 2032 that left a
+  // losing lot whose only partner was held in the other book. Since the same-role tie went to
+  // the current holder, the books stop swapping and no lot is stranded. The skip itself is
+  // pinned in behavioral-tax-loss-harvest.test.mjs. A golden clears it with a taxable book
+  // holding both securities of one identity group, at a loss, on 31 December.
+  'TLH_NO_SUBSTITUTE',
+
   // ── MSBS reversion (design 119 phase 5)
   // The only golden with an MSBS pension is a single person who outlives the run, so
   // nothing dies holding one. MSP-10 in msbs-pension.test.mjs covers it in isolation.

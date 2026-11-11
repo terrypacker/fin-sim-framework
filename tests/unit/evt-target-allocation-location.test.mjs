@@ -284,3 +284,43 @@ test('LOC-13: CASH is placed before EQUITY, so it takes its preferred home and n
   assert.equal(plan.get('superAccount')[ALLOCATION.CASH] ?? 0, 0, 'no cash in super');
   for (const a of accts) assert.ok(near(sumComp(plan.get(a.stateKey)), a.total), 'still conserved');
 });
+
+// ── Same-role tie-break: the current holder keeps the class ─────────────────
+
+test('LOC-14: a same-role tie goes to the account already holding the class, not the roomier one', () => {
+  // Two brokerage accounts, same role. B is bigger, but A already holds the bonds.
+  const accounts = [
+    { stateKey: 'brokA', role: ACCOUNT_ROLES.US_STOCK, total: 1_000_000, held: { BOND: 700_000, EQUITY: 300_000 } },
+    { stateKey: 'brokB', role: ACCOUNT_ROLES.US_STOCK, total: 1_200_000, held: { EQUITY: 1_200_000 } },
+  ];
+  const target = { BOND: 700_000 / 2_200_000, EQUITY: 1_500_000 / 2_200_000 };
+  const plan = planLocatedTargets({ accounts, portfolioTarget: target, policy: { BOND: [ACCOUNT_ROLES.US_STOCK] } });
+  assert.ok(near(plan.get('brokA').BOND ?? 0, 700_000, 1), `bonds stay in brokA, got ${plan.get('brokA').BOND}`);
+  assert.ok(near(plan.get('brokB').BOND ?? 0, 0, 1), 'nothing moves into brokB');
+
+  // Without `held` the old capacity order still applies: the bigger account takes the class.
+  const bare = planLocatedTargets({ accounts: accounts.map(({ held, ...a }) => a), portfolioTarget: target,
+    policy: { BOND: [ACCOUNT_ROLES.US_STOCK] } });
+  assert.ok(near(bare.get('brokB').BOND ?? 0, 700_000, 1), 'callers that pass no holdings keep the capacity order');
+});
+
+test('LOC-15: the rebalancer does not shuttle a class between two same-role accounts as their sizes swap', () => {
+  const apply = new RebalanceToTargetApplyReducer();
+  const reducer = new RebalanceToTargetReducer({
+    accounts: [{ stateKey: 'brokA', role: ACCOUNT_ROLES.US_STOCK }, { stateKey: 'brokB', role: ACCOUNT_ROLES.US_STOCK }],
+    targetAllocation: { EQUITY: 0.6, BOND: 0.4 }, driftBandSheltered: 0.02, driftBandTaxable: 0.02,
+    locationPolicy: { BOND: [ACCOUNT_ROLES.US_STOCK] },
+  });
+  // brokA is the BIGGER account but brokB holds the bonds; 400k of bonds fits in either.
+  const state = {
+    brokA: { balance: 600_000, role: ACCOUNT_ROLES.US_STOCK, holdings: [
+      { id: 'a0', allocation: ALLOCATION.EQUITY, marketValue: 600_000, costBasis: 200_000 }] },
+    brokB: { balance: 400_000, role: ACCOUNT_ROLES.US_STOCK, holdings: [
+      { id: 'b0', allocation: ALLOCATION.BOND, marketValue: 400_000, costBasis: 400_000 }] },
+  };
+  const res = reducer.reduce(state, { type: 'US_PERIOD_ADVANCE' });
+  let next = state; for (const a of (res.next ?? [])) next = apply.reduce(next, a);
+  const of = (k, c) => next[k].holdings.filter(h => h.allocation === c).reduce((s, h) => s + h.marketValue, 0);
+  assert.ok(near(of('brokB', ALLOCATION.BOND), 400_000, 1), `bonds stay in brokB, got ${of('brokB', ALLOCATION.BOND)}`);
+  assert.ok(near(of('brokA', ALLOCATION.EQUITY), 600_000, 1), 'brokA keeps its equity: no sale, no realised gain');
+});

@@ -367,15 +367,25 @@ function _canHold(eligibility, stateKey, cls) {
 
 /**
  * Order eligible accounts for a class: those whose role appears in the class's
- * preference list first (in that order), then any remaining accounts by descending
- * remaining capacity (stable) so the spillover fills the biggest homes first.
+ * preference list first (in that order), then any remaining accounts.
+ *
+ * Within one rank — two accounts of the same role, which the policy cannot tell apart — the
+ * account already holding more of the class goes first, and only then the one with more
+ * remaining capacity. The policy is indifferent between them, so the plan should not move
+ * money between them. Ranked by capacity alone, the class went wholesale to whichever account
+ * had more room at that rebalance. That changes with every draw, so a block of bonds that
+ * fitted in either of two brokerage accounts swapped between them at each rebalance, selling
+ * the equity on one side and rebuying it on the other, and realising gains for nothing.
+ * Without `held` (a caller that does not pass it) the order is the old capacity order.
  */
-function _orderedForClass(accounts, remaining, preferred) {
+function _orderedForClass(accounts, remaining, preferred, cls) {
   const pref = Array.isArray(preferred) ? preferred : [];
   const rank = (role) => { const i = pref.indexOf(role); return i === -1 ? pref.length : i; };
   return [...accounts].sort((a, b) => {
     const ra = rank(a.role), rb = rank(b.role);
     if (ra !== rb) return ra - rb;
+    const ha = a.held?.[cls] ?? 0, hb = b.held?.[cls] ?? 0;
+    if (ha !== hb) return hb - ha;
     return (remaining[b.stateKey] ?? 0) - (remaining[a.stateKey] ?? 0);
   });
 }
@@ -441,7 +451,9 @@ function _repairRestrictedGaps(active, out, remaining, classTargets, mayHold) {
  * `accounts`, honoring the location policy and the class restrictions.
  *
  * @param {object}   opts
- * @param {object[]} opts.accounts        - [{ stateKey, role, total }] (total = Σ marketValue)
+ * @param {object[]} opts.accounts        - [{ stateKey, role, total, held? }] (total = Σ marketValue;
+ *                                        held = { <ALLOCATION>: dollars } it holds now, which breaks
+ *                                        a same-role tie toward the current holder — see `_orderedForClass`)
  * @param {object}   opts.portfolioTarget - { EQUITY, BOND, CASH, GOLD } fractions (need not be exact)
  * @param {object}   [opts.policy]        - partial class → preferred-roles map, merged over the
  *                                        residency-resolved default (see resolveLocationPolicy)
@@ -516,7 +528,7 @@ export function planLocatedTargets({ accounts = [], portfolioTarget = {}, policy
     let need = classTargets[cls];
     if (need <= 0) continue;
     const eligible = active.filter(a => canHold(cls, a) && _canHold(eligibility, a.stateKey, cls));
-    for (const a of _orderedForClass(eligible, remaining, policy[cls])) {
+    for (const a of _orderedForClass(eligible, remaining, policy[cls], cls)) {
       if (need <= 1e-6) break;
       const amt = Math.min(need, remaining[a.stateKey]);
       if (amt <= 1e-6) continue;
