@@ -13,6 +13,12 @@ import { RecordBalanceAction } from '../../simulation-framework/actions.js';
 import { RATE_KEYS } from '../economic-regimes/rate-keys.js';
 import { computeHoldingsAccretion } from '../holdings/holdings-earnings.js';
 
+/** First of the month (UTC) that a month-end accretion credits. */
+function _monthStartMs(date) {
+  const d = date instanceof Date ? date : new Date(date);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
+}
+
 /**
  * Handles BOND_ACCRETION events — the imputed, non-cash principal growth of a
  * zero-coupon/OID bond or a TIPS held in ANY account (brokerage / 401k / IRA /
@@ -30,6 +36,11 @@ import { computeHoldingsAccretion } from '../holdings/holdings-earnings.js';
  *   - 'au'       → AU ordinary income (chains AU_SAVINGS_EARNINGS_TAX);
  *   - 'deferred' → tax-deferred/free wrapper (401k/IRA/Roth/super): balance only,
  *                  taxed (or not, for Roth) on the eventual withdrawal.
+ *
+ * Cadence (issue #783): the series is year-end under ANNUAL earnings and month-end under
+ * MONTHLY (design 127), whose event data carries `periodsPerYear: 12`. Monthly, each lot
+ * accretes the month's compounding share of the year's rate, so a lot accretes only for the
+ * months it is held: a 1 Jul buy gets six months, not the full year it got on 31 Dec.
  *
  * The TIPS indexation rate is the advancing country's period CPI rate; `country`
  * selects US vs AU (state.cpiRates → effectiveInflationRates → inflationRates). The
@@ -79,16 +90,22 @@ export class BondAccretionHandler extends HandlerEntry {
     };
   }
 
-  call({ state }) {
+  call({ data, state, date }) {
     const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
     const cc       = this.country;
     const cpiRate  = state.cpiRates?.[cc]
       ?? state.effectiveInflationRates?.[cc]
       ?? state.inflationRates?.[cc] ?? 0;
-    const asOfMs   = state.currentPeriods?.[cc]?.startMs ?? null;
+    // Design 127 / issue #783 — a MONTHLY series carries periodsPerYear: 12 and accretes the
+    // month's share; its OID clock starts at the first of the month being credited. ANNUAL
+    // (silent) keeps the period start, so its arithmetic is unchanged to the bit.
+    const periodsPerYear = data?.periodsPerYear ?? 1;
+    const asOfMs = periodsPerYear === 1 || date == null
+      ? (state.currentPeriods?.[cc]?.startMs ?? null)
+      : _monthStartMs(date);
 
     const { amount, federalTaxableAmount, stateTaxableAmount, holdingActions } = computeHoldingsAccretion({
-      state, stateKey, cpiRate, currentDate: asOfMs,
+      state, stateKey, cpiRate, currentDate: asOfMs, periodsPerYear,
     });
     // Accretion can be zero (no accreting bonds) or negative (TIPS deflation).
     if (amount === 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];

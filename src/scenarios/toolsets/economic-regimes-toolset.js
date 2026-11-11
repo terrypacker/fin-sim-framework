@@ -1687,8 +1687,9 @@ export const ECONOMIC_REGIMES = {
           + 'the whole year on the balance held on 31 December, so money that arrived in November earns a '
           + 'full year and money spent in June earns nothing for the months it was invested. Monthly credits '
           + 'each month-end at the rate that compounds to the same annual return, pays dividends each '
-          + 'quarter-end, and lets prices move during the year. The year\'s return is still decided once a '
-          + 'year. Annual reproduces runs made before design 127.',
+          + 'quarter-end, and lets prices move during the year. Bond accretion (TIPS indexation and OID) follows '
+          + 'the same cadence, so a bond bought in July accretes six months of the year, not twelve. The year\'s '
+          + 'return is still decided once a year. Annual reproduces runs made before design 127.',
       },
     ];
   },

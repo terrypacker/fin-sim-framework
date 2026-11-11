@@ -19,7 +19,7 @@ stamps:
   param:dividendReinvest: 9db9f3
   param:auDividendReinvest: 551114
   param:superFrankedPercent: 07a227
-  param:equityEarningsCadence: 75b74e
+  param:equityEarningsCadence: 0abdb7
   panel:allocation: 762dd9
   panel:holdings: 962055
 ---

@@ -55,5 +55,5 @@ rather than an edit here.
 - `couponFrequency` — Payments per year. Each firing pays the coupon rate divided by the frequency.
 - `maturityDate` — Set makes this an individual bond: the price pulls to par and it redeems on the date. Silent makes it a perpetual bond fund, which never redeems and never rolls.
 - `duration` — Modified duration — how far a rate move marks the price. The larger it is, the more of the plan's risk is in rates rather than equities.
-- `zeroCoupon` — No cash coupon: the price accretes to par and the annual accretion is imputed as ordinary income anyway. The tax arrives without the cash, which is the point of modelling it.
+- `zeroCoupon` — No cash coupon: the price accretes to par and the accretion is imputed as ordinary income anyway, by the month under monthly earnings, so a lot accretes only while it is held. The tax arrives without the cash, which is the point of modelling it.
 - `inflationLinked` — Principal indexes to CPI, and the accretion is imputed ordinary income. Same shape as a zero: taxable before it is spendable.

@@ -328,8 +328,11 @@ reducer pass.
   Franking and the US qualified/ordinary split are per payment and still aggregate by year.
   Check that `AU_STOCK_DIVIDEND_*` and `STOCK_DIVIDEND_*` sum by period, not "the one
   dividend this year".
-- **Not in scope:** property appreciation (its own handler and tick), bond accretion
-  (annual by its units), cash and bond coupons (already sub-annual). The stochastic tick
+- **Not in scope:** property appreciation (its own handler and tick), cash and bond
+  coupons (already sub-annual). Bond accretion was out of scope here ("annual by its
+  units"), but it was brought onto this cadence later (issue #783). On 31 Dec it credited a
+  full year's CPI to a lot bought on 1 Jul, and nothing to a lot sold before 31 Dec. Under
+  MONTHLY it now accretes at each month-end (order −0.3, after growth and dividends). The stochastic tick
   stays annual, so there is no volatility within a year: the path between two 31 Decembers
   is smooth, and a June sale receives half of a return that is fixed on 1 January.
 - **Help:** the parameter's description in the toolset, a help topic on the cadence and

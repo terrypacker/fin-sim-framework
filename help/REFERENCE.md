@@ -346,7 +346,7 @@ scenario's own schema), which is where to go to change it.
 - **`equityAnchorShift`** — Equity Return Shift (all markets) · `Number` · default `0` · sweep: mc · via ECONOMIC_REGIMES
   Added to every equity market's total return at once — one systematic draw, so the markets rise and fall together rather than cancelling out. Monte Carlo samples it; leave it at 0 for a single run. Reaches every holding that tracks a market; not an authored appreciation schedule, and not gold, bonds or cash.
 - **`equityEarningsCadence`** — Equity Earnings Cadence · `Enum` · default `MONTHLY` · one of `ANNUAL`, `MONTHLY` · via ECONOMIC_REGIMES
-  How often equity, gold and super holdings are credited with their return. Annual credits the whole year on the balance held on 31 December, so money that arrived in November earns a full year and money spent in June earns nothing for the months it was invested. Monthly credits each month-end at the rate that compounds to the same annual return, pays dividends each quarter-end, and lets prices move during the year. The year's return is still decided once a year. Annual reproduces runs made before design 127.
+  How often equity, gold and super holdings are credited with their return. Annual credits the whole year on the balance held on 31 December, so money that arrived in November earns a full year and money spent in June earns nothing for the months it was invested. Monthly credits each month-end at the rate that compounds to the same annual return, pays dividends each quarter-end, and lets prices move during the year. Bond accretion (TIPS indexation and OID) follows the same cadence, so a bond bought in July accretes six months of the year, not twelve. The year's return is still decided once a year. Annual reproduces runs made before design 127.
 - **`intlExAuEquityDividendYield`** — International ex-AU Equity Dividend Yield · `Number` · default `0.0147` · sweep: mc · via ECONOMIC_REGIMES
   The part of the International ex-AU Equity total return paid as dividends. Changes how the return is TAXED, not its size: a taxable account pays it out as a dividend and grows by the rest. A security or lot that names its own yield overrides this.
 - **`intlExAuEquityGrowthRate`** — International ex-AU Equity Total Return · `Number` · default `0.075` · sweep: mc · via ECONOMIC_REGIMES
@@ -1036,7 +1036,7 @@ Explained in [`help/nodes`](nodes/security.md). 0 field(s) described by a record
 - **`duration`** — Duration (yr) · `number` · topic
   Modified duration — how far a rate move marks the price. The larger it is, the more of the plan's risk is in rates rather than equities.
 - **`zeroCoupon`** — Zero-coupon / OID · `check` · topic
-  No cash coupon: the price accretes to par and the annual accretion is imputed as ordinary income anyway. The tax arrives without the cash, which is the point of modelling it.
+  No cash coupon: the price accretes to par and the accretion is imputed as ordinary income anyway, by the month under monthly earnings, so a lot accretes only while it is held. The tax arrives without the cash, which is the point of modelling it.
 - **`inflationLinked`** — Inflation-linked (TIPS) · `check` · topic
   Principal indexes to CPI, and the accretion is imputed ordinary income. Same shape as a zero: taxable before it is spendable.
 

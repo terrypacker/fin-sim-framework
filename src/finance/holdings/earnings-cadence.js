@@ -45,6 +45,14 @@ export const DEFAULT_EQUITY_EARNINGS_CADENCE = 'MONTHLY';
 export const MONTHLY_GROWTH_ORDER   = -0.5;
 export const MONTHLY_DIVIDEND_ORDER = -0.4;
 
+/**
+ * Same-date order of the MONTHLY bond-accretion series (issue #783). Under ANNUAL the 31 Dec
+ * accretion is a year-end series and runs, by FIFO, ahead of that day's month-end events, so
+ * the coupons that follow pay on the indexed principal. The band keeps that sequence: after
+ * growth and dividends, before everything at order 0.
+ */
+export const MONTHLY_ACCRETION_ORDER = -0.3;
+
 /** Months between dividend payments under MONTHLY: quarter-ends (§3.1). */
 export const DIVIDENDS_PER_YEAR = 4;
 
@@ -68,15 +76,19 @@ export function isMonthlyEarnings(params) {
  * unchanged.
  *
  * @returns {{ growth: { interval: string, order?: number, data?: object },
- *             dividend: { interval: string, order?: number, data?: object } }}
+ *             dividend: { interval: string, order?: number, data?: object },
+ *             accretion: { interval: string, order?: number, data?: object } }}
  */
 export function earningsSchedule(params) {
   if (!isMonthlyEarnings(params)) {
-    return { growth: { interval: 'year-end' }, dividend: { interval: 'year-end' } };
+    return { growth: { interval: 'year-end' }, dividend: { interval: 'year-end' }, accretion: { interval: 'year-end' } };
   }
   return {
-    growth:   { interval: 'month-end',   order: MONTHLY_GROWTH_ORDER,   data: { periodsPerYear: 12 } },
-    dividend: { interval: 'quarter-end', order: MONTHLY_DIVIDEND_ORDER, data: { periodsPerYear: DIVIDENDS_PER_YEAR } },
+    growth:    { interval: 'month-end',   order: MONTHLY_GROWTH_ORDER,    data: { periodsPerYear: 12 } },
+    dividend:  { interval: 'quarter-end', order: MONTHLY_DIVIDEND_ORDER,  data: { periodsPerYear: DIVIDENDS_PER_YEAR } },
+    // Issue #783 — bond accretion (TIPS indexation, OID) by the month, so a lot accretes for
+    // the months it was held: a 1 Jul buy six months, a lot sold in March through February.
+    accretion: { interval: 'month-end',   order: MONTHLY_ACCRETION_ORDER, data: { periodsPerYear: 12 } },
   };
 }
 

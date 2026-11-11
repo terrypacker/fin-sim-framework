@@ -64,7 +64,7 @@ import assert   from 'node:assert/strict';
 
 import {
   periodRate, multiplicativePrice, isQuarterEnd, earningsSchedule,
-  MONTHLY_GROWTH_ORDER, MONTHLY_DIVIDEND_ORDER,
+  MONTHLY_GROWTH_ORDER, MONTHLY_DIVIDEND_ORDER, MONTHLY_ACCRETION_ORDER,
 } from '../../src/finance/holdings/earnings-cadence.js';
 import { computeHoldingsGrowth, computeHoldingsDividends } from '../../src/finance/holdings/holdings-earnings.js';
 import { buildSecurityRegistry } from '../../src/finance/holdings/security.js';
@@ -211,8 +211,11 @@ const datesOf = (run, type, stateKey) => run.sim.journal.journal
 
 test('CAD-7: the schedules, by cadence', () => {
   assert.deepEqual(earningsSchedule({ equityEarningsCadence: 'ANNUAL' }),
-    { growth: { interval: 'year-end' }, dividend: { interval: 'year-end' } },
+    { growth: { interval: 'year-end' }, dividend: { interval: 'year-end' }, accretion: { interval: 'year-end' } },
     'ANNUAL adds no order and no data, so its queue is the pre-127 queue');
+  assert.deepEqual(earningsSchedule({}).accretion,
+    { interval: 'month-end', order: MONTHLY_ACCRETION_ORDER, data: { periodsPerYear: 12 } },
+    'MONTHLY accretes by the month (issue #783), after growth and dividends');
   assert.equal(earningsSchedule({}).growth.interval, 'month-end', 'MONTHLY is the default since phase 4');
   assert.throws(() => earningsSchedule({ equityEarningsCadence: 'WEEKLY' }), /equityEarningsCadence/);
 

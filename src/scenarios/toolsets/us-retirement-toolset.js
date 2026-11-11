@@ -894,14 +894,16 @@ export const US_RETIREMENT = {
           .data({ firingsPerYear: 2 }).build()
       );
       // Non-cash bond accretion — zero-coupon/OID + TIPS inflation indexation
-      // (design 66 §G5/§G6). One shared annual stream across brokerage + all
-      // equity-served accounts (US handlers here, AU handlers in au-retirement); the
-      // handler no-ops when an account holds no zero/TIPS bond. Annual, matching the
-      // per-year OID / CPI accretion units.
+      // (design 66 §G5/§G6). One shared stream across brokerage + all equity-served
+      // accounts (US handlers here, AU handlers in au-retirement); the handler no-ops
+      // when an account holds no zero/TIPS bond. It follows the earnings cadence
+      // (design 127, issue #783): year-end under ANNUAL, month-end under MONTHLY at
+      // the month's share of the year's CPI / yield, so a lot accretes only for the
+      // months it is held.
       schedules.push(
-        EventBuilder.eventSeries()
-          .name('Bond Accretion').type('BOND_ACCRETION')
-          .interval('year-end').startOffset(0).enabled(true).color('#6D4C41').build()
+        withEarningsCadence(EventBuilder.eventSeries()
+          .name('Bond Accretion').type('BOND_ACCRETION'), cadence.accretion)
+          .startOffset(0).enabled(true).color('#6D4C41').build()
       );
     }
 

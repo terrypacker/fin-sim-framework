@@ -366,3 +366,83 @@ test('ACC-11: a brokerage zero-coupon bond accretes to par over the sim (previou
   assert.ok(zero.costBasis > 80000, `OID steps up the basis, got ${zero.costBasis}`);
   assert.ok(zero.marketValue > 80000, `principal accretes toward par, got ${zero.marketValue}`);
 });
+
+// ── Issue #783: accretion by the month (design 127 cadence) ──────────────────
+
+test('ACC-M1: monthly TIPS indexation is the month share of CPI; twelve months compound to the year', () => {
+  const cpi = 0.03;
+  let lot = { id: 't', allocation: 'BOND', marketValue: 100_000, costBasis: 100_000, inflationLinked: true };
+  const one = computeHoldingsAccretion({ state: { acct: { holdings: [lot] } }, stateKey: 'acct', cpiRate: cpi, periodsPerYear: 12 });
+  assert.strictEqual(one.amount, +(100_000 * (Math.pow(1.03, 1 / 12) - 1)).toFixed(2), 'one month = principal × ((1+cpi)^(1/12) − 1)');
+  assert.ok(Math.abs(one.holdingActions[0].cpiIndexRatioFactor - Math.pow(1.03, 1 / 12)) < 1e-15, 'the index ratio moves by the month factor');
+
+  let total = 0;
+  for (let m = 0; m < 12; m += 1) {
+    const r = computeHoldingsAccretion({ state: { acct: { holdings: [lot] } }, stateKey: 'acct', cpiRate: cpi, periodsPerYear: 12 });
+    total += r.amount;
+    lot = { ...lot, marketValue: lot.marketValue + r.amount, costBasis: lot.costBasis + r.amount };
+  }
+  assert.ok(Math.abs(total - 3000) < 0.05, `a lot held all year accretes the year's CPI, got ${total}`);
+
+  const annual = computeHoldingsAccretion({ state: { acct: { holdings: [{ ...lot, marketValue: 100_000, costBasis: 100_000 }] } }, stateKey: 'acct', cpiRate: cpi });
+  assert.strictEqual(annual.amount, 3000, 'periodsPerYear 1 (ANNUAL) is unchanged: principal × CPI');
+});
+
+test('ACC-M2: a TIPS lot bought on 1 Jul accretes six months, not the full year (#783)', () => {
+  const cpi = 0.03;
+  let lot = { id: 'jul', allocation: 'BOND', marketValue: 50_000, costBasis: 50_000, inflationLinked: true };
+  let total = 0;
+  for (let m = 6; m < 12; m += 1) {   // month-ends Jul..Dec
+    const r = computeHoldingsAccretion({ state: { acct: { holdings: [lot] } }, stateKey: 'acct', cpiRate: cpi, periodsPerYear: 12 });
+    total += r.amount;
+    lot = { ...lot, marketValue: lot.marketValue + r.amount, costBasis: lot.costBasis + r.amount };
+  }
+  const half = 50_000 * (Math.sqrt(1.03) - 1);
+  assert.ok(Math.abs(total - half) < 0.05, `six months ≈ ${half.toFixed(2)}, got ${total}`);
+  assert.ok(total < 0.51 * 1500, 'well under the full-year 1,500 the 31 Dec accretion used to book');
+});
+
+test('ACC-M3: monthly OID accretes the month share of the constant yield and still caps at par', () => {
+  const start = Date.UTC(2026, 0, 1);
+  const mat   = start + 5 * YEAR_MS;
+  const zero  = { id: 'z', allocation: 'BOND', marketValue: 8000, costBasis: 8000, faceValue: 10000, maturityDate: new Date(mat), zeroCoupon: true };
+  const r = computeHoldingsAccretion({ state: { acct: { holdings: [zero] } }, stateKey: 'acct', currentDate: start, periodsPerYear: 12 });
+  const y = Math.pow(10000 / 8000, 1 / 5) - 1;
+  assert.strictEqual(r.amount, +(8000 * (Math.pow(1 + y, 1 / 12) - 1)).toFixed(2));
+
+  const last = { ...zero, costBasis: 9995, marketValue: 9995, maturityDate: new Date(start + YEAR_MS / 24) };
+  const c = computeHoldingsAccretion({ state: { acct: { holdings: [last] } }, stateKey: 'acct', currentDate: start, periodsPerYear: 12 });
+  assert.strictEqual(c.amount, 5, 'the final month is capped at face − basis');
+});
+
+function zeroOidRun(params) {
+  return run({ residencyState: 'NE', monthlyExpenses: 0, inflationAdjust: false, ...params }, (cfg) => {
+    const acct = (cfg.accounts ?? []).find(a => a.role === 'us-stock');
+    acct.holdings = [
+      { id: 'zero', allocation: 'BOND', marketValue: 80000, costBasis: 80000, faceValue: 100000,
+        rateKey: 'FIXED_INCOME_US', duration: 8, zeroCoupon: true,
+        maturityDate: new Date(Date.UTC(2034, 0, 1)), purchaseDate: new Date(Date.UTC(2026, 0, 1)) },
+    ];
+    acct.initialValue = 80000;
+    acct.balance = 80000;
+  });
+}
+
+test('ACC-M4: the accretion series is month-end under MONTHLY (default) and year-end under ANNUAL', () => {
+  const apply = (sim) => sim.journal.journal.filter(e => e.action?.type === 'BOND_ACCRETION_APPLY'
+    && (e.action.data?.stateKey ?? e.action.stateKey) === 'usStockAccount' && new Date(e.date).getUTCFullYear() === 2027);
+
+  const monthly = zeroOidRun({});
+  monthly.stepTo(new Date(Date.UTC(2028, 0, 2)));
+  const m = apply(monthly);
+  assert.strictEqual(new Set(m.map(e => new Date(e.date).getUTCMonth())).size, 12, 'MONTHLY books accretion at every month-end');
+
+  const annual = zeroOidRun({ equityEarningsCadence: 'ANNUAL' });
+  annual.stepTo(new Date(Date.UTC(2028, 0, 2)));
+  const a = apply(annual);
+  assert.deepStrictEqual([...new Set(a.map(e => new Date(e.date).getUTCMonth()))], [11], 'ANNUAL books it once, on 31 Dec');
+
+  const zm = monthly.state.usStockAccount.holdings.find(h => h.id === 'zero').costBasis;
+  const za = annual.state.usStockAccount.holdings.find(h => h.id === 'zero').costBasis;
+  assert.ok(Math.abs(zm - za) / za < 0.005, `two years of OID agree across cadences (monthly ${zm}, annual ${za})`);
+});

@@ -927,9 +927,11 @@ const ACCRETION_YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
  * @param {string} opts.stateKey        - state[stateKey] is the account
  * @param {number} [opts.cpiRate=0]     - The advancing country's period CPI/inflation rate (TIPS indexation)
  * @param {Date|number|null} [opts.currentDate=null] - As-of date (epoch ms or Date) for zero-coupon time-to-maturity
+ * @param {number} [opts.periodsPerYear=1] - Accrual periods per year (issue #783): 1 credits the year's
+ *   CPI / OID yield; 12 credits one month's compounding share, so a lot accretes only while held
  * @returns {{ amount: number, federalTaxableAmount: number, stateTaxableAmount: number, holdingActions: HoldingTransactAction[] }}
  */
-export function computeHoldingsAccretion({ state, stateKey, cpiRate = 0, currentDate = null }) {
+export function computeHoldingsAccretion({ state, stateKey, cpiRate = 0, currentDate = null, periodsPerYear = 1 }) {
   const account    = state?.[stateKey];
   const holdings   = account?.holdings ?? [];
   const securities = state?.securities ?? null;
@@ -958,7 +960,7 @@ export function computeHoldingsAccretion({ state, stateKey, cpiRate = 0, current
         ? Math.max(0, (matMs - asOfMs) / ACCRETION_YEAR_MS) : null;
       if (basis > 0 && face > basis && ttm != null && ttm > 0) {
         const y = Math.pow(face / basis, 1 / ttm) - 1;
-        accretion = Math.min(+(basis * y).toFixed(2), +(face - basis).toFixed(2));
+        accretion = Math.min(+(basis * periodRate(y, periodsPerYear)).toFixed(2), +(face - basis).toFixed(2));
       }
     } else if (inst.inflationLinked) {
       // Principal indexes to CPI (may be negative under deflation).
@@ -974,13 +976,16 @@ export function computeHoldingsAccretion({ state, stateKey, cpiRate = 0, current
       // not the history of what was paid for it.
       //
       // A scalar TIPS keeps the basis proxy: it has no principal to read.
-      indexRatioFactor = 1 + cpiRate;
+      // Issue #783 — `periodsPerYear` 12 indexes by the month's compounding share, so twelve
+      // months held compound to the year's CPI and a part-year lot indexes for its months.
+      const r = periodRate(cpiRate, periodsPerYear);
+      indexRatioFactor = 1 + r;
       // `units` and `cpiIndexRatio` are the POSITION's; `parPerUnit` is the INSTRUMENT's
       // (design 94 §5.1) — the one line in this file where both sides of the partition
       // appear in a single expression, which is why it reads oddly and is correct.
       accretion = isUnitised(h) && inst.parPerUnit != null
-        ? +(h.units * inst.parPerUnit * (h.cpiIndexRatio ?? 1) * cpiRate).toFixed(2)
-        : +(basis * cpiRate).toFixed(2);
+        ? +(h.units * inst.parPerUnit * (h.cpiIndexRatio ?? 1) * r).toFixed(2)
+        : +(basis * r).toFixed(2);
     } else {
       continue;  // plain coupon bond / fund — no accretion
     }
