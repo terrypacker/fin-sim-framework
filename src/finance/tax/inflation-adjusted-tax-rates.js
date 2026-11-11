@@ -22,8 +22,7 @@ import { AuTaxRatesBase } from './au/au-tax-rates-base.js';
  *               legislate their own schedules; neither HI nor NE indexes at all.
  *   US_FICA   — the §3121(a)(1) contribution and benefit base. Moves with the SSA
  *               AVERAGE WAGE INDEX, not with prices: it has historically outrun CPI by
- *               roughly the economy's real wage growth, so a run wanting fidelity sets
- *               a small positive spread here and nowhere else.
+ *               roughly the economy's real wage growth (≈1 pp/yr since 1992).
  *   US_FEIE   — the §911 foreign earned income exclusion cap. Indexed to the same
  *               chained CPI as the brackets, but a DIFFERENT act of Congress: freezing
  *               the brackets to model bracket creep must not silently freeze the FEIE.
@@ -31,6 +30,24 @@ import { AuTaxRatesBase } from './au/au-tax-rates-base.js';
  */
 export const BRACKET_INDEX_SERIES = Object.freeze({
   US: 'US', AU: 'AU', US_STATE: 'US_STATE', US_FICA: 'US_FICA', US_FEIE: 'US_FEIE',
+});
+
+/**
+ * Default spread over the scenario's inflation for each series (design 108 param
+ * descriptions carry the user-facing wording). Measured, not assumed — data and method in
+ * `docs/us-tax/SOURCES.md` ("Bracket indexation spreads"):
+ *
+ *   US, US_FEIE  −0.0025  C-CPI-U (the §1(f)(3) index) ran 0.26 pp/yr below CPI-U over the
+ *                         Sep–Aug index years 2002–2025 (0.30 pp the last ten); below it in
+ *                         23 of 24 years. The model's inflation is CPI-U (FRED CPIAUCSL).
+ *   US_FICA      +0.010   the SSA average wage index grew 1.01 pp/yr faster than CPI-U over
+ *                         1992–2025 (§230 indexes the base to it from the 1992 AWI).
+ *   US_STATE, AU  0       not CPI-indexed in law; a scenario models freezes explicitly.
+ *
+ * Changed from all-zero on 2026-11-11: every whole-state golden was regolded.
+ */
+export const DEFAULT_BRACKET_INDEX_SPREADS = Object.freeze({
+  US: -0.0025, US_FEIE: -0.0025, US_FICA: 0.010, US_STATE: 0, AU: 0,
 });
 
 /**

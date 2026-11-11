@@ -41,7 +41,9 @@
  * a full base. Pooling a household against one base under-charges every two-earner
  * household from the moment their combined pay passes it.
  *
- * Source: `docs/us-tax/SSA-COLA-Fact-Sheet-2026.txt` (Maximum Taxable Earnings).
+ * Sources: `docs/us-tax/SSA-COLA-Fact-Sheet-2026.txt` (Maximum Taxable Earnings, 2025–26);
+ * `docs/us-tax/SSA-FR-2026-21796-COLA-Determinations-2027.txt` (OASDI contribution and
+ * benefit base, 2027 — SSA's Federal Register notice; ssa.gov 403s automated fetches).
  * Transcribed from the authority within the published range. Past it the base must be
  * PROJECTED — holding it flat for the decades a retirement run covers understates the
  * OASDI charge on every high earner — and the projection rides its own US_FICA series
@@ -60,6 +62,7 @@ export const FICA_MEDICARE_RATE = 0.0145;
 export const FICA_WAGE_BASE_BY_YEAR = {
   2025: 176_100,
   2026: 184_500,
+  2027: 192_300,   // docs/us-tax/SSA-FR-2026-21796-COLA-Determinations-2027.txt
 };
 
 const _YEARS = Object.keys(FICA_WAGE_BASE_BY_YEAR).map(Number).sort((a, b) => a - b);

@@ -281,9 +281,9 @@ export const COCKPIT_CONTROLS = {
           && Number.isFinite(baseParams?.rothConversionEndYear)
           && year >= baseParams.rothConversionStartYear && year <= baseParams.rothConversionEndYear;
         sched.push({ year, incomeTarget: inWindow
-          ? _rowRealTarget({ year, bracketCeiling: baseParams?.rothConversionMaxBracket }, infl) : 0 });
+          ? _rowRealTarget({ year, bracketCeiling: baseParams?.rothConversionMaxBracket }, infl, baseParams?.usFederalBracketIndexSpread) : 0 });
       } else if (!Number.isFinite(sched[idx]?.incomeTarget)) {
-        sched[idx] = { ...sched[idx], incomeTarget: _rowRealTarget(sched[idx], infl) };
+        sched[idx] = { ...sched[idx], incomeTarget: _rowRealTarget(sched[idx], infl, baseParams?.usFederalBracketIndexSpread) };
       }
       sched.sort((a, b) => (a?.year ?? 0) - (b?.year ?? 0));
       return { ...baseParams, rothConversionSchedule: sched, rothConversionScheduleMode: mode };
@@ -2152,7 +2152,7 @@ function _liveConversionRows(snapshot, asOf, sched, baseParams, infl) {
   const bracket = baseParams?.rothConversionMaxBracket;
   const rows = [];
   for (const [y, nominal] of byYear) {
-    const windowNominal = Number.isFinite(bracket) ? usBracketGrossIncomeCeiling(bracket, y, infl) : NaN;
+    const windowNominal = Number.isFinite(bracket) ? usBracketGrossIncomeCeiling(bracket, y, infl, baseParams?.usFederalBracketIndexSpread) : NaN;
     rows.push(nominal === windowNominal
       ? { year: y, bracketCeiling: bracket }
       : { year: y, incomeTarget: nominal / Math.pow(1 + infl, y - BRACKET_BASE_YEAR) });
@@ -2161,10 +2161,10 @@ function _liveConversionRows(snapshot, asOf, sched, baseParams, infl) {
 }
 
 /** A row's target in the lever's units (real base-year USD), whichever form it was authored in. */
-function _rowRealTarget(row, infl) {
+function _rowRealTarget(row, infl, bracketSpread) {
   if (Number.isFinite(row?.incomeTarget)) return row.incomeTarget;
   if (!Number.isFinite(row?.bracketCeiling) || !Number.isFinite(row?.year)) return 0;
-  return usBracketGrossIncomeCeiling(row.bracketCeiling, row.year, infl)
+  return usBracketGrossIncomeCeiling(row.bracketCeiling, row.year, infl, bracketSpread)
     / Math.pow(1 + infl, row.year - BRACKET_BASE_YEAR);
 }
 
@@ -2264,8 +2264,8 @@ function _earlyWithdrawalRealCaps(state, baseParams, year) {
 // Marginal MFJ bracket a REAL (base-year) ordinary income lands in, for the
 // recommended-move card. Real target vs base-year brackets is inflation-free:
 // both the target and the statutory edges deflate by the same factor (§12.2).
-// Base-year table = the newest registered US statutory module (BRACKET_BASE_YEAR),
-// which is exactly where the settle-time inflation accumulator is 1.0.
+// Base-year table = the statutory module for BRACKET_BASE_YEAR (the real-dollar
+// base year, pinned at 2026), where the settle-time inflation accumulator is 1.0.
 const _US_BASE_RATES = usRatesForYear(BRACKET_BASE_YEAR);
 function _bracketLabelForRealIncome(realIncome) {
   const taxable = realIncome - _US_BASE_RATES._stdDeduction_mfj;

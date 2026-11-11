@@ -34,6 +34,7 @@ import { StateTaxSettleService } from '../../src/finance/tax/state/state-tax-set
 import { UsTaxRates2025 } from '../../src/finance/tax/us/us-tax-rates-2025.js';
 import { AuTaxRates2025 } from '../../src/finance/tax/au/au-tax-rates-2025.js';
 import { TaxSettleService } from '../../src/finance/tax-settle-service.js';
+import { DEFAULT_BRACKET_INDEX_SPREADS } from '../../src/finance/tax/inflation-adjusted-tax-rates.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -666,12 +667,16 @@ test('INFL-7: the three params reach state and drive real tax through a compiled
     stepTo: new Date(Date.UTC(2044, 11, 31)), telemetry: 'none',
   }).sim.state;
 
-  // Defaults: every spread present and zero, and the bracket series tracking CPI.
+  // Defaults: every spread present at its measured default, and the federal bracket
+  // series running BELOW CPI (chained CPI) while the AU series tracks it.
   const base = runTo({});
-  assert.deepEqual(base.bracketIndexSpreads,
-    { US: 0, US_FICA: 0, US_FEIE: 0, US_STATE: 0, AU: 0 },
+  assert.deepEqual(base.bracketIndexSpreads, { ...DEFAULT_BRACKET_INDEX_SPREADS },
     'all three toolsets must survive the compiler merge, not clobber each other');
-  assert.ok(Math.abs(base.bracketIndexAccumulator.US - base.inflationAccumulator.US) < 1e-9);
+  assert.ok(base.bracketIndexAccumulator.US < base.inflationAccumulator.US,
+    'C-CPI-U projection: brackets lag CPI');
+  assert.ok(base.bracketIndexAccumulator.US_FICA > base.inflationAccumulator.US,
+    'AWI projection: the wage base outruns CPI');
+  assert.ok(Math.abs(base.bracketIndexAccumulator.AU - base.inflationAccumulator.AU) < 1e-9);
 
   // Frozen brackets everywhere: more tax on the same plan, and the series stay flat.
   const frozen = runTo({
@@ -680,7 +685,8 @@ test('INFL-7: the three params reach state and drive real tax through a compiled
     auBracketIndexSpread:        -0.03,
   });
   assert.deepEqual(frozen.bracketIndexSpreads,
-    { US: -0.03, US_FICA: 0, US_FEIE: 0, US_STATE: -0.03, AU: -0.03 },
+    { US: -0.03, US_FICA: DEFAULT_BRACKET_INDEX_SPREADS.US_FICA,
+      US_FEIE: DEFAULT_BRACKET_INDEX_SPREADS.US_FEIE, US_STATE: -0.03, AU: -0.03 },
     'freezing the brackets must NOT drag the FICA base or the FEIE cap along');
   assert.ok(Math.abs(frozen.bracketIndexAccumulator.US - 1.0) < 1e-9);
   assert.ok(Math.abs(frozen.bracketIndexAccumulator.AU - 1.0) < 1e-9);
@@ -709,7 +715,8 @@ function usRun(bracketIndexSpreads, years = 14) {
 
 test('INFL-8: freezing the brackets leaves the FICA base and FEIE cap indexing', () => {
   const service   = new TaxSettleService();
-  const statutory = service.ratesForYear('US', 2026);
+  // The newest statutory table — a run past it holds (or indexes) THAT table.
+  const statutory = service.ratesForYear('US', Infinity);
   const module    = service._getModule('US', usRun({ US: -0.03 }));   // brackets frozen only
 
   assert.deepEqual(module._brackets_mfj, statutory._brackets_mfj, 'brackets held nominal');
@@ -722,7 +729,7 @@ test('INFL-8: freezing the brackets leaves the FICA base and FEIE cap indexing',
 
 test('INFL-8: a FICA spread moves the wage base and nothing else', () => {
   const service   = new TaxSettleService();
-  const statutory = service.ratesForYear('US', 2026);
+  const statutory = service.ratesForYear('US', Infinity);
   const plain     = service._getModule('US', usRun({}));
   // +0.5% for real wage growth: the SSA average wage index runs above CPI.
   const withAwi   = service._getModule('US', usRun({ US_FICA: 0.005 }));
@@ -738,7 +745,7 @@ test('INFL-8: a FEIE spread moves the exclusion cap and nothing else', () => {
   const plain   = service._getModule('US', usRun({}));
   const frozen  = service._getModule('US', usRun({ US_FEIE: -0.03 }));
 
-  assert.equal(frozen._feieCap, service.ratesForYear('US', 2026)._feieCap, 'cap held nominal');
+  assert.equal(frozen._feieCap, service.ratesForYear('US', Infinity)._feieCap, 'cap held nominal');
   assert.deepEqual(frozen._brackets_mfj, plain._brackets_mfj);
   assert.equal(frozen._ficaWageBase,     plain._ficaWageBase);
 });

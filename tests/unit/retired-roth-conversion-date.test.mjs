@@ -21,6 +21,7 @@ import { ServiceRegistry } from '../../src/services/service-registry.js';
 import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
 import { ScenarioSerializer } from '../../src/scenarios/scenario-serializer.js';
 import { applyParamBagToConfig } from '../../src/scenarios/scenario-param-apply.js';
+import { usBracketGrossIncomeCeiling } from '../../src/finance/tax-settle-service.js';
 
 const cfgWith = (enabled, month, day) => ({
   parameters: { rothConversionEnabled: enabled, rothConversionMonth: month, rothConversionDay: day, other: 1 },
@@ -101,4 +102,35 @@ test('RCD-6 (gain-aware, through the loader): the switch reaches the compiled co
   };
   assert.ok(queueFor(true).every(e => Number.isFinite(e.data.ltcgCeiling)), 'on ⇒ every event is band-capped');
   assert.ok(queueFor(false).every(e => e.data.ltcgCeiling === undefined), 'off ⇒ unchanged');
+});
+
+test('RCD-7 (bracket spread, through the loader): US_TAX\'s usFederalBracketIndexSpread reaches the conversion targets', () => {
+  // The Roth toolset projects "top of 22%" past the newest table; the settle projects the
+  // brackets at CPI + usFederalBracketIndexSpread (a US_TAX param). If the spread does not
+  // reach this toolset, every conversion past the newest table aims at the wrong edge.
+  const start = new Date(Date.UTC(2026, 0, 1)), end = new Date(Date.UTC(2036, 0, 1));
+  const targetsFor = (extra) => {
+    const params = { rothConversionEnabled: true, rothConversionStartYear: 2030, rothConversionEndYear: 2032,
+      rothConversionOwner: 'primary', ...extra };
+    const log = console.log, warn = console.warn; console.log = () => {}; console.warn = () => {};
+    try {
+      const registry = new ServiceRegistry();
+      const scenario = new IntlRetirementScenario({ context: registry.simulationContext, params, simStart: start, simEnd: end });
+      scenario.buildSim({ telemetry: 'off' });
+      const cfg = ScenarioSerializer.serializeScenario(IntlRetirementScenario.buildDefaultConfig({}, start, end));
+      cfg.params = [];
+      applyParamBagToConfig(cfg, params);
+      new ScenarioLoader().load(cfg, registry);
+      return new Map(scenario.sim.cloneQueue().filter(e => e.type === 'ROTH_CONVERSION_POLICY_EVALUATE')
+        .map(e => [new Date(e.date).getUTCFullYear(), e.data.targetIncome]));
+    } finally { console.log = log; console.warn = warn; }
+  };
+  const byDefault = targetsFor({});
+  const frozen    = targetsFor({ usFederalBracketIndexSpread: -0.03, inflationRate: 0.03 });
+  assert.ok(byDefault.size > 0, 'precondition: conversions were compiled');
+  for (const [year, target] of frozen) {
+    assert.ok(Math.abs(target - usBracketGrossIncomeCeiling(0.22, year, 0.03, -0.03)) < 1e-6,
+      `${year}: frozen-bracket target ${target}`);
+    assert.ok(target < byDefault.get(year), `${year}: frozen edges sit below the default projection`);
+  }
 });

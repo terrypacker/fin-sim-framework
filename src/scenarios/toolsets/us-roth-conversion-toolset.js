@@ -20,10 +20,9 @@ import { lastWorkDate } from '../../finance/payroll/employment.js';
 import { usRmdApplicableAge } from '../../finance/account-rules/us/us-rmd-uniform-table.js';
 
 // Base year for the per-year income-target schedule (design 39 §12.3): real
-// targets are quoted in this year's USD and compounded by inflation, matching
-// the base usBracketGrossIncomeCeiling indexes the statutory brackets from.
-// Derived from the newest registered US statutory table rather than restated as
-// a literal, so the two cannot drift apart when a new tax year is added.
+// targets are quoted in this year's USD and compounded by inflation. Owned by
+// TaxSettleService.usBracketBaseYear (pinned at 2026 — it must NOT move when a new
+// tax year's table is registered, or every authored real target changes meaning).
 export const BRACKET_BASE_YEAR = US_BRACKET_BASE_YEAR;
 
 /** After 31 Dec's order-0 income, before tax-gain harvest / inherited-RA (50) and the settle (100). */
@@ -219,6 +218,9 @@ export const US_ROTH_CONVERSION = {
         : [primary].filter(Boolean);
 
     const inflationRate = p.inflationRate ?? 0.03;
+    // The brackets' own projection spread (US_TAX's param; undefined ⇒ model default), so
+    // a bracket-ceiling target lands on the edge the settle will use past the newest table.
+    const bracketSpread = p.usFederalBracketIndexSpread;
 
     // Emit one ROTH_CONVERSION_POLICY_EVALUATE per (year, owner) at the given
     // gross-income ceiling. Shared by the legacy window path and the per-year
@@ -243,7 +245,7 @@ export const US_ROTH_CONVERSION = {
           // the 31 Dec accretion lost the tie and the "10%" fill landed in the 12% bracket.
           order:   ROTH_CONVERSION_ORDER,
           data:    { targetIncome, iraKey: iraAcct.stateKey, rothKey: rothAcct.stateKey,
-                     ...(p.rothConversionLtcgAware ? { ltcgCeiling: usLtcgZeroBandGrossCeiling(year, inflationRate) } : {}) },
+                     ...(p.rothConversionLtcgAware ? { ltcgCeiling: usLtcgZeroBandGrossCeiling(year, inflationRate, bracketSpread) } : {}) },
           enabled: true,
           color:   '#7E57C2',
         }));
@@ -262,7 +264,7 @@ export const US_ROTH_CONVERSION = {
     const rowTarget = (entry) => (Number.isFinite(entry.incomeTarget)
       ? entry.incomeTarget * Math.pow(1 + inflationRate, entry.year - BRACKET_BASE_YEAR)
       : Number.isFinite(entry.bracketCeiling)
-        ? usBracketGrossIncomeCeiling(entry.bracketCeiling, entry.year, inflationRate)
+        ? usBracketGrossIncomeCeiling(entry.bracketCeiling, entry.year, inflationRate, bracketSpread)
         : NaN);
     const overlay = p.rothConversionScheduleMode === 'OVERLAY';
     if (schedule.length > 0 && !overlay) {
@@ -303,7 +305,7 @@ export const US_ROTH_CONVERSION = {
     for (const year of [...years].sort((a, b) => a - b)) {
       emitYear(year, rows.has(year)
         ? rowTarget(rows.get(year))
-        : usBracketGrossIncomeCeiling(p.rothConversionMaxBracket, year, inflationRate));
+        : usBracketGrossIncomeCeiling(p.rothConversionMaxBracket, year, inflationRate, bracketSpread));
     }
     return events;
   },

@@ -84,3 +84,34 @@ Form 8621: `https://www.irs.gov/pub/irs-pdf/i8621.pdf` → `pdftotext -layout`.
 
 All five by the scripted routes above (govinfo granule; eCFR renderer with `curl -L`), converted by stripping tags + `html.unescape` (named entities included) and collapsing blank lines.
 | `Treaty-Australia-Convention-TE-1982-08-06.txt` | **Treasury Technical Explanation of the 1982 Convention** ("an official guide to the Convention") | Art 22(4) + Art 27(1)(c): for a US citizen resident in Australia the US re-sources "enough U.S.-source income as Australian-source income" to credit the Australian tax, floored at the US tax the treaty allows on a source basis. Fetched from `https://www.irs.gov/pub/irs-trty/austtech.pdf` (10 pp, text layer), `pdftotext -layout`. The treas.gov archive copy at UNT returned an HTML shell, not the PDF. |
+
+## Added 11 Nov 2026 — tax year 2027 rates (`us-tax-rates-2027.js`)
+
+| file | source | why it is here |
+|---|---|---|
+| `IRS-Rev-Proc-2026-35-Inflation-Adjustments-2027.txt` | **Rev. Proc. 2026-35** (IR-2026-133, 5 Nov 2026) | §3.01 Tables 1–5 ordinary brackets; §3.03 maximum zero / 15% rate amounts; §3.15 standard deduction; §3.41 §911 FEIE cap. `https://www.irs.gov/pub/irs-drop/rp-26-35.pdf` → `pdftotext -layout`. |
+| `SSA-FR-2026-21796-COLA-Determinations-2027.txt` | SSA, *Cost-of-Living Increase and Other Determinations for 2027*, 91 FR (26 Oct 2026), doc 2026-21796 | The 2027 OASDI contribution and benefit base (\$192,300). ssa.gov returns 403 to scripted fetches (the fact sheet PDF and the COLA page both); the Federal Register copy is the same determination and is scriptable: `https://www.federalregister.gov/api/v1/documents/2026-21796.json` → `raw_text_url`, tags stripped + `html.unescape`. |
+
+## Bracket indexation spreads — calibration (11 Nov 2026)
+
+`DEFAULT_BRACKET_INDEX_SPREADS` in `src/finance/tax/inflation-adjusted-tax-rates.js` was all-zero
+(every series tracked the scenario's CPI). It is now measured:
+
+| file | source |
+|---|---|
+| `BLS-CPI-U-and-C-CPI-U-monthly-1990-2026.csv` | BLS public API v1 (`POST https://api.bls.gov/publicAPI/v1/timeseries/data/`, ≤10 years per request), series `CUUR0000SA0` (CPI-U) and `SUUR0000SA0` (C-CPI-U, from 2000). October 2025 is unpublished (`-`). |
+| `SSA-FR-2026-21796-COLA-Determinations-2027.txt` | the 1992 and 2025 national average wage indexes (\$22,935.42, \$72,800.33). |
+
+- **Brackets, LTCG breakpoints, standard deduction, FEIE → −0.0025.** §1(f)(3) and (f)(4)
+  (`USCODE-2024-…-sec1.txt`) index to C-CPI-U averaged over the 12 months ending 31 August.
+  Over the index years 2002–2025 (Sep–Aug averages, each against the prior year's), C-CPI-U grew
+  2.257%/yr against CPI-U's 2.515%: a gap of **−0.258 pp/yr** (−0.301 pp over the last ten),
+  negative in 23 of 24 years. The model's inflation stands for CPI-U (`FRED-CPIAUCSL` in
+  `docs/economic-shocks/data/`).
+- **FICA wage base → +0.010.** §230 of the Social Security Act sets the base from the 1994 base
+  times AWI(Y−2)/AWI(1992) (the notice's own computation). AWI 1992→2025 grew 3.562%/yr against
+  CPI-U's 2.549% (calendar-year averages, 2025 on 11 months): **+1.01 pp/yr**.
+- Not modelled: the round-down to a multiple of \$50 (§1(f)(7)) — about \$25 per threshold.
+
+Check against the first year it could be checked: the 2027 tables (Rev. Proc. 2026-35) rose
+3.22–3.25% from 2026; the 2027 FICA base rose 4.23% on an AWI step of 4.23%.

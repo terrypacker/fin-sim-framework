@@ -156,7 +156,7 @@
   "spouse": 0
  },
  "auPersonOrdinaryIncomeYTD": {
-  "primary": 105486.509862,
+  "primary": 105483.429862,
   "spouse": 44452.4954309
  },
  "auPersonRealCapitalGainsYTD": {
@@ -176,7 +176,7 @@
   "spouse": 0
  },
  "auPersonUsSourceOrdinaryAudYTD": {
-  "primary": 102577.135862,
+  "primary": 102574.055862,
   "spouse": 44418.7454309
  },
  "auPersonUsSourceRealCapGainsAudYTD": {
@@ -511,9 +511,9 @@
  },
  "bracketIndexAccumulator": {
   "AU": 1.22987386542,
-  "US": 1.22987386542,
-  "US_FEIE": 1.22987386542,
-  "US_FICA": 1.22987386542,
+  "US": 1.20912949094,
+  "US_FEIE": 1.20912949094,
+  "US_FICA": 1.31593177924,
   "US_STATE": 1.22987386542
  },
  "bracketIndexAccumulatorByYear": {
@@ -529,33 +529,33 @@
   },
   "US": {
    "2026": 1,
-   "2027": 1.03,
-   "2028": 1.0609,
-   "2029": 1.092727,
-   "2030": 1.12550881,
-   "2031": 1.1592740743,
-   "2032": 1.19405229653,
-   "2033": 1.22987386542
+   "2027": 1.0275,
+   "2028": 1.05575625,
+   "2029": 1.08478954688,
+   "2030": 1.11462125941,
+   "2031": 1.14527334405,
+   "2032": 1.17676836101,
+   "2033": 1.20912949094
   },
   "US_FEIE": {
    "2026": 1,
-   "2027": 1.03,
-   "2028": 1.0609,
-   "2029": 1.092727,
-   "2030": 1.12550881,
-   "2031": 1.1592740743,
-   "2032": 1.19405229653,
-   "2033": 1.22987386542
+   "2027": 1.0275,
+   "2028": 1.05575625,
+   "2029": 1.08478954688,
+   "2030": 1.11462125941,
+   "2031": 1.14527334405,
+   "2032": 1.17676836101,
+   "2033": 1.20912949094
   },
   "US_FICA": {
    "2026": 1,
-   "2027": 1.03,
-   "2028": 1.0609,
-   "2029": 1.092727,
-   "2030": 1.12550881,
-   "2031": 1.1592740743,
-   "2032": 1.19405229653,
-   "2033": 1.22987386542
+   "2027": 1.04,
+   "2028": 1.0816,
+   "2029": 1.124864,
+   "2030": 1.16985856,
+   "2031": 1.2166529024,
+   "2032": 1.2653190185,
+   "2033": 1.31593177924
   },
   "US_STATE": {
    "2026": 1,
@@ -570,9 +570,9 @@
  },
  "bracketIndexSpreads": {
   "AU": 0,
-  "US": 0,
-  "US_FEIE": 0,
-  "US_FICA": 0,
+  "US": -0.0025,
+  "US_FEIE": -0.0025,
+  "US_FICA": 0.01,
   "US_STATE": 0
  },
  "collectibleAccount": {
@@ -629,7 +629,7 @@
  "cumulativeConsumptionUtility": 165.82651609,
  "cumulativeConsumptionUtilityCount": 84,
  "cumulativeDeficit": 0,
- "cumulativeTaxesPaid": 228493.112642,
+ "cumulativeTaxesPaid": 228687.504099,
  "currentPeriods": {
   "AU": {
    "endMs": 2003788800000,
@@ -749,10 +749,10 @@
  "ftcCurrentPassive": 0,
  "ftcCurrentResourced": 0,
  "ftcPoolGeneral": {
-  "2032": 10253.9353155
+  "2032": 9957.57145865
  },
  "ftcPoolPassive": {
-  "2032": 1440.98721228
+  "2032": 1398.88164708
  },
  "ftcPoolResourced": {},
  "fxAnchorRates": {
@@ -1039,8 +1039,8 @@
  },
  "marketIndexAsOfMs": 1988064000000,
  "metrics": {
-  "netLiquidity": 2188986.7,
-  "netWorth": 5731222.89,
+  "netLiquidity": 2188779.95,
+  "netWorth": 5731016.14,
   "offsetAppliedCapacity": 0,
   "offsetIdleCapacity": 0
  },
@@ -1656,7 +1656,7 @@
  "taxBasis": {
   "AU": {
    "primary": {
-    "instalmentBase": 207030.4,
+    "instalmentBase": 207023.23,
     "year": 2031
    },
    "spouse": {
@@ -1665,7 +1665,7 @@
    }
   },
   "US": {
-   "agi": 196106.78,
+   "agi": 196098.88,
    "tax": 13153.68,
    "year": 2032
   }
@@ -1745,7 +1745,7 @@
  "usPersonHousehold": true,
  "usSavingsAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 453895.449019,
+  "balance": 453688.697562,
   "country": "US",
   "currency": {
    "code": "USD",
@@ -1759,7 +1759,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 453895.449019,
+    "costBasis": 453688.697562,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -1770,7 +1770,7 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 453895.449019,
+    "marketValue": 453688.697562,
     "maturityDate": null,
     "purchaseDate": null,
     "rateKey": "SAVINGS_US",
@@ -2313,7 +2313,7 @@
   "stateKey": "usStockAccount",
   "type": "brokerage"
  },
- "usTaxPaidOnUsSourceAud": 34187.6195859,
+ "usTaxPaidOnUsSourceAud": 34524.2795158,
  "usWithheldYTD": 0,
  "withinTierDraw": "SEQUENTIAL",
  "yieldCurve": {

@@ -13,6 +13,7 @@ import { transferBalanceCap } from './tax/au/au-super-limits.js';
 import { UsTaxRates2024 } from './tax/us/us-tax-rates-2024.js';
 import { UsTaxRates2025 } from './tax/us/us-tax-rates-2025.js';
 import { UsTaxRates2026 } from './tax/us/us-tax-rates-2026.js';
+import { UsTaxRates2027 } from './tax/us/us-tax-rates-2027.js';
 import { AuTaxRates2024 } from './tax/au/au-tax-rates-2024.js';
 import { AuTaxRates2025 } from './tax/au/au-tax-rates-2025.js';
 import { AuTaxRates2026 } from './tax/au/au-tax-rates-2026.js';
@@ -23,6 +24,7 @@ import {
   InflationAdjustedAuTaxRates,
   bracketIndexationFactor,
   BRACKET_INDEX_SERIES,
+  DEFAULT_BRACKET_INDEX_SPREADS,
 } from './tax/inflation-adjusted-tax-rates.js';
 
 // Per-person AU maps whose non-zero balance means a person accrued AU tax
@@ -109,6 +111,7 @@ const AU_PER_PERSON_INCOME_FIELDS = [
  *   US 2024  — IRS Rev. Proc. 2023-34 MFJ brackets
  *   US 2025  — IRS Rev. Proc. 2024-40 MFJ brackets
  *   US 2026  — IRS Rev. Proc. 2025-32 MFJ brackets (permanent OBBBA schedule)
+ *   US 2027  — IRS Rev. Proc. 2026-35 MFJ brackets
  *   AU 2024  — ATO FY2024-25 (Stage 3 tax cuts)
  *   AU 2025  — ATO FY2025-26 (30% bracket extended to $135k)
  *   AU 2026  — ATO FY2026-27 ($18,201–$45,000 band cut 16% → 15%; CGT unchanged)
@@ -127,6 +130,9 @@ function _sumConcessional(byPerson) {
     .reduce((sum, rec) => sum + Math.max(0, rec?.concessionalYTD ?? 0), 0);
 }
 
+/** See `TaxSettleService.usBracketBaseYear` — pinned, never the newest table's year. */
+const US_REAL_DOLLAR_BASE_YEAR = 2026;
+
 export class TaxSettleService {
   constructor() {
     /** @type {Record<string, import('./tax/base-tax-rates-module.js').BaseTaxRatesModule>} */
@@ -136,6 +142,7 @@ export class TaxSettleService {
       new UsTaxRates2024(),
       new UsTaxRates2025(),
       new UsTaxRates2026(),
+      new UsTaxRates2027(),
       new AuTaxRates2024(),
       new AuTaxRates2025(),
       new AuTaxRates2026(),
@@ -482,15 +489,21 @@ export class TaxSettleService {
   }
 
   /**
-   * Base year for REAL (inflation-free) US amounts: the newest registered US
-   * statutory table. `state.inflationAccumulator.US` starts at 1.0 in the sim's
-   * first year, so this is the year in which quoted-real and nominal coincide.
+   * Base year for REAL (inflation-free) US amounts — the year whose dollars a real
+   * Roth-conversion or early-withdrawal target is quoted in. `state.inflationAccumulator.US`
+   * is 1.0 in the default sim's first year (2026), so this is where quoted-real and nominal
+   * coincide.
+   *
+   * PINNED, not derived from the registry. It used to be "the newest registered US
+   * table", which was 2026 by coincidence: registering the 2027 table (Rev. Proc. 2026-35)
+   * would have moved it to 2027 and silently re-read every authored real target as one
+   * year's inflation larger. The bracket ceilings no longer need it to match a table —
+   * they index each year's table from that table's own year, as the settle does.
    *
    * @returns {number}
    */
   get usBracketBaseYear() {
-    const years = this._yearsFor('US');
-    return years[years.length - 1];
+    return US_REAL_DOLLAR_BASE_YEAR;
   }
 
   /**
@@ -515,19 +528,26 @@ export class TaxSettleService {
    * household crosses into the next bracket. Returns Infinity for the top (37%) bracket.
    *
    * Mirrors the settle path: `year`'s statutory table, then indexed by inflation the
-   * way `_inflationWrap` indexes it. Indexing runs from `usBracketBaseYear` — where
-   * the settle-time accumulator is 1.0 — so a year with its own statutory module
-   * (2026 = Rev. Proc. 2025-32) is quoted at its published thresholds rather than
-   * an inflated older table's.
+   * way `_inflationWrap` indexes it — from THAT TABLE'S OWN YEAR (`bracketIndexationFactor`
+   * anchors at the module year), so a year with its own statutory module (2026 = Rev.
+   * Proc. 2025-32, 2027 = Rev. Proc. 2026-35) is quoted at its published thresholds and a
+   * year past the newest table rides the newest one forward.
+   *
+   * Past the newest table the brackets ride `annualInflation + bracketSpread` — the same
+   * CPI-plus-`usFederalBracketIndexSpread` path `InflationAdjustReducer` advances the
+   * settle's US series on, so a "fill to the top of 22%" target lands on the edge the
+   * settle will actually use.
    *
    * @param {number} rate            Target marginal rate, e.g. 0.22
    * @param {number} year            Tax year to compute for
-   * @param {number} annualInflation Annual rate used for bracket indexing
+   * @param {number} annualInflation Annual inflation (the scenario's `inflationRate`)
+   * @param {number} [bracketSpread] `usFederalBracketIndexSpread`; defaults to the model default
    * @returns {number}
    */
-  usBracketGrossIncomeCeiling(rate, year, annualInflation = 0.03) {
+  usBracketGrossIncomeCeiling(rate, year, annualInflation = 0.03,
+                              bracketSpread = DEFAULT_BRACKET_INDEX_SPREADS.US) {
     const base   = this.ratesForYear('US', year);
-    const factor = Math.pow(1 + annualInflation, year - this.usBracketBaseYear);
+    const factor = Math.pow(1 + annualInflation + bracketSpread, year - base.year);
 
     const idx = base._brackets_mfj.findIndex(([, r]) => r === rate);
     if (idx < 0 || idx + 1 >= base._brackets_mfj.length) return Infinity;
@@ -542,11 +562,13 @@ export class TaxSettleService {
    * added while gains sit in the band pushes one gain dollar from 0% to 15%.
    * @param {number} year
    * @param {number} [annualInflation=0.03]
+   * @param {number} [bracketSpread] `usFederalBracketIndexSpread`; defaults to the model default
    * @returns {number}
    */
-  usLtcgZeroBandGrossCeiling(year, annualInflation = 0.03) {
+  usLtcgZeroBandGrossCeiling(year, annualInflation = 0.03,
+                             bracketSpread = DEFAULT_BRACKET_INDEX_SPREADS.US) {
     const base   = this.ratesForYear('US', year);
-    const factor = Math.pow(1 + annualInflation, year - this.usBracketBaseYear);
+    const factor = Math.pow(1 + annualInflation + bracketSpread, year - base.year);
     const top    = base._ltcg_mfj?.[1]?.[0];
     if (!Number.isFinite(top)) return Infinity;
     return (top + base._stdDeduction_mfj) * factor;
@@ -562,8 +584,8 @@ function _shared() {
 
 /**
  * Base year for REAL base-year USD amounts — see `TaxSettleService.usBracketBaseYear`.
- * Read through the service so it tracks the newest registered US table instead of
- * being restated as a literal at each call site.
+ * Read through the service so there is one owner instead of a literal restated at
+ * each call site.
  */
 export const US_BRACKET_BASE_YEAR = _shared().usBracketBaseYear;
 
@@ -580,16 +602,17 @@ export function usRatesForYear(year) {
  *
  * @param {number} rate            Target marginal rate, e.g. 0.22
  * @param {number} year            Tax year to compute for
- * @param {number} annualInflation Annual rate for bracket indexing
+ * @param {number} annualInflation Annual inflation (the scenario's `inflationRate`)
+ * @param {number} [bracketSpread]  `usFederalBracketIndexSpread` (undefined ⇒ model default)
  * @returns {number}
  */
-export function usBracketGrossIncomeCeiling(rate, year, annualInflation = 0.03) {
-  return _shared().usBracketGrossIncomeCeiling(rate, year, annualInflation);
+export function usBracketGrossIncomeCeiling(rate, year, annualInflation = 0.03, bracketSpread) {
+  return _shared().usBracketGrossIncomeCeiling(rate, year, annualInflation, bracketSpread);
 }
 
 /** Free-function form of `TaxSettleService.usLtcgZeroBandGrossCeiling`. */
-export function usLtcgZeroBandGrossCeiling(year, annualInflation = 0.03) {
-  return _shared().usLtcgZeroBandGrossCeiling(year, annualInflation);
+export function usLtcgZeroBandGrossCeiling(year, annualInflation = 0.03, bracketSpread) {
+  return _shared().usLtcgZeroBandGrossCeiling(year, annualInflation, bracketSpread);
 }
 
 /**

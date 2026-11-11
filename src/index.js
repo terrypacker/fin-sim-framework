@@ -390,6 +390,7 @@ import { UsTaxModule2026 } from './finance/tax/us/us-tax-module-2026.js';
 import { UsTaxRates2024 } from './finance/tax/us/us-tax-rates-2024.js';
 import { UsTaxRates2025 } from './finance/tax/us/us-tax-rates-2025.js';
 import { UsTaxRates2026 } from './finance/tax/us/us-tax-rates-2026.js';
+import { UsTaxRates2027 } from './finance/tax/us/us-tax-rates-2027.js';
 import { UsTaxRatesBase, _computeInvestmentInterestLimitation, ORDINARY_CAPITAL_LOSS_CAP, _computeCapitalLossLimitation, _computeCapitalLossBasketAdjustment, _computeRateDifferentialAdjustment, _computePassiveLossLimitation, _drawDownBasket } from './finance/tax/us/us-tax-rates-base.js';
 import { resolveWashSales } from './finance/tax/us/wash-sale.js';
 import { PERIOD_ADVANCE_ORDER, TaxService } from './finance/tax-service.js';
@@ -1940,6 +1941,7 @@ export const Finance = {
   UsTaxRates2024,
   UsTaxRates2025,
   UsTaxRates2026,
+  UsTaxRates2027,
   UsTaxRatesBase,
   _computeInvestmentInterestLimitation,
   ORDINARY_CAPITAL_LOSS_CAP,

@@ -27,6 +27,7 @@ import assert   from 'node:assert/strict';
 
 import { UsTaxRates2025 } from '../../src/finance/tax/us/us-tax-rates-2025.js';
 import { UsTaxRates2026 } from '../../src/finance/tax/us/us-tax-rates-2026.js';
+import { UsTaxRates2027 } from '../../src/finance/tax/us/us-tax-rates-2027.js';
 import { AuTaxRates2025 } from '../../src/finance/tax/au/au-tax-rates-2025.js';
 import { AuTaxRates2026 } from '../../src/finance/tax/au/au-tax-rates-2026.js';
 import { AuTaxRates2027 } from '../../src/finance/tax/au/au-tax-rates-2027.js';
@@ -985,6 +986,66 @@ test('US-2026: LTCG stacks on ordinary income against the 2026 breakpoints', () 
   const expected = (98_900 - 50_000) * 0.00 + (110_000 - 98_900) * 0.15;
   assert.ok(Math.abs(result.capitalGainsTax - expected) < 0.01,
     `LTCG tax ${result.capitalGainsTax} ≠ ${expected}`);
+});
+
+// ─── US 2027 (IRS Rev. Proc. 2026-35) ─────────────────────────────────────────
+//
+// Transcribed from docs/us-tax/IRS-Rev-Proc-2026-35-Inflation-Adjustments-2027.txt
+// (§3.01 Tables 1/3, §3.03, §3.15, §3.41) and the SSA's 2027 determinations notice.
+
+test('US-2027: brackets, LTCG breakpoints, std deduction, FICA base and FEIE are the statutory 2027 figures', () => {
+  const r = new UsTaxRates2027();
+  assert.strictEqual(r.year, 2027);
+  assert.deepStrictEqual(r._brackets_mfj,
+    [[0, 0.10], [25_600, 0.12], [104_050, 0.22], [218_250, 0.24],
+     [416_650, 0.32], [529_100, 0.35], [793_650, 0.37]]);
+  assert.deepStrictEqual(r._ltcg_mfj, [[0, 0.00], [102_100, 0.15], [633_600, 0.20]]);
+  assert.strictEqual(r._stdDeduction_mfj, 33_200);
+  assert.deepStrictEqual(r._brackets_single,
+    [[0, 0.10], [12_800, 0.12], [52_025, 0.22], [109_125, 0.24],
+     [208_325, 0.32], [264_550, 0.35], [661_375, 0.37]]);
+  assert.deepStrictEqual(r._ltcg_single, [[0, 0.00], [51_050, 0.15], [563_200, 0.20]]);
+  assert.strictEqual(r._stdDeduction_single, 16_600);
+  assert.strictEqual(r._ficaWageBase, 192_300);
+  assert.strictEqual(r._feieCap, 137_300);
+});
+
+test('US-2027: the MFJ tax at each bracket edge matches the Rev. Proc. 2026-35 Table 1 column', () => {
+  // Table 1 states the cumulative tax at each threshold — an independent check on the
+  // transcription (published-base guard: compare against the authority, not our output).
+  const published = [[104_050, 11_974.00], [218_250, 37_098.00], [416_650, 84_714.00],
+                     [529_100, 120_698.00], [793_650, 213_290.50]];
+  const r = new UsTaxRates2027();
+  for (const [taxable, tax] of published) {
+    const got = r.computeTax(usState({ usOrdinaryIncomeYTD: taxable + 33_200 })).ordinaryTax;
+    assert.ok(Math.abs(got - tax) < 0.01, `taxable ${taxable}: ${got} ≠ ${tax}`);
+  }
+});
+
+test('US-2027: TaxSettleService files a 2027 period on the 2027 table, unindexed', () => {
+  const svc   = new TaxSettleService();
+  const state = usState({
+    usOrdinaryIncomeYTD: 200_000,
+    currentPeriods: { US: { startMs: Date.UTC(2027, 0, 1) } },
+  });
+  const result = svc.computeUsTax(state);
+  assert.strictEqual(result.taxYear, 2027);
+  assert.strictEqual(result.inputs.standardDeduction, 33_200);
+  assert.strictEqual(result.taxableIncome, 166_800);
+});
+
+test('US-2027: the real-dollar base year stays 2026 and the 2026/2027 bracket ceilings sit at their published edges', () => {
+  const svc = new TaxSettleService();
+  assert.strictEqual(svc.usBracketBaseYear, 2026, 'registering 2027 must not move the real-dollar base');
+  assert.strictEqual(svc.usBracketGrossIncomeCeiling(0.22, 2026, 0.03), 211_400 + 32_200);
+  assert.strictEqual(svc.usBracketGrossIncomeCeiling(0.22, 2027, 0.03), 218_250 + 33_200);
+  assert.ok(Math.abs(svc.usBracketGrossIncomeCeiling(0.22, 2028, 0.03, 0) - (218_250 + 33_200) * 1.03) < 1e-6,
+    'a year past the newest table rides it forward from ITS year');
+  // …at inflation PLUS the bracket spread — the settle's own path (default: chained CPI).
+  assert.ok(Math.abs(svc.usBracketGrossIncomeCeiling(0.22, 2029, 0.03) - (218_250 + 33_200) * 1.0275 ** 2) < 1e-6);
+  assert.ok(Math.abs(svc.usBracketGrossIncomeCeiling(0.22, 2029, 0.03, -0.03) - (218_250 + 33_200)) < 1e-6,
+    'a frozen-bracket scenario plans conversions against frozen edges');
+  assert.strictEqual(svc.usLtcgZeroBandGrossCeiling(2027, 0.03), 102_100 + 33_200);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

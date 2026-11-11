@@ -551,12 +551,12 @@ scenario's own schema), which is where to go to change it.
   The day residency moves to the destination state. Only 1 January is accepted, so the destination taxes the whole year, until part-year state residency is modelled; the year is the choice. Leave unset for no state move.
 - **`stateMoveDestination`** — State Move Destination · `Enum` · default — · one of `NE`, `HI`, `SD` · sweep: opt · via US_STATE_TAX
   Destination US state for the Jan-1 state move (design 34 §9).
-- **`usFederalBracketIndexSpread`** — US Federal Bracket Indexation Spread · `Number` · default `0` · sweep: mc · via US_TAX
-  Annual rate at which US FEDERAL tax brackets, the standard deduction, the FICA wage base and the FEIE cap are projected to rise past the newest published table, expressed as a spread ADDED TO inflation (0 = track CPI, -0.03 against 3% inflation = frozen brackets). Published years are always used as legislated. Does NOT move the FICA wage base or the FEIE cap — those have their own spreads.
-- **`usFeieCapIndexSpread`** — US FEIE Cap Indexation Spread · `Number` · default `0` · sweep: mc · via US_TAX
-  Annual rate at which the §911 foreign earned income exclusion cap is projected to rise past the newest published table, as a spread ADDED TO inflation (0 = track CPI, matching how §911(b)(2)(D)(ii) indexes it today).
-- **`usFicaWageBaseIndexSpread`** — US FICA Wage Base Indexation Spread · `Number` · default `0` · sweep: mc · via US_TAX
-  Annual rate at which the Social Security contribution and benefit base (§3121(a)(1)) is projected to rise past the last SSA announcement, as a spread ADDED TO inflation. The real base tracks the SSA average wage index, which runs above CPI, so a positive spread (~0.005) is more faithful than 0.
+- **`usFederalBracketIndexSpread`** — US Federal Bracket Indexation Spread · `Number` · default `-0.0025` · sweep: mc · via US_TAX
+  Annual rate at which US FEDERAL tax brackets, the long-term capital gains breakpoints and the standard deduction are projected to rise past the newest published table, expressed as a spread ADDED TO inflation. The default -0.0025 tracks chained CPI, the index the law uses, which has run about 0.25% a year below CPI; 0 = track CPI; -0.03 against 3% inflation = frozen brackets. Published years are always used as legislated. Does NOT move the FICA wage base or the FEIE cap, which have their own spreads.
+- **`usFeieCapIndexSpread`** — US FEIE Cap Indexation Spread · `Number` · default `-0.0025` · sweep: mc · via US_TAX
+  Annual rate at which the §911 foreign earned income exclusion cap is projected to rise past the newest published table, as a spread ADDED TO inflation. The default -0.0025 tracks chained CPI, the index the brackets use, which has run about 0.25% a year below CPI; 0 = track CPI.
+- **`usFicaWageBaseIndexSpread`** — US FICA Wage Base Indexation Spread · `Number` · default `0.01` · sweep: mc · via US_TAX
+  Annual rate at which the Social Security contribution and benefit base (§3121(a)(1)) is projected to rise past the last SSA announcement, as a spread ADDED TO inflation. The real base tracks the SSA average wage index, which has run about 1% a year above CPI since 1992, hence the default 0.010; 0 = track CPI.
 - **`usFilingSingle`** — Filing Single · `Boolean` · default — · via US_TAX
   Override filing status auto-detection (true = single, false = MFJ)
 - **`usStateBracketIndexSpread`** — US State Bracket Indexation Spread · `Number` · default `0` · sweep: mc · via US_STATE_TAX
@@ -2356,7 +2356,7 @@ what the in-app panel keys on.
 | [Superannuation Access](concepts/superannuation.md) | concept | 399 | 1 panel · 4 actions · design 119, 77 |
 | [Tax Harvesting and Asset Location](concepts/tax-harvesting.md) | concept | 235 | 2 panels · 3 params · design 29, 94 |
 | [Timeline](panels/timeline.md) | panel | 203 | 1 panel |
-| [US Tax](concepts/us-tax.md) | concept | 260 | 1 panel · 8 params · design 71 |
+| [US Tax](concepts/us-tax.md) | concept | 345 | 1 panel · 8 params · design 71 |
 | [Watchlist](panels/watchlist.md) | panel | 209 | 1 panel · design 101 |
 
 ---

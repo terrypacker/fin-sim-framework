@@ -156,7 +156,7 @@
   "spouse": 0
  },
  "auPersonOrdinaryIncomeYTD": {
-  "primary": 120940.011088,
+  "primary": 120940.151088,
   "spouse": 45785.0577938
  },
  "auPersonRealCapitalGainsYTD": {
@@ -176,7 +176,7 @@
   "spouse": 0
  },
  "auPersonUsSourceOrdinaryAudYTD": {
-  "primary": 119257.571088,
+  "primary": 119257.711088,
   "spouse": 45751.3077938
  },
  "auPersonUsSourceRealCapGainsAudYTD": {
@@ -518,9 +518,9 @@
  },
  "bracketIndexAccumulator": {
   "AU": 1.26677008139,
-  "US": 1.26677008139,
-  "US_FEIE": 1.26677008139,
-  "US_FICA": 1.26677008139,
+  "US": 1.24238055194,
+  "US_FEIE": 1.24238055194,
+  "US_FICA": 1.36856905041,
   "US_STATE": 1.26677008139
  },
  "bracketIndexAccumulatorByYear": {
@@ -537,36 +537,36 @@
   },
   "US": {
    "2026": 1,
-   "2027": 1.03,
-   "2028": 1.0609,
-   "2029": 1.092727,
-   "2030": 1.12550881,
-   "2031": 1.1592740743,
-   "2032": 1.19405229653,
-   "2033": 1.22987386542,
-   "2034": 1.26677008139
+   "2027": 1.0275,
+   "2028": 1.05575625,
+   "2029": 1.08478954688,
+   "2030": 1.11462125941,
+   "2031": 1.14527334405,
+   "2032": 1.17676836101,
+   "2033": 1.20912949094,
+   "2034": 1.24238055194
   },
   "US_FEIE": {
    "2026": 1,
-   "2027": 1.03,
-   "2028": 1.0609,
-   "2029": 1.092727,
-   "2030": 1.12550881,
-   "2031": 1.1592740743,
-   "2032": 1.19405229653,
-   "2033": 1.22987386542,
-   "2034": 1.26677008139
+   "2027": 1.0275,
+   "2028": 1.05575625,
+   "2029": 1.08478954688,
+   "2030": 1.11462125941,
+   "2031": 1.14527334405,
+   "2032": 1.17676836101,
+   "2033": 1.20912949094,
+   "2034": 1.24238055194
   },
   "US_FICA": {
    "2026": 1,
-   "2027": 1.03,
-   "2028": 1.0609,
-   "2029": 1.092727,
-   "2030": 1.12550881,
-   "2031": 1.1592740743,
-   "2032": 1.19405229653,
-   "2033": 1.22987386542,
-   "2034": 1.26677008139
+   "2027": 1.04,
+   "2028": 1.0816,
+   "2029": 1.124864,
+   "2030": 1.16985856,
+   "2031": 1.2166529024,
+   "2032": 1.2653190185,
+   "2033": 1.31593177924,
+   "2034": 1.36856905041
   },
   "US_STATE": {
    "2026": 1,
@@ -582,9 +582,9 @@
  },
  "bracketIndexSpreads": {
   "AU": 0,
-  "US": 0,
-  "US_FEIE": 0,
-  "US_FICA": 0,
+  "US": -0.0025,
+  "US_FEIE": -0.0025,
+  "US_FICA": 0.01,
   "US_STATE": 0
  },
  "collectibleAccount": {
@@ -641,7 +641,7 @@
  "cumulativeConsumptionUtility": 189.514370804,
  "cumulativeConsumptionUtilityCount": 96,
  "cumulativeDeficit": 0,
- "cumulativeTaxesPaid": 419684.376362,
+ "cumulativeTaxesPaid": 420979.311367,
  "currentPeriods": {
   "AU": {
    "endMs": 2035324800000,
@@ -1412,8 +1412,8 @@
  },
  "marketIndexAsOfMs": 2019600000000,
  "metrics": {
-  "netLiquidity": 3717065.06,
-  "netWorth": 6571390.97,
+  "netLiquidity": 3715754.76,
+  "netWorth": 6570080.67,
   "offsetAppliedCapacity": 0,
   "offsetIdleCapacity": 0
  },
@@ -2188,7 +2188,7 @@
  "taxBasis": {
   "AU": {
    "primary": {
-    "instalmentBase": 223359.13,
+    "instalmentBase": 223352.94,
     "year": 2032
    },
    "spouse": {
@@ -2197,8 +2197,8 @@
    }
   },
   "US": {
-   "agi": 228229.71,
-   "tax": 115238.37,
+   "agi": 228226.74,
+   "tax": 116558,
    "year": 2033
   }
  },
@@ -2277,7 +2277,7 @@
  "usPersonHousehold": true,
  "usSavingsAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 1259890.03247,
+  "balance": 1258579.73747,
   "country": "US",
   "currency": {
    "code": "USD",
@@ -2291,7 +2291,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 1259890.03247,
+    "costBasis": 1258579.73747,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -2302,7 +2302,7 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 1259890.03247,
+    "marketValue": 1258579.73747,
     "maturityDate": null,
     "purchaseDate": null,
     "rateKey": "SAVINGS_US",
@@ -2481,7 +2481,7 @@
   },
   "type": "brokerage"
  },
- "usTaxPaidOnUsSourceAud": 89803.4621586,
+ "usTaxPaidOnUsSourceAud": 89681.3061819,
  "usWithheldYTD": 0,
  "withinTierDraw": "SEQUENTIAL",
  "yieldCurve": {

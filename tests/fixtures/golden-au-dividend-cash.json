@@ -156,7 +156,7 @@
   "spouse": 0
  },
  "auPersonOrdinaryIncomeYTD": {
-  "primary": 120524.761088,
+  "primary": 120524.901088,
   "spouse": 45785.0577938
  },
  "auPersonRealCapitalGainsYTD": {
@@ -176,7 +176,7 @@
   "spouse": 0
  },
  "auPersonUsSourceOrdinaryAudYTD": {
-  "primary": 118144.161088,
+  "primary": 118144.301088,
   "spouse": 45751.3077938
  },
  "auPersonUsSourceRealCapGainsAudYTD": {
@@ -387,9 +387,9 @@
  },
  "bracketIndexAccumulator": {
   "AU": 1.26677008139,
-  "US": 1.26677008139,
-  "US_FEIE": 1.26677008139,
-  "US_FICA": 1.26677008139,
+  "US": 1.24238055194,
+  "US_FEIE": 1.24238055194,
+  "US_FICA": 1.36856905041,
   "US_STATE": 1.26677008139
  },
  "bracketIndexAccumulatorByYear": {
@@ -406,36 +406,36 @@
   },
   "US": {
    "2026": 1,
-   "2027": 1.03,
-   "2028": 1.0609,
-   "2029": 1.092727,
-   "2030": 1.12550881,
-   "2031": 1.1592740743,
-   "2032": 1.19405229653,
-   "2033": 1.22987386542,
-   "2034": 1.26677008139
+   "2027": 1.0275,
+   "2028": 1.05575625,
+   "2029": 1.08478954688,
+   "2030": 1.11462125941,
+   "2031": 1.14527334405,
+   "2032": 1.17676836101,
+   "2033": 1.20912949094,
+   "2034": 1.24238055194
   },
   "US_FEIE": {
    "2026": 1,
-   "2027": 1.03,
-   "2028": 1.0609,
-   "2029": 1.092727,
-   "2030": 1.12550881,
-   "2031": 1.1592740743,
-   "2032": 1.19405229653,
-   "2033": 1.22987386542,
-   "2034": 1.26677008139
+   "2027": 1.0275,
+   "2028": 1.05575625,
+   "2029": 1.08478954688,
+   "2030": 1.11462125941,
+   "2031": 1.14527334405,
+   "2032": 1.17676836101,
+   "2033": 1.20912949094,
+   "2034": 1.24238055194
   },
   "US_FICA": {
    "2026": 1,
-   "2027": 1.03,
-   "2028": 1.0609,
-   "2029": 1.092727,
-   "2030": 1.12550881,
-   "2031": 1.1592740743,
-   "2032": 1.19405229653,
-   "2033": 1.22987386542,
-   "2034": 1.26677008139
+   "2027": 1.04,
+   "2028": 1.0816,
+   "2029": 1.124864,
+   "2030": 1.16985856,
+   "2031": 1.2166529024,
+   "2032": 1.2653190185,
+   "2033": 1.31593177924,
+   "2034": 1.36856905041
   },
   "US_STATE": {
    "2026": 1,
@@ -451,9 +451,9 @@
  },
  "bracketIndexSpreads": {
   "AU": 0,
-  "US": 0,
-  "US_FEIE": 0,
-  "US_FICA": 0,
+  "US": -0.0025,
+  "US_FEIE": -0.0025,
+  "US_FICA": 0.01,
   "US_STATE": 0
  },
  "collectibleAccount": {
@@ -510,7 +510,7 @@
  "cumulativeConsumptionUtility": 189.514370804,
  "cumulativeConsumptionUtilityCount": 96,
  "cumulativeDeficit": 0,
- "cumulativeTaxesPaid": 419636.304839,
+ "cumulativeTaxesPaid": 420931.262283,
  "currentPeriods": {
   "AU": {
    "endMs": 2035324800000,
@@ -931,8 +931,8 @@
  },
  "marketIndexAsOfMs": 2019600000000,
  "metrics": {
-  "netLiquidity": 3091601.96,
-  "netWorth": 5896414.54,
+  "netLiquidity": 3090291.76,
+  "netWorth": 5895104.33,
   "offsetAppliedCapacity": 0,
   "offsetIdleCapacity": 0
  },
@@ -1526,7 +1526,7 @@
  "taxBasis": {
   "AU": {
    "primary": {
-    "instalmentBase": 224864.8,
+    "instalmentBase": 224858.58,
     "year": 2032
    },
    "spouse": {
@@ -1535,8 +1535,8 @@
    }
   },
   "US": {
-   "agi": 227779.99,
-   "tax": 114792.39,
+   "agi": 227777,
+   "tax": 116112.02,
    "year": 2033
   }
  },
@@ -1615,7 +1615,7 @@
  "usPersonHousehold": true,
  "usSavingsAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 1280352.9436,
+  "balance": 1279042.73616,
   "country": "US",
   "currency": {
    "code": "USD",
@@ -1629,7 +1629,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 1280352.9436,
+    "costBasis": 1279042.73616,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -1640,7 +1640,7 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 1280352.9436,
+    "marketValue": 1279042.73616,
     "maturityDate": null,
     "purchaseDate": null,
     "rateKey": "SAVINGS_US",
@@ -1856,7 +1856,7 @@
   "stateKey": "usStockAccount",
   "type": "brokerage"
  },
- "usTaxPaidOnUsSourceAud": 89466.4027286,
+ "usTaxPaidOnUsSourceAud": 89344.2445819,
  "usWithheldYTD": 0,
  "withinTierDraw": "SEQUENTIAL",
  "yieldCurve": {

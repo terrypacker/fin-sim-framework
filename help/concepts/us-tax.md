@@ -8,10 +8,10 @@ design: [71-tax-worksheet-csv-export.md]
 stamps:
   param:residencyState: 188c33
   param:usFilingSingle: 06119d
-  param:usFederalBracketIndexSpread: be5ae9
+  param:usFederalBracketIndexSpread: 4c8208
   param:usStateBracketIndexSpread: 7f550c
-  param:usFicaWageBaseIndexSpread: a676c0
-  param:usFeieCapIndexSpread: 277ceb
+  param:usFicaWageBaseIndexSpread: 75ca9f
+  param:usFeieCapIndexSpread: 576ada
   param:stateMoveDate: ef6579
   param:stateMoveDestination: 2f214c
   panel:journal-report: b2eedb
@@ -37,6 +37,13 @@ than inflation drags real income into higher brackets year after year — decade
 quiet bracket creep — and a plan that assumes perfect indexation will understate its
 own tax bill. Because the effect compounds, small differences in these spreads move
 terminal outcomes by amounts worth checking.
+
+The shipped defaults are not zero, because the law does not index to the inflation
+the plan assumes. The federal thresholds follow the chained index, which has lagged
+ordinary CPI in almost every year since 2002, so by default they creep. The wage base
+follows average pay, which has beaten prices since the early 1990s, so by default it
+climbs faster. Both figures were measured from published data; the trail is in
+`docs/us-tax/SOURCES.md`. Set a spread to 0 to go back to plain CPI tracking.
 
 Filing status changes the bracket widths and standard deduction, and survivorship
 changes it mid-plan — see [Mortality](mortality.md).
