@@ -30,7 +30,7 @@ import { YieldCurveStepReducer }          from '../../finance/economic-regimes/y
 import { YieldCurveTickHandler }          from '../../finance/economic-regimes/yield-curve-tick-handler.js';
 import { EquityReturnReducer }            from '../../finance/economic-regimes/equity-return-reducer.js';
 import { EquityReturnStepReducer }        from '../../finance/economic-regimes/equity-return-step-reducer.js';
-import { EquityReturnTickHandler, EQUITY_RETURN_MODEL_IDS, EQUITY_RETURN_MODEL_LABELS } from '../../finance/economic-regimes/equity-return-tick-handler.js';
+import { EquityReturnTickHandler, EQUITY_RETURN_MODEL_IDS, EQUITY_RETURN_MODEL_LABELS, DEFAULT_GOLD_RETURN_VOL } from '../../finance/economic-regimes/equity-return-tick-handler.js';
 import { InflationTickHandler, INFLATION_MODEL_IDS, INFLATION_MODEL_LABELS, jointInflationActive, inflationProcessConfig } from '../../finance/economic-regimes/inflation-tick-handler.js';
 import { stockBondCorrelationOf, stockBondCorrelationActive } from '../../finance/economic-regimes/stock-bond-correlation.js';
 import { InflationStepReducer }           from '../../finance/economic-regimes/inflation-step-reducer.js';
@@ -1327,8 +1327,8 @@ export const ECONOMIC_REGIMES = {
         group:        'Economic Shocks',
         mc:           true,
         opt:          false,
-        defaultValue: 0.15,
-        description:  'Annualized standard deviation of gold\'s own yearly return draw, around Gold Growth Rate (design 121 §6). 0.15 is gold\'s measured real volatility since 1985. Drawn once a year alongside the equity market, only when Stochastic Equity Returns is on, so a single deterministic run still grows gold at exactly its growth rate. Set 0 for no gold draw.',
+        defaultValue: DEFAULT_GOLD_RETURN_VOL,
+        description:  'Annualized standard deviation of gold\'s yearly return, around Gold Growth Rate. The default, 0.29, is gold\'s measured real volatility since 1969, so a historical year the bootstrap replays (with Replay Gold History on) comes through at history\'s own size: 1979 is +161% after inflation. 0.15 is the calmer since-1985 figure. Every other year draws at the same volatility, loosely tied to the equity market (designs 121 §6, 131). At 0.29 a one-in-ten bad year loses about a quarter of gold\'s value, and the average yearly return sits 3–4 points above the growth rate so that the long-run growth still matches it. Only used when Stochastic Equity Returns is on, so a single deterministic run still grows gold at exactly its growth rate. Set 0 for no gold draw.',
       },
       {
         key:          'goldEquityCorrelation',
@@ -1404,6 +1404,17 @@ export const ECONOMIC_REGIMES = {
         defaultValue: true,
         visibleWhen:  { param: 'equityReturnModel', equals: 'HISTORICAL_BOOTSTRAP' },
         description:  'When on (default), the AU market replays its OWN history in the same historical year the US market is replaying (OECD Australian share prices, 1958–2023, after inflation), instead of following the US market through its beta plus random noise. So AU-specific episodes, such as the 11-year recovery after 2008, come through. Rescaled so the AU market\'s volatility matches your beta and idiosyncratic settings. Historical years before 1958 use the random noise. Price-only data, so year-to-year dividend variation is not included (design 102 §6).',
+      },
+      {
+        key:          'goldReplay',
+        label:        'Historical Bootstrap — Replay Gold History',
+        type:         'Boolean',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: true,
+        visibleWhen:  { param: 'equityReturnModel', equals: 'HISTORICAL_BOOTSTRAP' },
+        description:  'When on (default), gold replays its OWN return from the historical year the share market is replaying (London gold price, 1969–2023, after US inflation), instead of a random draw. With inflation also replaying history, the Monte Carlo default, that year\'s gold, shares, inflation and interest rates all come from the same year, so gold\'s real-rate and inflation behaviour is history\'s. Rescaled to Gold Return Volatility. Years before 1969, when gold was fixed at $35, use the random draw. Outside joint inflation the replayed gold year runs on the model\'s own inflation instead of its own (design 131).',
       },
       {
         key:          'equityReturnReversionSpeed',
@@ -1997,8 +2008,10 @@ export const ECONOMIC_REGIMES = {
               : (p.equityReturnIdioVol ?? {}),
             stampMarketShock: _stampMarketShock(context),
             // Design 121 §6 — gold's own draw. Without it gold is riskless in every MC path.
-            gold:           (p.goldReturnVol ?? 0.15) > 0
-              ? { vol: p.goldReturnVol ?? 0.15, correlation: p.goldEquityCorrelation ?? 0 }
+            // Design 131 — the default vol is history's (0.29), and `replay` hands gold its own
+            // historical year whenever the bootstrap replays one that has a gold row.
+            gold:           (p.goldReturnVol ?? DEFAULT_GOLD_RETURN_VOL) > 0
+              ? { vol: p.goldReturnVol ?? DEFAULT_GOLD_RETURN_VOL, correlation: p.goldEquityCorrelation ?? 0, replay: p.goldReplay ?? true }
               : null,
             driftComp:      p.equityReturnDriftComp ?? 'GEOMETRIC',
             blockLength:    p.equityReturnBootstrapBlock ?? 5,

@@ -62,6 +62,7 @@ for years**, not a one-year spike.
 | `FRED-MORTGAGE30US` | Freddie Mac 30-year fixed | the pass-through from policy to a household's loan rate |
 | `FRED-DGS1/2/5/10/30` | Treasury constant maturity, daily | `yieldCurveTwist`, stated per tenor |
 | `FRED-GS1`, `FRED-GS10` | monthly equivalents, 1953– | the pre-1962 and pre-1977 history the daily series do not cover |
+| `FRED-FII10` | 10-year TIPS real yield (market yield on inflation-indexed constant maturity), monthly, 2003– | gold against the real rate (design 131 §2) |
 | `FRED-T10Y2Y` | 10y−2y spread, daily 1976– | dating the inversion episodes |
 | `FRED-IR3TIB01AUM156N` | AU 3-month interbank, monthly 1968– | `PRIME_AU`, and the evidence that AU policy does **not** track the Fed one-for-one |
 | `FRED-IRLTLT01AUM156N` | AU 10-year government bond yield, monthly 1969– | `FIXED_INCOME_AU` |

@@ -9,11 +9,11 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-238 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 92 tools · 330 state field types · 80 topics · 138 design docs
+239 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 94 tools · 330 state field types · 80 topics · 139 design docs
 
 ---
 
-## Parameters (238)
+## Parameters (239)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
@@ -190,7 +190,7 @@ scenario's own schema), which is where to go to change it.
 - **`earlyWithdrawalStartYear`** — Early Withdrawal Optimization Start Year · `Number` · default — · via US_EARLY_WITHDRAWAL
   First year of the opt-in optimization window. Set with the end year to let the MPC cockpit tune/discover early withdrawals. null = no window (manual schedule only).
 
-### Economic Shocks (55)
+### Economic Shocks (56)
 
 - **`auYieldCurveShape`** — AU Yield Curve Shape · `YieldCurveShape` · default — · via ECONOMIC_REGIMES
   Optional AU term-structure overlay (design 67): an array of { tenor, spread } anchor points added to the FIXED_INCOME_AU level, linearly interpolated and clamped to the endpoints. Independent of the US shape. Absent/empty ⇒ a flat curve.
@@ -214,8 +214,10 @@ scenario's own schema), which is where to go to change it.
   Annualized standard deviation (in rate units, e.g. 0.18 = 18%) of the shared equity MARKET factor — the US market's own volatility (0.18 is the mean of J.P. Morgan's and BlackRock's, design 90 §7.4). Each market loads on it by its beta (US 1.0; intl ex-US 0.85; intl ex-AU 0.81; AU 0.43) and adds its own idiosyncratic volatility. Only used when Stochastic Equity Returns is on.
 - **`goldEquityCorrelation`** — Gold–Equity Correlation · `Number` · default `0` · sweep: mc · via ECONOMIC_REGIMES
   Correlation of gold's yearly draw with that year's equity market shock (−1 to 1). 0 is the centre of the measured windows: −0.23 over 1972–2024, −0.04 since 1985, +0.17 since 2000 (design 121 §6). Only used when Stochastic Equity Returns is on.
-- **`goldReturnVol`** — Gold Return Volatility · `Number` · default `0.15` · sweep: mc · via ECONOMIC_REGIMES
-  Annualized standard deviation of gold's own yearly return draw, around Gold Growth Rate (design 121 §6). 0.15 is gold's measured real volatility since 1985. Drawn once a year alongside the equity market, only when Stochastic Equity Returns is on, so a single deterministic run still grows gold at exactly its growth rate. Set 0 for no gold draw.
+- **`goldReplay`** — Historical Bootstrap — Replay Gold History · `Boolean` · default `true` · conditional · via ECONOMIC_REGIMES
+  When on (default), gold replays its OWN return from the historical year the share market is replaying (London gold price, 1969–2023, after US inflation), instead of a random draw. With inflation also replaying history, the Monte Carlo default, that year's gold, shares, inflation and interest rates all come from the same year, so gold's real-rate and inflation behaviour is history's. Rescaled to Gold Return Volatility. Years before 1969, when gold was fixed at \$35, use the random draw. Outside joint inflation the replayed gold year runs on the model's own inflation instead of its own (design 131).
+- **`goldReturnVol`** — Gold Return Volatility · `Number` · default `0.29` · sweep: mc · via ECONOMIC_REGIMES
+  Annualized standard deviation of gold's yearly return, around Gold Growth Rate. The default, 0.29, is gold's measured real volatility since 1969, so a historical year the bootstrap replays (with Replay Gold History on) comes through at history's own size: 1979 is +161% after inflation. 0.15 is the calmer since-1985 figure. Every other year draws at the same volatility, loosely tied to the equity market (designs 121 §6, 131). At 0.29 a one-in-ten bad year loses about a quarter of gold's value, and the average yearly return sits 3–4 points above the growth rate so that the long-run growth still matches it. Only used when Stochastic Equity Returns is on, so a single deterministic run still grows gold at exactly its growth rate. Set 0 for no gold draw.
 - **`inflationGlobalReversionSpeed`** — Inflation Path Global Reversion Speed (k) · `Number` · default `0.1` · conditional · via ECONOMIC_REGIMES
   How quickly the shared global inflation cycle fades, per year: 0.1 keeps 0.90 of it each year, a half-life of about 7 years, so it moves on the scale of decades. Only used when Inflation Path Global Share is above 0. A TIPS ladder's expected inflation (design 125) fades at this speed too, even with the path off.
 - **`inflationGlobalShare`** — Inflation Path Global Share · `Number` · default `0.4` · conditional · via ECONOMIC_REGIMES
@@ -1106,11 +1108,11 @@ Explained in [`help/nodes`](nodes/reducer.md). 0 field(s) described by a record 
 
 ---
 
-## Headless tools (92)
+## Headless tools (94)
 
 Command-line entry points under `scripts/`. **Purpose** is harvested from each script's
 docblock, not re-authored here. Arguments come from each script's declarative
-`parseFlags` spec: 77 of 77 entry points carry one (design 108 D6 — all of them).
+`parseFlags` spec: 79 of 79 entry points carry one (design 108 D6 — all of them).
 6 scripts carry no docblock naming themselves and show `(undocumented)`.
 
 ### scripts/config-converters/
@@ -1225,6 +1227,14 @@ docblock, not re-authored here. Arguments come from each script's declarative
     - `--run` (flag) — price each corner against a smoothed counterfactual
     - `--seeds` (number, default `0`) — re-price over n stochastic seeds (implies --run)
     - `--material` (number, default `0.05`) — share at or above which a class counts as a position
+- **`scripts/lab/gold-correlation.mjs`**
+  what gold's annual return has moved with, by era (design 131 §2)
+    - `--json` (string) — also write every statistic to this JSON file
+- **`scripts/lab/gold-model-check.mjs`**
+  design 131 gate G2: does the MODEL's gold behave like history's?
+    - `--seeds` (number, default `40`) — paths (seeds 1..n), 42 years each
+    - `--no-replay` (flag) — run with goldReplay off (the comparison arm)
+    - `--vol` (number) — goldReturnVol (default: the param default)
 - **`scripts/lab/hedge-horizon.mjs`**
   the model's minimum-variance currency hedge ratio by holding period
     - `--seeds` (int, default `200`) — seeds per ρ (1..N)
@@ -2352,7 +2362,7 @@ what the in-app panel keys on.
 | [Spending](panels/spending.md) | panel | 209 | 1 panel · design 89 |
 | [The Spending Rule](concepts/spending-rule.md) | concept | 296 | 1 panel · 17 params · design 89 |
 | [State](panels/state-panel.md) | panel | 181 | 1 panel |
-| [Stochastic Return Paths](concepts/stochastic-return-paths.md) | concept | 379 | 2 panels · 18 params · design 74, 90, 102, 121, 129 |
+| [Stochastic Return Paths](concepts/stochastic-return-paths.md) | concept | 393 | 2 panels · 19 params · design 74, 90, 102, 121, 129, 131 |
 | [Superannuation Access](concepts/superannuation.md) | concept | 399 | 1 panel · 4 actions · design 119, 77 |
 | [Tax Harvesting and Asset Location](concepts/tax-harvesting.md) | concept | 235 | 2 panels · 3 params · design 29, 94 |
 | [Timeline](panels/timeline.md) | panel | 203 | 1 panel |
@@ -2361,7 +2371,7 @@ what the in-app panel keys on.
 
 ---
 
-## Design documents (138)
+## Design documents (139)
 
 Tier 3 — the full argument behind each mechanic, in `design/`. The title is each
 file's own H1, read out of it; there is no summary column, because a one-line precis
@@ -2505,6 +2515,7 @@ between 10 and 11.
 | [`128-ladder-aware-bond-buys.md`](../design/128-ladder-aware-bond-buys.md) | 128 — Ladder-aware bond buys (design 66 §10.5, Phase B) |
 | [`129-stock-bond-correlation.md`](../design/129-stock-bond-correlation.md) | 129 — Stock–bond correlation as a regime property (design 126 G3) |
 | [`130-bonds-panel.md`](../design/130-bonds-panel.md) | 130 — Bonds panel: holdings by bond type, and the maturity ladder |
+| [`131-gold-return-drivers.md`](../design/131-gold-return-drivers.md) | 131 — Gold's return drivers: inflation, real rates and replayed history |
 | [`bus-unification-plan.md`](../design/bus-unification-plan.md) | Bus Unification Plan |
 | [`inconsistencies.md`](../design/inconsistencies.md) | Inconsistencies, Rework Candidates, and Open Questions |
 | [`requirements.md`](../design/requirements.md) | Requirements Tracker |

@@ -14,7 +14,7 @@ import { McRunsPanel }             from './mc-runs-panel.js';
 import { IntlRetirementMcConfig, refineCenterSource } from '../../finance/monte-carlo/intl-retirement-mc-config.js';
 import { IntlRetirementScenario } from '../../scenarios/intl-retirement-scenario.js';
 import { resolveAliasCenters, resolveRecordCenters } from '../../scenarios/scenario-param-apply.js';
-import { resolveLiquidityAxisCenters, parsePoolTargetScaleKey }
+import { withLiquidityAxisCenters, parsePoolTargetScaleKey }
                               from '../../finance/pools/pool-target-scale.js';
 import { parseGateAxisKey }   from '../../finance/pools/pool-gate-axis.js';
 import { parseShapeYearShiftKey } from '../../finance/pools/pool-shape-year-axis.js';
@@ -406,7 +406,8 @@ export class MonteCarloPresenter {
     // Leg C's axes are hidden and generated (design 110 §6.2 / §6.3), so their plan value is
     // in neither store: a pool factor runs at 1.0 and a gate threshold at whatever the clause
     // says. Without them the grid panel shows an axis with no plan value and no reference cell.
-    return { ...snapshot, ...resolveRecordCenters(activeCfg), ...scenarioParamValues(activeCfg),
-             ...resolveAliasCenters(activeCfg), ...resolveLiquidityAxisCenters(activeCfg) };
+    // The leg-C centres only FILL a missing key: an authored factor is the plan value (design 131).
+    return withLiquidityAxisCenters({ ...snapshot, ...resolveRecordCenters(activeCfg), ...scenarioParamValues(activeCfg),
+             ...resolveAliasCenters(activeCfg) }, activeCfg);
   }
 }

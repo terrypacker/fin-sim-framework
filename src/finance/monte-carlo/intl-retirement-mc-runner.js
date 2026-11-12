@@ -12,7 +12,7 @@ import { ScenarioRunner }             from '../../simulation-framework/scenario.
 import { IntlRetirementScenario } from '../../scenarios/intl-retirement-scenario.js';
 import { ScenarioSerializer }         from '../../scenarios/scenario-serializer.js';
 import { resolveAliasCenters, resolveRecordCenters } from '../../scenarios/scenario-param-apply.js';
-import { resolveLiquidityAxisCenters } from '../pools/pool-target-scale.js';
+import { withLiquidityAxisCenters } from '../pools/pool-target-scale.js';
 import { IntlRetirementMcConfig, CENTER_SOURCES, refineCenterSource, variablesMissingCenter } from './intl-retirement-mc-config.js';
 import { scenarioParamValues, paramSchemaDefaults } from '../param-schema-utils.js';
 import { buildIterationRunner, perturbParams, samplingSignature, mcEquityModel, mcInflationModel, mcPrimeModel, applyMcPaths } from './parallel/mc-worker-core.js';
@@ -249,12 +249,12 @@ export class IntlRetirementMcRunner {
     // successor's value — a loaded cfg carries only that one.
     const aliasCenters   = resolveAliasCenters(rawTemplate);
     // Leg C's axes (a pool size factor, a gate threshold, a gate dwell) are hidden generated
-    // params: absent from `cfg.params` AND from the schema defaults, so nothing above carries
-    // their plan value. Without it a grid on one has no reference cell and a disabled row has
-    // no centre (design 110 §6.2 / §6.3).
-    const poolCenters    = resolveLiquidityAxisCenters(rawTemplate);
-    const base = { ...schemaDefaults, ...recordCenters, ...templateParams, ...aliasCenters,
-                   ...poolCenters, ...migrateParamBag(baseParams), endDate: simEnd };
+    // params: absent from the schema defaults, and from `cfg.params` unless authored, so
+    // nothing above carries their plan value. Without it a grid on one has no reference cell
+    // and a disabled row has no centre (design 110 §6.2 / §6.3). The centres only FILL a
+    // missing key: an authored factor is the plan value (design 131 phase 4).
+    const base = withLiquidityAxisCenters({ ...schemaDefaults, ...recordCenters, ...templateParams,
+                   ...aliasCenters, ...migrateParamBag(baseParams), endDate: simEnd }, rawTemplate);
     // Harvest from the raw template: its records carry the generated per-record params
     // (design 98 W3). Once, here on the main thread — workers get resolved `variables`.
     const variables  = this.mcConfig.buildVariables(base, { cfg: rawTemplate });
