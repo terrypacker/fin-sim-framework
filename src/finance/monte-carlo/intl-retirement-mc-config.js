@@ -156,9 +156,10 @@ export const DEFAULT_MC_VARIABLE_CONFIGS = [
     group: 'Return Paths',             enabled: false,
   },
   // Design 121 §6 — gold's own yearly draw. Like equity vol, inert unless the equity path runs.
+  // Design 131 §3.5 — centred on the default, history's 1969– sd.
   {
     paramKey: 'goldReturnVol',         label: 'Gold Return Volatility',
-    type: DISTRIBUTION_TYPES.NORMAL,   mean: 0.15, stdDev: 0.03,
+    type: DISTRIBUTION_TYPES.NORMAL,   mean: 0.29, stdDev: 0.05,
     group: 'Return Paths',             enabled: false,
   },
   {

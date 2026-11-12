@@ -12,6 +12,7 @@ import { HandlerEntry }                    from '../../simulation-framework/hand
 import { FX_PROCESS_MODELS, FX_PROCESS_MODEL_IDS, gaussianFrom } from '../fx/fx-process-models.js';
 import { RATE_KEYS, EQUITY_SLEEVES, DEFAULT_EQUITY_BETA, DEFAULT_EQUITY_IDIO } from './rate-keys.js';
 import { HISTORICAL_EQUITY_RETURNS }       from './historical-equity-returns.js';
+import { HISTORICAL_GOLD_RETURNS }         from './historical-gold.js';
 
 /**
  * The equity market-factor processes: the shared FX process library (design 47) plus the
@@ -88,6 +89,34 @@ export const HISTORICAL_AU_SERIES = (() => {
   const sd   = Math.sqrt(returns.reduce((s, x) => s + (x - mean) ** 2, 0) / (n - 1));
   return Object.freeze({ firstYear, deviations: Object.freeze(returns.map(x => x - mean)), sd });
 })();
+
+/**
+ * Gold's own history, re-centred (design 131 §3.2): its real return in each year from 1969
+ * (the free market), minus the 1969– mean. The gold replay uses it in place of the
+ * `ρ·z + ε` draw whenever the bootstrap's year has a gold row. `sd` is the unit the replay
+ * rescales against, and `dragVar` is the series' own 2 × (arithmetic − geometric), so the
+ * GEOMETRIC compensation is exact on history (design 102 §4.4).
+ */
+export const HISTORICAL_GOLD_SERIES = (() => {
+  const { firstYear, returns } = HISTORICAL_GOLD_RETURNS;
+  const n    = returns.length;
+  const mean = returns.reduce((s, x) => s + x, 0) / n;
+  const sd   = Math.sqrt(returns.reduce((s, x) => s + (x - mean) ** 2, 0) / (n - 1));
+  const geo  = Math.exp(returns.reduce((s, x) => s + Math.log(1 + x), 0) / n) - 1;
+  return Object.freeze({ firstYear, deviations: Object.freeze(returns.map(x => x - mean)), sd, dragVar: 2 * (mean - geo) });
+})();
+
+/**
+ * Design 131 §3.5 — `goldReturnVol`'s default: the 1969– series' measured sd, rounded to the
+ * percent. At this value a replayed year is history's year, very nearly unscaled.
+ */
+export const DEFAULT_GOLD_RETURN_VOL = Math.round(HISTORICAL_GOLD_SERIES.sd * 100) / 100;
+
+/** The gold series' index for a calendar year, or -1 when gold has no row for it. */
+function goldIndex(year) {
+  const i = year - HISTORICAL_GOLD_SERIES.firstYear;
+  return Number.isInteger(i) && i >= 0 && i < HISTORICAL_GOLD_SERIES.deviations.length ? i : -1;
+}
 
 /**
  * Design 127 §4.7, §10.1 — the monthly sd of a monthly-AVERAGE price series as a share of the
@@ -208,7 +237,9 @@ export class EquityReturnTickHandler extends HandlerEntry {
     // Design 120 §5.4 — publish the year's standardized market shock for the FX tick to
     // correlate with. Only when the FX path reads it, so no other run gains a state key.
     this.stampMarketShock     = stampMarketShock;
-    // Design 121 §6 — gold's own annual draw, `{ vol, correlation }`, or null for none.
+    // Design 121 §6 — gold's own annual draw, `{ vol, correlation, replay }`, or null for
+    // none. `replay` (design 131 §3.2, absent ⇒ off) replays gold's own historical year
+    // whenever the bootstrap's year has a gold row.
     this.gold                 = gold;
     // Design 127 §4.7 — under MONTHLY equity earnings, also emit the shape of the months
     // inside the drawn year. Off under ANNUAL, so its runs gain no draw and no state.
@@ -330,15 +361,31 @@ export class EquityReturnTickHandler extends HandlerEntry {
     // ε comes from gold's OWN keyed stream even when `rngStreams` is off: drawing it from the
     // shared cursor would shift every later draw in every stochastic run, gold or not. The
     // GEOMETRIC σ²/2 compensation applies as for a sleeve, so the anchor stays the CAGR.
+    //
+    // Design 131 §3.2 — the gold REPLAY. In a bootstrap year with a gold row (1969–) gold
+    // takes that year's own real deviation instead, rescaled to `vol` (at the default vol,
+    // history's own scale), exactly as the AU replay does for the AU market. In joint mode
+    // that year's inflation and 10-year replay too, so gold's link to inflation, real rates
+    // and equity is history's rather than a fitted coefficient's. No ε is drawn: the stream
+    // is keyed, so skipping it shifts nothing else.
     if (this.gold?.vol > 0) {
-      const year  = (sim.currentDate ?? new Date()).getUTCFullYear();
-      const rho   = Math.max(-1, Math.min(1, this.gold.correlation ?? 0));
-      const zEq   = bootstrapping ? marketDev / this.vol : zMarket;
-      const eps   = gaussianFrom(sim.keyedRng?.('gold', year) ?? rng);
-      const zGold = rho * zEq + Math.sqrt(1 - rho * rho) * eps;
-      deviation[RATE_KEYS.GOLD] = this.gold.vol * Math.sqrt(this.dt) * zGold;
-      driftComp[RATE_KEYS.GOLD] = geometric ? this.gold.vol * this.gold.vol / 2 : 0;
-      sleeveVar[RATE_KEYS.GOLD] = this.gold.vol * this.gold.vol;
+      const year    = (sim.currentDate ?? new Date()).getUTCFullYear();
+      const goldIdx = bootstrapping && this.gold.replay ? goldIndex(bootstrap.year) : -1;
+      if (goldIdx >= 0) {
+        const s   = this.gold.vol / HISTORICAL_GOLD_SERIES.sd;
+        const replayVar = s * s * HISTORICAL_GOLD_SERIES.dragVar;   // the rescaled series' measured drag
+        deviation[RATE_KEYS.GOLD] = HISTORICAL_GOLD_SERIES.deviations[goldIdx] * s;
+        driftComp[RATE_KEYS.GOLD] = geometric ? replayVar / 2 : 0;
+        sleeveVar[RATE_KEYS.GOLD] = replayVar;
+      } else {
+        const rho   = Math.max(-1, Math.min(1, this.gold.correlation ?? 0));
+        const zEq   = bootstrapping ? marketDev / this.vol : zMarket;
+        const eps   = gaussianFrom(sim.keyedRng?.('gold', year) ?? rng);
+        const zGold = rho * zEq + Math.sqrt(1 - rho * rho) * eps;
+        deviation[RATE_KEYS.GOLD] = this.gold.vol * Math.sqrt(this.dt) * zGold;
+        driftComp[RATE_KEYS.GOLD] = geometric ? this.gold.vol * this.gold.vol / 2 : 0;
+        sleeveVar[RATE_KEYS.GOLD] = this.gold.vol * this.gold.vol;
+      }
     }
 
     // ── The per-security overlay (design 94 §6.2) ─────────────────────────────────

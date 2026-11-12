@@ -3,7 +3,7 @@ id: stochastic-return-paths
 kind: concept
 title: Stochastic Return Paths
 panels: [mc-config, mc-results]
-params: [equityReturnStochastic, equityReturnModel, equityReturnVol, equityReturnReversionSpeed, equityReturnBeta, equityReturnIdioVol, equityReturnDriftComp, equityReturnBootstrapBlock, equityReturnBootstrapAuReplay, propertyReturnStochastic, propertyReturnBeta, propertyReturnIdioVol, propertyReturnIdioScale, mcSequenceRisk, mcEquityReturnModel, goldReturnVol, goldEquityCorrelation, stockBondCorrelation]
+params: [equityReturnStochastic, equityReturnModel, equityReturnVol, equityReturnReversionSpeed, equityReturnBeta, equityReturnIdioVol, equityReturnDriftComp, equityReturnBootstrapBlock, equityReturnBootstrapAuReplay, propertyReturnStochastic, propertyReturnBeta, propertyReturnIdioVol, propertyReturnIdioScale, mcSequenceRisk, mcEquityReturnModel, goldReturnVol, goldEquityCorrelation, goldReplay, stockBondCorrelation]
 design: [74-stochastic-return-paths.md, 90-equity-fidelity-and-capital-losses.md, 102-historical-bootstrap-equity-returns.md, 121-shock-leg-offset-and-stagflation-calibration.md, 129-stock-bond-correlation.md, 131-gold-return-drivers.md]
 stamps:
   param:equityReturnStochastic: 635a9b
@@ -21,8 +21,9 @@ stamps:
   param:propertyReturnIdioScale: 9b7140
   param:mcSequenceRisk: b1d187
   param:mcEquityReturnModel: 012b08
-  param:goldReturnVol: e74662
+  param:goldReturnVol: 81f145
   param:goldEquityCorrelation: 578ce4
+  param:goldReplay: 7dc19b
   param:stockBondCorrelation: 45d03d
   panel:mc-config: ad4956
   panel:mc-results: cc2f55
@@ -46,12 +47,12 @@ name suggests. Replaying blocks of real history keeps the multi-year runs and
 crashes that neither of the others produces, at the cost of drawing from fewer
 distinct sequences.
 
-Gold takes its own draw on the same yearly clock, loosely tied to the equity market's
-year. Without it gold would be riskless, flattering any allocation that holds it.
-Measured gold swings nearly as much as the share market and barely moves with it, so
-it is a diversifier with real drawdowns, not a safe harbour. When inflation replays history,
-as it does by default in Monte Carlo, gold's return rises with US inflation the way share
-returns do, so an inflation surprise does not erode its real value.
+Gold moves every year too. When the replay lands on a year after 1968, gold replays that
+year as well, so its swings, and its ties to inflation and interest rates, are history's;
+earlier years draw at random. Its default swing is history's, larger than the share
+market's, and barely tied to it: a diversifier with deep drawdowns, not a safe harbour.
+When inflation replays history, as it does by default in Monte Carlo, gold's return rises
+with US inflation the way share returns do.
 
 Bond noise can share that yearly draw too. Independent, the default, sits between eras:
 bonds fell with shares in the 1970s and hedged them after 2000, so the correlation picks a
