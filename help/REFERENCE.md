@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-238 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 92 tools · 330 state field types · 80 topics · 138 design docs
+238 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 93 tools · 330 state field types · 80 topics · 139 design docs
 
 ---
 
@@ -1106,11 +1106,11 @@ Explained in [`help/nodes`](nodes/reducer.md). 0 field(s) described by a record 
 
 ---
 
-## Headless tools (92)
+## Headless tools (93)
 
 Command-line entry points under `scripts/`. **Purpose** is harvested from each script's
 docblock, not re-authored here. Arguments come from each script's declarative
-`parseFlags` spec: 77 of 77 entry points carry one (design 108 D6 — all of them).
+`parseFlags` spec: 78 of 78 entry points carry one (design 108 D6 — all of them).
 6 scripts carry no docblock naming themselves and show `(undocumented)`.
 
 ### scripts/config-converters/
@@ -1225,6 +1225,9 @@ docblock, not re-authored here. Arguments come from each script's declarative
     - `--run` (flag) — price each corner against a smoothed counterfactual
     - `--seeds` (number, default `0`) — re-price over n stochastic seeds (implies --run)
     - `--material` (number, default `0.05`) — share at or above which a class counts as a position
+- **`scripts/lab/gold-correlation.mjs`**
+  what gold's annual return has moved with, by era (design 131 §2)
+    - `--json` (string) — also write every statistic to this JSON file
 - **`scripts/lab/hedge-horizon.mjs`**
   the model's minimum-variance currency hedge ratio by holding period
     - `--seeds` (int, default `200`) — seeds per ρ (1..N)
@@ -2352,7 +2355,7 @@ what the in-app panel keys on.
 | [Spending](panels/spending.md) | panel | 209 | 1 panel · design 89 |
 | [The Spending Rule](concepts/spending-rule.md) | concept | 296 | 1 panel · 17 params · design 89 |
 | [State](panels/state-panel.md) | panel | 181 | 1 panel |
-| [Stochastic Return Paths](concepts/stochastic-return-paths.md) | concept | 379 | 2 panels · 18 params · design 74, 90, 102, 121, 129 |
+| [Stochastic Return Paths](concepts/stochastic-return-paths.md) | concept | 397 | 2 panels · 18 params · design 74, 90, 102, 121, 129, 131 |
 | [Superannuation Access](concepts/superannuation.md) | concept | 399 | 1 panel · 4 actions · design 119, 77 |
 | [Tax Harvesting and Asset Location](concepts/tax-harvesting.md) | concept | 235 | 2 panels · 3 params · design 29, 94 |
 | [Timeline](panels/timeline.md) | panel | 203 | 1 panel |
@@ -2361,7 +2364,7 @@ what the in-app panel keys on.
 
 ---
 
-## Design documents (138)
+## Design documents (139)
 
 Tier 3 — the full argument behind each mechanic, in `design/`. The title is each
 file's own H1, read out of it; there is no summary column, because a one-line precis
@@ -2505,6 +2508,7 @@ between 10 and 11.
 | [`128-ladder-aware-bond-buys.md`](../design/128-ladder-aware-bond-buys.md) | 128 — Ladder-aware bond buys (design 66 §10.5, Phase B) |
 | [`129-stock-bond-correlation.md`](../design/129-stock-bond-correlation.md) | 129 — Stock–bond correlation as a regime property (design 126 G3) |
 | [`130-bonds-panel.md`](../design/130-bonds-panel.md) | 130 — Bonds panel: holdings by bond type, and the maturity ladder |
+| [`131-gold-return-drivers.md`](../design/131-gold-return-drivers.md) | 131 — Gold's return drivers: inflation, real rates and replayed history |
 | [`bus-unification-plan.md`](../design/bus-unification-plan.md) | Bus Unification Plan |
 | [`inconsistencies.md`](../design/inconsistencies.md) | Inconsistencies, Rework Candidates, and Open Questions |
 | [`requirements.md`](../design/requirements.md) | Requirements Tracker |

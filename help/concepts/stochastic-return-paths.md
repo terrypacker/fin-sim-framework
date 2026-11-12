@@ -4,7 +4,7 @@ kind: concept
 title: Stochastic Return Paths
 panels: [mc-config, mc-results]
 params: [equityReturnStochastic, equityReturnModel, equityReturnVol, equityReturnReversionSpeed, equityReturnBeta, equityReturnIdioVol, equityReturnDriftComp, equityReturnBootstrapBlock, equityReturnBootstrapAuReplay, propertyReturnStochastic, propertyReturnBeta, propertyReturnIdioVol, propertyReturnIdioScale, mcSequenceRisk, mcEquityReturnModel, goldReturnVol, goldEquityCorrelation, stockBondCorrelation]
-design: [74-stochastic-return-paths.md, 90-equity-fidelity-and-capital-losses.md, 102-historical-bootstrap-equity-returns.md, 121-shock-leg-offset-and-stagflation-calibration.md, 129-stock-bond-correlation.md]
+design: [74-stochastic-return-paths.md, 90-equity-fidelity-and-capital-losses.md, 102-historical-bootstrap-equity-returns.md, 121-shock-leg-offset-and-stagflation-calibration.md, 129-stock-bond-correlation.md, 131-gold-return-drivers.md]
 stamps:
   param:equityReturnStochastic: 635a9b
   param:equityReturnModel: 613513
@@ -47,10 +47,11 @@ crashes that neither of the others produces, at the cost of drawing from fewer
 distinct sequences.
 
 Gold takes its own draw on the same yearly clock, loosely tied to the equity market's
-year. Without it, gold returned exactly its growth rate on every path: a riskless asset
-paying more than the default bond, which flatters any allocation that holds it.
+year. Without it gold would be riskless, flattering any allocation that holds it.
 Measured gold swings nearly as much as the share market and barely moves with it, so
-it is a diversifier with real drawdowns, not a safe harbour.
+it is a diversifier with real drawdowns, not a safe harbour. When inflation replays history,
+as it does by default in Monte Carlo, gold's return rises with US inflation the way share
+returns do, so an inflation surprise does not erode its real value.
 
 Bond noise can share that yearly draw too. Independent, the default, sits between eras:
 bonds fell with shares in the 1970s and hedged them after 2000, so the correlation picks a

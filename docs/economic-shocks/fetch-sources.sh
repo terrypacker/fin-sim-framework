@@ -36,6 +36,7 @@ fred MPRIME              # bank prime loan rate, monthly 1949-
 fred MORTGAGE30US        # Freddie Mac 30-yr fixed mortgage, weekly 1971-
 for t in 1 2 5 10 30; do fred "DGS$t"; done   # Treasury constant maturity, daily
 fred GS1; fred GS10                            # monthly equivalents, longer history
+fred FII10               # 10-year TIPS real yield, monthly 2003- (design 131)
 fred T10Y2Y              # 10y minus 2y spread, daily 1976-
 
 echo "AU policy + term structure"
