@@ -243,3 +243,33 @@ for (const [fitFrom, fitTo, testFrom, testTo] of [[1969, 1996, 1997, 2023], [199
   console.log(`  ${key}: b ${num(fit.b[1])} (test half's own b ${num(tfit.b[1])}), out-of-sample R² ${oos.toFixed(2)}, n ${fy.length}/${ty.length}`);
 }
 if (jsonOut) fs.writeFileSync(jsonOut, JSON.stringify(out, null, 1));
+
+// ── 8. design 131 G3: the real-rate term AS THE MODEL WOULD APPLY IT ─────────────────
+// §3.3's term is a CORRELATION on a standardised innovation, mean-zero (the anchor owns the
+// mean) and scaled by goldReturnVol: added return = ρ_r · vol · z_real. The rule fixed BEFORE
+// the run (design 131 §4 G3): fit ρ_r on one half; score on the other with
+//   pred = (test half's mean) + ρ_fit · vol · z,  z = the test half's Δreal10 / its own sd
+// (the model standardises by its own process sd). PASS = ρ's sign holds both ways AND
+// out-of-sample R² > 0 both ways. vol = 0.29, the design-131 default.
+console.log('\n8. G3 — the real-rate term as the model applies it (ρ_r · vol · z_real, mean-zero, vol 0.29)\n');
+out.g3 = { rule: 'pred = mean_test + rho_fit*vol*z_test_own; pass = same sign AND oosR2 > 0 both ways', vol: 0.29, splits: {} };
+const G3_VOL = 0.29;
+let g3Pass = true;
+const z = (x) => { const m = mean(x), s = sd(x); return x.map(v => (v - m) / s); };
+for (const [fitFrom, fitTo, testFrom, testTo] of [[1969, 1996, 1997, 2023], [1997, 2023, 1969, 1996]]) {
+  const fy = years(fitFrom, fitTo, S.goldReal, S.dReal10), ty = years(testFrom, testTo, S.goldReal, S.dReal10);
+  const rhoFit  = corr(fy.map(S.dReal10), fy.map(S.goldReal));
+  const g = ty.map(S.goldReal), zt = z(ty.map(S.dReal10));
+  const rhoTest = corr(ty.map(S.dReal10), g);
+  const mg = mean(g), sst = g.reduce((s, v) => s + (v - mg) ** 2, 0);
+  const score = (vol) => 1 - g.reduce((s, v, i) => s + (v - (mg + rhoFit * vol * zt[i])) ** 2, 0) / sst;
+  const oos = score(G3_VOL), oosOwnSd = score(sd(g));
+  const sameSign = Math.sign(rhoFit) === Math.sign(rhoTest);
+  if (!(sameSign && oos > 0)) g3Pass = false;
+  const key = `fit ${fitFrom}-${fitTo} → test ${testFrom}-${testTo}`;
+  out.g3.splits[key] = { rhoFit, rhoTest, sameSign, oosR2: oos, oosR2AtTestSd: oosOwnSd, testGoldSd: sd(g), nFit: fy.length, nTest: ty.length };
+  console.log(`  ${key}: ρ_fit ${num(rhoFit)} (test half's own ρ ${num(rhoTest)}), OOS R² ${oos.toFixed(2)} at vol 0.29 (${oosOwnSd.toFixed(2)} at the test half's sd ${pct(sd(g))}), n ${fy.length}/${ty.length}`);
+}
+out.g3.pass = g3Pass;
+console.log(`\n  G3 ${g3Pass ? 'PASSES' : 'FAILS'}`);
+if (jsonOut) fs.writeFileSync(jsonOut, JSON.stringify(out, null, 1));

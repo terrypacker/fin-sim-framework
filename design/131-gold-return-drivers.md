@@ -1,7 +1,7 @@
 # 131 — Gold's return drivers: inflation, real rates and replayed history
 
-**Status:** ACCEPTED, rev 2 (12 Nov 2026). **Phases 1–2 BUILT** (§3.1.1 G1, §3.2.1 G2: both passed); **phase 4 (G4) RUN** 12 Nov (§5). The measurement step (§2) is done and reproducible
-(`scripts/lab/gold-correlation.mjs`). Phase 3 is not built. The author decided Q1–Q6 the same day
+**Status:** ACCEPTED, rev 2 (12 Nov 2026). **Phases 1–2 BUILT** (§3.1.1 G1, §3.2.1 G2: both passed); **phase 4 (G4) RUN** 12 Nov (§5); **phase 3 NOT BUILT: G3 failed** (§4.1). The measurement step (§2) is done and reproducible
+(`scripts/lab/gold-correlation.mjs`). Phase 3 is closed by its gate. The author decided Q1–Q6 the same day
 (§7). Q1 came with a change: **the default volatility is history's, 29%**. Rev 2 writes that
 into §3.2 and §3.5. Rev 1 was the proposal.
 
@@ -299,6 +299,24 @@ G3 is a real risk. §2.4 already fails a slope version of it on the ex-post real
 fails, the replay plus pass-through carries the real-rate link in joint mode (the MC default),
 and the Gaussian modes keep today's draw.
 
+### 4.1 G3 result (12 Nov 2026): FAILED, phase 3 not built
+
+`gold-correlation.mjs` section 8 scores the term exactly as §3.3 would apply it: a mean-zero
+`ρ_r · vol · z_real`, vol 0.29, `z_real` the half's Δ real 10-year standardised by its own sd.
+The rule was written into the script before the run.
+
+| fitted on | ρ_r fitted | the other half's own ρ | out-of-sample R² (vol 0.29) | at the test half's own sd |
+|---|--:|--:|--:|--:|
+| 1969–1996 | −0.63 | −0.22 | **−0.94** | −0.11 |
+| 1997–2023 | −0.22 | −0.63 | +0.18 | +0.23 |
+
+The sign holds both ways, but the 1970s–80s link is three times the later one. Fitted on the
+early half, it predicts the later half worse than the later half's own mean does. The
+correlation form fails like §2.4's slope form, just less badly. So the replay (§3.2) stays the
+only real-rate mechanism. It covers bootstrap years from 1969, which is the MC default. Gaussian
+modes and pre-1969 bootstrap years keep the `ρ·z + ε` draw. `goldRealRateCorrelation` is not
+added, and the §3.3 handler move is not needed.
+
 ## 5. Phases
 
 0. **Measurement.** Done: the script, `FRED-FII10` fetched and recorded in
@@ -306,7 +324,7 @@ and the Gaussian modes keep today's draw.
 1. **Pass-through** (§3.1) + G1. Small, independent.
 2. **Replay** (§3.2) + the §3.5 params (`goldReturnVol` 0.29, `goldReplay`): package the gold series in `build-historical-equity-returns.mjs`, the
    replay branch, G2, a help topic update (`stochastic-return-paths`).
-3. **Real-rate term** (§3.3), only if G3 passes.
+3. **Real-rate term** (§3.3), only if G3 passes. **Closed 12 Nov: G3 failed (§4.1), not built.**
 4. **G4**, the decision study. Run 12 Nov on the author's plan, before phase 3 (the private study
    holds the numbers). Gold's sleeve lowered the failure rate in every one of eleven calm, crash and
    inflation regimes, under both the old and the new draw, and with gold's return anchor cut by
