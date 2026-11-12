@@ -1,6 +1,6 @@
 # 131 — Gold's return drivers: inflation, real rates and replayed history
 
-**Status:** ACCEPTED, rev 2 (12 Nov 2026). **Phases 1–2 BUILT** (§3.1.1 G1, §3.2.1 G2: both passed); **phase 4 (G4) RUN** 12 Nov (§5); **phase 3 NOT BUILT: G3 failed** (§4.1). The measurement step (§2) is done and reproducible
+**Status:** COMPLETE (12 Nov 2026), rev 2. **Phases 1–2 BUILT** (§3.1.1 G1, §3.2.1 G2: both passed); **phase 4 (G4) RUN** 12 Nov (§5); **phase 3 NOT BUILT: G3 failed** (§4.1). The measurement step (§2) is done and reproducible
 (`scripts/lab/gold-correlation.mjs`). Phase 3 is closed by its gate. The author decided Q1–Q6 the same day
 (§7). Q1 came with a change: **the default volatility is history's, 29%**. Rev 2 writes that
 into §3.2 and §3.5. Rev 1 was the proposal.
@@ -270,7 +270,10 @@ proposal is an optional real-rate term, behind its own gate (§4 G3):
 - **Saved plans keep their own value.** An export stores every param it saw, so a plan saved
   before rev 2 carries `goldReturnVol: 0.15` explicitly, and the new default never reaches it.
   That is correct (a stored value is the owner's), but it means existing plans stay at the calm
-  setting until someone changes it. The editor should show the default beside the field. G4's
+  setting until someone changes it. The editor should show the default beside the field. (Not
+  built: the Scenario editor's rows don't carry schema defaults, so this is a general editor
+  feature for every param, not a gold one. Today the default shows in the `?` help panel and in
+  `goldReturnVol`'s description.) G4's
   arms set it explicitly so the study isn't measuring a stale value.
 - **The drift compensation grows.** At 0.29 the GEOMETRIC σ²/2 term is about 4.2 points, so the
   arithmetic mean gold return sits that far above `goldGrowthRate` to keep the CAGR at the
