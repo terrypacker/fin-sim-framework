@@ -29,7 +29,7 @@ import assert   from 'node:assert/strict';
 import {
   poolTargetScaleKey, parsePoolTargetScaleKey, poolTargetScalesFrom,
   scaleRawPoolGraph, scaleRawPoolShapes, scalablePoolTargets,
-  poolTargetScaleLabel, resolvePoolTargetScaleCenters,
+  poolTargetScaleLabel, resolvePoolTargetScaleCenters, withLiquidityAxisCenters,
 } from '../../src/finance/pools/pool-target-scale.js';
 import { resolveLiquidityGraph, resolveLiquidityGraphSchedule }
                                   from '../../src/finance/pools/liquidity-graph.js';
@@ -311,6 +311,25 @@ test('CTRL-8b the payoff: a pool factor is an MC GRID axis, with a reference cel
   assert.ok(grid.referenceCell.exact, 'the plan cell is on the grid');
   const nw = grid.cells.map(c => c.rows[0].nw);
   assert.equal(new Set(nw).size, 3, 'three reserve sizes, three worlds');
+});
+
+test('CTRL-8c an AUTHORED factor is the plan value — the centre only fills a missing key', async () => {
+  // Design 131 phase 4: a study arm writes `pool.gold.targetScale: 0` into `cfg.params` and
+  // the MC runner, the optimizer and the grid each spread the 1.0 centre AFTER it, so three
+  // gold arms ran byte-identical. ARRIVAL: the lever base keeps the authored value.
+  const { cfg } = loadScenarioSim({ params: RUN, ...SPAN });
+  const authored = structuredClone(cfg);
+  authored.params = [...authored.params, { name: SCALE, value: 0.5 }];
+  const grid = await new McGridRunner({
+    simEnd: new Date(Date.UTC(2029, 0, 1)), cfgTemplate: authored, mode: GRID_MODES.DETERMINISTIC,
+    axes: [{ paramKey: SCALE, values: [0.5, 1] }],
+  }).run();
+  assert.deepEqual(grid.planValues, [0.5], 'the authored half, not the generated 1.0');
+  assert.ok(grid.referenceCell.exact);
+
+  const bag = withLiquidityAxisCenters({ [SCALE]: 0 }, authored);
+  assert.equal(bag[SCALE], 0, 'zero is a value, not a gap');
+  assert.equal(withLiquidityAxisCenters({}, authored)[SCALE], 1, 'and a gap is still filled');
 });
 
 test('CTRL-16 identity: a factor of 1 is byte-identical to no axis at all', () => {

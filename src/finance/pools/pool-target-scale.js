@@ -296,6 +296,28 @@ export function resolveLiquidityAxisCenters(cfg) {
            ...resolveShapeYearShiftCenters(schedule) };
 }
 
+/**
+ * `bag` with every leg-C axis centre filled in WHERE THE BAG HAS NO VALUE for it.
+ *
+ * The centres exist because a hidden generated param has no other source (above). They are a
+ * floor, never an override: a value the plan or an arm authored (`buildVariant` writes a
+ * `pool.<id>.targetScale` into `cfg.params`) is the plan value. All three lever bases used to
+ * spread the centres AFTER the authored params, so an authored `pool.gold.targetScale: 0` ran
+ * at 1.0 in every MC path, optimizer rollout and grid cell (design 131 phase 4 found it: three
+ * gold arms, byte-identical). One helper so the three sites cannot disagree again.
+ *
+ * @param {object} bag  the merged lever base, authored values included
+ * @param {object} cfg  the scenario config the centres are read from
+ * @returns {object} a new bag
+ */
+export function withLiquidityAxisCenters(bag, cfg) {
+  const out = { ...bag };
+  for (const [key, value] of Object.entries(resolveLiquidityAxisCenters(cfg))) {
+    if (out[key] == null) out[key] = value;
+  }
+  return out;
+}
+
 /** Mode → the unit an authored target reads in, for a label. */
 const TARGET_UNIT = { YEARS_OF_SPEND: 'y', YEARS_OF_SPEND_REMAINDER: 'y', PERCENT: '%', AMOUNT: '$' };
 

@@ -256,7 +256,7 @@ import { poolMarketReturn, claimValueNative, loanForOffset, loansForOffset, annu
 import { BASE_SHAPE_ID, ShapeExpansionError, isDeltaShape, expandLiquidityShapes, applyShapeDelta, shapeLineage, liquidityShapeIds, expandedShapesOf, poolGraphEntries, poolGraphFor, sameGraphValue, shapeDeltaAgainst } from './finance/pools/pool-shape-expansion.js';
 import { PoolShapeScheduleReducer, liquidityStateAt } from './finance/pools/pool-shape-schedule-reducer.js';
 import { SHAPE_KEY_PREFIX, SHAPE_YEAR_SHIFT_FIELD, SHAPE_YEAR_SHIFT_DEFAULT, SHAPE_YEAR_SHIFT_RANGE, shapeYearShiftKey, parseShapeYearShiftKey, shapeYearShiftsFrom, applyShapeYearShifts, scheduledShapeAxes, shapeYearShiftLabel, resolveShapeYearShiftCenters } from './finance/pools/pool-shape-year-axis.js';
-import { POOL_KEY_PREFIX, POOL_TARGET_SCALE_FIELD, POOL_TARGET_SCALE_DEFAULT, POOL_TARGET_SCALE_RANGE, poolTargetScaleKey, parsePoolTargetScaleKey, poolTargetScalesFrom, scaleRawPoolGraph, scaleRawPoolShapes, scalablePoolTargets, authoredParamValue, authoredPoolGraphs, resolvePoolTargetScaleCenters, resolveLiquidityAxisCenters, poolTargetScaleLabel, describeScaledTarget, scaledTargetDescriptor, describeScaledDescriptor } from './finance/pools/pool-target-scale.js';
+import { POOL_KEY_PREFIX, POOL_TARGET_SCALE_FIELD, POOL_TARGET_SCALE_DEFAULT, POOL_TARGET_SCALE_RANGE, poolTargetScaleKey, parsePoolTargetScaleKey, poolTargetScalesFrom, scaleRawPoolGraph, scaleRawPoolShapes, scalablePoolTargets, authoredParamValue, authoredPoolGraphs, resolvePoolTargetScaleCenters, resolveLiquidityAxisCenters, withLiquidityAxisCenters, poolTargetScaleLabel, describeScaledTarget, scaledTargetDescriptor, describeScaledDescriptor } from './finance/pools/pool-target-scale.js';
 import { normalizeTargetSchedule, scalesInForceAt, appliedScales, stepKeyOf, composeScales, knownPoolIds, collapseTargetRuns } from './finance/pools/pool-target-schedule.js';
 import { AccountRetitleApplyReducer } from './finance/reducers/account-retitle-apply-reducer.js';
 import { AccumulateConsumptionReducer } from './finance/reducers/accumulate-consumption-reducer.js';
@@ -1650,6 +1650,7 @@ export const Finance = {
   authoredPoolGraphs,
   resolvePoolTargetScaleCenters,
   resolveLiquidityAxisCenters,
+  withLiquidityAxisCenters,
   poolTargetScaleLabel,
   describeScaledTarget,
   scaledTargetDescriptor,
