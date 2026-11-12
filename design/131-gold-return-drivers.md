@@ -1,7 +1,7 @@
 # 131 — Gold's return drivers: inflation, real rates and replayed history
 
-**Status:** ACCEPTED, rev 2 (12 Nov 2026). **Phases 1–2 BUILT** (§3.1.1 G1, §3.2.1 G2: both passed). The measurement step (§2) is done and reproducible
-(`scripts/lab/gold-correlation.mjs`). Phases 3–4 are not built. The author decided Q1–Q6 the same day
+**Status:** ACCEPTED, rev 2 (12 Nov 2026). **Phases 1–2 BUILT** (§3.1.1 G1, §3.2.1 G2: both passed); **phase 4 (G4) RUN** 12 Nov (§5). The measurement step (§2) is done and reproducible
+(`scripts/lab/gold-correlation.mjs`). Phase 3 is not built. The author decided Q1–Q6 the same day
 (§7). Q1 came with a change: **the default volatility is history's, 29%**. Rev 2 writes that
 into §3.2 and §3.5. Rev 1 was the proposal.
 
@@ -307,7 +307,13 @@ and the Gaussian modes keep today's draw.
 2. **Replay** (§3.2) + the §3.5 params (`goldReturnVol` 0.29, `goldReplay`): package the gold series in `build-historical-equity-returns.mjs`, the
    replay branch, G2, a help topic update (`stochastic-return-paths`).
 3. **Real-rate term** (§3.3), only if G3 passes.
-4. **G4**, the decision study.
+4. **G4**, the decision study. Run 12 Nov on the author's plan, before phase 3 (the private study
+   holds the numbers). Gold's sleeve lowered the failure rate in every one of eleven calm, crash and
+   inflation regimes, under both the old and the new draw, and with gold's return anchor cut by
+   2pp. The anchor decides only whether gold also wins the median in calm worlds. Running it
+   found a product bug: an authored `pool.<id>.targetScale` was overwritten by its generated 1.0
+   centre in MC, optimizer and grid bases (fixed, `withLiquidityAxisCenters`). Phase 3 stays gated
+   on G3.
 
 ## 6. Out of scope
 
