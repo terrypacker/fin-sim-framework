@@ -12,7 +12,8 @@ import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-fr
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { findLoanForProperty, findLoansForProperty, propertyLoanPayoffs } from '../loan-classes.js';
-import { singleAssetTermFields, auIndexedCostBase, auCpiLevel, auCpiRate } from '../../holdings/holding-period.js';
+import { singleAssetTermFields, auIndexedCostBase, auCpiLevel, auCpiRate, YEAR_MS } from '../../holdings/holding-period.js';
+import { deemedSaleHolds, pre2027BaseUnindexed, auDwellingTaxableFractions } from '../../tax/au/au-cgt-2027-property.js';
 import { resolveDestinationCashKey, resolveSaleDestinationKey, creditSaleProceeds } from '../cash-routing.js';
 import { auMainResidenceExemption, unrecaptured1250Gain, toMs } from '../main-residence.js';
 import { downsizerContributions } from './downsizer-contribution.js';
@@ -127,10 +128,41 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
     // gains whatever the asset — but the main-residence EXEMPTION does the analogous
     // job, and a wholly-exempt dwelling's loss is disregarded with its gain.
     const deductibleLoss = propState?.isPrimaryResidence !== true || accumulatedDep > 0;
+
+    // Design 132 §7.3 — the 1 July 2027 deemed sale (s112-155), when it still holds at
+    // this realisation event. The AU side splits in two: the gain to 30 June 2027 is a
+    // deferred gain (s112-160) on the pre-2027 base, taking the taxable fraction of the
+    // pre-2027 days; the gain after it is measured from the market value at the date,
+    // indexed from the July 2027 level, and takes the post-2027 days. Improvements and
+    // depreciation after the date move the new base, those before it the old one. The US
+    // side below is unchanged: the deemed sale is an Australian fiction.
+    const deemed = deemedSaleHolds(state, propState);
+    const acqMs  = toMs(propState?.acquisitionDate);
+    let auBasisRaw = propState?.costBaseByCountry?.AU ?? depAdjustedBasis;
+    let auTaxableFraction = auExemption.taxableFraction;
+    let deferredFields = {};
+    if (deemed) {
+      const laterImprovements  = (propState?.capitalizedImprovements ?? 0) - (deemed.capitalizedImprovements ?? 0);
+      const laterDepreciation  = accumulatedDep - (deemed.accumulatedDepreciation ?? 0);
+      const preBase  = propState?.costBaseByCountry?.AU
+                    ?? Math.max(0, costBasis - laterImprovements - (deemed.accumulatedDepreciation ?? 0));
+      auBasisRaw     = Math.max(0, deemed.value + laterImprovements - laterDepreciation);
+      const split    = auDwellingTaxableFractions(propState, { acquisitionMs: acqMs, saleMs });
+      auTaxableFraction = split.post;
+      // Signed: s118-185 scales a loss as it scales a gain. The 12-month test runs from
+      // the ORIGINAL acquisition (s112-160(3)(c)); an undated dwelling counts as long held.
+      const deferred = +((deemed.value - preBase) * split.pre).toFixed(2);
+      const held12   = acqMs == null || saleMs == null || saleMs - acqMs >= YEAR_MS;
+      deferredFields = { auDeferredGain: deferred, auDeferredDiscountableGain: deferred > 0 && held12 ? deferred : 0 };
+    }
+    const deemedReason = propState?.auDeemedSale2027 == null ? null
+      : deemed ? 'applied'
+      : (propState.auDeemedSale2027.reason ?? 'residency-broken-at-sale');
+
     const { usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain } =
       singleAssetTermFields({
         proceeds: salePrice, usBasis: adjustedBasis,
-        auBasis: (propState?.costBaseByCountry?.AU ?? depAdjustedBasis) + sellingCost,
+        auBasis: auBasisRaw + sellingCost,
         acquisitionMs:   toMs(propState?.acquisitionDate),
         auAcquisitionMs: propState?.acquisitionDateByCountry?.AU ?? toMs(propState?.acquisitionDate),
         saleMs, deductibleLoss,
@@ -153,10 +185,14 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
     // would re-open the phantom-assessable-income defect noted in `au-tax-module-2027.js`.
     // Selling costs are incurred at the sale, so they join the cost base after it is
     // indexed rather than being indexed from the acquisition.
-    const auBasisRaw     = propState?.costBaseByCountry?.AU ?? depAdjustedBasis;
-    const indexedAuBasis = sellingCost + auIndexedCostBase({
+    //
+    // Design 132 §7.4: a dwelling the deemed sale examined and does not reach has no
+    // indexation factor for its pre-2027 expenditure (s960-275(1B)), so it is not indexed.
+    const indexedAuBasis = pre2027BaseUnindexed(state, propState, saleMs)
+      ? sellingCost + auBasisRaw
+      : sellingCost + auIndexedCostBase({
       auBasis:               auBasisRaw,
-      acquisitionPriceLevel: propState?.acquisitionPriceLevel ?? null,
+      acquisitionPriceLevel: deemed ? deemed.priceLevel : (propState?.acquisitionPriceLevel ?? null),
       currentPriceLevel:     auCpiLevel(state),
       auAcquisitionMs:       propState?.acquisitionDateByCountry?.AU ?? toMs(propState?.acquisitionDate),
       saleMs,
@@ -168,7 +204,7 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
     const auSignedIndexedGain = auSignedGain <= 0
       ? auSignedGain
       : Math.max(0, +(salePrice - indexedAuBasis).toFixed(2));
-    const auIndexedGain = +(Math.min(gain, auSignedIndexedGain) * auExemption.taxableFraction).toFixed(2);
+    const auIndexedGain = +(Math.min(gain, auSignedIndexedGain) * auTaxableFraction).toFixed(2);
 
     const destKey     = resolveDestinationCashKey(this.stateRegistry, 'AU', state, destinationKey);
     // The proceeds are AUD; the destination need not be. An AU property may name a US
@@ -209,8 +245,12 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
          // G7: the AU-assessable slice after s118-185, and the §1250 slice the US
          // taxes at its own rate. Both default to the pre-G7 answer — taxableFraction
          // 1 and a 0 depreciation slice — for any property that states no history.
-         auTaxableFraction: auExemption.taxableFraction,
+         auTaxableFraction,
          auExemptionReason: auExemption.reason,
+         // Design 132 §7: present only for a dwelling held across 1 July 2027, so
+         // every other sale's payload is unchanged.
+         ...(deemedReason != null ? { auDeemedSaleReason: deemedReason } : {}),
+         ...deferredFields,
          depreciationGain:  unrecaptured1250Gain(gain, accumulatedDep),
          acquisitionMs:     toMs(propState?.acquisitionDate),
          saleMs,

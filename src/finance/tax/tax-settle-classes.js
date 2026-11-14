@@ -121,6 +121,9 @@ const PER_PERSON_AU_FIELDS = [
   'auPersonOrdinaryIncomeYTD',
   'auPersonDeferredCapitalGainsYTD',
   'auPersonDeferredDiscountableGainsYTD',
+  // design 132 §7.5 — the s115-115 base and allowance on a post-2027 dwelling gain
+  'auPersonPost2027DiscountBaseYTD',
+  'auPersonPost2027DiscountAllowanceYTD',
   'auPersonCapitalGainsYTD',
   'auPersonDiscountableGainsYTD',
   'auPersonDiscountApportionedBaseYTD',

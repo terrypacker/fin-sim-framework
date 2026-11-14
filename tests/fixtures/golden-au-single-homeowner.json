@@ -15,6 +15,13 @@
   "annualRunningCost": 0,
   "appreciationRate": 0.035,
   "appreciationSchedule": null,
+  "auDeemedSale2027": {
+   "accumulatedDepreciation": 0,
+   "applied": true,
+   "capitalizedImprovements": 0,
+   "priceLevel": 1.0609,
+   "value": 517500
+  },
   "capitalizeRepairs": 0,
   "capitalizedImprovements": 0,
   "claimDownsizerContribution": false,

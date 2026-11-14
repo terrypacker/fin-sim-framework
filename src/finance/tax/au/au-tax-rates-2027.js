@@ -92,7 +92,7 @@ export class AuTaxRates2027 extends AuTaxRatesBase {
     // (design 57 §6.6) — they still pay marginal-rate CGT on the real gain, just
     // no floor. auMinTaxExempt is stamped per-person by computeAuTaxPerPerson.
     const minTaxRate = state?.auMinTaxExempt ? 0 : AuTaxRates2027.MIN_CGT_RATE;
-    if (state?.auDeferredCapitalGainsYTD == null) {
+    if (state?.auDeferredCapitalGainsYTD == null && state?.auPost2027DiscountAllowanceYTD == null) {
       return {
         netTaxableGain: realGain,
         reliefAmount:   auCapitalGainsYTD - realGain,
@@ -107,12 +107,18 @@ export class AuTaxRates2027 extends AuTaxRatesBase {
     const deferred     = Math.max(0, state.auDeferredCapitalGainsYTD ?? 0);
     const deferredDisc = Math.min(deferred, Math.max(0, state.auDeferredDiscountableGainsYTD ?? 0));
     const deferredTaxable = deferred - deferredDisc * AuTaxRates2027.DEFERRED_GAIN_DISCOUNT;
-    const netTaxableGain  = realGain + deferredTaxable;
+    // Design 132 §7.5 — Case A's s115-115 discount on a post-2027 dwelling gain, already
+    // netted for losses. It is part of the real gain (that gain was not indexed), and
+    // the minimum tax is measured after the discount steps (s119-5(1)(a)).
+    const post2027Allowance = Math.min(Math.max(0, realGain),
+      Math.max(0, state.auPost2027DiscountAllowanceYTD ?? 0));
+    const realTaxable     = realGain - post2027Allowance;
+    const netTaxableGain  = realTaxable + deferredTaxable;
     return {
       netTaxableGain,
       reliefAmount: auCapitalGainsYTD + deferred - netTaxableGain,
       minTaxRate,
-      minTaxBase:   realGain,
+      minTaxBase:   realTaxable,
     };
   }
 
@@ -130,7 +136,9 @@ export class AuTaxRates2027 extends AuTaxRatesBase {
    * A year with no deferred gain takes the parent's path unchanged.
    */
   _applyCapitalLosses(state) {
-    if (state?.auDeferredCapitalGainsYTD == null) return super._applyCapitalLosses(state);
+    if (state?.auDeferredCapitalGainsYTD == null && state?.auPost2027DiscountBaseYTD == null) {
+      return super._applyCapitalLosses(state);
+    }
     const opening = Math.max(0, state?.auCapitalLossPool ?? 0);
     const D   = state.auDeferredCapitalGainsYTD ?? 0;
     const Dd0 = Math.min(Math.max(0, D), Math.max(0, state.auDeferredDiscountableGainsYTD ?? 0));
@@ -140,6 +148,10 @@ export class AuTaxRates2027 extends AuTaxRatesBase {
 
     const currentYearLosses = Math.max(0, -Dn0) + Math.max(0, -P0);
     let dn = Math.max(0, Dn0), dd = Dd0, p = Math.max(0, P0), r = Math.max(0, R0);
+    // Design 132 §7.5 — the Case A discount base sits inside the post-2027 gain and is
+    // reached last: it is a residential gain (Step 1(d) follows (c)), and within it
+    // Note 3 lets losses go to the non-discount gains first.
+    const A0 = Math.min(p, Math.max(0, state.auPost2027DiscountBaseYTD ?? 0));
     const take = (pool) => {
       let left = pool;
       const a = Math.min(left, dn); left -= a; dn -= a;
@@ -150,13 +162,22 @@ export class AuTaxRates2027 extends AuTaxRatesBase {
     const cy = take(currentYearLosses);
     const py = take(opening);
     const deferredNet = dn + dd;
+    const hasDeferred = state.auDeferredCapitalGainsYTD != null;
+    const A = Math.min(A0, p);
+    const aScale = A0 > 0 ? A / A0 : 0;
     return {
       total:        +p.toFixed(2),
       discountable: 0,
       real:         +r.toFixed(2),
       apportionedBase: 0, apportionedAllowance: 0,
-      deferred:             +deferredNet.toFixed(2),
-      deferredDiscountable: +dd.toFixed(2),
+      ...(hasDeferred ? {
+        deferred:             +deferredNet.toFixed(2),
+        deferredDiscountable: +dd.toFixed(2),
+      } : {}),
+      ...(state.auPost2027DiscountBaseYTD != null ? {
+        post2027DiscountBase:      +A.toFixed(2),
+        post2027DiscountAllowance: +(Math.max(0, state.auPost2027DiscountAllowanceYTD ?? 0) * aScale).toFixed(2),
+      } : {}),
       opening,
       applied: +(cy.applied + py.applied).toFixed(2),
       closing: +(cy.left + py.left).toFixed(2),

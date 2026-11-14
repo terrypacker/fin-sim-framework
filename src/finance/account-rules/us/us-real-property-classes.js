@@ -15,6 +15,7 @@ import { findLoanForProperty, findLoansForProperty, propertyLoanPayoffs } from '
 import { resolveDestinationCashKey, resolveSaleDestinationKey, creditSaleProceeds } from '../cash-routing.js';
 import { us121Exclusion, unrecaptured1250Gain, toMs } from '../main-residence.js';
 import { singleAssetTermFields, auIndexedCostBase, auCpiLevel, auCpiRate } from '../../holdings/holding-period.js';
+import { deemedSaleHolds, pre2027BaseUnindexed, usDwellingAuTaxableFractions } from '../../tax/au/au-cgt-2027-property.js';
 
 // IRC §121 caps and the ownership/use rules now live in ../main-residence.js, shared
 // with the AU dwelling path. The note that used to sit here — "the 2-of-5-year
@@ -132,13 +133,31 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
     // stepped up (domestic/TAP, or not owned at the move) auBasis is absent ⇒ no AU
     // gain here. Both figures are in the property currency (USD); the AU classifier
     // converts.
-    const auBasis   = propState?.costBaseByCountry?.AU;
+    //
+    // Design 132 §7.3: when the 1 July 2027 deemed sale holds, the step-up base yields the
+    // deferred gain to the market value at the date, on the pre-2027 days' taxable
+    // fraction, and the AU gain below is measured from that market value on the
+    // post-2027 days. The base ignores depreciation either way (design 132 §6).
+    let auBasis     = propState?.costBaseByCountry?.AU;
     let auGain = 0, auDiscountableGain = 0, auIndexedGain = 0;
+    let deferredFields = {}, deemedReason = null, deemed = null;
     if (auBasis != null && residency === 'AU') {
       const saleMs      = eventMs ?? state.currentPeriods?.AU?.startMs ?? state.currentPeriods?.US?.startMs ?? null;
       const deemedAcqMs = propState.acquisitionDateByCountry?.AU ?? null;
+      deemed = deemedSaleHolds(state, propState);
+      let exemptFrac  = auMainResidenceExemptFraction(propState, deemedAcqMs, saleMs);
+      if (propState.auDeemedSale2027 != null) {
+        deemedReason = deemed ? 'applied' : (propState.auDeemedSale2027.reason ?? 'residency-broken-at-sale');
+      }
+      if (deemed) {
+        const split = usDwellingAuTaxableFractions(propState, { acquisitionMs: deemedAcqMs, saleMs });
+        const held12 = deemedAcqMs == null || saleMs == null || saleMs - deemedAcqMs >= YEAR_MS;
+        const deferred = +((deemed.value - auBasis) * split.pre).toFixed(2);
+        deferredFields = { auDeferredGain: deferred, auDeferredDiscountableGain: deferred > 0 && held12 ? deferred : 0 };
+        auBasis    = deemed.value;
+        exemptFrac = 1 - split.post;
+      }
       const auRawGain   = Math.max(0, amountRealized - auBasis);
-      const exemptFrac  = auMainResidenceExemptFraction(propState, deemedAcqMs, saleMs);
       auGain = +(auRawGain * (1 - exemptFrac)).toFixed(2);
       // CGT 50%-discount eligibility (design 62 §4): held ≥12 months from the deemed
       // acquisition. The non-exempt slice is discountable only when held long enough.
@@ -149,9 +168,11 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
       // the move; a dwelling bought after arriving indexes from its purchase level, and
       // one with neither back-casts off its acquisition date. Same shape as the AU
       // dwelling's `auIndexedGain`: indexed first, exemption applied second.
-      const indexedAuBasis = auIndexedCostBase({
+      // Design 132 §7.4: an examined dwelling the deemed sale does not reach keeps its
+      // pre-2027 base unindexed (s960-275(1B)).
+      const indexedAuBasis = pre2027BaseUnindexed(state, propState, saleMs) ? auBasis : auIndexedCostBase({
         auBasis,
-        acquisitionPriceLevel: propState?.acquisitionPriceLevel ?? null,
+        acquisitionPriceLevel: deemed ? deemed.priceLevel : (propState?.acquisitionPriceLevel ?? null),
         currentPriceLevel:     auCpiLevel(state),
         auAcquisitionMs:       deemedAcqMs,
         saleMs,
@@ -222,6 +243,9 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
         // The FY2027 reform's assessable (indexed, post-exemption) AU gain. FY≤2026
         // modules ignore it and keep discounting `auGain`.
         auIndexedGain,
+        // Design 132 §7: present only for a dwelling held across 1 July 2027.
+        ...(deemedReason != null ? { auDeemedSaleReason: deemedReason } : {}),
+        ...deferredFields,
         // Design 90 §9 step 2. Note these measure from the SAME adjusted basis as
         // `gain`, but before the §121 exclusion and before the §1250 carve-out: those
         // two shrink the taxable gain and neither can create a loss, so applying them

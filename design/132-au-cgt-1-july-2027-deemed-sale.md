@@ -1,7 +1,7 @@
 # 132 — The 1 July 2027 deemed sale: assets held across the CGT reform
 
-**Status:** PHASES 1 AND 2a BUILT (14 Nov 2026). Phase 1 covers brokerage lots and phase 2a
-covers standalone collectibles and company equity (§4.5). Phase 2b, real property, is open (§6).
+**Status:** PHASES 1, 2a AND 2b BUILT (14 Nov 2026). Phase 1 covers brokerage lots, phase 2a
+standalone collectibles and company equity (§4.5), and phase 2b real property (§7).
 
 **Related:** design 57 Part 2 Item B (the decision this reverses), design 57 §6.3 (indexation),
 design 62 §4 (the 12-month discount test), design 36 §12.2 (the s855-45 residency step-up),
@@ -95,41 +95,133 @@ acquired at the move, so s112-155(1)(b) is not met.
 
 ## 6. Open
 
-- **Phase 2b: real property** still takes the Item B treatment. Brief for the next pass, from
-  the Act on disk:
-  1. **Split the main-residence exemption at the date.** The deemed sale is a CGT event whose
-     ownership period ends on 30 June 2027 (s112-155(2), Note 1), and the reacquired dwelling's
-     starts on 1 July 2027. Subdiv 118-B is in Part 3-1, which s112-155(2) covers. So the
-     deferred gain is (market value at 30 June 2027 − pre-2027 base) × the taxable fraction of
-     the pre-2027 days, and the post-2027 gain uses the post-2027 days. Both property reducers
-     need a windowed exemption: `auMainResidenceExemption` for the AU dwelling, and the 6-year
-     absence fraction (`auMainResidenceExemptFraction`) for the US one.
-  2. **Depreciation.** `AuHouseSaleApplyReducer` reduces the base by the whole
-     `accumulatedDepreciation`, but it ignores depreciation once `costBaseByCountry.AU` is set.
-     The stamp has to record the depreciation taken by 30 June 2027 (the pre-2027 base is net of
-     it), and the post-2027 base must be net of only the later deductions.
-  3. **s112-155(1)(d).** It is tested as if a discount gain were made at the realisation event.
-     An AU dwelling is taxable Australian property (no s855-45 reset), so an owner who was a
-     foreign resident after 8 May 2012 at any time between acquisition and sale makes
-     s115-105 apply. That dwelling is not deemed sold. The stamp can test `residencySinceMs`
-     against the acquisition. The sale also has to ignore the stamp when residency was broken
-     after 2027.
-  4. **Open question to settle first.** For that excluded dwelling, s115-100(c) gives the
-     s115-115 apportioned percentage, and s115-115 has no date limit. Whether a gain from a
-     post-2027 event can still be a discount capital gain turns on s115-5 to s115-25, which
-     have not been read yet. Today the model gives it 0%.
-  5. **The residential category.** s102-6(4) makes a dwelling's deferred gain a deferred
-     residential gain, which losses reach after deferred non-residential gains (s102-5 Step
-     1(b)). Lumping both into one deferred bucket changes the tax only when the two categories
-     differ in discount eligibility, which needs a sub-12-month deferred gain. Recommended:
-     lump them, and state this.
+- **Mixed-residency co-owners** of a dwelling (§7.2): when one owner fails s112-155(1)(d) and
+  another passes, the model stamps neither, so the passing owner's share loses its deferral.
+  A per-owner deemed sale would need two cost bases on one dwelling.
+- **s112-155(1)(d) for lots and scalar assets** is not tested. It only matters for an asset
+  that keeps a pre-residency AU acquisition date. The s855-45 step-up moves that date for
+  every non-TAP asset, so no plan in the suite reaches it.
+- **The US dwelling's AU base ignores depreciation and improvements** made after the s855-45
+  step-up. This gap predates design 132, and §7.3 keeps it.
+- **A foreign resident at the sale** still gets no s115-115 discount on an AU dwelling (the
+  design 62 TODO in the AU tax module). §7.5 builds the resident case only.
 - **Collectable rules the model lacks**, which this design does not change: s118-5(a)
   disregards the gain on a car, and s118-10 a collectable costing \$500 or less; s108-10(1)
   quarantines collectable losses.
 - **FITO:** the counterfactual removes no US-source deferred slice. A pre-2027 AU resident's
-  deferred gain on US-source property stays in the limit's base. That case also needs
-  §865(g)(2) to fail.
-- **Scenarios that start after 1 July 2027** with lots acquired before it: the 30 June 2027
-  market value is not known, so those lots keep the whole-gain treatment.
+  deferred gain on US-source property stays in the limit's base. For personal property that
+  case also needs §865(g)(2) to fail. A US dwelling (phase 2b) is US-source real property
+  whatever §865 says, so its deferred gain always reaches this gap. The limit comes out low,
+  which over-taxes.
+- **The `min(gain, …)` cap on the AU dwelling's assessable gain** compares the post-2027 AU
+  gain with the US gain over the whole holding. A dwelling whose value fell before 2027 and
+  rose after it has a post-2027 gain larger than the whole one, so the cap cuts it while the
+  deferred loss is still booked. That under-taxes, and no plan in the suite reaches it.
+- **Scenarios that start after 1 July 2027** with assets acquired before it: the 30 June
+  2027 market value is not known, so those assets keep the whole-gain treatment. That
+  includes a dwelling's back-cast indexation, which §7.1 shows the Act does not support.
 - **CGT event I1** on leaving Australia (s104-160) is not modelled, so a deferred gain is
   never realised by emigration.
+
+## 7. Phase 2b: real property
+
+### 7.1 Open question 4, settled from the Act
+
+Brief item 4 asked whether a dwelling that is **not** deemed sold can still make a discount
+gain from an event on or after 1 July 2027. The answer turns on indexation.
+
+| Rule | Section |
+|---|---|
+| Indexation under s110-36(1A) is **not elective**. The s110-36(2) and s114-5(2) choices cover subsection (1) only | s110-36(1A), (2), Note 3; s114-5(2) |
+| (1A) indexes only if the owner was neither a foreign nor a temporary resident at any time from the later of 1 July 2027 and acquisition, to the event | s114-25(2) |
+| (1A) has an indexation factor only for expenditure **incurred on or after 1 July 2027** | s960-275(1B) |
+| A gain worked out from a cost base calculated with reference to indexation is not a discount gain | s115-20(1)(a) |
+| s115-100(c) (the s115-115 percentage) has no date limit, unlike (aa) | s115-100 |
+| The 30% minimum tax covers residential and non-residential gains after the discount steps | s119-5(1)(a), (2) |
+
+There are two cases for a dwelling that s112-155(1)(d) excludes (the owner was foreign at
+some time after 8 May 2012 during the holding):
+
+- **Case A.** The owner was foreign at some time after the later of 1 July 2027 and
+  acquisition. For example, an AU house bought while living abroad, with the move to
+  Australia after 2027. s114-25 fails, so there is no indexation, s115-20 is met, and the
+  gain is a discount gain at the **s115-115 percentage**.
+- **Case B.** The foreign period ended before 1 July 2027 and the owner was resident from
+  then to the sale. (1A) applies, so s115-20 fails and the discount is **0%**. (1B) gives no
+  factor for the pre-2027 purchase price, so that is **not indexed** either. The user chose
+  this literal reading on 14 Nov 2026. The alternative was to treat the cost base as
+  unindexed, because nothing in it is indexed, and give the s115-115 percentage.
+
+So the Item B back-cast (`auIndexedCostBase` indexing a dwelling from its pre-2027
+acquisition) has no footing for an excluded dwelling. It stays only where nothing is known:
+a scenario that starts after 1 July 2027 (§6).
+
+### 7.2 The stamp
+
+`AuCgtDeemedSale2027Reducer` examines each `real-property` entry with a value at 1 July 2027
+whose AU acquisition (`acquisitionDateByCountry.AU`, else `acquisitionDate`) is before that
+date or unknown. A US dwelling is examined only when it carries the s855-45 AU base. The
+reducer writes `auDeemedSale2027` on it:
+
+- `applied`, and a `reason` when it is false;
+- `value`, the dwelling's value at the date (the s112-155(3)(a) proceeds);
+- `priceLevel`, the July 2027 AU CPI level (indexation of the new base starts here);
+- `accumulatedDepreciation` and `capitalizedImprovements` at the date.
+
+The record leaves the cost base unchanged. It is a record, not a rebase, because the sale may
+still have to ignore it (below), and because the dwelling's base is built at the sale from
+`costBasis`, depreciation and improvements anyway.
+
+`applied` is true when **every** owner was an AU resident at the date and passes
+s112-155(1)(d): `residencySinceMs` is unset, or is no later than the later of the acquisition
+and 8 May 2012. An unknown acquisition passes only with `residencySinceMs` unset. The reasons
+for `applied: false` are `not-au-resident`, `s115-105-applies` and `mixed-owner-residency`
+(§6).
+
+**At the sale** the same test runs again for each owner, with residency at the sale. If an
+owner left Australia after 2027, or `residencySinceMs` moved past the date, (d) has failed for
+the realisation event and the record is treated as `applied: false`.
+
+### 7.3 The sale, when the deemed sale applies
+
+- **The deferred gain** = (`value` − pre-2027 base) × the taxable fraction of the
+  **pre-2027 days**. The AU dwelling's pre-2027 base is `costBasis` − the improvements added
+  after the date − the depreciation taken by the date. The US dwelling's is its s855-45 AU
+  base. The gain is signed, because s118-185 scales a loss as well. It is discount-eligible
+  when held 12 months from the original acquisition, which an undated dwelling counts as.
+- **The post-2027 gain** is measured from `value`, plus later improvements, minus later
+  depreciation (US dwelling: `value` only, see §6), plus the selling costs. It is
+  indexed from `priceLevel`. It takes the taxable fraction of the **post-2027 days**.
+- **The exemption windows.** Each country's exempt interval is worked out over the whole
+  ownership as before. For the AU dwelling this is `mainResidenceWindow`; for the US dwelling
+  it is the first six years from the deemed acquisition when rented. The interval is then
+  day-counted into the two windows. This keeps the total exempt days unchanged, and it never
+  grants a second six-year absence because of the reacquisition. A main residence throughout
+  is exempt in both windows.
+- `auTaxableFraction` on the action is the post-2027 fraction. The downsizer gate keeps the
+  whole-ownership exemption, since s292-102 asks about the dwelling, not the regime.
+- The US side (`gain`, the §1222 terms, §121, §1250) does not change.
+
+### 7.4 The sale, when the deemed sale does not apply
+
+This covers a dwelling examined and excluded, or with a record the sale ignores, sold on or
+after 1 July 2027. Its pre-2027 cost base is **not indexed** (s960-275(1B)), so
+`auIndexedGain` equals the nominal gain. In Case B the discount is 0%, as it is today.
+
+### 7.5 Case A: the s115-115 discount after 2027
+
+`AuTaxModule2027` books Case A on `AU_HOUSE_SALE_TAX` for each owner who is resident at the
+sale and has `residencySinceMs` later than both 1 July 2027 and the acquisition. It writes the
+owner's share of the gain to `auPersonPost2027DiscountBaseYTD`, and that share ×
+`cgtDiscountFraction` to `auPersonPost2027DiscountAllowanceYTD`. These buckets are created on
+first use. In `AuTaxRates2027`, losses reach this base last inside the post-2027 gains
+(s102-5 Step 1(c)–(d) and Note 3), and the allowance scales with what is left. The allowance
+comes off the real gain, and also off the minimum-tax base, because s119-5(1)(a) takes the
+gains after the discount steps.
+
+### 7.6 The residential category
+
+Recommendation 5 of the brief is adopted. A dwelling's deferred gain joins the single
+deferred bucket rather than a separate deferred residential bucket (s102-6(4), s102-5
+Step 1(b)). The two orders differ only when a deferred gain is not discount-eligible, which needs a
+dwelling sold within 12 months of a purchase made before 1 July 2027.
