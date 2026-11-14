@@ -212,7 +212,7 @@
  "auNrWithholdingUnfrankedDividendYTD": 0,
  "auOrdinaryIncomeYTD": 0,
  "auPersonCapitalGainsYTD": {
-  "primary": -4804.8175,
+  "primary": -44045.7675,
   "spouse": -15910.843
  },
  "auPersonCapitalLossPool": {
@@ -232,7 +232,7 @@
   "spouse": 0
  },
  "auPersonDiscountableGainsYTD": {
-  "primary": -4804.8175,
+  "primary": -44045.7675,
   "spouse": -15910.843
  },
  "auPersonEarnedIncomeYTD": {
@@ -260,7 +260,7 @@
   "spouse": 47724.3199309
  },
  "auPersonRealCapitalGainsYTD": {
-  "primary": -4804.8175,
+  "primary": -44045.7675,
   "spouse": -15910.843
  },
  "auPersonSuperTaxYTD": {

@@ -175,3 +175,14 @@ test('DS-6: a ladder merge of a stamped and an unstamped rung does not hand the 
   assert.deepEqual(merged[0].costBaseByCountry, { [AU_PRE2027_KEY]: 85_000, AU: 93_000 },
     'deferred gain stays 48k − 40k = 8k');
 });
+
+test('DS-7: new money into a stamped lot raises every country base, so the deferred gain is unchanged', async () => {
+  const { addValue } = await import('../../src/finance/holdings/holding-utils.js');
+  const grown = addValue(stamped(), 10_000);
+  assert.deepEqual(grown.costBaseByCountry, { [AU_PRE2027_KEY]: 110_000, AU: 160_000 });
+  assert.equal(grown.costBasis, 110_000);
+  assert.deepEqual(addValue(stamped(), 10_000, { basisDelta: 0 }).costBaseByCountry,
+    { [AU_PRE2027_KEY]: 100_000, AU: 150_000 }, 'an income credit adds no basis anywhere');
+  assert.equal('costBaseByCountry' in addValue({ marketValue: 10, costBasis: 10 }, 5), false,
+    'a lot with no country base keeps the field absent');
+});

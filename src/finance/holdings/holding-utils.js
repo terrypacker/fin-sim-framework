@@ -462,6 +462,13 @@ export function resize(h, factor) {
  * real question, open as design 94 §9.4's follow-up F3; this parameter exists so that
  * answering it stays a deliberate change rather than a side effect of design 94 step 2a.
  *
+ * Every per-country base (`costBaseByCountry`: an s855-45 step-up, the design 132
+ * deemed-sale base) rises by the same `basisDelta`, because new money's cost is the same
+ * in every jurisdiction. Before 14 Nov 2026 only the bond vintage path in
+ * holdings-earnings did this. Every other caller raised `costBasis` alone, so a lot that
+ * carried a country base understated it by the new money, and the next sale overstated
+ * that country's gain. A lot with no country base keeps the field absent.
+ *
  * @param {object} h      - a holding (not mutated)
  * @param {number} amount - cash added; may be 0
  * @param {object} [opts]
@@ -470,6 +477,24 @@ export function resize(h, factor) {
  */
 export function addValue(h, amount, { basisDelta = amount } = {}) {
   if (!h || !Number.isFinite(amount) || amount === 0) return h;
+  const out = _addValueMoney(h, amount, basisDelta);
+  if (h.costBaseByCountry != null && basisDelta !== 0) {
+    out.costBaseByCountry = addToCountryBases(h.costBaseByCountry, basisDelta);
+  }
+  return out;
+}
+
+/** Every non-null per-country base raised by `amount` (a null entry stays null). */
+export function addToCountryBases(bases, amount) {
+  if (bases == null) return bases;
+  const out = {};
+  for (const [country, base] of Object.entries(bases)) {
+    out[country] = base == null ? base : +(base + amount).toFixed(2);
+  }
+  return out;
+}
+
+function _addValueMoney(h, amount, basisDelta) {
   // A UNITISED holding buys units at its own current price: `parPerUnit` is a constant of
   // the instrument, so par follows the count and the price-to-par ratio is untouched.
   // That is the only meaning "more money into this lot" can have once par is per-unit,

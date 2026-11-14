@@ -2145,7 +2145,7 @@
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": {
-     "AU": 156
+     "AU": 316.12
     },
     "costBasis": 314.92,
     "couponFrequency": 2,
