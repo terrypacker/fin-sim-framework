@@ -928,6 +928,9 @@ export class AuTaxModule2026 extends BaseTaxModule {
               : { auCapitalGainsYTD:      state.auCapitalGainsYTD + auAssessableGain }),
           };
         }
+        // Design 132 §7.3 — the s112-160 deferred gain of a dwelling held across
+        // 1 July 2027, already net of the pre-2027 main-residence days.
+        if (isAuResident) next = bookAuDeferredGain(state, next, action, null, 'AUD');
         return next;
       }],
     ];

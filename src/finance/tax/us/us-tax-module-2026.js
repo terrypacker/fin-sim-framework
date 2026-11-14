@@ -667,6 +667,10 @@ export class UsTaxModule2026 extends BaseTaxModule {
             usSourceCapGainsAudYTD: audGain,
           });
         }
+        // Design 132 §7.3 — the s112-160 deferred gain of a dwelling held across
+        // 1 July 2027. Outside the gate above: the post-2027 gain can be nil while the
+        // deferred one is not.
+        if (action.residency === 'AU') next = bookAuDeferredGain(state, next, action, null, 'USD');
         return next;
       }],
     ];

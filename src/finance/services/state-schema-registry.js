@@ -465,6 +465,8 @@ export class StateSchemaRegistry {
     this.registerPattern('auPersonRealCapitalGainsYTD.*',       ParameterValueType.currency('AUD'));
     this.registerPattern('auPersonDeferredCapitalGainsYTD.*',      ParameterValueType.currency('AUD'));
     this.registerPattern('auPersonDeferredDiscountableGainsYTD.*', ParameterValueType.currency('AUD'));
+    this.registerPattern('auPersonPost2027DiscountBaseYTD.*',      ParameterValueType.currency('AUD'));
+    this.registerPattern('auPersonPost2027DiscountAllowanceYTD.*', ParameterValueType.currency('AUD'));
     this.registerPattern('auPersonFrankingCreditYTD.*',         ParameterValueType.currency('AUD'));
     this.registerPattern('auPersonNonResidentWithholdingYTD.*', ParameterValueType.currency('AUD'));
     // design 73 Gap 2 — per-type non-resident final withholding
@@ -839,6 +841,11 @@ export class StateSchemaRegistry {
     this.register(`${stateKey}.repairMedian`,            vt);
     // Per-country cost base, stepped up from the asset's own value (design 36 §12.2).
     this.registerPatternFront(`${stateKey}.costBaseByCountry.*`, vt);
+    // The 1 July 2027 deemed-sale record on a dwelling (design 132 §7.2).
+    this.register(`${stateKey}.auDeemedSale2027.value`,                   vt);
+    this.register(`${stateKey}.auDeemedSale2027.accumulatedDepreciation`, vt);
+    this.register(`${stateKey}.auDeemedSale2027.capitalizedImprovements`, vt);
+    this.register(`${stateKey}.auDeemedSale2027.priceLevel`,              ParameterValueType.decimal(4));
   }
 
   /**

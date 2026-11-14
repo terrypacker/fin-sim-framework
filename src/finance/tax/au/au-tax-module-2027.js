@@ -13,6 +13,9 @@ import { accumulateByOwnership, resolveAttributionAsset, resolveAttributionFract
 import { toAUD, isAuDomiciledDisposal } from '../tax-fx.js';
 import { signedAuCapitalGain, auRealCapitalGain } from '../capital-gain-character.js';
 import { isPersonalPropertyGainForeignSource } from '../us/us-tax-module-2026.js';
+import { cgtDiscountFraction, toMs } from '../../account-rules/main-residence.js';
+import { AU_DEEMED_SALE_MS } from './au-cgt-2027-constants.js';
+import { ownershipFractions } from '../../ownership-utils.js';
 
 /**
  * AuTaxModule2027 — AU tax classification for FY starting July 2027.
@@ -87,7 +90,8 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
       const realGain = auRealCapitalGain(
         AuTaxModule2026.auAssessableHouseGain(action), action.auIndexedGain);
       const asset = { ownershipType: action.ownershipType, ownerId: action.ownerId, owners: action.owners };
-      return this._recordRealGain(next, state, realGain, asset);
+      return this._bookPost2027Discount(
+        this._recordRealGain(next, state, realGain, asset), state, action, asset);
     });
 
     // ── Cross-border (US-source) resident capital gains ──────────────────────
@@ -241,6 +245,43 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
         ? { auPersonUsSourceRealCapGainsAudYTD: spread(state.auPersonUsSourceRealCapGainsAudYTD) }
         : {}),
     };
+  }
+
+  /**
+   * Design 132 §7.5, Case A — a discount gain from an event after 1 July 2027.
+   *
+   * A dwelling the deemed sale examined and does not reach (s112-155(1)(d)) is not
+   * indexed for its pre-2027 cost (s960-275(1B)). For an owner who was a foreign resident
+   * at some time after the later of 1 July 2027 and the acquisition, s114-25 denies the
+   * indexation altogether, so s115-20 is met and the gain is a discount capital gain at
+   * the s115-115 percentage (s115-100(c), which has no date limit). An owner whose
+   * foreign period ended before the date takes Case B: 0% (design 132 §7.1).
+   *
+   * Booked per person into buckets created on first use, so every other plan's state is
+   * unchanged. `AuTaxRates2027` takes the allowance off the real gain.
+   */
+  _bookPost2027Discount(next, state, action, asset) {
+    const reason = action.auDeemedSaleReason;
+    if (reason == null || reason === 'applied' || state.people == null) return next;
+    if (!((action.saleMs ?? 0) >= AU_DEEMED_SALE_MS)) return next;
+    const gain = AuTaxModule2026.auAssessableHouseGain(action);
+    if (!(gain > 0)) return next;
+    const caseAFrom = Math.max(AU_DEEMED_SALE_MS, action.acquisitionMs ?? -Infinity);
+    let baseMap = next.auPersonPost2027DiscountBaseYTD, allowMap = next.auPersonPost2027DiscountAllowanceYTD;
+    for (const { personKey, fraction } of ownershipFractions(asset, state.people)) {
+      const person = state.people[personKey];
+      const since  = toMs(person?.residencySinceMs);
+      if (person?.residency !== 'AU' || since == null || !(since > caseAFrom) || !(fraction > 0)) continue;
+      const share = gain * fraction;
+      const pct   = cgtDiscountFraction({
+        acquisitionMs: action.acquisitionMs, saleMs: action.saleMs,
+        residencySinceMs: since, residencyAtSale: 'AU',
+      }).fraction;
+      baseMap  = { ...(baseMap  ?? {}), [personKey]: (baseMap?.[personKey]  ?? 0) + share };
+      allowMap = { ...(allowMap ?? {}), [personKey]: (allowMap?.[personKey] ?? 0) + share * pct };
+    }
+    if (baseMap === next.auPersonPost2027DiscountBaseYTD) return next;
+    return { ...next, auPersonPost2027DiscountBaseYTD: baseMap, auPersonPost2027DiscountAllowanceYTD: allowMap };
   }
 
   /**

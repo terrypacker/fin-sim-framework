@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-239 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 94 tools · 334 state field types · 80 topics · 140 design docs
+239 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 94 tools · 336 state field types · 80 topics · 140 design docs
 
 ---
 
@@ -1771,7 +1771,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `AU_FIXED_INCOME_EARNINGS_APPLY` | amount: currency(AUD), residency: text, stateKey: text | AU_BANKING |
 | `AU_FIXED_INCOME_EARNINGS_TAX` | amount: currency(AUD), residency: text, stateKey: text | AU_BANKING |
 | `AU_HOUSE_SALE_APPLY` | salePrice: currency(AUD), costBasis: currency(AUD), stateKey: text, mortgageBalance: currency(AUD), residency: text, ownershipType: text, ownerId: text, owners: any, loanKeys: any, breakCost: currency(AUD), loanPayoffs: any, sellingCost: currency(AUD) | AU_REAL_PROPERTY |
-| `AU_HOUSE_SALE_TAX` | usShortTermGain: currency(AUD), usLongTermGain: currency(AUD), auShortTermGain: currency(AUD), auLongTermGain: currency(AUD), gain: currency(AUD), auIndexedGain: currency(AUD), depreciationGain: currency(AUD), residency: text, proceeds: currency(AUD), sellingCost: currency(AUD), costBasis: currency(AUD), description: text, ownershipType: text, ownerId: text, owners: any, auTaxableFraction: number, auExemptionReason: text, acquisitionMs: number, saleMs: number, mainResidenceFrom: text, mainResidenceUntil: text, isPrimaryResidence: boolean | AU_REAL_PROPERTY |
+| `AU_HOUSE_SALE_TAX` | usShortTermGain: currency(AUD), usLongTermGain: currency(AUD), auShortTermGain: currency(AUD), auLongTermGain: currency(AUD), gain: currency(AUD), auIndexedGain: currency(AUD), auDeferredGain: currency(AUD), auDeferredDiscountableGain: currency(AUD), auDeemedSaleReason: text, depreciationGain: currency(AUD), residency: text, proceeds: currency(AUD), sellingCost: currency(AUD), costBasis: currency(AUD), description: text, ownershipType: text, ownerId: text, owners: any, auTaxableFraction: number, auExemptionReason: text, acquisitionMs: number, saleMs: number, mainResidenceFrom: text, mainResidenceUntil: text, isPrimaryResidence: boolean | AU_REAL_PROPERTY |
 | `AU_INVESTMENT_INTEREST_DEDUCTION` | loanKey: text, amount: number, residency: text, currency: text, ownerId: text, ownershipType: text, owners: any | AU_REAL_PROPERTY, US_REAL_PROPERTY |
 | `AU_PERIOD_ADVANCE` | period: any | AU_TAX |
 | `AU_QUALIFYING_EARNINGS_APPLY` | amount: currency(AUD), personKey: text, clamps: any, carriedForward: currency(AUD), employerKey: text | AU_RETIREMENT |
@@ -1918,7 +1918,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `SUPER_WITHDRAWAL_EARNINGS_TAX` | amount: currency(AUD) | AU_RETIREMENT |
 | `TLH_NO_SUBSTITUTE` | count: number, holdingIds: any, stateKeys: any | ECONOMIC_REGIMES |
 | `US_HOUSE_SALE_APPLY` | salePrice: currency(USD), costBasis: currency(USD), stateKey: text, mortgageBalance: currency(USD), residency: text, loanKeys: any, breakCost: currency(USD), loanPayoffs: any, sellingCost: currency(USD) | US_REAL_PROPERTY |
-| `US_HOUSE_SALE_TAX` | gain: currency(USD), depreciationGain: currency(USD), auGain: currency(USD), auIndexedGain: currency(USD), auDiscountableGain: currency(USD), usShortTermGain: currency(USD), usLongTermGain: currency(USD), auShortTermGain: currency(USD), auLongTermGain: currency(USD), residency: text, proceeds: currency(USD), sellingCost: currency(USD), costBasis: currency(USD), description: text, ownershipType: text, ownerId: text, owners: any | US_REAL_PROPERTY |
+| `US_HOUSE_SALE_TAX` | gain: currency(USD), depreciationGain: currency(USD), auGain: currency(USD), auIndexedGain: currency(USD), auDeferredGain: currency(USD), auDeferredDiscountableGain: currency(USD), auDeemedSaleReason: text, auDiscountableGain: currency(USD), usShortTermGain: currency(USD), usLongTermGain: currency(USD), auShortTermGain: currency(USD), auLongTermGain: currency(USD), residency: text, proceeds: currency(USD), sellingCost: currency(USD), costBasis: currency(USD), description: text, ownershipType: text, ownerId: text, owners: any | US_REAL_PROPERTY |
 | `US_INVESTMENT_INTEREST_DEDUCTION` | loanKey: text, amount: number, residency: text, currency: text, ownerId: text, ownershipType: text, owners: any | AU_REAL_PROPERTY, US_REAL_PROPERTY |
 | `US_PERIOD_ADVANCE` | period: any | US_TAX |
 | `US_RENTAL_INCOME_APPLY` | netCash: currency(USD), taxableRental: number, monthlyDepreciation: number, stateKey: text, residency: text | US_REAL_PROPERTY |
@@ -1936,7 +1936,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 
 ---
 
-## State field types (334)
+## State field types (336)
 
 The scenario-INDEPENDENT half of `StateSchemaRegistry`: the globs and exact paths it
 installs in its own constructor, with the value type that decides how each formats.
@@ -2070,6 +2070,8 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `auPersonNrWithholdingInterestYTD.*` | currency(AUD) |
 | `auPersonNrWithholdingUnfrankedDividendYTD.*` | currency(AUD) |
 | `auPersonOrdinaryIncomeYTD.*` | currency(AUD) |
+| `auPersonPost2027DiscountAllowanceYTD.*` | currency(AUD) |
+| `auPersonPost2027DiscountBaseYTD.*` | currency(AUD) |
 | `auPersonRealCapitalGainsYTD.*` | currency(AUD) |
 | `auPersonSuperStreamYTD.*.*` | currency(AUD) |
 | `auPersonSuperTaxYTD.*` | currency(AUD) |

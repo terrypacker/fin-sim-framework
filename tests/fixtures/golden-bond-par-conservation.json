@@ -64,6 +64,14 @@
   "annualRunningCost": 0,
   "appreciationRate": 0.04,
   "appreciationSchedule": null,
+  "auDeemedSale2027": {
+   "accumulatedDepreciation": 0,
+   "applied": false,
+   "capitalizedImprovements": 0,
+   "priceLevel": 1.0609,
+   "reason": "not-au-resident",
+   "value": 1040000
+  },
   "balanceAtResidencyChange": 1216652.9,
   "capitalizeRepairs": 0,
   "capitalizedImprovements": 0,

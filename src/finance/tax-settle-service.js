@@ -98,6 +98,7 @@ const AU_PER_PERSON_INCOME_FIELDS = [
   'auPersonRealCapitalGainsYTD',
   'auPersonDeferredCapitalGainsYTD',
   'auPersonDeferredDiscountableGainsYTD',
+  'auPersonPost2027DiscountBaseYTD',
   'auPersonNonResidentWithholdingYTD',
   'auPersonNrWithholdingInterestYTD',
   'auPersonNrWithholdingUnfrankedDividendYTD',
@@ -324,6 +325,12 @@ export class TaxSettleService {
         ...((state.auPersonDeferredCapitalGainsYTD != null || state.auDeferredCapitalGainsYTD != null) ? {
           auDeferredCapitalGainsYTD:      perPersonShare(state.auPersonDeferredCapitalGainsYTD,      state.auDeferredCapitalGainsYTD),
           auDeferredDiscountableGainsYTD: perPersonShare(state.auPersonDeferredDiscountableGainsYTD, state.auDeferredDiscountableGainsYTD),
+        } : {}),
+        // design 132 §7.5 — the s115-115 discount on a post-2027 dwelling gain (Case A),
+        // present only in a year that sold one.
+        ...(state.auPersonPost2027DiscountBaseYTD != null ? {
+          auPost2027DiscountBaseYTD:      perPersonShare(state.auPersonPost2027DiscountBaseYTD,      0),
+          auPost2027DiscountAllowanceYTD: perPersonShare(state.auPersonPost2027DiscountAllowanceYTD, 0),
         } : {}),
         auNonResidentWithholdingYTD: perPersonShare(state.auPersonNonResidentWithholdingYTD,  state.auNonResidentWithholdingYTD),
         auNrWithholdingInterestYTD:          perPersonShare(state.auPersonNrWithholdingInterestYTD,          state.auNrWithholdingInterestYTD),

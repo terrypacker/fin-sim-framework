@@ -101,7 +101,7 @@ export const AU_REAL_PROPERTY = {
       // apportioned gain with no way to explain it. The ownership trio (design 76
       // Gap B) attributes the gain to the owner(s) rather than splitting it 50/50.
       { type: 'AU_HOUSE_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'AU',
-        fields: { usShortTermGain: ValueType.currency('AUD'), usLongTermGain: ValueType.currency('AUD'), auShortTermGain: ValueType.currency('AUD'), auLongTermGain: ValueType.currency('AUD'), gain: ValueType.currency('AUD'), auIndexedGain: ValueType.currency('AUD'), depreciationGain: ValueType.currency('AUD'), residency: ValueType.text(), proceeds: ValueType.currency('AUD'), sellingCost: ValueType.currency('AUD'), costBasis: ValueType.currency('AUD'), description: ValueType.text(),
+        fields: { usShortTermGain: ValueType.currency('AUD'), usLongTermGain: ValueType.currency('AUD'), auShortTermGain: ValueType.currency('AUD'), auLongTermGain: ValueType.currency('AUD'), gain: ValueType.currency('AUD'), auIndexedGain: ValueType.currency('AUD'), auDeferredGain: ValueType.currency('AUD'), auDeferredDiscountableGain: ValueType.currency('AUD'), auDeemedSaleReason: ValueType.text(), depreciationGain: ValueType.currency('AUD'), residency: ValueType.text(), proceeds: ValueType.currency('AUD'), sellingCost: ValueType.currency('AUD'), costBasis: ValueType.currency('AUD'), description: ValueType.text(),
                   ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any(),
                   auTaxableFraction: ValueType.number(), auExemptionReason: ValueType.text(),
                   acquisitionMs: ValueType.number(), saleMs: ValueType.number(),

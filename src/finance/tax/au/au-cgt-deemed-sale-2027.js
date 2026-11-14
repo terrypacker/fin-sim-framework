@@ -34,6 +34,8 @@ import { primaryPersonKey }  from '../../residency-utils.js';
 import { AU_DEEMED_SALE_MS, AU_PRE2027_KEY, auAcquisitionMs as _auAcquisitionMs, scalarDeferredGainFields }
   from './au-cgt-2027-constants.js';
 
+import { isDeemedSaleProperty, stampDeemedSaleProperty } from './au-cgt-2027-property.js';
+
 export { AU_DEEMED_SALE_MS, AU_PRE2027_KEY, scalarDeferredGainFields };
 
 /**
@@ -70,8 +72,9 @@ export function stampDeemedSale(h, auLevel) {
 /**
  * The scalar CGT assets (design 132 phase 2a): a standalone collectible (bullion or a
  * true collectable — s112-155 reaches every non-pre-CGT asset) and a company stake.
- * Real property is phase 2b, because its deemed sale has to split the main-residence
- * days at 30 June 2027 (s102-6(4)).
+ * Real property is phase 2b (`au-cgt-2027-property.js`): a record rather than a rebase,
+ * because its main-residence days split at 30 June 2027 and s112-155(1)(d) is re-tested
+ * at the sale.
  */
 const SCALAR_KINDS = new Set(['collectible', 'company']);
 
@@ -111,7 +114,7 @@ function _ownedByAuResident(state, key) {
 
 export class AuCgtDeemedSale2027Reducer extends Reducer {
   static type        = 'AuCgtDeemedSale2027Reducer';
-  static description = 'On the AU period advance that opens FY2027 (1 July 2027), stamps every brokerage lot, standalone collectible and company stake an AU resident acquired before that date with the s112-155 deemed sale and reacquisition: the pre-2027 AU cost base is kept for the deferred gain, the market value becomes the AU cost base, and indexation starts at the July 2027 CPI level (design 132).';
+  static description = 'On the AU period advance that opens FY2027 (1 July 2027), stamps every brokerage lot, standalone collectible and company stake an AU resident acquired before that date with the s112-155 deemed sale and reacquisition: the pre-2027 AU cost base is kept for the deferred gain, the market value becomes the AU cost base, and indexation starts at the July 2027 CPI level. Real property gets a record of the deemed sale (market value, CPI level, depreciation and improvements at the date) and whether s112-155(1)(d) let it apply (design 132).';
   static actionType  = null;
 
   constructor() {
@@ -125,6 +128,10 @@ export class AuCgtDeemedSale2027Reducer extends Reducer {
     const auLevel = state.cpiAccumulator?.AU ?? state.inflationAccumulator?.AU ?? 1;
     const patch = {};
     for (const [key, a] of Object.entries(state)) {
+      if (isDeemedSaleProperty(a)) {
+        patch[key] = stampDeemedSaleProperty(state, a, auLevel);
+        continue;
+      }
       if (isDeemedSaleScalar(a)) {
         if (_ownedByAuResident(state, key)) patch[key] = stampDeemedSaleScalar(a, auLevel);
         continue;

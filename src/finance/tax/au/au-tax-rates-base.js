@@ -435,6 +435,11 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
         auDeferredCapitalGainsYTD:      capLoss.deferred,
         auDeferredDiscountableGainsYTD: capLoss.deferredDiscountable,
       } : {}),
+      // Design 132 §7.5 — the netted s115-115 base on a post-2027 dwelling gain.
+      ...(capLoss.post2027DiscountBase != null ? {
+        auPost2027DiscountBaseYTD:      capLoss.post2027DiscountBase,
+        auPost2027DiscountAllowanceYTD: capLoss.post2027DiscountAllowance,
+      } : {}),
     };
 
     // Apply the year's CGT relief. Base = flat 50% Div 115 discount and no
