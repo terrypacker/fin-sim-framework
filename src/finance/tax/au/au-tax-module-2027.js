@@ -12,6 +12,7 @@ import { AuTaxModule2026 } from './au-tax-module-2026.js';
 import { accumulateByOwnership, resolveAttributionAsset, resolveAttributionFractions } from '../../ownership-utils.js';
 import { toAUD, isAuDomiciledDisposal } from '../tax-fx.js';
 import { signedAuCapitalGain, auRealCapitalGain } from '../capital-gain-character.js';
+import { isPersonalPropertyGainForeignSource } from '../us/us-tax-module-2026.js';
 
 /**
  * AuTaxModule2027 — AU tax classification for FY starting July 2027.
@@ -90,10 +91,18 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
     });
 
     // ── Cross-border (US-source) resident capital gains ──────────────────────
-    // These three are ALL US-source, so besides the worldwide real bucket they
-    // also feed usSourceRealCapGainsAudYTD — the FY2027 FITO "without" pass reduces
-    // the real bucket by this to size the CG slice of the FITO limit (design 57
-    // Part 2, Item D). AU-native AU_STOCK/AU_HOUSE above are AU-source ⇒ excluded.
+    // Besides the worldwide real bucket these feed usSourceRealCapGainsAudYTD — the
+    // FY2027 FITO "without" pass reduces the real bucket by this to size the CG slice
+    // of the FITO limit (design 57 Part 2, Item D). AU-native AU_STOCK/AU_HOUSE above
+    // are AU-source ⇒ excluded.
+    //
+    // The slice is gated EXACTLY as its nominal sibling `usSourceCapGainsAudYTD` is in
+    // the US module, or the "without" pass strips one bucket and not the other. A gain on
+    // personal property (stock, company equity, a collectible) is US-source only when
+    // §865(g)(2) re-sources it (`isPersonalPropertyGainForeignSource` false), and never
+    // for an AU-domiciled asset (Art. 22(2)). Item D called all three "US-source"
+    // unconditionally; the nominal side never was. The US house is real property and
+    // stays US-source on both sides.
     //
     // US brokerage stock: indexed AU gain (deemed acquisition = residency date,
     // design 57 §6.3), stepped-up auGain, else the US gain — converted to AUD.
@@ -106,7 +115,7 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
       // leaves every US-domiciled disposal exactly as it was.
       const realGainAud = toAUD(realGainNative, action.currency ?? 'USD', state);
       return this._recordUsSourceReal(state, action, 'usStockAccount', realGainAud,
-        { usSource: !isAuDomiciledDisposal(state, action) });
+        { usSource: !(isPersonalPropertyGainForeignSource(state) || isAuDomiciledDisposal(state, action)) });
     });
 
     // Company equity: AU-assessable from the s855-45 stepped-up basis and indexed
@@ -118,7 +127,8 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
       if (action.residency !== 'AU') return state;
       const realGainUsd = this._realGain(action, action.auGain ?? action.gain ?? 0);
       const realGainAud = toAUD(realGainUsd, 'USD', state);
-      return this._recordUsSourceReal(state, action, null, realGainAud);
+      return this._recordUsSourceReal(state, action, null, realGainAud,
+        { usSource: !isPersonalPropertyGainForeignSource(state) });
     });
 
     // US house (foreign real property, design 62 §5): AU-assessable for a resident
@@ -148,7 +158,7 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
       // An AU-held gold sleeve or collectible is AU-source: real bucket only, as the
       // AU-native AU_STOCK path books it (Art. 22(2); see isAuDomiciledDisposal).
       return this._recordUsSourceReal(state, action, null, realGainAud,
-        { usSource: !isAuDomiciledDisposal(state, action) });
+        { usSource: !(isPersonalPropertyGainForeignSource(state) || isAuDomiciledDisposal(state, action)) });
     });
 
     return fns;

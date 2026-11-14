@@ -652,6 +652,11 @@ Cover the straddle path with a **new** unit/fixture where the person is AU-resid
 
 #### Item D — FITO "without"-pass real-bucket reduction (small, self-contained)
 
+> **Corrected 14 Nov 2026.** Step 2's "all three are US-source" was wrong for personal property.
+> The nominal slice has always been gated on §865(g)(2) (`isPersonalPropertyGainForeignSource`)
+> and, for an AU-domiciled asset, on Art. 22(2). The real slice now takes the same gate, so the
+> "without" pass strips both buckets or neither.
+
 Today `au-tax-rates-base.js` `computeTax` builds the FITO "without US-source" pass by reducing
 `auCapitalGainsYTD`, but FY2027 `_cgtRelief` reads `auRealCapitalGainsYTD` (unreduced) ⇒ the CG
 slice of the FITO limit is ~0. Immaterial in the reference (limit doesn't bind) but wrong.

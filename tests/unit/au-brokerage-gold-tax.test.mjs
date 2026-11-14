@@ -59,6 +59,7 @@ const AU_PERSON = {
   auDiscountableGainsYTD: 'auPersonDiscountableGainsYTD',
   auRealCapitalGainsYTD:  'auPersonRealCapitalGainsYTD',
   usSourceRealCapGainsAudYTD: 'auPersonUsSourceRealCapGainsAudYTD',
+  usSourceCapGainsAudYTD:     'auPersonUsSourceCapGainsAudYTD',
 };
 const au = (s, k) => (s[k] ?? 0) + Object.values(s[AU_PERSON[k]] ?? {}).reduce((a, b) => a + b, 0);
 
@@ -193,10 +194,44 @@ test('G-AU2 (equity): an AUD STOCK_WITHDRAWAL_TAX books USD in the US bucket and
 });
 
 test('control: a US-domiciled STOCK_WITHDRAWAL_TAX is unchanged (USD, and in the US-source real slice)', () => {
-  const state = { ...buckets(),
+  // auCgtEffectiveRate under 10% ⇒ §865(g)(2) re-sources the gain to the US.
+  const state = { ...buckets(), auCgtEffectiveRate: 0.05,
     usStockAccount: makeAccount({ stateKey: 'usStockAccount', currency: 'USD', country: 'US', balance: 0 }) };
   const taxed = book(state, [stockSale('usStockAccount', 'USD')]);
   close(taxed.usCapitalGainsYTD, 30_000, 'US LTCG bucket');
   close(au(taxed, 'auCapitalGainsYTD'), 30_000 * FX, 'AU nominal bucket in AUD');
+  close(au(taxed, 'usSourceCapGainsAudYTD'), 30_000 * FX, 'US-source nominal slice');
   close(au(taxed, 'usSourceRealCapGainsAudYTD'), 30_000 * FX, 'US-source real slice');
+  // At Australia's usual rate the gain stays foreign source, and BOTH slices are empty.
+  const foreign = book({ ...state, auCgtEffectiveRate: 0.22 }, [stockSale('usStockAccount', 'USD')]);
+  close(au(foreign, 'usSourceCapGainsAudYTD'), 0, 'nominal slice');
+  close(au(foreign, 'usSourceRealCapGainsAudYTD'), 0, 'real slice');
+});
+
+// ── FITO slice symmetry (design 57 Item D ↔ §865(g)(2)) ────────────────────────
+// The real US-source slice must be gated exactly as the nominal one: a personal-property
+// gain is US-source for Art. 22(2) only when §865(g)(2) re-sources it (Australia's tax on
+// it under 10%). Before 14 Nov 2026 the real slice was booked unconditionally.
+
+test('FITO-SYM: the real US-source slice follows the nominal slice through §865(g)(2)', async () => {
+  const { AuTaxModule2027 } = await import('../../src/finance/tax/au/au-tax-module-2027.js');
+  const fn = new AuTaxModule2027().getReducerFns().get('STOCK_WITHDRAWAL_TAX');
+  const base = {
+    people: { primary: { residency: 'AU', citizen: ['US'] } },
+    usStockAccount: { country: 'US', ownershipType: 'sole', ownerId: 'primary' },
+    fxRates: { USD_AUD: 1.5 },
+  };
+  const act = { type: 'STOCK_WITHDRAWAL_TAX', residency: 'AU', stateKey: 'usStockAccount',
+                currency: 'USD', gain: 1000, auGain: 1000, auIndexedGain: 1000 };
+  const slice = s => (s.usSourceRealCapGainsAudYTD ?? 0)
+    + Object.values(s.auPersonUsSourceRealCapGainsAudYTD ?? {}).reduce((a, b) => a + b, 0);
+  const real  = s => (s.auRealCapitalGainsYTD ?? 0)
+    + Object.values(s.auPersonRealCapitalGainsYTD ?? {}).reduce((a, b) => a + b, 0);
+
+  const foreign = fn({ ...base, auCgtEffectiveRate: 0.22 }, act);
+  assert.ok(real(foreign) > 0, 'the gain is assessed');
+  assert.equal(slice(foreign), 0, 'AU taxed it at ≥10% ⇒ foreign source ⇒ not in the removal set');
+
+  const resourced = fn({ ...base, auCgtEffectiveRate: 0.05 }, act);
+  assert.equal(slice(resourced), real(resourced), '§865(g)(2) re-sources it ⇒ US-source on both slices');
 });

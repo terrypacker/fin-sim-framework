@@ -248,7 +248,7 @@ function bookAuRmd(state, next, action, canonicalKey, amount) {
  * @returns {boolean} true ⇒ foreign source (no re-sourcing needed, not US-source
  *                    income for the Art. 22(2) handoff)
  */
-function isPersonalPropertyGainForeignSource(state) {
+export function isPersonalPropertyGainForeignSource(state) {
   const rate = state.auCgtEffectiveRate;
   return rate == null || rate >= SEC865_FOREIGN_TAX_THRESHOLD;
 }
