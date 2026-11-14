@@ -186,3 +186,51 @@ test('DS-7: new money into a stamped lot raises every country base, so the defer
   assert.equal('costBaseByCountry' in addValue({ marketValue: 10, costBasis: 10 }, 5), false,
     'a lot with no country base keeps the field absent');
 });
+
+// ── Phase 2a: standalone collectibles and company stakes ───────────────────────
+
+test('DS-8: the stamp reaches a standalone collectible and a company stake, measured on value', () => {
+  const s = {
+    people: { primary: { residency: 'AU' } }, cpiAccumulator: { AU: 1.2 },
+    gold: { kind: 'collectible', isGold: true, value: 80_000, costBasis: 50_000, ownershipType: 'sole', ownerId: 'primary' },
+    co:   { kind: 'company', value: 300_000, costBasis: 40_000, costBaseByCountry: { AU: 120_000 },
+            acquisitionDateByCountry: { AU: Date.UTC(2024, 0, 1) }, ownershipType: 'sole', ownerId: 'primary' },
+    late: { kind: 'company', value: 10_000, costBasis: 10_000, acquisitionDateByCountry: { AU: Date.UTC(2027, 7, 1) },
+            ownershipType: 'sole', ownerId: 'primary' },
+    sold: { kind: 'collectible', value: 0, costBasis: 5_000, ownershipType: 'sole', ownerId: 'primary' },
+  };
+  const out = STAMP.reduce(s, advance(AU_DEEMED_SALE_MS));
+  assert.deepEqual(out.gold.costBaseByCountry, { [AU_PRE2027_KEY]: 50_000, AU: 80_000 });
+  assert.deepEqual(out.co.costBaseByCountry, { [AU_PRE2027_KEY]: 120_000, AU: 300_000 },
+    'the s855-45 base is the pre-2027 base');
+  assert.equal(out.co.acquisitionPriceLevel, 1.2);
+  assert.equal(out.late.costBaseByCountry, undefined, 'acquired after the date');
+  assert.equal(out.sold.costBaseByCountry, undefined, 'nothing held');
+});
+
+test('DS-9: a stamped scalar asset reports its deferred gain; the 12-month test runs from the original date', async () => {
+  const { scalarDeferredGainFields } = await import('../../src/finance/tax/au/au-cgt-2027-constants.js');
+  const a = { costBaseByCountry: { [AU_PRE2027_KEY]: 120_000, AU: 300_000 },
+              acquisitionDateByCountry: { AU: Date.UTC(2027, 0, 1) } };
+  assert.deepEqual(scalarDeferredGainFields(a, Date.UTC(2027, 9, 1)),
+    { auDeferredGain: 180_000, auDeferredDiscountableGain: 0 }, 'nine months held');
+  assert.deepEqual(scalarDeferredGainFields(a, Date.UTC(2029, 0, 1)),
+    { auDeferredGain: 180_000, auDeferredDiscountableGain: 180_000 });
+  assert.deepEqual(scalarDeferredGainFields({ costBaseByCountry: { [AU_PRE2027_KEY]: 90, AU: 60 } }, 0),
+    { auDeferredGain: -30, auDeferredDiscountableGain: 0 }, 'a deferred LOSS (s112-160(4)) is signed');
+  assert.deepEqual(scalarDeferredGainFields({ costBaseByCountry: { AU: 60 } }, 0), {});
+});
+
+test('DS-10: the company-sale classifier books the deferred gain (USD → AUD)', async () => {
+  const { UsTaxModule2026 } = await import('../../src/finance/tax/us/us-tax-module-2026.js');
+  const fn = new UsTaxModule2026().getReducerFns().get('COMPANY_SALE_TAX');
+  const out = fn({
+    people: { primary: { residency: 'AU', citizen: ['US'] } }, effectiveExchangeRates: { USD_AUD: 1.5 },
+    usCapitalGainsYTD: 0, auCapitalGainsYTD: 0, auDiscountableGainsYTD: 0,
+  }, { type: 'COMPANY_SALE_TAX', residency: 'AU', gain: 260_000, auGain: 20_000, auIndexedGain: 10_000,
+       usShortTermGain: 0, usLongTermGain: 260_000, auShortTermGain: 0, auLongTermGain: 20_000,
+       ownershipType: 'sole', ownerId: 'primary',
+       auDeferredGain: 180_000, auDeferredDiscountableGain: 180_000 });
+  assert.equal(out.auPersonDeferredCapitalGainsYTD.primary, 270_000);
+  assert.equal(out.auPersonDeferredDiscountableGainsYTD.primary, 270_000);
+});

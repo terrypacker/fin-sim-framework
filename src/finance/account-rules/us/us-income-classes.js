@@ -15,6 +15,7 @@ import { creditPay } from '../../payroll/wage-splits.js';
 import { resolveCashKey, resolveDestinationCashKey, resolveSaleDestinationKey, creditSaleProceeds } from '../cash-routing.js';
 import { singleAssetTermFields } from '../../holdings/holding-period.js';
 import { toMs } from '../main-residence.js';
+import { scalarDeferredGainFields } from '../../tax/au/au-cgt-2027-constants.js';
 import { wageAt, hasSpells } from '../../payroll/employment.js';
 
 /** Resolve the US cash pool (legacy tail; prefer resolveCashKey for routing). */
@@ -247,6 +248,8 @@ export class CompanySaleApplyReducer extends AccountServiceReducer {
     return this.newState(state, stateUpdate, [...(fxLeg ? [fxLeg] : []),
       { type: 'COMPANY_SALE_TAX', gain, auGain, auIndexedGain, residency,
       usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
+      // Design 132 — the s112-160 deferred gain of a stake held across 1 July 2027.
+      ...scalarDeferredGainFields(eq, saleMs),
       // Sale detail for Schedule D / Form 8949 (mirrors US_HOUSE_SALE_TAX). `gain`
       // alone identifies the tax, not the disposal — a return has to show what was
       // sold, for how much, and against what basis.

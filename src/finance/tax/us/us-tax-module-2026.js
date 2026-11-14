@@ -1062,6 +1062,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
             auDiscountableGainsYTD: toAUD(auChar.long, 'USD', state),
             ...(foreignSource ? {} : { usSourceCapGainsAudYTD: audGain }),
           });
+          // Design 132 — the s112-160 deferred gain of a stake held across 1 July 2027.
+          next = bookAuDeferredGain(state, next, action, null, 'USD');
         }
         return next;
       }],

@@ -1,7 +1,7 @@
 # 132 — The 1 July 2027 deemed sale: assets held across the CGT reform
 
-**Status:** PHASE 1 BUILT (14 Nov 2026). Phase 1 covers brokerage lots. Phase 2 (standalone
-collectibles, real property, company equity) is open (§6).
+**Status:** PHASES 1 AND 2a BUILT (14 Nov 2026). Phase 1 covers brokerage lots and phase 2a
+covers standalone collectibles and company equity (§4.5). Phase 2b, real property, is open (§6).
 
 **Related:** design 57 Part 2 Item B (the decision this reverses), design 57 §6.3 (indexation),
 design 62 §4 (the 12-month discount test), design 36 §12.2 (the s855-45 residency step-up),
@@ -73,6 +73,20 @@ apportioning method to implement.
    deferred gain then enters net capital gain with 50% off its discount-eligible part,
    un-indexed. The 30% minimum tax applies to the post-2027 (real) gain only.
 
+### 4.5 Phase 2a: standalone collectibles and company equity
+
+Both are scalar assets: one `value`, one cost base, no lots. The stamp makes the same three
+changes as for a lot, measured on `value`: `AU_PRE2027` ← the AU base (the s855-45 step-up when
+there is one, else `costBasis`), `AU` ← `value`, `acquisitionPriceLevel` ← the 1 July 2027 level.
+The sale reducers (`CollectibleSaleApplyReducer`, `CompanySaleApplyReducer`) then measure the
+post-2027 gain from the deemed base without new code, and add `scalarDeferredGainFields`. Its
+12-month test runs from `acquisitionDateByCountry.AU`, and an asset with no date counts as long
+held, as the term split already treats it. The US module's `COLLECTIBLE_SALE_TAX` and
+`COMPANY_SALE_TAX` classifiers book the deferred gain.
+
+s112-155 reaches every non-pre-CGT asset, so a true collectable (not bullion) is stamped too. Its
+post-2027 gain is still not indexed (design 57 Part 2 Q3).
+
 ## 5. Who is affected
 
 Only AU residents who hold a lot on 30 June 2027 that was acquired (for AU purposes) before
@@ -81,9 +95,15 @@ acquired at the move, so s112-155(1)(b) is not met.
 
 ## 6. Open
 
-- **Phase 2:** standalone collectibles (including bullion), real property (including the
-  s102-6(4) deferred residential split and the main-residence days) and company equity still
-  take the Item B treatment.
+- **Phase 2b: real property** still takes the Item B treatment. It needs the main-residence
+  exemption split at 30 June 2027 (the deemed sale's ownership period ends there, and the
+  reacquired dwelling's starts on 1 July 2027). It also needs the s102-6(4) deferred
+  residential category, the depreciation history, and the s112-155(1)(d) test: an AU dwelling
+  (taxable Australian property, so no s855-45 reset) owned while its owner was a foreign
+  resident after 8 May 2012 fails s115-105 and is not deemed sold.
+- **Collectable rules the model lacks**, which this design does not change: s118-5(a)
+  disregards the gain on a car, and s118-10 a collectable costing \$500 or less; s108-10(1)
+  quarantines collectable losses.
 - **FITO:** the counterfactual removes no US-source deferred slice. A pre-2027 AU resident's
   deferred gain on US-source property stays in the limit's base. That case also needs
   §865(g)(2) to fail.

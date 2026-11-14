@@ -642,10 +642,13 @@
  },
  "carCollectible": {
   "acquisitionDateByCountry": null,
-  "acquisitionPriceLevel": null,
+  "acquisitionPriceLevel": 1.0609,
   "appreciationRate": 0.04,
   "appreciationSchedule": null,
-  "costBaseByCountry": null,
+  "costBaseByCountry": {
+   "AU": 78000,
+   "AU_PRE2027": 45000
+  },
   "costBasis": 45000,
   "country": "AU",
   "isGold": false,
