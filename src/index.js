@@ -133,6 +133,7 @@ import { CurrencyPair, FxEngine } from './finance/fx/fx-engine.js';
 import { FX_PROCESS_MODELS, FX_PROCESS_MODEL_IDS, gaussianFrom } from './finance/fx/fx-process-models.js';
 import { FxProcessReducer } from './finance/fx/fx-process-reducer.js';
 import { FxPppReducer } from './finance/fx/fx-ppp-reducer.js';
+import { AuCgtDeemedSale2027Reducer } from './finance/tax/au/au-cgt-deemed-sale-2027.js';
 import { FxRefreshReducer } from './finance/fx/fx-refresh-reducer.js';
 import { FxService } from './finance/fx/fx-service.js';
 import { FxStepApplyReducer } from './finance/fx/fx-step-apply-reducer.js';
@@ -1116,6 +1117,7 @@ export const Finance = {
   gaussianFrom,
   FxProcessReducer,
   FxPppReducer,
+  AuCgtDeemedSale2027Reducer,
   FxRefreshReducer,
   FxService,
   FxStepApplyReducer,

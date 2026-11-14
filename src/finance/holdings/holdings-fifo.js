@@ -8,6 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { AU_PRE2027_KEY } from '../tax/au/au-cgt-2027-constants.js';
 import { ALLOCATION, isCollectibleAllocation } from './allocation.js';
 import { buildHoldingsComparator } from './holdings-selection.js';
 import { isLongTerm, YEAR_MS }     from './holding-period.js';
@@ -184,6 +185,17 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
   for (const h of holdings) {
     if (h?.costBaseByCountry) for (const c of Object.keys(h.costBaseByCountry)) countries.add(c);
   }
+  // Design 132 — the pre-2027 AU base is a deferred-gain input, not a country: it gets its
+  // own tally below rather than a `realizedBasisByCountry` entry that would fall back to
+  // the US basis for every lot that does not carry it.
+  countries.delete(AU_PRE2027_KEY);
+  // The s112-160 deferred gain of lots stamped by the 1 July 2027 deemed sale, signed, and
+  // its discount-eligible part (lots held ≥12 months from the ORIGINAL acquisition,
+  // s112-160(3)(c)). Gold is tallied apart so the collectible emitters can carry its share.
+  const deferred     = { gain: 0, discountable: 0 };
+  const collDeferred = { gain: 0, discountable: 0 };
+  let anyDeferred = false;
+  const deferredAsOfMs = indexation?.asOfMs ?? terms?.asOfMs ?? null;
   const sorted = [...holdings].sort(buildHoldingsComparator(selection, securities, terms));
   let remaining     = amount;
   let realizedBasis = 0;
@@ -309,6 +321,19 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
         collectibleIndexedBasisByCountry[idxCountry] += idxBasisShare * factor;
       }
     }
+    // Design 132 — the deemed sale's deferred gain on the units leaving with this take.
+    const preBase = h.costBaseByCountry?.[AU_PRE2027_KEY];
+    if (preBase != null && !isCash) {
+      anyDeferred = true;
+      const auBase = h.costBaseByCountry?.AU ?? (h.costBasis ?? 0);
+      const d      = (auBase - preBase) * fraction;
+      const acqMs  = h.acquisitionDateByCountry?.AU ?? _purchaseMs(h);
+      const held12 = deferredAsOfMs == null || acqMs == null
+        || (deferredAsOfMs - acqMs) >= TWELVE_MONTHS_MS;
+      const bucket = isCollectibleAllocation(h.allocation) ? collDeferred : deferred;
+      bucket.gain += d;
+      if (held12 && d > 0) bucket.discountable += d;
+    }
     // Signed, per-country, per-character gain (design 90 §3.1). Independent of the
     // indexation block above — same per-country basis, no CPI factor, no floor.
     //
@@ -418,7 +443,12 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
       }
     }
   }
+  const round = b => ({ gain: +b.gain.toFixed(2), discountable: +b.discountable.toFixed(2) });
   return {
+    // Design 132 — present only when a stamped lot was consumed, so every other disposal's
+    // result (and the action built from it) is unchanged.
+    ...(anyDeferred ? { deferredGainByCountry: { AU: round(deferred) },
+                        collectibleDeferredGainByCountry: { AU: round(collDeferred) } } : {}),
     realizedBasis: +realizedBasis.toFixed(2),
     realizedBasisByCountry,
     realizedIndexedBasisByCountry,

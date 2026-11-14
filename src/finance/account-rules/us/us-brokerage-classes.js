@@ -8,6 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { deferredGainFields } from '../../tax/au/au-cgt-2027-constants.js';
 import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
@@ -367,7 +368,9 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
       // `currency`: this reducer is the US brokerage path, so always USD — stated
       // rather than left to the consumer's assumption, because the service drawdown
       // path emits the same action type for an AU-domiciled account.
-      { type: 'STOCK_WITHDRAWAL_TAX', currency: 'USD', gain, auGain, auIndexedGain, auDiscountableGain, residency, usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain, proceeds: equityProceeds, costBasis: equityBasis, description: sa.name || key, stateKey: key },
+      { type: 'STOCK_WITHDRAWAL_TAX', currency: 'USD', gain, auGain, auIndexedGain, auDiscountableGain, residency, usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain, proceeds: equityProceeds, costBasis: equityBasis, description: sa.name || key, stateKey: key,
+        // Design 132 — the s112-160 deferred gain of lots held across 1 July 2027.
+        ...(action.costBasis != null ? {} : deferredGainFields(r)) },
     ];
     // Widened from `collectibleGain > 0` for the reason the sibling drawdown path
     // documents: a gold sleeve sold below basis emitted NO action at all, so the loss
@@ -383,7 +386,8 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
       // proceeds/costBasis — the gold sleeve's slice of the sale. Same reason as the
       // standalone collectible (design 91 §8.9): without them this disposal is assessed
       // but never disclosed on the AU CGT worksheet.
-      taxActions.push({ type: 'COLLECTIBLE_SALE_TAX', currency: 'USD', gain: collectibleGain, auGain: collectibleAuGain, auIndexedGain: collectibleIndexedAuGain, isGold: true, residency, usShortTermGain: cUsShort, usLongTermGain: cUsLong, auShortTermGain: cAuShort, auLongTermGain: cAuLong, proceeds: collectibleProceeds, costBasis: collectibleBasis, stateKey: key });
+      taxActions.push({ type: 'COLLECTIBLE_SALE_TAX', currency: 'USD', gain: collectibleGain, auGain: collectibleAuGain, auIndexedGain: collectibleIndexedAuGain, isGold: true, residency, usShortTermGain: cUsShort, usLongTermGain: cUsLong, auShortTermGain: cAuShort, auLongTermGain: cAuLong, proceeds: collectibleProceeds, costBasis: collectibleBasis, stateKey: key,
+        ...(action.costBasis != null ? {} : deferredGainFields(r, { collectible: true })) });
     }
     // Design 87 G9 — the second Reg. §1.988-2(b)(5) trigger, "or the instrument is
     // disposed of". Wired on the US reducer too even though a USD account has no §988

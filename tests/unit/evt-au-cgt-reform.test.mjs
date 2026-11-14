@@ -232,9 +232,13 @@ test('COLLECTIBLE-SALE: a true collectible is not indexed (auIndexedGain === auG
 // appreciation) via the indexation path — no 50% discount, 30% floor — rather than
 // exempting the pre-2027 slice as the old deemed reset did.
 
-test('STRADDLE: pre-2027 AU-resident lot sold post-2027 assesses the FULL indexed gain', () => {
-  // Lot acquired via residency step-up in 2026 (pre-reform): AU basis 100k, level 1.0.
-  // Sold 2028 at 200k with CPI now 1.10 (10% since the step-up).
+test('UNSTAMPED: a post-2027 sale of a lot with no deemed-sale stamp assesses the FULL indexed gain', () => {
+  // Design 132 replaced this test's original claim (design 57 Part 2 Item B: a lot held
+  // across 1 July 2027 is taxed on its whole gain). The Act defers the pre-2027 gain
+  // instead (s112-155/160), and au-cgt-deemed-sale-2027.test.mjs covers that. What is
+  // left here is the classifier contract for a lot the 1 July 2027 stamp never reached:
+  // design 132 §6's scenario that starts after the date. AU basis 100k, level 1.0;
+  // sold 2028 at 200k with CPI now 1.10.
   const auStockFn = getFn(new AuTaxModule2027(), 'AU_STOCK_WITHDRAWAL_TAX');
 
   // The AU brokerage sale reducer would compute, for the whole holding:

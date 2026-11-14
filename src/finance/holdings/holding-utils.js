@@ -12,6 +12,7 @@ import { YEAR_MS as HOLDING_YEAR_MS } from './holding-period.js';
 import { syntheticSecurityId }         from './security.js';
 import { resolveEquityMarketMix }      from './default-allocations.js';
 import { ALLOCATION }                  from './allocation.js';
+import { AU_PRE2027_KEY }              from '../tax/au/au-cgt-2027-constants.js';
 
 /**
  * ─── THE VALUE-CHANGE PRIMITIVES (design 93 §4) ───────────────────────────────
@@ -1250,6 +1251,10 @@ export function compactLots(holdings, { asOfMs, policy } = {}) {
     let faceSum = 0, anyFace = false;
     const blendMv = {};
     const byCountry = {}, dateByCountry = {};
+    // Design 132: a lot with no 1 July 2027 stamp carries no deferred gain, so when it
+    // joins a stamped lot its pre-2027 base is its AU base. Summing only the stamped
+    // lots' pre-2027 bases would hand the unstamped lot's whole AU base to the deferral.
+    const anyPre = policy.sumCountryBases && idxs.some(i => holdings[i].costBaseByCountry?.[AU_PRE2027_KEY] != null);
     for (const i of idxs) {
       const h = holdings[i];
       units += h.units       ?? 0;
@@ -1263,6 +1268,11 @@ export function compactLots(holdings, { asOfMs, policy } = {}) {
       if (policy.sumCountryBases) {
         for (const [c, v] of Object.entries(h.costBaseByCountry ?? {})) {
           byCountry[c] = +((byCountry[c] ?? 0) + (v ?? 0)).toFixed(2);
+        }
+        if (anyPre && h.costBaseByCountry?.[AU_PRE2027_KEY] == null) {
+          const auBase = h.costBaseByCountry?.AU ?? h.costBasis ?? 0;
+          byCountry[AU_PRE2027_KEY] = +((byCountry[AU_PRE2027_KEY] ?? 0) + auBase).toFixed(2);
+          if (h.costBaseByCountry?.AU == null) byCountry.AU = +((byCountry.AU ?? 0) + auBase).toFixed(2);
         }
         // Earliest per country, for the same FIFO-stability reason as `purchaseDate`.
         for (const [c, ts] of Object.entries(h.acquisitionDateByCountry ?? {})) {

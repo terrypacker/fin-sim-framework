@@ -87,6 +87,7 @@ import { FxTransferApplyReducer }        from '../finance/fx/fx-transfer-apply-r
 import { FxRefreshReducer }              from '../finance/fx/fx-refresh-reducer.js';
 import { FxProcessReducer }              from '../finance/fx/fx-process-reducer.js';
 import { FxPppReducer }                  from '../finance/fx/fx-ppp-reducer.js';
+import { AuCgtDeemedSale2027Reducer }    from '../finance/tax/au/au-cgt-deemed-sale-2027.js';
 import { FxStepApplyReducer }            from '../finance/fx/fx-step-apply-reducer.js';
 import { StockDividendCashApplyReducer }  from '../finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { BondCouponCashApplyReducer }     from '../finance/reducers/bond-coupon-cash-apply-reducer.js';
@@ -310,7 +311,7 @@ const _ALL_CLASSES = [
   LateLifeCareApplyReducer,
   SetOutOfFundsDateReducer, AccumulateDeficitReducer, AccumulateTaxesPaidReducer, AccumulateConsumptionReducer,
   AccumulateConsumptionUtilityReducer,
-  OutOfFundsReducer, InflationAdjustReducer,
+  OutOfFundsReducer, InflationAdjustReducer, AuCgtDeemedSale2027Reducer,
   SpendingStrategyApplyReducer, RegimeAwareSpendingReducer,
   UsPeriodAdvanceReducer, AuPeriodAdvanceReducer,
   UsTaxSettleApplyReducer, AuTaxSettleApplyReducer,

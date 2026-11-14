@@ -449,6 +449,9 @@ export class StateSchemaRegistry {
     this.register('auCapitalGainsYTD',           ParameterValueType.currency('AUD'));
     this.register('auDiscountableGainsYTD',      ParameterValueType.currency('AUD'));
     this.register('auRealCapitalGainsYTD',       ParameterValueType.currency('AUD'));
+    // design 132 — the s112-160 deferred gain of lots held across 1 July 2027
+    this.register('auDeferredCapitalGainsYTD',      ParameterValueType.currency('AUD'));
+    this.register('auDeferredDiscountableGainsYTD', ParameterValueType.currency('AUD'));
     this.register('auNonResidentWithholdingYTD', ParameterValueType.currency('AUD'));
     this.register('auNrWithholdingInterestYTD',          ParameterValueType.currency('AUD'));
     this.register('auNrWithholdingUnfrankedDividendYTD', ParameterValueType.currency('AUD'));
@@ -460,6 +463,8 @@ export class StateSchemaRegistry {
     this.registerPattern('auPersonOrdinaryIncomeYTD.*',         ParameterValueType.currency('AUD'));
     this.registerPattern('auPersonCapitalGainsYTD.*',           ParameterValueType.currency('AUD'));
     this.registerPattern('auPersonRealCapitalGainsYTD.*',       ParameterValueType.currency('AUD'));
+    this.registerPattern('auPersonDeferredCapitalGainsYTD.*',      ParameterValueType.currency('AUD'));
+    this.registerPattern('auPersonDeferredDiscountableGainsYTD.*', ParameterValueType.currency('AUD'));
     this.registerPattern('auPersonFrankingCreditYTD.*',         ParameterValueType.currency('AUD'));
     this.registerPattern('auPersonNonResidentWithholdingYTD.*', ParameterValueType.currency('AUD'));
     // design 73 Gap 2 — per-type non-resident final withholding

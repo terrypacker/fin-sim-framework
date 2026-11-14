@@ -13,6 +13,7 @@ import { singleAssetTermFields } from '../holdings/holding-period.js';
 import { toMs } from '../account-rules/main-residence.js';
 import { resize, addValue, promoteToUnitised, prevailingPrice } from '../holdings/holding-utils.js';
 import { identityGroupOf } from '../holdings/security.js';
+import { AU_PRE2027_KEY } from '../tax/au/au-cgt-2027-constants.js';
 
 /**
  * StockHarvestApplyReducer — dedicated sell+rebuy path for tax-loss and tax-gain
@@ -105,6 +106,19 @@ export class StockHarvestApplyReducer extends Reducer {
     // A capital LOSS is never "discountable" — the discount applies to gains only, so
     // the eligible slice floors at 0 rather than tracking a negative auGainLoss.
     const auDiscountableGain = held12mo ? Math.max(0, auGainLoss) : 0;
+    // Design 132 — a lot held across 1 July 2027 carries its s112-160 deferred gain, whose
+    // 12-month test runs from the original (AU) acquisition to this harvest.
+    const preBase = source.costBaseByCountry?.[AU_PRE2027_KEY];
+    let deferredFields = {};
+    if (preBase != null) {
+      const deferredGain = +(((source.costBaseByCountry?.AU ?? source.costBasis ?? 0) - preBase) * basisFrac).toFixed(2);
+      const auAcqMs = toMs(source.acquisitionDateByCountry?.AU) ?? purchasedMs;
+      const deferredHeld12 = auAcqMs == null || asOfMs == null || (asOfMs - auAcqMs) >= 365 * 24 * 60 * 60 * 1000;
+      if (deferredGain !== 0) {
+        deferredFields = { auDeferredGain: deferredGain,
+                           auDeferredDiscountableGain: deferredHeld12 ? Math.max(0, deferredGain) : 0 };
+      }
+    }
 
     // Design 90 §9 step 2 — the signed, §1222-charactered split. This reducer has
     // always emitted a signed `gain`; what it could not say was WHICH CHARACTER that
@@ -336,6 +350,7 @@ export class StockHarvestApplyReducer extends Reducer {
         // drilled from the journal and footed against the return (design 94 §8.1j).
         ...(disallowed > 0 ? { washDisallowed: disallowed } : {}),
         residency:   residency ?? 'US',
+        ...deferredFields,
         proceeds:    consume,
         costBasis:   basisShare,
         description: `${purpose ?? 'HARVEST'} harvest on ${stateKey}`,

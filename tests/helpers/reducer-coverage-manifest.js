@@ -174,6 +174,8 @@ export const COVERED = [
   'FxProcessReducer', 'FxStepApplyReducer',
   // FX anchor follows the AU/US inflation gap (design 122) — evt-fx-ppp.test.mjs
   'FxPppReducer',
+  // 1 July 2027 deemed sale stamp (design 132) — au-cgt-deemed-sale-2027.test.mjs
+  'AuCgtDeemedSale2027Reducer',
   // Currency-hedge FX mark (design 120 §5.6) — evt-hedged-equity.test.mjs
   'HedgeYearEndReducer',
 

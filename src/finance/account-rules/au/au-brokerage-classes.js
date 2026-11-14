@@ -8,6 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { deferredGainFields } from '../../tax/au/au-cgt-2027-constants.js';
 import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
@@ -447,6 +448,8 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
            usShortTermGain: collTerms.usShortTermGain, usLongTermGain: collTerms.usLongTermGain,
            auShortTermGain: collTerms.auShortTermGain, auLongTermGain: collTerms.auLongTermGain,
            proceeds: collectibleProceeds, costBasis: collectibleBasis,
+           // Design 132 — the gold slice's s112-160 deferred gain, if any.
+           ...(action.costBasis != null ? {} : deferredGainFields(r, { collectible: true })),
            description: sa.name || key, stateKey: key }]
       : [];
 
@@ -464,7 +467,9 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
           holdings: newHoldings,
         },
       },
-      [{ type: 'AU_STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain, residency, usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain, proceeds: equityProceeds, costBasis: equityBasis, description: sa.name || key, stateKey: key },
+      [{ type: 'AU_STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain, residency, usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain, proceeds: equityProceeds, costBasis: equityBasis, description: sa.name || key, stateKey: key,
+         // Design 132 — the s112-160 deferred gain of lots held across 1 July 2027.
+         ...(action.costBasis != null ? {} : deferredGainFields(r)) },
        ...goldTax,
        // Design 87 G9 — the second Reg. §1.988-2(b)(5) trigger: "or the instrument is
        // disposed of". A foreign-currency bond sold before maturity realizes the same
