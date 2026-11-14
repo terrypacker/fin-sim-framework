@@ -95,12 +95,34 @@ acquired at the move, so s112-155(1)(b) is not met.
 
 ## 6. Open
 
-- **Phase 2b: real property** still takes the Item B treatment. It needs the main-residence
-  exemption split at 30 June 2027 (the deemed sale's ownership period ends there, and the
-  reacquired dwelling's starts on 1 July 2027). It also needs the s102-6(4) deferred
-  residential category, the depreciation history, and the s112-155(1)(d) test: an AU dwelling
-  (taxable Australian property, so no s855-45 reset) owned while its owner was a foreign
-  resident after 8 May 2012 fails s115-105 and is not deemed sold.
+- **Phase 2b: real property** still takes the Item B treatment. Brief for the next pass, from
+  the Act on disk:
+  1. **Split the main-residence exemption at the date.** The deemed sale is a CGT event whose
+     ownership period ends on 30 June 2027 (s112-155(2), Note 1), and the reacquired dwelling's
+     starts on 1 July 2027. Subdiv 118-B is in Part 3-1, which s112-155(2) covers. So the
+     deferred gain is (market value at 30 June 2027 − pre-2027 base) × the taxable fraction of
+     the pre-2027 days, and the post-2027 gain uses the post-2027 days. Both property reducers
+     need a windowed exemption: `auMainResidenceExemption` for the AU dwelling, and the 6-year
+     absence fraction (`auMainResidenceExemptFraction`) for the US one.
+  2. **Depreciation.** `AuHouseSaleApplyReducer` reduces the base by the whole
+     `accumulatedDepreciation`, but it ignores depreciation once `costBaseByCountry.AU` is set.
+     The stamp has to record the depreciation taken by 30 June 2027 (the pre-2027 base is net of
+     it), and the post-2027 base must be net of only the later deductions.
+  3. **s112-155(1)(d).** It is tested as if a discount gain were made at the realisation event.
+     An AU dwelling is taxable Australian property (no s855-45 reset), so an owner who was a
+     foreign resident after 8 May 2012 at any time between acquisition and sale makes
+     s115-105 apply. That dwelling is not deemed sold. The stamp can test `residencySinceMs`
+     against the acquisition. The sale also has to ignore the stamp when residency was broken
+     after 2027.
+  4. **Open question to settle first.** For that excluded dwelling, s115-100(c) gives the
+     s115-115 apportioned percentage, and s115-115 has no date limit. Whether a gain from a
+     post-2027 event can still be a discount capital gain turns on s115-5 to s115-25, which
+     have not been read yet. Today the model gives it 0%.
+  5. **The residential category.** s102-6(4) makes a dwelling's deferred gain a deferred
+     residential gain, which losses reach after deferred non-residential gains (s102-5 Step
+     1(b)). Lumping both into one deferred bucket changes the tax only when the two categories
+     differ in discount eligibility, which needs a sub-12-month deferred gain. Recommended:
+     lump them, and state this.
 - **Collectable rules the model lacks**, which this design does not change: s118-5(a)
   disregards the gain on a car, and s118-10 a collectable costing \$500 or less; s108-10(1)
   quarantines collectable losses.
