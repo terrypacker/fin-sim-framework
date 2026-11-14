@@ -235,7 +235,7 @@ Fix the stale text in the same change:
   account-level flag ("this fund offers gold") exist? This depends on whether per-account
   restrictions are ever built (D2).
 - **Q2** — PFIC exposure of **AU-domiciled gold ETFs held in AU brokerage** by a US citizen.
-  **Researched 27 Sep 2026 — see §13.** Not a gap in any authored plan today; the model's
+  **Researched 27 Sep 2026, re-checked 14 Nov 2026 — see §13.** Not a gap in any authored plan today; the model's
   look-through assumption is recorded; deferring PFIC modelling is recommended (§13.3).
 - **Q3** — The model treats super as tax-deferred for US purposes (design 83 §7a.5). §3.2 is more
   evidence that this is wrong for an SMSF. We do not model SMSFs, so nothing changes here, but an
@@ -488,7 +488,8 @@ the metal: a collectible.
 
 ### 13.2 What the model assumes
 
-`_sellTax` (`rebalance-to-target-apply-reducer.js`) sends every GOLD sale to
+`_sellTax` (`rebalance-to-target-apply-reducer.js`) and, since 14 Nov 2026, the AU brokerage
+withdrawal's gold slice (`AuStockWithdrawalApplyReducer`) send every GOLD sale to
 `COLLECTIBLE_SALE_TAX`: the US 28% collectibles rate, and indexed AU CGT via `isGold`. That is
 **look-through treatment**: correct for bullion and US grantor-trust ETFs, wrong for an
 AU-domiciled fund classified as a corporation. For that fund, the US side should be ordinary
@@ -502,6 +503,14 @@ No authored plan the author uses holds an AU-domiciled fund. **Recommended: defe
 until one does. The look-through assumption is now stated here. When a plan needs it, the hook is a
 per-security US tax vehicle (look-through / PFIC with MTM, QEF or excess-distribution), read by
 `_sellTax`, with an annual §1296 inclusion for MTM.
+
+**Re-checked 14 Nov 2026.** Each citation above was re-read against the text on disk (§954(c)(1)(C),
+§1291(c), §1296(c), §1298(a)(3), Reg. §301.7701-4(c)(1), §301.7701-2(b)(8)(i)), and the
+recommendation stands. The newest authored plan has no AU brokerage account, and its only gold
+securities are US-domiciled grantor-trust ETFs. These are not PFICs, and the 28% collectible rate
+is correct for them. One link in the chain still cannot be checked from disk: the US
+classification of each specific AU gold product (unit trust, depositary security or debt-like
+metal security). Modelling PFIC needs that link settled per product first.
 
 The placement concern already has a tool: a US citizen who would hold gold only through AU funds
 can bar the class from that role, e.g. `{"GOLD":["super","au-stock"]}` (§5.1).
