@@ -845,12 +845,7 @@ export function mergeCouponReinvestLots(holdings, { stateKey, buckets, prevailin
         ...addValue(cur, amount),
         couponRate:  blended,
       };
-      // Every per-country base rises by the same money — see the doc above. Written only
-      // when the lot HAS one, so a lot with no per-country base keeps the field ABSENT
-      // rather than gaining an explicit null (which is a visible whole-state diff).
-      if (cur.costBaseByCountry != null) {
-        merged.costBaseByCountry = _addToCountryBases(cur.costBaseByCountry, amount);
-      }
+      // `addValue` also raises every per-country base by the same money (see the doc above).
       next[idx] = merged;
     } else {
       next.push({
@@ -870,22 +865,6 @@ export function mergeCouponReinvestLots(holdings, { stateKey, buckets, prevailin
     }
   }
   return next;
-}
-
-/**
- * Raise every per-country cost base by `amount` (design 62 §9.7). Returns the input
- * untouched when the lot carries no per-country base at all — the overwhelmingly common
- * case, and the one where `costBasis` alone already governs. A country whose entry is
- * explicitly null is left null so it keeps deferring to `costBasis`, which the caller
- * has already raised.
- */
-function _addToCountryBases(bases, amount) {
-  if (bases == null) return bases;
-  const out = {};
-  for (const [country, base] of Object.entries(bases)) {
-    out[country] = base == null ? base : +(base + amount).toFixed(2);
-  }
-  return out;
 }
 
 const ACCRETION_YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
