@@ -204,7 +204,7 @@ export class RebalanceToTargetApplyReducer extends Reducer {
           const r = _consumeByMarket(matching, planned.total, consumeOptsFor(), { amounts: planned.byGroup, groupOf });
           washEntries.push(..._washPendingEntries({ allocation, country, matching, fifo: r, state, stateKey, ms: purchaseMs }));
           holdings = [...holdings.filter(h => h.allocation !== allocation), ...r.newHoldings];
-          taxActions.push(_sellTax({ allocation, country, proceeds: planned.total, fifo: r, residency, stateKey }));
+          taxActions.push(_sellTax({ allocation, country, proceeds: planned.total, fifo: r, residency, stateKey, currency: account?.currency?.code }));
         } else {
           // Pro rata WITHIN each market: each lot gives up its share of its market's amount.
           const sold = new Map();
@@ -265,7 +265,7 @@ export class RebalanceToTargetApplyReducer extends Reducer {
           allocation, country, matching, fifo: r, state, stateKey, ms: purchaseMs,
         }));
         holdings = [...holdings.filter(h => h.allocation !== allocation), ...r.newHoldings];
-        taxActions.push(_sellTax({ allocation, country, proceeds: take, fifo: r, residency, stateKey }));
+        taxActions.push(_sellTax({ allocation, country, proceeds: take, fifo: r, residency, stateKey, currency: account?.currency?.code }));
         // Design 87 G9 — a rebalance that trims a foreign-currency BOND sleeve disposes
         // of the instrument just as a drawdown sale does, and Reg. §1.988-2(b)(5) fires on
         // "or the instrument is disposed of" either way. Only the BOND leg can produce a
@@ -506,7 +506,7 @@ function _washPendingEntries({ allocation, country, matching, fifo, state, state
  * COLLECTIBLE_SALE_TAX (US 28% collectible / AU indexed via `isGold`); US vs AU stock
  * routes through STOCK_WITHDRAWAL_TAX vs AU_STOCK_WITHDRAWAL_TAX.
  */
-function _sellTax({ allocation, country, proceeds, fifo, residency, stateKey = null }) {
+function _sellTax({ allocation, country, proceeds, fifo, residency, stateKey = null, currency = null }) {
   const realizedBasis        = fifo.realizedBasis;
   const realizedAuBasis      = fifo.realizedBasisByCountry?.AU ?? realizedBasis;
   const realizedIndexedAu    = fifo.realizedIndexedBasisByCountry?.AU ?? realizedAuBasis;
@@ -526,6 +526,11 @@ function _sellTax({ allocation, country, proceeds, fifo, residency, stateKey = n
       disposalTermFields(fifo.collectibleGainByCountryAndTerm);
     return {
       type: 'COLLECTIBLE_SALE_TAX', isGold: true, residency, stateKey,
+      // The account's own currency. Unlike the two stock branches, whose action TYPE
+      // implies it, COLLECTIBLE_SALE_TAX is emitted for US- and AU-domiciled gold alike,
+      // and every consumer reads a missing currency as USD — an AU brokerage's AUD gain
+      // was booked unconverted into the US buckets and converted twice into the AU ones.
+      currency: currency ?? (country === 'AU' ? 'AUD' : 'USD'),
       gain,
       auGain:        Math.max(0, +(proceeds - collAuBasis).toFixed(2)),
       auIndexedGain: Math.max(0, +(proceeds - collIndexedAu).toFixed(2)),

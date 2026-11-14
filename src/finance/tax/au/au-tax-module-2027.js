@@ -10,7 +10,7 @@
 
 import { AuTaxModule2026 } from './au-tax-module-2026.js';
 import { accumulateByOwnership, resolveAttributionAsset, resolveAttributionFractions } from '../../ownership-utils.js';
-import { toAUD } from '../tax-fx.js';
+import { toAUD, isAuDomiciledDisposal } from '../tax-fx.js';
 import { signedAuCapitalGain, auRealCapitalGain } from '../capital-gain-character.js';
 
 /**
@@ -105,7 +105,8 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
       // converting those as USD overstated the gain by the exchange rate. `?? 'USD'`
       // leaves every US-domiciled disposal exactly as it was.
       const realGainAud = toAUD(realGainNative, action.currency ?? 'USD', state);
-      return this._recordUsSourceReal(state, action, 'usStockAccount', realGainAud);
+      return this._recordUsSourceReal(state, action, 'usStockAccount', realGainAud,
+        { usSource: !isAuDomiciledDisposal(state, action) });
     });
 
     // Company equity: AU-assessable from the s855-45 stepped-up basis and indexed
@@ -144,7 +145,10 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
       // an Australian's classic car would be assessed at the exchange rate times its
       // real gain. `?? 'USD'` keeps every pre-existing (US) disposal unchanged.
       const realGainAud = toAUD(realGainNative, action.currency ?? 'USD', state);
-      return this._recordUsSourceReal(state, action, null, realGainAud);
+      // An AU-held gold sleeve or collectible is AU-source: real bucket only, as the
+      // AU-native AU_STOCK path books it (Art. 22(2); see isAuDomiciledDisposal).
+      return this._recordUsSourceReal(state, action, null, realGainAud,
+        { usSource: !isAuDomiciledDisposal(state, action) });
     });
 
     return fns;
@@ -198,14 +202,19 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
    * @param {object} action        the tax action (carries stateKey / owner fields)
    * @param {string|null} canonicalKey  fallback account key for the account-derived case
    * @param {number} realGainAud   the real gain, AUD
+   * @param {{usSource?: boolean}} [opts]  `usSource: false` books the real bucket only —
+   *   an AU-domiciled disposal arriving on one of these cross-border action types
+   *   (an AU brokerage drawn by the service path, an AU-held gold sleeve) is AU-source
    */
-  _recordUsSourceReal(state, action, canonicalKey, realGainAud) {
+  _recordUsSourceReal(state, action, canonicalKey, realGainAud, { usSource = true } = {}) {
     const fractions = resolveAttributionFractions(state, action, canonicalKey);
     if (fractions == null) {
       return {
         ...state,
         auRealCapitalGainsYTD:      (state.auRealCapitalGainsYTD      ?? 0) + realGainAud,
-        usSourceRealCapGainsAudYTD: (state.usSourceRealCapGainsAudYTD ?? 0) + realGainAud,
+        ...(usSource
+          ? { usSourceRealCapGainsAudYTD: (state.usSourceRealCapGainsAudYTD ?? 0) + realGainAud }
+          : {}),
       };
     }
     const spread = (map) => {
@@ -218,7 +227,9 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
     return {
       ...state,
       auPersonRealCapitalGainsYTD:        spread(state.auPersonRealCapitalGainsYTD),
-      auPersonUsSourceRealCapGainsAudYTD: spread(state.auPersonUsSourceRealCapGainsAudYTD),
+      ...(usSource
+        ? { auPersonUsSourceRealCapGainsAudYTD: spread(state.auPersonUsSourceRealCapGainsAudYTD) }
+        : {}),
     };
   }
 

@@ -10,7 +10,7 @@
 
 import { BaseTaxModule } from '../base-tax-module.js';
 import { resolveAttributionFractions } from '../../ownership-utils.js';
-import { toAUD } from '../tax-fx.js';
+import { toAUD, toUSD, disposalCurrency, isAuDomiciledDisposal } from '../tax-fx.js';
 import { characterizeCapitalGain, characterizeAuCapitalGain, basketCapGainPatch } from '../capital-gain-character.js';
 
 /**
@@ -518,10 +518,17 @@ export class UsTaxModule2026 extends BaseTaxModule {
       // full US gain (USD) and the AU-taxed slice (AUD).
       ['STOCK_WITHDRAWAL_TAX', (state, action) => {
         const { gain, residency } = action;
+        // The drawn account's own currency (see account-service's emitter). USD for
+        // every US-domiciled disposal; an AU-domiciled brokerage states AUD.
+        const disposalCcy = disposalCurrency(action);
         // Design 90 §4 — the SIGNED §1222 split. `char.short + char.long` equals the old
         // floored `gain` whenever the disposal was profitable, so a gain year is
         // unchanged; a loss year now books a negative instead of a discarded zero.
-        const char  = characterizeCapitalGain(action, gain);
+        // Converted to USD here: the US buckets are USD, and an AU-domiciled brokerage's
+        // AUD gain used to be booked into them unconverted (identity for USD).
+        const nativeChar = characterizeCapitalGain(action, gain);
+        const char = { short: toUSD(nativeChar.short, disposalCcy, state),
+                       long:  toUSD(nativeChar.long,  disposalCcy, state) };
         const auGain = action.auGain ?? gain;
         // CGT 50%-discount-eligible slice (design 62 §4): lots held ≥12 months from
         // the AU deemed-acquisition date. Defaults to the full auGain when absent.
@@ -538,10 +545,6 @@ export class UsTaxModule2026 extends BaseTaxModule {
             : {}),
         };
         if (isAuResident) {
-          // The drawn account's own currency (see account-service's emitter). USD for
-          // every US-domiciled disposal, which is all this module saw before an
-          // AU-domiciled brokerage could be drawn down.
-          const disposalCcy = action.currency ?? 'USD';
           const audGain = toAUD(auGain, disposalCcy, state);
           const audDiscountableGain = toAUD(auDiscountableGain, disposalCcy, state);
           // Design 90 §5 — signed AU split, in the disposal's currency; converted at the
@@ -582,7 +585,10 @@ export class UsTaxModule2026 extends BaseTaxModule {
           next = bookAuResident(state, next, action, 'usStockAccount', {
             auCapitalGainsYTD:      toAUD(auChar.short + auChar.long, disposalCcy, state),
             auDiscountableGainsYTD: toAUD(auChar.long, disposalCcy, state),
-            ...(foreignSource ? {} : { usSourceCapGainsAudYTD: audGain }),
+            // The Art. 22(2) removal set. An AU-domiciled asset is never in it, even when
+            // §865(g)(2) makes the gain US-source for the US return: the US taxes it only
+            // by reason of citizenship, which Art. 22(2) excludes (isAuDomiciledDisposal).
+            ...(foreignSource || isAuDomiciledDisposal(state, action) ? {} : { usSourceCapGainsAudYTD: audGain }),
           });
         }
         return next;
@@ -1083,7 +1089,12 @@ export class UsTaxModule2026 extends BaseTaxModule {
         // any other disposal (design 57 Part 8). Same non-zero-only write as the
         // STOCK_WITHDRAWAL_TAX reducer above.
         // Reference: docs/us-tax/USCODE-2024-title26-subtitleA-chap1-subchapA-partI-sec1.txt
-        const char = characterizeCapitalGain(action, gain);
+        // In the collectible's own currency until here: the US buckets are USD, and an
+        // AU-domiciled gold sleeve (or an AU-held collectible) states AUD.
+        const saleCcy = disposalCurrency(action);
+        const nativeChar = characterizeCapitalGain(action, gain);
+        const char = { short: toUSD(nativeChar.short, saleCcy, state),
+                       long:  toUSD(nativeChar.long,  saleCcy, state) };
         let next = {
           ...state,
           usCollectibleGainsYTD: (state.usCollectibleGainsYTD ?? 0) + char.long,
@@ -1106,7 +1117,6 @@ export class UsTaxModule2026 extends BaseTaxModule {
           // In the collectible's own currency, as the FY2027 real bucket converts it: an
           // AU-domiciled collectible states AUD, and converting that as USD multiplied the
           // nominal bucket by the rate once a plan had one. `?? 'USD'` keeps US ones as were.
-          const saleCcy = action.currency ?? 'USD';
           const auGainNative = action.auGain ?? gain;
           const audGain = toAUD(auGainNative, saleCcy, state);
           // Design 90 §5 — signed AU split (sale currency; converted at the booking below).
@@ -1139,7 +1149,10 @@ export class UsTaxModule2026 extends BaseTaxModule {
             auCapitalGainsYTD:      toAUD(auChar.short + auChar.long, saleCcy, state),
             // Collectibles carry no per-lot 12-month tracking here (design 62 §4).
             auDiscountableGainsYTD: toAUD(auChar.long, saleCcy, state),
-            ...(foreignSource ? {} : { usSourceCapGainsAudYTD: audGain }),
+            // The Art. 22(2) removal set. An AU-domiciled asset is never in it, even when
+            // §865(g)(2) makes the gain US-source for the US return: the US taxes it only
+            // by reason of citizenship, which Art. 22(2) excludes (isAuDomiciledDisposal).
+            ...(foreignSource || isAuDomiciledDisposal(state, action) ? {} : { usSourceCapGainsAudYTD: audGain }),
           });
         }
         return next;

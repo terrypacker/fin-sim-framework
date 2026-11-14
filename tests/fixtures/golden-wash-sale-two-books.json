@@ -101,7 +101,7 @@
   }
  ],
  "auCapitalGainsYTD": 0,
- "auCgtEffectiveRate": 0.340052797681,
+ "auCgtEffectiveRate": 0.338190595584,
  "auDeductibleSuperYTD": 0,
  "auDiscountAllowanceYTD": 0,
  "auDiscountApportionedBaseYTD": 0,
@@ -212,7 +212,7 @@
  "auNrWithholdingUnfrankedDividendYTD": 0,
  "auOrdinaryIncomeYTD": 0,
  "auPersonCapitalGainsYTD": {
-  "primary": 17542.7605,
+  "primary": -4804.8175,
   "spouse": -15910.843
  },
  "auPersonCapitalLossPool": {
@@ -232,7 +232,7 @@
   "spouse": 0
  },
  "auPersonDiscountableGainsYTD": {
-  "primary": 17542.7605,
+  "primary": -4804.8175,
   "spouse": -15910.843
  },
  "auPersonEarnedIncomeYTD": {
@@ -260,7 +260,7 @@
   "spouse": 47724.3199309
  },
  "auPersonRealCapitalGainsYTD": {
-  "primary": 17542.7605,
+  "primary": -4804.8175,
   "spouse": -15910.843
  },
  "auPersonSuperTaxYTD": {
@@ -280,7 +280,7 @@
   "spouse": 47716.8199309
  },
  "auPersonUsSourceRealCapGainsAudYTD": {
-  "primary": 17542.7605,
+  "primary": -45436.7775,
   "spouse": -15910.843
  },
  "auRealCapitalGainsYTD": 0,
@@ -293,8 +293,8 @@
    "symbol": "A$"
   },
   "drawdownPriority": 0,
-  "fxBasisRate": 1.55000154404,
-  "fxBasisUsd": 1937.09484455,
+  "fxBasisRate": 1.55000154414,
+  "fxBasisUsd": 1937.09484443,
   "holdings": [
    {
     "acquisitionDateByCountry": null,
@@ -636,7 +636,7 @@
  "cumulativeConsumptionUtility": 165.82651609,
  "cumulativeConsumptionUtilityCount": 84,
  "cumulativeDeficit": 0,
- "cumulativeTaxesPaid": 251050.859917,
+ "cumulativeTaxesPaid": 250838.559683,
  "currentPeriods": {
   "AU": {
    "endMs": 2003788800000,
@@ -759,7 +759,7 @@
  "ftcCurrentPassive": 0,
  "ftcCurrentResourced": 0,
  "ftcPoolGeneral": {
-  "2032": 22242.0571972
+  "2032": 22029.7569632
  },
  "ftcPoolPassive": {},
  "ftcPoolResourced": {},
@@ -1164,8 +1164,8 @@
  },
  "marketIndexAsOfMs": 1988064000000,
  "metrics": {
-  "netLiquidity": 3049635.47,
-  "netWorth": 6539452.81,
+  "netLiquidity": 3049847.77,
+  "netWorth": 6539665.11,
   "offsetAppliedCapacity": 0,
   "offsetIdleCapacity": 0
  },
@@ -2354,7 +2354,7 @@
   "value": 1315931.78
  },
  "usInvestmentInterestCarryforward": 0,
- "usLongTermCapitalLossCarryforward": 75963.3,
+ "usLongTermCapitalLossCarryforward": 75963.2,
  "usNegativeIncomeYTD": 0,
  "usNetInvestmentIncomeYTD": 0,
  "usOrdinaryIncomeYTD": 0,
@@ -2378,9 +2378,9 @@
    }
   },
   "foreignGeneralIncomeYTD": 0,
-  "foreignPassiveCapGainsYTD": -39579.4,
-  "foreignPassiveIncomeYTD": -38646.3569496,
-  "ftcCurrentForeignTax": 39335.4578801,
+  "foreignPassiveCapGainsYTD": -39579.2970968,
+  "foreignPassiveIncomeYTD": -38646.2540464,
+  "ftcCurrentForeignTax": 39123.157646,
   "ftcCurrentGeneral": 0,
   "ftcCurrentPassive": 0,
   "ftcCurrentResourced": 0,
@@ -2408,7 +2408,7 @@
    "AU": 0,
    "US": 0
   },
-  "usCapitalGainsYTD": -39579.4,
+  "usCapitalGainsYTD": -39579.2970968,
   "usCollectibleGainsYTD": 0,
   "usInvestmentInterestCarryforward": 0,
   "usLongTermCapitalLossCarryforward": 38445.99,
@@ -2439,7 +2439,7 @@
  "usPersonHousehold": true,
  "usSavingsAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 464940.086312,
+  "balance": 465152.386546,
   "country": "US",
   "currency": {
    "code": "USD",
@@ -2453,7 +2453,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 464940.086312,
+    "costBasis": 465152.386546,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -2464,7 +2464,7 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 464940.086312,
+    "marketValue": 465152.386546,
     "maturityDate": null,
     "purchaseDate": null,
     "rateKey": "SAVINGS_US",
