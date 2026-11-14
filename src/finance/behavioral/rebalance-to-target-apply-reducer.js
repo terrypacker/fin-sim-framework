@@ -8,6 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { deferredGainFields } from '../tax/au/au-cgt-2027-constants.js';
 import { Reducer, PRIORITY }    from '../../simulation-framework/reducers.js';
 import { buyIntoLadder }        from './bond-ladder-reducer.js';
 import { ALLOCATION }           from '../holdings/allocation.js';
@@ -540,6 +541,8 @@ function _sellTax({ allocation, country, proceeds, fifo, residency, stateKey = n
       // two stock branches below have always stamped them; this branch is the one that
       // did not. All GOLD lots here, so the whole leg is the collectible slice.
       proceeds, costBasis: realizedBasis, description: 'rebalance',
+      // Design 132 — the s112-160 deferred gain of lots held across 1 July 2027.
+      ...deferredGainFields(fifo, { collectible: true }),
     };
   }
   // CGT 50%-discount-eligible slice (design 62 §4): gain from lots held ≥12 months from
@@ -562,12 +565,14 @@ function _sellTax({ allocation, country, proceeds, fifo, residency, stateKey = n
       usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
       // Design 76 Gap C — attribute the gain to the account that was rebalanced.
       residency, proceeds, costBasis: realizedBasis, description: 'rebalance', stateKey,
+      ...deferredGainFields(fifo),
     };
   }
   return {
     type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain,
     usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
     residency, proceeds, costBasis: realizedBasis, description: 'rebalance', stateKey,
+    ...deferredGainFields(fifo),
   };
 }
 

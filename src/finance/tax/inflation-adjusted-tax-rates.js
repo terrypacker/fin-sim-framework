@@ -177,5 +177,7 @@ export class InflationAdjustedAuTaxRates extends AuTaxRatesBase {
   // the FY2027 indexation + minimum-tax regime survives inflation adjustment
   // (design 57 §6.1/§6.3). Bracket inflation is orthogonal to CGT relief.
   _cgtRelief(state, auCapitalGainsYTD) { return this._base._cgtRelief(state, auCapitalGainsYTD); }
+  // Design 132 — FY2027 nets losses against the s112-160 deferred gain first.
+  _applyCapitalLosses(state)           { return this._base._applyCapitalLosses(state); }
   _cgtReliefLabel()                    { return this._base._cgtReliefLabel(); }
 }

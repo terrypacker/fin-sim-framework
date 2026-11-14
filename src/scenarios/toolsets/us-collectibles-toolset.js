@@ -67,7 +67,7 @@ export const US_COLLECTIBLES = {
       // disposal is mislabelled USD in the journal's display layer while every
       // computation on it is correct.
       { type: 'COLLECTIBLE_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'US',
-        fields: { gain: ValueType.currency('USD'), auGain: ValueType.currency('USD'), auIndexedGain: ValueType.currency('USD'), isGold: ValueType.boolean(), currency: ValueType.text(), usShortTermGain: ValueType.currency('USD'), usLongTermGain: ValueType.currency('USD'), auShortTermGain: ValueType.currency('USD'), auLongTermGain: ValueType.currency('USD'), residency: ValueType.text() , stateKey: ValueType.text(), ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any(),
+        fields: { auDeferredGain: ValueType.currency('USD'), auDeferredDiscountableGain: ValueType.currency('USD'), gain: ValueType.currency('USD'), auGain: ValueType.currency('USD'), auIndexedGain: ValueType.currency('USD'), isGold: ValueType.boolean(), currency: ValueType.text(), usShortTermGain: ValueType.currency('USD'), usLongTermGain: ValueType.currency('USD'), auShortTermGain: ValueType.currency('USD'), auLongTermGain: ValueType.currency('USD'), residency: ValueType.text() , stateKey: ValueType.text(), ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any(),
                   proceeds: ValueType.currency('USD'), costBasis: ValueType.currency('USD'),
                   // Form 8949 column (a). The gold-sleeve emitters live inside a
                   // brokerage account, so without a name the disposal register falls back

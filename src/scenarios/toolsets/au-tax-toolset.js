@@ -18,6 +18,7 @@ import { AuPeriodAdvanceHandler, AuPeriodAdvanceReducer }
 import { AuTaxSettleHandler, AuTaxSettleApplyReducer, AuTaxPaymentDebitReducer }
   from '../../finance/tax/tax-settle-classes.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
+import { AuCgtDeemedSale2027Reducer } from '../../finance/tax/au/au-cgt-deemed-sale-2027.js';
 
 /**
  * AU_TAX toolset — declarative shell around TaxService for AU.
@@ -39,7 +40,7 @@ export const AU_TAX = {
 
   types: {
     handlers: [AuPeriodAdvanceHandler, AuTaxSettleHandler],
-    reducers: [AuPeriodAdvanceReducer, AuTaxSettleApplyReducer, AuTaxPaymentDebitReducer, BalanceSnapshotReducer],
+    reducers: [AuPeriodAdvanceReducer, AuTaxSettleApplyReducer, AuTaxPaymentDebitReducer, BalanceSnapshotReducer, AuCgtDeemedSale2027Reducer],
     actions: [
       { type: 'AU_PERIOD_ADVANCE',  fields: { period: ValueType.any() } },
       { type: 'AU_TAX_SETTLE_APPLY', family: 'TAX_SETTLE_APPLY', cc: 'AU',
@@ -278,6 +279,10 @@ export const AU_TAX = {
     return [
       ..._getContributions(context).reducers,
       ..._getBalanceSnapshotReducer(context),
+      // Design 132 — the 1 July 2027 deemed sale (Subdiv 112-E). Only a run that reaches
+      // that date can stamp anything, so a run ending before it gets no reducer at all.
+      ...(context.endDate >= new Date(Date.UTC(2027, 6, 1)) && context.startDate < new Date(Date.UTC(2027, 6, 2))
+        ? [new AuCgtDeemedSale2027Reducer()] : []),
     ];
   },
 };

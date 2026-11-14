@@ -430,12 +430,17 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
       auDiscountApportionedBaseYTD: capLoss.apportionedBase,
       auDiscountAllowanceYTD:       capLoss.apportionedAllowance,
       ...('auRealCapitalGainsYTD' in state ? { auRealCapitalGainsYTD: capLoss.real } : {}),
+      // Design 132 — the netted s112-160 deferred gain, when the FY2027 netting produced one.
+      ...(capLoss.deferred != null ? {
+        auDeferredCapitalGainsYTD:      capLoss.deferred,
+        auDeferredDiscountableGainsYTD: capLoss.deferredDiscountable,
+      } : {}),
     };
 
     // Apply the year's CGT relief. Base = flat 50% Div 115 discount and no
     // minimum-tax floor (minTaxRate 0). FY2027+ removes the discount and sets
     // minTaxRate to 0.30 (design 57 §6.3).
-    const { netTaxableGain, reliefAmount: cgtDiscount, minTaxRate } =
+    const { netTaxableGain, reliefAmount: cgtDiscount, minTaxRate, minTaxBase } =
       this._cgtRelief(cgtState, nettedGains);
 
     // ─── Div 36 carried-forward tax losses (design 86 G1) ────────────────────
@@ -499,8 +504,16 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
     const ordinarySchedule = applyBracketsDetailed(Math.max(0, auOrdinaryIncomeYTD), this._brackets);
     const ordinaryOnlyTax  = ordinarySchedule.tax;
     const taxOnGain        = Math.max(0, baseTax - ordinaryOnlyTax);
+    // Design 132 — when only part of the net gain is a minimum tax capital gain (a
+    // s112-160 deferred gain is not one, s119-5(2) / s102-6(5)), the floor is measured
+    // the way s119-10(2) Steps 1–4 state it: 30% of that part against the tax it adds,
+    // i.e. tax on taxable income less tax with that part removed. `minTaxBase` absent ⇒
+    // the whole net gain, exactly as before.
     const minTaxTopUp      = minTaxRate > 0
-      ? Math.max(0, minTaxRate * netTaxableGain - taxOnGain)
+      ? (minTaxBase == null
+          ? Math.max(0, minTaxRate * netTaxableGain - taxOnGain)
+          : Math.max(0, minTaxRate * minTaxBase
+              - Math.max(0, baseTax - applyBracketsDetailed(Math.max(0, assessableIncome - minTaxBase), this._brackets).tax)))
       : 0;
 
     // Design 77 §5.3 — `auSuperTaxYTD` is NOT part of this. Div 295 fund tax is
@@ -795,6 +808,10 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
         lineItems: [
           { label: 'Ordinary Income',               amount:  auOrdinaryIncomeYTD },
           { label: 'Capital Gains (before relief)', amount:  auCapitalGainsYTD },
+          // Design 132 — shown only when a lot held across 1 July 2027 was sold this year.
+          ...(state.auDeferredCapitalGainsYTD != null
+            ? [{ label: 'Deferred Pre-1 July 2027 Gains (s112-160)', amount: state.auDeferredCapitalGainsYTD }]
+            : []),
           { label: this._cgtReliefLabel(),          amount: -a.cgtDiscount },
           { label: 'Net Capital Gains',             amount:  a.netTaxableGain },
           // s290-150, before the loss lines because that is the order it is applied

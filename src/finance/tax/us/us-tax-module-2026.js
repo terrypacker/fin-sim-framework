@@ -8,6 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { bookAuDeferredGain } from '../au/au-deferred-gain-booking.js';
 import { BaseTaxModule } from '../base-tax-module.js';
 import { resolveAttributionFractions } from '../../ownership-utils.js';
 import { toAUD, toUSD, disposalCurrency, isAuDomiciledDisposal } from '../tax-fx.js';
@@ -590,6 +591,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
             // by reason of citizenship, which Art. 22(2) excludes (isAuDomiciledDisposal).
             ...(foreignSource || isAuDomiciledDisposal(state, action) ? {} : { usSourceCapGainsAudYTD: audGain }),
           });
+          // Design 132 — the s112-160 deferred gain of a lot held across 1 July 2027.
+          next = bookAuDeferredGain(state, next, action, 'usStockAccount', disposalCcy);
         }
         return next;
       }],
@@ -1154,6 +1157,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
             // by reason of citizenship, which Art. 22(2) excludes (isAuDomiciledDisposal).
             ...(foreignSource || isAuDomiciledDisposal(state, action) ? {} : { usSourceCapGainsAudYTD: audGain }),
           });
+          // Design 132 — the s112-160 deferred gain of a lot held across 1 July 2027.
+          next = bookAuDeferredGain(state, next, action, null, saleCcy);
         }
         return next;
       }],

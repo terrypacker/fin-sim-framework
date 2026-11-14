@@ -40,6 +40,8 @@ export class AuTaxRates2027 extends AuTaxRatesBase {
 
   /** Minimum effective CGT rate (Division 115C). */
   static MIN_CGT_RATE = 0.30;
+  /** s115-100(aa): the discount on a s112-160 deferred gain (design 132). */
+  static DEFERRED_GAIN_DISCOUNT = 0.5;
 
   constructor() {
     super();
@@ -90,10 +92,92 @@ export class AuTaxRates2027 extends AuTaxRatesBase {
     // (design 57 §6.6) — they still pay marginal-rate CGT on the real gain, just
     // no floor. auMinTaxExempt is stamped per-person by computeAuTaxPerPerson.
     const minTaxRate = state?.auMinTaxExempt ? 0 : AuTaxRates2027.MIN_CGT_RATE;
+    if (state?.auDeferredCapitalGainsYTD == null) {
+      return {
+        netTaxableGain: realGain,
+        reliefAmount:   auCapitalGainsYTD - realGain,
+        minTaxRate,
+      };
+    }
+    // Design 132 — a lot held across 1 July 2027 adds its s112-160 deferred gain: a
+    // discount capital gain at 50% (s115-100(aa)) on its eligible part, never indexed,
+    // and NOT a minimum tax capital gain (s119-5(2) covers only residential and
+    // non-residential gains; s102-6(5) makes this one deferred). Already netted for
+    // losses by `_applyCapitalLosses` below.
+    const deferred     = Math.max(0, state.auDeferredCapitalGainsYTD ?? 0);
+    const deferredDisc = Math.min(deferred, Math.max(0, state.auDeferredDiscountableGainsYTD ?? 0));
+    const deferredTaxable = deferred - deferredDisc * AuTaxRates2027.DEFERRED_GAIN_DISCOUNT;
+    const netTaxableGain  = realGain + deferredTaxable;
     return {
-      netTaxableGain: realGain,
-      reliefAmount:   auCapitalGainsYTD - realGain,
+      netTaxableGain,
+      reliefAmount: auCapitalGainsYTD + deferred - netTaxableGain,
       minTaxRate,
+      minTaxBase:   realGain,
+    };
+  }
+
+  /**
+   * s102-5(1) Steps 1–2 once the year can hold a s112-160 deferred gain (design 132).
+   *
+   * Step 1's order is the Act's, not a choice: capital losses reduce DEFERRED
+   * non-residential gains first, then deferred residential, then non-residential, then
+   * residential. Note 3's choice applies only WITHIN a category, so inside the deferred
+   * gain the non-discountable part goes first (the parent's design 90 §5.3 rule). The
+   * prior-year pool follows the same order (Step 2). The post-2027 gain is reduced at
+   * face value on both its nominal and its real measure, as the parent does for the
+   * prior-year pool.
+   *
+   * A year with no deferred gain takes the parent's path unchanged.
+   */
+  _applyCapitalLosses(state) {
+    if (state?.auDeferredCapitalGainsYTD == null) return super._applyCapitalLosses(state);
+    const opening = Math.max(0, state?.auCapitalLossPool ?? 0);
+    const D   = state.auDeferredCapitalGainsYTD ?? 0;
+    const Dd0 = Math.min(Math.max(0, D), Math.max(0, state.auDeferredDiscountableGainsYTD ?? 0));
+    const Dn0 = D - Dd0;                                    // signed: a deferred loss lands here
+    const P0  = state.auCapitalGainsYTD ?? 0;               // post-2027 nominal, signed
+    const R0  = 'auRealCapitalGainsYTD' in state ? (state.auRealCapitalGainsYTD ?? 0) : P0;
+
+    const currentYearLosses = Math.max(0, -Dn0) + Math.max(0, -P0);
+    let dn = Math.max(0, Dn0), dd = Dd0, p = Math.max(0, P0), r = Math.max(0, R0);
+    const take = (pool) => {
+      let left = pool;
+      const a = Math.min(left, dn); left -= a; dn -= a;
+      const b = Math.min(left, dd); left -= b; dd -= b;
+      const c = Math.min(left, p);  left -= c; p  -= c; r = Math.max(0, r - c);
+      return { left, applied: a + b + c, other: a + c, discountable: b };
+    };
+    const cy = take(currentYearLosses);
+    const py = take(opening);
+    const deferredNet = dn + dd;
+    return {
+      total:        +p.toFixed(2),
+      discountable: 0,
+      real:         +r.toFixed(2),
+      apportionedBase: 0, apportionedAllowance: 0,
+      deferred:             +deferredNet.toFixed(2),
+      deferredDiscountable: +dd.toFixed(2),
+      opening,
+      applied: +(cy.applied + py.applied).toFixed(2),
+      closing: +(cy.left + py.left).toFixed(2),
+      steps: {
+        grossDiscountable: +Dd0.toFixed(2),
+        grossOther:        +(Math.max(0, Dn0) + Math.max(0, P0)).toFixed(2),
+        currentYear: {
+          losses: +currentYearLosses.toFixed(2),
+          appliedOther:        +cy.other.toFixed(2),
+          appliedDiscountable: +cy.discountable.toFixed(2),
+          applied: +cy.applied.toFixed(2),
+          unapplied: +cy.left.toFixed(2),
+        },
+        priorYear: {
+          opening,
+          appliedOther:        +py.other.toFixed(2),
+          appliedDiscountable: +py.discountable.toFixed(2),
+          applied: +py.applied.toFixed(2),
+          unapplied: +py.left.toFixed(2),
+        },
+      },
     };
   }
 

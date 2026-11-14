@@ -1,7 +1,8 @@
 # 57 — AU CGT reform: indexation + 30% minimum tax (from 1 July 2027)
 
 **Status**: **IN PROGRESS** — Phases 1–4 implemented and green (3272 unit + 864 viz;
-reference scenario runs clean to 2070). Phase 5 (deferred refinements) is optional. Scope,
+reference scenario runs clean to 2070). Part 2 Item B is superseded for brokerage lots by
+design 132 (the enacted Subdiv 112-E deemed sale). Phase 5 (deferred refinements) is optional. Scope,
 fidelity, and the §11 questions are resolved (see **Decisions locked** below).
 
 - **Phase 1 (done)** — `_cgtRelief` hook on `AuTaxRatesBase` + `AuTaxRates2026` (band 16%→15%).
@@ -693,6 +694,13 @@ are present — so just feed it those.
    un-indexed.
 
 #### Item B — Straddling lots apply the new regime to the full gain (remove the deemed reset)
+
+> **Superseded for brokerage lots by design 132 (14 Nov 2026).** The enacted Subdiv 112-E
+> (ITAA 1997 compilation 266, on disk) deems a sale at market value just before 1 July 2027
+> and defers that gain to the real disposal, with the 50% discount and without the 30%
+> minimum tax (s112-155, s112-160, s119-5(2)). Only the post-2027 gain takes this Item's
+> treatment. Collectibles, real property and company equity still follow Item B until design
+> 132 phase 2.
 
 **Decision: holdings crossing 1 Jul 2027 default to the FY2027+ rule on their whole AU gain** — no
 50% discount, cost-base indexation, 30% floor. No apportionment, no pre-2027 carve-out, no

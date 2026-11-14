@@ -84,6 +84,8 @@ const YTD_FIELDS = {
   AU: ['auOrdinaryIncomeYTD', 'auCapitalGainsYTD', 'auDiscountableGainsYTD',
        // design 83 G7 step 3 — s115-115 apportionment
        'auDiscountApportionedBaseYTD', 'auDiscountAllowanceYTD', 'auRealCapitalGainsYTD', 'auNonResidentWithholdingYTD', 'auSuperTaxYTD', 'auFrankingCreditYTD',
+       // design 132 — s112-160 deferred gains (present only once a stamped lot is sold)
+       'auDeferredCapitalGainsYTD', 'auDeferredDiscountableGainsYTD',
        // design 73 Gap 2 — per-type non-resident final withholding
        'auNrWithholdingInterestYTD', 'auNrWithholdingUnfrankedDividendYTD',
        'usSourceOrdinaryAudYTD', 'usSourceCapGainsAudYTD', 'usSourceRealCapGainsAudYTD',
@@ -117,6 +119,8 @@ const PER_PERSON_US_SCALAR_FIELDS = ['usSsWagesByPersonYTD'];
 // Per-person AU accumulator maps reset to zero after each AU settlement.
 const PER_PERSON_AU_FIELDS = [
   'auPersonOrdinaryIncomeYTD',
+  'auPersonDeferredCapitalGainsYTD',
+  'auPersonDeferredDiscountableGainsYTD',
   'auPersonCapitalGainsYTD',
   'auPersonDiscountableGainsYTD',
   'auPersonDiscountApportionedBaseYTD',

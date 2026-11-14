@@ -8,6 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { deferredGainFields } from '../tax/au/au-cgt-2027-constants.js';
 import { AssetService } from './asset-service.js';
 import { EventBus } from '../../simulation-framework/event-bus.js';
 import { InsufficientFundsError, ACCOUNT_TYPE } from '../assets/account.js';
@@ -1884,6 +1885,8 @@ export class AccountService extends AssetService {
           type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain, residency,
           usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
           proceeds: equityProceeds, costBasis: +(realizedBasis - collBasis).toFixed(2), description: account.name || key,
+          // Design 132 — the s112-160 deferred gain of lots held across 1 July 2027.
+          ...deferredGainFields(brokerageFifo),
           // Design 76 Gap B: attribute the AU gain to this account's owner.
           stateKey: account.stateKey ?? key,
         });
@@ -1916,6 +1919,7 @@ export class AccountService extends AssetService {
             // Schedule D, Form 8949 or AU CGT worksheet row. The equity leg above has
             // carried them all along, off the same FIFO tally.
             proceeds: collProceeds, costBasis: collBasis,
+            ...deferredGainFields(brokerageFifo, { collectible: true }),
             description: account.name || key,
             stateKey: account.stateKey ?? key,
           });

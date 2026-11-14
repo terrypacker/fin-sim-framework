@@ -8,6 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { bookAuDeferredGain } from './au-deferred-gain-booking.js';
 import { BaseTaxModule } from '../base-tax-module.js';
 import { accumulateByOwnership, resolveAttributionAsset, ownershipFractions } from '../../ownership-utils.js';
 import { toUSD, toAUD } from '../tax-fx.js';
@@ -744,6 +745,8 @@ export class AuTaxModule2026 extends BaseTaxModule {
             ...basketCapGainPatch(state, 'foreignPassiveCapGainsYTD', toUSD(auChar.short + auChar.long, 'AUD', state)),
           };
         }
+        // Design 132 — the s112-160 deferred gain of a lot held across 1 July 2027.
+        if (isAuResident) next = bookAuDeferredGain(state, next, action, 'auStockAccount', 'AUD');
         return next;
       }],
     ];

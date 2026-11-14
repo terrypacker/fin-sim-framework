@@ -45,6 +45,8 @@ const AU_MIGRATED_HOUSEHOLD_FIELDS = [
   'auCapitalGainsYTD',
   'auDiscountableGainsYTD',
   'auRealCapitalGainsYTD',
+  'auDeferredCapitalGainsYTD',
+  'auDeferredDiscountableGainsYTD',
   'usSourceOrdinaryAudYTD',
   'usSourceCapGainsAudYTD',
   'usSourceRealCapGainsAudYTD',
@@ -94,6 +96,8 @@ const AU_PER_PERSON_INCOME_FIELDS = [
   'auPersonCapitalGainsYTD',
   'auPersonDiscountableGainsYTD',
   'auPersonRealCapitalGainsYTD',
+  'auPersonDeferredCapitalGainsYTD',
+  'auPersonDeferredDiscountableGainsYTD',
   'auPersonNonResidentWithholdingYTD',
   'auPersonNrWithholdingInterestYTD',
   'auPersonNrWithholdingUnfrankedDividendYTD',
@@ -315,6 +319,12 @@ export class TaxSettleService {
         auDiscountApportionedBaseYTD: perPersonShare(state.auPersonDiscountApportionedBaseYTD, state.auDiscountApportionedBaseYTD),
         auDiscountAllowanceYTD:       perPersonShare(state.auPersonDiscountAllowanceYTD,       state.auDiscountAllowanceYTD),
         auRealCapitalGainsYTD:       perPersonShare(state.auPersonRealCapitalGainsYTD,        state.auRealCapitalGainsYTD),
+        // design 132 — written only when present, so a plan with no lot held across
+        // 1 July 2027 hands the rates module exactly the state it always did.
+        ...((state.auPersonDeferredCapitalGainsYTD != null || state.auDeferredCapitalGainsYTD != null) ? {
+          auDeferredCapitalGainsYTD:      perPersonShare(state.auPersonDeferredCapitalGainsYTD,      state.auDeferredCapitalGainsYTD),
+          auDeferredDiscountableGainsYTD: perPersonShare(state.auPersonDeferredDiscountableGainsYTD, state.auDeferredDiscountableGainsYTD),
+        } : {}),
         auNonResidentWithholdingYTD: perPersonShare(state.auPersonNonResidentWithholdingYTD,  state.auNonResidentWithholdingYTD),
         auNrWithholdingInterestYTD:          perPersonShare(state.auPersonNrWithholdingInterestYTD,          state.auNrWithholdingInterestYTD),
         auNrWithholdingUnfrankedDividendYTD: perPersonShare(state.auPersonNrWithholdingUnfrankedDividendYTD, state.auNrWithholdingUnfrankedDividendYTD),

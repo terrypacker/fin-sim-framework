@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-239 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 94 tools · 330 state field types · 80 topics · 139 design docs
+239 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 94 tools · 334 state field types · 80 topics · 140 design docs
 
 ---
 
@@ -1784,7 +1784,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `AU_SE_INCOME_TAX` | amount: currency(AUD), residency: text, personKey: text, workCountry: text | AU_INCOME |
 | `AU_STOCK_EARNINGS_APPLY` | amount: currency(AUD), stateKey: text, flooredLots: number | AU_BROKERAGE |
 | `AU_STOCK_WITHDRAWAL_APPLY` | salePrice: currency(AUD), costBasis: currency(AUD), residency: text | AU_BROKERAGE |
-| `AU_STOCK_WITHDRAWAL_TAX` | gain: currency(AUD), auGain: currency(AUD), auIndexedGain: currency(AUD), auDiscountableGain: currency(AUD), usShortTermGain: currency(AUD), usLongTermGain: currency(AUD), auShortTermGain: currency(AUD), auLongTermGain: currency(AUD), residency: text, proceeds: currency(AUD), costBasis: currency(AUD), description: text, stateKey: text | AU_BROKERAGE |
+| `AU_STOCK_WITHDRAWAL_TAX` | auDeferredGain: currency(AUD), auDeferredDiscountableGain: currency(AUD), gain: currency(AUD), auGain: currency(AUD), auIndexedGain: currency(AUD), auDiscountableGain: currency(AUD), usShortTermGain: currency(AUD), usLongTermGain: currency(AUD), auShortTermGain: currency(AUD), auLongTermGain: currency(AUD), residency: text, proceeds: currency(AUD), costBasis: currency(AUD), description: text, stateKey: text | AU_BROKERAGE |
 | `AU_TAX_INSTALMENT_DEBIT` | amount: currency(AUD), quarter: number | AU_TAX |
 | `AU_TAX_PAYMENT_DEBIT` | amount: currency(AUD), escalated: boolean, section988: any | AU_TAX |
 | `AU_TAX_REFUND_CREDIT` | amount: currency(AUD) | AU_TAX |
@@ -1803,7 +1803,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `CHANGE_RESIDENCY_APPLY` | — | US_AU_CROSS_BORDER |
 | `CHANGE_STATE_RESIDENCY_APPLY` | destination: text | US_STATE_TAX |
 | `COLLECTIBLE_SALE_APPLY` | salePrice: currency(USD), costBasis: currency(USD), residency: text, stateKey: text | US_COLLECTIBLES |
-| `COLLECTIBLE_SALE_TAX` | gain: currency(USD), auGain: currency(USD), auIndexedGain: currency(USD), isGold: boolean, currency: text, usShortTermGain: currency(USD), usLongTermGain: currency(USD), auShortTermGain: currency(USD), auLongTermGain: currency(USD), residency: text, stateKey: text, ownershipType: text, ownerId: text, owners: any, proceeds: currency(USD), costBasis: currency(USD), description: text | US_COLLECTIBLES |
+| `COLLECTIBLE_SALE_TAX` | auDeferredGain: currency(USD), auDeferredDiscountableGain: currency(USD), gain: currency(USD), auGain: currency(USD), auIndexedGain: currency(USD), isGold: boolean, currency: text, usShortTermGain: currency(USD), usLongTermGain: currency(USD), auShortTermGain: currency(USD), auLongTermGain: currency(USD), residency: text, stateKey: text, ownershipType: text, ownerId: text, owners: any, proceeds: currency(USD), costBasis: currency(USD), description: text | US_COLLECTIBLES |
 | `COLLECTIBLE_VALUE_CHANGE_APPLY` | change: currency(USD), stateKey: text | US_COLLECTIBLES |
 | `COMPANY_SALE_APPLY` | salePrice: currency(USD), costBasis: currency(USD), residency: text, stateKey: text, destinationKey: text | US_INCOME |
 | `COMPANY_SALE_TAX` | gain: currency(USD), auGain: currency(USD), auIndexedGain: currency(USD), usShortTermGain: currency(USD), usLongTermGain: currency(USD), auShortTermGain: currency(USD), auLongTermGain: currency(USD), residency: text, ownershipType: text, ownerId: text, owners: any, proceeds: currency(USD), costBasis: currency(USD), description: text | US_INCOME |
@@ -1901,7 +1901,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `STOCK_EARNINGS_APPLY` | amount: currency(USD), stateKey: text, flooredLots: number | US_BROKERAGE |
 | `STOCK_HARVEST_APPLY` | stateKey: text, sellAmount: number, sourceHoldingId: text, substituteHoldingId: text, substituteSecurityId: text, purpose: text, residency: text | ECONOMIC_REGIMES |
 | `STOCK_WITHDRAWAL_APPLY` | salePrice: currency(USD), costBasis: currency(USD), residency: text | US_BROKERAGE |
-| `STOCK_WITHDRAWAL_TAX` | currency: text, gain: currency(USD), auGain: currency(USD), auIndexedGain: currency(USD), auDiscountableGain: currency(USD), usShortTermGain: currency(USD), usLongTermGain: currency(USD), auShortTermGain: currency(USD), auLongTermGain: currency(USD), residency: text, proceeds: currency(USD), costBasis: currency(USD), description: text, stateKey: text, washDisallowed: currency(USD) | US_BROKERAGE |
+| `STOCK_WITHDRAWAL_TAX` | auDeferredGain: currency(USD), auDeferredDiscountableGain: currency(USD), currency: text, gain: currency(USD), auGain: currency(USD), auIndexedGain: currency(USD), auDiscountableGain: currency(USD), usShortTermGain: currency(USD), usLongTermGain: currency(USD), auShortTermGain: currency(USD), auLongTermGain: currency(USD), residency: text, proceeds: currency(USD), costBasis: currency(USD), description: text, stateKey: text, washDisallowed: currency(USD) | US_BROKERAGE |
 | `SUPER_CAPITAL_GAIN` | stateKey: text, discountableGain: currency(AUD), otherGain: currency(AUD), capitalLoss: currency(AUD), revenueGain: currency(AUD) | AU_RETIREMENT |
 | `SUPER_CONTRIBUTION_APPLY` | amount: currency(AUD), stateKey: text, employerFunded: boolean, deductible: boolean, personKey: text, clamps: any, carriedForward: currency(AUD), section988: any | AU_RETIREMENT |
 | `SUPER_CONTRIBUTION_TAX` | amount: currency(AUD), stateKey: text | AU_RETIREMENT |
@@ -1936,7 +1936,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 
 ---
 
-## State field types (330)
+## State field types (334)
 
 The scenario-INDEPENDENT half of `StateSchemaRegistry`: the globs and exact paths it
 installs in its own constructor, with the value type that decides how each formats.
@@ -2044,6 +2044,8 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `auCapitalGainsYTD` | currency(AUD) |
 | `auCgtEffectiveRate` | percentage |
 | `auDeductibleSuperYTD` | currency(AUD) |
+| `auDeferredCapitalGainsYTD` | currency(AUD) |
+| `auDeferredDiscountableGainsYTD` | currency(AUD) |
 | `auDiscountableGainsYTD` | currency(AUD) |
 | `auDiscountAllowanceYTD` | currency(AUD) |
 | `auDiscountApportionedBaseYTD` | currency(AUD) |
@@ -2057,6 +2059,8 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `auPersonCapitalGainsYTD.*` | currency(AUD) |
 | `auPersonCapitalLossPool.*` | currency(AUD) |
 | `auPersonDeductibleSuperYTD.*` | currency(AUD) |
+| `auPersonDeferredCapitalGainsYTD.*` | currency(AUD) |
+| `auPersonDeferredDiscountableGainsYTD.*` | currency(AUD) |
 | `auPersonDiscountableGainsYTD.*` | currency(AUD) |
 | `auPersonDiscountAllowanceYTD.*` | currency(AUD) |
 | `auPersonDiscountApportionedBaseYTD.*` | currency(AUD) |
@@ -2371,7 +2375,7 @@ what the in-app panel keys on.
 
 ---
 
-## Design documents (139)
+## Design documents (140)
 
 Tier 3 — the full argument behind each mechanic, in `design/`. The title is each
 file's own H1, read out of it; there is no summary column, because a one-line precis
@@ -2516,6 +2520,7 @@ between 10 and 11.
 | [`129-stock-bond-correlation.md`](../design/129-stock-bond-correlation.md) | 129 — Stock–bond correlation as a regime property (design 126 G3) |
 | [`130-bonds-panel.md`](../design/130-bonds-panel.md) | 130 — Bonds panel: holdings by bond type, and the maturity ladder |
 | [`131-gold-return-drivers.md`](../design/131-gold-return-drivers.md) | 131 — Gold's return drivers: inflation, real rates and replayed history |
+| [`132-au-cgt-1-july-2027-deemed-sale.md`](../design/132-au-cgt-1-july-2027-deemed-sale.md) | 132 — The 1 July 2027 deemed sale: assets held across the CGT reform |
 | [`bus-unification-plan.md`](../design/bus-unification-plan.md) | Bus Unification Plan |
 | [`inconsistencies.md`](../design/inconsistencies.md) | Inconsistencies, Rework Candidates, and Open Questions |
 | [`requirements.md`](../design/requirements.md) | Requirements Tracker |
