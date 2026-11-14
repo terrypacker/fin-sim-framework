@@ -383,7 +383,7 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
       // proceeds/costBasis — the gold sleeve's slice of the sale. Same reason as the
       // standalone collectible (design 91 §8.9): without them this disposal is assessed
       // but never disclosed on the AU CGT worksheet.
-      taxActions.push({ type: 'COLLECTIBLE_SALE_TAX', gain: collectibleGain, auGain: collectibleAuGain, auIndexedGain: collectibleIndexedAuGain, isGold: true, residency, usShortTermGain: cUsShort, usLongTermGain: cUsLong, auShortTermGain: cAuShort, auLongTermGain: cAuLong, proceeds: collectibleProceeds, costBasis: collectibleBasis, stateKey: key });
+      taxActions.push({ type: 'COLLECTIBLE_SALE_TAX', currency: 'USD', gain: collectibleGain, auGain: collectibleAuGain, auIndexedGain: collectibleIndexedAuGain, isGold: true, residency, usShortTermGain: cUsShort, usLongTermGain: cUsLong, auShortTermGain: cAuShort, auLongTermGain: cAuLong, proceeds: collectibleProceeds, costBasis: collectibleBasis, stateKey: key });
     }
     // Design 87 G9 — the second Reg. §1.988-2(b)(5) trigger, "or the instrument is
     // disposed of". Wired on the US reducer too even though a USD account has no §988

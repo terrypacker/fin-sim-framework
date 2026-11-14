@@ -1904,6 +1904,9 @@ export class AccountService extends AssetService {
           // the rebalancer taxed the SAME gold lots correctly (design/inconsistencies §4.11).
           const { usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain } = collTerms;
           pendingTaxActions.push({
+            // The source account's currency, as on the equity leg above: an AU-domiciled
+            // brokerage's gold slice is AUD, and a consumer reads a missing one as USD.
+            currency: account.currency?.code ?? (account.country === 'AU' ? 'AUD' : 'USD'),
             type: 'COLLECTIBLE_SALE_TAX', gain: collGain, auGain: collAuGain,
             auIndexedGain: collIndexedAuGain, isGold: true, residency,
             usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,

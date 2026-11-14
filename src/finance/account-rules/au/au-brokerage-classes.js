@@ -367,7 +367,7 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
     this.stateRegistry     = stateRegistry;
     this.costBasisStrategy = costBasisStrategy;
     this.reducedActionTypes   = ['AU_STOCK_WITHDRAWAL_APPLY'];
-    this.generatedActionTypes = ['AU_STOCK_WITHDRAWAL_TAX', 'SECTION_988_GAIN'];
+    this.generatedActionTypes = ['AU_STOCK_WITHDRAWAL_TAX', 'COLLECTIBLE_SALE_TAX', 'SECTION_988_GAIN'];
   }
 
   reduce(state, action, date) {
@@ -409,17 +409,46 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
     // stepped-up cost base; no step-up ⇒ falls back to realizedBasis (auGain === gain).
     const realizedAuBasis        = r.realizedBasisByCountry?.AU ?? realizedBasis;
     const realizedIndexedAuBasis = r.realizedIndexedBasisByCountry?.AU ?? realizedAuBasis;
-    const gain        = Math.max(0, salePrice - realizedBasis);
-    const auGain      = Math.max(0, salePrice - realizedAuBasis);
-    const auIndexedGain = Math.max(0, salePrice - realizedIndexedAuBasis);
+
+    // Collectible split (design 56 §7.2), mirroring the US sibling reducer. An AU
+    // brokerage CAN hold a GOLD sleeve — the AU-residency gold location policy names
+    // `au-stock` — and the US taxes its gain at the 28% collectibles rate
+    // (§1(h)(4)-(5) with §408(m)), so the gold slice goes out as COLLECTIBLE_SALE_TAX in
+    // AUD. For Australia bullion is an ordinary CGT asset (s108-10(2) does not list it),
+    // which the `isGold` flag tells the AU modules. A bare-event `costBasis` has no
+    // per-lot allocation to split, so it is treated as all-equity, as in the US reducer.
+    const collectibleProceeds = action.costBasis != null ? 0 : (r.collectibleProceeds ?? 0);
+    const collectibleBasis    = action.costBasis != null ? 0 : (r.collectibleBasis    ?? 0);
+    const collectibleGain     = Math.max(0, collectibleProceeds - collectibleBasis);
+    const collectibleAuBasis        = r.collectibleBasisByCountry?.AU        ?? collectibleBasis;
+    const collectibleIndexedAuBasis = r.collectibleIndexedBasisByCountry?.AU ?? collectibleAuBasis;
+
+    // The equity (non-collectible) portion is the total less the collectible slice.
+    const equityProceeds = +(salePrice - collectibleProceeds).toFixed(2);
+    const equityBasis    = +(realizedBasis - collectibleBasis).toFixed(2);
+    const gain        = Math.max(0, equityProceeds - equityBasis);
+    const auGain      = Math.max(0, equityProceeds - (realizedAuBasis - collectibleAuBasis));
+    const auIndexedGain = Math.max(0, equityProceeds - (realizedIndexedAuBasis - collectibleIndexedAuBasis));
     // CGT 50%-discount-eligible slice (design 62 §4): gain from lots held ≥12 months
     // from the AU deemed-acquisition date, capped at auGain. Read by the pre-2027
-    // rates module so the discount applies only to the eligible portion.
+    // rates module so the discount applies only to the eligible portion. The FIFO
+    // tally already excludes the gold sleeve (the collectible split carries its own).
     const auDiscountableGain = Math.min(auGain, r.realizedDiscountableGainByCountry?.AU ?? auGain);
     // Design 90 §9 step 2 — signed and charactered, alongside the floored figures above.
-    // An AU brokerage holds no gold sleeve, so there is no collectible slice to split.
     const { usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain } =
       disposalTermFields(r.realizedGainByCountryAndTerm);
+    const collTerms  = disposalTermFields(r.collectibleGainByCountryAndTerm);
+    const collSigned = collTerms.usShortTermGain + collTerms.usLongTermGain;
+    const goldTax = (collectibleGain > 0 || collSigned !== 0)
+      ? [{ type: 'COLLECTIBLE_SALE_TAX', currency: 'AUD', isGold: true, residency,
+           gain: collectibleGain,
+           auGain:        Math.max(0, collectibleProceeds - collectibleAuBasis),
+           auIndexedGain: Math.max(0, collectibleProceeds - collectibleIndexedAuBasis),
+           usShortTermGain: collTerms.usShortTermGain, usLongTermGain: collTerms.usLongTermGain,
+           auShortTermGain: collTerms.auShortTermGain, auLongTermGain: collTerms.auLongTermGain,
+           proceeds: collectibleProceeds, costBasis: collectibleBasis,
+           description: sa.name || key, stateKey: key }]
+      : [];
 
     this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'AU', state)], salePrice, null);
 
@@ -435,7 +464,8 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
           holdings: newHoldings,
         },
       },
-      [{ type: 'AU_STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain, residency, usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain, proceeds: salePrice, costBasis: realizedBasis, description: sa.name || key, stateKey: key },
+      [{ type: 'AU_STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain, residency, usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain, proceeds: equityProceeds, costBasis: equityBasis, description: sa.name || key, stateKey: key },
+       ...goldTax,
        // Design 87 G9 — the second Reg. §1.988-2(b)(5) trigger: "or the instrument is
        // disposed of". A foreign-currency bond sold before maturity realizes the same
        // accumulated exchange position a redemption would. Null unless this disposal

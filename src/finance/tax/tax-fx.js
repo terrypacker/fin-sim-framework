@@ -80,3 +80,36 @@ export const TAX_FX_PAIR = 'USD_AUD';
 export function taxFxRate(state) {
   return state?.effectiveExchangeRates?.[TAX_FX_PAIR] ?? null;
 }
+
+/**
+ * The currency a disposal tax action's money fields are stated in.
+ *
+ * Every emitter that can draw an AU-domiciled account states `currency`; an action with
+ * none predates that and was always a US-domiciled (USD) disposal.
+ *
+ * @param {object} action  a *_SALE_TAX / *_WITHDRAWAL_TAX action
+ * @returns {string}       ISO currency code
+ */
+export const disposalCurrency = (action) => action?.currency ?? 'USD';
+
+/**
+ * Whether a disposal is of an AU-DOMICILED asset (an AU brokerage lot, an AU-held
+ * collectible), read from the drawn account's `country` when the action names one and
+ * from the stated currency otherwise.
+ *
+ * It decides the FITO removal sets. Art. 22(2) of the US–Australia convention
+ * (`docs/us-tax/Treaty-Australia-Convention-1982-08-06.txt`) has Australia credit US
+ * tax on "income derived from sources in the United States", and excludes US tax
+ * "imposed … solely by reason of citizenship". An AU resident's gain on an AU-domiciled
+ * asset is taxed by the US only because the seller is a citizen, so it is never in the
+ * US-source slices, whatever §865(g)(2) says about its US-law source.
+ *
+ * @param {object} state
+ * @param {object} action
+ * @returns {boolean}
+ */
+export function isAuDomiciledDisposal(state, action) {
+  const acct = action?.stateKey != null ? state?.[action.stateKey] : null;
+  if (acct?.country === 'AU' || acct?.country === 'US') return acct.country === 'AU';
+  return disposalCurrency(action) === 'AUD';
+}

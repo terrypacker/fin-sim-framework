@@ -321,6 +321,11 @@ export class StockHarvestApplyReducer extends Reducer {
       },
       [{
         type:        'STOCK_WITHDRAWAL_TAX',
+        // The harvested account's own currency. TAX_LOSS_HARVEST / TAX_GAIN_HARVEST
+        // harvest AU_STOCK accounts too, and a consumer reads a missing currency as
+        // USD: an AU harvest's AUD gain was booked unconverted into the US buckets and
+        // converted a second time into the AU ones.
+        currency:    account.currency?.code ?? (account.country === 'AU' ? 'AUD' : 'USD'),
         gain:        gainRep,
         auGain:      auGainLoss,
         auDiscountableGain,

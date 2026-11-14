@@ -356,7 +356,7 @@ function _extractAuDisposals(currentEntry, journal, settleRate, typeRegistry = n
     const nativeGain  = auChar.short + auChar.long;
     const shares      = _personSharesFor(e, byInstance);
     const audTotal    = Object.values(shares).reduce((s, v) => s + v, 0);
-    const currency    = _disposalCurrency(typeRegistry, t);
+    const currency    = _disposalCurrency(typeRegistry, t, d);
 
     // Prefer the rate the booking IMPLIES — audTotal / nativeGain is exactly the rate
     // `toAUD` used at that moment, so proceeds and cost base convert on the same
@@ -394,8 +394,12 @@ function _extractAuDisposals(currentEntry, journal, settleRate, typeRegistry = n
  * and it is the figure the worksheet actually prints. Design 91 §8.1: the answer is the
  * ACTION TYPE's currency, so any money field on the type would give the same answer.
  */
-function _disposalCurrency(typeRegistry, actionType) {
-  return typeRegistry?.fieldCurrency?.(actionType, 'proceeds')
+function _disposalCurrency(typeRegistry, actionType, data = null) {
+  // The row's own `currency` first: STOCK_WITHDRAWAL_TAX and COLLECTIBLE_SALE_TAX are
+  // emitted for AU-domiciled accounts too, in AUD, and the manifest can only declare
+  // one static currency per type (see us-collectibles-toolset.js).
+  return data?.currency
+      ?? typeRegistry?.fieldCurrency?.(actionType, 'proceeds')
       ?? AU_DISPOSAL_CURRENCY[actionType]
       ?? 'USD';
 }
@@ -716,7 +720,7 @@ function _extractUsSaleRecords(currentEntry, journal, settleRate = null, typeReg
     if (!isFirstForAction(e)) continue;
 
     const booked   = _usGainDeltas(e, byInstance);
-    const currency = _disposalCurrency(typeRegistry, t);
+    const currency = _disposalCurrency(typeRegistry, t, d);
     // `fx.at(i)` and not `fx.onDate(e.date)`: several reducers can move the rate on one
     // date (the period-advance mirror, then the regime overwrite), so the journal
     // POSITION is what identifies the rate this disposal's reducer actually read.
