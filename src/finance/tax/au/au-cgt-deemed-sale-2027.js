@@ -31,17 +31,10 @@ import { ALLOCATION }        from '../../holdings/allocation.js';
 import { resolveAttributionFractions } from '../../ownership-utils.js';
 import { primaryPersonKey }  from '../../residency-utils.js';
 
-import { AU_DEEMED_SALE_MS, AU_PRE2027_KEY } from './au-cgt-2027-constants.js';
+import { AU_DEEMED_SALE_MS, AU_PRE2027_KEY, auAcquisitionMs as _auAcquisitionMs, scalarDeferredGainFields }
+  from './au-cgt-2027-constants.js';
 
-export { AU_DEEMED_SALE_MS, AU_PRE2027_KEY };
-
-/** The lot's AU acquisition instant: the s855-45 deemed date when stamped, else its purchase. */
-function _auAcquisitionMs(h) {
-  const raw = h?.acquisitionDateByCountry?.AU ?? h?.purchaseDate ?? null;
-  if (raw == null) return null;
-  const ms = raw instanceof Date ? raw.getTime() : (typeof raw === 'number' ? raw : Date.parse(raw));
-  return Number.isFinite(ms) ? ms : null;
-}
+export { AU_DEEMED_SALE_MS, AU_PRE2027_KEY, scalarDeferredGainFields };
 
 /**
  * Whether s112-155 reaches this lot: a non-cash lot, not already stamped, acquired (for AU
@@ -74,6 +67,37 @@ export function stampDeemedSale(h, auLevel) {
   };
 }
 
+/**
+ * The scalar CGT assets (design 132 phase 2a): a standalone collectible (bullion or a
+ * true collectable — s112-155 reaches every non-pre-CGT asset) and a company stake.
+ * Real property is phase 2b, because its deemed sale has to split the main-residence
+ * days at 30 June 2027 (s102-6(4)).
+ */
+const SCALAR_KINDS = new Set(['collectible', 'company']);
+
+/** Whether s112-155 reaches this scalar asset (same tests as a lot, on `value`). */
+export function isDeemedSaleScalar(a) {
+  if (!a || !SCALAR_KINDS.has(a.kind)) return false;
+  if (!((a.value ?? 0) > 0)) return false;
+  if (a.costBaseByCountry?.[AU_PRE2027_KEY] != null) return false;
+  const acq = _auAcquisitionMs(a);
+  return acq == null || acq < AU_DEEMED_SALE_MS;
+}
+
+/** The stamped scalar asset: the same three changes as a lot, measured on `value`. */
+export function stampDeemedSaleScalar(a, auLevel) {
+  const preBase = a.costBaseByCountry?.AU ?? a.costBasis ?? 0;
+  return {
+    ...a,
+    costBaseByCountry: {
+      ...(a.costBaseByCountry ?? {}),
+      [AU_PRE2027_KEY]: +(+preBase).toFixed(2),
+      AU: +(a.value ?? 0).toFixed(2),
+    },
+    acquisitionPriceLevel: auLevel,
+  };
+}
+
 /** Whether an AU-resident individual owns the account (any owner, by attribution). */
 function _ownedByAuResident(state, key) {
   const fractions = resolveAttributionFractions(state, { stateKey: key }, key);
@@ -87,7 +111,7 @@ function _ownedByAuResident(state, key) {
 
 export class AuCgtDeemedSale2027Reducer extends Reducer {
   static type        = 'AuCgtDeemedSale2027Reducer';
-  static description = 'On the AU period advance that opens FY2027 (1 July 2027), stamps every brokerage lot an AU resident acquired before that date with the s112-155 deemed sale and reacquisition: the pre-2027 AU cost base is kept for the deferred gain, the market value becomes the AU cost base, and indexation starts at the July 2027 CPI level (design 132).';
+  static description = 'On the AU period advance that opens FY2027 (1 July 2027), stamps every brokerage lot, standalone collectible and company stake an AU resident acquired before that date with the s112-155 deemed sale and reacquisition: the pre-2027 AU cost base is kept for the deferred gain, the market value becomes the AU cost base, and indexation starts at the July 2027 CPI level (design 132).';
   static actionType  = null;
 
   constructor() {
@@ -101,6 +125,10 @@ export class AuCgtDeemedSale2027Reducer extends Reducer {
     const auLevel = state.cpiAccumulator?.AU ?? state.inflationAccumulator?.AU ?? 1;
     const patch = {};
     for (const [key, a] of Object.entries(state)) {
+      if (isDeemedSaleScalar(a)) {
+        if (_ownedByAuResident(state, key)) patch[key] = stampDeemedSaleScalar(a, auLevel);
+        continue;
+      }
       if (a?.type !== ACCOUNT_TYPE.BROKERAGE || !Array.isArray(a.holdings)) continue;
       if (!a.holdings.some(isDeemedSaleLot)) continue;
       if (!_ownedByAuResident(state, key)) continue;

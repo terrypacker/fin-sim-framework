@@ -14,6 +14,7 @@ import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { resolveDestinationCashKey, resolveSaleDestinationKey, creditSaleProceeds } from '../cash-routing.js';
 import { singleAssetTermFields } from '../../holdings/holding-period.js';
 import { toMs } from '../main-residence.js';
+import { scalarDeferredGainFields } from '../../tax/au/au-cgt-2027-constants.js';
 
 /** Default US cash pool key when no saleDestinationAccount is provided. */
 const defaultUsCashKey = (state) =>
@@ -118,6 +119,8 @@ export class CollectibleSaleApplyReducer extends AccountServiceReducer {
       [...(fxLeg ? [fxLeg] : []),
        { type: 'COLLECTIBLE_SALE_TAX', gain, auGain, auIndexedGain, isGold, residency, currency,
         usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
+        // Design 132 — the s112-160 deferred gain of a collectible held across 1 July 2027.
+        ...scalarDeferredGainFields(col, toMs(date)),
         proceeds: salePrice, costBasis,
         ownershipType: col?.ownershipType, ownerId: col?.ownerId, owners: col?.owners }]
     );
