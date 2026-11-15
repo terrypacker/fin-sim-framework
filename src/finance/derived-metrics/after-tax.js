@@ -131,6 +131,12 @@ export function defaultRateProvider({
     rothLiquidationRate(/* account, assessable, state, date */) {
       return ordAu;
     },
+    // An AU-resident owner's US pre-tax draw (issue #770): Australia assesses it as a
+    // foreign pension (Art. 18). The charge is AUSTRALIAN, so — like the Roth — this answers
+    // `ordAu` whatever the wrapper's domicile. Reached only for an AU-resident owner.
+    auPensionLiquidationRate(/* account, amount, state, date */) {
+      return ordAu;
+    },
     // Gold sleeve (design 56 §7.3): US collectibles 28%; an AU-domiciled gold sleeve
     // disposes as an ordinary AU capital gain, so it takes the cap-gains rate there.
     collectibleLiquidationRate(account /*, gain, state, date */) {
@@ -189,6 +195,55 @@ export function afterTaxOptionsFromParams(params = {}) {
       : defaultRateProvider(rateCfg),
     assumedGainFraction: params.assumedGainFraction,
   };
+}
+
+/**
+ * Advisories about how the after-tax metric will price `state` under `params` (issue #770).
+ *
+ * Under the default `configured` method an AU-resident owner's leftover IRA / 401(k) is
+ * priced at max(`afterTaxOrdinaryRate`, `afterTaxOrdinaryRateAu`) — two fixed rates, where the
+ * real cost is the AU marginal rate on the drawn pension, which can sit well above or below
+ * either. Arms that leave different pre-tax balances are then scored with a bias the size of
+ * the effects a Roth or location study measures. `liquidation` stacks the balance through both
+ * tax engines instead. Read on the TERMINAL state, because the residency that matters is the
+ * one at the horizon.
+ *
+ * @param {object} state  - the state being scored (normally the terminal one)
+ * @param {object} [params] - scenario param bag
+ * @returns {string[]}
+ */
+export function afterTaxRateWarnings(state, params = {}) {
+  if (!state || params.afterTaxRateMethod === 'liquidation') return [];
+  const owners = new Set();
+  for (const val of Object.values(state)) {
+    if (val == null || typeof val !== 'object' || !(val.balance > 0)) continue;
+    if (taxClassForRole(val.role) !== TAX_CLASS.PRE_TAX) continue;
+    if (_isAuResidentOwner(val, state)) owners.add(val.ownerId ?? primaryPersonKey(state));
+  }
+  if (owners.size === 0) return [];
+  return ['After-tax net worth prices a pre-tax IRA/401(k) left to an Australian-resident owner '
+    + 'at fixed configured rates (afterTaxRateMethod "configured"); the real cost is the AU '
+    + 'marginal rate on the drawn pension. Set afterTaxRateMethod to "liquidation" to price it '
+    + 'through the tax engines, or treat after-tax comparisons that leave different IRA '
+    + 'balances as biased.'];
+}
+
+/** Messages `warnAfterTaxRate` has already printed in this process (once per message, not per path). */
+const _afterTaxWarned = new Set();
+
+/**
+ * {@link afterTaxRateWarnings}, printed to the console once per message per process — the
+ * scoring paths (optimizer, grid, Monte Carlo) call this on every terminal state.
+ * @returns {string[]} the warnings for this state, printed or not
+ */
+export function warnAfterTaxRate(state, params = {}) {
+  const warnings = afterTaxRateWarnings(state, params);
+  for (const w of warnings) {
+    if (_afterTaxWarned.has(w)) continue;
+    _afterTaxWarned.add(w);
+    console.warn(`[after-tax] ${w}`);
+  }
+  return warnings;
 }
 
 export function liquidationRateProvider({ ordinaryRate, ordinaryRateAu, capGainsRate, collectibleRate } = {}) {
@@ -251,6 +306,14 @@ export function liquidationRateProvider({ ordinaryRate, ordinaryRateAu, capGains
       const fb  = () => fallback.rothLiquidationRate(account, assessable, state, date);
       const ccy = currencyOf(account, 'USD');
       return engineDelta(computeAu, 'auOrdinaryIncomeYTD', toAUD(assessable, ccy, state), state, fb);
+    },
+    // An AU-resident owner's IRA / 401(k) draw stacks on `auOrdinaryIncomeYTD` as Art. 18
+    // pension income, the booking `bookArt18Pension` makes. USD → AUD before stacking, for
+    // the bracket reason `rothLiquidationRate` gives; the ratio is currency-neutral.
+    auPensionLiquidationRate(account, amount, state, date) {
+      const fb  = () => fallback.auPensionLiquidationRate(account, amount, state, date);
+      const ccy = currencyOf(account, 'USD');
+      return engineDelta(computeAu, 'auOrdinaryIncomeYTD', toAUD(amount, ccy, state), state, fb);
     },
     // Gold sleeve (design 56 §7.3): a US gold gain stacks on usCollectibleGainsYTD (the
     // 28%-rate accumulator); an AU-domiciled gold sleeve is an ordinary AU capital gain.
@@ -369,6 +432,21 @@ function _s99bAssessable(account, balance) {
 }
 
 /**
+ * The slice of an AU-resident owner's pre-tax balance that Australia assesses on a draw.
+ * The whole balance, except under `auRmdTreatment: ART18_EARNINGS_ONLY`, where only the
+ * pro-rata earnings share is assessable — the `auAssessableAmount` the apply reducers stamp
+ * (`proRataIraSplit`). No ledger ⇒ the whole balance, the never-under-taxing fallback.
+ */
+function _auAssessablePreTax(account, balance, state) {
+  if (state?.auRmdTreatment !== 'ART18_EARNINGS_ONLY') return balance;
+  const contrib  = account?.contributionBasis ?? 0;
+  const earnings = account?.earningsBasis     ?? 0;
+  const total    = contrib + earnings;
+  if (!(total > 0)) return balance;
+  return balance * Math.min(1, Math.max(0, earnings / total));
+}
+
+/**
  * After-tax value of a single account, in the account's own currency (FX is
  * applied by the summing functions, mirroring computeNetWorth). The shared core
  * of both scope metrics — one place defines the per-class discount.
@@ -416,9 +494,24 @@ export function computeAfterTaxValue(account, state, date, {
       return balance;
 
     case TAX_CLASS.PRE_TAX: {
-      // Every dollar is taxed as ordinary income on withdrawal.
-      const r = rateProvider.ordinaryLiquidationRate(account, balance, state, date);
-      return balance * (1 - clampRate(r));
+      // Every dollar is taxed as US ordinary income on withdrawal.
+      const usTax = balance * clampRate(rateProvider.ordinaryLiquidationRate(account, balance, state, date));
+      if (!_isAuResidentOwner(account, state) || !rateProvider.auPensionLiquidationRate) {
+        return balance - usTax;
+      }
+      // AU-resident owner (issue #770): Australia ALSO assesses the draw, as an Art. 18
+      // pension, at its own marginal rate. The two charges overlap rather than add — the
+      // treaty relieves one against the other (US credit on the re-sourced pension, or an AU
+      // FITO under ART21) — so the real cost is the LARGER of the two, which can sit well
+      // above or below the US rate alone. The metric follows the run's `auRmdTreatment`
+      // position, the same switch `bookAuRmd` reads: ART18_EARNINGS_ONLY assesses only the
+      // earnings share in AU, and NO_RELIEF (a stress bound) charges both in full.
+      const auSlice = _auAssessablePreTax(account, balance, state);
+      const auTax   = auSlice > 0
+        ? auSlice * clampRate(rateProvider.auPensionLiquidationRate(account, auSlice, state, date))
+        : 0;
+      const tax = state?.auRmdTreatment === 'NO_RELIEF' ? usTax + auTax : Math.max(usTax, auTax);
+      return balance - Math.min(balance, tax);
     }
 
     case TAX_CLASS.SUPER: {

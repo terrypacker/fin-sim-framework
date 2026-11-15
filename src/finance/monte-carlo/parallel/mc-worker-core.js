@@ -16,7 +16,7 @@ import { ScenarioLoader }        from '../../../scenarios/scenario-loader.js';
 import { applyParamBagToConfig } from '../../../scenarios/scenario-param-apply.js';
 import { computeNetWorth, computeNetWorthInclSpeculative }
   from '../../derived-metrics/net-worth.js';
-import { computeAfterTaxNetWorth, afterTaxOptionsFromParams } from '../../derived-metrics/after-tax.js';
+import { computeAfterTaxNetWorth, afterTaxOptionsFromParams, warnAfterTaxRate } from '../../derived-metrics/after-tax.js';
 import { computeNetLiquidity }   from '../../derived-metrics/net-liquidity.js';
 import { buildSpendingCube }     from '../../spending-reporting/spending-cube.js';
 import { summarizeSpendingForRun } from '../../spending-reporting/spending-distribution.js';
@@ -299,7 +299,7 @@ export function buildIterationRunner(ctx) {
 
   const runner = new ScenarioRunner({
     createSimulation: (params, seed) => createIterationSimulation(ctx, params, seed, { sampler }),
-    evaluate: (sim) => ({
+    evaluate: (sim) => (warnAfterTaxRate(sim.state, ctx.base), {   // issue #770
       // Design 84 §6.4a — MC used to record NOMINAL net worth only, which prices a
       // Roth dollar at par with a pre-tax one. On any question about WHERE wealth
       // sits (a decant, a conversion, a wrapper swap) that is the wrong scoreboard

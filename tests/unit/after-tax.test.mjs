@@ -14,7 +14,7 @@ import assert from 'node:assert/strict';
 import {
   TAX_CLASS, taxClassForRole, defaultRateProvider, liquidationRateProvider,
   computeAfterTaxValue, computeAfterTaxNetWorth, computeAfterTaxNetLiquidity,
-  deriveAfterTaxNetWorth, deriveAfterTaxNetLiquidity,
+  deriveAfterTaxNetWorth, deriveAfterTaxNetLiquidity, afterTaxRateWarnings,
 } from '../../src/finance/derived-metrics/after-tax.js';
 import { computeNetLiquidity } from '../../src/finance/derived-metrics/net-liquidity.js';
 import { OptimizationProblem } from '../../src/finance/optimization/optimization-problem.js';
@@ -503,5 +503,57 @@ describe('computeAfterTaxValue — ROTH is residency-dependent (design 84 G1)', 
     // design 45 decant lever exists to exploit.
     const preMove = { ...state, people: { primary: { residency: 'US' } } };
     assert.equal(computeAfterTaxNetWorth(preMove, LATE, opts), 200_000);
+  });
+});
+
+describe('computeAfterTaxValue — PRE_TAX is residency-dependent (issue #770)', () => {
+  const ira = acct('ira', 100_000, { contributionBasis: 40_000, earningsBasis: 60_000 });
+  const US_STATE = { people: { primary: { residency: 'US' } } };
+  const AU_STATE = { people: { primary: { residency: 'AU' } } };
+
+  test('configured rates: an AU-resident owner pays the larger of the US and AU charges', () => {
+    const hiAu = defaultRateProvider({ ordinaryRate: 0.22, ordinaryRateAu: 0.30 });
+    assert.equal(computeAfterTaxValue(ira, US_STATE, LATE, { rateProvider: hiAu }), 78_000, 'US owner: US 22%');
+    assert.equal(computeAfterTaxValue(ira, AU_STATE, LATE, { rateProvider: hiAu }), 70_000, 'AU owner: AU 30% > US 22%');
+    const loAu = defaultRateProvider({ ordinaryRate: 0.22, ordinaryRateAu: 0.15 });
+    assert.equal(computeAfterTaxValue(ira, AU_STATE, LATE, { rateProvider: loAu }), 78_000, 'AU 15% is credited under US 22%');
+  });
+
+  test('auRmdTreatment: EARNINGS_ONLY assesses the earnings share in AU; NO_RELIEF stacks both', () => {
+    const rp = defaultRateProvider({ ordinaryRate: 0.22, ordinaryRateAu: 0.45 });
+    assert.equal(computeAfterTaxValue(ira, AU_STATE, LATE, { rateProvider: rp }), 55_000);
+    assert.equal(computeAfterTaxValue(ira, { ...AU_STATE, auRmdTreatment: 'ART18_EARNINGS_ONLY' }, LATE,
+      { rateProvider: rp }), 73_000, 'max(22k, 45% × 60k = 27k)');
+    assert.equal(computeAfterTaxValue(ira, { ...AU_STATE, auRmdTreatment: 'NO_RELIEF' }, LATE,
+      { rateProvider: rp }), 33_000, '22k + 45k');
+  });
+
+  test('liquidation method: the same IRA balance prices differently for a US and an AU owner', () => {
+    const rp = liquidationRateProvider();
+    const big = acct('ira', 600_000);
+    const usState = { ...US_STATE, usOrdinaryIncomeYTD: 0, auOrdinaryIncomeYTD: 0 };
+    const auState = { ...AU_STATE, usOrdinaryIncomeYTD: 0, auOrdinaryIncomeYTD: 0 };
+    const us  = computeAfterTaxValue(big, usState, LATE, { rateProvider: rp });
+    const au  = computeAfterTaxValue(big, auState, LATE, { rateProvider: rp });
+    const usRate = rp.ordinaryLiquidationRate(big, 600_000, auState, LATE);
+    const auRate = rp.auPensionLiquidationRate(big, 600_000, auState, LATE);
+    assert.ok(Math.abs(us - 600_000 * (1 - rp.ordinaryLiquidationRate(big, 600_000, usState, LATE))) < 1e-6);
+    assert.ok(Math.abs(auRate - usRate) > 0.01, `engines disagree (US ${usRate}, AU ${auRate})`);
+    assert.ok(Math.abs(au - 600_000 * (1 - Math.max(usRate, auRate))) < 1e-6);
+    assert.notEqual(us, au);
+  });
+});
+
+describe('afterTaxRateWarnings (issue #770)', () => {
+  const auIra = { people: { primary: { residency: 'AU' } }, iraAccount: acct('ira', 100_000) };
+  test('configured method + an AU-resident owner holding pre-tax money ⇒ one warning', () => {
+    assert.equal(afterTaxRateWarnings(auIra, {}).length, 1);
+    assert.equal(afterTaxRateWarnings(auIra, { afterTaxRateMethod: 'configured' }).length, 1);
+  });
+  test('silent under liquidation, for a US owner, or with the IRA emptied', () => {
+    assert.deepEqual(afterTaxRateWarnings(auIra, { afterTaxRateMethod: 'liquidation' }), []);
+    assert.deepEqual(afterTaxRateWarnings({ ...auIra, people: { primary: { residency: 'US' } } }, {}), []);
+    assert.deepEqual(afterTaxRateWarnings({ ...auIra, iraAccount: acct('ira', 0) }, {}), []);
+    assert.deepEqual(afterTaxRateWarnings({ ...auIra, iraAccount: acct('roth-ira', 100_000) }, {}), []);
   });
 });

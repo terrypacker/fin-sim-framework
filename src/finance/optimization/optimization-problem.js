@@ -16,7 +16,7 @@ import { withLiquidityAxisCenters } from '../pools/pool-target-scale.js';
 import { ScenarioSerializer }  from '../../scenarios/scenario-serializer.js';
 import { computeNetWorth, computeNetWorthInclSpeculative } from '../derived-metrics/net-worth.js';
 import { computeNetLiquidity } from '../derived-metrics/net-liquidity.js';
-import { computeAfterTaxNetWorth, computeAfterTaxNetLiquidity, afterTaxOptionsFromParams }
+import { computeAfterTaxNetWorth, computeAfterTaxNetLiquidity, afterTaxOptionsFromParams, warnAfterTaxRate }
   from '../derived-metrics/after-tax.js';
 import { set }                 from '../monte-carlo/mc-param-paths.js';
 import { scenarioParamValues } from '../param-schema-utils.js';
@@ -506,6 +506,7 @@ export class OptimizationProblem {
     // the real tax-engine waterfall, design 40 Phase 3) or 'configured' (Option A,
     // the default — fixed effective rates).
     const afterTaxOpts = afterTaxOptionsFromParams(params);
+    warnAfterTaxRate(state, params);   // issue #770: configured rates on an AU-resident IRA
     return {
       finalNetWorthUsd:  computeNetWorth(state, 'USD'),
       finalNetLiquidity: computeNetLiquidity(state, endDate),

@@ -89,7 +89,7 @@ import { DecisionGraphResultStorage } from './finance/decision-graph/decision-gr
 import { DecisionGraphRunner } from './finance/decision-graph/decision-graph-runner.js';
 import { DecisionGraphStorage } from './finance/decision-graph/decision-graph-storage.js';
 import { makeLeafEntry, resolveLeafEntry } from './finance/decision-graph/leaf-entry.js';
-import { TAX_CLASS, taxClassForRole, defaultRateProvider, afterTaxOptionsFromParams, liquidationRateProvider, computeAfterTaxValue, computeAfterTaxNetWorth, computeAfterTaxNetLiquidity, deriveAfterTaxNetWorth, deriveAfterTaxNetLiquidity } from './finance/derived-metrics/after-tax.js';
+import { TAX_CLASS, taxClassForRole, defaultRateProvider, afterTaxOptionsFromParams, afterTaxRateWarnings, liquidationRateProvider, computeAfterTaxValue, computeAfterTaxNetWorth, computeAfterTaxNetLiquidity, deriveAfterTaxNetWorth, deriveAfterTaxNetLiquidity } from './finance/derived-metrics/after-tax.js';
 import { isDrawdownAccessible, computeNetLiquidity, deriveNetLiquidity } from './finance/derived-metrics/net-liquidity.js';
 import { computeNetWorth, computeNetWorthInclSpeculative, computeMsbsUnfundedBenefit, deriveNetWorth } from './finance/derived-metrics/net-worth.js';
 import { computeOffsetCapacity, deriveOffsetCapacity } from './finance/derived-metrics/offset-capacity.js';
@@ -1010,6 +1010,7 @@ export const Finance = {
   taxClassForRole,
   defaultRateProvider,
   afterTaxOptionsFromParams,
+  afterTaxRateWarnings,
   liquidationRateProvider,
   computeAfterTaxValue,
   computeAfterTaxNetWorth,
