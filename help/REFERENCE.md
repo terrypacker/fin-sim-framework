@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-239 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 94 tools · 336 state field types · 80 topics · 140 design docs
+239 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 94 tools · 340 state field types · 80 topics · 140 design docs
 
 ---
 
@@ -1936,7 +1936,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 
 ---
 
-## State field types (336)
+## State field types (340)
 
 The scenario-INDEPENDENT half of `StateSchemaRegistry`: the globs and exact paths it
 installs in its own constructor, with the value type that decides how each formats.
@@ -2051,6 +2051,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `auDiscountApportionedBaseYTD` | currency(AUD) |
 | `auFrankingCreditYTD` | currency(AUD) |
 | `auGdpUplift` | decimal |
+| `auGrossCapitalLossesYTD` | currency(AUD) |
 | `auNonResidentWithholdingYTD` | currency(AUD) |
 | `auNotionalTaxRate` | decimal |
 | `auNrWithholdingInterestYTD` | currency(AUD) |
@@ -2066,6 +2067,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `auPersonDiscountApportionedBaseYTD.*` | currency(AUD) |
 | `auPersonEarnedIncomeYTD.*` | currency(AUD) |
 | `auPersonFrankingCreditYTD.*` | currency(AUD) |
+| `auPersonGrossCapitalLossesYTD.*` | currency(AUD) |
 | `auPersonNonResidentWithholdingYTD.*` | currency(AUD) |
 | `auPersonNrWithholdingInterestYTD.*` | currency(AUD) |
 | `auPersonNrWithholdingUnfrankedDividendYTD.*` | currency(AUD) |
@@ -2077,6 +2079,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `auPersonSuperTaxYTD.*` | currency(AUD) |
 | `auPersonTaxLossPool.*` | currency(AUD) |
 | `auPersonUsSourceCapGainsAudYTD.*` | currency(AUD) |
+| `auPersonUsSourceGrossCapLossesAudYTD.*` | currency(AUD) |
 | `auPersonUsSourceOrdinaryAudYTD.*` | currency(AUD) |
 | `auPersonUsSourceRealCapGainsAudYTD.*` | currency(AUD) |
 | `auRealCapitalGainsYTD` | currency(AUD) |
@@ -2259,6 +2262,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `usSourceDividendsUsdYTD` | currency(USD) |
 | `usSourceGeneralCapGainsUsdYTD` | currency(USD) |
 | `usSourceGeneralUsdYTD` | currency(USD) |
+| `usSourceGrossCapLossesAudYTD` | currency(AUD) |
 | `usSourceInterestUsdYTD` | currency(USD) |
 | `usSourceOrdinaryAudYTD` | currency(AUD) |
 | `usSourceOrdinaryUsdYTD` | currency(USD) |

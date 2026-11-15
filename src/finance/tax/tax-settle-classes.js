@@ -86,6 +86,8 @@ const YTD_FIELDS = {
        'auDiscountApportionedBaseYTD', 'auDiscountAllowanceYTD', 'auRealCapitalGainsYTD', 'auNonResidentWithholdingYTD', 'auSuperTaxYTD', 'auFrankingCreditYTD',
        // design 132 — s112-160 deferred gains (present only once a stamped lot is sold)
        'auDeferredCapitalGainsYTD', 'auDeferredDiscountableGainsYTD',
+       // design 132 §4 step 4 — gross post-2027 losses and their US-source slice
+       'auGrossCapitalLossesYTD', 'usSourceGrossCapLossesAudYTD',
        // design 73 Gap 2 — per-type non-resident final withholding
        'auNrWithholdingInterestYTD', 'auNrWithholdingUnfrankedDividendYTD',
        'usSourceOrdinaryAudYTD', 'usSourceCapGainsAudYTD', 'usSourceRealCapGainsAudYTD',
@@ -124,6 +126,9 @@ const PER_PERSON_AU_FIELDS = [
   // design 132 §7.5 — the s115-115 base and allowance on a post-2027 dwelling gain
   'auPersonPost2027DiscountBaseYTD',
   'auPersonPost2027DiscountAllowanceYTD',
+  // design 132 §4 step 4 — gross post-2027 losses and their US-source slice
+  'auPersonGrossCapitalLossesYTD',
+  'auPersonUsSourceGrossCapLossesAudYTD',
   'auPersonCapitalGainsYTD',
   'auPersonDiscountableGainsYTD',
   'auPersonDiscountApportionedBaseYTD',

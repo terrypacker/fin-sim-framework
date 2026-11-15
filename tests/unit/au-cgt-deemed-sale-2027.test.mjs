@@ -163,6 +163,62 @@ test('DS-5b: a year with no deferred gain is assessed exactly as before', () => 
   assert.deepEqual(r._applyCapitalLosses(s), Object.getPrototypeOf(AuTaxRates2027.prototype)._applyCapitalLosses.call(r, s));
 });
 
+test('DS-5c: a post-2027 loss beside a post-2027 gain still reaches the deferred gain first', () => {
+  // A 100k deferred gain, a post-2027 gain of 100k (90k indexed) on one disposal and a
+  // 100k post-2027 loss on another. The net buckets read 0 nominal / −10k real, which
+  // hides the loss. Step 1(a) spends it on the deferred gain, so the post-2027 gain
+  // stays whole: 90k real, all of it under the minimum tax.
+  const t = ret({ auCapitalGainsYTD: 0, auRealCapitalGainsYTD: -10_000, auGrossCapitalLossesYTD: 100_000,
+                  auDeferredCapitalGainsYTD: 100_000, auDeferredDiscountableGainsYTD: 100_000 });
+  close(t.discountedCapitalGains, 90_000, 'the deferred gain absorbs the loss; the indexed post-2027 gain remains');
+  const tax = ti => applyBracketsDetailed(ti, new AuTaxRates2027()._brackets).tax;
+  close(t.cgtMinimumTaxTopUp, Math.max(0, 0.30 * 90_000 - tax(90_000)), 'floor on the 90k post-2027 gain');
+});
+
+test('DS-5d: the classifiers book each post-2027 loss gross, per person, with its US-source slice', () => {
+  const fns = new AuTaxModule2027().getReducerFns();
+  const s = {
+    people: { primary: { residency: 'AU' } },
+    auCapitalGainsYTD: 0, auRealCapitalGainsYTD: 0, auDiscountableGainsYTD: 0,
+    auStockAccount: { ownershipType: 'sole', ownerId: 'primary' },
+  };
+  const loss = fns.get('AU_STOCK_WITHDRAWAL_TAX')(s, { type: 'AU_STOCK_WITHDRAWAL_TAX', residency: 'AU',
+    stateKey: 'auStockAccount', gain: -30_000, auGain: -30_000, auIndexedGain: -30_000 });
+  assert.equal(loss.auPersonGrossCapitalLossesYTD.primary, 30_000);
+  assert.equal('auPersonUsSourceGrossCapLossesAudYTD' in loss, false, 'an AU share is AU-source');
+  const gain = fns.get('AU_STOCK_WITHDRAWAL_TAX')(s, { type: 'AU_STOCK_WITHDRAWAL_TAX', residency: 'AU',
+    stateKey: 'auStockAccount', gain: 30_000, auGain: 30_000, auIndexedGain: 25_000 });
+  assert.equal('auPersonGrossCapitalLossesYTD' in gain, false, 'a gain books no loss bucket');
+
+  // A US share sold by an AU resident is foreign-source under §865(g)(2): gross loss, no slice.
+  const us = { people: { primary: { residency: 'AU' } }, usStockAccount: { ownershipType: 'sole', ownerId: 'primary' } };
+  const usLoss = fns.get('STOCK_WITHDRAWAL_TAX')(us, { type: 'STOCK_WITHDRAWAL_TAX', residency: 'AU',
+    currency: 'USD', stateKey: 'usStockAccount', gain: -10_000, auGain: -10_000, auIndexedGain: -10_000 });
+  close(usLoss.auPersonGrossCapitalLossesYTD.primary, -usLoss.auPersonRealCapitalGainsYTD.primary, 'gross loss = the real loss, in AUD');
+  assert.equal('auPersonUsSourceGrossCapLossesAudYTD' in usLoss, false);
+  // A US dwelling is US-source real property: the loss carries its US-source slice.
+  const house = fns.get('US_HOUSE_SALE_TAX')({ people: { primary: { residency: 'AU' } } }, { type: 'US_HOUSE_SALE_TAX',
+    residency: 'AU', ownershipType: 'sole', ownerId: 'primary', gain: -10_000, auGain: -10_000, auIndexedGain: -10_000 });
+  assert.ok(house.auPersonGrossCapitalLossesYTD.primary > 0);
+  close(house.auPersonUsSourceGrossCapLossesAudYTD.primary, house.auPersonGrossCapitalLossesYTD.primary, 'its US-source slice');
+});
+
+test('DS-5e: the FITO "without" pass strips a US-source loss from the gross bucket too', () => {
+  // With a deferred gain and a gross loss in the year, the counterfactual must remove a
+  // US-source loss from BOTH its net and its gross measure. Removing it from the net bucket
+  // only would leave it in the gross bucket, overstating the counterfactual's gains and
+  // undersizing the FITO limit. AU-source: a 40k gain (36k indexed). US-source: a 60k gain
+  // (54k indexed) and a 20k loss. The counterfactual must equal the AU-source year alone.
+  const base = { auOrdinaryIncomeYTD: 80_000, auDeferredCapitalGainsYTD: 50_000, auDeferredDiscountableGainsYTD: 50_000 };
+  const withUs = ret({ ...base, auCapitalGainsYTD: 40_000 + 60_000 - 20_000, auRealCapitalGainsYTD: 36_000 + 54_000 - 20_000,
+    auGrossCapitalLossesYTD: 20_000, usSourceGrossCapLossesAudYTD: 20_000,
+    usSourceCapGainsAudYTD: 40_000, usSourceRealCapGainsAudYTD: 34_000, usTaxPaidOnUsSourceAud: 1e6 });
+  const withoutUs = ret({ ...base, auCapitalGainsYTD: 40_000, auRealCapitalGainsYTD: 36_000 });
+  assert.ok(withUs.fitoLimit > 0, 'the US-source slice is a net gain, so the limit is positive');
+  close(withUs.fitoLimit, (withUs.netLiability + withUs.fito) - withoutUs.netLiability,
+    'limit = tax with the US-source slice − tax on the AU-source year alone');
+});
+
 test('DS-6: a ladder merge of a stamped and an unstamped rung does not hand the unstamped base to the deferral', async () => {
   const { compactLots, LOT_POLICIES } = await import('../../src/finance/holdings/holding-utils.js');
   const rung = (id, over) => ({ id, allocation: ALLOCATION.BOND, rateKey: RATE_KEYS.BOND_US ?? 'BOND',

@@ -73,6 +73,16 @@ apportioning method to implement.
    deferred gain then enters net capital gain with 50% off its discount-eligible part,
    un-indexed. The 30% minimum tax applies to the post-2027 (real) gain only.
 
+   The post-2027 buckets are running nets, so a loss on one disposal would already have
+   cancelled a gain on another before Step 1 sees it, which reverses the Act's order. The
+   classifiers therefore also book each post-2027 loss gross (`auGrossCapitalLossesYTD`,
+   per person, with a US-source slice for the FITO "without" pass). The return puts the
+   post-2027 gains back to gross before spending the losses. A loss's indexed amount equals
+   its nominal one (s960-275), so the one figure restores both measures. Added 15 Nov 2026
+   (review finding). Before then, such a year spent the loss on the post-2027 gain, which
+   under-taxed. The bucket is created on first use, so a year with no post-2027 loss is
+   unchanged.
+
 ### 4.5 Phase 2a: standalone collectibles and company equity
 
 Both are scalar assets: one `value`, one cost base, no lots. The stamp makes the same three
@@ -122,6 +132,12 @@ acquired at the move, so s112-155(1)(b) is not met.
   includes a dwelling's back-cast indexation, which §7.1 shows the Act does not support.
 - **CGT event I1** on leaving Australia (s104-160) is not modelled, so a deferred gain is
   never realised by emigration.
+- **The pre-2027 back-cast for lots and scalar assets** the deemed sale never reached
+  (issue #788). s960-275(1B) gives no factor for pre-2027 expenditure.
+- **New residential dwellings** (s115-102: 50% after 2027, no minimum tax, and excluded
+  from the deemed sale by s112-155(1)(e)) are not modelled (issue #789).
+- **The deferred gain's currency:** a USD asset's deferred gain is converted at the sale
+  date, not fixed in AUD at 30 June 2027 (issue #790).
 
 ## 7. Phase 2b: real property
 

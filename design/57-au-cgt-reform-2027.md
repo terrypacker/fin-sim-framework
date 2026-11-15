@@ -1,8 +1,9 @@
 # 57 — AU CGT reform: indexation + 30% minimum tax (from 1 July 2027)
 
 **Status**: **IN PROGRESS** — Phases 1–4 implemented and green (3272 unit + 864 viz;
-reference scenario runs clean to 2070). Part 2 Item B is superseded for brokerage lots by
-design 132 (the enacted Subdiv 112-E deemed sale). Phase 5 (deferred refinements) is optional. Scope,
+reference scenario runs clean to 2070). Part 2 Item B is superseded by design 132 (the
+enacted Subdiv 112-E deemed sale) for lots, standalone collectibles, company equity and real
+property. Phase 5 (deferred refinements) is optional. Scope,
 fidelity, and the §11 questions are resolved (see **Decisions locked** below).
 
 - **Phase 1 (done)** — `_cgtRelief` hook on `AuTaxRatesBase` + `AuTaxRates2026` (band 16%→15%).
@@ -184,6 +185,7 @@ What landed:
   `AU_TAX`; removed the dead EVT-CGT-RESET tests + coverage-manifest entry. A straddling lot now
   keeps its residency-step-up AU basis and applies the new regime to its **whole** gain (no
   apportionment, no pre-2027 carve-out) — covered by the new STRADDLE unit test.
+  *(Superseded by design 132, 14 Nov 2026: see the note under Item B below.)*
 
 ---
 
@@ -700,12 +702,21 @@ are present — so just feed it those.
 
 #### Item B — Straddling lots apply the new regime to the full gain (remove the deemed reset)
 
-> **Superseded for brokerage lots by design 132 (14 Nov 2026).** The enacted Subdiv 112-E
-> (ITAA 1997 compilation 266, on disk) deems a sale at market value just before 1 July 2027
-> and defers that gain to the real disposal, with the 50% discount and without the 30%
-> minimum tax (s112-155, s112-160, s119-5(2)). Only the post-2027 gain takes this Item's
-> treatment. Collectibles, real property and company equity still follow Item B until design
-> 132 phase 2.
+> **Superseded by design 132 (14 Nov 2026)** for lots, standalone collectibles, company
+> equity and real property (phases 1, 2a and 2b). The enacted Subdiv 112-E (ITAA 1997
+> compilation 266, on disk) deems a sale at market value just before 1 July 2027 and defers
+> that gain to the real disposal, with the 50% discount and without the 30% minimum tax
+> (s112-155, s112-160, s119-5(2)).
+>
+> What survives and what does not:
+> - **The diagnosis stands.** The Phase 4 reset exempted the pre-2027 gain, which was wrong.
+>   Design 132 does not restore the exemption: the pre-2027 gain is taxed at the real sale.
+> - **The remedy is reversed.** Only the post-2027 gain takes the new regime. Indexation
+>   starts at 1 July 2027 (s110-36(1A) Note 4, s960-275(1B)), so the rationale below
+>   ("indexation already relieves the inflationary part of the whole holding period") has
+>   no footing in the Act.
+> - **Still on Item B's treatment:** an asset the deemed sale never examined, mainly a
+>   scenario that starts after 1 July 2027 (design 132 §6, issue #788).
 
 **Decision: holdings crossing 1 Jul 2027 default to the FY2027+ rule on their whole AU gain** — no
 50% discount, cost-base indexation, 30% floor. No apportionment, no pre-2027 carve-out, no

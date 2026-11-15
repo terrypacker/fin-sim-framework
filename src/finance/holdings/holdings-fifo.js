@@ -138,13 +138,14 @@ const TWELVE_MONTHS_MS = YEAR_MS;
  *      1.0 at sim start and knows nothing about the years before it. Compounding the run's
  *      CPI rate over the holding period recovers the missing factor.
  *
- * Branch 2 is new, and it closes an inconsistency rather than adding a concession. Design
- * 57 Part 2 Item B taxes the WHOLE gain of an asset held across 1 July 2027 under the new
- * regime — no Division 115 discount, a 30% floor — on the stated rationale that cost-base
- * indexation already relieves the inflationary part of the whole holding period. Scalar
- * assets have taken the back-cast since design 57 Part 4; LOTS were the one family that
- * did not, purely because the account editor had no way to author a `purchaseDate` on
- * them. They therefore took the reform's penalty without the relief that pays for it.
+ * Branch 2 was added under design 57 Part 2 Item B, which taxed the WHOLE gain of an asset
+ * held across 1 July 2027 under the new regime and relied on indexation over the whole
+ * holding period to relieve it. Design 132 reversed Item B: a lot an AU resident holds on
+ * 30 June 2027 is stamped by the deemed sale and takes branch 1 from the July 2027 level.
+ * Branch 2 now reaches only a pre-2027 lot the stamp never saw, mainly a scenario that
+ * starts after the date. For such a lot the back-cast has no footing in the Act, because
+ * s960-275(1B) has no factor for expenditure before 1 July 2027. It is kept for now as a
+ * proxy; issue #788 records the choice.
  *
  * **Silence still means no relief.** A lot with neither a stamped level nor an acquisition
  * date indexes at factor 1, exactly as before. §6.3 sketches an alternative (bootstrapped

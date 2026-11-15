@@ -133,6 +133,12 @@ export class AuTaxRates2027 extends AuTaxRatesBase {
    * face value on both its nominal and its real measure, as the parent does for the
    * prior-year pool.
    *
+   * The post-2027 buckets are nets: a loss on one disposal has already cancelled a gain
+   * on another inside them. Step 1 needs it first, so the classifiers also book each
+   * post-2027 loss gross (`auGrossCapitalLossesYTD`), and the post-2027 gains are put
+   * back to gross here before the losses are spent. A loss's real amount equals its
+   * nominal one (s960-275), so the same figure restores both measures.
+   *
    * A year with no deferred gain takes the parent's path unchanged.
    */
   _applyCapitalLosses(state) {
@@ -143,10 +149,12 @@ export class AuTaxRates2027 extends AuTaxRatesBase {
     const D   = state.auDeferredCapitalGainsYTD ?? 0;
     const Dd0 = Math.min(Math.max(0, D), Math.max(0, state.auDeferredDiscountableGainsYTD ?? 0));
     const Dn0 = D - Dd0;                                    // signed: a deferred loss lands here
-    const P0  = state.auCapitalGainsYTD ?? 0;               // post-2027 nominal, signed
-    const R0  = 'auRealCapitalGainsYTD' in state ? (state.auRealCapitalGainsYTD ?? 0) : P0;
+    // Post-2027 gains put back to gross: the net buckets plus the losses netted into them.
+    const L   = Math.max(0, state.auGrossCapitalLossesYTD ?? 0);
+    const P0  = (state.auCapitalGainsYTD ?? 0) + L;          // post-2027 nominal gains
+    const R0  = ('auRealCapitalGainsYTD' in state ? (state.auRealCapitalGainsYTD ?? 0) : (state.auCapitalGainsYTD ?? 0)) + L;
 
-    const currentYearLosses = Math.max(0, -Dn0) + Math.max(0, -P0);
+    const currentYearLosses = Math.max(0, -Dn0) + L + Math.max(0, -P0);
     let dn = Math.max(0, Dn0), dd = Dd0, p = Math.max(0, P0), r = Math.max(0, R0);
     // Design 132 §7.5 — the Case A discount base sits inside the post-2027 gain and is
     // reached last: it is a residential gain (Step 1(d) follows (c)), and within it
