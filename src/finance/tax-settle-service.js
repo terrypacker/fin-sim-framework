@@ -47,9 +47,11 @@ const AU_MIGRATED_HOUSEHOLD_FIELDS = [
   'auRealCapitalGainsYTD',
   'auDeferredCapitalGainsYTD',
   'auDeferredDiscountableGainsYTD',
+  'auGrossCapitalLossesYTD',
   'usSourceOrdinaryAudYTD',
   'usSourceCapGainsAudYTD',
   'usSourceRealCapGainsAudYTD',
+  'usSourceGrossCapLossesAudYTD',
 ];
 
 /**
@@ -99,6 +101,7 @@ const AU_PER_PERSON_INCOME_FIELDS = [
   'auPersonDeferredCapitalGainsYTD',
   'auPersonDeferredDiscountableGainsYTD',
   'auPersonPost2027DiscountBaseYTD',
+  'auPersonGrossCapitalLossesYTD',
   'auPersonNonResidentWithholdingYTD',
   'auPersonNrWithholdingInterestYTD',
   'auPersonNrWithholdingUnfrankedDividendYTD',
@@ -325,6 +328,12 @@ export class TaxSettleService {
         ...((state.auPersonDeferredCapitalGainsYTD != null || state.auDeferredCapitalGainsYTD != null) ? {
           auDeferredCapitalGainsYTD:      perPersonShare(state.auPersonDeferredCapitalGainsYTD,      state.auDeferredCapitalGainsYTD),
           auDeferredDiscountableGainsYTD: perPersonShare(state.auPersonDeferredDiscountableGainsYTD, state.auDeferredDiscountableGainsYTD),
+        } : {}),
+        // design 132 §4 step 4 — the year's post-2027 losses, gross, which s102-5 Step 1
+        // spends on the deferred gain first. Present only in a year that made one.
+        ...((state.auPersonGrossCapitalLossesYTD != null || state.auGrossCapitalLossesYTD != null) ? {
+          auGrossCapitalLossesYTD:      perPersonShare(state.auPersonGrossCapitalLossesYTD,      state.auGrossCapitalLossesYTD),
+          usSourceGrossCapLossesAudYTD: perPersonShare(state.auPersonUsSourceGrossCapLossesAudYTD, state.usSourceGrossCapLossesAudYTD),
         } : {}),
         // design 132 §7.5 — the s115-115 discount on a post-2027 dwelling gain (Case A),
         // present only in a year that sold one.

@@ -219,9 +219,13 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
    * @param {{usSource?: boolean}} [opts]  `usSource: false` books the real bucket only —
    *   an AU-domiciled disposal arriving on one of these cross-border action types
    *   (an AU brokerage drawn by the service path, an AU-held gold sleeve) is AU-source
+   *
+   * A loss is also booked gross, with its US-source slice, so the FITO "without" pass
+   * can strip it from the gross bucket too (see `_recordRealGain`).
    */
   _recordUsSourceReal(state, action, canonicalKey, realGainAud, { usSource = true } = {}) {
     const fractions = resolveAttributionFractions(state, action, canonicalKey);
+    const loss = Math.max(0, -realGainAud);
     if (fractions == null) {
       return {
         ...state,
@@ -229,12 +233,16 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
         ...(usSource
           ? { usSourceRealCapGainsAudYTD: (state.usSourceRealCapGainsAudYTD ?? 0) + realGainAud }
           : {}),
+        ...(loss > 0 ? {
+          auGrossCapitalLossesYTD: (state.auGrossCapitalLossesYTD ?? 0) + loss,
+          ...(usSource ? { usSourceGrossCapLossesAudYTD: (state.usSourceGrossCapLossesAudYTD ?? 0) + loss } : {}),
+        } : {}),
       };
     }
-    const spread = (map) => {
+    const spread = (map, amount = realGainAud) => {
       const out = { ...(map ?? {}) };
       for (const { personKey, fraction } of fractions) {
-        out[personKey] = (out[personKey] ?? 0) + realGainAud * fraction;
+        out[personKey] = (out[personKey] ?? 0) + amount * fraction;
       }
       return out;
     };
@@ -244,6 +252,12 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
       ...(usSource
         ? { auPersonUsSourceRealCapGainsAudYTD: spread(state.auPersonUsSourceRealCapGainsAudYTD) }
         : {}),
+      ...(loss > 0 ? {
+        auPersonGrossCapitalLossesYTD: spread(state.auPersonGrossCapitalLossesYTD, loss),
+        ...(usSource
+          ? { auPersonUsSourceGrossCapLossesAudYTD: spread(state.auPersonUsSourceGrossCapLossesAudYTD, loss) }
+          : {}),
+      } : {}),
     };
   }
 
@@ -285,6 +299,12 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
   }
 
   /**
+   * A loss is also booked GROSS into `auGrossCapitalLossesYTD` (design 132 §4 step 4): the
+   * real bucket is a net, and s102-5(1) Step 1 needs the year's losses before they
+   * cancel a post-2027 gain, so they can reach the deferred gain first. A loss's real
+   * amount is its nominal one (s960-275), so one gross figure serves both buckets.
+   * See `AuTaxRates2027._applyCapitalLosses`.
+   *
    * Add a real (post-indexation) capital gain into the real bucket, keyed per-person
    * by ownership when state.people is populated (mirrors the parent's
    * auCapitalGainsYTD handling so the two buckets slice identically). Used by the
@@ -292,13 +312,20 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
    */
   _recordRealGain(next, refState, realGain, asset) {
     const perPerson = refState.people != null && asset != null;
+    const loss = Math.max(0, -realGain);
     if (perPerson) {
       return {
         ...next,
         auPersonRealCapitalGainsYTD: accumulateByOwnership(
           next.auPersonRealCapitalGainsYTD ?? {}, asset, realGain, refState.people),
+        ...(loss > 0 ? { auPersonGrossCapitalLossesYTD: accumulateByOwnership(
+          next.auPersonGrossCapitalLossesYTD ?? {}, asset, loss, refState.people) } : {}),
       };
     }
-    return { ...next, auRealCapitalGainsYTD: (next.auRealCapitalGainsYTD ?? 0) + realGain };
+    return {
+      ...next,
+      auRealCapitalGainsYTD: (next.auRealCapitalGainsYTD ?? 0) + realGain,
+      ...(loss > 0 ? { auGrossCapitalLossesYTD: (next.auGrossCapitalLossesYTD ?? 0) + loss } : {}),
+    };
   }
 }

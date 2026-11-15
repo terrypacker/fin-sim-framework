@@ -926,8 +926,8 @@ function _newSleeve({ allocation, amount, country, role, purchaseMs, holdings = 
     // The AU indexation base (design 57 §6.3): the CPI level at THIS lot's acquisition,
     // which for a lot bought here is today. Leaving it null meant a lot bought during the
     // simulation indexed at factor 1 forever — never CPI-indexed under the post-2027
-    // reform, whose model (design 57 Item B) is "index from acquisition to sale, no
-    // pre-2027 carve-out". If the resident later moves to AU, the s855-45 step-up
+    // reform (s110-36(1A)). A lot bought before 1 July 2027 is restamped to the July
+    // 2027 level by the deemed sale (design 132). If the resident later moves to AU, the s855-45 step-up
     // supersedes this level with the move's, because the step-up IS the AU acquisition
     // (`AccountService.recordResidencyChange`).
     acquisitionPriceLevel: priceLevel,

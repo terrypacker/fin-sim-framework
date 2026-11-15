@@ -251,6 +251,10 @@
   "primary": 311.961428571,
   "spouse": 0
  },
+ "auPersonGrossCapitalLossesYTD": {
+  "primary": 45436.7775,
+  "spouse": 15910.843
+ },
  "auPersonNonResidentWithholdingYTD": {
   "primary": 0,
   "spouse": 0

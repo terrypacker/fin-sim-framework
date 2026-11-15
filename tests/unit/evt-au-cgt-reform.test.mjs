@@ -15,10 +15,9 @@
  *   - the Age Pension / JobSeeker exemption from the 30% CGT minimum tax
  *   - cross-border resident real-bucket routing (§6.5)
  *   - residency step-up indexation base + FIFO indexation (§6.3)
- *   - Part 2: straddling lots apply the new regime to the WHOLE gain (the deemed
- *     1 Jul 2027 reset was removed — a lot held across the date keeps its
- *     residency-step-up AU basis and indexes from acquisition, so its full gain
- *     — incl. pre-2027 appreciation — is assessed, no 50% discount, 30% floor).
+ *   - the classifier contract for a lot the 1 July 2027 deemed sale never stamped
+ *     (design 132 §6). Lots held across the date are covered by
+ *     au-cgt-deemed-sale-2027.test.mjs; design 132 reversed Part 2 Item B.
  *   - standalone Collectible (gold) indexation (Part 2, Item C)
  *
  * Run with: node --test tests/unit/evt-au-cgt-reform.test.mjs
@@ -225,12 +224,9 @@ test('COLLECTIBLE-SALE: a true collectible is not indexed (auIndexedGain === auG
   assert.strictEqual(tax.auIndexedGain, 30_000, 'true collectibles are NOT indexed');
 });
 
-// ─── Item B: straddling lot applies the new regime to the WHOLE gain ─────────
-// The deemed 1 Jul 2027 reset was removed (design 57 Part 2, Item B). A lot held
-// by an AU resident across 1 Jul 2027 keeps its residency-step-up AU basis and
-// acquisition level, so a post-2027 sale realizes its FULL AU gain (incl. pre-2027
-// appreciation) via the indexation path — no 50% discount, 30% floor — rather than
-// exempting the pre-2027 slice as the old deemed reset did.
+// ─── An unstamped lot sold after 1 July 2027 ─────────────────────────────────
+// Formerly design 57 Part 2 Item B's straddle test. Design 132 reversed Item B; see
+// the comment inside the test.
 
 test('UNSTAMPED: a post-2027 sale of a lot with no deemed-sale stamp assesses the FULL indexed gain', () => {
   // Design 132 replaced this test's original claim (design 57 Part 2 Item B: a lot held

@@ -657,6 +657,12 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
             ...('auRealCapitalGainsYTD' in state
               ? { auRealCapitalGainsYTD: (state.auRealCapitalGainsYTD ?? 0) - (state.usSourceRealCapGainsAudYTD ?? 0) }
               : {}),
+            // Design 132 — the gross post-2027 losses FY2027 nets against the deferred
+            // gain first. A US-source loss leaves the net buckets above, so it must leave
+            // the gross figure too, or the counterfactual's gains come out overstated.
+            ...(state.auGrossCapitalLossesYTD != null
+              ? { auGrossCapitalLossesYTD: (state.auGrossCapitalLossesYTD ?? 0) - (state.usSourceGrossCapLossesAudYTD ?? 0) }
+              : {}),
           }).netLiabilityPreFito;
           fitoLimit = Math.max(0, a.netLiabilityPreFito - without);
           fito      = Math.min(foreignTaxAud, fitoLimit);

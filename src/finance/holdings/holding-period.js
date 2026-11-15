@@ -142,16 +142,18 @@ export function singleAssetTermFields({ proceeds, usBasis, auBasis, acquisitionM
  *      is 1.0 at sim start and knows nothing about the years before it. Compounding the
  *      CPI rate over the whole holding period recovers the missing factor.
  *
- *      This matters because design 57 Part 2 Item B taxes the WHOLE gain of an asset
- *      held across 1 July 2027 under the new regime, on the stated rationale that
- *      "cost-base indexation already relieves the inflationary part of the whole
- *      holding period". A dwelling bought in 2016 and sold in 2032 is assessed on its
- *      2016 cost base; refusing to index the pre-run decade would take the reform's
- *      penalty (no Division 115 discount, 30% floor) without the relief that is
- *      supposed to pay for it. The pre-run CPI is not observed — the model has no
- *      history — so the run's own CPI rate stands in for it, the same proxy the design
- *      already accepts for the forward series. Authors who know the real figure can set
- *      `acquisitionPriceLevel` on the asset and take branch 1 instead.
+ *      This was added under design 57 Part 2 Item B, which taxed the WHOLE gain of an
+ *      asset held across 1 July 2027 under the new regime and relied on indexation over
+ *      the whole holding period to relieve it. Design 132 reversed Item B. An asset an
+ *      AU resident holds on 30 June 2027 is now stamped by the deemed sale (lots and
+ *      collectibles/company stakes take branch 1 from the July 2027 level; a dwelling
+ *      carries an `auDeemedSale2027` record), and an examined-but-excluded dwelling is
+ *      not back-cast (design 132 §7.4). The back-cast now reaches only a pre-2027 asset
+ *      nothing examined, mainly a scenario that starts after the date. There it has no
+ *      footing in the Act (s960-275(1B) has no factor for pre-2027 expenditure); it is
+ *      kept as a proxy, and issue #788 records the choice. The pre-run CPI is not
+ *      observed, so the run's own CPI rate stands in for it. Authors who know the real
+ *      figure can set `acquisitionPriceLevel` on the asset and take branch 1 instead.
  *
  * With **neither** — no stamped level and no acquisition date — the basis is returned
  * unindexed. §6.3 sketches an alternative ("lots bootstrapped from the scenario get the
