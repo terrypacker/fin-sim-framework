@@ -13,6 +13,7 @@ import { HandlerEntry }                              from '../../../simulation-f
 import { FieldValueAction, RecordBalanceAction }     from '../../../simulation-framework/actions.js';
 import { debitIra, proRataIraSplit }                 from './ira-rollover-classes.js';
 import { scaleHoldings, lotVintage } from '../../holdings/holding-utils.js';
+import { TaxSettleService }                      from '../../tax-settle-service.js';
 
 /**
  * Roth Conversion — EVT-52
@@ -155,30 +156,61 @@ export class RothConversionHandler extends HandlerEntry {
   }
 }
 
+let _settleService = null;
+function _settle() { return (_settleService ??= new TaxSettleService()); }
+
 /**
- * Room left in the 0% long-term-gain band, in gross-income space: `ltcgCeiling` minus ordinary
- * income YTD, positive net short-term gains (taxed as ordinary) and the long-term gains already
- * realised (net of a short-term loss). Zero when the year's gains already reach the band's top.
+ * The year-to-date income stack the US settle will tax, in gross-income space (before the
+ * standard deduction) — read from the settle's own `computeUsTax`, so a bracket-fill target
+ * is measured against exactly the income the settle puts in the brackets.
+ *
+ *   ordinary     — the settle's AGI: ordinary income YTD, plus net short-term gain after
+ *                  §1222/§1211 netting (and any short-term loss carryforward), less the
+ *                  §1211(b) allowance and the above-the-line deductions (deductible IRA/401(k)
+ *                  contributions, ½ SE tax, §988 loss, §163(d) interest), with the §469
+ *                  passive adjustment applied.
+ *   preferential — the post-netting gain layers stacked on top of it (§1250, 28%, 0/15/20),
+ *                  each of which uses up 0%-band room.
+ *
+ * Counting `usOrdinaryIncomeYTD` alone (issue #768) missed net short-term gain, which the
+ * settle taxes as ordinary: a fill sized to a bracket top spilled into the next bracket by
+ * about the STCG amount.
+ *
+ * @param {object} state
+ * @returns {{ ordinary: number, preferential: number }}
+ */
+export function usBracketFillIncome(state) {
+  const r  = _settle().computeUsTax(state);
+  const cl = r.capitalLoss ?? {};
+  return {
+    ordinary:     r.adjustedGrossIncome ?? 0,
+    preferential: (cl.longTermGain ?? 0) + (cl.collectibleGain ?? 0) + (cl.unrecaptured1250Gain ?? 0),
+  };
+}
+
+/**
+ * Room left in the 0% long-term-gain band, in gross-income space: `ltcgCeiling` minus the
+ * settle's ordinary income (AGI, which includes net short-term gain) and the preferential-rate
+ * gains already realised (after netting). Zero when the year's gains already reach the band's top.
  * @param {object} state
  * @param {number} ltcgCeiling - gross ceiling from usLtcgZeroBandGrossCeiling
+ * @param {{ ordinary: number, preferential: number }} [income] - precomputed usBracketFillIncome(state)
  * @returns {number}
  */
-export function ltcgBandRoom(state, ltcgCeiling) {
-  const shortTerm = state.usShortTermCapitalGainsYTD ?? 0;
-  const ordinary  = (state.usOrdinaryIncomeYTD ?? 0) + Math.max(0, shortTerm);
-  const longTerm  = Math.max(0, (state.usCapitalGainsYTD ?? 0) + Math.min(0, shortTerm));
-  return Math.max(0, ltcgCeiling - ordinary - longTerm);
+export function ltcgBandRoom(state, ltcgCeiling, income = usBracketFillIncome(state)) {
+  return Math.max(0, ltcgCeiling - income.ordinary - income.preferential);
 }
 
 /**
  * Bracket-fill policy handler — fires on ROTH_CONVERSION_POLICY_EVALUATE.
- * Reads live usOrdinaryIncomeYTD to compute remaining bracket room, then
- * converts up to that amount (further capped by the IRA balance).
+ * Measures the remaining bracket room against the income the settle will tax as
+ * ordinary (usBracketFillIncome: AGI, so net short-term gain counts and above-the-line
+ * deductions come off), then converts up to that amount (further capped by the IRA balance).
  * Emits nothing if room or IRA balance is zero.
  */
 export class RothConversionPolicyHandler extends HandlerEntry {
   static type        = 'RothConversionPolicyHandler';
-  static description = 'Bracket-fill policy: converts up to (targetIncome − usOrdinaryIncomeYTD), capped at IRA balance and, when gain-aware, at the room left in the 0% long-term-gain band.';
+  static description = 'Bracket-fill policy: converts up to (targetIncome − the settle ordinary AGI, which counts net short-term gains and nets above-the-line deductions), capped at IRA balance and, when gain-aware, at the room left in the 0% long-term-gain band.';
   static eventType   = 'ROTH_CONVERSION_POLICY_EVALUATE';
 
   constructor() {
@@ -188,13 +220,14 @@ export class RothConversionPolicyHandler extends HandlerEntry {
 
   call({ state, data }) {
     const { targetIncome, iraKey, rothKey, ltcgCeiling } = data;
-    let room = Math.max(0, targetIncome - state.usOrdinaryIncomeYTD);
+    const income = usBracketFillIncome(state);
+    let room = Math.max(0, targetIncome - income.ordinary);
     // Gain-aware fill (rothConversionLtcgAware, Roth study F3): ordinary income stacks under
     // long-term gains, so while the year's gains sit in the 0% band each converted dollar
     // pushes a gain dollar to 15% — a "10%" conversion costs 25%. Convert only the room left
     // above ordinary income + net short-term + long-term gains, measured in the same gross space
     // as the ceiling (same shape as the tax-gain harvest's band room).
-    if (Number.isFinite(ltcgCeiling)) room = Math.min(room, ltcgBandRoom(state, ltcgCeiling));
+    if (Number.isFinite(ltcgCeiling)) room = Math.min(room, ltcgBandRoom(state, ltcgCeiling, income));
     const iraBalance = state[iraKey]?.balance ?? 0;
     const amount     = Math.min(room, iraBalance);
     if (amount <= 0) return [];

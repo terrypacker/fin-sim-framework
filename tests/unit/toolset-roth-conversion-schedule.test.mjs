@@ -193,3 +193,37 @@ test('default window end is the year before the primary\'s RMD age (75 if born 1
   assert.equal(lastYear('1965-01-01'), 1965 + 74, 'born 1965 → RMDs at 75 → last conversion year at 74');
   assert.equal(lastYear('1958-06-01'), 1958 + 72, 'born 1958 → RMDs at 73 → last conversion year at 72');
 });
+
+// ── Issue #768: the fill counts the income the settle taxes as ordinary ──────────
+
+test('#768: a year with net short-term gain fills to the bracket top exactly, per the settle', async () => {
+  const { TaxSettleService } = await import('../../src/finance/tax-settle-service.js');
+  const svc = new TaxSettleService();
+  const h   = new RothConversionPolicyHandler();
+  const target = usBracketGrossIncomeCeiling(0.10, 2026, 0.03);   // gross top of 10%
+  const base = { usOrdinaryIncomeYTD: 20_000, usShortTermCapitalGainsYTD: 4_000, usCapitalGainsYTD: 6_000,
+                 // above-the-line: a deductible IRA contribution
+                 usNegativeIncomeYTD: 1_500,
+                 currentPeriods: { US: { startMs: Date.UTC(2026, 0, 1) } },   // the target's tax year
+                 iraAccount: { balance: 500_000 }, people: {} };
+  const amount = h.call({ state: base, data: { targetIncome: target, iraKey: 'iraAccount', rothKey: 'rothAccount' } })
+    .find(a => a.type === 'ROTH_CONVERSION_APPLY').amount;
+  assert.equal(amount, target - 20_000 - 4_000 + 1_500, 'room nets STCG in and the deduction out');
+
+  // The settle on the post-conversion year lands taxable ordinary income on the 10% top: marginal 10%,
+  // and one more dollar would be taxed at 12%.
+  const after = svc.computeUsTax({ ...base, usOrdinaryIncomeYTD: base.usOrdinaryIncomeYTD + amount });
+  const top10 = target - after.inputs.standardDeduction;
+  assert.ok(Math.abs(after.taxableIncome - top10) < 1e-6, `taxable ${after.taxableIncome} vs 10% top ${top10}`);
+  const oneMore = svc.computeUsTax({ ...base, usOrdinaryIncomeYTD: base.usOrdinaryIncomeYTD + amount + 1 });
+  assert.ok(Math.abs((oneMore.regularTax - after.regularTax) - 0.12) < 1e-6, 'the next dollar is the 12% bracket');
+});
+
+test('#768: a short-term loss carryforward nets the STCG before it counts as ordinary', () => {
+  const h = new RothConversionPolicyHandler();
+  const state = { usOrdinaryIncomeYTD: 20_000, usShortTermCapitalGainsYTD: 4_000,
+                  usShortTermCapitalLossCarryforward: 4_000, iraAccount: { balance: 500_000 }, people: {} };
+  const amount = h.call({ state, data: { targetIncome: 60_000, iraKey: 'iraAccount', rothKey: 'rothAccount' } })
+    .find(a => a.type === 'ROTH_CONVERSION_APPLY').amount;
+  assert.equal(amount, 40_000);
+});

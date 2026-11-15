@@ -20,6 +20,7 @@ import { retargetEarlyWithdrawalEvents, earlyWithdrawalDate } from '../../scenar
 import { set }                     from '../monte-carlo/mc-param-paths.js';
 import { DateUtils }               from '../../simulation-framework/date-utils.js';
 import { usRatesForYear, usBracketGrossIncomeCeiling } from '../tax-settle-service.js';
+import { usBracketFillIncome }     from '../account-rules/us/roth-conversion-classes.js';
 import {
   DRAWDOWN_WEIGHT_ROLES, DRAWDOWN_WEIGHT_MODE,
   DRAWDOWN_ROLE_LABELS, drawdownWeightKey,
@@ -2172,8 +2173,8 @@ function _rowRealTarget(row, infl, bracketSpread) {
  * The largest REAL (base-year) income-fill target that could actually convert a
  * dollar at `year`, given the snapshot's convertible IRA balances. The policy
  * handler (RothConversionPolicyHandler) converts
- * `min(nominalTarget − usOrdinaryIncomeYTD, iraBalance)` per conversion owner, so
- * any target beyond `(ordIncomeYTD + Σ convertible IRA)` is inert. We deflate
+ * `min(nominalTarget − ordinary AGI, iraBalance)` per conversion owner (usBracketFillIncome),
+ * so any target beyond `(ordinary AGI + Σ convertible IRA)` is inert. We deflate
  * that nominal headroom back to real base-year USD — the lever's units — by the
  * same inflation path the toolset compounds with. The conversion draws the IRA
  * only (a 401(k) must be rolled to the IRA first), so only IRA balances count.
@@ -2185,7 +2186,7 @@ function _convertibleRealCap(state, baseParams, year) {
   let ira = 0;
   if (owner === 'primary' || owner === 'both') ira += state.iraAccount?.balance       ?? 0;
   if (owner === 'spouse'  || owner === 'both') ira += state.spouseIraAccount?.balance ?? 0;
-  const ordYtd = state.usOrdinaryIncomeYTD ?? 0;
+  const ordYtd = usBracketFillIncome(state).ordinary;
   const infl   = baseParams?.inflationRate ?? 0.03;
   const factor = Math.pow(1 + infl, year - BRACKET_BASE_YEAR);
   return (ordYtd + ira) / (factor > 0 ? factor : 1);
