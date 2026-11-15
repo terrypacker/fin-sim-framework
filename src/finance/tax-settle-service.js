@@ -599,6 +599,41 @@ export class TaxSettleService {
     if (!Number.isFinite(top)) return Infinity;
     return (top + base._stdDeduction_mfj) * factor;
   }
+
+  /**
+   * {@link usBracketGrossIncomeCeiling} as the settle will apply it to the tax year in
+   * `state`: the same module, the same realised bracket index (`_inflationWrap`) and the
+   * filing status the settle uses (`state.usFilingSingle`). The flat-rate form projects the
+   * index at compile time and drifts from the settle once the CPI path departs from the flat
+   * rate (issue #769); a handler firing inside the year reads this instead. The index only
+   * advances at the period roll, so on 31 Dec it is the very factor the settle reads.
+   *
+   * @param {object} state Simulation state snapshot
+   * @param {number} rate  Target marginal rate, e.g. 0.22
+   * @returns {number} Infinity for the top bracket or a rate not on the table
+   */
+  usBracketGrossCeilingForState(state, rate) {
+    const m        = this._getModule('US', state);
+    const single   = !!state?.usFilingSingle;
+    const brackets = single ? m._brackets_single : m._brackets_mfj;
+    const idx = brackets.findIndex(([, r]) => r === rate);
+    if (idx < 0 || idx + 1 >= brackets.length) return Infinity;
+    return brackets[idx + 1][0] + (single ? m._stdDeduction_single : m._stdDeduction_mfj);
+  }
+
+  /**
+   * {@link usLtcgZeroBandGrossCeiling} as the settle will apply it to the tax year in
+   * `state` — see {@link usBracketGrossCeilingForState}.
+   * @param {object} state Simulation state snapshot
+   * @returns {number}
+   */
+  usLtcgZeroBandGrossCeilingForState(state) {
+    const m      = this._getModule('US', state);
+    const single = !!state?.usFilingSingle;
+    const top    = (single ? m._ltcg_single : m._ltcg_mfj)?.[1]?.[0];
+    if (!Number.isFinite(top)) return Infinity;
+    return top + (single ? m._stdDeduction_single : m._stdDeduction_mfj);
+  }
 }
 
 /** Shared read-only instance for the module-level bracket helpers below. */

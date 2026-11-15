@@ -81,6 +81,7 @@ export function retargetRothConversionEvents(queue, schedule, { inflationRate = 
     const year = d.getUTCFullYear();
     if (!byYear.has(year)) continue;                    // year not controlled → keep window
     item.data.targetIncome = byYear.get(year) * Math.pow(1 + inflationRate, year - BRACKET_BASE_YEAR);
+    delete item.data.bracketRate;                       // a real income target, not a bracket top
     hits++;
   }
   return hits;
@@ -227,7 +228,11 @@ export const US_ROTH_CONVERSION = {
     // schedule path. A non-finite/negative target is skipped (no conversion);
     // the policy handler also no-ops when there is no bracket room left.
     const events = [];
-    const emitYear = (year, targetIncome) => {
+    //
+    // `bracketRate` (issue #769): when the target IS a bracket top, the event names the rate and
+    // the handler reads that top from the settle's realised-CPI table on the day it fires.
+    // `targetIncome` stays as the flat-rate compile-time estimate (cockpit caps, labels).
+    const emitYear = (year, targetIncome, bracketRate = null) => {
       if (!(Number.isFinite(targetIncome) && targetIncome >= 0)) return;
       for (const person of ownersToConvert) {
         const iraAcct  = accounts.find(a => a.role === ACCOUNT_ROLES.IRA  && a.ownerId === person.id);
@@ -245,7 +250,10 @@ export const US_ROTH_CONVERSION = {
           // the 31 Dec accretion lost the tie and the "10%" fill landed in the 12% bracket.
           order:   ROTH_CONVERSION_ORDER,
           data:    { targetIncome, iraKey: iraAcct.stateKey, rothKey: rothAcct.stateKey,
-                     ...(p.rothConversionLtcgAware ? { ltcgCeiling: usLtcgZeroBandGrossCeiling(year, inflationRate, bracketSpread) } : {}) },
+                     ...(Number.isFinite(bracketRate) ? { bracketRate } : {}),
+                     ...(p.rothConversionLtcgAware
+                       ? { ltcgCeiling: usLtcgZeroBandGrossCeiling(year, inflationRate, bracketSpread), ltcgZeroBand: true }
+                       : {}) },
           enabled: true,
           color:   '#7E57C2',
         }));
@@ -266,11 +274,13 @@ export const US_ROTH_CONVERSION = {
       : Number.isFinite(entry.bracketCeiling)
         ? usBracketGrossIncomeCeiling(entry.bracketCeiling, entry.year, inflationRate, bracketSpread)
         : NaN);
+    const rowBracket = (entry) => (!Number.isFinite(entry.incomeTarget) && Number.isFinite(entry.bracketCeiling)
+      ? entry.bracketCeiling : null);
     const overlay = p.rothConversionScheduleMode === 'OVERLAY';
     if (schedule.length > 0 && !overlay) {
       for (const entry of schedule) {
         if (!entry || !Number.isFinite(entry.year)) continue;
-        emitYear(entry.year, rowTarget(entry));
+        emitYear(entry.year, rowTarget(entry), rowBracket(entry));
       }
       return events;
     }
@@ -303,9 +313,9 @@ export const US_ROTH_CONVERSION = {
     for (let year = convStartYear; year <= convEndYear; year++) years.add(year);
     for (const y of rows.keys()) years.add(y);
     for (const year of [...years].sort((a, b) => a - b)) {
-      emitYear(year, rows.has(year)
-        ? rowTarget(rows.get(year))
-        : usBracketGrossIncomeCeiling(p.rothConversionMaxBracket, year, inflationRate, bracketSpread));
+      if (rows.has(year)) emitYear(year, rowTarget(rows.get(year)), rowBracket(rows.get(year)));
+      else emitYear(year, usBracketGrossIncomeCeiling(p.rothConversionMaxBracket, year, inflationRate, bracketSpread),
+                    p.rothConversionMaxBracket);
     }
     return events;
   },

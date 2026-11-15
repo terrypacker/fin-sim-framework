@@ -227,3 +227,50 @@ test('#768: a short-term loss carryforward nets the STCG before it counts as ord
     .find(a => a.type === 'ROTH_CONVERSION_APPLY').amount;
   assert.equal(amount, 40_000);
 });
+
+// ── Issue #769: the ceilings ride the settle's realised bracket index, not the flat rate ──
+
+test('#769: under a CPI path off the flat rate, a 10% fill lands on the settle\'s 10% top', async () => {
+  const { TaxSettleService } = await import('../../src/finance/tax-settle-service.js');
+  const svc = new TaxSettleService();
+  const win = { ...baseParams, rothConversionStartYear: 2031, rothConversionEndYear: 2031,
+                rothConversionMaxBracket: 0.10, rothConversionLtcgAware: true };
+  const [ev] = US_ROTH_CONVERSION.schedules(makeContext(win));
+  assert.equal(ev.data.bracketRate, 0.10);
+  assert.equal(ev.data.ltcgZeroBand, true);
+
+  // Realised bracket index well above the flat 3%/yr the compile-time estimate projected.
+  const state = {
+    usOrdinaryIncomeYTD: 20_000, usCapitalGainsYTD: 5_000,
+    currentPeriods: { US: { startMs: Date.UTC(2031, 0, 1) } },
+    bracketIndexAccumulator: { US: 1.30, US_FICA: 1.30, US_FEIE: 1.30 },
+    bracketIndexAccumulatorByYear: { US: { 2026: 1.0, 2027: 1.04 } },
+    iraAccount: { balance: 500_000 }, people: {},
+  };
+  const h = new RothConversionPolicyHandler();
+  const amount = h.call({ state, data: ev.data }).find(a => a.type === 'ROTH_CONVERSION_APPLY').amount;
+
+  const after   = svc.computeUsTax({ ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount });
+  const wrapped = svc._getModule('US', state);
+  const top10   = wrapped._brackets_mfj.find(([, r]) => r === 0.12)[0];
+  assert.ok(Math.abs(after.taxableIncome - top10) < 1e-6, `taxable ${after.taxableIncome} vs settle 10% top ${top10}`);
+  const oneMore = svc.computeUsTax({ ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount + 1 });
+  assert.ok(Math.abs((oneMore.regularTax - after.regularTax) - 0.12) < 1e-6, 'the next dollar is 12%');
+  // …and the flat-rate estimate would have under-filled.
+  assert.ok(ev.data.targetIncome - 20_000 < amount - 1_000, 'compile-time estimate is well short of the live top');
+
+  // The band cap reads the live 0% band too.
+  const band = wrapped._ltcg_mfj[1][0] + wrapped._stdDeduction_mfj;
+  const capped = h.call({ state: { ...state, usCapitalGainsYTD: band - 20_000 - 1_000 }, data: ev.data })
+    .find(a => a.type === 'ROTH_CONVERSION_APPLY').amount;
+  assert.ok(Math.abs(capped - 1_000) < 1e-6, `band room ${capped}`);
+});
+
+test('#769: a re-targeted real income target drops the bracket marker', async () => {
+  const { retargetRothConversionEvents } = await import('../../src/scenarios/toolsets/us-roth-conversion-toolset.js');
+  const win = { ...baseParams, rothConversionStartYear: 2031, rothConversionEndYear: 2031, rothConversionMaxBracket: 0.10 };
+  const queue = US_ROTH_CONVERSION.schedules(makeContext(win)).map(e => ({ type: e.type, date: e.date, data: { ...e.data } }));
+  assert.equal(retargetRothConversionEvents(queue, [{ year: 2031, incomeTarget: 70_000 }]), 1);
+  assert.equal(queue[0].data.bracketRate, undefined);
+  assert.ok(Math.abs(queue[0].data.targetIncome - 70_000 * Math.pow(1.03, 2031 - BRACKET_BASE_YEAR)) < 1e-6);
+});

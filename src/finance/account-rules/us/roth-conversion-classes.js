@@ -202,6 +202,31 @@ export function ltcgBandRoom(state, ltcgCeiling, income = usBracketFillIncome(st
 }
 
 /**
+ * The nominal ceilings a policy event fills to, resolved against `state` (issue #769).
+ *
+ * An event whose target IS a bracket top carries `bracketRate`; one that is gain-aware carries
+ * `ltcgZeroBand: true`. Both are read here from the settle's own inflation-wrapped table for the
+ * year in `state`, so the fill lands on the edge the settle applies even when the realised CPI
+ * path (a regime, an MC path) has left the flat `inflationRate` the compile-time `targetIncome`
+ * / `ltcgCeiling` were projected on. Those two stay on the event as the compile-time estimate
+ * and are the fallback for an event without the markers (a re-targeted real income target, an
+ * older saved queue).
+ *
+ * @param {object} state
+ * @param {object} data - the ROTH_CONVERSION_POLICY_EVALUATE payload
+ * @returns {{ targetIncome: number, ltcgCeiling: number|undefined }}
+ */
+export function resolveFillCeilings(state, data) {
+  const targetIncome = Number.isFinite(data.bracketRate)
+    ? _settle().usBracketGrossCeilingForState(state, data.bracketRate)
+    : data.targetIncome;
+  const ltcgCeiling = data.ltcgZeroBand
+    ? _settle().usLtcgZeroBandGrossCeilingForState(state)
+    : data.ltcgCeiling;
+  return { targetIncome, ltcgCeiling };
+}
+
+/**
  * Bracket-fill policy handler — fires on ROTH_CONVERSION_POLICY_EVALUATE.
  * Measures the remaining bracket room against the income the settle will tax as
  * ordinary (usBracketFillIncome: AGI, so net short-term gain counts and above-the-line
@@ -219,7 +244,8 @@ export class RothConversionPolicyHandler extends HandlerEntry {
   }
 
   call({ state, data }) {
-    const { targetIncome, iraKey, rothKey, ltcgCeiling } = data;
+    const { iraKey, rothKey } = data;
+    const { targetIncome, ltcgCeiling } = resolveFillCeilings(state, data);
     const income = usBracketFillIncome(state);
     let room = Math.max(0, targetIncome - income.ordinary);
     // Gain-aware fill (rothConversionLtcgAware, Roth study F3): ordinary income stacks under

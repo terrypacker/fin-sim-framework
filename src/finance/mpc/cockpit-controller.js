@@ -2148,11 +2148,13 @@ function _liveConversionRows(snapshot, asOf, sched, baseParams, infl) {
     const y = d.getUTCFullYear();
     if (d.getTime() <= asOfMs || named.has(y) || byYear.has(y)) continue;
     const t = e.data?.targetIncome;
-    if (Number.isFinite(t)) byYear.set(y, t);
+    if (Number.isFinite(t)) byYear.set(y, { nominal: t, bracketRate: e.data?.bracketRate });
   }
   const bracket = baseParams?.rothConversionMaxBracket;
   const rows = [];
-  for (const [y, nominal] of byYear) {
+  for (const [y, { nominal, bracketRate }] of byYear) {
+    // A bracket-top event (issue #769) says so; keep it a bracket row so it stays live-indexed.
+    if (Number.isFinite(bracketRate)) { rows.push({ year: y, bracketCeiling: bracketRate }); continue; }
     const windowNominal = Number.isFinite(bracket) ? usBracketGrossIncomeCeiling(bracket, y, infl, baseParams?.usFederalBracketIndexSpread) : NaN;
     rows.push(nominal === windowNominal
       ? { year: y, bracketCeiling: bracket }
