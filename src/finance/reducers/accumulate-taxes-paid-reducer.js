@@ -24,9 +24,19 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
  * USD (same convention as computeNetWorth: USD = audAmount / rate, rate =
  * effectiveExchangeRates['USD_AUD']) before accumulating. One coherent USD
  * lifetime-tax figure regardless of cross-border residency.
+ *
+ * **Net of refunds, so it can fall (#774).** AU franking credits are refundable
+ * (s67-25), both to a member (design 90 §8) and to the super fund (s207-20, design 90
+ * §8.4). A settle whose `tax` or `fundTax` is negative is a refund the household really
+ * receives as cash, and it is subtracted here at that settle's rate, exactly as a
+ * payment is added. It is not floored. Flooring would let MIN_LIFETIME_TAXES ignore the
+ * cash a franked-dividend portfolio gets back. The usual case is a fund in pension phase
+ * (0% earnings tax), which turns every franking credit into a refund. Each settle is
+ * converted once, at its own rate, and never restated later, so FX never lowers the
+ * figure.
  */
 export class AccumulateTaxesPaidReducer extends Reducer {
-  static description = 'Accumulates cumulativeTaxesPaid (USD-normalized) from US/AU/state tax-settle actions.';
+  static description = 'Accumulates cumulativeTaxesPaid (USD-normalized) from US/AU/state tax-settle actions, net of refunds: a negative settle (refundable franking credits, incl. a pension-phase super fund) lowers it.';
   static type        = 'AccumulateTaxesPaidReducer';
   static actionType  = null;
 

@@ -41,5 +41,14 @@ through the real tax engine for an accurate figure at a real cost in time. Use
 configured while searching and liquidation to check the winner; if they disagree
 about the ranking, the ranking was not robust.
 
+**Lifetime taxes are net of refunds.** The minimise-lifetime-taxes objective scores
+`cumulativeTaxesPaid`: every US, US-state and Australian settlement in US dollars, plus
+the tax the super fund withholds. Australian franking credits are refundable, so a year
+can settle negative, and the running total then *falls* by that refund. The common case
+is a super fund in pension phase, where the fund pays no earnings tax and gets every
+franking credit back as cash. A dip late in a run is that refund, not an error. FX
+never causes one, because each settlement is converted once, at its own rate, and never
+restated.
+
 The assumed gain fraction is a fallback for when per-lot basis is unavailable, so the
 metric degrades to an estimate rather than pretending there is no gain.

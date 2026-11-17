@@ -2350,7 +2350,7 @@ what the in-app panel keys on.
 | [Optimize](panels/opt-config.md) | panel | 248 | 1 panel |
 | [OPT Results](panels/opt-results.md) | panel | 186 | 1 panel |
 | [OPT Runs](panels/opt-runs.md) | panel | 139 | 1 panel |
-| [Objectives and After-Tax Value](concepts/optimizer-objectives.md) | concept | 258 | 3 panels · 7 params · design 40 |
+| [Objectives and After-Tax Value](concepts/optimizer-objectives.md) | concept | 359 | 3 panels · 7 params · design 40 |
 | [Parameters](panels/parameters.md) | panel | 188 | 1 panel · design 98 |
 | [Paycheque](panels/paycheque.md) | panel | 197 | 1 panel · design 95, 107 |
 | [Performance](panels/perf.md) | panel | 201 | 1 panel · design 78 |

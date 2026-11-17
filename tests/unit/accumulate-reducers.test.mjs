@@ -47,6 +47,21 @@ describe('AccumulateTaxesPaidReducer', () => {
     const out = r.reduce({ cumulativeTaxesPaid: 42 }, { type: 'US_TAX_SETTLE_APPLY', tax: 0 });
     close(out.cumulativeTaxesPaid, 42);
   });
+
+  // #774 — the figure is NET of refunds. A pension-phase fund's refundable franking
+  // credits arrive as a negative fundTax; that is cash back, and it lowers the total by
+  // exactly the refund (at the settle's own rate), never more and never floored away.
+  test('a refund year lowers it by exactly the refund (fund franking refund)', () => {
+    const state = { cumulativeTaxesPaid: 10000, effectiveExchangeRates: { USD_AUD: 2 } };
+    const out = r.reduce(state, { type: 'AU_TAX_SETTLE_APPLY', tax: 0, fundTax: -3000 });
+    close(out.cumulativeTaxesPaid, 8500); // −3000 AUD / 2 = −1500 USD
+  });
+
+  test('a member refund nets against fund tax in the same settle', () => {
+    const state = { cumulativeTaxesPaid: 10000, effectiveExchangeRates: { USD_AUD: 2 } };
+    const out = r.reduce(state, { type: 'AU_TAX_SETTLE_APPLY', tax: -1000, fundTax: 400 });
+    close(out.cumulativeTaxesPaid, 9700); // (−1000 + 400) / 2
+  });
 });
 
 // ─── AccumulateConsumptionReducer ─────────────────────────────────────────────
