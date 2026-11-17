@@ -231,8 +231,12 @@ for (const [order, key] of armKeys.entries()) {
   if (planPaths && !shock && hasRandomArrival(shocks)) {
     console.log(`** ${key}: a random-arrival shock on top of stochastic paths double-counts the downside`);
   }
-  const { rows, mixSeries, spendingRuns, pathShape, provenance, sequenceRisk, ms } =
+  const { rows, mixSeries, spendingRuns, pathShape, provenance, sequenceRisk, summary, ms } =
     await runArm({ cfg, n, mcConfig, shocks, mix, spending });
+  // A path that THREW is excluded from `rows` by the runner (#792). `n` stays the paths
+  // ASKED for — mc-report pairs arms on it — so the dropped seeds travel beside it, or a
+  // report reads 199 rows as a 200-path arm and cannot tell a path went missing.
+  const erroredRuns = (summary?.erroredRuns ?? []).map(e => ({ seed: e.seed, message: e.message }));
 
   // The arm's risk model AS RUN. Report consumers read `paths`/`vol`/`drift`, so stamping
   // the truth here fixes every one of them, old arm files included (they keep their flag).
@@ -263,17 +267,22 @@ for (const [order, key] of armKeys.entries()) {
   writeFileSync(join(outDir, `${key}.json`), serializeArm({
     arm: key, order, n, source: base.source, synthetic: base.synthetic,
     samplerCadence: MC_SAMPLER_CADENCE,
-    riskModel: armRisk, levers, recentred, provenance, pathShape, rows,
+    riskModel: armRisk, levers, recentred, provenance, pathShape, erroredRuns, rows,
   }, mixSeries, spendingRuns));
 
   const extras = pathShape?.medianHouseCagr != null
     ? `  houseCAGR=${pct(pathShape.medianHouseCagr)} repair p50=$${Math.round((pathShape.medianRepairSpend ?? 0) / 1000)}k`
     : '';
-  console.log(`${key.padEnd(24)} fail ${String(fails).padStart(4)}/${n} `
-    + `(${pct(fails / n).padStart(6)})${extras}`
+  // Rated over the rows that RAN: an errored path is neither a success nor a failure.
+  const ran = rows.length;
+  console.log(`${key.padEnd(24)} fail ${String(fails).padStart(4)}/${ran} `
+    + `(${pct(ran ? fails / ran : 0).padStart(6)})`
+    + (erroredRuns.length ? `  [n=${ran} (${erroredRuns.length} errored)]` : '')
+    + `${extras}`
     + `  ${armRisk.paths ? 'paths' : 'CONSTANT return'}  ${(ms / 1000).toFixed(0)}s`
     + (recentred.length ? `  [!! ${recentred.length} centers off-scenario]` : ''));
   for (const line of recentred) console.log(`    !! ${line}`);
+  for (const e of erroredRuns) console.log(`    !! seed ${e.seed} errored and is excluded: ${e.message}`);
 }
 
 console.log(`\nraw rows → ${outDir}/`);

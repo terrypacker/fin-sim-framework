@@ -181,6 +181,9 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       // via BOTH `agi` and `unrelatedDeductions` is what keeps the Form 1116
       // identity exact; that is the same pair usNegativeIncomeYTD uses.
       usSection988LossYTD    = 0,
+      // #792 — the year's signed federal bond interest (coupons + accretion), a subset
+      // of usOrdinaryIncomeYTD. Absent on every state with no bond income.
+      usBondInterestYTD      = 0,
     } = state;
 
     // Step 0a: §469 passive activity loss limitation (design 86 G5/G5b).
@@ -485,9 +488,35 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // unrelated deductions below. Both are required to keep the Form 1116 identity
     // `totalTaxable = grossIncomeAllSources − unrelatedDeductions − FEIE` exact — the same
     // pairing usNegativeIncomeYTD and the §988 loss already use.
-    const totalGrossIncome      = usOrdinaryIncomeYTD + capLoss.shortTermGain + cg + collectibles + unrecap1250;
+    //
+    // #792 — a TIPS deflation adjustment larger than the year's bond interest. Treas.
+    // Reg. §1.1275-7(f)(1)(i): a deflation adjustment "reduces the amount of interest
+    // otherwise includible in income … with respect to the debt instrument", and "the
+    // excess is treated as an ordinary loss". So the part that offsets bond interest
+    // nets inside gross income, as the classifier already books it, but the excess is
+    // a deduction, and gross income cannot go below zero on a loss. The classifier
+    // nets the whole adjustment into `usOrdinaryIncomeYTD`, so in a deflation year
+    // gross income from all sources fell below the baskets. The bond is US-source and
+    // in no basket for a US resident, so nothing reduced the baskets to match. Seed 47
+    // of a dot-com MC booked −14,047 of bond interest against 8,197 of AU passive
+    // income and threw. Adding the excess back here and taking it in
+    // `unrelatedDeductions` keeps the identity exact, the same pair the §988 loss uses.
+    // AGI is unaffected: the loss already sits inside `usOrdinaryIncomeYTD`.
+    //
+    // Accepted approximations, all inside a loss nobody's tax changes on: the netting is
+    // household-wide (the regulation nets per instrument, the model has no per-instrument
+    // ledger); the loss is not capped at the instrument's prior net interest inclusions,
+    // and no excess is carried forward (the third and fourth sentences of (f)(1)(i));
+    // and it joins the UNRELATED pool, so a slice is apportioned to the foreign
+    // baskets. Under §1.861-8 it relates to US-source interest, so all of it would go
+    // to US-source income. That last one costs slightly less credit, never more, which
+    // is the same direction as the §988 and §163(d) entries below.
+    const bondDeflationLoss     = Math.max(0, -usBondInterestYTD);
+    const totalGrossIncome      = usOrdinaryIncomeYTD + bondDeflationLoss
+                                  + capLoss.shortTermGain + cg + collectibles + unrecap1250;
     const grossIncomeAllSources = Math.max(0, totalGrossIncome);
     const unrelatedDeductions   = stdDeduction + seDeduction + Math.max(0, usNegativeIncomeYTD)
+                                  + bondDeflationLoss
                                   + Math.max(0, usSection988LossYTD)
                                   // §163(d) investment interest (design 86 G3 error 1).
                                   // Form 1116 would apportion it against the investment
@@ -600,6 +629,10 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       capitalLoss:            capLoss,
       shortTermCapitalGain:   capLoss.shortTermGain,
       capitalLossDeduction:   capLoss.allowance,
+      // #792 — TIPS deflation beyond the year's bond interest (§1.1275-7(f)(1)(i)).
+      // Already inside `adjustedGrossIncome`; reported because it moves Form 1116
+      // line 3e and line 3c, which nothing else here shows.
+      bondDeflationLoss,
       // The two Pub 514 adjustments to foreign source capital gains, in the order the
       // publication runs them: §904(b)(3)(A)'s U.S. capital loss adjustment (design 90
       // §4.5 step 8), then §904(b)(2)(B)'s rate differential (step 9). Reported rather
@@ -682,6 +715,12 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
           : []),
         ...(usSection988LossYTD > 0
           ? [{ label: '§988 Exchange Loss on Foreign Debt', amount: -usSection988LossYTD }]
+          : []),
+        // #792 — zero effect for the same reason as the §988 gain line: the loss is
+        // already netted inside Gross Ordinary Income. It is shown because it is why
+        // that line can be smaller than the year's interest and dividends.
+        ...(bondDeflationLoss > 0
+          ? [{ label: 'TIPS Deflation Loss (Reg. §1.1275-7(f)(1), in gross income)', amount: 0 }]
           : []),
         ...((state.usSection988DisallowedLossYTD ?? 0) > 0
           ? [{ label: '§988 Personal Exchange Loss — DISALLOWED (§165(c))', amount: 0 }]

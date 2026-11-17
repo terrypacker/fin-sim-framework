@@ -2322,6 +2322,7 @@
   "AU": 0,
   "US": 0
  },
+ "usBondInterestYTD": 0,
  "usCapitalGainsYTD": 0,
  "usCollectibleGainsYTD": 0,
  "usFeieElected": false,
@@ -2438,6 +2439,7 @@
    "AU": 0,
    "US": 0
   },
+  "usBondInterestYTD": 0,
   "usCapitalGainsYTD": -0.187096774194,
   "usCollectibleGainsYTD": 0,
   "usInvestmentInterestCarryforward": 0,

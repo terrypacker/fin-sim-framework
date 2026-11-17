@@ -80,7 +80,10 @@ const YTD_FIELDS = {
        // three are per-year: §988 gain and loss are ordinary and current, with no
        // carryforward of their own (a loss that outruns income becomes an NOL, which
        // this model does not have — stated in design 86 §3 "Out of scope").
-       'usSection988GainYTD', 'usSection988LossYTD', 'usSection988DisallowedLossYTD'],
+       'usSection988GainYTD', 'usSection988LossYTD', 'usSection988DisallowedLossYTD',
+       // #792 — the year's signed bond interest. Per-year: the regulation's carryforward
+       // of an unabsorbed deflation adjustment is not modelled (us-tax-rates-base.js).
+       'usBondInterestYTD'],
   AU: ['auOrdinaryIncomeYTD', 'auCapitalGainsYTD', 'auDiscountableGainsYTD',
        // design 83 G7 step 3 — s115-115 apportionment
        'auDiscountApportionedBaseYTD', 'auDiscountAllowanceYTD', 'auRealCapitalGainsYTD', 'auNonResidentWithholdingYTD', 'auSuperTaxYTD', 'auFrankingCreditYTD',

@@ -697,6 +697,7 @@ export class StateSchemaRegistry {
     this.register('usWithheldYTD',                 ParameterValueType.currency('USD'));
     this.register('usSection988GainYTD',           ParameterValueType.currency('USD'));
     this.register('usSection988DisallowedLossYTD', ParameterValueType.currency('USD'));
+    this.register('usBondInterestYTD',             ParameterValueType.currency('USD'));
     this.registerPattern('k401ContributionsYTD.*.*', ParameterValueType.currency('USD'));
     this.registerPattern('auPersonDiscountableGainsYTD.*', ParameterValueType.currency('AUD'));
     // The return held open for a pending wash-sale re-file (tax-file-classes.js) is a

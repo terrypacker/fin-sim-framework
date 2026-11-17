@@ -486,6 +486,18 @@ export class UsTaxModule2026 extends BaseTaxModule {
           ...state,
           usOrdinaryIncomeYTD:       state.usOrdinaryIncomeYTD + fedAmount,
           usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + fedAmount,
+          // #792 — the year's SIGNED bond interest, beside the ordinary total it is
+          // already inside. A TIPS deflation adjustment (BOND_ACCRETION_APPLY, negative)
+          // arrives here too, and Treas. Reg. §1.1275-7(f)(1)(i) gives it two different
+          // lives: it "reduces the amount of interest otherwise includible", and only the
+          // EXCESS over that interest "is treated as an ordinary loss". The settle needs
+          // this figure to tell the two apart — the excess is a deduction, not negative
+          // gross income, and netting it into gross income from all sources broke the §904
+          // partition (see `bondDeflationLoss` in us-tax-rates-base.js). Written only when
+          // non-zero, following the usUnrecaptured1250GainYTD precedent.
+          ...(fedAmount !== 0
+            ? { usBondInterestYTD: (state.usBondInterestYTD ?? 0) + fedAmount }
+            : {}),
         };
         if (isAuResident) {
           const audFull = toAUD(amount, 'USD', state);

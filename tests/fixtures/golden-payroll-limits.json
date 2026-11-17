@@ -1738,6 +1738,7 @@
   "AU": 0,
   "US": 0
  },
+ "usBondInterestYTD": 0,
  "usCapitalGainsYTD": 0,
  "usCollectibleGainsYTD": 0,
  "usFeieElected": false,

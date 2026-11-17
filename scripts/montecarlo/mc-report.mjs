@@ -140,7 +140,8 @@ const thresholds = (opts.thresholds
 if (opts.json) {
   console.log(JSON.stringify({
     arms: Object.fromEntries(keys.map(k => [k, {
-      n: arms[k].n, failureRate: failureRate(arms[k].rows), pathShape: arms[k].pathShape,
+      n: arms[k].n, rows: arms[k].rows.length, erroredRuns: arms[k].erroredRuns ?? [],
+      failureRate: failureRate(arms[k].rows), pathShape: arms[k].pathShape,
       provenance: arms[k].provenance ?? null,
       mixThresholds: arms[k].mixSeries
         ? thresholdProbabilities(arms[k].mixSeries, thresholds)
@@ -171,6 +172,13 @@ for (const k of keys) {
   const p = arms[k].provenance;
   // A lever every path ignored (design 129 §3.4): an arm that differs only by it is a copy.
   for (const w of (p?.inertWarnings ?? [])) console.log(`** ${k}: ${w}`);
+  // #792 — paths that threw and were dropped. `n` is the paths asked for; the rows are
+  // fewer by this many, and every rate below is over the rows that ran.
+  const errored = arms[k].erroredRuns ?? [];
+  if (errored.length) {
+    console.log(`** ${k}: n=${arms[k].rows.length} (${errored.length} errored of ${arms[k].n}; seeds `
+      + `${errored.map(e => e.seed).join(', ')}) — rates are over the rows that ran`);
+  }
   if (!p || p.fromScenario) continue;
   if (p.syntheticCenters?.length) {
     console.log(`** ${k}: sampled around FRAMEWORK DEFAULTS (absent from the scenario): `
