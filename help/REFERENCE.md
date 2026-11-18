@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-239 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 94 tools · 341 state field types · 80 topics · 140 design docs
+239 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 94 tools · 341 state field types · 80 topics · 141 design docs
 
 ---
 
@@ -205,7 +205,7 @@ scenario's own schema), which is where to go to change it.
 - **`equityReturnIdioVol`** — Equity Return Idiosyncratic Volatility · `RateKeyMap` · default — · one of `EQUITY_AU`, `EQUITY_INTL_EX_AU`, `EQUITY_INTL_EX_US`, `EQUITY_US` · via ECONOMIC_REGIMES
   Optional per-market override of each equity market's own (idiosyncratic) return sd, keyed by MARKET rate key. It is what lets one market fall while another rises. Absent keys use the sourced defaults (design 90 §7.4): US 0 (it is the market factor) / intl ex-US 8.5% / intl ex-AU 2.0% / AU 13.0%. Set a market to 0 to make it a pure multiple of the US market. Only used when Stochastic Equity Returns is on.
 - **`equityReturnModel`** — Equity Return Process Model · `Enum` · default `WHITE_NOISE` · one of `NONE`, `WHITE_NOISE`, `RANDOM_WALK`, `MEAN_REVERTING`, `HISTORICAL_BOOTSTRAP` · via ECONOMIC_REGIMES
-  Process for the market factor. White noise (WHITE_NOISE, default) draws an independent shock each year. Annual US returns since 1871 have a lag-1 autocorrelation of +0.01, so this matches history year to year. Historical bootstrap (HISTORICAL_BOOTSTRAP, design 102) replays blocks of consecutive real historical years (US 1871–2023), re-centred on your anchor and rescaled to Equity Return Volatility; the AU market replays its own history for the same year from 1958 (Historical Bootstrap — Replay AU Market History). That keeps history's fat left tail and its mild multi-year pull-back without fitting a parameter to either. Persistent returns (MEAN_REVERTING) applies an Ornstein-Uhlenbeck step to the RETURN, so consecutive years are POSITIVELY correlated at e^(-k): +0.74 at the default k=0.3, against history's +0.01. Long-run outcomes spread about 3.5× wider than white noise, so treat it as a stress test, not a realistic world (design 97 §20.9, design 102 §2). No process makes a crash predict a rebound. Only used when Stochastic Equity Returns is on. Monte Carlo turns that on for every path, and uses its own process setting (Monte Carlo: Equity Return Process, default Historical bootstrap) unless that is set to "Same as single runs".
+  Process for the market factor. White noise (WHITE_NOISE, default) draws an independent shock each year. Annual US returns since 1871 have a lag-1 autocorrelation of +0.01, so this matches history year to year. Historical bootstrap (HISTORICAL_BOOTSTRAP, design 102) replays blocks of consecutive real historical years (US 1871–2023, or 1951–2023 when Inflation Process is Historical, joint with equity), re-centred on your anchor and rescaled to Equity Return Volatility; the AU market replays its own history for the same year from 1958 (Historical Bootstrap — Replay AU Market History). That keeps history's fat left tail and its mild multi-year pull-back without fitting a parameter to either. Persistent returns (MEAN_REVERTING) applies an Ornstein-Uhlenbeck step to the RETURN, so consecutive years are POSITIVELY correlated at e^(-k): +0.74 at the default k=0.3, against history's +0.01. Long-run outcomes spread about 3.5× wider than white noise, so treat it as a stress test, not a realistic world (design 97 §20.9, design 102 §2). No process makes a crash predict a rebound. Only used when Stochastic Equity Returns is on. Monte Carlo turns that on for every path, and uses its own process setting (Monte Carlo: Equity Return Process, default Historical bootstrap) unless that is set to "Same as single runs".
 - **`equityReturnReversionSpeed`** — Equity Return Persistence (OU pull-back speed k) · `Number` · default `0.3` · conditional · via ECONOMIC_REGIMES
   Ornstein-Uhlenbeck pull-back speed k, per year. Consecutive annual returns end up correlated at e^(-k), which is POSITIVE — so a LOWER k is MORE persistent (k=0.15 measures +0.83; k=0.9 measures +0.41), and this is a momentum knob, not a rebound one. Unlike the FX and yield-curve reversion speeds, which run on levels and do mean-revert, this runs on a return. Ignored under WHITE_NOISE. No setting of it makes a down year predict an up year: see design 97 §20.9 for what that rules out. Only used when Stochastic Equity Returns is on with MEAN_REVERTING.
 - **`equityReturnStochastic`** — Stochastic Equity Returns · `Boolean` · default `false` · via ECONOMIC_REGIMES
@@ -245,9 +245,9 @@ scenario's own schema), which is where to go to change it.
 - **`inflationStochastic`** — Stochastic Inflation · `Boolean` · default `false` · via ECONOMIC_REGIMES
   When on (design 103), each country's inflation wanders around its anchor (Inflation Rate / AU Inflation Rate) year by year, with post-war persistence: a high-inflation year tends to be followed by another. Everything priced in today's money follows it: expenses, wages, Social Security, tax brackets, TIPS and house running costs. Off by default, so runs stay byte-identical. Monte Carlo turns it on for every path (Monte Carlo: Stochastic Inflation Path); this switch governs single runs.
 - **`mcEquityReturnModel`** — Monte Carlo: Equity Return Process · `Enum` · default `HISTORICAL_BOOTSTRAP` · one of `SCENARIO`, `NONE`, `WHITE_NOISE`, `RANDOM_WALK`, `MEAN_REVERTING`, `HISTORICAL_BOOTSTRAP` · conditional · via ECONOMIC_REGIMES
-  The equity return process every Monte Carlo path runs. The default, Historical bootstrap, replays blocks of real historical years (US 1871–2023, and AU's own history from 1958) re-centred on your anchor, and matches history better than white noise on autocorrelation, multi-year pull-back and crash skew (design 102 §2). "Same as single runs" uses Equity Return Process Model instead. Only used when Monte Carlo: Stochastic Return Path is on.
+  The equity return process every Monte Carlo path runs. The default, Historical bootstrap, replays blocks of real historical years (US, and AU's own history from 1958) re-centred on your anchor, and matches history better than white noise on autocorrelation, multi-year pull-back and crash skew (design 102 §2). "Same as single runs" uses Equity Return Process Model instead. Under the Monte Carlo default inflation (Automatic, which runs inflation joint with equity) the bootstrap draws only the post-war years 1951–2023, the years the inflation and yield history covers; with Gaussian inflation it draws from 1871–2023 (design 133). The Monte Carlo panel shows which years a run samples. Only used when Monte Carlo: Stochastic Return Path is on.
 - **`mcInflationModel`** — Monte Carlo: Inflation Process · `Enum` · default `AUTO` · one of `AUTO`, `SCENARIO`, `GAUSSIAN`, `HISTORICAL_JOINT` · conditional · via ECONOMIC_REGIMES
-  The inflation process every Monte Carlo path runs. Automatic (default) samples inflation jointly with equity whenever the Monte Carlo equity process is the historical bootstrap, so each path's inflation surprises, equity returns and yield changes come from the same historical years.
+  The inflation process every Monte Carlo path runs. Automatic (default) samples inflation jointly with equity whenever the Monte Carlo equity process is the historical bootstrap, so each path's inflation surprises, equity returns and yield changes come from the same historical years. That also limits the equity bootstrap to the post-war years 1951–2023, the years the inflation and yield history covers (design 133).
 - **`mcInflationPath`** — Monte Carlo: Stochastic Inflation Path · `Boolean` · default `true` · via ECONOMIC_REGIMES
   When on (default), every Monte Carlo path runs the stochastic inflation path on top of its sampled inflation anchor, so each path lives through its own inflation history, including high-inflation decades. Single runs are unaffected. Turn off to hold each path's inflation at its sampled rate.
 - **`mcPrimeRateModel`** — Monte Carlo: Prime Rate Mode · `Enum` · default `AUTO` · one of `AUTO`, `SCENARIO`, `SCHEDULE`, `INFLATION_LINKED` · via ECONOMIC_REGIMES
@@ -1526,6 +1526,7 @@ docblock, not re-authored here. Arguments come from each script's declarative
   design 102 §2
     - `--paths` (number, default `2000`) — simulated paths per model
     - `--seed` (number, default `7`) — RNG seed
+    - `--from` (number) — first historical year of the window to measure (default: the whole series)
 - **`scripts/probes/probe-fito-handoff.mjs`**
   design 83 G5
     - `--to` (string) — stop at this YYYY-MM-DD instead of the scenario's simEnd
@@ -2342,7 +2343,7 @@ what the in-app panel keys on.
 | [Journal Report](panels/journal-report.md) | panel | 193 | 1 panel · design 16 |
 | [Lineage](panels/lineage.md) | panel | 196 | 1 panel · design 30 |
 | [Liquidity Pools](concepts/liquidity-pools.md) | concept | 397 | 1 panel · 7 params · design 97 |
-| [Monte Carlo](panels/mc-config.md) | panel | 239 | 1 panel · design 100 |
+| [Monte Carlo](panels/mc-config.md) | panel | 249 | 1 panel · design 100 |
 | [MC Results](panels/mc-results.md) | panel | 202 | 1 panel · design 100, 89 |
 | [MC Runs](panels/mc-runs.md) | panel | 196 | 1 panel · design 100 |
 | [Mortality and Survivorship](concepts/mortality.md) | concept | 263 | 2 panels · 5 params |
@@ -2373,7 +2374,7 @@ what the in-app panel keys on.
 | [Spending](panels/spending.md) | panel | 209 | 1 panel · design 89 |
 | [The Spending Rule](concepts/spending-rule.md) | concept | 296 | 1 panel · 17 params · design 89 |
 | [State](panels/state-panel.md) | panel | 181 | 1 panel |
-| [Stochastic Return Paths](concepts/stochastic-return-paths.md) | concept | 393 | 2 panels · 19 params · design 74, 90, 102, 121, 129, 131 |
+| [Stochastic Return Paths](concepts/stochastic-return-paths.md) | concept | 397 | 2 panels · 19 params · design 74, 90, 102, 121, 129, 131, 133 |
 | [Superannuation Access](concepts/superannuation.md) | concept | 399 | 1 panel · 4 actions · design 119, 77 |
 | [Tax Harvesting and Asset Location](concepts/tax-harvesting.md) | concept | 235 | 2 panels · 3 params · design 29, 94 |
 | [Timeline](panels/timeline.md) | panel | 203 | 1 panel |
@@ -2382,7 +2383,7 @@ what the in-app panel keys on.
 
 ---
 
-## Design documents (140)
+## Design documents (141)
 
 Tier 3 — the full argument behind each mechanic, in `design/`. The title is each
 file's own H1, read out of it; there is no summary column, because a one-line precis
@@ -2528,6 +2529,7 @@ between 10 and 11.
 | [`130-bonds-panel.md`](../design/130-bonds-panel.md) | 130 — Bonds panel: holdings by bond type, and the maturity ladder |
 | [`131-gold-return-drivers.md`](../design/131-gold-return-drivers.md) | 131 — Gold's return drivers: inflation, real rates and replayed history |
 | [`132-au-cgt-1-july-2027-deemed-sale.md`](../design/132-au-cgt-1-july-2027-deemed-sale.md) | 132 — The 1 July 2027 deemed sale: assets held across the CGT reform |
+| [`133-bootstrap-history-window-and-start-year.md`](../design/133-bootstrap-history-window-and-start-year.md) | 133 — Historical bootstrap: the history window and a pinned start year |
 | [`bus-unification-plan.md`](../design/bus-unification-plan.md) | Bus Unification Plan |
 | [`inconsistencies.md`](../design/inconsistencies.md) | Inconsistencies, Rework Candidates, and Open Questions |
 | [`requirements.md`](../design/requirements.md) | Requirements Tracker |

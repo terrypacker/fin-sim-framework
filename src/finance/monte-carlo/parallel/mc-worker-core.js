@@ -26,6 +26,7 @@ import { get, set }              from '../mc-param-paths.js';
 import { computePathShape }      from '../mc-sampling.js';
 import { runsToRows }            from '../mc-analysis.js';
 import { realRatesOf }           from '../../fx/real-basis.js';
+import { describeBootstrapWindow } from '../../economic-regimes/bootstrap-window.js';
 
 /**
  * The per-iteration Monte Carlo world, in one place, so the SERIAL loop and a WORKER
@@ -119,6 +120,25 @@ export function applyMcPaths(p) {
   p.primeRateModel = mcPrimeModel(p);
 
   return p;
+}
+
+/**
+ * The return processes a Monte Carlo path runs, for display (design 133 phase 1): the equity
+ * process, the inflation process, and, under the historical bootstrap, the years it samples.
+ * Resolved by `applyMcPaths` on a COPY, so it is exactly what each path will run and the
+ * caller's params are untouched.
+ *
+ * @param {object} params  the batch's base params
+ * @returns {{ equityModel: string|null, inflationModel: string|null,
+ *             window: ReturnType<typeof describeBootstrapWindow> }}
+ */
+export function mcReturnPaths(params) {
+  const p = applyMcPaths({ ...(params ?? {}) });
+  return {
+    equityModel:    mcEquityModel(params),
+    inflationModel: mcInflationModel(params),
+    window:         describeBootstrapWindow(p),
+  };
 }
 
 /**

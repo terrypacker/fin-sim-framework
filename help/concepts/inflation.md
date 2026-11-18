@@ -23,7 +23,7 @@ stamps:
   param:inflationGlobalReversionSpeed: 6772d8
   param:inflationGlobalShareJoint: 8ac4a0
   param:mcInflationPath: d1d79d
-  param:mcInflationModel: b804e9
+  param:mcInflationModel: d7a771
   panel:chart: db45f8
   panel:mc-config: ad4956
 ---

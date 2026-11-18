@@ -25,6 +25,38 @@ function _isoDay(v) {
   return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
 }
 
+const EQUITY_MODEL_SHORT = Object.freeze({
+  HISTORICAL_BOOTSTRAP: 'historical bootstrap', WHITE_NOISE: 'white noise',
+  MEAN_REVERTING: 'persistent returns (stress test)', RANDOM_WALK: 'random walk', NONE: 'none',
+});
+const INFLATION_MODEL_SHORT = Object.freeze({
+  HISTORICAL_JOINT: 'historical, joint with equity', GAUSSIAN: 'Gaussian',
+});
+
+/**
+ * The return-paths line (design 133 phase 1): the equity and inflation processes every path
+ * runs, and the historical years the bootstrap samples. The window used to be chosen by a
+ * rule nobody could see (POSTWAR under joint inflation, the Monte Carlo default), so this
+ * names it and says why.
+ *
+ * @param {{ equityModel: string|null, inflationModel: string|null,
+ *           window: { fromYear: number, toYear: number, automatic: boolean, reason: string }|null }|null} info
+ *   `mcReturnPaths(base)`
+ * @returns {string} '' when there is nothing to say
+ */
+export function formatReturnPaths(info) {
+  if (!info) return '';
+  const equity = info.equityModel == null
+    ? 'off (single-run returns)'
+    : (EQUITY_MODEL_SHORT[info.equityModel] ?? info.equityModel);
+  const w = info.window;
+  const years = w ? `, ${w.fromYear}–${w.toYear}${w.automatic ? ` (automatic: ${w.reason})` : ''}` : '';
+  const inflation = info.inflationModel == null
+    ? 'off (single-run inflation)'
+    : (INFLATION_MODEL_SHORT[info.inflationModel] ?? info.inflationModel);
+  return `Equity: ${equity}${years} · Inflation: ${inflation}`;
+}
+
 /**
  * McConfigPanel — left pane of the MC tab.
  *
@@ -60,6 +92,7 @@ export class McConfigPanel extends BaseComponent {
     this._runBtn     = null;
     this._copyBtn    = null;
     this._statusEl   = null;
+    this._pathsEl    = null;
     this._section    = null;
     this.onRun       = null;
     this.onRunGrid   = null;
@@ -85,6 +118,19 @@ export class McConfigPanel extends BaseComponent {
   enableRun() {
     if (this._runBtn) this._runBtn.disabled = false;
     if (this._gridRunBtn) this._gridRunBtn.disabled = false;
+  }
+
+  /**
+   * Show which return processes, and which historical years, every path will run
+   * (design 133 phase 1). The presenter calls it on build and before each run.
+   *
+   * @param {Parameters<typeof formatReturnPaths>[0]} info  `mcReturnPaths(base)`
+   */
+  setReturnPaths(info) {
+    if (!this._pathsEl) return;
+    const text = formatReturnPaths(info);
+    this._pathsEl.textContent = text;
+    this._pathsEl.hidden = !text;
   }
 
   /** Show a transient status message without touching the Run button state. */
@@ -330,6 +376,8 @@ export class McConfigPanel extends BaseComponent {
           <label class="mc-telemetry-opt"><input type="checkbox" class="mc-opt-spending" />
             Record spending <span class="mc-telemetry-cost">~7.5× time</span></label>
         </div>
+        <div class="mc-return-paths" hidden
+          title="The return processes every path runs, and the historical years the equity bootstrap samples (design 133). Set them under Economic Shocks: Monte Carlo: Equity Return Process and Monte Carlo: Inflation Process."></div>
         <button class="btn btn-primary mc-batch-run" style="width:100%">▶ Run Monte Carlo</button>
         <div class="mc-grid-body" hidden></div>
       </div>
@@ -353,6 +401,7 @@ export class McConfigPanel extends BaseComponent {
     this._modeBtns    = [...shell.querySelectorAll('.mc-mode-btn')];
     this._copyBtn  = shell.querySelector('.mc-copy-scenario-btn');
     this._statusEl = shell.querySelector('.mc-status-el');
+    this._pathsEl  = shell.querySelector('.mc-return-paths');
     this._section  = shell.querySelector('.mc-var-section');
 
     this.listen(this._runBtn, 'click', () => {

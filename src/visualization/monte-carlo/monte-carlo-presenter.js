@@ -28,6 +28,7 @@ import { buildGridAxes }           from '../../finance/optimization/intl-retirem
 import { get }                     from '../../finance/monte-carlo/mc-param-paths.js';
 import { formatDuration, formatAxisValue } from './mc-grid-format.js';
 import { gridCellRuns }            from '../../finance/monte-carlo/mc-grid-runner.js';
+import { mcReturnPaths }           from '../../finance/monte-carlo/parallel/mc-worker-core.js';
 
 /**
  * MonteCarloPresenter — wires McConfigPanel callbacks to MonteCarloController
@@ -86,6 +87,7 @@ export class MonteCarloPresenter {
     // each row carrying the provenance of its center.
     this._configPanel.setVariables(this._resolveVariables());
     this._configPanel.setGridAxes(this._resolveGridAxes());
+    this._refreshReturnPaths();
 
     /** Set by WorkbenchApp to handle replay: onReplayRun(run) */
     this.onReplayRun = null;
@@ -208,6 +210,16 @@ export class MonteCarloPresenter {
     return new Map(this._resolveVariables().map(v => [v.paramKey, v.defaultValue]));
   }
 
+  /**
+   * Tell the config panel which return processes and historical years the paths will run
+   * (design 133 phase 1). Schema defaults go under the plan, as in `_resolveVariables`, so
+   * the line shows what the sim runs at; the runner resolves the same params the same way.
+   */
+  _refreshReturnPaths() {
+    const schemaDefaults = paramSchemaDefaults(IntlRetirementScenario.buildFullParamSchema());
+    this._configPanel.setReturnPaths(mcReturnPaths({ ...schemaDefaults, ...this._resolveBaseParams() }));
+  }
+
   /** Copy the live scenario parameter values into the MC variable centers. */
   _onCopyFromScenario() {
     const count = this._configPanel.applyScenarioValues(this._scenarioCenters());
@@ -215,6 +227,7 @@ export class MonteCarloPresenter {
   }
 
   _onRun(config) {
+    this._refreshReturnPaths();
     const { n, variableConfigs, mix = false, spending = false } = config;
     const mcConfig = IntlRetirementMcConfig.fromVariableConfigs(variableConfigs);
     const started  = performance.now();
@@ -255,6 +268,7 @@ export class MonteCarloPresenter {
 
   /** Run a lever grid (design 100 §7) and show it in the results pane. */
   _onRunGrid(config) {
+    this._refreshReturnPaths();
     const { n, variableConfigs, axes, mode, runs } = config;
     const mcConfig = IntlRetirementMcConfig.fromVariableConfigs(variableConfigs);
     const started  = performance.now();

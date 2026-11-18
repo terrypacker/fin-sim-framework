@@ -31,6 +31,7 @@ import { YieldCurveTickHandler }          from '../../finance/economic-regimes/y
 import { EquityReturnReducer }            from '../../finance/economic-regimes/equity-return-reducer.js';
 import { EquityReturnStepReducer }        from '../../finance/economic-regimes/equity-return-step-reducer.js';
 import { EquityReturnTickHandler, EQUITY_RETURN_MODEL_IDS, EQUITY_RETURN_MODEL_LABELS, DEFAULT_GOLD_RETURN_VOL } from '../../finance/economic-regimes/equity-return-tick-handler.js';
+import { bootstrapWindowName }            from '../../finance/economic-regimes/bootstrap-window.js';
 import { InflationTickHandler, INFLATION_MODEL_IDS, INFLATION_MODEL_LABELS, jointInflationActive, inflationProcessConfig } from '../../finance/economic-regimes/inflation-tick-handler.js';
 import { stockBondCorrelationOf, stockBondCorrelationActive } from '../../finance/economic-regimes/stock-bond-correlation.js';
 import { InflationStepReducer }           from '../../finance/economic-regimes/inflation-step-reducer.js';
@@ -1136,7 +1137,7 @@ export const ECONOMIC_REGIMES = {
                         HISTORICAL_BOOTSTRAP: `${EQUITY_RETURN_MODEL_LABELS.HISTORICAL_BOOTSTRAP} (default)` },
         defaultValue: 'HISTORICAL_BOOTSTRAP',
         visibleWhen:  { param: 'mcSequenceRisk', truthy: true },
-        description:  'The equity return process every Monte Carlo path runs. The default, Historical bootstrap, replays blocks of real historical years (US 1871–2023, and AU\'s own history from 1958) re-centred on your anchor, and matches history better than white noise on autocorrelation, multi-year pull-back and crash skew (design 102 §2). "Same as single runs" uses Equity Return Process Model instead. Only used when Monte Carlo: Stochastic Return Path is on.',
+        description:  'The equity return process every Monte Carlo path runs. The default, Historical bootstrap, replays blocks of real historical years (US, and AU\'s own history from 1958) re-centred on your anchor, and matches history better than white noise on autocorrelation, multi-year pull-back and crash skew (design 102 §2). "Same as single runs" uses Equity Return Process Model instead. Under the Monte Carlo default inflation (Automatic, which runs inflation joint with equity) the bootstrap draws only the post-war years 1951–2023, the years the inflation and yield history covers; with Gaussian inflation it draws from 1871–2023 (design 133). The Monte Carlo panel shows which years a run samples. Only used when Monte Carlo: Stochastic Return Path is on.',
       },
       // ── Stochastic inflation path (design 103) ──────────────────────────────────
       {
@@ -1308,7 +1309,7 @@ export const ECONOMIC_REGIMES = {
                         GAUSSIAN: 'Gaussian — persistent, US and AU correlated' },
         defaultValue: 'AUTO',
         visibleWhen:  { param: 'mcInflationPath', truthy: true },
-        description:  'The inflation process every Monte Carlo path runs. Automatic (default) samples inflation jointly with equity whenever the Monte Carlo equity process is the historical bootstrap, so each path\'s inflation surprises, equity returns and yield changes come from the same historical years.',
+        description:  'The inflation process every Monte Carlo path runs. Automatic (default) samples inflation jointly with equity whenever the Monte Carlo equity process is the historical bootstrap, so each path\'s inflation surprises, equity returns and yield changes come from the same historical years. That also limits the equity bootstrap to the post-war years 1951–2023, the years the inflation and yield history covers (design 133).',
       },
       {
         key:          'equityReturnVol',
@@ -1381,7 +1382,7 @@ export const ECONOMIC_REGIMES = {
         options:      EQUITY_RETURN_MODEL_IDS,
         optionLabels: EQUITY_RETURN_MODEL_LABELS,
         defaultValue: 'WHITE_NOISE',
-        description:  'Process for the market factor. White noise (WHITE_NOISE, default) draws an independent shock each year. Annual US returns since 1871 have a lag-1 autocorrelation of +0.01, so this matches history year to year. Historical bootstrap (HISTORICAL_BOOTSTRAP, design 102) replays blocks of consecutive real historical years (US 1871–2023), re-centred on your anchor and rescaled to Equity Return Volatility; the AU market replays its own history for the same year from 1958 (Historical Bootstrap — Replay AU Market History). That keeps history\'s fat left tail and its mild multi-year pull-back without fitting a parameter to either. Persistent returns (MEAN_REVERTING) applies an Ornstein-Uhlenbeck step to the RETURN, so consecutive years are POSITIVELY correlated at e^(-k): +0.74 at the default k=0.3, against history\'s +0.01. Long-run outcomes spread about 3.5× wider than white noise, so treat it as a stress test, not a realistic world (design 97 §20.9, design 102 §2). No process makes a crash predict a rebound. Only used when Stochastic Equity Returns is on. Monte Carlo turns that on for every path, and uses its own process setting (Monte Carlo: Equity Return Process, default Historical bootstrap) unless that is set to "Same as single runs".',
+        description:  'Process for the market factor. White noise (WHITE_NOISE, default) draws an independent shock each year. Annual US returns since 1871 have a lag-1 autocorrelation of +0.01, so this matches history year to year. Historical bootstrap (HISTORICAL_BOOTSTRAP, design 102) replays blocks of consecutive real historical years (US 1871–2023, or 1951–2023 when Inflation Process is Historical, joint with equity), re-centred on your anchor and rescaled to Equity Return Volatility; the AU market replays its own history for the same year from 1958 (Historical Bootstrap — Replay AU Market History). That keeps history\'s fat left tail and its mild multi-year pull-back without fitting a parameter to either. Persistent returns (MEAN_REVERTING) applies an Ornstein-Uhlenbeck step to the RETURN, so consecutive years are POSITIVELY correlated at e^(-k): +0.74 at the default k=0.3, against history\'s +0.01. Long-run outcomes spread about 3.5× wider than white noise, so treat it as a stress test, not a realistic world (design 97 §20.9, design 102 §2). No process makes a crash predict a rebound. Only used when Stochastic Equity Returns is on. Monte Carlo turns that on for every path, and uses its own process setting (Monte Carlo: Equity Return Process, default Historical bootstrap) unless that is set to "Same as single runs".',
       },
       {
         key:          'equityReturnBootstrapBlock',
@@ -2016,8 +2017,9 @@ export const ECONOMIC_REGIMES = {
             driftComp:      p.equityReturnDriftComp ?? 'GEOMETRIC',
             blockLength:    p.equityReturnBootstrapBlock ?? 5,
             // Design 103 §5.1: joint mode draws only post-war years, the era the inflation
-            // and yield series share.
-            window:         joint ? 'POSTWAR' : 'FULL',
+            // and yield series share. Design 133: the rule lives in bootstrap-window.js, so the
+            // Monte Carlo panel can say which window a run samples.
+            window:         bootstrapWindowName(p),
             // Design 102 §6: the AU market replays its own history where the year has data.
             auReplay:       p.equityReturnBootstrapAuReplay ?? true,
             // Design 127 §4.7 — the months inside each drawn year, under MONTHLY earnings.

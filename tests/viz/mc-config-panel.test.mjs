@@ -370,3 +370,18 @@ describe('McConfigPanel — an unset row', () => {
     panel.destroy();
   });
 });
+
+describe('McConfigPanel — return-paths line (design 133 phase 1)', () => {
+  test('hidden until told, then names the processes and the bootstrap years', () => {
+    const { panel, container } = makePanel();
+    const el = container.querySelector('.mc-return-paths');
+    expect(el).toBeTruthy();
+    expect(el.hidden).toBe(true);
+    panel.setReturnPaths({ equityModel: 'HISTORICAL_BOOTSTRAP', inflationModel: 'HISTORICAL_JOINT',
+      window: { name: 'POSTWAR', fromYear: 1951, toYear: 2023, automatic: true, reason: 'joint inflation' } });
+    expect(el.hidden).toBe(false);
+    expect(el.textContent).toContain('1951–2023 (automatic: joint inflation)');
+    panel.setReturnPaths(null);
+    expect(el.hidden).toBe(true);
+  });
+});

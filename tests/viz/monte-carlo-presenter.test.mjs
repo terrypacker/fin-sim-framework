@@ -233,3 +233,21 @@ describe('MonteCarloPresenter — pool axis hygiene', () => {
     presenter.destroy();
   });
 });
+
+describe('MonteCarloPresenter — return-paths line (design 133 phase 1)', () => {
+  afterEach(() => ServiceRegistry.resetAll());
+
+  test('a default plan shows the post-war window; Gaussian MC inflation shows the whole series', () => {
+    setActiveCfg({ params: [], accounts: [] });
+    const p1 = makePresenter({ params: {} });
+    const line = () => p1._view.configPane.querySelector('.mc-return-paths').textContent;
+    expect(line()).toContain('1951–2023 (automatic: joint inflation)');
+    p1.destroy();
+
+    setActiveCfg({ params: [{ name: 'mcInflationModel', value: 'GAUSSIAN' }], accounts: [] });
+    const p2 = makePresenter({ params: {} });
+    expect(p2._view.configPane.querySelector('.mc-return-paths').textContent)
+      .toContain('1871–2023 (automatic: no joint inflation)');
+    p2.destroy();
+  });
+});
