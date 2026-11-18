@@ -38,6 +38,10 @@ function schemaByKey() {
  * Enums have no categorical distribution, so they are Opt-only.
  */
 export function mcRowFor(kind, center, entry) {
+  // A grid-only lever (design 133: the bootstrap window) is an axis, never a per-path draw:
+  // drawing it per path would mix windows inside one batch, which the pairing record
+  // (one window per batch) could not describe.
+  if (entry?.gridOnly) return null;
   switch (kind) {
     case 'year':
       // An UNSET year (a sale that does not happen) has nothing to sample around: the row

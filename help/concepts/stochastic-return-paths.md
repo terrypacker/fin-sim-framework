@@ -3,7 +3,7 @@ id: stochastic-return-paths
 kind: concept
 title: Stochastic Return Paths
 panels: [mc-config, mc-results]
-params: [equityReturnStochastic, equityReturnModel, equityReturnVol, equityReturnReversionSpeed, equityReturnBeta, equityReturnIdioVol, equityReturnDriftComp, equityReturnBootstrapBlock, equityReturnBootstrapAuReplay, propertyReturnStochastic, propertyReturnBeta, propertyReturnIdioVol, propertyReturnIdioScale, mcSequenceRisk, mcEquityReturnModel, goldReturnVol, goldEquityCorrelation, goldReplay, stockBondCorrelation]
+params: [equityReturnStochastic, equityReturnModel, equityReturnVol, equityReturnReversionSpeed, equityReturnBeta, equityReturnIdioVol, equityReturnDriftComp, equityReturnBootstrapBlock, equityReturnBootstrapFromYear, equityReturnBootstrapAuReplay, propertyReturnStochastic, propertyReturnBeta, propertyReturnIdioVol, propertyReturnIdioScale, mcSequenceRisk, mcEquityReturnModel, goldReturnVol, goldEquityCorrelation, goldReplay, stockBondCorrelation]
 design: [74-stochastic-return-paths.md, 90-equity-fidelity-and-capital-losses.md, 102-historical-bootstrap-equity-returns.md, 121-shock-leg-offset-and-stagflation-calibration.md, 129-stock-bond-correlation.md, 131-gold-return-drivers.md, 133-bootstrap-history-window-and-start-year.md]
 stamps:
   param:equityReturnStochastic: 635a9b
@@ -14,6 +14,7 @@ stamps:
   param:equityReturnIdioVol: 8bc7ec
   param:equityReturnDriftComp: be12e6
   param:equityReturnBootstrapBlock: 9d8272
+  param:equityReturnBootstrapFromYear: 434fe6
   param:equityReturnBootstrapAuReplay: 168628
   param:propertyReturnStochastic: e5f7f2
   param:propertyReturnBeta: 5ce9a3
@@ -44,8 +45,8 @@ A mean-reverting process introduces persistence, and a *lower* pull-back speed m
 crashes the others lack, but draws from fewer distinct sequences.
 
 When inflation replays history too, as Monte Carlo does by default, the replay keeps to
-1951 onwards, the years with inflation records to match; otherwise it ranges from 1871.
-The Monte Carlo panel shows which, above Run. Every span is moved onto your anchor and
+1951 onwards, where inflation records start; otherwise it ranges from 1871, unless you set
+a later first year. The Monte Carlo panel shows which. Every span is moved onto your anchor and
 volatility, so the span changes how hard crashes hit, not the average return.
 
 Gold moves every year too. When the replay lands on a year after 1968, gold replays that

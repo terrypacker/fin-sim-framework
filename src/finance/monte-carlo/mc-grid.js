@@ -105,7 +105,7 @@ export function percentile(xs, p) {
  * @param {Array}  o.sampled         the grid's sampling signature (same for every cell)
  * @param {boolean} o.mcSequenceRisk
  */
-export function summarizeGridCell(rows, { sampled, mcSequenceRisk, equityModel, inflationModel, primeModel }) {
+export function summarizeGridCell(rows, { sampled, mcSequenceRisk, equityModel, equityWindow, inflationModel, primeModel }) {
   const nw = rows.map(r => r.nw);
   return {
     n:           rows.length,
@@ -119,6 +119,6 @@ export function summarizeGridCell(rows, { sampled, mcSequenceRisk, equityModel, 
       medianNetWorthCagr:        percentile(rows.map(r => r.netWorthCagr), 0.50),
       p10TroughRealNetLiquidity: percentile(rows.map(r => r.troughRealNetLiq), 0.10),
     },
-    pairing: { n: rows.length, seeds: rows.map(r => r.seed), sampled, mcSequenceRisk, equityModel, inflationModel, primeModel },
+    pairing: { n: rows.length, seeds: rows.map(r => r.seed), sampled, mcSequenceRisk, equityModel, equityWindow, inflationModel, primeModel },
   };
 }

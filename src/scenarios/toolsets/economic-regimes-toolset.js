@@ -31,7 +31,7 @@ import { YieldCurveTickHandler }          from '../../finance/economic-regimes/y
 import { EquityReturnReducer }            from '../../finance/economic-regimes/equity-return-reducer.js';
 import { EquityReturnStepReducer }        from '../../finance/economic-regimes/equity-return-step-reducer.js';
 import { EquityReturnTickHandler, EQUITY_RETURN_MODEL_IDS, EQUITY_RETURN_MODEL_LABELS, DEFAULT_GOLD_RETURN_VOL } from '../../finance/economic-regimes/equity-return-tick-handler.js';
-import { bootstrapWindowName }            from '../../finance/economic-regimes/bootstrap-window.js';
+import { bootstrapWindowName, bootstrapWindowWarning, LATEST_BOOTSTRAP_FROM, HISTORICAL_FIRST_YEAR } from '../../finance/economic-regimes/bootstrap-window.js';
 import { InflationTickHandler, INFLATION_MODEL_IDS, INFLATION_MODEL_LABELS, jointInflationActive, inflationProcessConfig } from '../../finance/economic-regimes/inflation-tick-handler.js';
 import { stockBondCorrelationOf, stockBondCorrelationActive } from '../../finance/economic-regimes/stock-bond-correlation.js';
 import { InflationStepReducer }           from '../../finance/economic-regimes/inflation-step-reducer.js';
@@ -393,6 +393,18 @@ function legStartMonths(shock, leg) {
       + `non-negative integer, got ${JSON.stringify(m)}`);
   }
   return m;
+}
+
+const _warnedBootstrapWindow = new Set();
+/**
+ * The bootstrap window for the equity handler (design 133), printing the joint-mode clamp
+ * once per process: every Monte Carlo path compiles, and the warning is about the plan.
+ */
+function _bootstrapWindowWithWarning(p) {
+  const w   = bootstrapWindowName(p);
+  const msg = bootstrapWindowWarning(p);
+  if (msg && !_warnedBootstrapWindow.has(msg)) { _warnedBootstrapWindow.add(msg); console.warn(msg); }
+  return w;
 }
 
 /**
@@ -1396,6 +1408,28 @@ export const ECONOMIC_REGIMES = {
         description:  'How many consecutive historical years are replayed before jumping to a new random start year (design 102 §4.3). Longer blocks keep more of history\'s multi-year runs and pull-backs, but draw from fewer distinct sequences. 1 replays single years in random order, which throws away any link between neighbouring years. The default of 5 is the usual n^(1/3) rule for a 153-year series. Only used with the Historical bootstrap model.',
       },
       {
+        key:          'equityReturnBootstrapFromYear',
+        label:        'Historical Bootstrap — Sample From Year',
+        type:         'Number',
+        group:        'Economic Shocks',
+        // A grid axis over windows (design 133 §3.2): every value runs the same path seeds.
+        // Grid only: never a per-path draw in a batch, and never an optimizer lever (picking
+        // the best era is cherry-picking history). A historical year, so its own range.
+        mc:           true,
+        opt:          false,
+        gridOnly:     true,
+        sweepUnset:   true,
+        sweepRange:   { min: HISTORICAL_FIRST_YEAR, max: LATEST_BOOTSTRAP_FROM },
+        defaultValue: null,
+        // Shown when either a single run or Monte Carlo replays history: Monte Carlo's
+        // default equity process is the bootstrap whatever the single-run model is.
+        visibleWhen:  { anyOf: [
+          { param: 'equityReturnModel',   equals: 'HISTORICAL_BOOTSTRAP' },
+          { param: 'mcEquityReturnModel', equals: 'HISTORICAL_BOOTSTRAP' },
+        ] },
+        description:  `The first historical year the bootstrap may draw from; it always draws up to 2023 (design 133). Blank (default) chooses for you: 1951 when inflation replays history jointly with equity, which is the Monte Carlo default, and 1871 otherwise. A year from 1871 to ${LATEST_BOOTSTRAP_FROM} limits the draw to that year onwards, so every window keeps at least 50 years of history. A year before 1951 runs from 1951 under joint inflation, with a warning, because the inflation and yield records start there. The window changes only history's shape: each is re-centred on your anchor and rescaled to Equity Return Volatility, so a later year does not mean lower returns, but it does change how deep the crashes go. The AU market replays its own years from 1958 and gold from 1969; earlier years in the window draw at random for those. Sweep it as a Monte Carlo grid axis to see whether a result depends on the era.`,
+      },
+      {
         key:          'equityReturnBootstrapAuReplay',
         label:        'Historical Bootstrap — Replay AU Market History',
         type:         'Boolean',
@@ -2018,8 +2052,9 @@ export const ECONOMIC_REGIMES = {
             blockLength:    p.equityReturnBootstrapBlock ?? 5,
             // Design 103 §5.1: joint mode draws only post-war years, the era the inflation
             // and yield series share. Design 133: the rule lives in bootstrap-window.js, so the
-            // Monte Carlo panel can say which window a run samples.
-            window:         bootstrapWindowName(p),
+            // Monte Carlo panel can say which window a run samples; an authored first year
+            // is validated there (throws outside 1871–1974) and clamped to 1951 under joint.
+            window:         _bootstrapWindowWithWarning(p),
             // Design 102 §6: the AU market replays its own history where the year has data.
             auReplay:       p.equityReturnBootstrapAuReplay ?? true,
             // Design 127 §4.7 — the months inside each drawn year, under MONTHLY earnings.

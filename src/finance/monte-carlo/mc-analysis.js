@@ -204,6 +204,12 @@ export function pairingMismatches(a, b) {
   else if (a.equityModel !== undefined && b.equityModel !== undefined && a.equityModel !== b.equityModel) {
     out.push(`equity process ${a.equityModel} vs ${b.equityModel}`);
   }
+  // Design 133 — the bootstrap's window, same rule. Only meaningful when both ran the bootstrap
+  // (an equity-process mismatch is already reported above).
+  if (a.equityWindow !== undefined && b.equityWindow !== undefined && a.equityWindow !== b.equityWindow
+      && a.equityModel === b.equityModel) {
+    out.push(`bootstrap years from ${a.equityWindow ?? 'none'} vs ${b.equityWindow ?? 'none'}`);
+  }
   // Design 103 §6 — the inflation process, under the same rule for records that predate it.
   if (a.inflationModel !== undefined && b.inflationModel !== undefined && a.inflationModel !== b.inflationModel) {
     out.push(`inflation process ${a.inflationModel ?? 'off'} vs ${b.inflationModel ?? 'off'}`);

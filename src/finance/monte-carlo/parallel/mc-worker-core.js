@@ -142,6 +142,18 @@ export function mcReturnPaths(params) {
 }
 
 /**
+ * The first historical year a Monte Carlo path's equity bootstrap samples (design 133 §3.2),
+ * or null when the bootstrap is not the path's process. The pairing record carries it, so two
+ * batches that sampled different windows are not read as paired.
+ *
+ * @param {object} params  the batch's (or a grid cell's) base params
+ * @returns {number|null}
+ */
+export function mcEquityWindow(params) {
+  return describeBootstrapWindow(applyMcPaths({ ...(params ?? {}) }))?.fromYear ?? null;
+}
+
+/**
  * The prime-rate mode a Monte Carlo path runs (design 104 §6). `mcPrimeRateModel`:
  *   - 'AUTO' (the default, also when absent): the scenario's own choice when it is
  *     INFLATION_LINKED, or when it authored a Prime Rate Schedule. Otherwise, with the
