@@ -12,6 +12,7 @@ import { ScenarioLoader } from './scenario-loader.js';
 import { migrateYearFieldsToDates, migrateParamBag } from './year-date-migration.js';
 import { scenarioParamValues } from '../finance/param-schema-utils.js';
 import { ScenarioParamGenerator } from './params/scenario-param-generator.js';
+import { deepClone } from '../simulation-framework/state-utils.js';
 
 /**
  * The record's own value for every generated per-record MC/Opt lever, keyed by its
@@ -182,4 +183,66 @@ export function applyParamBagToConfig(cfg, params) {
   }
 
   return cfg;
+}
+
+const same = (a, b) => a === b || JSON.stringify(a) === JSON.stringify(b);
+const clone = deepClone;
+
+/**
+ * What a scenario's two param stores hold, so a Monte Carlo replay can be undone.
+ *
+ * A replay writes the WHOLE of a path's param bag onto the live record (that is what makes it
+ * faithful), and the bag carries every lever the batch sampled plus the MC's own process
+ * settings (the joint-inflation prime-rate mode, the stochastic flags, a rolling path's start
+ * year). Left behind, all of that becomes the plan. `record` also keeps every generated
+ * per-record lever's own value (`resolveRecordCenters`): a balance or wage the replay wrote has
+ * no bag entry to put back, so Clear writes the record's own value instead (a no-op for a
+ * record lever, see `resolveRecordCenters`).
+ *
+ * @param {object} cfg  scenario config
+ * @returns {{ bag: object, typed: Map<string, *>, record: object }}
+ */
+export function snapshotParamStores(cfg) {
+  return {
+    bag:    clone(cfg?.parameters ?? {}),
+    typed:  new Map((cfg?.params ?? []).map(p => [p.name, clone(p.value)])),
+    record: clone(resolveRecordCenters(cfg)),
+  };
+}
+
+/**
+ * Undo a replay: every param the replay left as it wrote it goes back to `before`.
+ *
+ * Per key, and only where the value is still the replay's (`after`): a param the user edited
+ * while the replay was up is theirs, and stays. A bag key the replay added goes back to the
+ * record's own value when it is a record lever, and is removed otherwise.
+ *
+ * @param {object} cfg     scenario config (mutated)
+ * @param {ReturnType<typeof snapshotParamStores>} before  taken before the replay applied
+ * @param {ReturnType<typeof snapshotParamStores>} after   taken once the replay had loaded
+ * @returns {string[]} the names put back
+ */
+export function restoreParamStores(cfg, before, after) {
+  if (!cfg || !before || !after) return [];
+  const restored = new Set();
+  const bag = { ...(cfg.parameters ?? {}) };
+  for (const key of Object.keys(after.bag)) {
+    if (!(key in bag) || !same(bag[key], after.bag[key])) continue;
+    const was = key in before.bag ? before.bag[key]
+      : (key in before.record ? before.record[key] : undefined);
+    if (same(was, bag[key])) continue;
+    if (was === undefined) delete bag[key];
+    else bag[key] = clone(was);
+    restored.add(key);
+  }
+  cfg.parameters = bag;
+  for (const p of cfg.params ?? []) {
+    if (!before.typed.has(p.name) || !after.typed.has(p.name)) continue;
+    if (!same(p.value, after.typed.get(p.name))) continue;
+    const was = before.typed.get(p.name);
+    if (same(was, p.value)) continue;
+    p.value = clone(was);
+    restored.add(p.name);
+  }
+  return [...restored];
 }

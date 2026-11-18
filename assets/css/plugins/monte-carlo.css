@@ -904,7 +904,8 @@
   border: 1px solid var(--border);
   border-radius: 2px;
   color: var(--text-muted);
-  background: var(--bg-panel2);
+  /* --shade 0–60% by rank of terminal net worth: the darker, the poorer the start ended. */
+  background: color-mix(in srgb, var(--warning) calc(var(--shade, 0%) * 0.6), var(--bg-panel2));
   white-space: nowrap;
 }
 
@@ -940,3 +941,11 @@ button.mc-start-tile--fails:hover { border-color: var(--red); color: var(--red);
 }
 .mc-run-line--focus { background: var(--bg-active); }
 .mc-replay-pin { color: var(--text-muted); }
+
+/* "· today's USD" on the run list header: which money the values are in. */
+.mc-runs-basis {
+  font-weight: normal;
+  text-transform: none;
+  color: var(--text-dim);
+  cursor: help;
+}

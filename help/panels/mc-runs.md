@@ -13,9 +13,7 @@ representatives — best, worst, median, most volatile, earliest failure — and
 every run, sortable and filterable to failures only.
 
 Both exist on purpose. The representatives answer *how bad does it get*; only the full
-list answers *how many of them look like that*, and a panel that showed five of a
-thousand with no way to reach the rest would send you back to re-running the batch to
-find out.
+list answers *how many of them look like that*.
 
 Any run expands to its parameters, ranked by how far each sits from the batch median.
 That is the difference between knowing a run failed and knowing what failed it — the
@@ -25,9 +23,12 @@ hundred thousand rows nobody has asked to see.
 
 Replay on a row re-runs that exact iteration as the live simulation, so a failure you
 found in the distribution becomes something you can step through in
-[Timeline](timeline.md) and [Chart](chart.md). Clear the replay badge to go back.
+[Timeline](timeline.md) and [Chart](chart.md). The replay writes that run's values into your
+plan, the Monte Carlo's own settings included; Clear on the replay badge puts yours back,
+keeping anything you edited meanwhile.
 
 After a rolling-start batch each run shows the historical year it opened with, and can be
-sorted by it. Replaying one pins your plan to that year while it replays; Clear unpins it.
+sorted by it. Values are then in today's dollars: start years differ mostly in the
+inflation they carry, so in nominal money the 1970s starts would look best.
 
 Needs a completed [Monte Carlo](mc-config.md) run.

@@ -11,7 +11,7 @@
 /**
  * bootstrap-start-ui.test.mjs — design 133's UI follow-ups.
  *
- *   1. Replaying a rolling path pins the plan's start year; Clear puts back what the plan had.
+ *   1. A replay writes the path's params onto the plan; Clear puts back what the plan had.
  *   2. The compile's window/start warnings (and refusals) show under their Parameters rows,
  *      and the Monte Carlo line names pre-1951 pinned years and a refused year.
  *   3. A rolling batch's run list tags each path's start year, sorts by it, and a strip tile
@@ -26,7 +26,8 @@ import { McResultsPanel }   from '../../src/visualization/monte-carlo/mc-results
 import { McConfigPanel, formatReturnPaths } from '../../src/visualization/monte-carlo/mc-config-panel.js';
 import { ScenarioTabView }  from '../../src/visualization/scenario/scenario-tab-view.js';
 import { paramAdvisory }    from '../../src/visualization/scenario/param-advisories.js';
-import { _pinnedStartRestore } from '../../src/apps/workbench-app.js';
+import { applyParamBagToConfig, snapshotParamStores, restoreParamStores }
+  from '../../src/scenarios/scenario-param-apply.js';
 
 global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
 
@@ -43,22 +44,42 @@ const run = (seed, startYear, failed = false) => ({
 const ROLLING = { p50: 2e6, pairing: { equityStart: 'ROLLING' } };
 const RANDOM  = { p50: 2e6, pairing: { equityStart: null } };
 
-describe('1. replay pins the start year, Clear unpins it', () => {
-  const plan = (year = null, runYears = null) => ({ params: [
-    { name: 'equityReturnBootstrapStartYear', value: year },
-    { name: 'equityReturnBootstrapStartRun', value: runYears },
-  ] });
+describe('1. Clear undoes what the replay wrote', () => {
+  const plan = () => ({
+    params: [
+      { name: 'equityReturnBootstrapStartYear', value: null },
+      { name: 'primeRateMode', value: 'FIXED' },
+      { name: 'inflationRate', value: 0.03 },
+    ],
+    parameters: { equityReturnBootstrapStartYear: null, primeRateMode: 'FIXED', inflationRate: 0.03 },
+  });
+  const path = { equityReturnBootstrapStartYear: 1966, primeRateMode: 'FOLLOW_INFLATION',
+                 inflationRate: 0.041, mcEquityBootstrapStarts: 'ROLLING' };
 
-  test('a rolling path\'s start year is new to the plan: remember the plan\'s blank', () => {
-    expect(_pinnedStartRestore(plan(), { equityReturnBootstrapStartYear: 1966, equityReturnBootstrapStartRun: null }))
-      .toEqual({ equityReturnBootstrapStartYear: null, equityReturnBootstrapStartRun: null });
-    expect(_pinnedStartRestore(plan(1929, 15), { equityReturnBootstrapStartYear: 1966 }))
-      .toEqual({ equityReturnBootstrapStartYear: 1929, equityReturnBootstrapStartRun: 15 });
+  test('every param the replay changed goes back; a key it added goes away', () => {
+    const cfg = plan();
+    const before = snapshotParamStores(cfg);
+    applyParamBagToConfig(cfg, path);
+    const after = snapshotParamStores(cfg);
+    expect(cfg.params.find(p => p.name === 'primeRateMode').value).toBe('FOLLOW_INFLATION');
+
+    expect(restoreParamStores(cfg, before, after).sort())
+      .toEqual(['equityReturnBootstrapStartYear', 'inflationRate', 'mcEquityBootstrapStarts', 'primeRateMode']);
+    expect(Object.fromEntries(cfg.params.map(p => [p.name, p.value])))
+      .toEqual({ equityReturnBootstrapStartYear: null, primeRateMode: 'FIXED', inflationRate: 0.03 });
+    expect(cfg.parameters).toEqual(plan().parameters);
   });
 
-  test('nothing to restore when the path pinned nothing new', () => {
-    expect(_pinnedStartRestore(plan(), { inflationRate: 0.03 })).toBeNull();
-    expect(_pinnedStartRestore(plan(1966, 15), { equityReturnBootstrapStartYear: 1966, equityReturnBootstrapStartRun: 15 })).toBeNull();
+  test('a param edited while replaying keeps the edit', () => {
+    const cfg = plan();
+    const before = snapshotParamStores(cfg);
+    applyParamBagToConfig(cfg, path);
+    const after = snapshotParamStores(cfg);
+    cfg.params.find(p => p.name === 'inflationRate').value = 0.025;
+    cfg.parameters.inflationRate = 0.025;
+    restoreParamStores(cfg, before, after);
+    expect(cfg.params.find(p => p.name === 'inflationRate').value).toBe(0.025);
+    expect(cfg.params.find(p => p.name === 'primeRateMode').value).toBe('FIXED');
   });
 
   test('the replay badge says history is pinned, and that Clear unpins it', () => {
@@ -66,8 +87,8 @@ describe('1. replay pins the start year, Clear unpins it', () => {
     panel.showResults(ROLLING, [run(1, 1951), run(2, 1952)]);
     panel.setReplaySeed(2);
     const badge = panel._container.querySelector('.mc-replay-badge');
-    expect(badge.textContent).toMatch(/History is pinned to open in 1952 while it replays; Clear unpins it/);
-    expect(badge.querySelector('button').title).toMatch(/except the start year 1952/);
+    expect(badge.textContent).toMatch(/History is pinned to open in 1952 while it replays\. Clear puts your plan's own settings back/);
+    expect(badge.querySelector('button').title).toMatch(/the start year 1952 among them/);
 
     panel.showResults(RANDOM, [run(1, 1951)]);
     panel.setReplaySeed(1);
@@ -188,5 +209,59 @@ describe('4. the iterations a rolling batch needs', () => {
     const panel = new McConfigPanel(host());
     panel.setReturnPaths({ ...info, start: null });
     expect(panel._pathsEl.querySelector('.mc-set-iters-btn')).toBeNull();
+  });
+});
+
+describe('follow-ups: real money where starts are compared, and controls that survive a rebuild', () => {
+  // A 1970s start: high nominal wealth, eaten by the inflation it carried.
+  const priced = (seed, startYear, nw, level) => ({ ...run(seed, startYear), finalNetWorthUsd: nw,
+    terminalRates: { priceLevels: { US: level }, usdAud: 1.5 } });
+
+  test('a rolling batch\'s run list ranks and shows today\'s dollars, and says so', () => {
+    const panel = new McRunsPanel(host());
+    panel.showResults(ROLLING, [priced(1, 1966, 3e6, 3), priced(2, 1977, 5e6, 10), priced(3, 1990, 2e6, 1)]);
+    const card = (label) => [...panel._container.querySelectorAll('.mc-run-card')]
+      .find(c => c.querySelector('.mc-run-label').textContent === label);
+    // Real: 1966 → 1M, 1977 → 0.5M, 1990 → 2M. Nominal would have made 1977 the best.
+    expect(card('Best').querySelector('.mc-run-start').textContent).toBe('1990');
+    expect(card('Worst').querySelector('.mc-run-start').textContent).toBe('1977');
+    expect(card('Worst').querySelector('.mc-run-nw').textContent).toMatch(/500/);
+    expect(panel._container.querySelector('.mc-runs-basis').textContent).toMatch(/today's USD/);
+    expect([...panel._container.querySelectorAll('.mc-run-line .mc-run-start')].map(e => e.textContent))
+      .toEqual(['1977', '1966', '1990']);
+
+    // A random batch under a nominal basis stays nominal.
+    panel.showResults(RANDOM, [priced(1, null, 3e6, 3), priced(2, null, 5e6, 10)]);
+    expect(panel._container.querySelector('.mc-runs-basis')).toBeNull();
+  });
+
+  test('the strip tints each start by its rank of terminal wealth, and names the poorest', () => {
+    const panel = new McResultsPanel(host());
+    panel.showResults({ successRate: 1, p10: 1, p50: 1, p90: 1, pairing: { equityStart: 'ROLLING' } },
+      [priced(1, 1966, 3e6, 3), priced(2, 1977, 5e6, 10), priced(3, 1990, 2e6, 1), priced(4, 1995, 9e6, 1)]);
+    const shade = (y) => panel._container.querySelector(`.mc-start-tile[data-start-year="${y}"]`)
+      .style.getPropertyValue('--shade');
+    expect([1977, 1966, 1990, 1995].map(shade)).toEqual(['60%', '40%', '20%', '0%']);
+    expect(panel._container.querySelector('.mc-start-summary').textContent).toBe('Survives all 4 start years.');
+    panel.destroy();
+
+    // Of ten or more starts, the three poorest are named.
+    const many = new McResultsPanel(host());
+    many.showResults({ successRate: 1, p10: 1, p50: 1, p90: 1, pairing: { equityStart: 'ROLLING' } },
+      Array.from({ length: 10 }, (_, i) => priced(i + 1, 1960 + i, 1e6 * (10 - Math.abs(i - 6)), 1)));
+    expect(many._container.querySelector('.mc-start-summary').textContent)
+      .toMatch(/Least wealth at the end \(in today's dollars\): 1960, 1961, 1962\./);
+    many.destroy();
+  });
+
+  test('the iterations and telemetry options carry from one panel to the next', () => {
+    const a = new McConfigPanel(host());
+    a._iterEl.value = '73';
+    a._mixCb.checked = true;
+    const b = new McConfigPanel(host());
+    b.setRunControls(a.getRunControls());
+    expect(b._iterEl.value).toBe('73');
+    expect(b._mixCb.checked).toBe(true);
+    expect(b._spendingCb.checked).toBe(false);
   });
 });
