@@ -9,7 +9,7 @@
  */
 
 import { IntlRetirementMcRunner } from './intl-retirement-mc-runner.js';
-import { buildIterationRunner, runGridTask, samplingSignature, gridCellParams, mcEquityModel, mcEquityWindow, mcInflationModel, mcPrimeModel } from './parallel/mc-worker-core.js';
+import { buildIterationRunner, runGridTask, samplingSignature, gridCellParams, mcEquityModel, mcEquityWindow, mcEquityStart, mcInflationModel, mcPrimeModel } from './parallel/mc-worker-core.js';
 import { cartesianProduct } from '../optimization/opt-values.js';
 import { get, set } from './mc-param-paths.js';
 import { GRID_MODES, referenceCellOf, summarizeGridCell } from './mc-grid.js';
@@ -157,7 +157,7 @@ export class McGridRunner extends IntlRetirementMcRunner {
         const cellBase = structuredClone(gctx.base);
         for (const [key, v] of Object.entries(gctx.cells[k].overrides)) set(cellBase, key, v);
         return { values: c.values, rows: cellRows, errored,
-                 summary: summarizeGridCell(cellRows, { ...pairingFacts, equityWindow: mcEquityWindow(cellBase) }) };
+                 summary: summarizeGridCell(cellRows, { ...pairingFacts, equityWindow: mcEquityWindow(cellBase), equityStart: mcEquityStart(cellBase) }) };
       }),
       provenance,
       // What `gridCellRuns` needs to rebuild any path's params: one copy of the base

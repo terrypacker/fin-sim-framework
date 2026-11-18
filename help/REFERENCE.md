@@ -9,11 +9,11 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-240 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 94 tools · 341 state field types · 80 topics · 141 design docs
+242 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 94 tools · 342 state field types · 80 topics · 141 design docs
 
 ---
 
-## Parameters (240)
+## Parameters (242)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
@@ -190,7 +190,7 @@ scenario's own schema), which is where to go to change it.
 - **`earlyWithdrawalStartYear`** — Early Withdrawal Optimization Start Year · `Number` · default — · via US_EARLY_WITHDRAWAL
   First year of the opt-in optimization window. Set with the end year to let the MPC cockpit tune/discover early withdrawals. null = no window (manual schedule only).
 
-### Economic Shocks (57)
+### Economic Shocks (59)
 
 - **`auYieldCurveShape`** — AU Yield Curve Shape · `YieldCurveShape` · default — · via ECONOMIC_REGIMES
   Optional AU term-structure overlay (design 67): an array of { tenor, spread } anchor points added to the FIXED_INCOME_AU level, linearly interpolated and clamped to the endpoints. Independent of the US shape. Absent/empty ⇒ a flat curve.
@@ -202,6 +202,10 @@ scenario's own schema), which is where to go to change it.
   How many consecutive historical years are replayed before jumping to a new random start year (design 102 §4.3). Longer blocks keep more of history's multi-year runs and pull-backs, but draw from fewer distinct sequences. 1 replays single years in random order, which throws away any link between neighbouring years. The default of 5 is the usual n^(1/3) rule for a 153-year series. Only used with the Historical bootstrap model.
 - **`equityReturnBootstrapFromYear`** — Historical Bootstrap — Sample From Year · `Number` · default — · sweep: mc · conditional · via ECONOMIC_REGIMES
   The first historical year the bootstrap may draw from; it always draws up to 2023 (design 133). Blank (default) chooses for you: 1951 when inflation replays history jointly with equity, which is the Monte Carlo default, and 1871 otherwise. A year from 1871 to 1974 limits the draw to that year onwards, so every window keeps at least 50 years of history. A year before 1951 runs from 1951 under joint inflation, with a warning, because the inflation and yield records start there. The window changes only history's shape: each is re-centred on your anchor and rescaled to Equity Return Volatility, so a later year does not mean lower returns, but it does change how deep the crashes go. The AU market replays its own years from 1958 and gold from 1969; earlier years in the window draw at random for those. Sweep it as a Monte Carlo grid axis to see whether a result depends on the era.
+- **`equityReturnBootstrapStartRun`** — Historical Bootstrap — Start Run (years) · `Number` · default — · conditional · via ECONOMIC_REGIMES
+  How many years replay in order from Historical Bootstrap — Start Year before the replay goes back to random blocks. Blank (default) replays through to the end of the history. A run longer than the history has left is cut at its end. Fifteen years covers most of what decides whether a retirement plan survives its start (design 133 §11 Q4).
+- **`equityReturnBootstrapStartYear`** — Historical Bootstrap — Start Year · `Number` · default — · conditional · via ECONOMIC_REGIMES
+  Replay history in order from this year, as if your plan's first year were that year (design 133). Blank (default) starts every path at a random historical year. A year from 1871 to 2023 makes the first years of the run that year and the ones after it, for Historical Bootstrap — Start Run years or until the history ends in 2023; after that the replay goes back to random blocks. It never wraps round to the start of the history. Use it to ask "what if I retire into 1929, 1966 or 2000?". It is that era's pattern around your anchor, not its actual returns: the years are re-centred on your anchor and rescaled to Equity Return Volatility, like every replayed year. Under joint inflation the same years' inflation and interest-rate moves come with it; years before 1951 have no inflation history, so inflation is drawn at random for those, with a warning. In Monte Carlo every path shares this opening run and differs only after it, so the result answers "given this start, how does the rest go?".
 - **`equityReturnDriftComp`** — Equity Return Drift Compensation · `Enum` · default `GEOMETRIC` · one of `GEOMETRIC`, `NONE` · via ECONOMIC_REGIMES
   How the growth-rate anchor is interpreted once returns are stochastic (design 74 §5.3). Adding a mean-0 shock to a multiplicatively-applied rate lowers the realized geometric (compounded) return by ≈σ²/2. GEOMETRIC (default) adds σ²/2 back per sleeve so the anchor reads as the CAGR you expect to earn and turning volatility on changes only the SPREAD, not the centre. NONE interprets the anchor as an ARITHMETIC mean and leaves the ≈σ²/2 volatility drag in (at σ=0.18 that is ≈−1.6pp/yr). Also governs the stochastic PROPERTY return path (design 75). Only used when Stochastic Equity Returns or Stochastic Property Returns is on.
 - **`equityReturnIdioVol`** — Equity Return Idiosyncratic Volatility · `RateKeyMap` · default — · one of `EQUITY_AU`, `EQUITY_INTL_EX_AU`, `EQUITY_INTL_EX_US`, `EQUITY_US` · via ECONOMIC_REGIMES
@@ -1939,7 +1943,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 
 ---
 
-## State field types (341)
+## State field types (342)
 
 The scenario-INDEPENDENT half of `StateSchemaRegistry`: the globs and exact paths it
 installs in its own constructor, with the value type that decides how each formats.
@@ -2134,6 +2138,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `equityMarketShock.z` | decimal |
 | `equityMonthShape.*.*` | decimal |
 | `equityReturnBootstrap.index` | integer |
+| `equityReturnBootstrap.pinned` | boolean |
 | `equityReturnBootstrap.remaining` | integer |
 | `equityReturnBootstrap.year` | integer |
 | `equityReturnDev.*` | rate |
@@ -2376,7 +2381,7 @@ what the in-app panel keys on.
 | [Spending](panels/spending.md) | panel | 209 | 1 panel · design 89 |
 | [The Spending Rule](concepts/spending-rule.md) | concept | 296 | 1 panel · 17 params · design 89 |
 | [State](panels/state-panel.md) | panel | 181 | 1 panel |
-| [Stochastic Return Paths](concepts/stochastic-return-paths.md) | concept | 399 | 2 panels · 20 params · design 74, 90, 102, 121, 129, 131, 133 |
+| [Stochastic Return Paths](concepts/stochastic-return-paths.md) | concept | 390 | 2 panels · 22 params · design 74, 90, 102, 121, 129, 131, 133 |
 | [Superannuation Access](concepts/superannuation.md) | concept | 399 | 1 panel · 4 actions · design 119, 77 |
 | [Tax Harvesting and Asset Location](concepts/tax-harvesting.md) | concept | 235 | 2 panels · 3 params · design 29, 94 |
 | [Timeline](panels/timeline.md) | panel | 203 | 1 panel |

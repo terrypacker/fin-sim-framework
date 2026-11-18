@@ -56,6 +56,7 @@ function bootstrapWindow(fromYear) {
   return Object.freeze({
     firstYear:  HISTORICAL_EQUITY_RETURNS.firstYear,   // calendar year of SERIES index 0
     start,                                            // series index of the window's first year
+    mean,                                             // the window's mean: a pinned year outside it re-centres on this (design 133 §4.1)
     deviations: Object.freeze(r.map(x => x - mean)),  // indexed from `start`
     sd,
     dragVar:    2 * (mean - geo),
@@ -239,7 +240,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
   static type        = 'EquityReturnTickHandler';
   static eventType   = 'EQUITY_RETURN_TICK';
 
-  constructor({ vol = 0.18, model = 'WHITE_NOISE', reversionSpeed = 0.3, beta = {}, idioVol = {}, driftComp = 'GEOMETRIC', blockLength = 5, window = 'FULL', auReplay = true, dt = 1, stampMarketShock = false, gold = null, monthShape = false } = {}) {
+  constructor({ vol = 0.18, model = 'WHITE_NOISE', reversionSpeed = 0.3, beta = {}, idioVol = {}, driftComp = 'GEOMETRIC', blockLength = 5, window = 'FULL', auReplay = true, dt = 1, stampMarketShock = false, gold = null, monthShape = false, pinned = null } = {}) {
     super(null, 'Equity Return Tick');
     this.vol                  = vol;             // annualized market-factor sd (rate units)
     this.model                = model;           // one of EQUITY_RETURN_MODEL_IDS
@@ -248,6 +249,9 @@ export class EquityReturnTickHandler extends HandlerEntry {
     this.idioVol              = idioVol ?? {};   // per-sleeve idiosyncratic sd; absent ⇒ 0
     this.driftComp            = driftComp;       // 'GEOMETRIC' (add σ²/2) or 'NONE' (design 74 §5.3)
     this.blockLength          = blockLength;     // consecutive historical years per block (HISTORICAL_BOOTSTRAP only)
+    // Design 133 §4.1 — `{ startYear, years }`: the FIRST block replays these years in order,
+    // capped at the series' end and never wrapping. null = every block random (as before).
+    this.pinned               = pinned;
     this.window               = window;          // 'FULL', 'POSTWAR' (design 103 joint mode) or a first year (design 133) — HISTORICAL_BOOTSTRAP only
     this.auReplay             = auReplay;        // replay the AU market's own year where it has data (HISTORICAL_BOOTSTRAP only)
     this.dt                   = dt;              // tick interval in years (annual)
@@ -269,6 +273,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
       vol: d.vol, model: d.model, reversionSpeed: d.reversionSpeed,
       beta: d.beta, idioVol: d.idioVol, driftComp: d.driftComp, blockLength: d.blockLength,
       window: d.window, auReplay: d.auReplay, dt: d.dt, stampMarketShock: d.stampMarketShock ?? false,
+      pinned: d.pinned ?? null,
       gold: d.gold ?? null, monthShape: d.monthShape ?? false,
     });
     h.id = d.id;
@@ -281,6 +286,8 @@ export class EquityReturnTickHandler extends HandlerEntry {
       vol: this.vol, model: this.model, reversionSpeed: this.reversionSpeed,
       beta: this.beta, idioVol: this.idioVol, driftComp: this.driftComp, blockLength: this.blockLength,
       window: this.window, auReplay: this.auReplay, dt: this.dt, stampMarketShock: this.stampMarketShock,
+      // Only when set, so an unpinned handler's snapshot is byte-identical to before.
+      ...(this.pinned ? { pinned: this.pinned } : {}),
       gold: this.gold, monthShape: this.monthShape,
     };
   }
@@ -560,9 +567,27 @@ export class EquityReturnTickHandler extends HandlerEntry {
     // The cursor's `index` is a SERIES index; the window maps it to its own deviations.
     // Under FULL (start 0) this is design 102's arithmetic exactly. A prior cursor outside
     // the window (never, within one run) starts a fresh block rather than reading off it.
-    const { deviations, sd, firstYear, start } = this._window();
+    const { deviations, sd, firstYear, start, mean } = this._window();
     const n     = deviations.length;
     const prior = state.equityReturnBootstrap;
+    const scale = this.vol / sd;
+
+    // Design 133 §4.1 — a pinned run. It reads the whole SERIES, not the window (a pinned 1929
+    // under POSTWAR still replays 1929), re-centred on the window's mean so one centre holds
+    // for the run, and it never wraps: `remaining` is capped at the series' last year.
+    const all = HISTORICAL_EQUITY_RETURNS.returns;
+    const pinnedStep = (index, remaining) => ({
+      marketDev: (all[index] - mean) * scale,
+      bootstrap: { index, year: firstYear + index, remaining, pinned: true },
+    });
+    if (prior == null && this.pinned) {
+      rng();   // draw and discard the first block's uniform, so every later draw stays in place
+      const index = this.pinned.startYear - firstYear;
+      const years = Math.min(this.pinned.years ?? Infinity, all.length - index);
+      return pinnedStep(index, years - 1);
+    }
+    if (prior?.pinned && prior.remaining > 0) return pinnedStep(prior.index + 1, prior.remaining - 1);
+
     const inWindow = prior != null && prior.index >= start && prior.index < start + n;
     let rel, remaining;
     if (prior?.remaining > 0 && inWindow) {
@@ -574,7 +599,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
     }
     const index = start + rel;
     return {
-      marketDev: deviations[rel] * (this.vol / sd),
+      marketDev: deviations[rel] * scale,
       bootstrap: { index, year: firstYear + index, remaining },
     };
   }

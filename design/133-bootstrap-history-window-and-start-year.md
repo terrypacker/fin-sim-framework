@@ -1,6 +1,6 @@
 # 133 — Historical bootstrap: the history window and a pinned start year
 
-**Status:** ACCEPTED (18 Nov 2026), rev 2. **Phases 1–2 BUILT** (§9.1, §9.2). Phases 3–4 not started.
+**Status:** ACCEPTED (18 Nov 2026), rev 2. **Phases 1–3 BUILT** (§9.1–§9.3). Phase 4 not started.
 All five questions are decided (§11). Rev 2 records the decisions (a 50-year window floor,
 a 15-year shading threshold) and corrects §2 point 2 and flag F1. Rev 1 read post-war
 history's variance ratios as the default Monte Carlo's, and the phase 1 probe showed they
@@ -285,10 +285,14 @@ doesn't apply).
   windows the history VR is mostly lags 3–4 (§2 point 2).
 - **G-B1 (a pinned run replays history in order):** a pinned 1966 run's first N stamped
   `equityReturnBootstrap.year` values are 1966…1966+N−1, with no wrap past 2023. Under joint
-  mode the inflation tick reads the same years.
+  mode the inflation tick reads the same years. **PASSED** in phase 3
+  (`tests/unit/bootstrap-start.test.mjs`).
 - **G-B2 (pinned is a stress):** on a reference plan, a pinned 1966 single run funds worse than
   the median MC path, and a pinned 1950 funds better. If it doesn't, either the re-centring
-  or the pinned run is wrong.
+  or the pinned run is wrong. **PASSED** in phase 3. On the toolset's default plan (40 years,
+  joint inflation, year-keyed RNG streams, a 15-year pinned run), terminal real net worth was
+  ranked against 40 unpinned seeds. Across three seeds each, pinned 1966 ranked 0–3 of 40 and
+  pinned 1950 ranked 33–40. Pinned 1929 ranked 17–30, near the median, as §2 point 4 expects.
 - **G-B3 (rolling covers every start):** under ROLLING with n = the number of start years,
   each start year appears exactly once, and the by-year strip's success values match the
   per-path rows.
@@ -301,7 +305,7 @@ doesn't apply).
 2. **Part A:** `equityReturnBootstrapFromYear`, the rules in §3.2, the pairing field, the MC axis.
    **BUILT** (§9.2).
 3. **Part B:** pinned start and run, cursor `pinned`, the joint-mode warning, the pairing
-   field.
+   field. **BUILT** (§9.3).
 4. **Rolling-start sweep:** `mcEquityBootstrapStarts`, the per-path stamp, the by-start-year
    strip, the `mc-run` flag.
 
@@ -358,6 +362,35 @@ Each phase restamps `stochastic-return-paths` and regenerates `help/REFERENCE.md
     plan's own calendar years (`optRowFor`), and bounds the ±5 range around a typed centre.
 - **Not done:** re-fitting the block length per window (F1), and registering the param with
   lever-inertness (§5). The visibility rule covers the grid.
+
+### 9.3 As built (phase 3, 18 Nov 2026)
+
+- **Params.** `equityReturnBootstrapStartYear` takes any year 1871–2023. It isn't bound by
+  the window or the 50-year floor, because the user names the year. It's neither an MC draw
+  nor an optimizer lever, since phase 4's rolling mode is how start years get swept.
+  `equityReturnBootstrapStartRun` is a whole number ≥ 1, blank = through 2023, cut at the
+  series' end. Both are validated in `bootstrap-window.js` (`authoredBootstrapStart`), and
+  only when the bootstrap runs.
+- **Handler.** `EquityReturnTickHandler` takes `pinned: { startYear, years }`.
+  - On the first tick (no cursor yet) it draws and discards the block's uniform, then
+    replays the start year.
+  - While the cursor is `pinned` with years left, it steps to the next series year. That
+    skips the in-window check and can't wrap, because `remaining` is capped at 2023.
+  - Each pinned year is `(series[i] − window.mean) × vol / window.sd`. Windows now carry
+    `mean`. Inside the window this is exactly the deviation a random block would give
+    (tested).
+  - After the run, the cursor drops `pinned` and blocks are random again.
+  - `pinned` is serialized only when set, so unpinned snapshots are byte-identical.
+    `equityReturnBootstrap.pinned` is registered in the state schema.
+- **Joint mode.** Inflation, the 10-year yield, gold and AU all read the cursor's year, so
+  they follow the pinned run with no change. A pinned year before 1951 under joint
+  inflation prints one warning naming the years whose inflation is drawn at random.
+- **Monte Carlo.** The params pass through `perturbParams`, so every path shares the
+  opening run (§11 Q3).
+  - The panel line says "every path opens with 1966–1980 in order". The design asked for
+    this in the run header; it's on the config panel's return-paths line instead.
+  - `mcEquityStart` gives the pairing record `equityStart: '<year>+<years>'` for batches
+    and grid cells. `pairingMismatches` reports "pinned start none vs 1966 for 15 years".
 
 ## 10. Flags raised by this design
 
