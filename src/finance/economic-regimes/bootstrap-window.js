@@ -144,3 +144,80 @@ export function describeBootstrapWindow(p) {
       : (clamped ? `set to ${authored}; joint inflation starts in ${JOINT_FIRST_YEAR}` : 'set'),
   };
 }
+
+// ─── the pinned start (design 133 §4) ────────────────────────────────────────────
+
+/**
+ * The authored pinned run, validated, or null when no start year is set.
+ *
+ * `equityReturnBootstrapStartYear` is any year of the series (1871–2023). It is not bound by
+ * the window or its 50-year floor: the user named the year. `equityReturnBootstrapStartRun`
+ * is how many years replay in order from it (blank = through 2023), capped at the series' end.
+ *
+ * @param {object} p  params
+ * @returns {{ startYear: number, years: number, toYear: number }|null}
+ * @throws on a start year outside the series, or a run that is not a whole number ≥ 1
+ */
+export function authoredBootstrapStart(p) {
+  const v = p?.equityReturnBootstrapStartYear;
+  if (v == null || v === '') return null;
+  const y = Number(v);
+  if (!Number.isInteger(y) || y < HISTORICAL_FIRST_YEAR || y > HISTORICAL_LAST_YEAR) {
+    throw new Error(`Historical Bootstrap — Start Year: ${v} is not allowed. Use a whole year from `
+      + `${HISTORICAL_FIRST_YEAR} to ${HISTORICAL_LAST_YEAR}, the years the history covers (design 133).`);
+  }
+  const maxYears = HISTORICAL_LAST_YEAR - y + 1;
+  const r = p?.equityReturnBootstrapStartRun;
+  let years = maxYears;
+  if (r != null && r !== '') {
+    const k = Number(r);
+    if (!Number.isInteger(k) || k < 1) {
+      throw new Error(`Historical Bootstrap — Start Run: ${r} is not allowed. Use a whole number of years, `
+        + '1 or more, or leave it blank to replay through to the end of the history (design 133).');
+    }
+    years = Math.min(k, maxYears);
+  }
+  return { startYear: y, years, toYear: y + years - 1 };
+}
+
+/**
+ * The pinned run the equity handler is built with (`{ startYear, years }`), or null. Null off
+ * the bootstrap, so a stale start year never fails a run that does not replay history.
+ *
+ * @param {object} p  resolved params
+ * @returns {{ startYear: number, years: number }|null}
+ */
+export function bootstrapPinnedRun(p) {
+  if (!bootstrapActive(p)) return null;
+  const a = authoredBootstrapStart(p);
+  return a ? { startYear: a.startYear, years: a.years } : null;
+}
+
+/**
+ * The pinned run for display, or null.
+ *
+ * @param {object} p  resolved params
+ * @returns {{ startYear: number, toYear: number, years: number }|null}
+ */
+export function describeBootstrapStart(p) {
+  if (!bootstrapActive(p)) return null;
+  return authoredBootstrapStart(p);
+}
+
+/**
+ * The warning a pinned run needs, or null: under joint inflation, years before 1951 have no
+ * inflation or yield history, so those years draw inflation at random (§4.1). Allowed,
+ * because the user picked the year by name; said once.
+ *
+ * @param {object} p  resolved params
+ * @returns {string|null}
+ */
+export function bootstrapStartWarning(p) {
+  if (!bootstrapActive(p) || !jointInflationActive(p)) return null;
+  const a = authoredBootstrapStart(p);
+  if (!a || a.startYear >= JOINT_FIRST_YEAR) return null;
+  const last = Math.min(a.toYear, JOINT_FIRST_YEAR - 1);
+  const span = last === a.startYear ? `${last} has` : `${a.startYear}–${last} have`;
+  return `Historical Bootstrap — Start Year ${a.startYear}: ${span} no inflation history, `
+    + `so inflation is drawn at random for those years; it replays history from ${JOINT_FIRST_YEAR} (design 133).`;
+}

@@ -26,7 +26,7 @@ import { get, set }              from '../mc-param-paths.js';
 import { computePathShape }      from '../mc-sampling.js';
 import { runsToRows }            from '../mc-analysis.js';
 import { realRatesOf }           from '../../fx/real-basis.js';
-import { describeBootstrapWindow } from '../../economic-regimes/bootstrap-window.js';
+import { describeBootstrapWindow, describeBootstrapStart } from '../../economic-regimes/bootstrap-window.js';
 
 /**
  * The per-iteration Monte Carlo world, in one place, so the SERIAL loop and a WORKER
@@ -138,6 +138,8 @@ export function mcReturnPaths(params) {
     equityModel:    mcEquityModel(params),
     inflationModel: mcInflationModel(params),
     window:         describeBootstrapWindow(p),
+    // Design 133 §4.2 — a pinned opening run every path shares (a conditional Monte Carlo).
+    start:          describeBootstrapStart(p),
   };
 }
 
@@ -151,6 +153,19 @@ export function mcReturnPaths(params) {
  */
 export function mcEquityWindow(params) {
   return describeBootstrapWindow(applyMcPaths({ ...(params ?? {}) }))?.fromYear ?? null;
+}
+
+/**
+ * The pinned opening run every Monte Carlo path shares (design 133 §4.2), as
+ * '<startYear>+<years>', or null when there is none. The pairing record carries it, so a
+ * pinned batch is never read as paired with an unpinned one, or with another start.
+ *
+ * @param {object} params  the batch's (or a grid cell's) base params
+ * @returns {string|null}
+ */
+export function mcEquityStart(params) {
+  const a = describeBootstrapStart(applyMcPaths({ ...(params ?? {}) }));
+  return a ? `${a.startYear}+${a.years}` : null;
 }
 
 /**

@@ -210,6 +210,13 @@ export function pairingMismatches(a, b) {
       && a.equityModel === b.equityModel) {
     out.push(`bootstrap years from ${a.equityWindow ?? 'none'} vs ${b.equityWindow ?? 'none'}`);
   }
+  // Design 133 §4.2 — a pinned opening run, same rule. A pinned batch is a CONDITIONAL Monte
+  // Carlo (every path shares its first years), so it never pairs with an unpinned one.
+  if (a.equityStart !== undefined && b.equityStart !== undefined && a.equityStart !== b.equityStart
+      && a.equityModel === b.equityModel) {
+    const show = (x) => (x == null ? 'none' : x.replace('+', ' for ') + ' years');
+    out.push(`pinned start ${show(a.equityStart)} vs ${show(b.equityStart)}`);
+  }
   // Design 103 §6 — the inflation process, under the same rule for records that predate it.
   if (a.inflationModel !== undefined && b.inflationModel !== undefined && a.inflationModel !== b.inflationModel) {
     out.push(`inflation process ${a.inflationModel ?? 'off'} vs ${b.inflationModel ?? 'off'}`);

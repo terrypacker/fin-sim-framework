@@ -31,7 +31,7 @@ import { YieldCurveTickHandler }          from '../../finance/economic-regimes/y
 import { EquityReturnReducer }            from '../../finance/economic-regimes/equity-return-reducer.js';
 import { EquityReturnStepReducer }        from '../../finance/economic-regimes/equity-return-step-reducer.js';
 import { EquityReturnTickHandler, EQUITY_RETURN_MODEL_IDS, EQUITY_RETURN_MODEL_LABELS, DEFAULT_GOLD_RETURN_VOL } from '../../finance/economic-regimes/equity-return-tick-handler.js';
-import { bootstrapWindowName, bootstrapWindowWarning, LATEST_BOOTSTRAP_FROM, HISTORICAL_FIRST_YEAR } from '../../finance/economic-regimes/bootstrap-window.js';
+import { bootstrapWindowName, bootstrapWindowWarning, bootstrapPinnedRun, bootstrapStartWarning, LATEST_BOOTSTRAP_FROM, HISTORICAL_FIRST_YEAR, HISTORICAL_LAST_YEAR } from '../../finance/economic-regimes/bootstrap-window.js';
 import { InflationTickHandler, INFLATION_MODEL_IDS, INFLATION_MODEL_LABELS, jointInflationActive, inflationProcessConfig } from '../../finance/economic-regimes/inflation-tick-handler.js';
 import { stockBondCorrelationOf, stockBondCorrelationActive } from '../../finance/economic-regimes/stock-bond-correlation.js';
 import { InflationStepReducer }           from '../../finance/economic-regimes/inflation-step-reducer.js';
@@ -401,10 +401,20 @@ const _warnedBootstrapWindow = new Set();
  * once per process: every Monte Carlo path compiles, and the warning is about the plan.
  */
 function _bootstrapWindowWithWarning(p) {
-  const w   = bootstrapWindowName(p);
-  const msg = bootstrapWindowWarning(p);
-  if (msg && !_warnedBootstrapWindow.has(msg)) { _warnedBootstrapWindow.add(msg); console.warn(msg); }
+  const w = bootstrapWindowName(p);
+  _warnOnce(bootstrapWindowWarning(p));
   return w;
+}
+
+/** The pinned first block (design 133 §4), with its joint-mode warning printed once. */
+function _bootstrapPinnedWithWarning(p) {
+  const pinned = bootstrapPinnedRun(p);
+  _warnOnce(bootstrapStartWarning(p));
+  return pinned;
+}
+
+function _warnOnce(msg) {
+  if (msg && !_warnedBootstrapWindow.has(msg)) { _warnedBootstrapWindow.add(msg); console.warn(msg); }
 }
 
 /**
@@ -1430,6 +1440,33 @@ export const ECONOMIC_REGIMES = {
         description:  `The first historical year the bootstrap may draw from; it always draws up to 2023 (design 133). Blank (default) chooses for you: 1951 when inflation replays history jointly with equity, which is the Monte Carlo default, and 1871 otherwise. A year from 1871 to ${LATEST_BOOTSTRAP_FROM} limits the draw to that year onwards, so every window keeps at least 50 years of history. A year before 1951 runs from 1951 under joint inflation, with a warning, because the inflation and yield records start there. The window changes only history's shape: each is re-centred on your anchor and rescaled to Equity Return Volatility, so a later year does not mean lower returns, but it does change how deep the crashes go. The AU market replays its own years from 1958 and gold from 1969; earlier years in the window draw at random for those. Sweep it as a Monte Carlo grid axis to see whether a result depends on the era.`,
       },
       {
+        key:          'equityReturnBootstrapStartYear',
+        label:        'Historical Bootstrap — Start Year',
+        type:         'Number',
+        group:        'Economic Shocks',
+        // A named stress test, not an uncertain input: phase 4's rolling sweep is how start
+        // years get swept, so it is neither a Monte Carlo draw nor an optimizer lever.
+        mc:           false,
+        opt:          false,
+        defaultValue: null,
+        visibleWhen:  { anyOf: [
+          { param: 'equityReturnModel',   equals: 'HISTORICAL_BOOTSTRAP' },
+          { param: 'mcEquityReturnModel', equals: 'HISTORICAL_BOOTSTRAP' },
+        ] },
+        description:  `Replay history in order from this year, as if your plan's first year were that year (design 133). Blank (default) starts every path at a random historical year. A year from ${HISTORICAL_FIRST_YEAR} to ${HISTORICAL_LAST_YEAR} makes the first years of the run that year and the ones after it, for Historical Bootstrap — Start Run years or until the history ends in ${HISTORICAL_LAST_YEAR}; after that the replay goes back to random blocks. It never wraps round to the start of the history. Use it to ask "what if I retire into 1929, 1966 or 2000?". It is that era's pattern around your anchor, not its actual returns: the years are re-centred on your anchor and rescaled to Equity Return Volatility, like every replayed year. Under joint inflation the same years' inflation and interest-rate moves come with it; years before 1951 have no inflation history, so inflation is drawn at random for those, with a warning. In Monte Carlo every path shares this opening run and differs only after it, so the result answers "given this start, how does the rest go?".`,
+      },
+      {
+        key:          'equityReturnBootstrapStartRun',
+        label:        'Historical Bootstrap — Start Run (years)',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: null,
+        visibleWhen:  { param: 'equityReturnBootstrapStartYear', exists: true },
+        description:  'How many years replay in order from Historical Bootstrap — Start Year before the replay goes back to random blocks. Blank (default) replays through to the end of the history. A run longer than the history has left is cut at its end. Fifteen years covers most of what decides whether a retirement plan survives its start (design 133 §11 Q4).',
+      },
+      {
         key:          'equityReturnBootstrapAuReplay',
         label:        'Historical Bootstrap — Replay AU Market History',
         type:         'Boolean',
@@ -2055,6 +2092,8 @@ export const ECONOMIC_REGIMES = {
             // Monte Carlo panel can say which window a run samples; an authored first year
             // is validated there (throws outside 1871–1974) and clamped to 1951 under joint.
             window:         _bootstrapWindowWithWarning(p),
+            // Design 133 §4 — the first block replays a named run of years in order.
+            pinned:         _bootstrapPinnedWithWarning(p),
             // Design 102 §6: the AU market replays its own history where the year has data.
             auReplay:       p.equityReturnBootstrapAuReplay ?? true,
             // Design 127 §4.7 — the months inside each drawn year, under MONTHLY earnings.

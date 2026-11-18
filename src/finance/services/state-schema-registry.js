@@ -654,6 +654,7 @@ export class StateSchemaRegistry {
     this.register('equityReturnBootstrap.index',      ParameterValueType.integer());
     this.register('equityReturnBootstrap.year',       ParameterValueType.integer());
     this.register('equityReturnBootstrap.remaining',  ParameterValueType.integer());
+    this.register('equityReturnBootstrap.pinned',     ParameterValueType.boolean());   // design 133 §4.2
     this.registerPattern('propertyReturnDev.*',       ParameterValueType.rate());
     this.registerPattern('propertyReturnDriftComp.*', ParameterValueType.rate());
     this.register('propertyReturnMarketDev',          ParameterValueType.rate());

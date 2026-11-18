@@ -53,10 +53,13 @@ export function formatReturnPaths(info) {
   // Automatic windows say why; an authored year says nothing unless joint inflation moved it.
   const why   = !w ? '' : w.automatic ? ` (automatic: ${w.reason})` : (w.reason !== 'set' ? ` (${w.reason})` : '');
   const years = w ? `, ${w.fromYear}–${w.toYear}${why}` : '';
+  // Design 133 §4.2 — a pinned opening run changes what the whole batch means: say so.
+  const st    = info.start;
+  const start = st ? `; every path opens with ${st.startYear}–${st.toYear} in order` : '';
   const inflation = info.inflationModel == null
     ? 'off (single-run inflation)'
     : (INFLATION_MODEL_SHORT[info.inflationModel] ?? info.inflationModel);
-  return `Equity: ${equity}${years} · Inflation: ${inflation}`;
+  return `Equity: ${equity}${years}${start} · Inflation: ${inflation}`;
 }
 
 /**

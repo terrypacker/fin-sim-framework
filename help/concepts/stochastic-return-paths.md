@@ -3,7 +3,7 @@ id: stochastic-return-paths
 kind: concept
 title: Stochastic Return Paths
 panels: [mc-config, mc-results]
-params: [equityReturnStochastic, equityReturnModel, equityReturnVol, equityReturnReversionSpeed, equityReturnBeta, equityReturnIdioVol, equityReturnDriftComp, equityReturnBootstrapBlock, equityReturnBootstrapFromYear, equityReturnBootstrapAuReplay, propertyReturnStochastic, propertyReturnBeta, propertyReturnIdioVol, propertyReturnIdioScale, mcSequenceRisk, mcEquityReturnModel, goldReturnVol, goldEquityCorrelation, goldReplay, stockBondCorrelation]
+params: [equityReturnStochastic, equityReturnModel, equityReturnVol, equityReturnReversionSpeed, equityReturnBeta, equityReturnIdioVol, equityReturnDriftComp, equityReturnBootstrapBlock, equityReturnBootstrapFromYear, equityReturnBootstrapStartYear, equityReturnBootstrapStartRun, equityReturnBootstrapAuReplay, propertyReturnStochastic, propertyReturnBeta, propertyReturnIdioVol, propertyReturnIdioScale, mcSequenceRisk, mcEquityReturnModel, goldReturnVol, goldEquityCorrelation, goldReplay, stockBondCorrelation]
 design: [74-stochastic-return-paths.md, 90-equity-fidelity-and-capital-losses.md, 102-historical-bootstrap-equity-returns.md, 121-shock-leg-offset-and-stagflation-calibration.md, 129-stock-bond-correlation.md, 131-gold-return-drivers.md, 133-bootstrap-history-window-and-start-year.md]
 stamps:
   param:equityReturnStochastic: 635a9b
@@ -15,6 +15,8 @@ stamps:
   param:equityReturnDriftComp: be12e6
   param:equityReturnBootstrapBlock: 9d8272
   param:equityReturnBootstrapFromYear: 434fe6
+  param:equityReturnBootstrapStartYear: c6a65f
+  param:equityReturnBootstrapStartRun: 183cef
   param:equityReturnBootstrapAuReplay: 168628
   param:propertyReturnStochastic: e5f7f2
   param:propertyReturnBeta: 5ce9a3
@@ -49,16 +51,17 @@ When inflation replays history too, as Monte Carlo does by default, the replay k
 a later first year. The Monte Carlo panel shows which. Every span is moved onto your anchor and
 volatility, so the span changes how hard crashes hit, not the average return.
 
-Gold moves every year too. When the replay lands on a year after 1968, gold replays that
-year as well, so its swings, and its ties to inflation and interest rates, are history's;
-earlier years draw at random. Its default swing is history's, larger than the share
-market's, and barely tied to it: a diversifier with deep drawdowns, not a safe harbour.
-When inflation replays history, as it does by default in Monte Carlo, gold's return rises
-with US inflation the way share returns do.
+A start year instead replays a named era in order from your first year: "what if I retire
+into 1966?". In Monte Carlo every path then shares that opening and differs only after it.
 
-Bond noise can share that yearly draw too. Independent, the default, sits between eras:
-bonds fell with shares in the 1970s and hedged them after 2000, so the correlation picks a
-world. Within a year the bond move shows first.
+Gold replays its own year after 1968 too, so its swings and its ties to inflation and
+interest rates are history's; earlier years draw at random. Its default swing is larger
+than the share market's and barely tied to it: a diversifier with deep drawdowns, not a
+safe harbour.
+
+Bond noise can share that yearly draw. Independent, the default, sits between eras: bonds
+fell with shares in the 1970s and hedged them after 2000. Within a year the bond move shows
+first.
 
 Property gets its own version: for a house, the variance that matters is its price on
 the day you sell.
