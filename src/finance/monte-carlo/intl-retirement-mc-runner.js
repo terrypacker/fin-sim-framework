@@ -15,7 +15,7 @@ import { resolveAliasCenters, resolveRecordCenters } from '../../scenarios/scena
 import { withLiquidityAxisCenters } from '../pools/pool-target-scale.js';
 import { IntlRetirementMcConfig, CENTER_SOURCES, refineCenterSource, variablesMissingCenter } from './intl-retirement-mc-config.js';
 import { scenarioParamValues, paramSchemaDefaults } from '../param-schema-utils.js';
-import { buildIterationRunner, perturbParams, samplingSignature, mcEquityModel, mcInflationModel, mcPrimeModel, applyMcPaths } from './parallel/mc-worker-core.js';
+import { buildIterationRunner, perturbParams, samplingSignature, mcEquityModel, mcEquityWindow, mcInflationModel, mcPrimeModel, applyMcPaths } from './parallel/mc-worker-core.js';
 import { stockBondCorrelationWarnings } from '../economic-regimes/stock-bond-correlation.js';
 import { McWorkerPool }              from './parallel/mc-worker-pool.js';
 import { migrateYearFieldsToDates, migrateParamBag } from '../../scenarios/year-date-migration.js';
@@ -469,6 +469,8 @@ export class IntlRetirementMcRunner {
       mcSequenceRisk: ctx.base.mcSequenceRisk !== false,
       // Which equity process the paths ran (design 102 §7 Q3); null when the path is off.
       equityModel:    mcEquityModel(ctx.base),
+      // And the historical years the bootstrap sampled (design 133); null off the bootstrap.
+      equityWindow:   mcEquityWindow(ctx.base),
       // And the inflation process (design 103 §6); null when the path is off.
       inflationModel: mcInflationModel(ctx.base),
       // And the prime rate mode (design 104).

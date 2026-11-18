@@ -9,9 +9,9 @@
  */
 
 import { IntlRetirementMcRunner } from './intl-retirement-mc-runner.js';
-import { buildIterationRunner, runGridTask, samplingSignature, gridCellParams, mcEquityModel, mcInflationModel, mcPrimeModel } from './parallel/mc-worker-core.js';
+import { buildIterationRunner, runGridTask, samplingSignature, gridCellParams, mcEquityModel, mcEquityWindow, mcInflationModel, mcPrimeModel } from './parallel/mc-worker-core.js';
 import { cartesianProduct } from '../optimization/opt-values.js';
-import { get } from './mc-param-paths.js';
+import { get, set } from './mc-param-paths.js';
 import { GRID_MODES, referenceCellOf, summarizeGridCell } from './mc-grid.js';
 
 /**
@@ -153,8 +153,11 @@ export class McGridRunner extends IntlRetirementMcRunner {
         for (const r of errored) {
           console.error(`[McGridRunner] cell ${k} path seed=${r.seed} threw and is excluded: ${r.error}`);
         }
+        // Design 133 — a cell's window is its own: the axis can be the window itself.
+        const cellBase = structuredClone(gctx.base);
+        for (const [key, v] of Object.entries(gctx.cells[k].overrides)) set(cellBase, key, v);
         return { values: c.values, rows: cellRows, errored,
-                 summary: summarizeGridCell(cellRows, pairingFacts) };
+                 summary: summarizeGridCell(cellRows, { ...pairingFacts, equityWindow: mcEquityWindow(cellBase) }) };
       }),
       provenance,
       // What `gridCellRuns` needs to rebuild any path's params: one copy of the base

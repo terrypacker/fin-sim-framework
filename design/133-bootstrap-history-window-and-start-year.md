@@ -1,6 +1,6 @@
 # 133 — Historical bootstrap: the history window and a pinned start year
 
-**Status:** ACCEPTED (18 Nov 2026), rev 2. **Phase 1 BUILT** (§9.1). Phases 2–4 not started.
+**Status:** ACCEPTED (18 Nov 2026), rev 2. **Phases 1–2 BUILT** (§9.1, §9.2). Phases 3–4 not started.
 All five questions are decided (§11). Rev 2 records the decisions (a 50-year window floor,
 a 15-year shading threshold) and corrects §2 point 2 and flag F1. Rev 1 read post-war
 history's variance ratios as the default Monte Carlo's, and the phase 1 probe showed they
@@ -119,7 +119,7 @@ the same path length is the yardstick, not 1.
 
 ### 3.1 The parameter
 
-`equityReturnBootstrapFrom`: a year, blank by default. Blank keeps today's rule exactly
+`equityReturnBootstrapFromYear`: a year, blank by default. Blank keeps today's rule exactly
 (FULL, or POSTWAR under joint mode), so every saved plan and every golden is unchanged. A
 year Y builds the window Y–2023 with `bootstrapWindow(Y)`, which already takes any year.
 Each window is re-centred and drag-compensated on its own statistics, and wraps within
@@ -147,9 +147,11 @@ one year is easier to explain than two. If one is needed later, `bootstrapWindow
   record (`mc-grid-runner.js`, `intl-retirement-mc-runner.js`). The resolved window's first
   year joins it as `equityWindow`. `mc-analysis.js` flags two batches with different windows
   as unpaired, just as it does for different equity processes.
-- **Sweepable in MC (design 98):** yes, as an MC axis (`sweep: mc`). The sensitivity check is
-  "rerun my plan on 1871, 1926, 1951 and 1970" as one paired grid. It's a discrete axis, and
-  every value runs the same path seeds.
+- **Sweepable in MC (design 98):** yes, as a Monte Carlo **grid axis only** (§9.2). The
+  sensitivity check is "rerun my plan on 1871, 1926, 1951 and 1970" as one paired grid. It's
+  a discrete axis, and every value runs the same path seeds. It's never a per-path draw in a
+  batch, because the pairing record holds one window per batch, and never an optimizer
+  lever, because picking the best era is cherry-picking history.
 
 ### 3.3 Help and UI
 
@@ -234,8 +236,9 @@ paths, summarises them and pairs them:
 - **Property** reuses `state.equityReturnMarketDev`, so it rides the pinned run too. That's
   the same approximation design 102 §4.5 documents.
 - **Other equity processes.** Both params are ignored unless the bootstrap is the active
-  process. The lever-inertness machinery (design 114) tags them inert otherwise, so the grid
-  and the optimizer don't sweep a dead lever.
+  process. As built (§9.2), `visibleWhen` hides the window param unless the single-run or the
+  Monte Carlo equity process is the bootstrap, which keeps it off the grid's axis list too.
+  It isn't registered with the lever-inertness machinery (design 114).
 
 ## 6. Raw history (refused, Q5)
 
@@ -257,7 +260,7 @@ The owner refused both the mode and a "Use history's level" button (Q5).
 
 | param | type, default | applies when |
 |---|---|---|
-| `equityReturnBootstrapFrom` | year, blank (= automatic: FULL, or POSTWAR under joint) | bootstrap active; sweep: mc |
+| `equityReturnBootstrapFromYear` | year, blank (= automatic: FULL, or POSTWAR under joint) | bootstrap active; MC grid axis only |
 | `equityReturnBootstrapStartYear` | year, blank (= random) | bootstrap active |
 | `equityReturnBootstrapStartRun` | years, blank (= to 2023) | a start year is set |
 | `mcEquityBootstrapStarts` | `RANDOM` \| `ROLLING`, `RANDOM` | MC, bootstrap active |
@@ -270,10 +273,11 @@ doesn't apply).
 ## 8. How the choices are proved
 
 - **G-A1 (blank is today):** with every new param blank, goldens and seeded MC fixtures are
-  byte-identical (memory: the sim is bit-deterministic).
+  byte-identical (memory: the sim is bit-deterministic). **PASSED** in phases 1–2: the full
+  suite is unchanged, and a blank year or 1871 runs byte-identical to the automatic window.
 - **G-A2 (a window is shape only):** at an anchor equal to a window's own geometric mean,
   replaying that whole window returns that mean to 1e-9. That's design 102's existing
-  exactness test, parameterised over 1871, 1926, 1951 and 1970.
+  exactness test, parameterised over 1871, 1926, 1951 and 1970. **PASSED** in phase 2.
 - **G-A3 (the engine replays the window's shape):** `probe-equity-process-fit.mjs --from
   <year>`. The bootstrap's skew must match each window's history within simulation error.
   **PASSED** in phase 1 (§2.1: within 0.04 on all four windows). VR was in rev 1's gate. It's
@@ -294,7 +298,8 @@ doesn't apply).
 1. **Visibility (no new behaviour).** Show the window in force in the MC panel. Add the help
    section from §3.3. Extend the probe with `--from`. Ship this whatever happens to the rest,
    because the hidden POSTWAR default is the immediate problem. **BUILT** (§9.1).
-2. **Part A:** `equityReturnBootstrapFrom`, the rules in §3.2, the pairing field, the MC axis.
+2. **Part A:** `equityReturnBootstrapFromYear`, the rules in §3.2, the pairing field, the MC axis.
+   **BUILT** (§9.2).
 3. **Part B:** pinned start and run, cursor `pinned`, the joint-mode warning, the pairing
    field.
 4. **Rolling-start sweep:** `mcEquityBootstrapStarts`, the per-path stamp, the by-start-year
@@ -322,6 +327,37 @@ Each phase restamps `stochastic-return-paths` and regenerates `help/REFERENCE.md
   `EquityReturnTickHandler`'s `window` also accepts a first year
   (`bootstrapWindowFrom(year)`, memoised, throws outside the series). Nothing in the engine
   passes a year yet. That's phase 2, which adds the floor and the joint-mode clamp on top.
+
+### 9.2 As built (phase 2, 18 Nov 2026)
+
+- **The param is `equityReturnBootstrapFromYear`.** The draft's `equityReturnBootstrapFrom`
+  was renamed. Toolset `mc` flags must be booleans, and the sweep machinery infers a year
+  kind from a key that ends in `Year`. It's a Number, blank by default, shown when the
+  single-run or the Monte Carlo equity process is the bootstrap.
+- **Rules** (`bootstrap-window.js`):
+  - `authoredBootstrapFrom` refuses anything but a whole year from 1871 to 1974, and the
+    message names the 50-year floor. It only checks when the bootstrap runs, so a stale
+    year can't fail a run that doesn't replay history.
+  - Under joint inflation a pre-1951 year resolves to POSTWAR. The run is byte-identical
+    to the automatic window (tested), and `bootstrapWindowWarning` explains it. The toolset
+    prints the warning once per process, because every MC path compiles.
+  - A year that equals a named window resolves to that name (1871 → FULL, 1951 →
+    POSTWAR), so it's byte-identical to the automatic run.
+- **Panel line.** An authored year shows as "1970–2023". A clamped one says why: "1951–2023
+  (set to 1926; joint inflation starts in 1951)".
+- **Pairing.** `mcEquityWindow(params)` (`mc-worker-core.js`) is the resolved first year, or
+  null off the bootstrap. Batch records and each grid cell's record carry it as
+  `equityWindow`. A grid cell's window is resolved from its own overrides, since the axis
+  can be the window. `pairingMismatches` reports "bootstrap years from A vs B" when both
+  records ran the same equity process. Records from before the field are never called
+  mismatched. Turning the MC inflation path off now also reports 1951 vs 1871, which is
+  correct (MPR-10 updated).
+- **Grid only.** Two new schema fields:
+  - `gridOnly: true` makes `mcRowFor` return no batch row.
+  - `sweepRange: { min, max }` gives an unset year axis the range 1871–1974 rather than the
+    plan's own calendar years (`optRowFor`), and bounds the ±5 range around a typed centre.
+- **Not done:** re-fitting the block length per window (F1), and registering the param with
+  lever-inertness (§5). The visibility rule covers the grid.
 
 ## 10. Flags raised by this design
 

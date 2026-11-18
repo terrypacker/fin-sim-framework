@@ -108,3 +108,12 @@ test('MCA-8 a missing record is a mismatch, never assumed paired', () => {
   assert.match(shared.pairingMismatches(null, rec())[0], /the baseline has no pairing record/);
   assert.match(shared.pairingMismatches(rec(), undefined)[0], /this run has no pairing record/);
 });
+
+test('MCA-9 design 133: two bootstrap batches on different windows are not paired', () => {
+  const boot = { equityModel: 'HISTORICAL_BOOTSTRAP' };
+  assert.deepEqual(shared.pairingMismatches(rec({ ...boot, equityWindow: 1951 }), rec({ ...boot, equityWindow: 1926 })),
+    ['bootstrap years from 1951 vs 1926']);
+  assert.deepEqual(shared.pairingMismatches(rec({ ...boot, equityWindow: 1951 }), rec({ ...boot, equityWindow: 1951 })), []);
+  // A record from before the field existed says nothing about its window.
+  assert.deepEqual(shared.pairingMismatches(rec(boot), rec({ ...boot, equityWindow: 1926 })), []);
+});

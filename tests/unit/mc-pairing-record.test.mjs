@@ -130,9 +130,12 @@ test('MPR-10 a batch records its inflation process, and a change is flagged as u
   assert.ok(def.runs.every(r => r.params.inflationStochastic === true && r.params.inflationModel === 'HISTORICAL_JOINT'));
   const off = await runner().run({ mcInflationPath: false });
   assert.equal(off.summary.pairing.inflationModel, null);
-  // With no inflation path, AUTO prime has nothing to follow, so it drops to the schedule (design 104 §6).
+  // With no inflation path, AUTO prime has nothing to follow, so it drops to the schedule (design 104 §6),
+  // and without joint inflation the bootstrap's automatic window widens to the whole series (design 133).
+  assert.equal(def.summary.pairing.equityWindow, 1951);
+  assert.equal(off.summary.pairing.equityWindow, 1871);
   assert.deepEqual(pairingMismatches(def.summary.pairing, off.summary.pairing),
-    ['inflation process HISTORICAL_JOINT vs off', 'prime rate mode INFLATION_LINKED vs SCHEDULE']);
+    ['bootstrap years from 1951 vs 1871', 'inflation process HISTORICAL_JOINT vs off', 'prime rate mode INFLATION_LINKED vs SCHEDULE']);
 });
 
 test('MPR-7 a record from before the field existed is not called a process mismatch', () => {

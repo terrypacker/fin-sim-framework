@@ -50,7 +50,9 @@ export function formatReturnPaths(info) {
     ? 'off (single-run returns)'
     : (EQUITY_MODEL_SHORT[info.equityModel] ?? info.equityModel);
   const w = info.window;
-  const years = w ? `, ${w.fromYear}–${w.toYear}${w.automatic ? ` (automatic: ${w.reason})` : ''}` : '';
+  // Automatic windows say why; an authored year says nothing unless joint inflation moved it.
+  const why   = !w ? '' : w.automatic ? ` (automatic: ${w.reason})` : (w.reason !== 'set' ? ` (${w.reason})` : '');
+  const years = w ? `, ${w.fromYear}–${w.toYear}${why}` : '';
   const inflation = info.inflationModel == null
     ? 'off (single-run inflation)'
     : (INFLATION_MODEL_SHORT[info.inflationModel] ?? info.inflationModel);

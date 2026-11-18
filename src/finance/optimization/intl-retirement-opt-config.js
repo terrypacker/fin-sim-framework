@@ -51,12 +51,18 @@ export function optRowFor(kind, center, entry, window = null) {
       // An UNSET year (a sale that does not happen, `sweepUnset`) has no center to range
       // around, so it searches the plan window — every year the sale could land in. The
       // window comes from the cfg, so without one there is no row.
+      // A year that is not on the plan's calendar (design 133: a HISTORICAL year) declares its
+      // own `sweepRange`, which wins over the plan window and bounds a ±5 range.
+      const range = entry?.sweepRange ?? null;
       if (center === null) {
+        if (range) return { type: OPT_PARAM_TYPES.INTEGER, min: range.min, max: range.max, step: 1 };
         return window ? { type: OPT_PARAM_TYPES.INTEGER, min: window.from, max: window.to, step: 1 }
           : null;
       }
       const c = Math.round(center);
-      return { type: OPT_PARAM_TYPES.INTEGER, min: c - 5, max: c + 5, step: 1 };
+      return { type: OPT_PARAM_TYPES.INTEGER,
+        min: range ? Math.max(range.min, c - 5) : c - 5,
+        max: range ? Math.min(range.max, c + 5) : c + 5, step: 1 };
     }
     case 'rate':
       return { type: OPT_PARAM_TYPES.CONTINUOUS,
