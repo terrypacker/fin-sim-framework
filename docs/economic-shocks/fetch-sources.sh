@@ -45,6 +45,9 @@ fred IRLTLT01AUM156N     # AU 10-year government bond yield, monthly 1969-
 echo "  RBA   F1.1 cash rate target"
 curl -sSL --fail --max-time 60 -o RBA-F1.1-money-market.csv \
   "https://www.rba.gov.au/statistics/tables/csv/f1.1-data.csv"
+echo "  RBA   G1 consumer price inflation (AU CPI index, quarterly 1922-)"
+curl -sSL --fail --max-time 60 -A "Mozilla/5.0" -o RBA-G1-consumer-price-inflation.csv \
+  "https://www.rba.gov.au/statistics/tables/csv/g1-data.csv"
 
 echo "FX"
 fred DEXUSAL             # USD per AUD, daily 1971-
