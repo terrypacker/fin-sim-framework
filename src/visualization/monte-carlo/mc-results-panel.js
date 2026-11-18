@@ -1286,11 +1286,21 @@ export class McResultsPanel extends BaseComponent {
 
     const failing = years.filter(y => y.failed > 0);
     const counts  = new Set(years.map(y => y.n));
+    // Tint by rank of the median terminal net worth: a plan that never fails still shows which
+    // starts left it poorest. Rank, not value: a few rich starts would wash the rest out.
+    const ranked  = years.filter(y => y.medianNw != null && isFinite(y.medianNw))
+      .sort((a, b) => a.medianNw - b.medianNw);
+    const shadeOf = new Map(ranked.map((y, i) =>
+      [y.startYear, ranked.length > 1 ? Math.round(60 * (1 - i / (ranked.length - 1))) : 0]));
+    // Named only where three is a few of many: of a handful of starts, the tiles say it.
+    const poorest = ranked.length >= 10 ? ranked.slice(0, 3).map(y => y.startYear) : [];
+    const money   = years[0].real ? 'in today\'s dollars' : 'nominal';
     const summaryEl = document.createElement('div');
     summaryEl.className = 'mc-start-summary';
     summaryEl.textContent = (failing.length
       ? `Fails in ${failing.length} of ${years.length} start years: ${failing.map(y => y.startYear).join(', ')}.`
       : `Survives all ${years.length} start years.`)
+      + (poorest.length ? ` Least wealth at the end (${money}): ${poorest.join(', ')}.` : '')
       + (counts.size > 1 ? ' Some start years ran more paths than others: set the runs to a multiple of '
         + `${years.length} to run each the same number of times.` : '');
     section.appendChild(summaryEl);
@@ -1307,6 +1317,7 @@ export class McResultsPanel extends BaseComponent {
         + (y.short ? ' mc-start-tile--short' : '');
       tile.setAttribute('role', 'listitem');
       tile.dataset.startYear = String(y.startYear);
+      if (shadeOf.has(y.startYear)) tile.style.setProperty('--shade', `${shadeOf.get(y.startYear)}%`);
       const mark = y.n === 1 ? (y.failed ? '✗' : '✓') : fmtPct(y.successRate);
       tile.textContent = `${y.startYear} ${mark}`;
       tile.title = `${y.startYear}: ${y.n} path${y.n === 1 ? '' : 's'}, success ${fmtPct(y.successRate)}; `
@@ -1322,6 +1333,7 @@ export class McResultsPanel extends BaseComponent {
     note.className = 'mc-shape-note';
     const shortN = years.filter(y => y.short).length;
     note.textContent = 'Each path replays its start year and the years after it in order. '
+      + `The darker a tile, the less net worth that start ended with (${money}, ranked). `
       + (shortN ? `${shortN} faded start year${shortN === 1 ? '' : 's'} replay fewer than `
         + `${Math.min(ROLLING_SHADE_YEARS, horizonYears ?? ROLLING_SHADE_YEARS)} years before the `
         + `history ends in ${HISTORICAL_LAST_YEAR}; random blocks carry the rest, so read them as partly history.`

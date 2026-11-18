@@ -187,6 +187,12 @@ export class MonteCarloPresenter {
     if (this._lastResult) this._showResult(this._lastResult);
   }
 
+  /** The iterations and telemetry options, for WorkbenchApp's rebuild carry. */
+  getRunControls() { return this._configPanel?.getRunControls?.() ?? null; }
+
+  /** Put back run controls kept by a previous presenter. */
+  restoreRunControls(controls) { this._configPanel?.setRunControls?.(controls); }
+
   // ── Private ───────────────────────────────────────────────────────────────────
 
   _showResult(result) {

@@ -10,6 +10,8 @@
 
 import { BaseComponent } from '../components/base-component.js';
 import { fmtCompact } from '../money-format.js';
+import { realFromUsd } from '../../finance/fx/real-basis.js';
+import { ServiceRegistry } from '../../services/service-registry.js';
 import { buildParamStats, paramRowsForRun, fmtParamValue, fmtParamDelta } from './mc-run-params.js';
 
 function stddev(values) {
@@ -32,8 +34,8 @@ const METRIC_SERIES_FIELD = {
 
 /** Sort orders offered over the full run list. */
 const SORTS = {
-  metricAsc:  { label: 'value ↑', cmp: (f) => (a, b) => (a[f] ?? 0) - (b[f] ?? 0) },
-  metricDesc: { label: 'value ↓', cmp: (f) => (a, b) => (b[f] ?? 0) - (a[f] ?? 0) },
+  metricAsc:  { label: 'value ↑', cmp: (val) => (a, b) => (val(a) ?? 0) - (val(b) ?? 0) },
+  metricDesc: { label: 'value ↓', cmp: (val) => (a, b) => (val(b) ?? 0) - (val(a) ?? 0) },
   seed:       { label: 'seed',    cmp: ()  => (a, b) => a.seed - b.seed },
   // Design 133 §4.3 — offered only for a rolling batch (see `_sorts`).
   startYear:  { label: 'start year', rolling: true,
@@ -51,17 +53,17 @@ function startYearOf(run) {
  * Deduplicates by seed so the same run doesn't appear twice.
  * Representatives are chosen relative to the active metric.
  */
-function selectRepresentativeRuns(runs, summary, metric) {
+function selectRepresentativeRuns(runs, summary, metric, val, real = false) {
   if (!runs.length) return [];
 
-  const field = METRIC_FIELD[metric] ?? 'finalNetWorthUsd';
-  const sorted = [...runs].sort((a, b) => (a[field] ?? 0) - (b[field] ?? 0));
+  const sorted = [...runs].sort((a, b) => (val(a) ?? 0) - (val(b) ?? 0));
   const best   = sorted.at(-1);
   const worst  = sorted[0];
 
-  const p50 = summary.p50 ?? 0;
+  // The summary's P50 is nominal: in real money the median is the middle real value.
+  const p50 = real ? (val(sorted[Math.floor((sorted.length - 1) / 2)]) ?? 0) : (summary.p50 ?? 0);
   const median = runs.reduce((c, r) =>
-    Math.abs((r[field] ?? 0) - p50) < Math.abs((c[field] ?? 0) - p50) ? r : c
+    Math.abs((val(r) ?? 0) - p50) < Math.abs((val(c) ?? 0) - p50) ? r : c
   );
 
   const seriesField = METRIC_SERIES_FIELD[metric] ?? 'netWorthUsd';
@@ -200,7 +202,9 @@ export class McRunsPanel extends BaseComponent {
   _render() {
     this._container.innerHTML = '';
     const runs = this._runs;
-    const reps = selectRepresentativeRuns(runs, this._summary ?? {}, this._metric);
+    this._basis = this._valueBasis(runs);
+    const reps = selectRepresentativeRuns(runs, this._summary ?? {}, this._metric,
+      (r) => this._value(r), !!this._basis);
 
     const wrapper = document.createElement('div');
     wrapper.className = 'mc-runs-wrapper';
@@ -216,6 +220,7 @@ export class McRunsPanel extends BaseComponent {
     const header = document.createElement('div');
     header.className = 'node-header';
     header.textContent = 'Representative Runs';
+    if (this._basis) header.appendChild(this._basisTag());
     wrapper.appendChild(header);
 
     if (!reps.length) {
@@ -246,15 +251,17 @@ export class McRunsPanel extends BaseComponent {
     if (year != null) {
       const pin = document.createElement('span');
       pin.className = 'mc-replay-pin';
-      pin.textContent = ` History is pinned to open in ${year} while it replays; Clear unpins it.`;
+      pin.textContent = ` History is pinned to open in ${year} while it replays.`;
       text.appendChild(pin);   // in the sentence, not a column of its own (the badge is a flex row)
     }
+    text.appendChild(document.createTextNode(' Clear puts your plan\'s own settings back.'));
 
     const clear = document.createElement('button');
     clear.className = 'btn btn-xs btn-ghost';
     clear.textContent = 'Clear';
-    clear.title = 'Rebuild at the scenario\'s own seed. Params applied by the replay are NOT reverted'
-      + (year != null ? `, except the start year ${year}, which goes back to what the plan had.` : '.');
+    clear.title = 'Rebuild at the scenario\'s own seed, and put back every param the replay changed'
+      + (year != null ? ` (the start year ${year} among them)` : '')
+      + '. A param you edited while replaying keeps your edit.';
     this.listen(clear, 'click', () => this.onClearReplaySeed?.());
     badge.appendChild(clear);
 
@@ -264,7 +271,6 @@ export class McRunsPanel extends BaseComponent {
   // ── All runs ──────────────────────────────────────────────────────────────────
 
   _buildAllRunsSection(runs) {
-    const field = METRIC_FIELD[this._metric] ?? 'finalNetWorthUsd';
     const failCount = runs.filter(r => r.scenarioFailed).length;
 
     const section = document.createElement('div');
@@ -309,18 +315,18 @@ export class McRunsPanel extends BaseComponent {
     section.appendChild(header);
 
     const shown = (this._failsOnly ? runs.filter(r => r.scenarioFailed) : [...runs])
-      .sort(SORTS[this._sort].cmp(field));
+      .sort(SORTS[this._sort].cmp((r) => this._value(r)));
 
     const list = document.createElement('div');
     list.className = 'mc-run-list';
-    for (const run of shown) list.appendChild(this._buildCompactRow(run, field));
+    for (const run of shown) list.appendChild(this._buildCompactRow(run));
     section.appendChild(list);
 
     return section;
   }
 
   /** One line in the full list: seed, value, status, expand, replay. */
-  _buildCompactRow(run, field) {
+  _buildCompactRow(run) {
     const row = document.createElement('div');
     row.className = 'mc-run-line';
     if (run.scenarioFailed) row.classList.add('mc-run-line--fail');
@@ -336,7 +342,7 @@ export class McRunsPanel extends BaseComponent {
 
     const valEl = document.createElement('span');
     valEl.className = run.scenarioFailed ? 'mc-run-nw mc-run-nw--fail' : 'mc-run-nw';
-    valEl.textContent = fmtK(run[field]);
+    valEl.textContent = this._fmtValue(run);
 
     const statusEl = document.createElement('span');
     statusEl.className = 'mc-run-line-status';
@@ -362,6 +368,52 @@ export class McRunsPanel extends BaseComponent {
     return wrap;
   }
 
+  // ── Value basis ───────────────────────────────────────────────────────────────
+
+  /**
+   * `{ currency, why }` when the runs are shown and ranked in real money, else null.
+   *
+   * Real when the app's value basis is real (design 79, as the results panel does), and
+   * ALWAYS for a rolling batch (design 133 §4.3): its starts differ mostly in the inflation
+   * they carry, so nominal wealth puts the 1970s starts at the top and the run list would
+   * contradict the By Start Year table beside it, which ranks in today's dollars. All or
+   * nothing: a run without recorded rates keeps the whole list nominal.
+   */
+  _valueBasis(runs) {
+    const reg = ServiceRegistry.getInstance?.()?.schemaRegistry;
+    const asked = reg?.valueBasis?.() === 'real';
+    if ((!asked && !this._rolling()) || !runs?.length) return null;
+    const currency = asked ? (reg.displayCurrencyCode?.() ?? 'USD') : 'USD';
+    const field = this._field();
+    const ok = runs.every(r => realFromUsd(r[field] ?? 0, r.terminalRates, currency) != null);
+    return ok ? { currency, why: asked ? 'basis' : 'rolling' } : null;
+  }
+
+  /** A run's terminal value of the metric, in real money when `_basis` says so. */
+  _value(run) {
+    const field = this._field();
+    return this._basis ? realFromUsd(run[field] ?? 0, run.terminalRates, this._basis.currency) : run[field];
+  }
+
+  _fmtValue(run) {
+    return this._basis ? fmtCompact(this._value(run), this._basis.currency) : fmtK(run[this._field()]);
+  }
+
+  _field() { return METRIC_FIELD[this._metric] ?? 'finalNetWorthUsd'; }
+
+  /** "today's USD", on the header, so a reader knows which money the values are. */
+  _basisTag() {
+    const tag = document.createElement('span');
+    tag.className = 'mc-runs-basis';
+    tag.textContent = ` · today's ${this._basis.currency}`;
+    tag.title = this._basis.why === 'rolling'
+      ? 'Each run restated by its own inflation. A rolling batch\'s start years differ mostly in the '
+        + 'inflation they carry, so nominal wealth would rank the 1970s starts near the top; ranked '
+        + 'in today\'s dollars, as By Start Year is.'
+      : 'Each run restated by its own inflation and exchange rate (the value basis is real).';
+    return tag;
+  }
+
   /** True when the batch rolled its historical start years (design 133 §4.3). */
   _rolling() { return this._summary?.pairing?.equityStart === 'ROLLING'; }
 
@@ -380,8 +432,6 @@ export class McRunsPanel extends BaseComponent {
   // ── Representative cards ──────────────────────────────────────────────────────
 
   _buildRow(label, run) {
-    const field = METRIC_FIELD[this._metric] ?? 'finalNetWorthUsd';
-
     const card = document.createElement('div');
     card.className = 'mc-run-card';
 
@@ -409,7 +459,7 @@ export class McRunsPanel extends BaseComponent {
 
     const valEl = document.createElement('span');
     valEl.className = run.scenarioFailed ? 'mc-run-nw mc-run-nw--fail' : 'mc-run-nw';
-    valEl.textContent = fmtK(run[field]);
+    valEl.textContent = this._fmtValue(run);
 
     metricsRow.append(seedEl, valEl);
     const year = this._rolling() ? startYearOf(run) : null;

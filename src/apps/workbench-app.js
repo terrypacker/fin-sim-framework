@@ -30,7 +30,8 @@ import { PARAMETERS_PANEL_HOST }        from '../visualization/workbench/plugins
 import { AppDisplaySettings, APP_EVENTS } from '../visualization/app-display-settings.js';
 import { EventBus }                      from '../simulation-framework/event-bus.js';
 import { ScenarioLoader }             from '../scenarios/scenario-loader.js';
-import { applyParamBagToConfig }      from '../scenarios/scenario-param-apply.js';
+import { applyParamBagToConfig, snapshotParamStores, restoreParamStores }
+  from '../scenarios/scenario-param-apply.js';
 import { ScenarioSerializer }         from '../scenarios/scenario-serializer.js';
 import { ParamFieldLinks }            from '../visualization/scenario/param-field-links.js';
 import { ChartController }            from '../visualization/chart/chart-controller.js';
@@ -172,6 +173,7 @@ export class WorkbenchApp extends BaseComponent {
     this._mcBaselineCarry      = null;
     // { state, scenarioId } — the MC lever grid (design 100 §7), carried the same way.
     this._mcGridCarry          = null;
+    this._mcControlsCarry      = null;
 
     // App-lifetime event bus — shared across all app-level services and components.
     this.appBus = new EventBus();
@@ -1084,6 +1086,8 @@ export class WorkbenchApp extends BaseComponent {
     });
     this.mcPresenter.onReplayRun = (run) => this._replayMcRun(run);
     this.mcPresenter.onClearReplaySeed = () => this.clearReplaySeed();
+    // The iterations and telemetry options are the user's, not the plan's: every scenario.
+    if (this._mcControlsCarry) this.mcPresenter.restoreRunControls(this._mcControlsCarry);
     // Hand back the batch the previous presenter was showing (see destroyScenario).
     // Scoped to the scenario it was run on: a batch describes ONE plan, and re-presenting
     // it under a different scenario's name would be a chart that lies about its subject.
@@ -1197,6 +1201,7 @@ export class WorkbenchApp extends BaseComponent {
       this._mcBaselineCarry = baseline ? { baseline, scenarioId: this._loadedCfg?.id ?? null } : null;
       const gridState = this.mcPresenter.getGridState?.() ?? null;
       this._mcGridCarry = gridState ? { state: gridState, scenarioId: this._loadedCfg?.id ?? null } : null;
+      this._mcControlsCarry = this.mcPresenter.getRunControls?.() ?? this._mcControlsCarry;
     }
 
     // Harvest in-flight free-field domain edits (currency, holdings, names, …)
@@ -1469,12 +1474,18 @@ export class WorkbenchApp extends BaseComponent {
   _replayMcRun(run) {
     const registry = ServiceRegistry.getInstance();
     const active   = registry.scenarioService.getActive();
+    // A replay of a replay keeps the plan's values from before the first one.
+    const before = this._replaySeed?.before && this._replaySeed.scenarioId === (active?.id ?? null)
+      ? this._replaySeed.before
+      : (active ? snapshotParamStores(active) : null);
     this._replaySeed = run.seed != null
-      ? { seed: run.seed, scenarioId: active?.id ?? null, restore: _pinnedStartRestore(active, run.params) }
+      ? { seed: run.seed, scenarioId: active?.id ?? null, before, after: null }
       : null;
     this._applyParamsToActive(run.params);
     this.destroyScenario();
     this.initScenario();
+    // Taken after the load, so the comparison on Clear sees what the loader made of the bag.
+    if (this._replaySeed && active) this._replaySeed.after = snapshotParamStores(active);
     this._wbShell?.activatePlugin('timeline');
   }
 
@@ -1495,12 +1506,13 @@ export class WorkbenchApp extends BaseComponent {
    */
   clearReplaySeed() {
     if (!this._replaySeed) return false;
-    // Design 133 §4.3 — a rolling path's replay pinned the plan's history to its start year.
-    // Faithful while replaying; left behind, it would make every later Monte Carlo batch a
-    // conditional one. Clear puts back what the plan had. Only on the scenario it was taken on.
-    const { restore, scenarioId } = this._replaySeed;
+    // The replay wrote the path's whole param bag onto the plan: every sampled lever, the MC's
+    // own process settings, a rolling path's start year (design 133 §4.3). Faithful while
+    // replaying; left behind, it is the plan. Clear puts back what the plan had, except a param
+    // edited since. Only on the scenario it was taken on.
+    const { before, after, scenarioId } = this._replaySeed;
     const active = ServiceRegistry.getInstance().scenarioService.getActive();
-    if (restore && active && (active.id ?? null) === scenarioId) applyParamBagToConfig(active, restore);
+    if (active && (active.id ?? null) === scenarioId) restoreParamStores(active, before, after);
     this._replaySeed = null;
     this.destroyScenario();
     this.initScenario();
@@ -1699,24 +1711,3 @@ export class WorkbenchApp extends BaseComponent {
   }
 }
 
-/**
- * What Clear must put back after replaying a path that pinned a historical start year the plan
- * did not have (design 133 §4.3: every rolling path does), or null when the replay pins nothing
- * new. The replay itself applies the start year, because without it the single run is not that
- * path.
- *
- * @param {object|null} active  the scenario record, before the replay's params are applied
- * @param {object|null} params  the replayed path's params
- * @returns {{ equityReturnBootstrapStartYear: *, equityReturnBootstrapStartRun: * }|null}
- */
-export function _pinnedStartRestore(active, params) {
-  const year = params?.equityReturnBootstrapStartYear;
-  if (!active || year == null) return null;
-  const plan = scenarioParamValues(active);
-  if (plan.equityReturnBootstrapStartYear === year
-      && (plan.equityReturnBootstrapStartRun ?? null) === (params.equityReturnBootstrapStartRun ?? null)) return null;
-  return {
-    equityReturnBootstrapStartYear: plan.equityReturnBootstrapStartYear ?? null,
-    equityReturnBootstrapStartRun:  plan.equityReturnBootstrapStartRun ?? null,
-  };
-}

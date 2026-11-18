@@ -12,18 +12,18 @@ The batch as a distribution: success rate and percentile badges, a fan chart of 
 confidence bands over time, a histogram of terminal values, and — when the run was
 made to collect them — asset-mix and spending sections.
 
-The fan chart is what most questions actually want. A median is a single path's worth
-of comfort; the band is the range the plan lives in, and the width of it at the point
-you retire is usually the number that changes a decision.
+The fan chart is what most questions actually want: the band is the range the plan
+lives in, and its width at retirement is usually the number that changes a decision.
 
 "Path shape" is the diagnostic section: failure by realised return, and what separates
 a failing path from a surviving one. It answers *why* the failures failed rather than
-how many there were, which is the difference between a scary percentage and something
-you can act on.
+how many there were.
 
 "By start year" appears for a batch run with rolling historical starts: one tile per
-starting year, marked where the plan failed. Faded tiles replay under 15 years of history
-before it runs out, so random years carry the rest.
+starting year, marked where the plan failed. The darker a tile, the less the plan ended
+with from that start in today's dollars, so a plan that never fails still shows which
+starts hurt it. Faded tiles replay under 15 years of history before it runs out, so random
+years carry the rest.
 
 "Against baseline" appears once you have kept a batch as a baseline, and shows paired
 rescues and money delta against it. Paired is the important word: comparing two batches

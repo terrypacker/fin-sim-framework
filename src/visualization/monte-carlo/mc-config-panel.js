@@ -315,6 +315,26 @@ export class McConfigPanel extends BaseComponent {
   }
 
   /**
+   * The run controls a user set (iterations, the telemetry options), so a Rebuild or a replay,
+   * which recreate this panel, can hand them to the next one instead of resetting to 100.
+   * @returns {{ iterations: string, mix: boolean, spending: boolean }|null}
+   */
+  getRunControls() {
+    if (!this._iterEl) return null;
+    return { iterations: this._iterEl.value, mix: !!this._mixCb?.checked, spending: !!this._spendingCb?.checked };
+  }
+
+  /** Put back what `getRunControls` returned (see there). */
+  setRunControls(controls) {
+    if (!controls || !this._iterEl) return;
+    if (controls.iterations != null && controls.iterations !== '') this._iterEl.value = String(controls.iterations);
+    if (this._mixCb)      this._mixCb.checked      = !!controls.mix;
+    if (this._spendingCb) this._spendingCb.checked = !!controls.spending;
+    // Whatever else reads these (the grid's cost line, the rolling-start offer) redraws on input.
+    this._iterEl.dispatchEvent(new Event('input'));
+  }
+
+  /**
    * Returns the current panel configuration.
    * `mix` / `spending` are the runner's opt-in telemetry flags (design 100 §4). Both
    * default off: mix is ~1% extra compute, spending forces full telemetry at ~7.5x.
