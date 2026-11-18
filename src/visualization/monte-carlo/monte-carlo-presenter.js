@@ -29,6 +29,7 @@ import { get }                     from '../../finance/monte-carlo/mc-param-path
 import { formatDuration, formatAxisValue } from './mc-grid-format.js';
 import { gridCellRuns }            from '../../finance/monte-carlo/mc-grid-runner.js';
 import { mcReturnPaths }           from '../../finance/monte-carlo/parallel/mc-worker-core.js';
+import { PARAM_EDITED_EVENT } from '../scenario/param-advisories.js';
 
 /**
  * MonteCarloPresenter — wires McConfigPanel callbacks to MonteCarloController
@@ -75,6 +76,7 @@ export class MonteCarloPresenter {
     this._runsPanel.onClearReplaySeed    = ()        => this.onClearReplaySeed?.();
     this._configPanel.onRunGrid          = (config)  => this._onRunGrid(config);
     this._resultsPanel.onGridCellSelected = (view)   => this._onGridCellSelected(view);
+    this._resultsPanel.onStartYearSelected = (year) => this._runsPanel.focusStartYear(year);
     this._resultsPanel.onKeepBaseline  = () => this.keepBaseline();
     this._resultsPanel.onClearBaseline = () => this.clearBaseline();
     this._resultsPanel.onMetricChange = (metric) => {
@@ -88,6 +90,18 @@ export class MonteCarloPresenter {
     this._configPanel.setVariables(this._resolveVariables());
     this._configPanel.setGridAxes(this._resolveGridAxes());
     this._refreshReturnPaths();
+    // The line reads the live plan, which the Parameters panel edits without a Rebuild: redraw
+    // it on each committed edit, and each time the panel comes into view, so it never
+    // describes the plan as it was (design 133). The observer is absent in a test DOM.
+    this._onParamEdited = () => this._refreshReturnPaths();
+    document.addEventListener(PARAM_EDITED_EVENT, this._onParamEdited);
+    const panelEl = this._configPanel._container;
+    if (panelEl && typeof IntersectionObserver === 'function') {
+      this._pathsObserver = new IntersectionObserver((entries) => {
+        if (entries.some(e => e.isIntersecting)) this._refreshReturnPaths();
+      });
+      this._pathsObserver.observe(panelEl);
+    }
 
     /** Set by WorkbenchApp to handle replay: onReplayRun(run) */
     this.onReplayRun = null;
@@ -112,6 +126,8 @@ export class MonteCarloPresenter {
 
   destroy() {
     this._unsubSettings?.();
+    this._pathsObserver?.disconnect();
+    document.removeEventListener(PARAM_EDITED_EVENT, this._onParamEdited);
     // The controller owns the MC worker pool; a rebuild recreates this presenter, so
     // without this every Rebuild would leak a poolful of worker threads.
     this._controller.destroy?.();
@@ -217,7 +233,12 @@ export class MonteCarloPresenter {
    */
   _refreshReturnPaths() {
     const schemaDefaults = paramSchemaDefaults(IntlRetirementScenario.buildFullParamSchema());
-    this._configPanel.setReturnPaths(mcReturnPaths({ ...schemaDefaults, ...this._resolveBaseParams() }));
+    // A year the bootstrap refuses throws here, as it would in every path: say so on the line
+    // rather than fail the panel's build (design 133).
+    let info;
+    try { info = mcReturnPaths({ ...schemaDefaults, ...this._resolveBaseParams() }); }
+    catch (err) { info = { error: String(err?.message ?? err) }; }
+    this._configPanel.setReturnPaths(info);
   }
 
   /** Copy the live scenario parameter values into the MC variable centers. */

@@ -35,7 +35,16 @@ const SORTS = {
   metricAsc:  { label: 'value ↑', cmp: (f) => (a, b) => (a[f] ?? 0) - (b[f] ?? 0) },
   metricDesc: { label: 'value ↓', cmp: (f) => (a, b) => (b[f] ?? 0) - (a[f] ?? 0) },
   seed:       { label: 'seed',    cmp: ()  => (a, b) => a.seed - b.seed },
+  // Design 133 §4.3 — offered only for a rolling batch (see `_sorts`).
+  startYear:  { label: 'start year', rolling: true,
+                cmp: () => (a, b) => (startYearOf(a) - startYearOf(b)) || (a.seed - b.seed) },
 };
+
+/** The historical year a pinned path's replay opened with, or null (design 133 §4). */
+function startYearOf(run) {
+  const y = run?.params?.equityReturnBootstrapStartYear;
+  return y == null ? null : Number(y);
+}
 
 /**
  * Select at most 6 representative runs from the full MC results.
@@ -121,6 +130,7 @@ export class McRunsPanel extends BaseComponent {
     this._failsOnly   = false;
     this._replaySeed  = null;
     this._context     = null;
+    this._focusYear   = null;
 
     this._renderIdle();
   }
@@ -136,6 +146,20 @@ export class McRunsPanel extends BaseComponent {
   }
 
   // ── Public API ────────────────────────────────────────────────────────────────
+
+  /**
+   * Show the runs that opened with historical year `year` (design 133 §4.3, a tile in the
+   * results' By Start Year strip): sort by start year, mark them, and scroll the first into
+   * view. A no-op unless the batch rolled.
+   */
+  focusStartYear(year) {
+    if (!this._rolling()) return;
+    this._sort = 'startYear';
+    this._failsOnly = false;
+    this._focusYear = Number(year);
+    this._render();
+    this._container.querySelector('.mc-run-line--focus')?.scrollIntoView?.({ block: 'nearest' });
+  }
 
   clearResults() {
     this._runs    = [];
@@ -159,6 +183,7 @@ export class McRunsPanel extends BaseComponent {
     // Recompute only when the batch itself changes — a metric switch or a re-render
     // reuses the stats, which are a property of the runs and not of the view.
     if (runs !== this._runs) {
+      this._focusYear  = null;
       this._runs       = runs ?? [];
       this._paramStats = buildParamStats(this._runs);
     }
@@ -216,10 +241,20 @@ export class McRunsPanel extends BaseComponent {
     text.textContent = `▶ Scenario is replaying seed ${this._replaySeed} — params and RNG path pinned to that run.`;
     badge.appendChild(text);
 
+    // Design 133 §4.3 — a rolling path's replay pins the plan's history to its start year.
+    const year = this._rolling() ? startYearOf(this._runs.find(r => r.seed === this._replaySeed)) : null;
+    if (year != null) {
+      const pin = document.createElement('span');
+      pin.className = 'mc-replay-pin';
+      pin.textContent = ` History is pinned to open in ${year} while it replays; Clear unpins it.`;
+      text.appendChild(pin);   // in the sentence, not a column of its own (the badge is a flex row)
+    }
+
     const clear = document.createElement('button');
     clear.className = 'btn btn-xs btn-ghost';
     clear.textContent = 'Clear';
-    clear.title = 'Rebuild at the scenario\'s own seed. Params applied by the replay are NOT reverted.';
+    clear.title = 'Rebuild at the scenario\'s own seed. Params applied by the replay are NOT reverted'
+      + (year != null ? `, except the start year ${year}, which goes back to what the plan had.` : '.');
     this.listen(clear, 'click', () => this.onClearReplaySeed?.());
     badge.appendChild(clear);
 
@@ -248,7 +283,8 @@ export class McRunsPanel extends BaseComponent {
     const sortSel = document.createElement('select');
     sortSel.className = 'mc-run-sort';
     sortSel.title = 'Sort order';
-    for (const [key, { label }] of Object.entries(SORTS)) {
+    if (SORTS[this._sort]?.rolling && !this._rolling()) this._sort = 'metricAsc';
+    for (const [key, { label }] of this._sorts()) {
       const opt = document.createElement('option');
       opt.value = key;
       opt.textContent = label;
@@ -314,7 +350,9 @@ export class McRunsPanel extends BaseComponent {
     replayBtn.title = 'Replay this run';
     this.listen(replayBtn, 'click', () => this.onRunSelected?.(run));
 
-    row.append(toggle, seedEl, valEl, statusEl, replayBtn);
+    const year = this._rolling() ? startYearOf(run) : null;
+    if (year != null && year === this._focusYear) row.classList.add('mc-run-line--focus');
+    row.append(toggle, seedEl, ...(year != null ? [this._startTag(year)] : []), valEl, statusEl, replayBtn);
 
     const wrap = document.createElement('div');
     wrap.className = 'mc-run-line-wrap';
@@ -322,6 +360,21 @@ export class McRunsPanel extends BaseComponent {
 
     this._wireParamsToggle(toggle, wrap, run);
     return wrap;
+  }
+
+  /** True when the batch rolled its historical start years (design 133 §4.3). */
+  _rolling() { return this._summary?.pairing?.equityStart === 'ROLLING'; }
+
+  /** The sort orders this batch offers: start year only when it rolled. */
+  _sorts() { return Object.entries(SORTS).filter(([, d]) => !d.rolling || this._rolling()); }
+
+  /** The "opened with 1966" tag a rolling path's row carries. */
+  _startTag(year) {
+    const tag = document.createElement('span');
+    tag.className = 'mc-run-start';
+    tag.textContent = String(year);
+    tag.title = `This path replays history in order from ${year}`;
+    return tag;
   }
 
   // ── Representative cards ──────────────────────────────────────────────────────
@@ -359,6 +412,8 @@ export class McRunsPanel extends BaseComponent {
     valEl.textContent = fmtK(run[field]);
 
     metricsRow.append(seedEl, valEl);
+    const year = this._rolling() ? startYearOf(run) : null;
+    if (year != null) metricsRow.appendChild(this._startTag(year));
 
     if (run.outOfFundsDate instanceof Date) {
       const failDate = document.createElement('span');

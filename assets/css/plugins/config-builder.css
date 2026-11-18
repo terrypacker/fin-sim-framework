@@ -1387,3 +1387,16 @@
   align-self: flex-start;
   margin-top: 2px;
 }
+/* What the compile would warn about this value, said at the row (param-advisories.js). The
+   row is a one-line flex row: one with an advisory wraps, and the note takes its own line. */
+.param-row:has(> .param-advisory) { flex-wrap: wrap; }
+.param-row > .param-advisory { flex: 1 0 100%; }
+.param-advisory {
+  font-size: 10px;
+  line-height: 1.45;
+  color: var(--text-muted);
+  border-left: 2px solid var(--border-hi);
+  padding: 2px 0 2px 6px;
+  margin: 2px 0 4px;
+}
+.param-advisory--refused { color: var(--red); border-left-color: var(--red); }

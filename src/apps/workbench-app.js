@@ -1468,8 +1468,9 @@ export class WorkbenchApp extends BaseComponent {
    */
   _replayMcRun(run) {
     const registry = ServiceRegistry.getInstance();
+    const active   = registry.scenarioService.getActive();
     this._replaySeed = run.seed != null
-      ? { seed: run.seed, scenarioId: registry.scenarioService.getActive()?.id ?? null }
+      ? { seed: run.seed, scenarioId: active?.id ?? null, restore: _pinnedStartRestore(active, run.params) }
       : null;
     this._applyParamsToActive(run.params);
     this.destroyScenario();
@@ -1494,6 +1495,12 @@ export class WorkbenchApp extends BaseComponent {
    */
   clearReplaySeed() {
     if (!this._replaySeed) return false;
+    // Design 133 §4.3 — a rolling path's replay pinned the plan's history to its start year.
+    // Faithful while replaying; left behind, it would make every later Monte Carlo batch a
+    // conditional one. Clear puts back what the plan had. Only on the scenario it was taken on.
+    const { restore, scenarioId } = this._replaySeed;
+    const active = ServiceRegistry.getInstance().scenarioService.getActive();
+    if (restore && active && (active.id ?? null) === scenarioId) applyParamBagToConfig(active, restore);
     this._replaySeed = null;
     this.destroyScenario();
     this.initScenario();
@@ -1690,4 +1697,26 @@ export class WorkbenchApp extends BaseComponent {
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
   }
+}
+
+/**
+ * What Clear must put back after replaying a path that pinned a historical start year the plan
+ * did not have (design 133 §4.3: every rolling path does), or null when the replay pins nothing
+ * new. The replay itself applies the start year, because without it the single run is not that
+ * path.
+ *
+ * @param {object|null} active  the scenario record, before the replay's params are applied
+ * @param {object|null} params  the replayed path's params
+ * @returns {{ equityReturnBootstrapStartYear: *, equityReturnBootstrapStartRun: * }|null}
+ */
+export function _pinnedStartRestore(active, params) {
+  const year = params?.equityReturnBootstrapStartYear;
+  if (!active || year == null) return null;
+  const plan = scenarioParamValues(active);
+  if (plan.equityReturnBootstrapStartYear === year
+      && (plan.equityReturnBootstrapStartRun ?? null) === (params.equityReturnBootstrapStartRun ?? null)) return null;
+  return {
+    equityReturnBootstrapStartYear: plan.equityReturnBootstrapStartYear ?? null,
+    equityReturnBootstrapStartRun:  plan.equityReturnBootstrapStartRun ?? null,
+  };
 }

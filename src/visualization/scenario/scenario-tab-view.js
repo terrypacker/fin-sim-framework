@@ -9,6 +9,7 @@
  */
 
 import { isParamVisible, visibleWhenControllers } from '../../finance/param-schema-utils.js';
+import { paramAdvisory, hasAdvisory, ADVISORY_INPUTS, PARAM_EDITED_EVENT } from './param-advisories.js';
 import { scenarioSecurityRegistry } from '../../finance/holdings/security.js';
 import { normalizeFilter, matchesFilter, FilteredFoldState } from '../components/text-filter.js';
 import { collectRunPlayability } from '../../finance/mpc/run-compile-fold.js';
@@ -347,6 +348,7 @@ export class ScenarioTabView {
     const container = this._el('paramsList');
     if (!container) return;
     container.innerHTML = '';
+    this._advisoryEls = new Map();
     this._activeScenario = scenario;
     this._refreshRunGuard(scenario);
     if (!scenario?.params?.length) return;
@@ -966,6 +968,9 @@ export class ScenarioTabView {
             ? (raw.trim() === '' ? null : parseFloat(raw))
             : raw;
         });
+        // A typed value can reveal or hide a dependent row (Start Year → Start Run): redraw
+        // when the field is left, not per keystroke, which would take the focus away.
+        valueInput.addEventListener('change', () => this._maybeRerenderForController(param, scenario));
       }
       if (tooltip) valueInput.title = tooltip;
       field.appendChild(valueInput);
@@ -1006,7 +1011,42 @@ export class ScenarioTabView {
         row.appendChild(delBtn);
       }
 
+      // ── Advisory (param-advisories.js) — what the compile would warn, said here ─
+      if (hasAdvisory(param.name)) {
+        const note = document.createElement('div');
+        note.className = 'param-advisory';
+        note.dataset.id = `advisory-${param.name}`;
+        row.appendChild(note);
+        (this._advisoryEls ??= new Map()).set(param.name, note);
+        this._refreshAdvisory(param.name, scenario);
+      }
+      // A committed edit, announced for readers of the live plan that sit in other panels (the
+      // Monte Carlo return-paths line, design 133). `change`, not `input`: once per edit.
+      row.addEventListener('change', () => document.dispatchEvent(
+        new CustomEvent(PARAM_EDITED_EVENT, { detail: { name: param.name } })));
+      // Bubbled from whichever control this row built, so every control type is covered.
+      if (ADVISORY_INPUTS.has(param.name)) {
+        const redraw = () => this._refreshAdvisories(scenario);
+        row.addEventListener('input', redraw);
+        row.addEventListener('change', redraw);
+      }
+
       return row;
+  }
+
+  /** Redraw every advisory row on screen (an input to them changed). */
+  _refreshAdvisories(scenario) {
+    for (const name of this._advisoryEls?.keys() ?? []) this._refreshAdvisory(name, scenario);
+  }
+
+  _refreshAdvisory(name, scenario) {
+    const el = this._advisoryEls?.get(name);
+    if (!el) return;
+    const values = Object.fromEntries((scenario?.params ?? []).map(p => [p.name, p.value]));
+    const a = paramAdvisory(name, values);
+    el.textContent = a?.text ?? '';
+    el.hidden = !a;
+    el.classList.toggle('param-advisory--refused', !!a?.refused);
   }
 
   /**

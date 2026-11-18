@@ -27,8 +27,8 @@ function makePanel() {
   return { container, panel: new McResultsPanel(container) };
 }
 
-// A 30-year plan: the time series' length is the horizon.
-const SERIES = Array.from({ length: 30 }, (_, i) => ({ date: new Date(Date.UTC(2026 + i, 0, 1)), netWorthUsd: 1e6, netLiquidity: 5e5 }));
+// A 30-year plan: 31 year-boundary points, 30 years of returns.
+const SERIES = Array.from({ length: 31 }, (_, i) => ({ date: new Date(Date.UTC(2026 + i, 0, 1)), netWorthUsd: 1e6, netLiquidity: 5e5 }));
 const run = (seed, startYear, failed) => ({
   seed, params: { equityReturnBootstrapStartYear: startYear },
   finalNetWorthUsd: failed ? 0 : 2e6, finalNetLiquidity: 5e5, scenarioFailed: failed,
