@@ -3,7 +3,7 @@ id: stochastic-return-paths
 kind: concept
 title: Stochastic Return Paths
 panels: [mc-config, mc-results]
-params: [equityReturnStochastic, equityReturnModel, equityReturnVol, equityReturnReversionSpeed, equityReturnBeta, equityReturnIdioVol, equityReturnDriftComp, equityReturnBootstrapBlock, equityReturnBootstrapFromYear, equityReturnBootstrapStartYear, equityReturnBootstrapStartRun, equityReturnBootstrapAuReplay, propertyReturnStochastic, propertyReturnBeta, propertyReturnIdioVol, propertyReturnIdioScale, mcSequenceRisk, mcEquityReturnModel, goldReturnVol, goldEquityCorrelation, goldReplay, stockBondCorrelation]
+params: [equityReturnStochastic, equityReturnModel, equityReturnVol, equityReturnReversionSpeed, equityReturnBeta, equityReturnIdioVol, equityReturnDriftComp, equityReturnBootstrapBlock, equityReturnBootstrapFromYear, equityReturnBootstrapStartYear, equityReturnBootstrapStartRun, mcEquityBootstrapStarts, equityReturnBootstrapAuReplay, propertyReturnStochastic, propertyReturnBeta, propertyReturnIdioVol, propertyReturnIdioScale, mcSequenceRisk, mcEquityReturnModel, goldReturnVol, goldEquityCorrelation, goldReplay, stockBondCorrelation]
 design: [74-stochastic-return-paths.md, 90-equity-fidelity-and-capital-losses.md, 102-historical-bootstrap-equity-returns.md, 121-shock-leg-offset-and-stagflation-calibration.md, 129-stock-bond-correlation.md, 131-gold-return-drivers.md, 133-bootstrap-history-window-and-start-year.md]
 stamps:
   param:equityReturnStochastic: 635a9b
@@ -17,6 +17,7 @@ stamps:
   param:equityReturnBootstrapFromYear: 434fe6
   param:equityReturnBootstrapStartYear: c6a65f
   param:equityReturnBootstrapStartRun: 183cef
+  param:mcEquityBootstrapStarts: 265022
   param:equityReturnBootstrapAuReplay: 168628
   param:propertyReturnStochastic: e5f7f2
   param:propertyReturnBeta: 5ce9a3
@@ -42,8 +43,7 @@ is what lets one market fall while another rises.
 
 Three processes are available, and they answer different questions. Independent
 annual draws match history's year-to-year behaviour, which is close to uncorrelated.
-A mean-reverting process introduces persistence, and a *lower* pull-back speed means
-*more* of it, the opposite of what the name suggests. Replaying blocks of real history keeps the multi-year runs and
+A mean-reverting process adds persistence; a *lower* pull-back speed means *more* of it. Replaying blocks of real history keeps the multi-year runs and
 crashes the others lack, but draws from fewer distinct sequences.
 
 When inflation replays history too, as Monte Carlo does by default, the replay keeps to
@@ -53,6 +53,8 @@ volatility, so the span changes how hard crashes hit, not the average return.
 
 A start year instead replays a named era in order from your first year: "what if I retire
 into 1966?". In Monte Carlo every path then shares that opening and differs only after it.
+Rolling starts instead give each path the next year in turn: which starting years does the
+plan survive?
 
 Gold replays its own year after 1968 too, so its swings and its ties to inflation and
 interest rates are history's; earlier years draw at random. Its default swing is larger

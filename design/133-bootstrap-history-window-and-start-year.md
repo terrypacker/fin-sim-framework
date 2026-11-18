@@ -1,6 +1,6 @@
 # 133 — Historical bootstrap: the history window and a pinned start year
 
-**Status:** ACCEPTED (18 Nov 2026), rev 2. **Phases 1–3 BUILT** (§9.1–§9.3). Phase 4 not started.
+**Status:** ACCEPTED (18 Nov 2026), rev 2. **COMPLETE: phases 1–4 BUILT** (§9.1–§9.4).
 All five questions are decided (§11). Rev 2 records the decisions (a 50-year window floor,
 a 15-year shading threshold) and corrects §2 point 2 and flag F1. Rev 1 read post-war
 history's variance ratios as the default Monte Carlo's, and the phase 1 probe showed they
@@ -295,7 +295,8 @@ doesn't apply).
   pinned 1950 ranked 33–40. Pinned 1929 ranked 17–30, near the median, as §2 point 4 expects.
 - **G-B3 (rolling covers every start):** under ROLLING with n = the number of start years,
   each start year appears exactly once, and the by-year strip's success values match the
-  per-path rows.
+  per-path rows. **PASSED** in phase 4 (`tests/unit/bootstrap-rolling.test.mjs`, a 73-path
+  batch on the default MC: each of 1951–2023 once).
 
 ## 9. Phases
 
@@ -307,7 +308,7 @@ doesn't apply).
 3. **Part B:** pinned start and run, cursor `pinned`, the joint-mode warning, the pairing
    field. **BUILT** (§9.3).
 4. **Rolling-start sweep:** `mcEquityBootstrapStarts`, the per-path stamp, the by-start-year
-   strip, the `mc-run` flag.
+   strip, the `mc-run` flag. **BUILT** (§9.4).
 
 Each phase restamps `stochastic-return-paths` and regenerates `help/REFERENCE.md`.
 
@@ -391,6 +392,46 @@ Each phase restamps `stochastic-return-paths` and regenerates `help/REFERENCE.md
     this in the run header; it's on the config panel's return-paths line instead.
   - `mcEquityStart` gives the pairing record `equityStart: '<year>+<years>'` for batches
     and grid cells. `pairingMismatches` reports "pinned start none vs 1966 for 15 years".
+
+### 9.4 As built (phase 4, 18 Nov 2026)
+
+- **The mode.** `mcEquityBootstrapStarts`: `RANDOM` (default) or `ROLLING`, shown when the
+  Monte Carlo equity process is the bootstrap. `applyRollingStart` (`bootstrap-window.js`)
+  runs at the end of `perturbParams`, after `applyMcPaths`, so the start years are the window
+  the path's bootstrap actually samples: 1951–2023 (73 starts) on the default MC, 1871–2023
+  (153) with Gaussian inflation, an authored window's years when one is set. Under joint
+  inflation no rolling start falls before 1951, so none draws random inflation.
+- **The run.** Path i writes `equityReturnBootstrapStartYear` = first year + (i mod count)
+  and clears `equityReturnBootstrapStartRun`. Blank replays through 2023, which is the same
+  thing as "the plan's horizon, cut at 2023" (§4.3) for the run itself, because the sim ends
+  at its horizon. ROLLING replaces an authored Start Year and Start Run on every path. The
+  path's params record its start year, so a replayed path reproduces it, and grid cells
+  share start years path by path (same i).
+- **The stamp.** `startYearFields` (`mc-analysis.js`) gives a pinned path's row `startYear`
+  and `realNw`, terminal net worth in today's USD. Unpinned rows don't get them, so their
+  shape is unchanged. The app's rows (`runsToRows`, grid tasks too) and the lab's arm rows
+  (`scripts/lib/mc.mjs`) share it.
+- **Real, not nominal.** The strip ranks on real terminal wealth. A start year carries its
+  era's inflation under joint mode, and on nominal wealth the 1970s starts ranked near the
+  *top* for that reason alone. In real terms, on the toolset's default plan with n = 73,
+  1966 is the worst start and the eight worst are all 1964–1972. That's the classic
+  rolling-start result, a check on the whole chain.
+- **The strip.** `byStartYear(rows, { lastYear, horizonYears, shadeYears })` gives one entry
+  per start year: paths, failures, success, the lowest real spendable wealth (the worst
+  point of funding), and median terminal wealth. `short` marks a pinned run under 15 years,
+  or under the horizon if the plan is shorter. The results panel shows it only when the
+  pairing record says `ROLLING`:
+  - a line naming the failing start years;
+  - one tile per year, red where any path failed, faded and dashed where `short`;
+  - a collapsible table with the same numbers.
+
+  When n isn't a multiple of the start count, it says some years ran more paths.
+- **Pairing and panel line.** `mcEquityStart` returns `'ROLLING'`, so a rolling batch pairs
+  with neither a random nor a pinned one. The return-paths line reads "rolling starts: path
+  1 opens with 1951, each next path a year later (73 start years, then they repeat)".
+- **CLI.** `mc-run --equity-starts rolling` sets the param on every arm. `mc-report` adds a
+  BY START YEAR table for any arm whose rows carry more than one start year, with `~` on
+  short starts.
 
 ## 10. Flags raised by this design
 

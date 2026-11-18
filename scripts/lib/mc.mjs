@@ -66,6 +66,7 @@ import { mixSeriesFromRuns }      from '../../src/finance/allocation-reporting/m
 import { shockArrivalKeys, isRandomArrival, firstArrival } from '../../src/finance/economic-shocks/shock-arrival.js';
 import { quietAsync, quiet } from './run.mjs';
 import { numericParams } from './variant.mjs';
+import { startYearFields } from '../../src/finance/monte-carlo/mc-analysis.js';
 
 /**
  * Combine an arms spec's `base` levers with one arm's, the way `mc-run.mjs` runs them.
@@ -333,6 +334,9 @@ export async function runArm({ cfg, n, mcConfig, shocks, mix = false, spending =
     houseMaxDrawdown: r.pathShape?.houseMaxDrawdown ?? null,
     repairSpend:      Math.round(r.lifetimeRepairSpend ?? 0),
     firstDecadeBelow: r.firstDecadeBelowMedian ?? null,
+    // Design 133 §4.3 — the historical year a pinned or rolling path opened with, and its
+    // real terminal net worth; absent otherwise, so an unpinned arm file is unchanged.
+    ...startYearFields(r),
   }));
 
   // Per-path mix matrix (design 82 §8.1). `failed` travels with each path because

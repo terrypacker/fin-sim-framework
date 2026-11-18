@@ -9,11 +9,11 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-242 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 94 tools · 342 state field types · 80 topics · 141 design docs
+243 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 94 tools · 342 state field types · 80 topics · 141 design docs
 
 ---
 
-## Parameters (242)
+## Parameters (243)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
@@ -190,7 +190,7 @@ scenario's own schema), which is where to go to change it.
 - **`earlyWithdrawalStartYear`** — Early Withdrawal Optimization Start Year · `Number` · default — · via US_EARLY_WITHDRAWAL
   First year of the opt-in optimization window. Set with the end year to let the MPC cockpit tune/discover early withdrawals. null = no window (manual schedule only).
 
-### Economic Shocks (59)
+### Economic Shocks (60)
 
 - **`auYieldCurveShape`** — AU Yield Curve Shape · `YieldCurveShape` · default — · via ECONOMIC_REGIMES
   Optional AU term-structure overlay (design 67): an array of { tenor, spread } anchor points added to the FIXED_INCOME_AU level, linearly interpolated and clamped to the endpoints. Independent of the US shape. Absent/empty ⇒ a flat curve.
@@ -250,6 +250,8 @@ scenario's own schema), which is where to go to change it.
   How quickly a US inflation surprise fades, per year. This year's deviation keeps e^(−k) of last year's: 0.33 keeps 0.72, a half-life of about 2 years, matching US CPI 1951–2023. Lower is more persistent. Unlike the equity persistence knob, this runs on a LEVEL, so it genuinely mean-reverts. A TIPS ladder's expected inflation (design 125) fades at this speed too, even with the path off.
 - **`inflationStochastic`** — Stochastic Inflation · `Boolean` · default `false` · via ECONOMIC_REGIMES
   When on (design 103), each country's inflation wanders around its anchor (Inflation Rate / AU Inflation Rate) year by year, with post-war persistence: a high-inflation year tends to be followed by another. Everything priced in today's money follows it: expenses, wages, Social Security, tax brackets, TIPS and house running costs. Off by default, so runs stay byte-identical. Monte Carlo turns it on for every path (Monte Carlo: Stochastic Inflation Path); this switch governs single runs.
+- **`mcEquityBootstrapStarts`** — Monte Carlo: Historical Start Years · `Enum` · default `RANDOM` · one of `RANDOM`, `ROLLING` · conditional · via ECONOMIC_REGIMES
+  How Monte Carlo picks the historical year each path's bootstrap opens with (design 133). Random (default) starts every path at a random year. Rolling runs the classic rolling-start study: path 1 opens with the first year the bootstrap samples, path 2 with the next, and so on, cycling back after 2023; each path then replays history in order for the plan's whole horizon, or until the history ends in 2023, and draws random blocks after that. Set the number of runs to the number of start years (73 for 1951–2023, the Monte Carlo default) to run each start once. The results add a "by start year" strip, which shades starts that replay fewer than 15 years of history. Rolling replaces Historical Bootstrap — Start Year and Start Run on every path.
 - **`mcEquityReturnModel`** — Monte Carlo: Equity Return Process · `Enum` · default `HISTORICAL_BOOTSTRAP` · one of `SCENARIO`, `NONE`, `WHITE_NOISE`, `RANDOM_WALK`, `MEAN_REVERTING`, `HISTORICAL_BOOTSTRAP` · conditional · via ECONOMIC_REGIMES
   The equity return process every Monte Carlo path runs. The default, Historical bootstrap, replays blocks of real historical years (US, and AU's own history from 1958) re-centred on your anchor, and matches history better than white noise on autocorrelation, multi-year pull-back and crash skew (design 102 §2). "Same as single runs" uses Equity Return Process Model instead. Under the Monte Carlo default inflation (Automatic, which runs inflation joint with equity) the bootstrap draws only the post-war years 1951–2023, the years the inflation and yield history covers; with Gaussian inflation it draws from 1871–2023 (design 133). The Monte Carlo panel shows which years a run samples. Only used when Monte Carlo: Stochastic Return Path is on.
 - **`mcInflationModel`** — Monte Carlo: Inflation Process · `Enum` · default `AUTO` · one of `AUTO`, `SCENARIO`, `GAUSSIAN`, `HISTORICAL_JOINT` · conditional · via ECONOMIC_REGIMES
@@ -1448,6 +1450,7 @@ docblock, not re-authored here. Arguments come from each script's declarative
     - `--no-recentre` (flag) — skip the check that MC centers match the scenario
     - `--mix` (flag) — also record the per-year asset mix
     - `--spending` (flag) — also record classified spending — forces FULL telemetry, ~7.5x
+    - `--equity-starts` (string, one of random|rolling) — historical bootstrap start years: rolling = path i opens with the window's i-th year (design 133 §4.3)
 - **`scripts/montecarlo/mc-trace.mjs`**
   replay ONE Monte Carlo path of one arm with the journal on
     - `--arms` (string) — REQUIRED. the { base, arms } spec mc-run was given
@@ -2351,7 +2354,7 @@ what the in-app panel keys on.
 | [Lineage](panels/lineage.md) | panel | 196 | 1 panel · design 30 |
 | [Liquidity Pools](concepts/liquidity-pools.md) | concept | 397 | 1 panel · 7 params · design 97 |
 | [Monte Carlo](panels/mc-config.md) | panel | 249 | 1 panel · design 100 |
-| [MC Results](panels/mc-results.md) | panel | 202 | 1 panel · design 100, 89 |
+| [MC Results](panels/mc-results.md) | panel | 242 | 1 panel · design 100, 89 |
 | [MC Runs](panels/mc-runs.md) | panel | 196 | 1 panel · design 100 |
 | [Mortality and Survivorship](concepts/mortality.md) | concept | 263 | 2 panels · 5 params |
 | [MPC Cockpit](panels/mpc-cockpit.md) | panel | 244 | 1 panel · design 39, 80 |
@@ -2381,7 +2384,7 @@ what the in-app panel keys on.
 | [Spending](panels/spending.md) | panel | 209 | 1 panel · design 89 |
 | [The Spending Rule](concepts/spending-rule.md) | concept | 296 | 1 panel · 17 params · design 89 |
 | [State](panels/state-panel.md) | panel | 181 | 1 panel |
-| [Stochastic Return Paths](concepts/stochastic-return-paths.md) | concept | 390 | 2 panels · 22 params · design 74, 90, 102, 121, 129, 131, 133 |
+| [Stochastic Return Paths](concepts/stochastic-return-paths.md) | concept | 400 | 2 panels · 23 params · design 74, 90, 102, 121, 129, 131, 133 |
 | [Superannuation Access](concepts/superannuation.md) | concept | 399 | 1 panel · 4 actions · design 119, 77 |
 | [Tax Harvesting and Asset Location](concepts/tax-harvesting.md) | concept | 235 | 2 panels · 3 params · design 29, 94 |
 | [Timeline](panels/timeline.md) | panel | 203 | 1 panel |

@@ -39,6 +39,11 @@
  *   --shock-window <a>-<b>  narrow that arrival to years a..b from the run's start, e.g. 0-15
  *   --no-recentre       skip the check that MC centers match the scenario. The runner
  *                       re-centres itself now, so this only silences the verification.
+ *   --equity-starts <random|rolling>  the historical bootstrap's start years (design 133
+ *                       §4.3). rolling: path i opens with the bootstrap window's first year
+ *                       + i (cycling), replayed in order through the plan. Each row gets a
+ *                       `startYear`; `mc-report.mjs` adds a by-start-year table. Set -n to
+ *                       the number of start years (73 for 1951–2023) to run each once.
  *
  *   --spending          also record the per-path CLASSIFIED SPENDING summary (design 89
  *                       phase 6): realized vs intended spend, the shortfall on a path that
@@ -127,6 +132,8 @@ const opts = parseFlags(argv, {
   noRecentre: { type: 'flag', help: 'skip the check that MC centers match the scenario' },
   mix:      { type: 'flag', help: 'also record the per-year asset mix' },
   spending: { type: 'flag', help: 'also record classified spending — forces FULL telemetry, ~7.5x' },
+  equityStarts: { type: 'string', default: null, choices: ['random', 'rolling'],
+    help: 'historical bootstrap start years: rolling = path i opens with the window\'s i-th year (design 133 §4.3)' },
 });
 
 const specFile = opts.arms;
@@ -147,6 +154,8 @@ if (shockWindow && !shock) { console.error('--shock-window needs --shock'); proc
 const recentre = !opts.noRecentre;
 const mix = opts.mix;
 const spending = opts.spending;
+// Design 133 §4.3 — a param like any other, set on every arm so the arms stay paired.
+const equityStarts = opts.equityStarts ? opts.equityStarts.toUpperCase() : null;
 
 const spec = JSON.parse(readFileSync(specFile, 'utf8'));
 const only = opts.only.length ? opts.only : undefined;
@@ -186,6 +195,7 @@ function describeRisk() {
     : 'constant sampled return (plan sets mcSequenceRisk: false)');
   if (propertyPaths) parts.push('stochastic property path');
   if (shock) parts.push(`manufactured crash (shocks[0], arriving ${shockWindow ? `in years ${shockWindow.fromYears}-${shockWindow.toYears}` : 'any month of the run'})`);
+  if (equityStarts === 'ROLLING') parts.push('rolling historical start years (one per path, in turn)');
   if (mix) parts.push('recording asset mix');
   if (spending) parts.push('recording classified spending (FULL telemetry, ~7.5x)');
   if (!recentre) parts.push('** CENTER CHECK SKIPPED **');
@@ -225,6 +235,7 @@ for (const [order, key] of armKeys.entries()) {
   // silently dropped by any arm that carries params of its own.
   const levers = mergeArmLevers(spec.base, spec.arms[key]);
   if (stochastic) levers.stochastic = { ...(levers.stochastic ?? {}), ...stochastic };
+  if (equityStarts) levers.params = { ...(levers.params ?? {}), mcEquityBootstrapStarts: equityStarts };
 
   const cfg = buildVariant(base.cfg, levers);
   const { mcConfig, shocks, recentred } = buildMcConfig(cfg, { shock, shockWindow, recentre });

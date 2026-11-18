@@ -26,7 +26,8 @@ import { get, set }              from '../mc-param-paths.js';
 import { computePathShape }      from '../mc-sampling.js';
 import { runsToRows }            from '../mc-analysis.js';
 import { realRatesOf }           from '../../fx/real-basis.js';
-import { describeBootstrapWindow, describeBootstrapStart } from '../../economic-regimes/bootstrap-window.js';
+import { describeBootstrapWindow, describeBootstrapStart, rollingStartYears, applyRollingStart }
+  from '../../economic-regimes/bootstrap-window.js';
 
 /**
  * The per-iteration Monte Carlo world, in one place, so the SERIAL loop and a WORKER
@@ -89,7 +90,9 @@ export function perturbParams(baseParams, i, variables) {
     }
   }
 
-  return applyMcPaths(perturbed);
+  // Design 133 §4.3 — under ROLLING, path i replays its own start year. After the process
+  // choice, because the start years are the window the path's bootstrap actually samples.
+  return applyRollingStart(applyMcPaths(perturbed), i);
 }
 
 /**
@@ -138,8 +141,9 @@ export function mcReturnPaths(params) {
     equityModel:    mcEquityModel(params),
     inflationModel: mcInflationModel(params),
     window:         describeBootstrapWindow(p),
-    // Design 133 §4.2 — a pinned opening run every path shares (a conditional Monte Carlo).
-    start:          describeBootstrapStart(p),
+    // Design 133 §4.2 — a pinned opening run every path shares (a conditional Monte Carlo),
+    // or §4.3's rolling starts, `{ rolling: true, fromYear, toYear, count }`.
+    start:          _rolling(p) ?? describeBootstrapStart(p),
   };
 }
 
@@ -157,15 +161,24 @@ export function mcEquityWindow(params) {
 
 /**
  * The pinned opening run every Monte Carlo path shares (design 133 §4.2), as
- * '<startYear>+<years>', or null when there is none. The pairing record carries it, so a
- * pinned batch is never read as paired with an unpinned one, or with another start.
+ * '<startYear>+<years>'; 'ROLLING' when each path pins its own start year (§4.3); or null.
+ * The pairing record carries it, so a pinned batch is never read as paired with an unpinned
+ * one, or with another start.
  *
  * @param {object} params  the batch's (or a grid cell's) base params
  * @returns {string|null}
  */
 export function mcEquityStart(params) {
-  const a = describeBootstrapStart(applyMcPaths({ ...(params ?? {}) }));
+  const p = applyMcPaths({ ...(params ?? {}) });
+  if (rollingStartYears(p)) return 'ROLLING';
+  const a = describeBootstrapStart(p);
   return a ? `${a.startYear}+${a.years}` : null;
+}
+
+/** §4.3's rolling starts for display, or null when the batch does not roll. */
+function _rolling(p) {
+  const r = rollingStartYears(p);
+  return r ? { rolling: true, ...r } : null;
 }
 
 /**
@@ -457,10 +470,11 @@ export function gridCellParams(ctx, cell, i) {
  * the paired readout use (§7.2).
  */
 export function runGridTask(iter, ctx, { cell, i }) {
-  const { seed, result, error } = iter.runIteration(i, gridCellParams(ctx, cell, i));
+  const { seed, params, result, error } = iter.runIteration(i, gridCellParams(ctx, cell, i));
   if (error) return { cell, seed, error: error.message };
   const [row] = runsToRows([{
     seed,
+    params,   // read for the path's pinned start year only (design 133 §4.3)
     scenarioFailed:      result.scenarioFailed,
     outOfFundsDate:      result.outOfFundsDate,
     finalNetWorthUsd:    result.finalNetWorthUsd,

@@ -55,7 +55,11 @@ export function formatReturnPaths(info) {
   const years = w ? `, ${w.fromYear}–${w.toYear}${why}` : '';
   // Design 133 §4.2 — a pinned opening run changes what the whole batch means: say so.
   const st    = info.start;
-  const start = st ? `; every path opens with ${st.startYear}–${st.toYear} in order` : '';
+  // Design 133 §4.3 — a rolling batch gives each path its own start: say how many there are.
+  const start = !st ? ''
+    : st.rolling ? `; rolling starts: path 1 opens with ${st.fromYear}, each next path a year later `
+      + `(${st.count} start years, then they repeat)`
+    : `; every path opens with ${st.startYear}–${st.toYear} in order`;
   const inflation = info.inflationModel == null
     ? 'off (single-run inflation)'
     : (INFLATION_MODEL_SHORT[info.inflationModel] ?? info.inflationModel);

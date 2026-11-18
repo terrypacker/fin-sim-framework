@@ -221,3 +221,40 @@ export function bootstrapStartWarning(p) {
   return `Historical Bootstrap — Start Year ${a.startYear}: ${span} no inflation history, `
     + `so inflation is drawn at random for those years; it replays history from ${JOINT_FIRST_YEAR} (design 133).`;
 }
+
+// ─── the rolling-start sweep (design 133 §4.3) ───────────────────────────────────
+
+/** A start year whose pinned run is shorter than this is shaded in the strip (§11 Q4). */
+export const ROLLING_SHADE_YEARS = 15;
+
+/**
+ * The start years a ROLLING Monte Carlo cycles through, or null when it does not roll:
+ * one per year of the window the run samples. The window is the resolved one (automatic,
+ * authored or clamped), so under joint inflation no rolling start falls before 1951.
+ *
+ * @param {object} p  resolved params (a path's, after `applyMcPaths`)
+ * @returns {{ fromYear: number, toYear: number, count: number }|null}
+ */
+export function rollingStartYears(p) {
+  if (p?.mcEquityBootstrapStarts !== 'ROLLING') return null;
+  const w = describeBootstrapWindow(p);
+  return w ? { fromYear: w.fromYear, toYear: w.toYear, count: w.toYear - w.fromYear + 1 } : null;
+}
+
+/**
+ * Pin path `i`'s start year under ROLLING (mutates and returns `p`): the window's first year
+ * + (i mod the number of start years), replayed through to 2023, which is the plan's horizon
+ * cut at the end of the history (§4.3). An authored Start Year or Start Run is replaced, so
+ * the path's params record the run it actually replayed. Not rolling: `p` unchanged.
+ *
+ * @param {object} p  a path's resolved params
+ * @param {number} i  the path index (seed − 1)
+ * @returns {object} `p`
+ */
+export function applyRollingStart(p, i) {
+  const r = rollingStartYears(p);
+  if (!r) return p;
+  p.equityReturnBootstrapStartYear = r.fromYear + (i % r.count);
+  p.equityReturnBootstrapStartRun  = null;
+  return p;
+}
