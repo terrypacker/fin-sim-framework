@@ -949,3 +949,44 @@ button.mc-start-tile--fails:hover { border-color: var(--red); color: var(--red);
   color: var(--text-dim);
   cursor: help;
 }
+
+/* "Ran with: …" under the results header: what history the batch sampled (design 133). */
+.mc-ran-with {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--text-dim);
+  margin: 2px 0 4px;
+}
+
+/* The Monte Carlo tab's return-process and history settings (design 133). */
+.mc-return-settings-box summary {
+  font-size: 10px;
+  color: var(--text-dim);
+  cursor: pointer;
+  margin: 2px 0;
+}
+.mc-return-settings {
+  display: grid;
+  gap: 3px;
+  margin: 2px 0 6px;
+}
+.mc-return-setting {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.mc-return-setting-input {
+  min-width: 0;
+  width: 100%;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 2px 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text);
+}

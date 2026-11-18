@@ -15,7 +15,7 @@ import { resolveAliasCenters, resolveRecordCenters } from '../../scenarios/scena
 import { withLiquidityAxisCenters } from '../pools/pool-target-scale.js';
 import { IntlRetirementMcConfig, CENTER_SOURCES, refineCenterSource, variablesMissingCenter } from './intl-retirement-mc-config.js';
 import { scenarioParamValues, paramSchemaDefaults } from '../param-schema-utils.js';
-import { buildIterationRunner, perturbParams, samplingSignature, mcEquityModel, mcEquityWindow, mcEquityStart, mcInflationModel, mcPrimeModel, applyMcPaths } from './parallel/mc-worker-core.js';
+import { buildIterationRunner, perturbParams, samplingSignature, mcEquityModel, mcEquityWindow, mcEquityStart, mcInflationModel, mcPrimeModel, applyMcPaths, mcReturnPaths } from './parallel/mc-worker-core.js';
 import { stockBondCorrelationWarnings } from '../economic-regimes/stock-bond-correlation.js';
 import { McWorkerPool }              from './parallel/mc-worker-pool.js';
 import { migrateYearFieldsToDates, migrateParamBag } from '../../scenarios/year-date-migration.js';
@@ -478,6 +478,10 @@ export class IntlRetirementMcRunner {
       // And the prime rate mode (design 104).
       primeModel:     mcPrimeModel(ctx.base),
     };
+    // The return processes and historical years the batch ran, in full (design 133), so the
+    // results say what they were run with after the plan has moved on. The pairing fields
+    // above are the comparison keys; this is the readable record.
+    try { summary.returnPaths = mcReturnPaths(ctx.base); } catch { summary.returnPaths = null; }
 
     return { runs, summary };
   }

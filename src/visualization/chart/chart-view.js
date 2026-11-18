@@ -58,6 +58,7 @@ export class ChartView extends BaseComponent {
     this._seriesMap    = new Map();  // key → { colorIdx, dataArr } — dataArr is NATIVE currency
     this._colorIdx     = 0;
     this._annotations  = {};         // id → { date, label, color, position }
+    this._bands        = {};         // id → { from, to, label, color }: a span of the run, not of its history
     this._hiddenSeries = new Set();
     // Panel-local, deliberately not persisted: the popup is the useful half and the
     // cluttering half at once, so the toggle is a per-view mood, not a preference.
@@ -259,6 +260,20 @@ export class ChartView extends BaseComponent {
     if (this._chart) {
       this.scheduleRender(() => this._doChartUpdate());
     }
+  }
+
+  /**
+   * Shade a span of the run's dates, e.g. the years a pinned bootstrap replays history in order
+   * (design 133). A property of the run, not of what has been drawn, so `resetHistory` keeps it.
+   */
+  addBand(id, { label, from, to, color = readThemeColor('--warning') }) {
+    this._bands[id] = { label, from: new Date(from), to: new Date(to), color };
+    if (this._chart) this.scheduleRender(() => this._doChartUpdate());
+  }
+
+  removeBand(id) {
+    delete this._bands[id];
+    if (this._chart) this.scheduleRender(() => this._doChartUpdate());
   }
 
   removeAnnotation(id) {
@@ -489,8 +504,9 @@ export class ChartView extends BaseComponent {
   }
 
   _buildAnnotationSeries() {
-    const annList = Object.values(this._annotations);
-    if (annList.length === 0) return null;
+    const annList  = Object.values(this._annotations);
+    const bandList = Object.values(this._bands);
+    if (annList.length === 0 && bandList.length === 0) return null;
     return {
       type:            'line',
       id:              '__annotations__',
@@ -519,7 +535,17 @@ export class ChartView extends BaseComponent {
             padding:         [2, 4],
           }
         }))
-      }
+      },
+      markArea: {
+        silent: false,
+        data: bandList.map(b => [
+          { name: b.label, xAxis: b.from.getTime(),
+            itemStyle: { color: b.color, opacity: 0.08 },
+            label: { show: true, position: 'insideTop', formatter: b.label, color: b.color,
+                     fontSize: 10, fontFamily: 'monospace' } },
+          { xAxis: b.to.getTime() },
+        ]),
+      },
     };
   }
 

@@ -10,7 +10,8 @@ stamps:
 
 The batch as a distribution: success rate and percentile badges, a fan chart of the
 confidence bands over time, a histogram of terminal values, and — when the run was
-made to collect them — asset-mix and spending sections.
+made to collect them — asset-mix and spending sections. "Ran with" names the return
+processes and historical years the batch sampled, as they were when it ran.
 
 The fan chart is what most questions actually want: the band is the range the plan
 lives in, and its width at retirement is usually the number that changes a decision.
@@ -26,10 +27,9 @@ starts hurt it. Faded tiles replay under 15 years of history before it runs out,
 years carry the rest.
 
 "Against baseline" appears once you have kept a batch as a baseline, and shows paired
-rescues and money delta against it. Paired is the important word: comparing two batches
-run on different random draws measures the draws as much as the change.
+rescues and money delta against it. Paired matters: batches on different random draws
+measure the draws as much as the change.
 
-The mix and spending sections only exist for a batch that was run with them enabled, and
-say so when absent rather than showing empty charts.
+The mix and spending sections exist only for a batch run with them enabled.
 
 Needs a completed [Monte Carlo](mc-config.md) run.

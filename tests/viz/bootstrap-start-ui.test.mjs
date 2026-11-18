@@ -265,3 +265,85 @@ describe('follow-ups: real money where starts are compared, and controls that su
     expect(b._spendingCb.checked).toBe(false);
   });
 });
+
+describe('the remaining three: settings in the Monte Carlo tab, what a batch ran with, the chart band', () => {
+  const enumP = (name, value, options) => ({ name, label: `Monte Carlo: ${name}`, type: 'Enum', value, options });
+  const numP  = (name, value) => ({ name, label: `Historical Bootstrap — ${name}`, type: 'Number', value });
+  const params = () => [
+    enumP('mcEquityReturnModel', 'HISTORICAL_BOOTSTRAP', ['WHITE_NOISE', 'HISTORICAL_BOOTSTRAP']),
+    enumP('mcInflationModel', 'AUTO', ['AUTO', 'GAUSSIAN']),
+    enumP('mcEquityBootstrapStarts', 'RANDOM', ['RANDOM', 'ROLLING']),
+    numP('equityReturnBootstrapFromYear', null),
+    numP('equityReturnBootstrapStartYear', null),
+    numP('equityReturnBootstrapStartRun', null),
+    { name: 'inflationRate', type: 'Number', value: 0.03 },
+  ];
+  const shown = (panel) => [...panel._settingsEl.querySelectorAll('.mc-return-setting')].map(r => r.dataset.paramName);
+
+  test('the Monte Carlo tab edits the record\'s own entries, and shows only the rows that apply', () => {
+    const panel = new McConfigPanel(host());
+    const ps = params();
+    const edited = [];
+    panel.onReturnSettingEdited = (n) => edited.push(n);
+    panel.setReturnSettings(ps.filter(p => p.name !== 'inflationRate'), { bootstrap: true });
+    expect(shown(panel)).toEqual(['mcEquityReturnModel', 'mcInflationModel', 'mcEquityBootstrapStarts',
+      'equityReturnBootstrapFromYear', 'equityReturnBootstrapStartYear']);
+
+    const sel = panel._settingsEl.querySelector('[data-param-name="mcEquityBootstrapStarts"] select');
+    sel.value = 'ROLLING';
+    sel.dispatchEvent(new Event('change'));
+    expect(ps[2].value).toBe('ROLLING');
+    expect(edited).toEqual(['mcEquityBootstrapStarts']);
+
+    const year = panel._settingsEl.querySelector('[data-param-name="equityReturnBootstrapFromYear"] input');
+    year.value = '1926';
+    year.dispatchEvent(new Event('change'));
+    expect(ps[3].value).toBe(1926);
+
+    // Rolling replaces the pinned start; off the bootstrap only the processes show.
+    panel.setReturnSettings(ps.slice(0, 6), { bootstrap: true });
+    expect(shown(panel)).not.toContain('equityReturnBootstrapStartYear');
+    panel.setReturnSettings(ps.slice(0, 6), { bootstrap: false });
+    expect(shown(panel)).toEqual(['mcEquityReturnModel', 'mcInflationModel']);
+  });
+
+  test('Start Run shows once a Start Year is set', () => {
+    const panel = new McConfigPanel(host());
+    const ps = params().slice(0, 6);
+    ps[4].value = 1966;
+    panel.setReturnSettings(ps, { bootstrap: true });
+    expect(shown(panel)).toContain('equityReturnBootstrapStartRun');
+  });
+
+  test('the results say what the batch ran with', () => {
+    const panel = new McResultsPanel(host());
+    panel.showResults({ successRate: 1, p10: 1, p50: 1, p90: 1, pairing: { equityStart: 'ROLLING' },
+      returnPaths: { equityModel: 'HISTORICAL_BOOTSTRAP', inflationModel: 'HISTORICAL_JOINT',
+        window: { name: 'POSTWAR', fromYear: 1951, toYear: 2023, automatic: true, reason: 'joint inflation' },
+        start: { rolling: true, fromYear: 1951, toYear: 2023, count: 73 } } },
+      [run(1, 1951)]);
+    expect(panel._container.querySelector('.mc-ran-with').textContent)
+      .toMatch(/^Ran with: Equity: .*1951–2023.*rolling starts/);
+    panel.destroy();
+
+    const old = new McResultsPanel(host());
+    old.showResults({ successRate: 1, p10: 1, p50: 1, p90: 1 }, [run(1, null)]);
+    expect(old._container.querySelector('.mc-ran-with')).toBeNull();
+    old.destroy();
+  });
+});
+
+describe('the chart band', () => {
+  test('a band is a markArea on the annotation series, and survives a history reset', async () => {
+    const { ChartView } = await import('../../src/visualization/chart/chart-view.js');
+    const view = new ChartView({ container: host(), simStart: new Date(Date.UTC(2026, 0, 1)),
+      simEnd: new Date(Date.UTC(2041, 0, 1)) });
+    view.addBand('bootstrap_pinned', { label: 'History 1966–1980 in order',
+      from: new Date(Date.UTC(2026, 0, 1)), to: new Date(Date.UTC(2041, 0, 1)) });
+    view.resetHistory();
+    const area = view._buildAnnotationSeries().markArea.data;
+    expect(area).toHaveLength(1);
+    expect(area[0][0].name).toBe('History 1966–1980 in order');
+    expect(area[0][1].xAxis).toBe(Date.UTC(2041, 0, 1));
+  });
+});

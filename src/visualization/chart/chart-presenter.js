@@ -329,5 +329,7 @@ export class ChartPresenter extends BaseComponent {
 
   resize()                 { this._view.resize(); }
   addAnnotation(id, opts)  { this._view.addAnnotation(id, opts); }
+  addBand(id, opts)        { this._view.addBand?.(id, opts); }
+  removeBand(id)           { this._view.removeBand?.(id); }
   removeAnnotation(id)     { this._view.removeAnnotation(id); }
 }

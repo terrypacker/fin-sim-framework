@@ -130,6 +130,9 @@ describe('G-B3: a rolling batch covers every start', () => {
     }).run(ROLL);
 
     assert.equal(summary.pairing.equityStart, 'ROLLING');
+    // The readable record of what the batch ran with travels on the result.
+    assert.deepEqual(summary.returnPaths.start, { rolling: true, fromYear: 1951, toYear: 2023, count: 73 });
+    assert.equal(summary.returnPaths.window.fromYear, 1951);
     const rows  = runsToRows(runs);
     const years = rows.map(r => r.startYear).sort((a, b) => a - b);
     assert.deepEqual(years, Array.from({ length: 73 }, (_, i) => 1951 + i));
@@ -141,5 +144,27 @@ describe('G-B3: a rolling batch covers every start', () => {
       assert.equal(y.n, 1);
       assert.equal(y.successRate, row.failed ? 0 : 1, `start ${y.startYear}`);
     }
+  });
+});
+
+describe('the band a pinned single run gets on its chart', async () => {
+  const { pinnedHistorySpan } = await import('../../src/finance/economic-regimes/bootstrap-window.js');
+  const on = { equityReturnStochastic: true, equityReturnModel: 'HISTORICAL_BOOTSTRAP' };
+  const s = new Date(Date.UTC(2026, 0, 1));
+  const e = new Date(Date.UTC(2041, 0, 1));
+
+  test('the pinned years from the run start, cut at the run end', () => {
+    const a = pinnedHistorySpan({ ...on, equityReturnBootstrapStartYear: 1966 }, s, e);
+    assert.deepEqual([a.from, a.to, a.startYear, a.toYear], [s, e, 1966, 1980]);
+    const b = pinnedHistorySpan({ ...on, equityReturnBootstrapStartYear: 1966, equityReturnBootstrapStartRun: 5 }, s, e);
+    assert.deepEqual([b.to, b.toYear], [new Date(Date.UTC(2031, 0, 1)), 1970]);
+    const c = pinnedHistorySpan({ ...on, equityReturnBootstrapStartYear: 2020 }, s, e);
+    assert.equal(c.toYear, 2023, 'history ends in 2023');
+  });
+
+  test('nothing pinned, the bootstrap off, or a refused year: no band', () => {
+    assert.equal(pinnedHistorySpan(on, s, e), null);
+    assert.equal(pinnedHistorySpan({ equityReturnBootstrapStartYear: 1966 }, s, e), null);
+    assert.equal(pinnedHistorySpan({ ...on, equityReturnBootstrapStartYear: 1700 }, s, e), null);
   });
 });
