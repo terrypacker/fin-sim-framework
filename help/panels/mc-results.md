@@ -21,6 +21,10 @@ a failing path from a surviving one. It answers *why* the failures failed rather
 how many there were, which is the difference between a scary percentage and something
 you can act on.
 
+"By start year" appears for a batch run with rolling historical starts: one tile per
+starting year, marked where the plan failed. Faded tiles replay under 15 years of history
+before it runs out, so random years carry the rest.
+
 "Against baseline" appears once you have kept a batch as a baseline, and shows paired
 rescues and money delta against it. Paired is the important word: comparing two batches
 run on different random draws measures the draws as much as the change.

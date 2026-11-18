@@ -63,7 +63,10 @@ import { join, dirname, resolve } from 'node:path';
 
 import {
   pairedRescues, pairedMetric, failureRate, failureByBand, failureDrivers, RETURN_BAND_EDGES,
+  byStartYear,
 } from '../lib/mc-analysis.mjs';
+import { HISTORICAL_LAST_YEAR, ROLLING_SHADE_YEARS }
+  from '../../src/finance/economic-regimes/bootstrap-window.js';
 import { millions, thousands, money, moneyAuto, pct, percentile, columns } from '../lib/format.mjs';
 import { renderMixReport } from '../lib/mix-report-html.mjs';
 import { parseFlags }      from '../lib/cli.mjs';
@@ -408,6 +411,40 @@ if (anyBanded) {
   });
   console.log('Cell = failure rate (paths in band). This is the readout to quote: it converts');
   console.log('"12% of paths fail" into a RETURN THRESHOLD you can hold an opinion about.');
+}
+
+// Design 133 §4.3 — a rolling-start arm (`mc-run --equity-starts rolling`) stamps each row's
+// historical start year. One row per start year; a start that replays under 15 years of
+// history before it runs out is marked `~` (shaded in the app), never dropped.
+const startArms = keys.filter(k => new Set(arms[k].rows.map(r => r.startYear).filter(y => y != null)).size > 1);
+if (startArms.length) {
+  const byArm = Object.fromEntries(startArms.map(k => [k, new Map(byStartYear(arms[k].rows, {
+    lastYear: HISTORICAL_LAST_YEAR, shadeYears: ROLLING_SHADE_YEARS,
+  }).map(y => [y.startYear, y]))]));
+  const years = [...new Set(startArms.flatMap(k => [...byArm[k].keys()]))].sort((a, b) => a - b);
+  columns({
+    title: 'BY START YEAR (rolling historical starts)',
+    rows: years,
+    columns: [
+      { head: 'START', width: 7, align: 'left',
+        get: y => `${y}${startArms.some(k => byArm[k].get(y)?.short) ? '~' : ''}` },
+      ...startArms.map(k => ({
+        head: k.length > 12 ? k.slice(0, 12) : k, width: 22,
+        get: (y) => {
+          const e = byArm[k].get(y);
+          return e ? `${e.failed ? 'FAIL' : 'ok'} ${e.failed}/${e.n}  ${moneyAuto(e.medianNw)}` : '·';
+        },
+      })),
+    ],
+  });
+  for (const k of startArms) {
+    const fails = [...byArm[k].values()].filter(e => e.failed > 0).map(e => e.startYear);
+    console.log(`${k}: fails in ${fails.length} of ${byArm[k].size} start years${fails.length ? `: ${fails.join(', ')}` : ''}`);
+  }
+  const real = startArms.every(k => [...byArm[k].values()].every(e => e.real));
+  console.log(`Cell = failed/paths and median terminal net worth (${real ? "today's dollars" : 'NOMINAL'}). `
+    + `~ = fewer than ${ROLLING_SHADE_YEARS} years of`);
+  console.log(`history before ${HISTORICAL_LAST_YEAR}; random blocks carry the rest of that path.`);
 }
 
 // ─── 5. mix distribution (design 82 §8) ──────────────────────────────────────

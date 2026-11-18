@@ -1467,6 +1467,22 @@ export const ECONOMIC_REGIMES = {
         description:  'How many years replay in order from Historical Bootstrap — Start Year before the replay goes back to random blocks. Blank (default) replays through to the end of the history. A run longer than the history has left is cut at its end. Fifteen years covers most of what decides whether a retirement plan survives its start (design 133 §11 Q4).',
       },
       {
+        // Design 133 §4.3 — the rolling-start study as a Monte Carlo sampling mode: path i
+        // pins its own start year (bootstrap-window.js applyRollingStart).
+        key:          'mcEquityBootstrapStarts',
+        label:        'Monte Carlo: Historical Start Years',
+        type:         'Enum',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        options:      ['RANDOM', 'ROLLING'],
+        optionLabels: { RANDOM: 'Random — each path starts at a random historical year (default)',
+                        ROLLING: 'Rolling — each path starts at the next historical year in turn' },
+        defaultValue: 'RANDOM',
+        visibleWhen:  { param: 'mcEquityReturnModel', equals: 'HISTORICAL_BOOTSTRAP' },
+        description:  `How Monte Carlo picks the historical year each path's bootstrap opens with (design 133). Random (default) starts every path at a random year. Rolling runs the classic rolling-start study: path 1 opens with the first year the bootstrap samples, path 2 with the next, and so on, cycling back after ${HISTORICAL_LAST_YEAR}; each path then replays history in order for the plan's whole horizon, or until the history ends in ${HISTORICAL_LAST_YEAR}, and draws random blocks after that. Set the number of runs to the number of start years (73 for 1951–${HISTORICAL_LAST_YEAR}, the Monte Carlo default) to run each start once. The results add a "by start year" strip, which shades starts that replay fewer than 15 years of history. Rolling replaces Historical Bootstrap — Start Year and Start Run on every path.`,
+      },
+      {
         key:          'equityReturnBootstrapAuReplay',
         label:        'Historical Bootstrap — Replay AU Market History',
         type:         'Boolean',

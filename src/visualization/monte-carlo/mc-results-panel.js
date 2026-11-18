@@ -18,8 +18,9 @@ import { ServiceRegistry } from '../../services/service-registry.js';
 import { formatAxisValue } from './mc-grid-format.js';
 import {
   runsToRows, failureByBand, failureDrivers, RETURN_BAND_EDGES,
-  pairingMismatches, pairedRescues, pairedMetric, failureRate,
+  pairingMismatches, pairedRescues, pairedMetric, failureRate, byStartYear,
 } from '../../finance/monte-carlo/mc-analysis.js';
+import { HISTORICAL_LAST_YEAR, ROLLING_SHADE_YEARS } from '../../finance/economic-regimes/bootstrap-window.js';
 import {
   GRID_METRICS, GRID_STATS, GRID_READINGS, FAILURE_RATE, GRID_CONSTRAINT_OPS,
   gridMetric, gridCellMetric, rankCells, normalizeGridReading,
@@ -402,6 +403,10 @@ export class McResultsPanel extends BaseComponent {
     // ── Path shape (design 100 §3) ─────────────────────────────────────────────
     const shape = this._buildPathShapeSection(summary, runs);
     if (shape) wrapper.appendChild(shape);
+
+    // ── By start year (design 133 §4.3) — only a rolling batch has one ─────────
+    const starts = this._buildStartYearSection(summary, runs);
+    if (starts) wrapper.appendChild(starts);
 
     // ── Opt-in telemetry sections (design 100 §4) ─────────────────────────────
     const mixSection = this._buildMixSection(runs);
@@ -1250,6 +1255,102 @@ export class McResultsPanel extends BaseComponent {
     if (bandTable) section.appendChild(bandTable);
     const drivers = this._buildDriversTable(rows);
     if (drivers) section.appendChild(drivers);
+    return section;
+  }
+
+  /**
+   * The rolling-start strip (design 133 §4.3): one tile per historical start year, marked
+   * when any of its paths failed, and shaded when its pinned run is under 15 years (§11 Q4:
+   * shaded, never dropped). The tile's title and the table under it carry success, the
+   * lowest real spendable wealth and the median terminal net worth. Shown only for a batch
+   * that rolled: a pinned or random batch has no start years to compare.
+   */
+  _buildStartYearSection(summary, runs) {
+    if (summary?.pairing?.equityStart !== 'ROLLING') return null;
+    const horizonYears = Math.max(0, ...runs.map(r => r.timeSeries?.length ?? 0)) || null;
+    const years = byStartYear(runsToRows(runs), {
+      lastYear: HISTORICAL_LAST_YEAR, horizonYears, shadeYears: ROLLING_SHADE_YEARS,
+    });
+    if (!years.length) return null;
+
+    const section = document.createElement('div');
+    section.className = 'mc-shape-section mc-start-section';
+    const label = document.createElement('div');
+    label.className = 'mc-section-label';
+    label.textContent = 'By Start Year — rolling historical starts';
+    section.appendChild(label);
+
+    const failing = years.filter(y => y.failed > 0);
+    const counts  = new Set(years.map(y => y.n));
+    const summaryEl = document.createElement('div');
+    summaryEl.className = 'mc-start-summary';
+    summaryEl.textContent = (failing.length
+      ? `Fails in ${failing.length} of ${years.length} start years: ${failing.map(y => y.startYear).join(', ')}.`
+      : `Survives all ${years.length} start years.`)
+      + (counts.size > 1 ? ' Some start years ran more paths than others: set the runs to a multiple of '
+        + `${years.length} to run each the same number of times.` : '');
+    section.appendChild(summaryEl);
+
+    const strip = document.createElement('div');
+    strip.className = 'mc-start-strip';
+    strip.setAttribute('role', 'list');
+    for (const y of years) {
+      const tile = document.createElement('div');
+      tile.className = 'mc-start-tile'
+        + (y.failed > 0 ? ' mc-start-tile--fails' : '')
+        + (y.short ? ' mc-start-tile--short' : '');
+      tile.setAttribute('role', 'listitem');
+      tile.dataset.startYear = String(y.startYear);
+      const mark = y.n === 1 ? (y.failed ? '✗' : '✓') : fmtPct(y.successRate);
+      tile.textContent = `${y.startYear} ${mark}`;
+      tile.title = `${y.startYear}: ${y.n} path${y.n === 1 ? '' : 's'}, success ${fmtPct(y.successRate)}; `
+        + `lowest real spendable ${fmtMoneyOrDash(y.minRealNetLiq)}; median terminal net worth `
+        + `${fmtMoneyOrDash(y.medianNw)}${y.real ? ' in today\'s dollars' : ' (nominal)'}; replays ${y.pinnedYears} year${y.pinnedYears === 1 ? '' : 's'} of history`
+        + (y.short ? ', then random blocks' : '');
+      strip.appendChild(tile);
+    }
+    section.appendChild(strip);
+
+    const note = document.createElement('div');
+    note.className = 'mc-shape-note';
+    const shortN = years.filter(y => y.short).length;
+    note.textContent = 'Each path replays its start year and the years after it in order. '
+      + (shortN ? `${shortN} faded start year${shortN === 1 ? '' : 's'} replay fewer than `
+        + `${Math.min(ROLLING_SHADE_YEARS, horizonYears ?? ROLLING_SHADE_YEARS)} years before the `
+        + `history ends in ${HISTORICAL_LAST_YEAR}; random blocks carry the rest, so read them as partly history.`
+        : 'Every start replays history for the whole plan.');
+    section.appendChild(note);
+
+    const details = document.createElement('details');
+    details.className = 'mc-start-details';
+    const sum = document.createElement('summary');
+    sum.textContent = 'Table';
+    details.appendChild(sum);
+    const table = document.createElement('table');
+    table.className = 'mc-shape-table mc-start-table';
+    const nwHead = years[0].real ? 'Median terminal NW (today\'s USD)' : 'Median terminal NW (USD, nominal)';
+    table.innerHTML = '<thead><tr><th class="mc-shape-name">Start year</th><th>Paths</th>'
+      + `<th>Success</th><th>Lowest real spendable</th><th>${nwHead}</th>`
+      + '<th>History years</th></tr></thead>';
+    const body = document.createElement('tbody');
+    for (const y of years) {
+      const tr = document.createElement('tr');
+      const cls = [y.failed > 0 ? 'mc-start-row--fails' : '', y.short ? 'mc-start-row--short' : '']
+        .filter(Boolean).join(' ');
+      if (cls) tr.className = cls;
+      tr.append(
+        cell(String(y.startYear), 'mc-shape-name'),
+        cell(String(y.n)),
+        cell(fmtPct(y.successRate)),
+        cell(fmtMoneyOrDash(y.minRealNetLiq)),
+        cell(fmtMoneyOrDash(y.medianNw)),
+        cell(String(y.pinnedYears)),
+      );
+      body.appendChild(tr);
+    }
+    table.appendChild(body);
+    details.appendChild(table);
+    section.appendChild(details);
     return section;
   }
 

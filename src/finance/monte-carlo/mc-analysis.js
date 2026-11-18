@@ -21,6 +21,8 @@
  * analysis stays single-shaped (design 100 §2.4).
  */
 
+import { realFromUsd } from '../fx/real-basis.js';
+
 /**
  * Return bands for `failureByBand` on realized net-worth CAGR (design 100 §2.3).
  *
@@ -60,7 +62,81 @@ export function runsToRows(runs) {
     troughRealDrawdown: r.pathShape?.troughRealDrawdown ?? null,
     minRealNetLiq:      r.pathShape?.minRealNetLiquidity ?? null,
     repairSpend:  r.lifetimeRepairSpend ?? null,
+    // Design 133 §4.3 — the historical year the path's replay opened with, when it was
+    // pinned (a rolling batch pins every path). Absent otherwise, so unpinned rows keep
+    // their shape.
+    ...startYearFields(r),
   }));
+}
+
+/**
+ * The fields a pinned path's row adds (design 133 §4.3): its start year, and its terminal net
+ * worth in today's dollars. Real, because start years differ most in their inflation: under
+ * joint inflation a 1970s start carries 1970s inflation, and its nominal wealth ranks it near
+ * the top for that reason alone. Empty for an unpinned path, so its row keeps its shape.
+ * Shared with the lab's arm rows (`scripts/lib/mc.mjs`).
+ *
+ * @param {object} r  a runner run (`params`, `finalNetWorthUsd`, `terminalRates`)
+ * @returns {{ startYear?: number, realNw?: number|null }}
+ */
+export function startYearFields(r) {
+  if (r?.params?.equityReturnBootstrapStartYear == null) return {};
+  return {
+    startYear: Number(r.params.equityReturnBootstrapStartYear),
+    realNw:    realFromUsd(r.finalNetWorthUsd, r.terminalRates, 'USD'),
+  };
+}
+
+/**
+ * Results by pinned start year (design 133 §4.3): the rolling-start study's readout.
+ *
+ * One entry per start year that any row carries, in year order. `minRealNetLiq` is the
+ * lowest real spendable wealth any of that year's paths reached (the worst point of
+ * funding), `medianNw` the median terminal net worth: in today's dollars when every row
+ * carries `realNw` (`real: true`), else nominal. `pinnedYears` is how many years the
+ * replay ran in order before random blocks took over: the plan's horizon, cut at the end of
+ * the history. `short` marks a start whose pinned run is under `shadeYears` (or under the
+ * horizon, when the plan is shorter), so a reader can see where history stops carrying the
+ * result. Shaded, never dropped (§11 Q4).
+ *
+ * @param {Array} rows  `runsToRows` rows
+ * @param {{ lastYear: number, horizonYears?: number|null, shadeYears?: number }} opts
+ * @returns {Array<{ startYear: number, n: number, failed: number, successRate: number,
+ *                   minRealNetLiq: number|null, medianNw: number|null, real: boolean,
+ *                   pinnedYears: number, short: boolean }>}
+ */
+export function byStartYear(rows, { lastYear, horizonYears = null, shadeYears = 15 }) {
+  const groups = new Map();
+  for (const r of rows ?? []) {
+    if (r.startYear == null) continue;
+    if (!groups.has(r.startYear)) groups.set(r.startYear, []);
+    groups.get(r.startYear).push(r);
+  }
+  const bar = horizonYears != null ? Math.min(shadeYears, horizonYears) : shadeYears;
+  // Real when every row carries it (see `startYearFields`); nominal otherwise, and said so.
+  const all  = [...groups.values()].flat();
+  const real = all.length > 0 && all.every(r => typeof r.realNw === 'number');
+  return [...groups.entries()].sort((a, b) => a[0] - b[0]).map(([startYear, rs]) => {
+    const failed = rs.filter(r => r.failed).length;
+    const liq = rs.map(r => r.minRealNetLiq).filter(v => typeof v === 'number');
+    const nws = rs.map(r => (real ? r.realNw : r.nw)).filter(v => typeof v === 'number').sort((a, b) => a - b);
+    const history = lastYear - startYear + 1;
+    const pinnedYears = horizonYears != null ? Math.min(horizonYears, history) : history;
+    return {
+      startYear, n: rs.length, failed,
+      successRate:   (rs.length - failed) / rs.length,
+      minRealNetLiq: liq.length ? Math.min(...liq) : null,
+      medianNw:      nws.length ? _median(nws) : null,
+      real,
+      pinnedYears,
+      short:         pinnedYears < bar,
+    };
+  });
+}
+
+function _median(sorted) {
+  const m = sorted.length >> 1;
+  return sorted.length % 2 ? sorted[m] : (sorted[m - 1] + sorted[m]) / 2;
 }
 
 /**
@@ -214,7 +290,8 @@ export function pairingMismatches(a, b) {
   // Carlo (every path shares its first years), so it never pairs with an unpinned one.
   if (a.equityStart !== undefined && b.equityStart !== undefined && a.equityStart !== b.equityStart
       && a.equityModel === b.equityModel) {
-    const show = (x) => (x == null ? 'none' : x.replace('+', ' for ') + ' years');
+    const show = (x) => (x == null ? 'none' : x === 'ROLLING' ? 'rolling (one per path)'
+      : x.replace('+', ' for ') + ' years');
     out.push(`pinned start ${show(a.equityStart)} vs ${show(b.equityStart)}`);
   }
   // Design 103 §6 — the inflation process, under the same rule for records that predate it.

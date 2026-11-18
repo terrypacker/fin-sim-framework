@@ -882,3 +882,44 @@
    result — so it is the one that carries the full-strength rule. */
 .mc-grid-hygiene-row--inert { border-left-width: 3px; }
 .mc-grid-hygiene-row--confounded { border-left-color: var(--warning-dim); }
+
+/* ── By start year (design 133 §4.3): the rolling-start strip ── */
+.mc-start-summary {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin: 2px 0 6px;
+}
+
+.mc-start-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-bottom: 4px;
+}
+
+.mc-start-tile {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--text-muted);
+  background: var(--bg-panel2);
+  white-space: nowrap;
+}
+
+.mc-start-tile--fails {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+/* Shaded, never dropped (§11 Q4): the history runs out before 15 years. */
+.mc-start-tile--short { opacity: 0.5; border-style: dashed; }
+.mc-start-row--fails td:nth-child(3) { color: var(--red); }
+.mc-start-row--short td { opacity: 0.6; }
+
+.mc-start-details summary {
+  font-size: 9px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
