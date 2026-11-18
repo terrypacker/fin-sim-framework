@@ -18,6 +18,7 @@ import { dateSolverView, dateParamValue } from '../../finance/optimization/opt-d
 import { GRID_MODES, MAX_AXIS_VALUES } from '../../finance/monte-carlo/mc-grid.js';
 import { formatAxisValue, formatDuration } from './mc-grid-format.js';
 import { JOINT_FIRST_YEAR }           from '../../finance/economic-regimes/bootstrap-window.js';
+import { renderReturnSettings }       from './mc-return-settings.js';
 
 /** A date-like value → `YYYY-MM-DD` for a date input, or '' when it is not a date. */
 function _isoDay(v) {
@@ -166,6 +167,24 @@ export class McConfigPanel extends BaseComponent {
       });
       this._pathsEl.append(' ', btn);
     }
+  }
+
+  /**
+   * The return-process and history settings, edited here on the live record (design 133; see
+   * mc-return-settings.js). `params` are the record's typed entries; `bootstrap` says whether
+   * the batch runs the historical bootstrap, which is when its year rows apply.
+   * `onReturnSettingEdited(name)` fires after an edit.
+   */
+  setReturnSettings(params, { bootstrap = false } = {}) {
+    if (!this._settingsEl) return;
+    const any = (params ?? []).length > 0;
+    this._settingsBox.hidden = !any;
+    if (!any) return;
+    renderReturnSettings(this._settingsEl, params, {
+      bootstrap,
+      onEdit: (name) => this.onReturnSettingEdited?.(name),
+      onOpenHelp: this.onOpenHelp,
+    });
   }
 
   /** Show a transient status message without touching the Run button state. */
@@ -433,6 +452,10 @@ export class McConfigPanel extends BaseComponent {
         </div>
         <div class="mc-return-paths" hidden
           title="The return processes every path runs, and the historical years the equity bootstrap samples (design 133). Set them under Economic Shocks: Monte Carlo: Equity Return Process, Monte Carlo: Inflation Process and Monte Carlo: Historical Start Years."></div>
+        <details class="mc-return-settings-box" hidden>
+          <summary title="The return processes and the historical years every path samples. The same settings as Parameters → Economic Shocks.">Return processes &amp; history</summary>
+          <div class="mc-return-settings"></div>
+        </details>
         <button class="btn btn-primary mc-batch-run" style="width:100%">▶ Run Monte Carlo</button>
         <div class="mc-grid-body" hidden></div>
       </div>
@@ -457,6 +480,8 @@ export class McConfigPanel extends BaseComponent {
     this._copyBtn  = shell.querySelector('.mc-copy-scenario-btn');
     this._statusEl = shell.querySelector('.mc-status-el');
     this._pathsEl  = shell.querySelector('.mc-return-paths');
+    this._settingsBox = shell.querySelector('.mc-return-settings-box');
+    this._settingsEl  = shell.querySelector('.mc-return-settings');
     // The iterations decide whether the line offers its rolling-start count (design 133).
     this.listen(this._iterEl, 'input', () => { if (this._pathsInfo) this.setReturnPaths(this._pathsInfo); });
     this._section  = shell.querySelector('.mc-var-section');

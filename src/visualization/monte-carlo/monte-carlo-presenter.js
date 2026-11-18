@@ -30,6 +30,7 @@ import { formatDuration, formatAxisValue } from './mc-grid-format.js';
 import { gridCellRuns }            from '../../finance/monte-carlo/mc-grid-runner.js';
 import { mcReturnPaths }           from '../../finance/monte-carlo/parallel/mc-worker-core.js';
 import { PARAM_EDITED_EVENT } from '../scenario/param-advisories.js';
+import { RETURN_SETTING_NAMES } from './mc-return-settings.js';
 
 /**
  * MonteCarloPresenter — wires McConfigPanel callbacks to MonteCarloController
@@ -69,6 +70,10 @@ export class MonteCarloPresenter {
 
     this._configPanel.onRun              = (config)  => this._onRun(config);
     this._configPanel.onCopyFromScenario = ()        => this._onCopyFromScenario();
+    // An edit in the tab's own settings: announced like a Parameters edit, so the line here and
+    // the Parameters list both redraw from the record.
+    this._configPanel.onReturnSettingEdited = (name) => document.dispatchEvent(
+      new CustomEvent(PARAM_EDITED_EVENT, { detail: { name, source: 'mc' } }));
     // Lets the panel re-centre untouched variables on the live scenario at run time,
     // so a run always describes the plan as it stands rather than as it was loaded.
     this._configPanel.onResolveScenarioCenters = ()  => this._scenarioCenters();
@@ -245,6 +250,10 @@ export class MonteCarloPresenter {
     try { info = mcReturnPaths({ ...schemaDefaults, ...this._resolveBaseParams() }); }
     catch (err) { info = { error: String(err?.message ?? err) }; }
     this._configPanel.setReturnPaths(info);
+    // The settings that line describes, editable beside it (design 133).
+    const active = ServiceRegistry.getInstance()?.scenarioService?.getActive?.() ?? null;
+    const params = (active?.params ?? []).filter(p => RETURN_SETTING_NAMES.includes(p.name));
+    this._configPanel.setReturnSettings(params, { bootstrap: !!info?.window || !!info?.error });
   }
 
   /** Copy the live scenario parameter values into the MC variable centers. */

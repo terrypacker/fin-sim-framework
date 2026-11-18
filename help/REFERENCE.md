@@ -2321,7 +2321,7 @@ what the in-app panel keys on.
 | [Bond Ladders](concepts/bond-ladders.md) | concept | 399 | 1 panel · 10 params · design 66, 121, 125, 128 |
 | [Bonds](panels/bonds.md) | panel | 246 | 1 panel · design 130, 66 |
 | [Bonus](nodes/bonus.md) | node | 169 | design 116 |
-| [Chart](panels/chart.md) | panel | 199 | 1 panel |
+| [Chart](panels/chart.md) | panel | 220 | 1 panel |
 | [Collectible](nodes/collectible.md) | node | 205 | 2 panels · design 57, 88 |
 | [Company Equity](nodes/company.md) | node | 214 | 2 panels · design 49, 72, 88 |
 | [Graph](panels/config-graph.md) | panel | 197 | 1 panel |
@@ -2353,7 +2353,7 @@ what the in-app panel keys on.
 | [Journal Report](panels/journal-report.md) | panel | 193 | 1 panel · design 16 |
 | [Lineage](panels/lineage.md) | panel | 196 | 1 panel · design 30 |
 | [Liquidity Pools](concepts/liquidity-pools.md) | concept | 397 | 1 panel · 7 params · design 97 |
-| [Monte Carlo](panels/mc-config.md) | panel | 249 | 1 panel · design 100 |
+| [Monte Carlo](panels/mc-config.md) | panel | 231 | 1 panel · design 100 |
 | [MC Results](panels/mc-results.md) | panel | 242 | 1 panel · design 100, 89 |
 | [MC Runs](panels/mc-runs.md) | panel | 234 | 1 panel · design 100 |
 | [Mortality and Survivorship](concepts/mortality.md) | concept | 263 | 2 panels · 5 params |

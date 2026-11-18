@@ -16,6 +16,7 @@ import { fmtCompact, fmtWhole } from '../money-format.js';
 import { realFromUsd } from '../../finance/fx/real-basis.js';
 import { ServiceRegistry } from '../../services/service-registry.js';
 import { formatAxisValue } from './mc-grid-format.js';
+import { formatReturnPaths } from './mc-config-panel.js';
 import {
   runsToRows, failureByBand, failureDrivers, RETURN_BAND_EDGES,
   pairingMismatches, pairedRescues, pairedMetric, failureRate, byStartYear,
@@ -351,6 +352,8 @@ export class McResultsPanel extends BaseComponent {
     headerRow.append(header, ...(badge ? [badge] : []), actions);
     wrapper.appendChild(headerRow);
 
+    const ranWith = this._buildRanWith(summary?.returnPaths);
+    if (ranWith) wrapper.appendChild(ranWith);
     const provenance = this._buildProvenanceBanner(summary?.provenance);
     if (provenance) wrapper.appendChild(provenance);
     if (basisNote) wrapper.appendChild(basisNote);
@@ -1258,6 +1261,22 @@ export class McResultsPanel extends BaseComponent {
     const drivers = this._buildDriversTable(rows);
     if (drivers) section.appendChild(drivers);
     return section;
+  }
+
+  /**
+   * "Ran with: Equity: Historical bootstrap, 1951–2023 …" — the return processes and the
+   * historical years this batch sampled (design 133), as recorded when it ran. The Monte Carlo
+   * tab's return-paths line describes the plan NOW; once the plan moves on, this is the only
+   * place that says what these results are.
+   */
+  _buildRanWith(info) {
+    const text = info ? formatReturnPaths(info) : '';
+    if (!text) return null;
+    const el = document.createElement('div');
+    el.className = 'mc-ran-with';
+    el.textContent = `Ran with: ${text}`;
+    el.title = 'The return processes and historical years this batch ran with, recorded when it ran.';
+    return el;
   }
 
   /**

@@ -32,6 +32,7 @@ import { EventBus }                      from '../simulation-framework/event-bus
 import { ScenarioLoader }             from '../scenarios/scenario-loader.js';
 import { applyParamBagToConfig, snapshotParamStores, restoreParamStores }
   from '../scenarios/scenario-param-apply.js';
+import { pinnedHistorySpan } from '../finance/economic-regimes/bootstrap-window.js';
 import { ScenarioSerializer }         from '../scenarios/scenario-serializer.js';
 import { ParamFieldLinks }            from '../visualization/scenario/param-field-links.js';
 import { ChartController }            from '../visualization/chart/chart-controller.js';
@@ -971,6 +972,16 @@ export class WorkbenchApp extends BaseComponent {
     this.chartPresenter.fieldStore = fieldStore;   // read to backfill a path when it is charted
     this.chartPresenter.formatter  = fieldFormatter;
     this.chartPresenter.startViz();
+    // Design 133 — the years this run replays history in order (a pinned start year, or a
+    // replayed rolling path's): shaded, so a reader sees which part of the chart is 1966.
+    const runParams = Array.isArray(this.scenario.params)
+      ? Object.fromEntries(this.scenario.params.map(p => [p.name, p.value]))
+      : (this.scenario.params ?? {});
+    const pinned = pinnedHistorySpan(runParams, this.scenario.simStart, this.scenario.simEnd);
+    if (pinned) {
+      const span = pinned.toYear > pinned.startYear ? `${pinned.startYear}–${pinned.toYear}` : `${pinned.startYear}`;
+      this.chartPresenter.addBand('bootstrap_pinned', { label: `History ${span} in order`, from: pinned.from, to: pinned.to });
+    }
 
     // Design 101 W2: the scenario's watchlists drive the chart (the active list's
     // charted entries), full-resolution capture (every entry of every list), and the

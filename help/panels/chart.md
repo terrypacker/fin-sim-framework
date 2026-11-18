@@ -19,7 +19,8 @@ can see there you can plot here. For a set of fields you want to keep across run
 build a [Watchlist](watchlist.md) instead — this panel's selection is per session.
 
 A failure banner appears above the plot when the run did not survive, rather than
-leaving you to infer it from a line reaching zero.
+leaving you to infer it from a line reaching zero. A run pinned to a historical start
+year (or a replayed rolling path) shades the years it replays history in order.
 
 Needs a scenario built. The plot's container belongs to the workbench runtime, not
 to this panel, so a layout with this tab closed at load still gets a working chart

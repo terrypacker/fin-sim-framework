@@ -42,6 +42,12 @@ const LIQUIDITY_GROUP_ORDER = Object.freeze(['liquidityGraph', 'liquidityGraphSc
 export class ScenarioTabView {
   constructor() {
 
+    // The Monte Carlo tab edits a few of these params on the same record (design 133): redraw
+    // so this list shows what it set. This view lives as long as the app, so no removal.
+    document.addEventListener(PARAM_EDITED_EVENT, (e) => {
+      if (e.detail?.source === 'mc' && this._activeScenario) this._renderParamsList(this._activeScenario);
+    });
+
     /** @type {function(string)|null} */
     this.onOpen = null;
     /** @type {function()|null} */

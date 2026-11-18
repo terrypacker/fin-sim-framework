@@ -258,3 +258,26 @@ export function applyRollingStart(p, i) {
   p.equityReturnBootstrapStartRun  = null;
   return p;
 }
+
+/**
+ * The dates of a run that replay a pinned history in order (design 133 §4.1), for a band on a
+ * single run's chart; null when the run pins nothing. Path year k is the k-th year from the
+ * run's start, so the span is `simStart` plus the pinned years, cut at `simEnd`; past it the
+ * run draws random blocks. A start year the bootstrap would refuse is null here: the run says
+ * so itself.
+ *
+ * @param {object} p        the run's params
+ * @param {Date} simStart
+ * @param {Date} simEnd
+ * @returns {{ from: Date, to: Date, startYear: number, toYear: number, years: number }|null}
+ */
+export function pinnedHistorySpan(p, simStart, simEnd) {
+  let run;
+  try { run = bootstrapPinnedRun(p); } catch { return null; }
+  if (!run || !(simStart instanceof Date) || !(simEnd instanceof Date)) return null;
+  const end = new Date(simStart);
+  end.setUTCFullYear(end.getUTCFullYear() + run.years);
+  const to = end < simEnd ? end : simEnd;
+  const years = Math.max(1, Math.round((to - simStart) / (365.2425 * 864e5)));
+  return { from: new Date(simStart), to, startYear: run.startYear, toYear: run.startYear + years - 1, years };
+}
