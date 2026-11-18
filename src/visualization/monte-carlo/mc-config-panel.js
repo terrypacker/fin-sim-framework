@@ -17,6 +17,7 @@ import { OPT_PARAM_TYPES }             from '../../finance/optimization/optimiza
 import { dateSolverView, dateParamValue } from '../../finance/optimization/opt-date.js';
 import { GRID_MODES, MAX_AXIS_VALUES } from '../../finance/monte-carlo/mc-grid.js';
 import { formatAxisValue, formatDuration } from './mc-grid-format.js';
+import { JOINT_FIRST_YEAR }           from '../../finance/economic-regimes/bootstrap-window.js';
 
 /** A date-like value → `YYYY-MM-DD` for a date input, or '' when it is not a date. */
 function _isoDay(v) {
@@ -44,8 +45,11 @@ const INFLATION_MODEL_SHORT = Object.freeze({
  *   `mcReturnPaths(base)`
  * @returns {string} '' when there is nothing to say
  */
+const _span = (a, b) => (a === b ? String(a) : `${a}–${b}`);
+
 export function formatReturnPaths(info) {
   if (!info) return '';
+  if (info.error) return `Every path would fail: ${info.error}`;
   const equity = info.equityModel == null
     ? 'off (single-run returns)'
     : (EQUITY_MODEL_SHORT[info.equityModel] ?? info.equityModel);
@@ -59,7 +63,12 @@ export function formatReturnPaths(info) {
   const start = !st ? ''
     : st.rolling ? `; rolling starts: path 1 opens with ${st.fromYear}, each next path a year later `
       + `(${st.count} start years, then they repeat)`
-    : `; every path opens with ${st.startYear}–${st.toYear} in order`;
+    : `; every path opens with ${st.startYear}–${st.toYear} in order`
+      // §4.1 — under joint inflation, pinned years before 1951 have no inflation history.
+      + (info.inflationModel === 'HISTORICAL_JOINT' && st.startYear < JOINT_FIRST_YEAR
+        ? ` (${_span(st.startYear, Math.min(st.toYear, JOINT_FIRST_YEAR - 1))} draw inflation at random: `
+          + `its history starts in ${JOINT_FIRST_YEAR})`
+        : '');
   const inflation = info.inflationModel == null
     ? 'off (single-run inflation)'
     : (INFLATION_MODEL_SHORT[info.inflationModel] ?? info.inflationModel);
@@ -137,9 +146,26 @@ export class McConfigPanel extends BaseComponent {
    */
   setReturnPaths(info) {
     if (!this._pathsEl) return;
+    this._pathsInfo = info;
     const text = formatReturnPaths(info);
     this._pathsEl.textContent = text;
     this._pathsEl.hidden = !text;
+    // Design 133 §4.3 — rolling starts cover each year evenly only when the iterations are a
+    // multiple of the start-year count: offer the count, before the run rather than after.
+    const count = info?.start?.rolling ? info.start.count : null;
+    const n = parseInt(this._iterEl?.value ?? '', 10);
+    if (count && !(n > 0 && n % count === 0)) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-xs btn-ghost mc-set-iters-btn';
+      btn.textContent = `Set iterations to ${count}`;
+      btn.title = `${count} start years: ${n || 0} iterations would run some of them more often than others.`;
+      btn.addEventListener('click', () => {
+        if (this._iterEl) this._iterEl.value = String(count);
+        this.setReturnPaths(this._pathsInfo);
+      });
+      this._pathsEl.append(' ', btn);
+    }
   }
 
   /** Show a transient status message without touching the Run button state. */
@@ -386,7 +412,7 @@ export class McConfigPanel extends BaseComponent {
             Record spending <span class="mc-telemetry-cost">~7.5× time</span></label>
         </div>
         <div class="mc-return-paths" hidden
-          title="The return processes every path runs, and the historical years the equity bootstrap samples (design 133). Set them under Economic Shocks: Monte Carlo: Equity Return Process and Monte Carlo: Inflation Process."></div>
+          title="The return processes every path runs, and the historical years the equity bootstrap samples (design 133). Set them under Economic Shocks: Monte Carlo: Equity Return Process, Monte Carlo: Inflation Process and Monte Carlo: Historical Start Years."></div>
         <button class="btn btn-primary mc-batch-run" style="width:100%">▶ Run Monte Carlo</button>
         <div class="mc-grid-body" hidden></div>
       </div>
@@ -411,6 +437,8 @@ export class McConfigPanel extends BaseComponent {
     this._copyBtn  = shell.querySelector('.mc-copy-scenario-btn');
     this._statusEl = shell.querySelector('.mc-status-el');
     this._pathsEl  = shell.querySelector('.mc-return-paths');
+    // The iterations decide whether the line offers its rolling-start count (design 133).
+    this.listen(this._iterEl, 'input', () => { if (this._pathsInfo) this.setReturnPaths(this._pathsInfo); });
     this._section  = shell.querySelector('.mc-var-section');
 
     this.listen(this._runBtn, 'click', () => {

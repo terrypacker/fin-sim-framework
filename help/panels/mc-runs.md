@@ -27,4 +27,7 @@ Replay on a row re-runs that exact iteration as the live simulation, so a failur
 found in the distribution becomes something you can step through in
 [Timeline](timeline.md) and [Chart](chart.md). Clear the replay badge to go back.
 
+After a rolling-start batch each run shows the historical year it opened with, and can be
+sorted by it. Replaying one pins your plan to that year while it replays; Clear unpins it.
+
 Needs a completed [Monte Carlo](mc-config.md) run.

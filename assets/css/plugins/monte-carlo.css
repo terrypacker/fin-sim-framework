@@ -923,3 +923,20 @@
   color: var(--text-dim);
   cursor: pointer;
 }
+
+/* Tiles are buttons (they open the start year's runs): keep them looking like tiles. */
+button.mc-start-tile { cursor: pointer; line-height: inherit; }
+button.mc-start-tile:hover { border-color: var(--border-hi); color: var(--text); }
+button.mc-start-tile--fails:hover { border-color: var(--red); color: var(--red); }
+
+/* The run list under a rolling batch: each path's start year, and the focused year's paths. */
+.mc-run-start {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 0 3px;
+}
+.mc-run-line--focus { background: var(--bg-active); }
+.mc-replay-pin { color: var(--text-muted); }

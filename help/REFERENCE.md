@@ -2355,7 +2355,7 @@ what the in-app panel keys on.
 | [Liquidity Pools](concepts/liquidity-pools.md) | concept | 397 | 1 panel · 7 params · design 97 |
 | [Monte Carlo](panels/mc-config.md) | panel | 249 | 1 panel · design 100 |
 | [MC Results](panels/mc-results.md) | panel | 242 | 1 panel · design 100, 89 |
-| [MC Runs](panels/mc-runs.md) | panel | 196 | 1 panel · design 100 |
+| [MC Runs](panels/mc-runs.md) | panel | 229 | 1 panel · design 100 |
 | [Mortality and Survivorship](concepts/mortality.md) | concept | 263 | 2 panels · 5 params |
 | [MPC Cockpit](panels/mpc-cockpit.md) | panel | 244 | 1 panel · design 39, 80 |
 | [Optimize](panels/opt-config.md) | panel | 248 | 1 panel |

@@ -209,6 +209,8 @@ export class McResultsPanel extends BaseComponent {
     this.onClearBaseline = null;
     /** Grid: onGridCellSelected({ ref, sel, shown }) — the cell being read changed. */
     this.onGridCellSelected = null;
+    /** Rolling batch: onStartYearSelected(year) — a By Start Year tile was clicked (design 133). */
+    this.onStartYearSelected = null;
 
     this._renderIdle();
   }
@@ -1267,7 +1269,9 @@ export class McResultsPanel extends BaseComponent {
    */
   _buildStartYearSection(summary, runs) {
     if (summary?.pairing?.equityStart !== 'ROLLING') return null;
-    const horizonYears = Math.max(0, ...runs.map(r => r.timeSeries?.length ?? 0)) || null;
+    // The yearly series holds a point at each year boundary, the first and the last included,
+    // so a 15-year plan has 16 points and 15 years of returns.
+    const horizonYears = Math.max(0, ...runs.map(r => (r.timeSeries?.length ?? 1) - 1)) || null;
     const years = byStartYear(runsToRows(runs), {
       lastYear: HISTORICAL_LAST_YEAR, horizonYears, shadeYears: ROLLING_SHADE_YEARS,
     });
@@ -1295,7 +1299,9 @@ export class McResultsPanel extends BaseComponent {
     strip.className = 'mc-start-strip';
     strip.setAttribute('role', 'list');
     for (const y of years) {
-      const tile = document.createElement('div');
+      // A button: it opens that start year's runs in the run list (design 133 §4.3).
+      const tile = document.createElement('button');
+      tile.type = 'button';
       tile.className = 'mc-start-tile'
         + (y.failed > 0 ? ' mc-start-tile--fails' : '')
         + (y.short ? ' mc-start-tile--short' : '');
@@ -1306,7 +1312,8 @@ export class McResultsPanel extends BaseComponent {
       tile.title = `${y.startYear}: ${y.n} path${y.n === 1 ? '' : 's'}, success ${fmtPct(y.successRate)}; `
         + `lowest real spendable ${fmtMoneyOrDash(y.minRealNetLiq)}; median terminal net worth `
         + `${fmtMoneyOrDash(y.medianNw)}${y.real ? ' in today\'s dollars' : ' (nominal)'}; replays ${y.pinnedYears} year${y.pinnedYears === 1 ? '' : 's'} of history`
-        + (y.short ? ', then random blocks' : '');
+        + (y.short ? ', then random blocks' : '') + '. Click to show its runs.';
+      tile.addEventListener('click', () => this.onStartYearSelected?.(y.startYear));
       strip.appendChild(tile);
     }
     section.appendChild(strip);
