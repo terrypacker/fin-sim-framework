@@ -154,6 +154,9 @@
 .mc-telemetry-opt input { margin: 0; accent-color: var(--purple); }
 .mc-telemetry-cost { color: var(--text-dim); font-size: 9px; }
 
+/* Design 133 phase 1 — the return processes and bootstrap years every path runs. */
+.mc-return-paths { color: var(--text-dim); font-size: 10px; line-height: 1.35; }
+
 /* ── Mix + spending sections (design 100 §4) ── */
 .mc-mix-chips { display: flex; flex-wrap: wrap; gap: 3px; }
 

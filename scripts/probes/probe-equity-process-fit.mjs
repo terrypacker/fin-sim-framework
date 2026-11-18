@@ -30,22 +30,27 @@
  * and the same vol (history's sd, so the bootstrap replays history at its own size), with
  * idiosyncratic vol off. Only the process shape differs.
  *
- * Usage: node scripts/probes/probe-equity-process-fit.mjs [--paths 2000] [--seed 7]
+ * `--from <year>` measures the window that starts in that year instead (design 133 §2): the
+ * history rows, and the bootstrap rows, which replay that same window (the default Monte
+ * Carlo replays 1951–). The AU section always uses the AU years it has.
+ *
+ * Usage: node scripts/probes/probe-equity-process-fit.mjs [--paths 2000] [--seed 7] [--from 1871]
  */
 
 import { readFileSync }  from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { EquityReturnTickHandler, HISTORICAL_BOOTSTRAP_SERIES } from '../../src/finance/economic-regimes/equity-return-tick-handler.js';
+import { EquityReturnTickHandler, HISTORICAL_BOOTSTRAP_SERIES, bootstrapWindowFrom } from '../../src/finance/economic-regimes/equity-return-tick-handler.js';
 import { EquityReturnStepReducer } from '../../src/finance/economic-regimes/equity-return-step-reducer.js';
 import { EQUITY_SLEEVES, RATE_KEYS } from '../../src/finance/economic-regimes/rate-keys.js';
 import { gaussianFrom }  from '../../src/finance/fx/fx-process-models.js';
 import { parseFlags } from '../lib/cli.mjs';
 
 const opts  = parseFlags(process.argv.slice(2), {
-  usage: 'node scripts/probes/probe-equity-process-fit.mjs [--paths 2000] [--seed 7]\n\n'
+  usage: 'node scripts/probes/probe-equity-process-fit.mjs [--paths 2000] [--seed 7] [--from 1871]\n\n'
        + 'probe-equity-process-fit — which return process fits the observed history.',
   paths: { type: 'number', default: 2000, help: 'simulated paths per model' },
   seed:  { type: 'number', default: 7,    help: 'RNG seed' },
+  from:  { type: 'number', default: null, help: 'first historical year of the window to measure (default: the whole series)' },
 });
 const PATHS = opts.paths;
 const SEED  = opts.seed;
@@ -56,11 +61,19 @@ const [hdr, ...lines] = readFileSync(root + 'docs/economic-shocks/data/Shiller-S
 const cols = hdr.split(',');
 const at   = (c, name) => c[cols.indexOf(name)];
 const jan  = lines.map(l => l.split(',')).filter(c => at(c, 'observation_date').slice(5, 7) === '01' && at(c, 'real_total_return_price') !== '');
-const years = jan.map(c => Number(at(c, 'observation_date').slice(0, 4)));
+const yearsAll = jan.map(c => Number(at(c, 'observation_date').slice(0, 4)));
 const rtr   = jan.map(c => Number(at(c, 'real_total_return_price')));
 const cpi   = jan.map(c => Number(at(c, 'CPI')));
-const real  = rtr.slice(1).map((v, i) => Math.log(v / rtr[i]));                          // log real TR
-const nom   = rtr.slice(1).map((v, i) => Math.log((v * cpi[i + 1]) / (rtr[i] * cpi[i])));  // log nominal TR
+const realAll = rtr.slice(1).map((v, i) => Math.log(v / rtr[i]));                          // log real TR
+const nomAll  = rtr.slice(1).map((v, i) => Math.log((v * cpi[i + 1]) / (rtr[i] * cpi[i])));  // log nominal TR
+// Design 133 — the window. Return i is the year yearsAll[i] (January to the next January).
+const FROM  = opts.from ?? yearsAll[0];
+const cut   = yearsAll.indexOf(FROM);
+if (cut < 0 || cut >= realAll.length - 1) throw new Error(`--from ${FROM}: not a year of the series (${yearsAll[0]}–${yearsAll[realAll.length - 1]})`);
+const WINDOW = opts.from == null ? 'FULL' : FROM;          // what the engine's bootstrap replays
+const years = yearsAll.slice(cut);
+const real  = realAll.slice(cut);
+const nom   = nomAll.slice(cut);
 const N     = real.length;
 
 // ── statistics ───────────────────────────────────────────────────────────────────
@@ -120,7 +133,7 @@ console.log('stat     observed   null p5 .. p95     one-sided p (null ≤ observ
 // ── 3. the engine's processes, through the real handler ──────────────────────────
 const simple  = real.map(Math.expm1);
 const anchor  = Math.exp(mean(real)) - 1;                 // history's real geometric mean
-const histSd  = HISTORICAL_BOOTSTRAP_SERIES.sd;           // simple-return sd the bootstrap rescales against
+const histSd  = (WINDOW === 'FULL' ? HISTORICAL_BOOTSTRAP_SERIES : bootstrapWindowFrom(FROM)).sd;  // simple-return sd the bootstrap rescales against
 const US      = RATE_KEYS.EQUITY_US;
 const noIdio  = Object.fromEntries(EQUITY_SLEEVES.map(k => [k, 0]));
 const reducer = new EquityReturnStepReducer();
@@ -148,9 +161,9 @@ const MODELS = [
   ['WHITE_NOISE',                        { model: 'WHITE_NOISE' }],
   ['MEAN_REVERTING k=0.3 (persistent)',  { model: 'MEAN_REVERTING', reversionSpeed: 0.3 }],
   ['MEAN_REVERTING k=0.5 (persistent)',  { model: 'MEAN_REVERTING', reversionSpeed: 0.5 }],
-  ['HISTORICAL_BOOTSTRAP block 1',       { model: 'HISTORICAL_BOOTSTRAP', blockLength: 1 }],
-  ['HISTORICAL_BOOTSTRAP block 5',       { model: 'HISTORICAL_BOOTSTRAP', blockLength: 5 }],
-  ['HISTORICAL_BOOTSTRAP block 10',      { model: 'HISTORICAL_BOOTSTRAP', blockLength: 10 }],
+  ['HISTORICAL_BOOTSTRAP block 1',       { model: 'HISTORICAL_BOOTSTRAP', blockLength: 1, window: WINDOW }],
+  ['HISTORICAL_BOOTSTRAP block 5',       { model: 'HISTORICAL_BOOTSTRAP', blockLength: 5, window: WINDOW }],
+  ['HISTORICAL_BOOTSTRAP block 10',      { model: 'HISTORICAL_BOOTSTRAP', blockLength: 10, window: WINDOW }],
 ];
 
 console.log(`\nEngine processes: ${PATHS} paths × ${N} years, anchor ${pct(anchor)} real (history's geometric mean), vol ${histSd.toFixed(3)} (history's simple-return sd), idio off`);
@@ -181,7 +194,7 @@ for (const [label, opts] of MODELS) {
   const { DEFAULT_EQUITY_BETA, DEFAULT_EQUITY_IDIO } = await import('../../src/finance/economic-regimes/rate-keys.js');
   const AU = RATE_KEYS.EQUITY_AU;
   const au = HISTORICAL_AU_SERIES;
-  const usSame = simple.slice(au.firstYear - years[0], au.firstYear - years[0] + au.deviations.length);
+  const usSame = realAll.map(Math.expm1).slice(au.firstYear - yearsAll[0], au.firstYear - yearsAll[0] + au.deviations.length);
   const corr = (a, b) => { const ma = mean(a), mb = mean(b); let s = 0, sa = 0, sb = 0; a.forEach((v, i) => { s += (v - ma) * (b[i] - mb); sa += (v - ma) ** 2; sb += (b[i] - mb) ** 2; }); return s / Math.sqrt(sa * sb); };
   const beta = DEFAULT_EQUITY_BETA[AU], idio = DEFAULT_EQUITY_IDIO[AU], vol = 0.18;
   console.log(`\nAU MARKET (OECD, real price, 1958–2023, n=${au.deviations.length})`);
@@ -215,7 +228,7 @@ const capeX = [], fwdY = [];
 for (let i = 0; i + 10 <= N; i++) {
   const e = Array.from({ length: 10 }, (_, j) => realEarn(years[i] - 1 - j));
   if (e.includes(null)) continue;
-  capeX.push(Math.log(Number(at(jan[i], 'real_price')) / mean(e)));
+  capeX.push(Math.log(Number(at(jan[cut + i], 'real_price')) / mean(e)));
   fwdY.push(mean(real.slice(i, i + 10)));
 }
 const mx = mean(capeX), my = mean(fwdY);

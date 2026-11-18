@@ -4,10 +4,10 @@ kind: concept
 title: Stochastic Return Paths
 panels: [mc-config, mc-results]
 params: [equityReturnStochastic, equityReturnModel, equityReturnVol, equityReturnReversionSpeed, equityReturnBeta, equityReturnIdioVol, equityReturnDriftComp, equityReturnBootstrapBlock, equityReturnBootstrapAuReplay, propertyReturnStochastic, propertyReturnBeta, propertyReturnIdioVol, propertyReturnIdioScale, mcSequenceRisk, mcEquityReturnModel, goldReturnVol, goldEquityCorrelation, goldReplay, stockBondCorrelation]
-design: [74-stochastic-return-paths.md, 90-equity-fidelity-and-capital-losses.md, 102-historical-bootstrap-equity-returns.md, 121-shock-leg-offset-and-stagflation-calibration.md, 129-stock-bond-correlation.md, 131-gold-return-drivers.md]
+design: [74-stochastic-return-paths.md, 90-equity-fidelity-and-capital-losses.md, 102-historical-bootstrap-equity-returns.md, 121-shock-leg-offset-and-stagflation-calibration.md, 129-stock-bond-correlation.md, 131-gold-return-drivers.md, 133-bootstrap-history-window-and-start-year.md]
 stamps:
   param:equityReturnStochastic: 635a9b
-  param:equityReturnModel: 613513
+  param:equityReturnModel: 8624e4
   param:equityReturnVol: 32b4c6
   param:equityReturnReversionSpeed: 99faae
   param:equityReturnBeta: 68fe4a
@@ -20,7 +20,7 @@ stamps:
   param:propertyReturnIdioVol: c3171f
   param:propertyReturnIdioScale: 9b7140
   param:mcSequenceRisk: b1d187
-  param:mcEquityReturnModel: 012b08
+  param:mcEquityReturnModel: 5d713c
   param:goldReturnVol: 81f145
   param:goldEquityCorrelation: 578ce4
   param:goldReplay: 7dc19b
@@ -34,18 +34,19 @@ through. Turning return paths on gives each year its own draw, which is what mak
 **sequence risk** measurable: the same average return, arriving in a different order,
 is a different retirement.
 
-The structure is one shared market factor plus per-market idiosyncrasy. Each market
-loads on the common factor by a beta and adds its own noise, which is what lets one
-market fall while another rises — a single global factor would make international
-diversification arithmetic rather than a real effect.
+Each market loads on one shared market factor by a beta and adds its own noise, which
+is what lets one market fall while another rises.
 
 Three processes are available, and they answer different questions. Independent
 annual draws match history's year-to-year behaviour, which is close to uncorrelated.
-A mean-reverting process introduces persistence, and note the direction: a *lower*
-pull-back speed means *more* persistence, which is the opposite of the intuition the
-name suggests. Replaying blocks of real history keeps the multi-year runs and
-crashes that neither of the others produces, at the cost of drawing from fewer
-distinct sequences.
+A mean-reverting process introduces persistence, and a *lower* pull-back speed means
+*more* of it, the opposite of what the name suggests. Replaying blocks of real history keeps the multi-year runs and
+crashes the others lack, but draws from fewer distinct sequences.
+
+When inflation replays history too, as Monte Carlo does by default, the replay keeps to
+1951 onwards, the years with inflation records to match; otherwise it ranges from 1871.
+The Monte Carlo panel shows which, above Run. Every span is moved onto your anchor and
+volatility, so the span changes how hard crashes hit, not the average return.
 
 Gold moves every year too. When the replay lands on a year after 1968, gold replays that
 year as well, so its swings, and its ties to inflation and interest rates, are history's;
@@ -58,11 +59,10 @@ Bond noise can share that yearly draw too. Independent, the default, sits betwee
 bonds fell with shares in the 1970s and hedged them after 2000, so the correlation picks a
 world. Within a year the bond move shows first.
 
-Property gets its own version, because a house is one asset with a sale date rather
-than a diversified position — the variance that matters is what it is worth on the
-day you sell.
+Property gets its own version: for a house, the variance that matters is its price on
+the day you sell.
 
-One subtlety worth knowing before reading any result. Adding mean-zero noise to a
+One subtlety: adding mean-zero noise to a
 rate applied multiplicatively *lowers* the compounded return relative to the anchor
 you typed. The drift-compensation setting decides whether the anchor is honoured as
 a geometric outcome or taken literally as an arithmetic input, and it moves terminal

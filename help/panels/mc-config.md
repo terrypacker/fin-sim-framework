@@ -16,18 +16,21 @@ parameter marked for Monte Carlo appears here — including a row per shock. Eac
 has a centre and a spread; the centre is the plan's current value for that parameter
 unless you typed your own.
 
+The line above Run names the return processes and replayed years every path uses; see
+[Stochastic Return Paths](../concepts/stochastic-return-paths.md).
+
 A date is drawn as *uniformDate* (any day between two dates, the default) or *normalDate*
 (around a centre date, spread in days). A date pinned to one day of the year, such as a
 1 July move, keeps that day and varies only the year.
 
-That distinction matters more than it looks. Rows you have not touched are re-synced
+Rows you have not touched are re-synced
 from the live scenario on every run, so a panel opened at load time does not keep
 sampling a plan you have since edited away from. Centres you set by hand are never
 overwritten — they are flagged instead, so a deliberate override stays deliberate and
 a stale one is visible.
 
-Needs a scenario loaded. Results land in [MC Results](mc-results.md) and the
-individual iterations in [MC Runs](mc-runs.md).
+Needs a scenario loaded. Results land in [MC Results](mc-results.md) and
+each iteration in [MC Runs](mc-runs.md).
 
 Iteration count is the honest cost control: paths are independent runs of the whole
 simulation, so a thousand of them costs a thousand runs. Start small enough to see

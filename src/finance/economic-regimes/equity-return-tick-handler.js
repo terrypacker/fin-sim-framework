@@ -73,6 +73,23 @@ export const HISTORICAL_BOOTSTRAP_WINDOWS = Object.freeze({
   POSTWAR: bootstrapWindow(1951),
 });
 
+const _windowsByYear = new Map();
+/**
+ * The window that starts in `fromYear` and runs to the end of the series (design 133 §3),
+ * built once per year. Throws outside the series, rather than silently replaying FULL.
+ *
+ * @param {number} fromYear
+ */
+export function bootstrapWindowFrom(fromYear) {
+  const first = HISTORICAL_EQUITY_RETURNS.firstYear;
+  const last  = first + HISTORICAL_EQUITY_RETURNS.returns.length - 1;
+  if (!Number.isInteger(fromYear) || fromYear < first || fromYear >= last) {
+    throw new Error(`bootstrap window: the first year must be a whole year from ${first} to ${last - 1} (got ${fromYear})`);
+  }
+  if (!_windowsByYear.has(fromYear)) _windowsByYear.set(fromYear, bootstrapWindow(fromYear));
+  return _windowsByYear.get(fromYear);
+}
+
 /** The FULL window (design 102's series), kept under its original name. */
 export const HISTORICAL_BOOTSTRAP_SERIES = HISTORICAL_BOOTSTRAP_WINDOWS.FULL;
 
@@ -231,7 +248,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
     this.idioVol              = idioVol ?? {};   // per-sleeve idiosyncratic sd; absent ⇒ 0
     this.driftComp            = driftComp;       // 'GEOMETRIC' (add σ²/2) or 'NONE' (design 74 §5.3)
     this.blockLength          = blockLength;     // consecutive historical years per block (HISTORICAL_BOOTSTRAP only)
-    this.window               = window;          // 'FULL' or 'POSTWAR' (design 103 joint mode) — HISTORICAL_BOOTSTRAP only
+    this.window               = window;          // 'FULL', 'POSTWAR' (design 103 joint mode) or a first year (design 133) — HISTORICAL_BOOTSTRAP only
     this.auReplay             = auReplay;        // replay the AU market's own year where it has data (HISTORICAL_BOOTSTRAP only)
     this.dt                   = dt;              // tick interval in years (annual)
     // Design 120 §5.4 — publish the year's standardized market shock for the FX tick to
@@ -268,8 +285,12 @@ export class EquityReturnTickHandler extends HandlerEntry {
     };
   }
 
-  /** The bootstrap window this handler draws from (FULL unless told otherwise). */
+  /**
+   * The bootstrap window this handler draws from (FULL unless told otherwise). `window` is a
+   * name, or a first year (design 133: the probe's `--from`; phase 2's custom window).
+   */
   _window() {
+    if (typeof this.window === 'number') return bootstrapWindowFrom(this.window);
     return HISTORICAL_BOOTSTRAP_WINDOWS[this.window] ?? HISTORICAL_BOOTSTRAP_WINDOWS.FULL;
   }
 
