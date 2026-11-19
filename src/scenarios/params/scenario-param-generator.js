@@ -19,6 +19,7 @@
  *   coll.<stateKey>.<field>    equity.<stateKey>.<field>
  */
 import {
+  FARM_PARAM_TEMPLATES, FARM_PARAM_TABLES,
   ACCOUNT_PARAM_TEMPLATES,
   PERSON_PARAM_TEMPLATE,
   REAL_PROPERTY_PARAM_TEMPLATE,
@@ -88,10 +89,13 @@ const PREFIX_TO_NODE_TYPE = {
   coll: 'collectible', equity: 'companyEquity',
   bequest: 'bequest', raAsset: 'bequestAsset',
   job: 'job',
+  farm: 'farm',
 };
 
 /** Node types whose records are keyed by `id` rather than `stateKey`. */
-const ID_KEYED_NODE_TYPES = new Set(['person', 'job']);
+// A farm node's `id` is `<kind>.<rowId>` (design 134): the owner between the key's first and
+// last dots, which is why farm row ids may not contain a dot (`validateFarm`).
+const ID_KEYED_NODE_TYPES = new Set(['person', 'job', 'farm']);
 
 /**
  * Decode a generated key back into its cascade `node` (design 55 §3 "Decodable").
@@ -172,6 +176,15 @@ export class ScenarioParamGenerator {
         const l = levers.get(`${j.id}.${e.node.field}`);
         return l ? { ...e, dateReach: { down: l.down, up: l.up } } : e;
       }));
+    }
+    // Design 134 — the farm records' levers, `farm.<kind>.<id>.<field>`, grouped per table.
+    for (const [kind, template] of Object.entries(FARM_PARAM_TEMPLATES)) {
+      for (const r of cfg.farm?.[FARM_PARAM_TABLES[kind]] ?? []) {
+        if (r?.id == null) continue;
+        const name = r.name ? `${r.name}` : r.id;
+        add(this._expand('farm', 'farm', { ...r, name }, `${kind}.${r.id}`,
+          template.map(t => ({ ...t, group: t.group ?? `Farm · ${FARM_PARAM_TABLES[kind]}` }))));
+      }
     }
     for (const r of cfg.realProperties ?? [])
       add(this._expand('prop', 'realProperty', r, r.stateKey, REAL_PROPERTY_PARAM_TEMPLATE));

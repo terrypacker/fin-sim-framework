@@ -43,6 +43,9 @@ import { US_COMPANY_SALE }   from './toolsets/us-company-sale-toolset.js';
 import { AU_INCOME }         from './toolsets/au-income-toolset.js';
 import { INHERITANCE }       from './toolsets/inheritance-toolset.js';
 import { ECONOMIC_REGIMES }  from './toolsets/economic-regimes-toolset.js';
+import { US_FARM_OPERATIONS } from './toolsets/us-farm-operations-toolset.js';
+import { FarmScenario }      from './farm-scenario.js';
+import { validateFarm }      from '../finance/farm/farm-records.js';
 import { seedIndexLevels }   from '../finance/economic-regimes/market-index.js';
 import { normalizeCountryCode, currencyForCountry } from '../finance/country-codes.js';
 import { loanKeyForProperty } from '../finance/account-rules/loan-classes.js';
@@ -67,6 +70,7 @@ const SCENARIO_CLASS_BY_ID = new Map([
   [BlankScenario.scenarioId(),          BlankScenario],
   [UsSingleHomeownerScenario.scenarioId(), UsSingleHomeownerScenario],
   [AuSingleHomeownerScenario.scenarioId(), AuSingleHomeownerScenario],
+  [FarmScenario.scenarioId(),           FarmScenario],
 ]);
 
 const BUILT_IN_TOOLSETS = [
@@ -79,6 +83,7 @@ const BUILT_IN_TOOLSETS = [
   INHERITANCE,
   ECONOMIC_REGIMES,
   CORPORATE_ACTIONS,
+  US_FARM_OPERATIONS,
 ];
 
 /*
@@ -91,7 +96,7 @@ import { synthesizeWeightedPriorities, resolveOwnerBanding } from './params/leve
 import { migrateYearFieldsToDates } from './year-date-migration.js';
 import { validateJobs, validateBonuses, bonusJobProblem, buildSpells } from '../finance/payroll/employment.js';
 import { validateMsbsAccounts } from '../finance/account-rules/au/msbs.js';
-import { JOB_DATE_PARAM_FIELDS } from './params/record-param-templates.js';
+import { JOB_DATE_PARAM_FIELDS, FARM_PARAM_TABLES } from './params/record-param-templates.js';
 export { synthesizeWeightedPriorities } from './params/lever-weights.js';
 
 /**
@@ -184,6 +189,12 @@ export class ScenarioLoader {
     }
     this._warnUnpaidBonuses(cfg);
     this._warnAuJobsWithoutFund(cfg);
+    // Design 134 — farm records that cannot run are an error for jobs' reason: a dangling
+    // join is a cost silently missing from a field's P&L.
+    const farmErrors = validateFarm(cfg.farm);
+    if (farmErrors.length > 0) {
+      throw new Error(`Scenario farm records are invalid:\n  ${farmErrors.join('\n  ')}`);
+    }
     const msbsErrors = validateMsbsAccounts(cfg.accounts);
     if (msbsErrors.length > 0) {
       throw new Error(`Scenario MSBS accounts are invalid:\n  ${msbsErrors.join('\n  ')}`);
@@ -818,6 +829,14 @@ export class ScenarioLoader {
    * @private
    */
   _applyParamNode(cfg, node, val) {
+    if (node.type === 'farm') {
+      // Design 134 — a farm lever lands on its `cfg.farm` table row (`<kind>.<rowId>`).
+      const dot = node.id.indexOf('.');
+      const table = FARM_PARAM_TABLES[node.id.slice(0, dot)];
+      const rec = table ? (cfg.farm?.[table] ?? []).find(r => r.id === node.id.slice(dot + 1)) : null;
+      if (rec) rec[node.field] = val;
+      return;
+    }
     if (node.type === 'job') {
       // Design 116 phase 4 — a job lever lands on its `cfg.jobs` row.
       const rec = (cfg.jobs ?? []).find(r => r.id === node.id);

@@ -52,6 +52,7 @@ import { ALLOCATION } from '../../src/finance/holdings/allocation.js';
 import { RATE_KEYS }  from '../../src/finance/economic-regimes/rate-keys.js';
 import { UsSingleHomeownerScenario } from '../../src/scenarios/us-single-homeowner-scenario.js';
 import { AuSingleHomeownerScenario } from '../../src/scenarios/au-single-homeowner-scenario.js';
+import { FarmScenario } from '../../src/scenarios/farm-scenario.js';
 
 /** @type {import('./golden-harness.js').GoldenSpec[]} */
 export const GOLDEN_SPECS = [
@@ -612,6 +613,25 @@ export const GOLDEN_SPECS = [
         })],
       });
     },
+  },
+  {
+    name:        'farm-demo',
+    cls:         FarmScenario,
+    description:
+      'Design 134 phase 1: the demo farm, and the only golden that is not a household. Two '
+      + 'operators, four fields (owned and cash-rented, irrigated and dry), corn and soybeans, '
+      + 'over the three calendar years one season spans: the December prepay before, the crop '
+      + 'year, and the deferred sales after. Runs the whole farm ledger end to end: rent in '
+      + 'spring and fall installments, the prepaid inputs, costing-only custom rates, harvest '
+      + 'into pools, forward contracts paid after delivery (one in January, deferring it a tax '
+      + 'year), planned sales out of storage with storage charged on the months held, a carry-in '
+      + 'crop with its own open contract, last crop\'s ARC payment, and the carry-out prepay. '
+      + 'The final state is small: each operator\'s cash net (a checksum over every CASH '
+      + 'posting, so a moved amount, date-independent, shows here), the emptied pools and no '
+      + 'open receivables. Costing-only custom rates never reach state; the per-posting '
+      + 'ledger is pinned by evt-farm-job-costing.test.mjs.',
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2029, 0, 1)),
   },
 ];
 

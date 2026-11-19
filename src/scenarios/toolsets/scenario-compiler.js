@@ -221,6 +221,8 @@ export class ScenarioCompiler {
       // there is nothing for a service to own. Read off the definition for the same
       // reason `parameters` is.
       corporateActions: definition?.corporateActions ?? [],
+      // Design 134 — the farm records (`farm-records.js`). Plain authored data, like jobs.
+      farm: definition?.farm ?? null,
       // Design 120 — the authored securities, read at compile time only to decide whether a
       // currency overlay can run (a security declares a hedge ratio). The run-time registry
       // is `state.securities`, projected by ScenarioLoader.

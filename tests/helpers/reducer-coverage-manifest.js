@@ -212,6 +212,9 @@ export const COVERED = [
 
   // K — rental income (design 48; reducer-postconditions-backfill.test.mjs)
   'UsRentalIncomeApplyReducer', 'AuRentalIncomeApplyReducer',
+
+  // design 134 — the farm ledger's pools, receivables and cash net (evt-farm-job-costing.test.mjs)
+  'FarmLedgerReducer',
 ];
 
 /**

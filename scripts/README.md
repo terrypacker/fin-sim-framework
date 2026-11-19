@@ -12,6 +12,7 @@ number the app would produce.
 scripts/
   lib/                shared modules — imported, never run directly
   scenario/           run · diff · sweep · audit · import one or more scenarios
+  farm/               farm scenarios (design 134): job-cost and Schedule F reports
   lab/                decision analysis: grids, frontiers, spending traces
   montecarlo/         Monte Carlo arm runners and reporters
   probes/             targeted engine-fidelity probes and prototypes
@@ -163,6 +164,14 @@ even when small; it means state-dependent harm with a mechanism, not noise.
 **Never quote a mean of terminal wealth** from these runs. A single return compounded
 for forty years produces tail numbers with no economic content, and they dominate the
 average. The reporter prints medians and low percentiles only.
+
+---
+
+## farm/
+
+| tool | question |
+|---|---|
+| `farm-report.mjs` (`npm run farm:report`) | what does each field earn this season, where is its breakeven, and what does each operator's calendar-year Schedule F look like? With no `--scenario` it runs the demo farm. |
 
 ---
 

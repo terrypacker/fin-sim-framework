@@ -370,3 +370,89 @@ export const INHERITED_RA_PARAM_TEMPLATE = [
 // prefix is retired. Inherited real property / collectible are now first-class
 // service records, so their sale-date knob is the standard REAL_PROPERTY /
 // COLLECTIBLE `plannedSaleDate` param above — one source, shared with owned assets.
+
+/**
+ * Design 134 §5.1 / §6 — the sweepable fields of the farm records, one template per
+ * `cfg.farm` table, generated as `farm.<kind>.<id>.<field>` (`kind` is the key below).
+ *
+ * Only a field a mechanic reads is here, for the dead-axis reason on the job template: a
+ * contract's bushels and price are fixed by the contract (Q8b), so a contract has no row, and
+ * the share contracted is a phase 2 lever over the crop rather than a field of one contract.
+ * `mc` marks what design 134 §6 says varies; `opt` what it lists as an optimizer lever.
+ */
+export const FARM_PARAM_TEMPLATES = {
+  field: [
+    { field: 'rentPerAcre', label: 'Cash Rent per Acre', type: 'Number', mc: true, opt: false,
+      appliesTo: r => r.tenure === 'CASH_RENT',
+      description: 'Cash rent for this field in dollars per RENTED acre, paid in the spring and '
+        + 'fall installments of the season calendar.' },
+    { field: 'propertyTax', label: 'Property Tax', type: 'Number', mc: false, opt: false,
+      appliesTo: r => (r.propertyTax ?? 0) > 0,
+      description: 'This field\'s property tax for the year as billed, net of the credits on '
+        + 'the statement, paid in two halves.' },
+  ],
+  product: [
+    { field: 'unitPrice', label: 'Unit Price', type: 'Number', mc: true, opt: false,
+      description: 'List price of one unit of this product before its discount. Every crop '
+        + 'plan that prescribes it moves with it.' },
+    { field: 'discountPct', label: 'Discount', type: 'Number', mc: false, opt: false,
+      description: 'The discount taken off the unit price, as a fraction (0.08 = 8%).' },
+  ],
+  operation: [
+    { field: 'customRatePerAcre', label: 'Custom Rate per Acre', type: 'Number', mc: true, opt: false,
+      description: 'The custom-hire rate per acre per pass for this field operation. A costing '
+        + 'rate for the operator\'s own machines: charged to each crop plan, never paid.' },
+  ],
+  plan: [
+    { field: 'expectedYield', label: 'Expected Yield', type: 'Number', mc: true, opt: false,
+      description: 'Expected yield of this crop plan in bushels (or tons) per planted acre.' },
+    { field: 'insurancePremiumPerAcre', label: 'Insurance Premium per Acre', type: 'Number', mc: false, opt: false,
+      appliesTo: r => (r.insurancePremiumPerAcre ?? 0) > 0,
+      description: 'The farmer-paid crop insurance premium per planted acre.' },
+    { field: 'irrigationElectricity', label: 'Irrigation Electricity', type: 'Number', mc: true, opt: false,
+      appliesTo: r => (r.irrigationElectricity ?? 0) > 0,
+      description: 'This crop plan\'s metered irrigation electricity for the season, in dollars.' },
+  ],
+  machinery: [
+    { field: 'amount', label: 'Machinery Cost', type: 'Number', mc: true, opt: false,
+      description: 'The operator\'s real machinery cost for the year in dollars: ownership, '
+        + 'repairs, fuel and any machine bought this year at its full price.' },
+  ],
+  overhead: [
+    { field: 'amount', label: 'Amount', type: 'Number', mc: false, opt: false,
+      description: 'This overhead pool\'s amount for the year, allocated to its operator\'s '
+        + 'crop plans by its basis.' },
+  ],
+  price: [
+    { field: 'price', label: 'Cash Price', type: 'Number', mc: true, opt: false,
+      description: 'The local cash price per bushel from this date until the next price row '
+        + 'for the same crop.' },
+  ],
+  storage: [
+    { field: 'costPerBuMonth', label: 'Storage per Bushel-Month', type: 'Number', mc: true, opt: false,
+      description: 'The cost of holding one bushel of this crop for one month.' },
+  ],
+  sale: [
+    { field: 'share', label: 'Share of Unpriced', type: 'Number', mc: false, opt: true,
+      description: 'The share of the crop not under contract that this planned sale sells.' },
+    { field: 'price', label: 'Sale Price', type: 'Number', mc: true, opt: false,
+      appliesTo: r => r.price != null,
+      description: 'The price per bushel this sale gets. Blank uses the cash price on the sale date.' },
+  ],
+  otherIncome: [
+    { field: 'amount', label: 'Amount', type: 'Number', mc: false, opt: false,
+      description: 'The amount of this payment in dollars.' },
+  ],
+  carryOut: [
+    { field: 'amount', label: 'Prepay Amount', type: 'Number', mc: false, opt: true,
+      description: 'Next season\'s inputs prepaid this December, in dollars. §464(d) defers '
+        + 'any part above half the year\'s other farm expenses.' },
+  ],
+};
+
+/** `FARM_PARAM_TEMPLATES` kind → its `cfg.farm` table. */
+export const FARM_PARAM_TABLES = {
+  field: 'fields', product: 'products', operation: 'operations', plan: 'cropPlans',
+  machinery: 'machinery', overhead: 'overhead', price: 'prices', storage: 'storage',
+  sale: 'sales', otherIncome: 'otherIncome', carryOut: 'carryOut',
+};

@@ -1,7 +1,7 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** DRAFT (19 Nov 2026), rev 7: **ready to build phase 1.** Nothing built. Every owner
-question is answered (§3, Q1–Q20); none is open. §7 records what the primary sources on disk decide. §8 is the household
+**Status:** rev 8 (19 Nov 2026): **phase 1 in progress** (§12). Owner questions Q1–Q20 are
+answered (§3); Q21 (§12.3) is open. §7 records what the primary sources on disk decide. §8 is the household
 link.
 
 Revision history: rev 2 added §7 and §8, and corrected rev 1's guess that Nebraska credits
@@ -14,7 +14,8 @@ one machinery figure per operator, purchases expensed in full, and the own-vs-cu
 phase 2**, because phase 1 does not need it and it is larger than rev 1 said (§4). Rev 6 also
 fixes the breakeven formulas (§5.4), settles contract shortfalls (§6), and states the phase 1
 acceptance test and its first spike (§9). Rev 7 records Q20, which turns the own-vs-custom
-study into an operation-by-operation fleet model with its own design (§5.6).
+study into an operation-by-operation fleet model with its own design (§5.6). Rev 8 records the phase 1 build: the spike
+result, the record and ledger shapes it settled, and a §464(d) exception that §7.1 missed (§12).
 
 **Related:** design 98 (the sweepable parameter surface: per-record generated params become
 MC and optimizer levers), design 55 (configuration-driven parameters and record templates),
@@ -356,7 +357,8 @@ section that amends it.
 - **Prepaying inputs is bounded.** §464(d): prepaid farm supplies above 50% of the year's
   other deductible farming expenses are deferred, with exceptions. The owners prepay next
   year's inputs in Nov/Dec (Q11), so this limit is live: the cash report applies it, and it
-  caps the prepay lever.
+  caps the prepay lever. **Rev 8 correction:** the limit does not apply to a *qualified
+  farm-related taxpayer* (§464(d)(2)), see §12.3.
 - **Deferring sales moves income between years.** On the cash method a sale is income when
   paid, so a contract or sale paid after 31 December lands in the next year (Reg. §1.61-4,
   cash method). This is the owners' smoothing tool (Q11). It needs no special rule, only the
@@ -553,5 +555,65 @@ bad one for another in the same world.
 
 ## 11. Open questions
 
-None. Every owner question is answered (§3). The fleet model (§5.6) and farm–market
-correlation (Q15) each need their own design later.
+Q21 (§12.3) is for the owners. The fleet model (§5.6) and farm–market correlation (Q15) each
+need their own design later.
+
+## 12. Phase 1 build notes (rev 8)
+
+### 12.1 The spike
+
+A `FarmScenario` with no persons and no accounts loads through `ScenarioLoader` and
+`ScenarioCompiler` unchanged: the compile path runs its toolset, the household derived metrics
+evaluate to zero, and a save and reload through the serialized-graph path runs the same
+ledger. Three things did need work, none of them a household assumption:
+
+- **The journal drops undeclared fields.** An action's payload is gated by its toolset's
+  `types.actions[].fields` manifest (design 91), so every field §5.3 needs on a ledger entry is
+  declared on `FARM_LEDGER_POST`.
+- **The serializer writes an explicit key list**, so `cfg.farm` is added to it (as `jobs` was).
+- Toolsets and scenario classes are registered statically, in `BUILT_IN_TOOLSETS` and
+  `SCENARIO_CLASS_BY_ID`.
+
+### 12.2 Shapes the build settled
+
+- **Records** are flat tables in `cfg.farm`, joined by id (`src/finance/farm/farm-records.js`).
+  §5.5's list of seasons is `cfg.farm.seasons`, and every row but an operator carries a
+  `seasonId`, filled in when there is one season. Phase 1 refuses more than one. A record that
+  cannot run is a load error, as jobs are (design 116 §4.6), never a skip.
+- **Irrigation electricity** (Q19) is a field of the crop plan, because a crop plan already is
+  the (field, crop year) record §5.1 asks for.
+- **The ledger is the journal.** One action, `FARM_LEDGER_POST`, carries operator, job, crop
+  year, category, Schedule F line, cash flag and allocation basis; the entry's date is the cash
+  date. State holds only what a later event reads: grain pools, open receivables and a cash
+  net per operator.
+- **Grain revenue is two steps.** The sale or delivery date moves bushels and fixes the amount
+  as a receivable; the payment date posts the revenue. That is the cash method (§7.1) and the
+  deferral tool (Q11) with no special rule, and the receivable is what the crop-year view
+  values at 31 December.
+- **Pools** are (operator, crop, crop year). A planned sale sells its share of the pool's
+  unpriced bushels (harvested less contracted). Revenue and storage are charged to the pool and
+  split to crop plans by expected bushels when the report is built. A sale or delivery of this
+  season's crop dated before its harvest is a load error, since it would sell nothing.
+- **Storage** is charged when grain leaves the pool, on the months held since it entered
+  (bushel-weighted when fields are harvested on different days), as a cash cost on that day.
+- **Prices** are a dated step table per crop in phase 1. Phase 2 replaces the table with a
+  sampled path through the marketing year (§6), without changing the readers.
+- **The cash report** marks the years before and after the crop year as partial and does not
+  test §464(d) on them: a lone prepay tested against a year with no other expenses would defer
+  almost all of it, an artifact of what was simulated.
+- **Levers** are generated as `farm.<kind>.<id>.<field>` (`FARM_PARAM_TEMPLATES`), only for
+  fields a mechanic reads. A contract has none (Q8b); the share contracted is phase 2's.
+
+### 12.3 §464(d) has an exception the design missed (Q21)
+
+§464(d)(2) exempts a **qualified farm-related taxpayer**: someone whose main home is on a farm,
+whose principal business is farming, or who is family of such a person, **and** whose prepaid
+farm supplies over the three prior years were under 50% of their other farm expenses (Pub 225
+reads the same). The owners very likely pass the first test, so whether the limit bites turns
+on their three-year history, which the model can't know.
+
+The build applies the limit unless an operator record says otherwise (`farmRelated`, and the
+three prior years' prepaid supplies and other farm expenses), and the report says which case
+applied and why. **Q21, for the owners:** for each operator, is farming the principal
+business (or is the home on the farm), and what were the three prior years' prepaid supplies
+and total other farm expenses?

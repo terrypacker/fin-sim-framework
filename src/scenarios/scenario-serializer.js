@@ -510,6 +510,9 @@ export class ScenarioSerializer {
       // Dated one-off bonuses, joined to their person by `personId`; the job in force on
       // the date is the one paying it. Emitted only when present, like `jobs`.
       ...(scenario.bonuses?.length ? { bonuses: scenario.bonuses.map(b => ({ ...b })) } : {}),
+      // Design 134 — the farm records, flat id-joined tables of plain authored data.
+      // Emitted only when present, so no household scenario gains a key.
+      ...(scenario.farm ? { farm: structuredClone(scenario.farm) } : {}),
       bequests:       (scenario.bequests ?? []).map(n => ScenarioSerializer._serializeBequest(n)),
       events:   (scenario.events ?? []).map(n => ScenarioSerializer._serializeEvent(n)),
       handlers: (scenario.handlers ?? []).map(n => ScenarioSerializer._serializeHandler(n)),

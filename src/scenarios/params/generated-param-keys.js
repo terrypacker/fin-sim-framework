@@ -39,7 +39,10 @@ export const GENERATED_KEY_PREFIXES = ['acct.', 'person.', 'prop.', 'coll.', 'eq
   'shape.',
   // Design 116 phase 4 — `job.<jobId>.<field>`, the per-job wage and real growth. A cfg
   // record like a person (keyed by `id`), cascaded onto `cfg.jobs` by the loader.
-  'job.'];
+  'job.',
+  // Design 134 §5.1 — `farm.<kind>.<id>.<field>`, the farm records' levers (rents, product
+  // prices, custom rates, yields, …). Cascaded onto the `cfg.farm` table row by the loader.
+  'farm.'];
 
 /** True when `key` is a generated per-record param key (by namespace). */
 export function isGeneratedParamKey(key) {
