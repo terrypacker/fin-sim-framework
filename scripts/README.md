@@ -12,7 +12,7 @@ number the app would produce.
 scripts/
   lib/                shared modules — imported, never run directly
   scenario/           run · diff · sweep · audit · import one or more scenarios
-  farm/               farm scenarios (design 134): job-cost and Schedule F reports
+  farm/               farm scenarios (design 134): job-cost and Schedule F reports, Monte Carlo
   lab/                decision analysis: grids, frontiers, spending traces
   montecarlo/         Monte Carlo arm runners and reporters
   probes/             targeted engine-fidelity probes and prototypes
@@ -172,6 +172,7 @@ average. The reporter prints medians and low percentiles only.
 | tool | question |
 |---|---|
 | `farm-report.mjs` (`npm run farm:report`) | what does each field earn this season, where is its breakeven, and what does each operator's calendar-year Schedule F look like? With no `--scenario` it runs the demo farm. |
+| `farm-mc.mjs` (`npm run farm:mc`) | across a sampled season, how likely is each field, crop and operator to lose money, and how wide are the breakevens? `--list` shows the variables, `--enable` picks them. The spreads are uncalibrated until design 134 §6's sources are fetched. |
 
 ---
 

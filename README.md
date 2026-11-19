@@ -378,8 +378,17 @@ Same registry pattern as `TaxEngine`. Per-year `UsAccountModule2024/2025/2026` a
 
 ### Monte Carlo (`src/finance/monte-carlo/`)
 
-- `IntlRetirementMcConfig` — declarative MC config (per-param distribution).
+- **The MC path is scenario-agnostic** (design 134 §4). `McConfig` (`mc-config.js`) is a variable
+  catalog's shared half: contributors, the schema harvest, centres and provenance. `McRunner`
+  (`mc-runner.js`) is the batch: index-seeded paths, serial or on the worker pool, bit-identical
+  either way. A path is built from a **scenario descriptor** in `parallel/mc-worker-core.js`
+  (`MC_SCENARIOS`, keyed by `scenarioId()`, named on the context as `scenarioKind`): the scenario
+  class, its process switches and its result extractor. A context without a kind is a retirement one.
+- `IntlRetirementMcConfig` — the retirement catalog (per-param distributions, shocks, mortality).
 - `IntlRetirementMcRunner` — runs N simulations, evaluates objectives, returns per-run results + summary.
+- `FarmMcConfig` / `FarmMcRunner` (`src/finance/farm/farm-mc.js`) — the farm season's catalog (its
+  `farm.*` record levers) and batch: net income, loss probability and breakevens per farm,
+  operator, crop and crop plan. `npm run farm:mc`.
 - **Centers follow the loaded scenario.** `run()` seeds its base params from the cfgTemplate's own
   two param stores (schema defaults → scenario params → account balances → caller overrides), so a
   variable is sampled around the plan's value rather than the library default — for the UI and the

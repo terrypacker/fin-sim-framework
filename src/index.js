@@ -190,6 +190,9 @@ import { createReportApis, apiFor, runReport } from './finance/journal-reporting
 import { JournalReportingService } from './finance/journal-reporting-service.js';
 import { DEFAULT_MC_VARIABLE_CONFIGS, CENTER_SOURCES, refineCenterSource, variablesMissingCenter, IntlRetirementMcConfig } from './finance/monte-carlo/intl-retirement-mc-config.js';
 import { summarizeProvenance, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
+import { McConfig } from './finance/monte-carlo/mc-config.js';
+import { McRunner } from './finance/monte-carlo/mc-runner.js';
+import { FarmMcConfig, FarmMcRunner } from './finance/farm/farm-mc.js';
 import { CDC_2024, AU_2022, lookupLifeTable } from './finance/monte-carlo/life-tables.js';
 import { RETURN_BAND_EDGES, runsToRows, pairedRescues, pairedMetric, pairingMismatches, failureRate, failureByBand, failureDrivers } from './finance/monte-carlo/mc-analysis.js';
 import { GRID_STATS, GRID_READINGS, FAILURE_RATE, GRID_METRICS, gridMetric, normalizeGridReading, GRID_CONSTRAINT_OPS, DEFAULT_GRID_COLUMNS, betterOp, normalizeGridConstraints, activeConstraints, normalizeGridColumns, constraintThreshold, gridConstraintCheck, gridCellMetric, rankCells } from './finance/monte-carlo/mc-grid-metrics.js';
@@ -197,7 +200,7 @@ import { gridCellRuns, McGridRunner } from './finance/monte-carlo/mc-grid-runner
 import { GRID_MODES, MAX_AXIS_VALUES, nearestIndex, cellIndexOf, referenceCellOf, percentile, summarizeGridCell } from './finance/monte-carlo/mc-grid.js';
 import { get, set } from './finance/monte-carlo/mc-param-paths.js';
 import { computeNetWorthUsd, computeHouseValueUsd, MC_SAMPLER_CADENCE, createMcSampler, extractYearlyTimeSeries, makeMcSeededRng, computePathShape } from './finance/monte-carlo/mc-sampling.js';
-import { perturbParams, mcPrimeModel, mcInflationModel, mcEquityModel, samplingSignature, buildIterationRunner, initMcContext, runMcIteration, gridCellParams, runGridTask } from './finance/monte-carlo/parallel/mc-worker-core.js';
+import { perturbParams, mcPrimeModel, mcInflationModel, mcEquityModel, samplingSignature, buildIterationRunner, initMcContext, runMcIteration, gridCellParams, runGridTask, MC_SCENARIOS, mcScenarioFor } from './finance/monte-carlo/parallel/mc-worker-core.js';
 import { browserMcSpawn, McWorkerPool } from './finance/monte-carlo/parallel/mc-worker-pool.js';
 import { adviceSignals } from './finance/mpc/advice-signals.js';
 import { rollForwardWithControls, recordDecisionRecord, readDecisionRecords, readDecisionRuns } from './finance/mpc/apply-forward.js';
@@ -1318,6 +1321,10 @@ export const Finance = {
   computePathShape,
   summarizeProvenance,
   IntlRetirementMcRunner,
+  McConfig,
+  McRunner,
+  FarmMcConfig,
+  FarmMcRunner,
   CDC_2024,
   AU_2022,
   lookupLifeTable,
@@ -1364,6 +1371,8 @@ export const Finance = {
   samplingSignature,
   buildIterationRunner,
   initMcContext,
+  MC_SCENARIOS,
+  mcScenarioFor,
   runMcIteration,
   gridCellParams,
   runGridTask,

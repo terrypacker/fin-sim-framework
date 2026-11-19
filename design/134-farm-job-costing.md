@@ -1,7 +1,8 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** rev 10 (19 Nov 2026): **phase 1 BUILT** (§12): the acceptance import passes
-(§12.4) and the Field P&L panel is in the workbench (§12.5). Owner questions Q1–Q20 are answered (§3); Q21–Q25 (§12.3–§12.4) are open. §7 records what the primary sources on disk decide. §8 is the household
+**Status:** rev 11 (19 Nov 2026): **phase 1 BUILT** (§12): the acceptance import passes
+(§12.4) and the Field P&L panel is in the workbench (§12.5). **Phase 2 started** (§13): step 2a,
+the scenario-agnostic MC path and a farm batch on it, is built. Owner questions Q1–Q20 are answered (§3); Q21–Q25 (§12.3–§12.4) are open. §7 records what the primary sources on disk decide. §8 is the household
 link.
 
 Revision history: rev 2 added §7 and §8, and corrected rev 1's guess that Nebraska credits
@@ -17,7 +18,7 @@ acceptance test and its first spike (§9). Rev 7 records Q20, which turns the ow
 study into an operation-by-operation fleet model with its own design (§5.6). Rev 8 records the phase 1 build: the spike
 result, the record and ledger shapes it settled, and a §464(d) exception that §7.1 missed (§12).
 Rev 9 records the acceptance import and the questions it raised (§12.4). Rev 10 records the
-Field P&L panel (§12.5).
+Field P&L panel (§12.5). Rev 11 splits phase 2 into steps and records step 2a (§13).
 
 **Related:** design 98 (the sweepable parameter surface: per-record generated params become
 MC and optimizer levers), design 55 (configuration-driven parameters and record templates),
@@ -672,3 +673,80 @@ Decided in the build:
 
 The household panels open on a farm without errors; a household plan's Field P&L says it has
 no farm records.
+
+## 13. Phase 2 build notes (rev 11)
+
+### 13.1 Steps
+
+Phase 2 is six steps. Each one ships on its own, and none changes a retirement run.
+
+| Step | Scope | State |
+|---|---|---|
+| **2a** | The scenario-agnostic MC path (§4), and a farm batch on it: the farm records' levers as the catalog, per-path metrics, the loss and breakeven distributions, `npm run farm:mc` | **built** (§13.2) |
+| 2b | **Realized yield**, separate from expected yield (§13.3): a farm-wide factor times a per-field factor, narrower on irrigated fields | open |
+| 2c | **Price paths** per crop through the marketing year, drawn against the farm yield factor (the yield–price link, §6), replacing the step table on a path | open |
+| 2d | **Multiplier levers** (product category, rent, custom rates, machinery, irrigation) and the contracted share per crop (Q18) | open |
+| 2e | **Calibration.** NASS county yields, RMA price elections and futures history fetched into `docs/`, then the 2b–2d distributions set from them (§6) | open |
+| 2f | **A farm MC results panel** (§4: the farm gets its own, rather than bending the retirement one) | open |
+
+2e gates the numbers in 2b–2d, not their mechanics: each mechanism can be built and tested
+with its spread at zero, which reproduces the deterministic run exactly. No default spread is
+set before its source is on disk.
+
+### 13.2 Step 2a: the scenario-agnostic MC path
+
+§4 named three things a scenario descriptor supplies. The build split them by **thread**,
+because a context crosses `postMessage` and a class reference cannot:
+
+- **Worker side**: `MC_SCENARIOS` in `mc-worker-core.js`, keyed by `scenarioId()` and named on
+  the context as `scenarioKind`. An entry builds the scenario node, writes the scenario's own
+  process switches into a path's params (the retirement return paths; the identity for a
+  farm), picks the telemetry level and sampler, and extracts the path's result. A context
+  with no kind is a retirement one, so every existing caller is unchanged. An unknown kind
+  throws rather than running a retirement.
+- **Main thread**: `McRunner` (`mc-runner.js`) is the batch: index-seeded paths, serial or on
+  the pool, and paths that threw split out loudly. A scenario's runner subclasses it with its
+  own `_prepare` (template, base params, variables) and its own aggregation.
+  `McConfig` (`mc-config.js`) is a catalog's shared half (contributors, the schema harvest,
+  centres, provenance), and a catalog sets its contributors, schema and aliases.
+
+**The retirement runs did not move.** A fingerprint of an MC batch, its summary, its variable
+list and a grid run taken before the split matches after it byte for byte, and the MC test
+files pass unchanged.
+
+**The farm batch** (`src/finance/farm/farm-mc.js`):
+
+- **The catalog** is the records' `mc`-flagged levers, harvested and centred on their records
+  (design 98 W3). Every row starts **off**, at the harvest's generic spread (±10% on an amount,
+  ±20% on a rate). Those spreads are placeholders, so the batch's provenance lists every
+  sampled row that uses one as `uncalibrated`, and the CLI says to read the run as a
+  sensitivity run.
+- **A path is built at telemetry `journal`**, because the ledger is the journal (§12.2).
+- **A path's result is a flat map** of metric key to number: net, net per acre, revenue and
+  the three breakevens for the farm, each operator, crop and crop plan, under **both**
+  machinery bases, plus each operator's crop-year Schedule F net after §464(d). The batch
+  reports p10, p50, p90, mean, min and max of each, and the probability of a loss for each net.
+- With nothing sampled, every path is the deterministic run to the cent. A sampled lever
+  reaches the loaded records, a path replays from its params through
+  `applyParamBagToConfig` alone, and a pool run is bit-identical to a serial one (tests).
+
+The grid runner, the optimizer and the MC panel stay retirement-only, as §4 planned.
+
+### 13.3 What 2a shows is missing
+
+Two levers the harvest offers are **not the §6 variables they look like**, so a run that
+samples them answers a narrower question than it appears to:
+
+- **`expectedYield` moves the plan, not only the harvest.** It is the yield the crop is
+  planned on, so sampling it moves the breakevens and the allocation of pool revenue along
+  with the bushels harvested. In §5.4 the breakevens are the plan's numbers, and a short crop
+  should change what is earned, not the breakeven it is measured against. Step 2b adds a
+  realized yield (expected × a drawn factor) for the harvest and leaves `expectedYield` as
+  the plan.
+- **A price row is drawn on its own.** Sampling `farm.price.<id>.price` moves each dated price
+  independently, so a harvest price and a winter price for one crop can move in opposite
+  directions on the same path. That is a sensitivity on each row, not a price path. Step 2c
+  replaces it.
+
+Until then the two are useful for "what if this one number were different", and that is all.
+
