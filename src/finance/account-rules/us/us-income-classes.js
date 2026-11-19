@@ -394,7 +394,9 @@ export class BusinessIncomeHandler extends HandlerEntry {
     const { net } = businessIncomeAmounts(data, accNow, accBase);
     return [
       { type: 'BUSINESS_INCOME_APPLY', amount: net, residency, personKey,
-        businessIncomeId: data.businessIncomeId, indexBase: accBase ?? accNow },
+        businessIncomeId: data.businessIncomeId, indexBase: accBase ?? accNow,
+        // Which farm MC path paid this year (design 134 step 4d); null for the deterministic run.
+        farmPathSeed: data.farmPathSeed ?? null },
       new FieldValueAction('business_income', 'Business Income (Schedule F)', net),
       new RecordBalanceAction(`${cashKey}.balance`, cashKey),
     ];

@@ -109,3 +109,44 @@ describe('import-farm (design 134 step 4c)', async () => {
       /net must be a number/);
   });
 });
+
+describe('household draws a farm path per year (design 134 step 4d)', async () => {
+  const doc = await farmExport();
+  const base = GOLDEN_SPECS.find(x => x.name === 'us-single-homeowner');
+  const spec = (params = {}, simEnd = 2035) => ({
+    ...base, simEnd: new Date(Date.UTC(simEnd, 0, 1)), params: { ...(base.params ?? {}), ...params },
+    mutateCfg: (cfg) => {
+      base.mutateCfg?.(cfg);
+      Object.assign(cfg, applyFarmImport(cfg, buildFarmImport(doc, { operatorId: 'opA', personId: 'primary', plan: cfg })));
+    },
+  });
+  const paid = (s) => runGolden(s).sim.journal.journal
+    .filter(e => e.action?.type === 'BUSINESS_INCOME_APPLY')
+    .map(e => e.action.data ?? e.action);
+  const pathNets = new Map(doc.mc.paths.map(p => [p.seed, fullYearRow(p.operators.opA, 2027).net]));
+
+  test('off (a single run\'s default): every year pays the deterministic net', () => {
+    const rows = paid(spec());
+    assert.ok(rows.every(r => r.farmPathSeed == null));
+    assert.strictEqual(rows[0].amount, fullYearRow(doc.deterministic.operators.opA, 2027).net);
+  });
+
+  test('on: each year pays one drawn path, and the run replays', () => {
+    const rows = paid(spec({ businessIncomeFarmPaths: true, randomSeed: 7 }));
+    assert.strictEqual(rows.length, 8);
+    assert.ok(rows.every(r => pathNets.has(r.farmPathSeed)), 'every year names a path of the export');
+    assert.ok(new Set(rows.map(r => r.farmPathSeed)).size > 1, 'years draw different seasons');
+    // The first year is paid as drawn; later years are that path's net indexed by CPI.
+    assert.strictEqual(rows[0].amount, pathNets.get(rows[0].farmPathSeed));
+    const again = paid(spec({ businessIncomeFarmPaths: true, randomSeed: 7 }));
+    assert.deepStrictEqual(again.map(r => r.farmPathSeed), rows.map(r => r.farmPathSeed));
+    const other = paid(spec({ businessIncomeFarmPaths: true, randomSeed: 8 }));
+    assert.notDeepStrictEqual(other.map(r => r.farmPathSeed), rows.map(r => r.farmPathSeed));
+  });
+
+  test('Monte Carlo turns the draw on in every path, unless mcFarmPaths is off', async () => {
+    const { applyMcPaths } = await import('../../src/finance/monte-carlo/parallel/mc-worker-core.js');
+    assert.strictEqual(applyMcPaths({}).businessIncomeFarmPaths, true);
+    assert.strictEqual(applyMcPaths({ mcFarmPaths: false }).businessIncomeFarmPaths, undefined);
+  });
+});

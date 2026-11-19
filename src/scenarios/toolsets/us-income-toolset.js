@@ -17,6 +17,7 @@ import {
 } from '../../finance/account-rules/us/us-income-classes.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
 import { OneOffEvent } from '../../simulation-framework/events/one-off-event.js';
+import { keyedRng } from '../../simulation-framework/simulation.js';
 import { bonusJobProblem } from '../../finance/payroll/employment.js';
 import { businessIncomeDates } from '../../finance/payroll/business-income.js';
 
@@ -70,7 +71,7 @@ export const US_INCOME = {
       // Design 134 step 4b: a year of a `cfg.businessIncome` row. `indexBase` is the US CPI
       // accumulator the row's figures are in the money of (its first payment's).
       { type: 'BUSINESS_INCOME_APPLY', fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text(),
-        businessIncomeId: ValueType.text(), indexBase: ValueType.number() } },
+        businessIncomeId: ValueType.text(), indexBase: ValueType.number(), farmPathSeed: ValueType.number() } },
       { type: 'BONUS_APPLY',         fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text() } },
       { type: 'BONUS_TAX',           fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , personKey: ValueType.text()} },
       { type: 'COMPANY_SALE_APPLY',  fields: { salePrice: ValueType.currency('USD'), costBasis: ValueType.currency('USD'), residency: ValueType.text(), stateKey: ValueType.text(), destinationKey: ValueType.text() } },
@@ -84,7 +85,32 @@ export const US_INCOME = {
     ],
   },
 
-  paramSchema(context) { return []; },
+  paramSchema(context) {
+    return [
+      {
+        // Design 134 step 4d. The single-run switch; Monte Carlo turns it on in every path
+        // (`mcFarmPaths`), as it does the stochastic inflation path.
+        key:          'businessIncomeFarmPaths',
+        label:        'Business Income: Draw Farm Paths',
+        type:         'Boolean',
+        group:        'Business Income',
+        mc:           false,
+        opt:          false,
+        defaultValue: false,
+        description:  'When on, each year of an imported farm\'s business income is one Monte Carlo path of the farm, drawn at random for that year, instead of the farm\'s deterministic run. Seasons are then independent of one another, and of the household\'s market draws. The draw follows the run\'s seed, so a run replays. Needs a farm export imported with its paths; a row without them always pays its deterministic figures.',
+      },
+      {
+        key:          'mcFarmPaths',
+        label:        'Monte Carlo: Farm Paths',
+        type:         'Boolean',
+        group:        'Business Income',
+        mc:           false,
+        opt:          false,
+        defaultValue: true,
+        description:  'When on (default), every household Monte Carlo path draws its business income from the imported farm paths, a different farm season each year. Turn off to pay the farm\'s deterministic figures in every path, which shows the household\'s risk without the farm\'s.',
+      },
+    ];
+  },
   state(context) { return {}; },
   /**
    * One BONUS event per authored `cfg.bonuses` row inside the run. A row dated before
@@ -124,17 +150,32 @@ export const US_INCOME = {
     const start = context?.startDate, end = context?.endDate;
     if (!start || !end) return [];
     const person = id => (context?.people ?? []).find(p => p?.id === id);
+    // Design 134 step 4d (§16.1): with farm paths on, each year draws one path of the farm on
+    // its own keyed stream, so a year's draw does not move when another row or process is
+    // added. Seasons are independent, and independent of the market draws (Q15).
+    const draw = context?.parameters?.businessIncomeFarmPaths === true;
+    const pathsById = new Map();
+    for (const p of context?.businessIncomePaths ?? []) {
+      if (!pathsById.has(p.businessIncomeId)) pathsById.set(p.businessIncomeId, []);
+      pathsById.get(p.businessIncomeId).push(p);
+    }
     const out = [];
     for (const r of context?.businessIncome ?? []) {
       const p = person(r.personId);
       if (!p) continue;
+      const paths = draw ? (pathsById.get(r.id) ?? []) : [];
       for (const { year, date } of businessIncomeDates(r, start, end)) {
+        const picked = paths.length
+          ? paths[Math.floor(keyedRng(context?.rngSeed ?? 1, `business-income:${r.id}`, year)() * paths.length)]
+          : null;
         out.push(new OneOffEvent({
           name:    `${r.name ?? 'Business income'} ${year} — ${p.name ?? r.personId}`,
           type:    'BUSINESS_INCOME',
           date,
           data:    { businessIncomeId: r.id, personId: r.personId, year,
-                     net: Number(r.net), neCommunityCollegeTax: Number(r.neCommunityCollegeTax ?? 0) },
+                     net: Number((picked ?? r).net),
+                     neCommunityCollegeTax: Number((picked ?? r).neCommunityCollegeTax ?? 0),
+                     farmPathSeed: picked?.seed ?? null },
           enabled: true,
           color:   '#6D4C41',
         }));

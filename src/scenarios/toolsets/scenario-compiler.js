@@ -214,6 +214,8 @@ export class ScenarioCompiler {
       // Design 134 step 4b — `cfg.businessIncome`, validated by ScenarioLoader. US_INCOME
       // turns each row into one BUSINESS_INCOME event a year.
       businessIncome: Array.isArray(definition?.businessIncome) ? definition.businessIncome : [],
+      // Its farm MC paths (step 4d), drawn one per year when `businessIncomeFarmPaths` is on.
+      businessIncomePaths: Array.isArray(definition?.businessIncomePaths) ? definition.businessIncomePaths : [],
       spellsByPerson: buildSpellsByPerson(jobs, people, new Date(definition.simStart)),
       accounts:       services.accountService?.getAll()      ?? [],
       realProperties: services.realPropertyService?.getAll() ?? [],
