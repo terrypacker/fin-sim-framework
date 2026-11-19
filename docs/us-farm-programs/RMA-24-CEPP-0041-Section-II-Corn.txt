@@ -1,0 +1,139 @@
+     SUMMARY OF CHANGES FOR THE COMMODITY EXCHANGE PRICE PROVISIONS – SECTION II – CORN
+                                     (24-CEPP-0041)
+
+The following is a brief description of changes to the Commodity Exchange Price Provisions – Section II – Corn that will be
+effective for the 2024 and succeeding crop years. Please refer to the Commodity Exchange Price Provisions – Section II
+– Corn for complete information.
+
+Released June 2023
+    • Added “oats” and “rye” to the list of crops shown in the summary box on the top of page 1.
+24-CEPP-0041
+(Released June 2023)
+                                 UNITED STATES DEPARTMENT OF AGRICULTURE
+                                       Federal Crop Insurance Corporation
+                                      Commodity Exchange Price Provisions
+                                                Section II – Corn
+ The Commodity Exchange Price Provisions (CEPP) are an extension of the Common Crop Insurance Policy Basic Provisions and the
+ Area Risk Protection Insurance Basic Provisions, along with the Crop Provisions, for the following crops: barley, canola (including
+ rapeseed), corn, cotton, flax, grain sorghum, oats, rice, rye, soybeans, sunflowers, and wheat.
+ The CEPP has two sections. Section I - General Information, contains information relevant for all applicable crops, including definitions
+ and common policy material. Section II contains crop-specific projected and harvest price definitions and specifications, including
+ commodity exchanges, contracts, and discovery periods and is used in conjunction with Section I – General Information. There is a
+ separate Section II document for each crop. This is the Section II document for corn.
+
+Grain Type Definitions
+Projected price - The harvest year’s average daily settlement price for the projected price discovery period for the harvest year’s
+futures contract, as shown in the tables below, rounded to the nearest whole cent. Note: Pre-harvest year’s daily settlement
+prices through December 31 are included in the average for the January 31 sales closing date.
+Harvest price - The harvest year’s average daily settlement price for the harvest price discovery period for the harvest year’s
+futures contract, as shown in the tables below, rounded to the nearest whole cent.
+
+CORN – January 31 Sales Closing Date
+                                                                                   Projected      Projected       Harvest       Harvest
+                                                                                     Price          Price          Price         Price
+                                                                                   Discovery      Discovery      Discovery     Discovery
+                                                                                    Period         Period         Period        Period
+                                 Commodity         Contract         Contract       Beginning       Ending        Beginning      Ending
+ State                           Exchange         Commodity          Month           Date           Date           Date          Date
+ Texas                             CBOT             Corn           September        Dec 15         Jan 14          Aug 1        Aug 31
+
+CORN – February 15 Sales Closing Date
+                                                                                   Projected      Projected       Harvest       Harvest
+                                                                                     Price          Price          Price         Price
+                                                                                   Discovery      Discovery      Discovery     Discovery
+                                                                                    Period         Period         Period        Period
+                                 Commodity         Contract          Contract      Beginning       Ending        Beginning      Ending
+ State                           Exchange         Commodity           Month          Date           Date           Date          Date
+ Texas                             CBOT             Corn            December         Jan 1         Jan 31          Sep 1        Sep 30
+
+CORN – February 28 Sales Closing Date
+                                                                                   Projected      Projected       Harvest       Harvest
+                                                                                     Price          Price          Price         Price
+                                                                                   Discovery      Discovery      Discovery     Discovery
+                                                                                    Period         Period         Period        Period
+                                 Commodity         Contract         Contract       Beginning       Ending        Beginning      Ending
+ State                           Exchange         Commodity          Month           Date           Date           Date          Date
+ Alabama                           CBOT             Corn           September        Jan 15         Feb 14          Aug 1        Aug 31
+ Arizona                           CBOT             Corn           December         Jan 15         Feb 14          Oct 1        Oct 31
+ Arkansas                          CBOT             Corn           December         Jan 15         Feb 14         Aug 15        Sep 14
+ California                        CBOT             Corn           December         Jan 15         Feb 14          Oct 1        Oct 31
+ Florida                           CBOT             Corn           September        Jan 15         Feb 14          Aug 1        Aug 31
+ Georgia                           CBOT             Corn           September        Jan 15         Feb 14          Aug 1        Aug 31
+ Louisiana                         CBOT             Corn           September        Jan 15         Feb 14          Aug 1        Aug 31
+ Mississippi                       CBOT             Corn           December         Jan 15         Feb 14         Aug 15        Sep 14
+ Nevada                            CBOT             Corn           December         Jan 15         Feb 14          Oct 1        Oct 31
+ North Carolina                    CBOT             Corn           December         Jan 15         Feb 14          Sep 1        Sep 30
+ South Carolina                    CBOT             Corn           September        Jan 15         Feb 14          Aug 1        Aug 31
+
+
+                                                                  (1 of 3)
+CORN – March 15 Sales Closing Date
+                                                                             Projected     Projected      Harvest      Harvest
+                                                                               Price         Price         Price        Price
+                                                                             Discovery     Discovery     Discovery    Discovery
+                                                                              Period        Period        Period       Period
+                               Commodity        Contract        Contract     Beginning      Ending       Beginning     Ending
+ State                         Exchange        Commodity         Month         Date          Date*         Date         Date
+ Colorado                         CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ Connecticut                      CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ Delaware                         CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ Idaho                            CBOT             Corn          December       Feb 1        Feb 28        Nov 1        Nov 30
+ Illinois                         CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ Indiana                          CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ Iowa                             CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ Kansas                           CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ Kentucky                         CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ Maine                            CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ Maryland                         CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ Massachusetts                    CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ Michigan                         CBOT             Corn          December       Feb 1        Feb 28        Nov 1        Nov 30
+ Minnesota                        CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ Missouri                         CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ Montana                          CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ Nebraska                         CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ New Hampshire                    CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ New Jersey                       CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ New Mexico                       CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ New York                         CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ North Dakota                     CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ Ohio                             CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ Oklahoma                         CBOT             Corn          December       Feb 1        Feb 28        Sep 1        Sep 30
+ Oregon                           CBOT             Corn          December       Feb 1        Feb 28        Nov 1        Nov 30
+ Pennsylvania                     CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ Rhode Island                     CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ South Dakota                     CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ Tennessee                        CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ Texas                            CBOT             Corn          December       Feb 1        Feb 28        Sep 1        Sep 30
+ Utah                             CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ Vermont                          CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ Virginia                         CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ Washington                       CBOT             Corn          December       Feb 1        Feb 28        Nov 1        Nov 30
+ West Virginia                    CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ Wisconsin                        CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+ Wyoming                          CBOT             Corn          December       Feb 1        Feb 28        Oct 1        Oct 31
+*February 28 Ending Date is extended to February 29 in leap years.
+
+Silage Type Definitions
+Corn for silage is not traded on any Commodity Exchange. However, revenue protection is still considered to be available in
+counties where silage is an insurable type and the projected and harvest prices will be determined by RMA in accordance with
+this CEPP. The result of this action will allow the producer to insure both the silage and grain types of corn under revenue
+protection. With both types of corn insured under revenue protection the producer may qualify for a whole-farm unit. However,
+corn insured as silage will not have the benefit of the projected price and the harvest price moving as the price on the Commodity
+Exchange moves for corn for grain.
+Projected price - A price determined by RMA and released by January 31 of the harvest year.
+
+
+                                                             (2 of 3)
+Harvest price - A price equal to the silage type projected price.
+
+Organic (Certified) Practice Definitions
+Projected price - The corn (grain type) projected price as determined above, multiplied by a factor determined by RMA, rounded
+to the nearest whole cent.
+Harvest price - The corn (grain type) harvest price as determined above, multiplied by the same factor determined for the organic
+(certified) practice projected price, rounded to the nearest whole cent.
+
+
+
+
+                                                              (3 of 3)
+

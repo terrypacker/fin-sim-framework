@@ -47,6 +47,9 @@ export const FARM_BASES = Object.freeze({ custom: 'CUSTOM', actual: 'ACTUAL' });
  *   `<scope>.breakevenUnpricedPrice.<basis>`  what the unpriced bushels must fetch
  *   `<scope>.breakevenYield.<basis>`   bushels per acre that cover cost
  *   `operator.<id>.scheduleF`          the crop year's cash net after §464(d) (Schedule F)
+ *   `<scope>.insurance`                crop insurance indemnity for the crop year (§15.2)
+ *   `<scope>.insurancePays`            1 when that indemnity is above 0, else 0: its mean is
+ *                                      the probability a claim pays
  *
  * where `<scope>` is `farm`, `operator.<id>`, `crop.<CROP>` or `plan.<id>`, and `<basis>` is
  * `custom` or `actual`. A breakeven is null where the report's is (a mixed-crop group, a crop
@@ -82,6 +85,26 @@ export function farmPathMetrics(cfg, sim) {
     for (const row of r.plans) if (row.planId) put(`plan.${row.planId}`, basis, row);
   }
   const y = base.jobCost.cropYear;
+  // Crop insurance per scope, from the ledger: a plan's indemnity is charged to the plan.
+  const planRow = new Map(base.jobCost.plans.filter(r => r.planId).map(r => [r.planId, r]));
+  const indemnity = { farm: 0 };
+  for (const r of base.jobCost.plans) {
+    if (!r.planId) continue;
+    for (const scope of [`operator.${r.operatorId}`, `crop.${r.crop}`, `plan.${r.planId}`]) indemnity[scope] ??= 0;
+  }
+  for (const p of base.ledger) {
+    if (p.category !== 'CROP_INSURANCE_PROCEEDS' || p.cropYear !== y) continue;
+    const r = planRow.get(p.jobId);
+    indemnity.farm += p.amount;
+    if (!r) continue;
+    indemnity[`operator.${r.operatorId}`] += p.amount;
+    indemnity[`crop.${r.crop}`] += p.amount;
+    indemnity[`plan.${r.planId}`] += p.amount;
+  }
+  for (const [scope, v] of Object.entries(indemnity)) {
+    out[`${scope}.insurance`] = v;
+    out[`${scope}.insurancePays`] = v > 0 ? 1 : 0;
+  }
   for (const row of base.cash) {
     if (row.year === y) out[`operator.${row.operatorId}.scheduleF`] = row.net;
   }

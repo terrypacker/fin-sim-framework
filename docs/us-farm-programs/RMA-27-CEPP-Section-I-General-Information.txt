@@ -1,0 +1,113 @@
+SUMMARY OF CHANGES FOR THE COMMODITY EXCHANGE PRICE PROVISIONS - SECTION I
+                               (27-CEPP)
+
+The following is a brief description of changes to the Commodity Exchange Price Provisions - Section
+I that will be effective for the 2027 and succeeding crop years. Please refer to the Commodity Exchange
+Price Provisions - Section I for complete information.
+
+Released June 2026
+   • The list of crops revenue protection is available for has been updated.
+27-CEPP
+(Released June 2026)
+                                UNITED STATES DEPARTMENT OF AGRICULTURE
+                                      Federal Crop Insurance Corporation
+                                     Commodity Exchange Price Provisions
+                                        Section I - General Information
+   The Commodity Exchange Price Provisions (CEPP) are an extension of the Common Crop Insurance Policy, Basic Provisions and
+   the Area Risk Protection Insurance, Basic Provisions, along with the Crop Provisions, for revenue crops.
+   The CEPP has two sections. Section I - General Information, contains information relevant for all revenue crops, including definitions
+   and common policy material. Section II contains crop-specific projected and harvest price definitions and specifications, including
+   commodity exchanges, contracts, and discovery periods and is used in conjunction with Section I - General Information. There is a
+   separate Section II document for each revenue crop.
+
+ 1. Definitions                                                                   The substitute average daily settlement price is
+    AMS - Agricultural Marketing Service, an agency within                        generally obtained from the contract immediately prior to
+    the United States Department of Agriculture, which                            the contract specified in the applicable insured crop’s
+    reports soft white wheat cash prices in its “Portland Daily                   projected price or harvest price definition, or another
+    Grain Bids” report.                                                           contract as determined by RMA. It must represent the
+    Average Daily Settlement Price - The sum of all daily                         same crop year as the insured crop. Threshold
+    settlement prices divided by the total number of daily                        requirements must be met for the contract used to
+    settlement prices included in the sum. All daily                              determine the substitute average daily settlement price.
+    settlement prices during the price discovery period for                       If threshold requirements are not met, the applicable
+    the contract specified in the applicable crop’s Section II                    projected price and harvest price will be established in
+    document’s projected price or harvest price definition will                   accordance with 2(d) or 2(e).
+    be included in the sum, provided the threshold                                Threshold Requirements - For revenue protection
+    requirements are met. If the threshold requirements are                       coverage to be offered there must be one full active
+    not met for the specified contract, see the terms under                       trading day during the price discovery period, and the
+    the substitute average daily settlement price definition.                     contract must trade at least once during the discovery
+    CBOT - Chicago Board of Trade.                                                period, i.e., there must be one trading day with a volume
+    CME - Chicago Mercantile Exchange.                                            of at least one.
+    Daily Settlement Price - A price established in                          2.   Price Determinations
+    accordance with these provisions which is available for                       (a) In accordance with either Section 1 of the Common
+    the crop at the end of a trading day.                                              Crop Insurance Policy, Basic Provisions or Section
+    Full Active Trading Day - For all exchanges, any                                   1 of the Area Risk Protection Insurance, Basic
+    trading day on which a minimum of one (1) open interest                            Provisions, these Commodity Exchange Price
+    contract for the relevant futures contract is available at                         Provisions specify how and when the projected
+    the close of trading. For soft white wheat cash prices                             price and harvest price will be determined, by crop.
+    reported by AMS, there is no open interest requirement.                            (1) These provisions are a part of the policy for all
+    Harvest Price - See the definitions in the Section II                                   revenue crops, regardless of whether revenue
+    document for each crop. The harvest price will be                                       protection or yield protection is elected.
+    published no later than three business days following the                          (2) These provisions include information necessary
+    end of the harvest price discovery period.                                              to derive the projected price and the harvest
+    Harvest Year - The calendar year in which the crop is                                   price for the insured crop, as applicable.
+    normally harvested.                                                           (b) RMA reserves the right to omit any daily settlement
+    ICE - Intercontinental Exchange.                                                   price or substitute daily settlement price used to
+    KCBT - Kansas City Board of Trade.                                                 compute the average daily settlement price or
+    MGE - Minneapolis Grain Exchange.                                                  substitute average daily settlement price if market
+    Price Discovery Website - https://public-                                          conditions are different than those used to rate or
+    rma.fpac.usda.gov/apps/PriceDiscovery.                                             price revenue protection.
+    Projected Price - See the definitions in the Section II                       (c) RMA reserves the right to set the projected price for
+    document for each crop. The projected price will be                                yield protection.
+    published no later than three business days following the                     (d) If the projected price cannot be calculated by the
+    end of the projected price discovery period.                                       procedures outlined in these provisions:
+    Revenue Crops - Barley, canola (including rapeseed),                               (1) No revenue protection will be available, and
+    corn, cotton, flax, forage production, grain sorghum,                                   notice will be provided on the price discovery
+    oats, peanuts, rice, rye, soybeans, sunflowers, and                                     website no later than three business days
+    wheat.                                                                                  following the end of the projected price
+    RMA - Risk Management Agency.                                                           discovery period;
+    Substitute Average Daily Settlement Price - An                                     (2) Yield protection will be available; and
+    average daily settlement price used when the threshold                             (3) The projected price for yield protection will be
+    requirements for the contract specified in the applicable                               determined by RMA and published no later than
+    crop’s projected or harvest price definition are not met.                               three business days following the end of the
+
+                                                                  (1 of 2)
+         projected price discovery period.
+(e) If the harvest price cannot be calculated by the
+    procedures outlined in these provisions, refer to
+    Section 3(c)(5)(ii) of the Common Crop Insurance
+    Policy, Basic Provisions or Section 12(d) of the Area
+    Risk Protection Insurance, Basic Provisions.
+(f) The harvest price will not be greater than the
+    projected price multiplied by 2.00.
+(g) Projected prices, harvest prices, and associated
+    factors and adjustments for all crops, except forage
+    production and the corn silage type, can be found
+    on the price discovery website.
+(h) Methods used to calculate factors and adjustments
+    not published by the contract change date can be
+    found on RMA’s website.
+(i) In counties with a fall sales closing date for which
+    insurance is provided on both the spring and
+    fall/winter types, the projected price for spring types
+    will be published after the fall sales closing date at
+    the time specified in the applicable definition of
+    projected price.
+(j) For each insurance offer, if the actuarial documents
+    specify that contract pricing is available, and
+    procedures for establishing contract pricing are not
+    specified in the crop provisions or special
+    provisions, the Contract Price Addendum (CPA)
+    outlines the procedures for using a contract price to
+    determine your projected price and, if applicable,
+    harvest price.
+(k) For revenue protection coverage to be offered,
+    implied volatilities must be available for an
+    appropriate option contract. The implied volatility
+    requirements are specified in the volatility factor
+    calculation methodology paper on RMA’s website.
+
+
+
+
+                                                              (2 of 2)
+

@@ -1,0 +1,801 @@
+
+
+Federal Register, Volume 91 Issue 62 (Wednesday, April 1, 2026)
+
+
+[Federal Register Volume 91, Number 62 (Wednesday, April 1, 2026)]
+[Rules and Regulations]
+[Pages 16151-16156]
+From the Federal Register Online via the Government Publishing Office [www.gpo.gov]
+[FR Doc No: 2026-06277]
+
+
+
+========================================================================
+Rules and Regulations
+                                                Federal Register
+________________________________________________________________________
+
+This section of the FEDERAL REGISTER contains regulatory documents 
+having general applicability and legal effect, most of which are keyed 
+to and codified in the Code of Federal Regulations, which is published 
+under 50 titles pursuant to 44 U.S.C. 1510.
+
+The Code of Federal Regulations is sold by the Superintendent of Documents. 
+
+========================================================================
+
+
+Federal Register / Vol. 91, No. 62 / Wednesday, April 1, 2026 / Rules 
+and Regulations
+
+[[Page 16151]]
+
+
+
+DEPARTMENT OF AGRICULTURE
+
+Federal Crop Insurance Corporation
+
+7 CFR Parts 400, 402, 407, and 457
+
+[Docket No. FCIC-26-0067]
+RIN 0563-AC91
+
+
+Removal of Regulatory Overreach and Federal Crop Insurance Policy 
+Provisions
+
+AGENCY: Federal Crop Insurance Corporation, U.S. Department of 
+Agriculture (USDA).
+
+ACTION: Final rule.
+
+-----------------------------------------------------------------------
+
+SUMMARY: The Federal Crop Insurance Corporation (FCIC) is amending its 
+regulations regarding final agency determinations and interpretations 
+of the Federal Crop Insurance Act and its associated regulations. This 
+action is necessary to align agency procedures with Supreme Court 
+precedent and the Administrative Procedure Act, ensuring that 
+interpretive determinations are not improperly characterized as 
+legislative rules. The effect of this rule is to clarify that final 
+agency determinations are not matters of general applicability and are 
+binding only on the parties requesting them. Furthermore, this rule 
+removes provisions that previously attempted to make such 
+determinations binding on independent adjudicators, such as Federal 
+judges and the National Appeals Division. This final rule will also 
+remove Federal crop insurance policy provisions from the Code of 
+Federal Regulations (CFR). This action modernizes program 
+administration by discontinuing the practice of codifying detailed 
+insurance contracts in regulation. Policy terms will continue to be 
+published through official program materials and made available on the 
+Risk Management Agency (RMA) website. This change does not affect the 
+statutory authority of FCIC or the availability of crop insurance 
+coverage.
+
+DATES: Effective May 1, 2026.
+
+FOR FURTHER INFORMATION CONTACT: Chandra Place; telephone: (816) 926-
+3875; email: [email&#160;protected].
+
+SUPPLEMENTARY INFORMATION: 
+
+I. Statutory Limitation of Section 506(r)
+
+    Section 506(r)(1) of the Federal Crop Insurance Act provides:
+    (1) Procedures Required.--The Corporation shall establish 
+procedures under which the Corporation will provide a final agency 
+determination in response to an inquiry regarding the interpretation by 
+the Corporation of this subtitle or any regulation issued under this 
+subtitle.
+    (2) Implementation.--Not later than 180 days after the date of 
+enactment of this subsection, the Corporation shall issue regulations 
+to implement this subsection. At a minimum, the regulations shall 
+establish--
+    (A) the manner in which inquiries described in paragraph (1) are 
+required to be submitted to the Corporation; and
+    (B) a reasonable maximum number of days within which the 
+Corporation will respond to all inquiries.
+    (3) Effect of Failure to Timely Respond.--If the Corporation fails 
+to respond to an inquiry in accordance with the procedures established 
+pursuant to this subsection, the person requesting the interpretation 
+of this subtitle or regulation may assume the interpretation is correct 
+for the applicable reinsurance year.
+    The Supreme Court of the United States's holding In Perez v. 
+Mortgage Bankers Ass'n, 575 U.S. 92 (2015), sets forth legal principles 
+applicable to FCIC's implementation of provision of the FCIC Act. The 
+Supreme Court noted that:
+    The APA establishes the procedures federal administrative agencies 
+use for ``rule making,'' defined as the process of ``formulating, 
+amending, or repealing a rule.'' Sec.  551(5). ``Rule,'' in turn, is 
+defined broadly to include ``statement[s] of general or particular 
+applicability and future effect'' that are designed to ``implement, 
+interpret, or prescribe law or policy.'' Sec.  551(4).
+    Section 4 of the APA, 5 U.S.C. 553, prescribes a three-step 
+procedure for so-called ``notice-and-comment rulemaking.'' First, the 
+agency must issue a ``[g]eneral notice of proposed rule making,'' 
+ordinarily by publication in the Federal Register. Sec.  553(b). 
+Second, if ``notice [is] required,'' the agency must ``give interested 
+persons an opportunity to participate in the rule making through 
+submission of written data, views, or arguments.'' Sec.  553(c). An 
+agency must consider and respond to significant comments received 
+during the period for public comment. See Citizens to Preserve Overton 
+Park, Inc. v. Volpe, 401 U.S. 402, 416 (1971); Thompson v. Clark, 741 
+F. 2d 401, 408 (CADC 1984). Third, when the agency promulgates the 
+final rule, it must include in the rule's text ``a concise general 
+statement of [its] basis and purpose.'' Sec.  553(c). Rules issued 
+through the notice-and-comment process are often referred to as 
+``legislative rules'' because they have the ``force and effect of 
+law.'' Chrysler Corp. v. Brown, 441 U. S. 281, 302-303 (1979) (internal 
+quotation marks omitted).
+    Not all ``rules'' must be issued through the notice-and-comment 
+process. Section 4(b)(A) of the APA provides that, unless another 
+statute states otherwise, the notice-and-comment requirement ``does not 
+apply'' to ``interpretative rules, general statements of policy, or 
+rules of agency organization, procedure, or practice.'' 5 U.S.C. 
+553(b)(A). The term ``interpretative rule,'' or ``interpretive rule,'' 
+is not further defined by the APA, and its precise meaning is the 
+source of much scholarly and judicial debate. See generally Pierce, 
+Distinguishing Legislative Rules From Interpretative Rules, 52 Admin. 
+L. Rev. 547 (2000); Manning, Nonlegislative Rules, 72 Geo. Wash. L. 
+Rev. 893 (2004). We need not, and do not, wade into that debate here. 
+For our purposes, it suffices to say that the critical feature of 
+interpretive rules is that they are ``issued by an agency to advise the 
+public of the agency's construction of the statutes and rules which it 
+administers.'' Shalala v. Guernsey Memorial Hospital, 514 U.S. 87, 99 
+(1995) (internal quotation marks omitted). The absence of a notice-and-
+comment obligation makes the process of issuing interpretive rules 
+comparatively easier for agencies than issuing legislative rules. But 
+that convenience comes at a price: Interpretive rules ``do not have the 
+force and effect of law and are not accorded that weight in the 
+adjudicatory process.'' Ibid.
+    Section 506(r) of the FCIC Act requires FCIC to ``establish 
+procedures under which the Corporation will
+
+[[Page 16152]]
+
+provide a final agency determination in response to an inquiry 
+regarding the interpretation by the Corporation of this subtitle or any 
+regulation issued under this subtitle.'' In issuing regulations to 
+implement this requirement to ``establish procedures'' went well beyond 
+establishing procedures and issued regulations that attempted to 
+elevate final agency determinations to the status of a final rule and 
+to preclude administrative and even judicial review of certain FCIC 
+actions.
+    In implementing section 506(r) through issuance of regulations set 
+forth in 7 CFR part 400, most notably 7 CFR 400.766(b)(2), FCIC did not 
+adhere to the basic principles articulated by the Supreme Court and the 
+provisions of the Administrative Procedure Act in that it attempted to 
+make certain determinations and interpretations ``binding'', that is, a 
+final rule, in certain circumstances:
+    (2) All written final agency determinations issued by FCIC are 
+binding on all participants in the Federal crop insurance program for 
+the crop years the policy provisions are in effect. All written FCIC 
+interpretations and testimony from an employee of RMA are binding on 
+the parties to the dispute, including the arbitrator, mediator, judge, 
+or NAD.
+    The current regulations in subpart X of 7 CFR part 400 contemplate 
+the issuance of: 1. a ``final agency determination'', which prior to 
+the issuance of this final rule was considered to be a matter of 
+general applicability, and 2. a ``FCIC interpretation'' which is 
+applicable to only ``the parties to the dispute, including the 
+arbitrator, mediator, judge, or NAD.'' These terms are defined as 
+follows:
+    FCIC interpretation. An interpretation of a policy provision not 
+codified in the Code of Federal Regulations or any procedure used in 
+the administration of the Federal crop insurance program.
+    Final agency determination. Matters of general applicability 
+regarding FCIC's interpretation of provisions of the Act or any 
+regulation codified in the Code of Federal Regulations, including 
+certain policy provisions, which are applicable to all participants in 
+the Federal crop insurance program and the appeals process.
+    Under the revised regulation, because a final agency determination 
+issued pursuant to the process required by section 506(r) of the FCIC 
+Act is not a final rule, it is binding only on the parties that 
+requested such a determination. In revising these regulations to remove 
+references to the ``general applicability'' of such determinations, 
+there is no discernable difference between a ``final agency 
+determination'' and a ``FCIC interpretation.'' Accordingly, references 
+to a ``FCIC interpretation'' are deleted. Thus, a determination on a 
+matter outside the scope of section 506(r) is also binding only on a 
+party who requested the determination.
+    FCIC may not issue a regulation that affects the authority of other 
+Federal agencies and the Federal judiciary. Prior to the issuance of 
+this final rule, 7 CFR 400.766(b)(2) provided that ``written FCIC 
+interpretations and testimony from an employee of RMA are binding on . 
+. . [a Federal] judge . . . .'' There simply is no constitutional basis 
+for this provision.
+    The Federal Crop Insurance Reform and Department of Agriculture 
+Reorganization Act of 1994 established an independent administrative 
+appeal system within the Department of Agriculture to hear appeals from 
+certain agency determinations including most FCIC determinations. The 
+National Appeals Division (NAD) performs this function. Certain agency 
+determinations are not reviewable by NAD:
+    (d) Determination of Appealability of Agency Decisions.--If an 
+officer, employee, or committee of an agency determines that a decision 
+is not appealable and a participant appeals the decision to the 
+Director, the Director shall determine whether the decision is adverse 
+to the individual participant and thus appealable or is a matter of 
+general applicability and thus not subject to appeal. The determination 
+of the Director as to whether a decision is appealable shall be 
+administratively final. (emphasis added).
+    7 CFR 400.766(b)(3) provides:
+    All written final agency determinations that are published on RMA's 
+website are considered matters of general applicability and are not 
+appealable to NAD. Before obtaining judicial review of any final agency 
+determination, you must obtain an Administrative Final Determination 
+from the Director of NAD on the issue of whether the final agency 
+determination is a matter of general applicability.
+    This regulatory provision attempts to preclude review by NAD of a 
+determination that adversely affects a participant in a FCIC program by 
+posting the determination on a website and asserting that such a 
+determination is a matter of ``general applicability.'' The revised 
+regulation makes clear that a final agency determination made pursuant 
+to section 506(r) or outside of the purview of that section is 
+applicable only to the party that requested the determination. 
+Accordingly, such a determination is not a matter of general 
+applicability, and this regulatory provision is deleted.
+    Final agency determinations issued prior to April 1, 2026 are not 
+binding on any party other than the party requesting the determination 
+unless the determination has been incorporated by reference in a policy 
+that is in effect on the date of publication of this final rule.
+
+Conflict With Executive Order 14219 and the Definition of Guidance
+
+    Executive Order 14219, ``Ensuring Lawful Governance and 
+Implementing the President's `Department of Government Efficiency' 
+Deregulatory Initiative,'' requires federal agencies to identify and 
+de-prioritize regulations that are not based on the ``best reading'' of 
+their underlying statutes.
+
+Re-Evaluating the 2018 Final Rule Justification
+
+    In the 2018 Final Rule (83 FR 66590), RMA justified this binding 
+authority by stating that Section 506(r) gave ``FCIC express authority 
+to provide interpretations... and makes them binding on all 
+participants.'' However, RMA further stated that many policies are not 
+published as regulations and ``have the force of contracts but not 
+law.''
+    The Agency now determines that its previous interpretation--
+concluding that the authority to issue an interpretation (granted in 
+Section 506(r)) inherently includes, for example, the authority to make 
+that interpretation binding on a judge--is not the ``best reading'' of 
+the Act. Such a requirement impedes the constitutional role of judges 
+and the statutory role of NAD to independently evaluate the law and 
+facts of a case.
+    To align with Executive Order 14219 and the statutory limits of 7 
+U.S.C. 1506(r), the Agency is striking the language in 7 CFR 
+400.766(b)(2) that purports to make FADs and employee testimony binding 
+on arbitrators, mediators, judges, and the NAD. This change ensures 
+that while FADs remain a vital tool for program consistency, they 
+function as persuasive guidance with respect to parties that were not 
+involved in the FAD request rather than an unlawful restriction on 
+judicial and quasi-judicial independence. Accordingly, the 
+determination set forth in the FAD is applicable to only the parties 
+involved in the request for the FAD and that determination is 
+appealable to NAD.
+
+[[Page 16153]]
+
+II. Modernization of Public Access and Regulatory Efficiency
+
+History of the FCIC and CFR Publications
+
+    Congress established the Federal Crop Insurance Program in 1938 
+through the Federal Crop Insurance Act, enacted as part of the 
+Agricultural Adjustment Act of 1938 (Pub. L. 75-430). This legislation 
+created the FCIC as a wholly owned government corporation to provide 
+farmers with a means of managing production risk through federally 
+backed crop insurance. The initial program focused on wheat and 
+gradually expanded to other crops and regions over subsequent decades.
+    The creation of FCIC reflected a broader federal policy goal: 
+stabilizing farm income and promoting agricultural resilience during 
+periods of economic uncertainty and natural disaster. By offering 
+insurance against crop losses due to unavoidable perils, the program 
+aimed to reduce reliance on ad hoc disaster assistance and foster a 
+more predictable safety net for producers.
+    From its inception, FCIC operated under statutory authority and 
+published its insurance policies and related regulations in the CFR. 
+This practice was consistent with the requirements of the Federal 
+Register Act of 1935, which established the Federal Register as the 
+official journal for agency rules and notices, and later the 
+Administrative Procedure Act of 1946, which formalized rulemaking 
+procedures, including public notice and comment.
+    The Supreme Court's decision in Federal Crop Insurance Corp. v. 
+Merrill (1947) underscored the binding nature of these published 
+regulations, holding that policies promulgated and published in the 
+Federal Register were enforceable even against parties lacking actual 
+knowledge of their terms. This precedent reinforced the principle that 
+publication in the Federal Register provides constructive notice to all 
+affected persons.
+    Over time, however, the approach of codifying detailed insurance 
+policy terms in the CFR has become increasingly uncommon among federal 
+programs. This traditional method often leads to delays in implementing 
+necessary policy adjustments, creates administrative burden in 
+maintaining frequently updated regulations, and can result in policy 
+language becoming outdated before rulemaking processes are complete. 
+Most agencies now issue contractual terms through program materials 
+rather than rulemaking, as seen in analogous contexts such as FEMA's 
+flood reinsurance program, allowing for greater agility and 
+responsiveness to evolving program needs. RMA, which administers FCIC 
+programs today, is adopting this modernized approach to streamline 
+operations and reduce regulatory complexity.
+
+Compliance With the E-Government Act of 2002
+
+    The E-Government Act of 2002 mandates that agencies use internet-
+based information technologies to enhance the ``transparency, 
+accountability, and accessibility'' of Government information. Section 
+202 of the Act specifically requires agencies to provide the public 
+with ``timely and high-quality'' electronic access to information.
+    By removing voluminous, frequently updated policy provisions from 
+the static CFR and transitioning them to the RMA website, the Agency 
+fulfills the Act's mandate to improve the efficiency of service 
+delivery. The CFR is published annually and updated incrementally, 
+which creates a significant lag between policy updates and public 
+notification. In contrast, the RMA's electronic repository provides 
+real-time, searchable, and version-controlled access to the Common Crop 
+Insurance Policy (CCIP) and related endorsements, ensuring that 
+participants have the most current information available.
+
+Reduction of Regulatory Redundancy and Administrative Burden
+
+    The Agency determines that the CFR is best utilized for legislative 
+rules that establish legal rights or obligations. Because individual 
+crop policies and endorsements function as contracts rather than 
+legislative rules, their presence in the CFR is not required by the 
+Administrative Procedure Act. Removing these provisions reduces the 
+overall size of the CFR, streamlining the regulatory landscape for 
+small entities and reducing the regulatory thicket that complicates 
+compliance.
+    This action does not alter the statutory authority of FCIC or the 
+availability of crop insurance coverage. Farmers will continue to 
+access policy terms through designated and easily discoverable official 
+program documents and the RMA website. RMA commits to maintaining a 
+comprehensive, user-friendly, and searchable online repository for all 
+current policy provisions and related materials. Non-policy provisions 
+related to Federal crop insurance are now consolidated in part 400.
+
+Regulatory Matters
+
+Administrative Procedure Act
+    FCIC has determined that good cause exists to issue this rule 
+without prior notice and comment pursuant to 5 U.S.C. 553(b)(3)(B). 
+This action is a procedural change that solely concerns the location 
+and method of publication for detailed policy provisions, rather than 
+their content or substance. The rule itself does not introduce, modify, 
+or remove any specific insurance coverage, eligibility criteria, or 
+producer obligations. Instead, it streamlines administrative processes 
+by relocating existing policy text from the CFR to official program 
+materials. Therefore, this rule does not alter substantive rights or 
+obligations of producers or other stakeholders, making prior public 
+notice and comment unnecessary and impracticable.
+Executive Order 12866
+    The Office of Management and Budget (OMB) has designated this rule 
+as not significant under Executive Order 12866, ``Regulatory Planning 
+and Review.'' This determination is based on the finding that this 
+final rule is primarily administrative and procedural in nature, as it 
+merely relocates existing policy provisions from the Code of Federal 
+Regulations to official program materials.
+Executive Order 13563
+    This rule is also consistent with the principles of Executive Order 
+13563, ``Improving Regulation and Regulatory Review,'' which directs 
+agencies to assess all costs and benefits of available regulatory 
+alternatives and select approaches that maximize net benefits. By 
+removing detailed policy text from the CFR, this action reduces 
+regulatory burden, streamlines program administration, and allows for 
+more efficient updates to policy terms, thereby enhancing the overall 
+effectiveness and responsiveness of the Federal Crop Insurance Program 
+without diminishing protections or benefits to producers.
+Regulatory Flexibility Act (5 U.S.C. 601 et seq.)
+    The Agency certifies that this rule will not have a significant 
+economic impact on a substantial number of small entities as defined by 
+the Regulatory Flexibility Act (RFA). This final rule is administrative 
+and procedural, focusing solely on the method and location of 
+publishing Federal crop insurance policy provisions. It does not 
+establish new substantive requirements, impose new compliance costs, or 
+alter the
+
+[[Page 16154]]
+
+eligibility, coverage, or financial obligations of producers or 
+Approved Insurance Providers, many of which are small entities. The 
+removal of text from the CFR is expected to reduce, rather than 
+increase, administrative burden for all entities by facilitating more 
+timely access to current policy terms. Therefore, a Regulatory 
+Flexibility Analysis is not required.
+Congressional Review Act
+    This rule is not a major rule as defined by the Congressional 
+Review Act in 5 U.S.C. 804(2). It will not result in an annual effect 
+on the economy of $100 million or more; a major increase in costs or 
+prices for consumers, individual industries, Federal, State, or local 
+government agencies, or geographic regions; or significant adverse 
+effects on competition, employment, investment, productivity, 
+innovation, or on the ability of United States-based enterprises to 
+compete with foreign-based enterprises in domestic and export markets. 
+Accordingly, the Agency has submitted this rule and all required 
+supporting documentation to the Comptroller General of the United 
+States and both Houses of Congress prior to its effective date, as 
+required by 5 U.S.C. 801(a)(1).
+Executive Order 13175
+    This rule has been reviewed in accordance with the requirements of 
+Executive Order 13175, ``Consultation and Coordination with Indian 
+Tribal Governments.'' This Executive Order requires agencies to consult 
+with tribal officials when rules have tribal implications, impose 
+substantial direct compliance costs on tribal governments, or affect 
+the relationship between the Federal Government and Indian tribes. The 
+Agency has determined that this rule does not have tribal implications 
+and does not impose substantial direct compliance costs on tribal 
+governments.
+Paperwork Reduction Act of 1995
+    In accordance with the Paperwork Reduction Act of 1995, this rule 
+does not impose any new or revise any existing ``collection of 
+information'' requirements as defined by the Act that would require 
+approval by OMB.
+
+List of Subjects
+
+7 CFR Part 400
+
+    Acreage allotments, Administrative practice and procedure, Claims, 
+Crop insurance, Drug traffic control, Fraud, Government employees, 
+Income taxes, Intergovernmental relations, Penalties, Reporting and 
+recordkeeping requirements, Wages.
+
+7 CFR Part 402
+
+    Administrative practice and procedure, Claims, Crop Insurance, 
+Disaster assistance, Fraud, Penalties, Reporting and recordkeeping 
+requirements.
+
+7 CFR Part 407
+
+    Acreage allotments, Administrative practice and procedure, Barley, 
+Corn, Cotton, Crop insurance, Peanuts, Reporting and recordkeeping 
+requirements, Sorghum, Soybeans, Wheat.
+
+7 CFR Part 457
+
+    Acreage allotments, Crop insurance, Reporting and recordkeeping 
+requirements.
+
+Final Rule
+
+    Accordingly, as set forth in the preamble, the Federal Crop 
+Insurance Corporation amends 7 CFR parts 400, 402, 407, and 457 as 
+follows:
+
+PART 400--GENERAL ADMINISTRATIVE REGULATIONS
+
+0
+1. The authority citation for part 400 continues to read as follows:
+
+    Authority: 7 U.S.C. 1506(l), 1506(o).
+
+
+0
+2. Add subpart A, consisting of Sec. Sec.  400.10 through 400.17, to 
+read as follows:
+
+Subpart A--Administration of Reinsured Crop Insurance Policies
+
+Sec.
+400.10 General statement.
+400.11 Applicability.
+400.12 Availability of Federal crop insurance.
+400.13 Premium rates, amounts of protection, and coverage levels.
+400.14 The contract.
+400.15 The application and the policy.
+400.16 Appropriation contingency.
+400.17 Creditors.
+
+    Authority: 7 U.S.C. 1506(l), 1506(o).
+
+
+Sec.  400.10  General statement.
+
+    (a) Catastrophic coverage. The Federal Crop Insurance Act, as 
+amended by the Federal Crop Insurance Reform Act of 1994 (Act), 
+requires the Federal Crop Insurance Corporation (FCIC) to implement a 
+catastrophic risk protection plan of insurance that provides a basic 
+level of insurance coverage to protect producers in the event of a 
+catastrophic crop loss due to loss of yield or prevented planting, if 
+provided by FCIC, provided the crop loss or prevented planting is due 
+to an insured cause of loss specified in the crop insurance policy. The 
+Catastrophic Risk Protection Endorsement is a continuous endorsement 
+that is effective in conjunction with a crop insurance policy for the 
+insured crop. Catastrophic risk protection coverage will be offered 
+through approved insurance providers if there are a sufficient number 
+available to service the area. If there are an insufficient number 
+available, as determined by the Secretary, local offices of the Farm 
+Service Agency will provide catastrophic risk protection coverage.
+    (b) Additional coverage. The Act directs FCIC to offer additional 
+coverage insurance policies that provide a level of coverage greater 
+than the level available under catastrophic risk protection. These 
+additional coverage policies may be offered on an individual loss 
+basis, an area loss basis, or an individual loss basis supplemented 
+with area loss coverage and may include margin coverage.
+
+
+Sec.  400.11  Applicability.
+
+    The provisions of this part are applicable to each crop for which 
+Federal crop insurance coverage is available and for which the producer 
+elects such coverage.
+
+
+Sec.  400.12  Availability of Federal crop insurance.
+
+    (a) Insurance shall be offered under the provisions of this section 
+on the insured crop in counties within the limits prescribed by and in 
+accordance with the provisions of the Act. The crops and counties shall 
+be designated by the Manager of the Federal Crop Insurance Corporation 
+(FCIC) from those approved by the Board of Directors of FCIC.
+    (b) The insurance is offered through approved insurance providers 
+reinsured by FCIC that offer contracts containing the terms and 
+conditions approved by the FCIC. These contracts are clearly identified 
+as being reinsured by FCIC. FCIC may offer the contract for the 
+catastrophic level of coverage directly to the insured through local 
+offices of the Department of Agriculture only if the Secretary 
+determines that the availability of local agents is not adequate. Those 
+contracts are specifically identified as being offered by FCIC.
+    (c) Except as specified in the contract, no person may have in 
+force more than one Federal crop insurance contract on the same crop 
+for the same crop year in the same county.
+    (d) A person that has received a fee or penalty for violation of 
+the contract must repay all amounts received with interest at the rate 
+contained in the contract.
+    (e) An insured whose contract with FCIC or with a company reinsured 
+by
+
+[[Page 16155]]
+
+FCIC under the Act has been terminated because of violation of the 
+terms of the contract is not eligible to obtain multiple peril crop 
+insurance under the Act with FCIC or with a company reinsured by FCIC 
+unless the insured can show that the default in the prior contract was 
+cured prior to the sales closing date of the contract applied for or 
+unless the insured can show that the termination was improper and 
+should not result in subsequent ineligibility.
+    (f) All applicants for insurance under the Act must advise the 
+agent, in writing, at the time of application, of any previous 
+applications for insurance or policies of insurance under the Act and 
+the present status of any such applications or insurance.
+
+
+Sec.  400.13  Premium rates, amounts of protection, and coverage 
+levels.
+
+    (a) The Manager shall establish premium rates, production 
+guarantees or amounts of insurance, coverage levels, and prices at 
+which indemnities shall be computed for the insured crop which will be 
+included in the actuarial documents on file in the applicable agents' 
+office for the county and which may be changed from year to year.
+    (b) At the time the application for insurance is made, the 
+applicant will elect an amount of insurance or a coverage level and 
+price from among those contained in the actuarial documents for the 
+crop year.
+
+
+Sec.  400.14  The contract.
+
+    (a) The insurance contract shall become effective upon the 
+acceptance by FCIC or the insurance provider of a complete, duly 
+executed application for insurance on a form prescribed or approved by 
+FCIC.
+    (b) Changes made in the contract shall not affect its continuity 
+from year to year.
+    (c) No indemnity shall be paid unless the insured complies with all 
+terms and conditions of the contract, except as provided in the policy.
+    (d) The forms required under this part and by the contract are 
+available at the office of the insurance provider, or such other 
+location as specified by FCIC, if applicable.
+
+
+Sec.  400.15  The application and the policy.
+
+    (a) Application for insurance on a form prescribed by FCIC, or 
+approved by FCIC, must be made by any person who wishes to participate 
+in the program, to cover such person's share in the insured crop as 
+landlord, owner-operator, crop ownership interest, or tenant. No other 
+person's interest in the crop may be insured under an application 
+unless that person's interest is clearly shown on the application and 
+unless that other person's interest is insured in accordance with the 
+procedures of FCIC. The application must be submitted to FCIC or the 
+reinsured company through the crop insurance agent and must be 
+submitted on or before the applicable sales closing date on file.
+    (b) FCIC or the reinsured company may reject or discontinue the 
+acceptance of applications in any county or of any individual 
+application upon FCIC's determination that the insurance risk is 
+excessive.
+
+
+Sec.  400.16  Appropriation contingency.
+
+    Notwithstanding the cancellation date stated in the policy, if 
+there are insufficient funds appropriated by the Congress to deliver 
+the crop insurance program, the policy will automatically terminate 
+without liability.
+
+
+Sec.  400.17  Creditors.
+
+    An interest of a person in an insured crop existing by virtue of a 
+lien, mortgage, garnishment, levy, execution, bankruptcy, involuntary 
+transfer or other similar interest shall not entitle the holder of the 
+interest to any benefit under the contract.
+
+
+Sec.  400.765  [Amended]
+
+0
+3. In 400.765, remove the definitions of ``FCIC interpretation'', 
+``Final agency determination'', and ``You''.
+
+
+0
+4. Revise Sec. Sec.  400.766 through 400.768 to read as follows:
+
+
+Sec.  400.766  Basis and applicability.
+
+    (a) This subpart sets forth the procedure for a participant to make 
+a request for a final agency determination with respect to a:
+    (1) Provision of the Act;
+    (2) Provision of this part;
+    (3) Provision of a crop insurance policy re-insured by FCIC;
+    (4) Handbook, manual, memorandum, and a non-binding guidance 
+document issued by FCIC; and
+    (5) Bulletins issued to AIPs.
+    (b) A final agency determination is applicable to only the party 
+requesting such a determination.
+    (c)(1) A request for a final agency determination must be made as 
+provided in Sec.  400.767(a). FCIC will make a determination on the 
+request not later than 90 days after receipt of the request.
+    (2)(i) A request for a administrative review of a final agency 
+determination made under this section may be made by a producer or 
+applicant in accordance with subpart J or an appeal may be made to NAD 
+as provided in part 11 of this Title.
+    (ii) A request for a administrative review of a final agency 
+determination made under this section may be made by a reinsured 
+company.
+    (3) FCIC will provide a final agency determination with respect to 
+the crop year in which the request is made. If the crop insurance 
+policy or other FCIC action was effective in any of the immediately 
+preceding three crop years, the participant may request a determination 
+for such years. For example, for a request received in the 2027 crop 
+year, FCIC will consider a request for a final agency determination for 
+the 2027, 2026, 2025, and 2024 crop years. A request for an 
+interpretation that is outside of this timeframe will not be 
+considered.
+    (4) If statutory, regulatory, policy provision, or procedure has 
+changed during the time period for which an interpretation is 
+requested, FCIC will provide, at the request of the participant, a 
+final agency determination for each such crop year.
+
+
+Sec.  400.767  Request for a final agency determination.
+
+    (a) A request for a final agency determination must:
+    (1) Be submitted to the Deputy Administrator as provided on RMA's 
+website at www.rma.usda.gov through one of the following methods:
+    (i) By certified mail or overnight delivery, to the Deputy 
+Administrator, Risk Management Agency, United States Department of 
+Agriculture, P.O. Box 419205, Kansas City, MO 64141-6205; or
+    (ii) By electronic mail at [email&#160;protected];
+    (2) Identify and quote the specific provision in the Act, 
+regulation, insurance policy provision, or procedure that is the 
+subject of the request. The request for a final agency determination 
+may pertain to only such provision unless other provisions are directly 
+related to the subject provision;
+    (3) State the crop, crop year(s), and plan of insurance applicable 
+to the request;
+    (4) State the name, address, and telephone number of a contact 
+person for the request;
+    (5) Contain the requestor's detailed interpretation of the specific 
+provision of the Act, regulation, crop insurance policy, or procedure 
+that is the subject of the request; and
+    (6) Not contain any specific facts, alleged conduct, or 
+hypothetical situations or the request will be returned to the 
+requestor without consideration.
+    (b) If multiple parties are involved in a dispute and have opposing
+
+[[Page 16156]]
+
+interpretations of a matter that FCIC may consider under this subpart, 
+a joint request for a final agency determination in one request is 
+encouraged. If multiple insured entities are parties to the dispute, 
+and the request for a final agency determination applies to all 
+parties, one request may be submitted for all insured entities. In this 
+case, the information required in paragraphs (a) and (c) of this 
+section must be provided for each person.
+    (c)(1) If the final agency determination will be used in a 
+judicial, mediation, or arbitration proceeding, the requestor must 
+identify:
+    (i) The type of proceeding and the date the proceeding is scheduled 
+to begin, or the earliest possible date the proceeding would likely 
+begin if a specific date has not been established; and
+    (ii) The name, address, telephone number, and or email address of a 
+contact person for each party to the dispute;
+    (2) A request for a final agency determination must be submitted 
+not later than 90 days before the date the mediation, or arbitration 
+proceeding in which the determination will be used is scheduled to 
+begin unless the parties elect to use the expedited review process 
+available under the AAA rules.
+    (3)(i) FCIC will cooperate to the extent practicable to accommodate 
+the schedule of a court, mediator, arbitrator, and NAD when a FCIC 
+matter is pending before such entity. A party requesting a final agency 
+determination should advise such entity that FCIC acts on requests for 
+final agency determinations within 90 days but cannot provide an exact 
+date on which such a determination will be issued.
+    (ii) During litigation, mediation, arbitration, and appeals before 
+NAD, if an issue arises and the presiding official determines that a 
+final agency determination may assist in the resolution of the dispute, 
+FCIC will honor a request for a final agency determination from such 
+entity. Such a request should conform, to the extent practicable, to 
+the provisions of paragraphs (a)(2) through (5) of this section. Such a 
+determination is not binding on the presiding official and is a 
+guidance document.
+
+
+Sec.  400.768  FCIC response.
+
+    (a)(1) FCIC will not provide a final agency determination for any 
+request that contains specific factual information to situations or 
+cases, such as acts or failures to act of any participant under the 
+terms of a policy, procedure, or any reinsurance agreement. A properly 
+filed request will be reviewed by FCIC and a final agency determination 
+will be issued within 90 days of receipt of the request.
+    (2) FCIC will not consider any examples or hypotheticals provided 
+in the request because those are fact-specific and could be construed 
+as a finding of fact by FCIC. If an example or hypothetical is required 
+to illustrate an interpretation, FCIC will provide the example in the 
+interpretation.
+    (b)(1) If, in the sole judgment of FCIC, the request is unclear, 
+ambiguous, or incomplete, FCIC will not provide a final agency 
+determination and the requestor will be notified within 30 days of the 
+date of receipt by FCIC that the request is unclear, ambiguous, or 
+incomplete.
+    (2) When FCIC provides a notification under paragraph (b)(1) of 
+this section, the 90-day time period for FCIC to provide a response is 
+stopped on the date FCIC issues the notification. On the date FCIC 
+receives an acceptable request, FCIC has the balance of the days 
+remaining in the 90-day time period to provide a final agency 
+determination. For example, FCIC receives a request for a final agency 
+determination on January 10. On February 10, FCIC issues a notification 
+that the request is unclear. On March 10, FCIC receives an acceptable 
+request. FCIC has 60 days from March 10, the balance of the 90-day time 
+period, to provide a response.
+    (c) If FCIC does not provide a response within 90 days of receipt 
+of a request, the requested interpretation is applicable for the 
+applicable crop year. Additionally, in the case of a joint request for 
+a final agency determination when the requestors have differing 
+interpretations, if FCIC does not provide a response within 90 days, 
+neither party may assume their interpretation is correct.
+    (d) When issuing a final agency determination, FCIC will not 
+evaluate the insured, insurance provider, agent, or loss adjuster as it 
+relates to their performance in following FCIC policy provisions.
+
+PART 402 [REMOVED AND RESERVED]
+
+0
+5. Remove and reserve part 402.
+
+PART 407 [REMOVED AND RESERVED]
+
+0
+6. Remove and reserve part 407.
+
+PART 457 [REMOVED AND RESERVED]
+
+0
+7. Remove and reserve part 457.
+
+Heather Manzano,
+Acting Manager, Federal Crop Insurance Corporation.
+[FR Doc. 2026-06277 Filed 3-31-26; 8:45 am]
+BILLING CODE 3410-08-P
+
+
+

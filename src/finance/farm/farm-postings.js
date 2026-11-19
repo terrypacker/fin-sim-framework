@@ -10,6 +10,7 @@
 
 import { categoryLine } from './schedule-f.js';
 import { TENURE, harvestDateFor, priceOn, realizedYield, categoryMultiplierField } from './farm-records.js';
+import { settleInsurance } from './farm-programs.js';
 
 /**
  * The farm calendar (design 134 §5.2) compiled from normalized records into dated events.
@@ -153,6 +154,20 @@ export function compileFarmEvents(farm) {
       post(rx.paidDate ?? cal.inputDate, `${opn.name ?? opn.id} (custom rate) — ${plan.id}`, {
         operatorId: f.operatorId, jobId: plan.id, category: 'CUSTOM_RATE', cash: false,
         amount: acres * rx.passes * opn.customRatePerAcre * m.customRateMultiplier, sourceId: rx.id,
+      });
+    }
+  }
+
+  // ── crop insurance indemnities (design 134 §15.2) ──────────────────────────────────
+  // Settled at compile time like the harvest: the realized yields and the price path are
+  // known once the season's draws are. Paid to the unit, charged to its plans by shortfall.
+  const policyById = new Map(farm.insurance.map(r => [r.id, r]));
+  for (const u of settleInsurance(farm)) {
+    const policy = policyById.get(u.insuranceId);
+    for (const { planId, amount } of u.byPlan) {
+      post(policy.paymentDate, `Crop insurance indemnity — ${planId}`, {
+        operatorId: u.operatorId, jobId: planId, category: 'CROP_INSURANCE_PROCEEDS', kind: 'REVENUE',
+        amount, sourceId: u.insuranceId, memo: `${u.plan} ${u.unit} unit`,
       });
     }
   }

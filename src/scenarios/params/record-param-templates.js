@@ -452,6 +452,17 @@ export const FARM_PARAM_TEMPLATES = {
     { field: 'irrigationElectricity', label: 'Irrigation Electricity', type: 'Number', mc: true, opt: false,
       appliesTo: r => (r.irrigationElectricity ?? 0) > 0,
       description: 'This crop plan\'s metered irrigation electricity for the season, in dollars.' },
+    // Design 134 §15.2 — the insurer's number, not the plan's. Only on a plan that has one.
+    { field: 'aphYield', label: 'Approved (APH) Yield', type: 'Number', mc: false, opt: false,
+      appliesTo: r => r.aphYield != null,
+      description: 'The approved yield on this field\'s crop insurance, in bushels per acre: the '
+        + 'yield history the guarantee is built on. Blank uses the expected yield.' },
+  ],
+  insurance: [
+    // Design 134 §15.2 — the coverage choice is the operator's, so an optimizer lever.
+    { field: 'coverageLevel', label: 'Coverage Level', type: 'Number', mc: false, opt: true,
+      description: 'The share of the approved yield this policy insures, from 0.5 to 0.85 in '
+        + 'steps of 0.05. A higher level pays sooner and costs more premium.' },
   ],
   machinery: [
     { field: 'amount', label: 'Machinery Cost', type: 'Number', mc: true, opt: false,
@@ -507,7 +518,7 @@ export const FARM_PARAM_TEMPLATES = {
 export const FARM_PARAM_TABLES = {
   season: 'seasons', contract: 'contracts', field: 'fields', product: 'products', operation: 'operations', plan: 'cropPlans',
   machinery: 'machinery', overhead: 'overhead', price: 'prices', storage: 'storage',
-  sale: 'sales', otherIncome: 'otherIncome', carryOut: 'carryOut',
+  sale: 'sales', otherIncome: 'otherIncome', carryOut: 'carryOut', insurance: 'insurance',
 };
 
 /** `customRateMultiplier` → `Custom Rate Multiplier`. */
