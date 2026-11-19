@@ -105,11 +105,17 @@ function _syncJobParams(scenario, jobs) {
 }
 
 /**
- * Remove a deleted person's jobs and bonuses. Without this the loader rejects the
+ * Remove a deleted person's jobs, bonuses and business income. Without this the loader rejects the
  * scenario on its next load: a job or bonus naming no person is an error (§4.6).
  */
 export function deletePersonJobs(scenario, personId) {
   if (!scenario) return;
+  // Design 134 step 4b — a business-income row naming no person is a load error too.
+  if (Array.isArray(scenario.businessIncome) && scenario.businessIncome.some(r => r?.personId === personId)) {
+    const rest = scenario.businessIncome.filter(r => r?.personId !== personId);
+    if (rest.length > 0) scenario.businessIncome = rest;
+    else delete scenario.businessIncome;
+  }
   if (listPersonBonuses(scenario, personId).length > 0) _writeBonuses(scenario, personId, []);
   if (listPersonJobs(scenario, personId).length === 0) return;
   replacePersonJobs(scenario, personId, []);

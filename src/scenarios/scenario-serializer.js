@@ -172,9 +172,9 @@ import {
 import { UsHouseSaleHandler, UsHouseSaleApplyReducer }     from '../finance/account-rules/us/us-real-property-classes.js';
 import {
   SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler,
-  SeIncomeUsHandler, BonusHandler, CompanySaleHandler,
+  SeIncomeUsHandler, BonusHandler, CompanySaleHandler, BusinessIncomeHandler,
   SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer,
-  SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer,
+  SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer, BusinessIncomeApplyReducer,
 } from '../finance/account-rules/us/us-income-classes.js';
 import {
   CollectibleSaleHandler, CollectibleValueChangeHandler,
@@ -288,7 +288,7 @@ const _ALL_CLASSES = [
   StockContributionHandler, StockDividendHandler, StockEarningsHandler, StockWithdrawalHandler,
   UsHouseSaleHandler,
   SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler,
-  SeIncomeUsHandler, BonusHandler, CompanySaleHandler,
+  SeIncomeUsHandler, BonusHandler, CompanySaleHandler, BusinessIncomeHandler,
   CollectibleSaleHandler, CollectibleValueChangeHandler,
   IraRolloverWithdrawalHandler, IraRmdHandler, IraAnnualRmdHandler,
   RothRolloverContributionHandler, RothRolloverEarningsHandler,
@@ -329,7 +329,7 @@ const _ALL_CLASSES = [
   StockContributionApplyReducer, StockDividendApplyReducer, BondCouponApplyReducer, StockEarningsApplyReducer, StockWithdrawalApplyReducer,
   UsHouseSaleApplyReducer,
   SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer,
-  SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer,
+  SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer, BusinessIncomeApplyReducer,
   CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer,
   IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer,
   RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer,
@@ -510,6 +510,8 @@ export class ScenarioSerializer {
       // Dated one-off bonuses, joined to their person by `personId`; the job in force on
       // the date is the one paying it. Emitted only when present, like `jobs`.
       ...(scenario.bonuses?.length ? { bonuses: scenario.bonuses.map(b => ({ ...b })) } : {}),
+      // Design 134 step 4b — business income (a Schedule F per year), joined by `personId`.
+      ...(scenario.businessIncome?.length ? { businessIncome: scenario.businessIncome.map(b => ({ ...b })) } : {}),
       // Design 134 — the farm records, flat id-joined tables of plain authored data.
       // Emitted only when present, so no household scenario gains a key.
       ...(scenario.farm ? { farm: structuredClone(scenario.farm) } : {}),

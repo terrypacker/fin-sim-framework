@@ -44,7 +44,7 @@ import { UsAccountModule2026 } from './finance/account-rules/us/us-account-modul
 import { FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer, FixedIncomeEarningsApplyReducer, StockContributionApplyReducer, StockDividendApplyReducer, BondCouponApplyReducer, StockEarningsApplyReducer, StockWithdrawalApplyReducer, FixedIncomeContributionHandler, FixedIncomeWithdrawalHandler, FixedIncomeEarningsHandler, StockContributionHandler, StockDividendHandler, StockEarningsHandler, StockWithdrawalHandler } from './finance/account-rules/us/us-brokerage-classes.js';
 import { CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer, CollectibleSaleHandler, CollectibleValueChangeHandler } from './finance/account-rules/us/us-collectible-classes.js';
 import { getUsEarlyWithdrawalRules, supportsEarlyWithdrawal } from './finance/account-rules/us/us-early-withdrawal-rules.js';
-import { SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer, SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer, SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler, SeIncomeUsHandler, resolveBonusEarner, BonusHandler, CompanySaleHandler } from './finance/account-rules/us/us-income-classes.js';
+import { SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer, SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer, SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler, SeIncomeUsHandler, resolveBonusEarner, BonusHandler, CompanySaleHandler, BusinessIncomeApplyReducer, BusinessIncomeHandler } from './finance/account-rules/us/us-income-classes.js';
 import { auMainResidenceExemptFraction, UsHouseSaleApplyReducer, UsHouseSaleHandler } from './finance/account-rules/us/us-real-property-classes.js';
 import { getUniformDistributionPeriod } from './finance/account-rules/us/us-rmd-uniform-table.js';
 import { CUBE_SOURCE, buildAllocationCube } from './finance/allocation-reporting/allocation-cube.js';
@@ -870,6 +870,7 @@ export const Finance = {
   WagesWithheldApplyReducer,
   SeIncomeUsApplyReducer,
   BonusApplyReducer,
+  BusinessIncomeApplyReducer,
   CompanySaleApplyReducer,
   SsIncomeHandler,
   WagesIncomeHandler,
@@ -877,6 +878,7 @@ export const Finance = {
   SeIncomeUsHandler,
   resolveBonusEarner,
   BonusHandler,
+  BusinessIncomeHandler,
   CompanySaleHandler,
   auMainResidenceExemptFraction,
   UsHouseSaleApplyReducer,

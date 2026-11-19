@@ -615,6 +615,28 @@ export const GOLDEN_SPECS = [
     },
   },
   {
+    name:        'us-farm-operator',
+    cls:         UsSingleHomeownerScenario,
+    description:
+      'Design 134 step 4b: the household side of the farm link. The US single homeowner (a '
+      + 'Nebraska resident on a W-2 wage) also runs a farm, imported as a business-income row: '
+      + 'one Schedule F net a year from 2027, repeated and indexed by US CPI from its first '
+      + 'payment, so the 2028 and 2029 amounts pin the index base. A second row is a LOSS from '
+      + '2029, which must debit cash and offset ordinary income. The year\'s net is ordinary '
+      + 'income and the SECA base (behind the W-2 wage in the Social Security base), and '
+      + 'Nebraska taxes it as ordinary income. Short: three payments are enough.',
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2030, 0, 1)),
+    mutateCfg: (cfg) => {
+      cfg.businessIncome = [
+        { id: 'farm', personId: 'primary', name: 'Farm', kind: 'SCHEDULE_F',
+          startDate: '2027-01-01', net: 48_000, neCommunityCollegeTax: 680 },
+        { id: 'hobby-loss', personId: 'primary', name: 'Second operation', kind: 'SCHEDULE_F',
+          startDate: '2029-01-01', net: -9_000 },
+      ];
+    },
+  },
+  {
     name:        'farm-demo',
     cls:         FarmScenario,
     description:

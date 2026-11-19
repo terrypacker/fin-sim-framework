@@ -71,6 +71,8 @@ export const COVERED = [
   // C — US income + real property (reducer-postconditions-us-income.test.mjs)
   'WagesIncomeApplyReducer', 'WagesWithheldApplyReducer', 'SsIncomeApplyReducer',
   'SeIncomeUsApplyReducer', 'BonusApplyReducer', 'CompanySaleApplyReducer',
+  // design 134 step 4b — a year of business income (Schedule F net)
+  'BusinessIncomeApplyReducer',
   // design 63 — INHERIT funding + basis stamping (evt-inheritance.test.mjs P2 cases)
   'InheritApplyReducer',
   // design 63 §6.2 — SECURE 10-year inherited-RA distribution (evt-inheritance.test.mjs P3 cases)

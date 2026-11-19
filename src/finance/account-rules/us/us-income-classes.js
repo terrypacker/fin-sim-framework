@@ -17,6 +17,7 @@ import { singleAssetTermFields } from '../../holdings/holding-period.js';
 import { toMs } from '../main-residence.js';
 import { scalarDeferredGainFields } from '../../tax/au/au-cgt-2027-constants.js';
 import { wageAt, hasSpells } from '../../payroll/employment.js';
+import { businessIncomeAmounts } from '../../payroll/business-income.js';
 
 /** Resolve the US cash pool (legacy tail; prefer resolveCashKey for routing). */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
@@ -143,6 +144,36 @@ export class SeIncomeUsApplyReducer extends AccountServiceReducer {
     // otherwise credits the single targetKey exactly as before.
     creditPay(this.accountService, state, action, resolveCashKey(this.stateRegistry, 'US', state));
     return this.newState(state, {}, [{ type: 'SE_INCOME_US_TAX', amount, residency, personKey }]);
+  }
+}
+
+/**
+ * Design 134 step 4b: a person's business income (`cfg.businessIncome`), one signed amount a
+ * year. Credits the US cash pool (a loss debits it: the household funds the farm's loss) and
+ * chains SE_INCOME_US_TAX, so the Schedule F net is ordinary income AND the SECA base, exactly
+ * as a self-employed wage is. Records the row's CPI base on its first payment.
+ */
+export class BusinessIncomeApplyReducer extends AccountServiceReducer {
+  static type        = 'BusinessIncomeApplyReducer';
+  static description = 'Credits the US cash pool with a year of business income (a loss debits it); chains SE_INCOME_US_TAX.';
+  static actionType  = 'BUSINESS_INCOME_APPLY';
+
+  constructor({ accountService, stateRegistry }) {
+    super('Business Income Apply', PRIORITY.CASH_FLOW);
+    this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
+    this.reducedActionTypes   = ['BUSINESS_INCOME_APPLY'];
+    this.generatedActionTypes = ['SE_INCOME_US_TAX'];
+  }
+
+  reduce(state, action) {
+    const { amount, residency, personKey, businessIncomeId, indexBase } = action;
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], amount, null);
+    const bases = state.businessIncomeIndexBase ?? {};
+    const updates = bases[businessIncomeId] == null
+      ? { businessIncomeIndexBase: { ...bases, [businessIncomeId]: indexBase } }
+      : {};
+    return this.newState(state, updates, [{ type: 'SE_INCOME_US_TAX', amount, residency, personKey }]);
   }
 }
 
@@ -335,6 +366,36 @@ export class SeIncomeUsHandler extends HandlerEntry {
     return [
       { type: 'SE_INCOME_US_APPLY', amount: data.amount, residency: state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null },
       new FieldValueAction('se_income_us', 'Self-Employment Income (US)', data.amount),
+      new RecordBalanceAction(`${cashKey}.balance`, cashKey),
+    ];
+  }
+}
+
+/**
+ * Design 134 step 4b: one year of a `cfg.businessIncome` row. The row's figures are in the
+ * money of its first payment; each later year is scaled by US CPI since then.
+ */
+export class BusinessIncomeHandler extends HandlerEntry {
+  static type        = 'BusinessIncomeHandler';
+  static description = 'Dispatches BUSINESS_INCOME_APPLY with a year of a business-income row, indexed by US CPI since its first payment.';
+  static eventType   = 'BUSINESS_INCOME';
+
+  constructor() {
+    super(null, 'Business Income');
+    this.generatedActionTypes = ['BUSINESS_INCOME_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
+  }
+
+  call({ data, state }) {
+    const cashKey   = state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount';
+    const personKey = data.personId;
+    const residency = state.people?.[personKey]?.residency ?? null;
+    const accNow    = state.inflationAccumulator?.US ?? 1;
+    const accBase   = state.businessIncomeIndexBase?.[data.businessIncomeId] ?? null;
+    const { net } = businessIncomeAmounts(data, accNow, accBase);
+    return [
+      { type: 'BUSINESS_INCOME_APPLY', amount: net, residency, personKey,
+        businessIncomeId: data.businessIncomeId, indexBase: accBase ?? accNow },
+      new FieldValueAction('business_income', 'Business Income (Schedule F)', net),
       new RecordBalanceAction(`${cashKey}.balance`, cashKey),
     ];
   }

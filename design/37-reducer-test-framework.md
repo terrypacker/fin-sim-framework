@@ -263,7 +263,7 @@ disposal variants add **I6**. **Swept ✅** — isolated postcondition tests in 
 | `us/roth-rollover-classes.js` | RothRolloverContribution, RothRolloverEarnings, RothRolloverWithdrawalContrib, RothRolloverWithdrawalEarnings | ✅ |
 | `us/us-brokerage-classes.js` | StockContribution, StockEarnings, StockDividend, StockWithdrawal, FixedIncomeContribution, FixedIncomeEarnings, FixedIncomeWithdrawal | ✅ |
 | `us/us-collectible-classes.js` | CollectibleSale, CollectibleValueChange | ✅ |
-| `us/us-income-classes.js` | WagesIncome, WagesWithheld, SsIncome, SeIncomeUs, Bonus, CompanySale | ✅ |
+| `us/us-income-classes.js` | WagesIncome, WagesWithheld, SsIncome, SeIncomeUs, Bonus, CompanySale, BusinessIncome | ✅ |
 | `us/us-real-property-classes.js` | UsHouseSale | ✅ |
 | `au/au-brokerage-classes.js` | AuStockEarnings, AuStockWithdrawal, Au Dividend {Franked,Unfranked}×{Resident,NonResident}, and the two Franked **Cash** siblings (design 106 §4a) | ✅ |
 | `au/au-fixed-income-classes.js` | AuFixedIncomeEarnings | ✅ scalar contract + event-level §4.4 (`earnings-holdings-sync`) |

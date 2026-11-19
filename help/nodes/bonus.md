@@ -12,7 +12,7 @@ sources: [src/visualization/people/bonuses-section.js, src/scenarios/toolsets/us
 stamps:
   node:bonus: d4f4d9
   src/visualization/people/bonuses-section.js: 21edd5
-  src/scenarios/toolsets/us-income-toolset.js: e411c0
+  src/scenarios/toolsets/us-income-toolset.js: 0b4946
 ---
 
 A one-off payment on a date, such as a signing, retention or year-end bonus, on top of a
