@@ -418,3 +418,18 @@ test('EVT-FARM-8: a flat-bag override of a farm lever reaches the record and mov
   assert.equal(rent, 50 * 250);
   assert.equal(r.sim.state.farm.pools['o1|CORN|2027'].harvested, 100 * 210 + 40 * 150);
 });
+
+test('EVT-FARM-5: a FIELDS overhead allocates by acres over its named fields only', () => {
+  const farm = tinyFarm();
+  farm.overhead[0] = { id: 'oh-int', operatorId: 'o1', category: 'INTEREST_MORTGAGE', amount: 3_000,
+    basis: 'FIELDS', fieldIds: ['f-rent'] };
+  const { jobCost } = run(farm);
+  close(jobCost.plans.find(r => r.planId === 'pl-rent').overhead.INTEREST_MORTGAGE, 3_000, 'all on the named field');
+  assert.equal(jobCost.plans.find(r => r.planId === 'pl-own').overhead.INTEREST_MORTGAGE, undefined);
+  const bad = tinyFarm();
+  bad.overhead[0] = { ...farm.overhead[0], fieldIds: ['nope'] };
+  assert.match(validateFarm(bad).join('\n'), /not in farm\.fields/);
+  const noList = tinyFarm();
+  noList.overhead[0] = { ...farm.overhead[0], fieldIds: undefined };
+  assert.match(validateFarm(noList).join('\n'), /fieldIds goes with basis FIELDS/);
+});
