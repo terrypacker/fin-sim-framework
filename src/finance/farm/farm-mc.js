@@ -73,7 +73,8 @@ export function buildYieldMcConfigs(cfg, spreads = FARM_MC_SPREADS) {
   });
   return [
     ...farm.seasons.map(s => row(`farm.season.${s.id}.yieldShock`, 'Farm-wide yield shock', spreads.farmYieldShockSd)),
-    ...(farm.cropPlans ?? []).map(p => row(`farm.plan.${p.id}.yieldShock`, `${p.id} — yield shock`,
+    ...(farm.cropPlans ?? []).map(p => row(`farm.plan.${p.id}.yieldShock`,
+      `${(farm.fields ?? []).find(f => f.id === p.fieldId)?.name ?? p.fieldId} · ${p.crop} — yield shock`,
       irrigated.get(p.fieldId) ? spreads.fieldYieldShockSd.irrigated : spreads.fieldYieldShockSd.dry)),
   ];
 }
@@ -90,6 +91,8 @@ export function buildPriceMcConfigs(cfg) {
     paramKey: `farm.price.${p.id}.shock`, label: `${p.crop} ${p.date} — price shock`,
     type: DISTRIBUTION_TYPES.NORMAL, mean: 0, stdDev: 1, group: 'Farm · prices', enabled: false,
     effectiveDefault: true,
+    // A unit z: the scale is the season's priceVol, so the panel must not offer it as a spread.
+    fixedSpread: true, crop: p.crop,
   }));
 }
 

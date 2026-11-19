@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-243 parameters · 35 panels · 13 node types (209 fields) · 183 action types · 96 tools · 352 state field types · 81 topics · 142 design docs
+243 parameters · 36 panels · 13 node types (209 fields) · 183 action types · 96 tools · 352 state field types · 82 topics · 142 design docs
 
 ---
 
@@ -574,7 +574,7 @@ scenario's own schema), which is where to go to change it.
 
 ---
 
-## Workbench panels (35)
+## Workbench panels (36)
 
 From `FINANCE_PLUGINS`. **Pane** is where the default layout opens the tab, and where
 the header's Panels menu re-opens it after a close. **Category** is the heading that
@@ -601,6 +601,7 @@ menu files it under.
 | `bonds` | Bonds | portfolio | center | `src/visualization/workbench/plugins/finance/bonds-plugin.js` |
 | `spending` | Spending | portfolio | center | `src/visualization/workbench/plugins/finance/spending-plugin.js` |
 | `field-pnl` | Field P&L | analysis | center | `src/visualization/workbench/plugins/finance/field-pnl-plugin.js` |
+| `farm-mc` | Farm MC | analysis | center | `src/visualization/workbench/plugins/finance/farm-mc-plugin.js` |
 | `pools` | Liquidity Pools | portfolio | center | `src/visualization/workbench/plugins/finance/liquidity-pools-plugin.js` |
 | `paycheque` | Paycheque | portfolio | center | `src/visualization/workbench/plugins/finance/paycheque-plugin.js` |
 | `mc-runs` | MC Runs | studies | right | `src/visualization/workbench/plugins/finance/mc-runs-plugin.js` |
@@ -2334,7 +2335,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 
 ---
 
-## Topics (81)
+## Topics (82)
 
 Tier 2 — the hand-written prose under `help/`, listed by what it CITES rather than
 summarised. A topic may not restate a param description (design 108 §3), so there is
@@ -2375,6 +2376,7 @@ what the in-app panel keys on.
 | [Event](nodes/event.md) | node | 220 | 2 panels · design 2 |
 | [Event Sourcing](concepts/event-sourcing.md) | concept | 381 | 3 panels · design 2, 16, 91 |
 | [Node History](panels/exec-history.md) | panel | 191 | 1 panel |
+| [Farm MC](panels/farm-mc.md) | panel | 238 | 1 panel · design 134 |
 | [Field P&L](panels/field-pnl.md) | panel | 243 | 1 panel · design 134 |
 | [Funding and Instalments](concepts/funding-and-instalments.md) | concept | 248 | 2 panels · 3 params · design 107 |
 | [FX](concepts/fx.md) | concept | 390 | 2 panels · 6 params · design 47, 87, 122 |
