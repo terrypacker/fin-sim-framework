@@ -1,12 +1,14 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** DRAFT (19 Nov 2026), rev 3. Nothing built. §3 records the decisions, including
+**Status:** DRAFT (19 Nov 2026), rev 4. Nothing built. §3 records the decisions, including
 the owners' answers to Q5–Q15 (rev 3). §7 records what the primary sources on disk decide.
 §8 is the household link. The follow-up questions in §11 are open. Rev 2 added §7 and §8, and
 corrected rev 1's guess that Nebraska credits school property tax on the income tax return
 (it no longer does, §7.3). Rev 3 moves grain marketing (storage, forward contracts, deferred
 sales) from phase 5 into phases 1–2, narrows programs to ARC-County, and makes overhead
-per-operator.
+per-operator. Rev 4 records the follow-up answers. The main change: the custom-hire rate is a
+**costing rate for the operator's own machines**, so the cash view needs the real machinery
+costs (§5.1, §5.3). It also proposes one season plus carry-in and carry-out for Q16 (§5.5).
 
 **Related:** design 98 (the sweepable parameter surface: per-record generated params become
 MC and optimizer levers), design 55 (configuration-driven parameters and record templates),
@@ -78,17 +80,23 @@ What the workbook got wrong, or left out, gives the design its requirements:
 | Q2 | Accounting basis | Crop-year job costing first, with breakeven and P&L under swept inputs as the goal. Cash basis (Schedule F) reconciled later. |
 | Q3 | Are the operators separate businesses? | Yes. Each files married-joint with a Schedule F; some have dependents. |
 | Q4 | Level of detail | High. Individual inputs must be adjustable and sweepable in MC. |
-| Q5 | Machinery | **Custom-hire rates per acre** for planting, spraying and harvesting. No own-cost machinery model. (Follow-up Q5a.) |
+| Q5 | Machinery | **Custom-hire rates per acre** for planting, spraying and harvesting, in the job-cost view. |
+| Q5a | Who is paid the custom rate? | **No one.** It is a costing rate for the operator's own machines. The cash view (Schedule F) carries the real machinery costs instead (§5.1). |
 | Q6 | Household link | A farm export each operator imports (§8). |
 | Q7 | Rent | **Cash rent only.** No crop-share or flexible leases. |
-| Q8 | Grain marketing | **Modelled from the start**: a storage cost per bushel, and forward contracts whose prices vary. (Follow-ups Q8a, Q8b.) |
+| Q8 | Grain marketing | **Modelled from the start**: a storage cost, and forward contracts whose prices vary. |
+| Q8a | Storage cost | **Per bushel per month held.** |
+| Q8b | Contract types | **Fixed-price cash forward contracts only.** The share of the crop contracted is a lever. |
 | Q9 | Horizon | **One season at a time.** No rotation. |
 | Q10 | Overhead | **Per operator, never shared** between operators. |
-| Q11 | Tax habits | **Cash method.** Next year's inputs (seed, fertilizer, …) are **prepaid in Nov/Dec**. Income is **smoothed by deferring some sales** into the next tax year. (Follow-ups Q11a, Q11b.) |
-| Q12 | Irrigation | All irrigated fields are in **one NRD**. Its allocation is to be looked up. |
+| Q11 | Tax habits | **Cash method.** Next year's inputs (seed, fertilizer, …) are **prepaid in Nov/Dec**. Income is **smoothed by deferring some sales** into the next tax year. |
+| Q11a | Co-op sales | **Not relevant.** §199A(b)(7) and (g)(2) are out of scope. |
+| Q11b | §451(f) deferral, income averaging | **Offer both as options**, to show their effect. |
+| Q12 | Irrigation | All irrigated fields are in **one NRD**, with an allocation in acre-inches per acre. It is a minor input (§7.3). |
 | Q13 | Programs | **ARC-County** on every FSA farm. No PLC. |
 | Q14 | Export granularity | **A calendar-year Schedule F per operator**, until a reason to go deeper appears. |
 | Q15 | Farm vs market correlation | **Independent in phase 4.** Correlation is wanted eventually and needs its own design (§8.3). |
+| Q16 | Season vs calendar year | **Proposed:** one simulated season plus a carry-in and a carry-out (§5.5). Pending confirmation. |
 
 ## 4. Architecture: a new scenario type and toolsets, not a new application
 
@@ -134,10 +142,11 @@ the golden fixtures confirm that.
 | **Crop plan** | field, crop year, crop (corn, corn-on-corn, soybeans, …), practice, expected yield, prescriptions | The job. One per field per crop year. |
 | **Product** | category (seed, nitrogen, P&K, herbicide, fungicide, …), unit, unit price, discount | The shared catalog. One price change moves every plan that uses the product. |
 | **Prescription line** | crop plan, product or field operation, rate per acre, share of acres | A seed hybrid planted on 60% of a field is one line. |
-| **Field operation** | name (plant, spray, harvest, …), **custom-hire \$/acre**, passes | Q5: planting, spraying and harvesting are costed at a per-acre custom rate × passes (Schedule F line 13). A prescription line references the operation. |
+| **Field operation** | name (plant, spray, harvest, …), **custom-hire \$/acre**, passes | Q5: planting, spraying and harvesting are charged to each job at a per-acre custom rate × passes. **Job-cost view only**: no cash moves (Q5a). A prescription line references the operation. |
+| **Machinery cost** | operator, fuel, repairs, depreciation (from the operator's depreciation schedule), machinery loan interest, insurance | Q5a: the **real** cost of the operator's own machines. **Cash view only**, on Schedule F lines 14, 19, 21, 25, …. Not allocated to fields. |
 | **Overhead pool** | operator, annual amount, allocation basis (acres, owned acres) | Land debt interest, insurance, office. Q10: always one operator's. Allocated across **that operator's** fields only. |
-| **Forward contract** | operator, crop, bushels, contract price, delivery date, **payment date** | Q8: prices the contracted bushels. A payment date after 31 Dec is how a sale is deferred into the next tax year (Q11). |
-| **Storage** | operator, crop, cost per bushel (§11 Q8a), from and to dates | Q8: the cost of holding unsold or contracted-later grain. |
+| **Forward contract** | operator, crop, bushels, fixed price (Q8b), delivery date, **payment date** | Q8: prices the contracted bushels. A payment date after 31 Dec is how a sale is deferred into the next tax year (Q11). |
+| **Storage** | operator, crop, **cost per bushel per month** (Q8a), from and to dates | Q8: the cost of holding unsold or contracted-later grain. |
 | **Planned sale** | operator, crop, share of unpriced bushels, sale date, payment date | The bushels not under contract: sold at harvest or later out of storage, at the price on the sale date. |
 
 Each record type gets a template in `record-param-templates.js`, so its numbers (a rent, a
@@ -182,6 +191,12 @@ Overhead is allocated to jobs by a declared basis when the report is built, neve
 pre-split. A changed basis then re-allocates every year at once. Overhead never crosses
 operators (Q10).
 
+**Machinery is where the two views differ by design** (Q5a). The job-cost view charges each
+field the custom rate. The cash view carries the operator's real machinery cost and charges
+the fields nothing. The reconciliation (§9 phase 5) therefore has a **machinery margin**
+line: custom value charged minus real machinery cost. That answers a question of its own:
+is owning the equipment cheaper than hiring the work done?
+
 **Grain on hand at 31 December is inventory**, not yet revenue on the cash basis. The ledger
 holds bushels by crop, operator and location (bin or contract). The crop-year report values
 them at their contract or expected price. The cash report shows nothing until the payment
@@ -196,13 +211,34 @@ Per crop plan, per operator, per crop and whole-farm:
   expected price);
 - under MC: the distribution of net income and the probability of a loss.
 
+### 5.5 One season, a carry-in and a carry-out (Q16, proposed)
+
+A calendar year's Schedule F mixes three seasons (§5.2). The design simulates **one season**
+and supplies the rest as inputs:
+
+| Lands in calendar year *Y* | Source |
+|---|---|
+| Last crop's deferred sales and storage | **Carry-in**: bushels on hand and open contracts on 1 January, from the operator's own books. They are already known when the plan is made. |
+| Last crop's ARC-County payment | **Carry-in**: an expected amount. The county yield is published and the national price nearly settled by then. |
+| This crop's flows | **The simulated season.** |
+| Next crop's Nov/Dec prepay | **Carry-out**: an amount, set as a lever and capped by §464(d). |
+
+Simulating last season again would replace facts with guesses, and next season reaches year *Y*
+only through the prepay decision. So running three seasons back to back costs more setup and
+more MC variables without making year *Y* more accurate.
+
+What keeps multi-season open: a scenario holds a **list of seasons** from the start, and
+a **roll forward** action copies a season (fields, plans, prescriptions, contracts) into the
+next crop year as a starting point. Going back to back later, for example to test an
+income-smoothing strategy over several years, is then configuration, not a redesign.
+
 ## 6. What varies (the MC surface)
 
 | Variable | Shape |
 |---|---|
 | Grain price per crop | futures plus local basis, as a path through the marketing year, so a later sale date sees a different price |
 | Forward contracts | the contracted bushels are fixed-price. What varies is the **share of the expected crop contracted**, and the **shortfall** if yield comes in below the contracted bushels |
-| Storage cost | per bushel (§11 Q8a) |
+| Storage cost | per bushel per month held (Q8a) |
 | County yield | ARC-County pays on the county's yield, not the farm's (§7.4). Drawn correlated with the farm-wide yield factor |
 | National marketing-year price | ARC-County uses the national average price; correlated with the local cash price |
 | Yield per crop plan | a farm-wide factor plus a per-field factor; irrigated fields vary less |
@@ -254,10 +290,13 @@ section that amends it.
   payment date (§5.1).
 - **Crop insurance and disaster proceeds can be deferred a year.** §451(f) and Reg. §1.451-6
   let a cash-method farmer elect to report them in the following year, if their normal
-  practice is to sell the crop then. This is a per-operator option on the cash report.
-- **Machinery is not depreciated in this model.** Q5 costs it at custom-hire rates, so §179,
-  §168(k) and Pub. 946 are not used in phases 1–2. They stay on disk in case Q5a shows the
-  operators own the machines and the custom rate is only a costing proxy.
+  practice is to sell the crop then. This is a per-operator option on the cash report
+  (Q11b: offered, to show its effect).
+- **Machinery is depreciated on the cash side** (Q5a). The operators own their machines, so
+  the Schedule F view needs depreciation. Phase 1 takes each operator's annual depreciation
+  from their existing depreciation schedule, as an input. A new purchase, with its §179
+  (limits raised by P.L. 119-21 §70306) or §168(k) (full expensing made permanent by §70301)
+  election and its MACRS class (Pub. 946), is phase 4.
 
 ### 7.2 Federal tax: what the household side must model
 
@@ -266,10 +305,10 @@ module. **None of them exists in FinSim today:**
 
 | Provision | Effect | Source |
 |---|---|---|
-| **§199A** QBI deduction | A deduction of up to 20% of qualified business income, so of farm net. Extended by P.L. 119-21 §70105. **Selling to a cooperative changes it:** `(b)(7)` reduces the patron's deduction for that income by the lesser of 9% of the QBI from co-op payments or 50% of the allocable W-2 wages, and `(g)(2)` lets the co-op pass part of its own deduction through to the patron (§11 Q11a). | `sec199A`, Form 8995 instructions |
+| **§199A** QBI deduction | A deduction of up to 20% of qualified business income, so of farm net. Extended by P.L. 119-21 §70105. Selling to a cooperative would change it (`(b)(7)`, `(g)(2)`); the operators don't, so that is out of scope (Q11a). | `sec199A`, Form 8995 instructions |
 | **§461(l)** excess business loss | Caps how much farm loss can offset other income in one year. Made permanent by P.L. 119-21 §70601. | `sec461` |
 | **§172(b)(1)(B)** farming loss | A farming NOL carries back 2 years. | `sec172` |
-| **§1301** income averaging (Schedule J) | Elected farm income is taxed at the 3 prior years' rates. In a good year this can matter a lot. | `sec1301`, Schedule J instructions |
+| **§1301** income averaging (Schedule J) | Elected farm income is taxed at the 3 prior years' rates. In a good year this can matter a lot. Offered as an option (Q11b). It needs the 3 prior years' taxable income, which the household plan supplies. | `sec1301`, Schedule J instructions |
 
 SECA on Schedule F net already exists (design 69, via the `selfEmployed` path). The farm
 optional method (Schedule SE instructions) does not.
@@ -296,8 +335,11 @@ optional method (Schedule SE instructions) does not.
   disk (a gap in `docs/ne-law/SOURCES.md`).
 - **Irrigation is bounded by the field's Natural Resources District.** 46-739 lets an NRD
   allocate groundwater, require rotation or metering, and limit or reduce irrigated acres.
-  An irrigated field therefore carries an **allocation cap**, which bounds the irrigated-yield
-  assumption and the pumping cost. The cap values are each NRD's own rules (§11 Q12a).
+  An irrigated field therefore carries an **allocation cap** in acre-inches per acre (the
+  owners supplied it, Q12). It reaches the money only if it binds: in a dry year where the
+  crop needs more water than the cap allows, irrigated yield is capped, and pumping cost
+  (per acre-inch applied) stops rising. In a normal year it changes nothing, so it is an
+  optional input, used only for drought draws under MC.
 - **Beginning-farmer credit.** 77-5211 gives an owner who rents to a certified beginning
   farmer a refundable Nebraska credit. It matters only if a family rental qualifies.
 
@@ -351,7 +393,7 @@ One JSON file per farm run, versioned (`farmResultVersion`). Q14: the unit is **
 calendar-year Schedule F per operator**. A season's flows span three calendar years (§5.2),
 so the export is built from **dated flows**, and the calendar year is a grouping of them.
 A run of one season gives full Schedule Fs only when the neighbouring seasons' flows (last
-year's December prepay, this year's deferred sales) are supplied as well (§11 Q16). For each
+year's December prepay, this year's deferred sales) are supplied as the carry-in and carry-out (§5.5). For each
 **operator** and each **calendar year**:
 
 - **Schedule F lines.** Income lines 1–9 and expense lines 10–32, the net, and any §451(f)
@@ -402,9 +444,10 @@ bad one for another in the same world.
 0. **Scenario-agnostic MC and optimizer runner** (§4). The retirement goldens stay
    byte-identical.
 1. **Deterministic job costing.** `FarmScenario`, the §5.1 records (each category declaring
-   its Schedule F line, §7.1), including forward contracts, storage and planned sales (Q8),
-   `US_FARM_OPERATIONS`, the ledger with grain inventory, the §464(d) prepay limit, and a
-   Field P&L panel with breakeven. Tested on a hand-built small farm. A private import reproduces the source
+   its Schedule F line, §7.1), including forward contracts, storage and planned sales (Q8)
+   and the operator's real machinery cost (Q5a), `US_FARM_OPERATIONS`, the ledger with grain
+   inventory, the carry-in and carry-out (§5.5), the §464(d) prepay limit, and a Field P&L
+   panel with breakeven. Tested on a hand-built small farm. A private import reproduces the source
    workbook's per-field totals, as the acceptance test.
 2. **Monte Carlo.** The §6 variable catalog, correlated yield and price, category levers, and
    results showing the breakeven and loss distributions.
@@ -421,37 +464,21 @@ bad one for another in the same world.
 - Agronomy: yield is an input with a distribution, not the output of a crop model.
 - Payroll for hired labor beyond a cost per operation or a lump overhead.
 - Crop rotation and multi-season planning (Q9), crop-share and flexible leases (Q7), and
-  own-cost machinery (Q5).
+  basis, hedge-to-arrive or minimum-price contracts (Q8b).
+- Cooperative patronage (§199A(b)(7), (g)(2); Q11a).
 - Entity structures other than a sole proprietor on Schedule F (partnerships, S corporations,
   farm LLCs taxed as partnerships).
 
 ## 11. Open questions
 
-Q5–Q15 are answered (§3). Follow-ups from those answers:
+All owner questions so far are answered (§3). What remains:
 
-For the owners:
-
-- **Q5a — Who is the custom-hire rate paid to?** If it is paid to an outside operator, it is
-  a real cost on Schedule F line 13. If it is paid to another of the three operators, it is
-  that operator's custom-hire *income* (line 7), and the two must net across the farm. If it
-  is only a costing rate for the operator's own machines, the job-cost view is right but the
-  cash view is not: the real Schedule F would show fuel, repairs and depreciation instead.
-- **Q8a — Storage cost.** A flat cost per bushel, or per bushel per month held? On-farm bins,
-  commercial storage, or both?
-- **Q8b — Forward contracts.** Fixed-price cash forward contracts only, or also basis,
-  hedge-to-arrive, or minimum-price contracts? Roughly what share of the expected crop is
-  contracted before harvest?
-- **Q11a — Co-op sales.** Does any operator sell grain to an agricultural cooperative? If so,
-  §199A(b)(7) and (g)(2) change that operator's QBI deduction (§7.2). It only matters for the
-  household-side tax in phase 4.
-- **Q11b — The other elections.** Is the §451(f) crop-insurance deferral used, or farm income
-  averaging (Schedule J)? If no one knows, the model can offer both as options and show their
-  effect.
-- **Q12a — The NRD allocation** for the irrigated fields (pending).
-
-For the design:
-
-- **Q16 — Season and calendar year.** A calendar-year Schedule F mixes three seasons (§5.2).
-  Options: run the farm for three consecutive seasons, or run one season and carry the
-  neighbours' prepay and deferred flows as inputs. And for a multi-decade household plan:
-  repeat the season with escalators, or let the importer hold the last year flat?
+- **Q16 — confirm the season model** (§5.5): one simulated season with a carry-in and a
+  carry-out, or three seasons back to back.
+- **Q17 — Machinery cost input.** Is each operator's annual depreciation figure (from their tax
+  depreciation schedule) enough for phase 1, with fuel, repairs and machinery interest as
+  annual amounts? Or should equipment purchases be modelled from the start?
+- **Q18 — Default contracted share.** What share of the expected crop is typically forward
+  contracted before harvest? It sets the lever's starting value; MC sweeps it either way.
+- **Q19 — Pumping cost.** Is irrigation energy a cost worth carrying per acre-inch, so the
+  allocation cap matters in a drought draw? Or is it folded into overhead?
