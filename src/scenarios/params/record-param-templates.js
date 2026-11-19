@@ -458,6 +458,17 @@ export const FARM_PARAM_TEMPLATES = {
       description: 'The approved yield on this field\'s crop insurance, in bushels per acre: the '
         + 'yield history the guarantee is built on. Blank uses the expected yield.' },
   ],
+  arcBase: [
+    { field: 'baseAcres', label: 'Base Acres', type: 'Number', mc: false, opt: false,
+      description: 'The FSA farm\'s base acres of this crop, on which ARC-County pays (85% of '
+        + 'them are payment acres), whatever is planted.' },
+  ],
+  arcCounty: [
+    // Design 134 §15.3 — the county's EXPECTED yield; a season's yield shocks move it.
+    { field: 'expectedYield', label: 'Expected County Yield', type: 'Number', mc: false, opt: false,
+      description: 'The county yield expected this season for this crop and practice, in bushels '
+        + 'per planted acre. Blank uses the benchmark yield.' },
+  ],
   insurance: [
     // Design 134 §15.2 — the coverage choice is the operator's, so an optimizer lever.
     { field: 'coverageLevel', label: 'Coverage Level', type: 'Number', mc: false, opt: true,
@@ -519,6 +530,7 @@ export const FARM_PARAM_TABLES = {
   season: 'seasons', contract: 'contracts', field: 'fields', product: 'products', operation: 'operations', plan: 'cropPlans',
   machinery: 'machinery', overhead: 'overhead', price: 'prices', storage: 'storage',
   sale: 'sales', otherIncome: 'otherIncome', carryOut: 'carryOut', insurance: 'insurance',
+  arcBase: 'arcBase', arcCounty: 'arcCounties',
 };
 
 /** `customRateMultiplier` → `Custom Rate Multiplier`. */

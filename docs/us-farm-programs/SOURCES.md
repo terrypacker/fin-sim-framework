@@ -28,6 +28,7 @@ Fetch the primary source here first, then cite it by path.
 | `…-sec9015.txt` | §9015, *Election* | Choosing PLC or ARC per farm. |
 | `…-sec9016.txt` | §9016, *Price loss coverage* | The PLC payment rate and amount. **P.L. 119-21 §10304** extends it through crop year 2031. |
 | `…-sec9017.txt` | §9017, *Agriculture risk coverage* | ARC-CO benchmark revenue and guarantee. **P.L. 119-21 §10305** sets the guarantee at 90% of benchmark revenue for crop years 2025–2031. |
+| `USCODE-2024-title7-chap115-subchapII-sec9032.txt` | **7 U.S.C. §9032**, *Loan rates for nonrecourse marketing assistance loans*, 2024 edition | ARC values actual revenue at the higher of the national price and this loan rate. 2019–2023 rates here (corn \$2.20, soybeans \$6.20); **P.L. 119-21 §10309** extends them to 2025 and adds 2026–2031 (\$2.42, \$6.82). |
 | `CFR-7-1412-Agriculture-Risk-Coverage-And-Price-Loss-Coverage.txt` | **7 CFR part 1412**, live eCFR, fetched 19 Nov 2026 | FSA's implementing rules for both programs. Check its amendment notes against P.L. 119-21 before relying on any figure. |
 | `CFR-7-457.8-Common-Crop-Insurance-Policy-Basic-Provisions-2026-01-01.txt` | **7 CFR §457.8**, annual edition as of 1 Jan 2026 | The Basic Provisions: revenue protection vs yield protection, **projected price** and **harvest price**, the harvest price exclusion, the guarantee and indemnity. |
 | `CFR-7-457.113-Coarse-Grains-Crop-Provisions-2026-01-01.txt` | **7 CFR §457.113**, annual edition as of 1 Jan 2026 | The Coarse Grains Crop Provisions, which insure corn and soybeans. |

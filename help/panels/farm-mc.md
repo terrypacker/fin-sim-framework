@@ -25,11 +25,11 @@ drought's long tail, and a price row with no season volatility uses that history
 0, because no source sets it, so type one. The panel calls those a sensitivity run.
 
 **Results** open with the whole farm, then each operator with its crop plans, then each
-crop. *P(loss)* is the share of seasons whose net is below zero. The net is shown at the
-10th, 50th and 90th percentile, and the breakevens as their 10th–90th range. An operator
-row adds its cash Schedule F net, after the prepaid-supplies limit. *Insurance* is the
-crop insurance claim: its average over all seasons, and how often one pays. The machinery
-switch works as it does on the Field P&L.
+crop. *P(loss)* is the share of seasons whose net is below zero. The net shows its 10th,
+50th and 90th percentiles, the breakevens their 10th–90th range. An operator row adds its
+cash Schedule F net, after the prepaid-supplies limit. *Insurance* and *ARC* are the crop
+insurance claim and the ARC-County payment: the average over all seasons, and how often
+each pays. The machinery switch works as on the Field P&L.
 
-The same seed always gives the same seasons, so changing one spread and running again
-is a fair comparison. The CSV carries every metric's distribution.
+The same seed always gives the same seasons, so rerunning after one change is a fair
+comparison. The CSV carries every metric's distribution.

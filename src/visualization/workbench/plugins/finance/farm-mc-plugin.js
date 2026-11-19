@@ -96,6 +96,7 @@ export class FarmMcPlugin extends WorkbenchComponent {
             <th class="sec-th sec-th--num" title="The yield that covers cost, p10 – p90">BE yield</th>
             <th class="sec-th sec-th--num" title="The operator's crop-year Schedule F (cash) net after §464(d), p50, and its loss probability">Sched F p50 · P(loss)</th>
             <th class="sec-th sec-th--num" title="Crop insurance indemnity: its mean over all paths, and the share of paths in which a claim pays">Insurance mean · P(pays)</th>
+            <th class="sec-th sec-th--num" title="This crop's ARC-County payment (paid the next October): its mean, and the share of paths in which it pays">ARC mean · P(pays)</th>
           </tr></thead>
           <tbody data-fmc="rows"></tbody>
         </table>
@@ -287,6 +288,7 @@ export class FarmMcPlugin extends WorkbenchComponent {
         <td class="sec-td sec-td--num">${_range(r.breakevenYield, (x) => _num(x, 1))}</td>
         <td class="sec-td sec-td--num">${r.scheduleF ? `${this._money(r.scheduleF.p50)} · ${_pct(r.scheduleF.lossProbability)}` : ''}</td>
         <td class="sec-td sec-td--num">${r.insurance ? `${this._money(r.insurance.mean)} · ${_pct(r.insurancePays?.mean)}` : ''}</td>
+        <td class="sec-td sec-td--num">${r.arc ? `${this._money(r.arc.mean)} · ${_pct(r.arcPays?.mean)}` : ''}</td>
       </tr>`).join('');
   }
 
@@ -327,7 +329,8 @@ export class FarmMcPlugin extends WorkbenchComponent {
  * @param {'custom'|'actual'} [basis='custom']
  * @returns {{ level: 'farm'|'operator'|'plan'|'crop', key: string, label: string, net: object|null,
  *   lossProbability: number|null, breakevenUnpricedPrice: object|null, breakevenYield: object|null,
- *   scheduleF: object|null, insurance: object|null, insurancePays: object|null }[]}
+ *   scheduleF: object|null, insurance: object|null, insurancePays: object|null,
+ *   arc: object|null, arcPays: object|null }[]}
  */
 export function farmMcRows(summary, farm, basis = 'custom') {
   const m = summary?.metrics ?? {};
@@ -341,6 +344,8 @@ export function farmMcRows(summary, farm, basis = 'custom') {
       scheduleF: level === 'operator' ? (m[`${scope}.scheduleF`] ?? null) : null,
       insurance:     m[`${scope}.insurance`] ?? null,
       insurancePays: m[`${scope}.insurancePays`] ?? null,
+      arc:           m[`${scope}.arc`] ?? null,
+      arcPays:       m[`${scope}.arcPays`] ?? null,
     };
   };
   const fieldOf = new Map(farm.fields.map(f => [f.id, f]));

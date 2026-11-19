@@ -12,6 +12,9 @@ import {
   PRODUCT_CATEGORIES, COST_CATEGORIES, INCOME_CATEGORIES,
 } from './schedule-f.js';
 import { FARM_CALIBRATION } from './farm-calibration.js';
+// farm-programs imports this module too; the cycle is safe because each side reads the other's
+// exports only inside functions, never at module evaluation.
+import { settleArc, ARC_PLC_PAYMENT_LIMIT } from './farm-programs.js';
 
 /**
  * Farm records (design 134 §5.1): flat tables joined by id, in `cfg.farm`.
@@ -22,10 +25,11 @@ import { FARM_CALIBRATION } from './farm-calibration.js';
  *                     yieldShockScale?: { [crop]: k }, priceVol?: { [crop]: σ }, priceYieldBeta?: { [crop]: b },
  *                     rentMultiplier?, customRateMultiplier?, machineryMultiplier?,
  *                     irrigationMultiplier?, interestMultiplier?, projectedPrice?: { [crop]: $ },
+ *                     nationalPrice?: { [crop]: $ },
  *                     <category>Multiplier? (one per PRODUCT_CATEGORIES, e.g. nitrogenMultiplier) }],
  *   operators:     [{ id, name, farmRelated?, prior3PrepaidSupplies?, prior3FarmExpenses? }],
  *   fields:        [{ id, operatorId, name, tenure, rentedAcres, plantedAcres, irrigated,
- *                     rentPerAcre, propertyTax, fsaFarm?, baseAcres?, provenYield? }],
+ *                     rentPerAcre, propertyTax, fsaFarm?, provenYield? }],
  *   products:      [{ id, name, category, unit, unitPrice, discountPct }],
  *   operations:    [{ id, name, customRatePerAcre }],
  *   cropPlans:     [{ id, fieldId, crop, expectedYield, yieldShock?, insurancePremiumPerAcre,
@@ -42,6 +46,8 @@ import { FARM_CALIBRATION } from './farm-calibration.js';
  *   otherIncome:   [{ id, operatorId, category, amount, paymentDate, cropYear?, planId? }],
  *   carryOut:      [{ id, operatorId, category, amount, paidDate? }],
  *   insurance:     [{ id, operatorId, crop, plan?, coverageLevel, unit?, paymentDate? }],
+ *   arcBase:       [{ id, operatorId, fsaFarm, crop, baseAcres, county, irrigatedPct?, paymentDate? }],
+ *   arcCounties:   [{ id, county, crop, practice, benchmarkYield, benchmarkPrice, expectedYield? }],
  * }
  * ```
  *
@@ -62,7 +68,7 @@ import { FARM_CALIBRATION } from './farm-calibration.js';
 export const FARM_TABLES = Object.freeze([
   'operators', 'fields', 'products', 'operations', 'cropPlans', 'prescriptions', 'machinery',
   'overhead', 'prices', 'contracts', 'storage', 'sales', 'carryIn', 'otherIncome', 'carryOut',
-  'insurance',
+  'insurance', 'arcBase', 'arcCounties',
 ]);
 
 /** The tables whose rows belong to a season (all but `operators`). */
@@ -120,6 +126,15 @@ export const INSURANCE_UNITS = Object.freeze({
   ENTERPRISE: 'ENTERPRISE', ENTERPRISE_BY_PRACTICE: 'ENTERPRISE_BY_PRACTICE', FIELD: 'FIELD',
 });
 
+/**
+ * ARC-County practice designations, as FSA's county file names them: separate irrigated and
+ * non-irrigated figures where FSA sets them, one combined figure (`ALL`) elsewhere.
+ */
+export const ARC_PRACTICES = Object.freeze({ IRRIGATED: 'IRRIGATED', NONIRRIGATED: 'NONIRRIGATED', ALL: 'ALL' });
+
+/** Covered commodities the model's ARC terms carry (design 134 §15.3). */
+export const ARC_CROPS = Object.freeze(['WHEAT', 'CORN', 'SORGHUM', 'SOYBEANS']);
+
 /** Crops the Coarse Grains Crop Provisions insure (7 CFR §457.113 §1, annual edition 2026). */
 export const INSURABLE_CROPS = Object.freeze(['CORN', 'SORGHUM', 'SOYBEANS']);
 
@@ -165,6 +180,8 @@ export function defaultCalendar(y) {
     // (docs/us-farm-programs/RMA-24-CEPP-0041/0081); the claim is paid after it.
     harvestPriceDate:      `${y}-10-31`,
     insurancePaymentDate:  `${y}-12-15`,
+    // ARC is paid from 1 October after the marketing year ends (7 U.S.C. §9017(f)).
+    arcPaymentDate:        `${y + 1}-10-01`,
     irrigationDate:        `${y}-09-30`,
     machineryDate:         `${y}-07-01`,
     overheadDate:          `${y}-07-01`,
@@ -217,6 +234,7 @@ export function normalizeFarm(farm) {
     yieldShockScale:     { ...FARM_CALIBRATION.yieldShockScale, ...(season0.yieldShockScale ?? {}) },
     priceVol:            { ...(season0.priceVol ?? {}) },
     projectedPrice:      { ...(season0.projectedPrice ?? {}) },
+    nationalPrice:       { ...(season0.nationalPrice ?? {}) },
     priceYieldBeta:      { ...FARM_CALIBRATION.priceYieldBeta, ...(season0.priceYieldBeta ?? {}) },
     ...Object.fromEntries([...Object.keys(SEASON_MULTIPLIERS),
       ...Object.keys(PRODUCT_CATEGORIES).map(categoryMultiplierField)].map(k => [k, season0[k] ?? 1])),
@@ -248,6 +266,24 @@ export function normalizeFarm(farm) {
     // yield, which the advisories flag on an insured plan: the APH is the insurer's number.
     p.aphDefaulted = p.aphYield == null;
     p.aphYield ??= p.expectedYield;
+  }
+  for (const c of out.arcCounties) c.expectedYield ??= c.benchmarkYield;
+  for (const b of out.arcBase) {
+    b.paymentDate = day(b.paymentDate) ?? calendar.arcPaymentDate;
+    // FSA's historical irrigated percentage (2019–2023 plantings, 7 CFR §1412.3). Blank is the
+    // share of this season's planted acres of the crop on the FSA farm that are irrigated, which
+    // the advisories flag: the historical figure is FSA's.
+    b.irrigatedPctDefaulted = b.irrigatedPct == null;
+    if (b.irrigatedPct == null) {
+      let irr = 0, all = 0;
+      for (const plan of out.cropPlans) {
+        const fld = out.fields.find(x => x.id === plan.fieldId);
+        if (!fld || fld.operatorId !== b.operatorId || fld.fsaFarm !== b.fsaFarm || plan.crop !== b.crop) continue;
+        all += fld.plantedAcres ?? 0;
+        if (fld.irrigated) irr += fld.plantedAcres ?? 0;
+      }
+      b.irrigatedPct = all > 0 ? irr / all : 0;
+    }
   }
   for (const r of out.insurance) {
     r.plan ??= INSURANCE_PLANS.RP;
@@ -482,6 +518,44 @@ export function validateFarm(farm) {
     if (insured.has(k)) err(`farm.insurance "${r.id}": a second policy for ${r.operatorId} ${r.crop}`);
     insured.add(k);
   }
+  for (const [c, v] of Object.entries(f.season.nationalPrice)) {
+    if (!Object.hasOwn(CROPS, c)) err(`farm.seasons[0].nationalPrice: unknown crop "${c}"`);
+    if (!isNum(v) || v <= 0) err(`farm.seasons[0].nationalPrice.${c} must be a number > 0`);
+  }
+  const countyKeys = new Set();
+  for (const r of f.arcCounties) {
+    if (!r.county) err(`farm.arcCounties "${r.id}" needs a county`);
+    if (!ARC_CROPS.includes(r.crop)) err(`farm.arcCounties "${r.id}": crop must be one of ${ARC_CROPS.join(', ')}`);
+    if (!Object.hasOwn(ARC_PRACTICES, r.practice)) err(`farm.arcCounties "${r.id}": practice must be IRRIGATED, NONIRRIGATED or ALL`);
+    nonNeg('arcCounties', r, 'benchmarkYield', { required: true });
+    nonNeg('arcCounties', r, 'benchmarkPrice', { required: true });
+    nonNeg('arcCounties', r, 'expectedYield');
+    const k = `${r.county}|${r.crop}|${r.practice}`;
+    if (countyKeys.has(k)) err(`farm.arcCounties "${r.id}": a second ${r.practice} row for ${r.county} ${r.crop}`);
+    countyKeys.add(k);
+  }
+  const baseKeys = new Set();
+  if (f.arcBase.length && (f.season.cropYear < 2019 || f.season.cropYear > 2031)) {
+    err(`farm.arcBase: ARC-CO terms are modelled for crop years 2019–2031, not ${f.season.cropYear}`);
+  }
+  for (const b of f.arcBase) {
+    need('arcBase', b, 'operatorId', 'operators');
+    if (!b.fsaFarm) err(`farm.arcBase "${b.id}" needs an fsaFarm`);
+    if (!ARC_CROPS.includes(b.crop)) err(`farm.arcBase "${b.id}": crop must be one of ${ARC_CROPS.join(', ')}`);
+    nonNeg('arcBase', b, 'baseAcres', { required: true });
+    share('arcBase', b, 'irrigatedPct');
+    date('arcBase', b, 'paymentDate');
+    const has = (pr) => countyKeys.has(`${b.county}|${b.crop}|${pr}`);
+    if (!has('ALL') && !(has('IRRIGATED') && has('NONIRRIGATED'))) {
+      err(`farm.arcBase "${b.id}": farm.arcCounties needs ${b.county} ${b.crop} as ALL, or as both IRRIGATED and NONIRRIGATED`);
+    }
+    if (!(f.season.nationalPrice[b.crop] > 0)) {
+      err(`farm.arcBase "${b.id}": no expected national price for ${b.crop} (farm.seasons[0].nationalPrice)`);
+    }
+    const k = `${b.fsaFarm}|${b.crop}`;
+    if (baseKeys.has(k)) err(`farm.arcBase "${b.id}": a second ${b.crop} enrollment on FSA farm ${b.fsaFarm}`);
+    baseKeys.add(k);
+  }
   for (const r of f.contracts) {
     need('contracts', r, 'operatorId', 'operators');
     crop('contracts', r);
@@ -594,6 +668,10 @@ export function realizedYield(farm, plan, field = farm.fields.find(x => x.id ===
  * Advisories on records that load and run but are probably incomplete (design 134 §14.1).
  * Never errors: the season still costs, but the named numbers are understated.
  *
+ * - `ARC_IRRIGATED_PCT_DEFAULTED`: an ARC enrollment in a county with separate irrigated figures
+ *   and no historical irrigated percentage, so this season's planting stands in for FSA's.
+ * - `ARC_2025_HIGHER_OF`: a 2025 season with ARC, where the law pays the higher of PLC and ARC.
+ * - `ARC_OVER_LIMIT`: an operator's ARC payment above the per-person limit, which is not applied.
  * - `APH_DEFAULTED`: an insured crop plan with no approved (APH) yield, so its guarantee is
  *   built on the expected yield (design 134 §15.2).
  * - `NO_SEED`: a crop plan for an annual crop with no seed cost. Every annual crop is planted
@@ -619,6 +697,33 @@ export function farmAdvisories(farm) {
       kind: 'NO_SEED', planId: plan.id, fieldId: plan.fieldId,
       message: `${f?.name ?? plan.fieldId} (${CROPS[plan.crop]?.label ?? plan.crop}) has no seed cost: `
         + 'probably a missing entry, so its costs and breakevens are understated.',
+    });
+  }
+  for (const b of farm.arcBase) {
+    if (!b.irrigatedPctDefaulted) continue;
+    const split = farm.arcCounties.some(r => r.county === b.county && r.crop === b.crop && r.practice === 'IRRIGATED');
+    if (!split) continue;
+    out.push({
+      kind: 'ARC_IRRIGATED_PCT_DEFAULTED', arcBaseId: b.id,
+      message: `FSA farm ${b.fsaFarm} (${CROPS[b.crop]?.label ?? b.crop}) has no historical irrigated percentage: `
+        + `this season's ${Math.round(b.irrigatedPct * 100)}% stands in for FSA's, which weights the ARC payment.`,
+    });
+  }
+  if (farm.arcBase.length && farm.season.cropYear === 2025) {
+    out.push({
+      kind: 'ARC_2025_HIGHER_OF', message: 'For crop year 2025 the law pays the higher of PLC and ARC-County '
+        + '(P.L. 119-21 §10303). The model has no PLC, so program payments may be understated.',
+    });
+  }
+  const arcByOperator = new Map();
+  for (const a of settleArc(farm)) arcByOperator.set(a.operatorId, (arcByOperator.get(a.operatorId) ?? 0) + a.payment);
+  for (const [op, total] of arcByOperator) {
+    if (total <= ARC_PLC_PAYMENT_LIMIT) continue;
+    out.push({
+      kind: 'ARC_OVER_LIMIT', operatorId: op,
+      message: `${op}'s ARC payment of $${Math.round(total).toLocaleString('en-US')} is above the `
+        + `$${ARC_PLC_PAYMENT_LIMIT.toLocaleString('en-US')} limit per person (before CPI indexing). `
+        + 'The limit is not applied: it depends on how many people the operation counts.',
     });
   }
   for (const plan of farm.cropPlans) {

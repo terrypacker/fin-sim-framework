@@ -78,20 +78,22 @@ export function demoFarm(y) {
   return {
     // Projected prices are the insurance's February futures averages (CEPP); a placeholder
     // pair here, above the local cash table by a typical basis.
-    seasons: [{ id: `s${y}`, cropYear: y, projectedPrice: { CORN: 4.40, SOYBEANS: 10.50 } }],
+    // The national marketing-year price ARC-County is paid on: placeholders near today's.
+    seasons: [{ id: `s${y}`, cropYear: y, projectedPrice: { CORN: 4.40, SOYBEANS: 10.50 },
+      nationalPrice: { CORN: 4.20, SOYBEANS: 10.40 } }],
     operators: [
       { id: 'opA', name: 'Operator A' },
       { id: 'opB', name: 'Operator B' },
     ],
     fields: [
       { id: 'a-home-irr', operatorId: 'opA', name: 'Home quarter (irrigated)', tenure: 'OWN',
-        plantedAcres: 125, irrigated: true, propertyTax: 9_000 },
+        plantedAcres: 125, irrigated: true, propertyTax: 9_000, fsaFarm: '1001' },
       { id: 'a-home-dry', operatorId: 'opA', name: 'Home quarter (dry corners)', tenure: 'OWN',
-        plantedAcres: 30, irrigated: false, propertyTax: 1_200 },
+        plantedAcres: 30, irrigated: false, propertyTax: 1_200, fsaFarm: '1001' },
       { id: 'a-west', operatorId: 'opA', name: 'West rented', tenure: 'CASH_RENT',
-        rentedAcres: 80, plantedAcres: 78, irrigated: false, rentPerAcre: 190 },
+        rentedAcres: 80, plantedAcres: 78, irrigated: false, rentPerAcre: 190, fsaFarm: '1002' },
       { id: 'b-river', operatorId: 'opB', name: 'River rented (irrigated)', tenure: 'CASH_RENT',
-        rentedAcres: 150, plantedAcres: 146, irrigated: true, rentPerAcre: 300 },
+        rentedAcres: 150, plantedAcres: 146, irrigated: true, rentPerAcre: 300, fsaFarm: '1003' },
     ],
     products: [
       { id: 'seed-corn',  name: 'Corn seed',      category: 'SEED',      unit: 'unit (80k kernels)', unitPrice: 300, discountPct: 0.08 },
@@ -204,6 +206,19 @@ export function demoFarm(y) {
       { id: 'ins-a-corn', operatorId: 'opA', crop: 'CORN',     plan: 'RP', coverageLevel: 0.80, unit: 'ENTERPRISE' },
       { id: 'ins-a-soy',  operatorId: 'opA', crop: 'SOYBEANS', plan: 'RP', coverageLevel: 0.75, unit: 'ENTERPRISE' },
       { id: 'ins-b-corn', operatorId: 'opB', crop: 'CORN',     plan: 'RP', coverageLevel: 0.85, unit: 'ENTERPRISE' },
+    ],
+    // ARC-County on every FSA farm (Q13), paid on base acres from 1 October next year. The
+    // county figures are placeholders shaped like FSA's file (`npm run farm:arc`).
+    arcCounties: [
+      { id: 'cty-corn-irr', county: 'Demo', crop: 'CORN',     practice: 'IRRIGATED',    benchmarkYield: 222, benchmarkPrice: 5.03 },
+      { id: 'cty-corn-dry', county: 'Demo', crop: 'CORN',     practice: 'NONIRRIGATED', benchmarkYield: 140, benchmarkPrice: 5.03 },
+      { id: 'cty-soy',      county: 'Demo', crop: 'SOYBEANS', practice: 'ALL',          benchmarkYield: 56,  benchmarkPrice: 12.17 },
+    ],
+    arcBase: [
+      { id: 'arc-1001-corn', operatorId: 'opA', fsaFarm: '1001', crop: 'CORN',     baseAcres: 110, county: 'Demo', irrigatedPct: 0.8 },
+      { id: 'arc-1001-soy',  operatorId: 'opA', fsaFarm: '1001', crop: 'SOYBEANS', baseAcres: 40,  county: 'Demo' },
+      { id: 'arc-1002-soy',  operatorId: 'opA', fsaFarm: '1002', crop: 'SOYBEANS', baseAcres: 70,  county: 'Demo' },
+      { id: 'arc-1003-corn', operatorId: 'opB', fsaFarm: '1003', crop: 'CORN',     baseAcres: 135, county: 'Demo', irrigatedPct: 1 },
     ],
     carryOut: [
       // Next crop's seed and fertilizer, prepaid in December (Q11; capped by §464(d)).

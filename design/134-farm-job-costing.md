@@ -1,6 +1,6 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** rev 14 (19 Nov 2026): **phase 3 started** (§15): sources settled, step 3b (revenue protection) built. **phase 1 BUILT** (§12): the acceptance import passes
+**Status:** rev 15 (19 Nov 2026): **phase 3 in progress** (§15): sources settled, steps 3b (revenue protection) and 3c (ARC-County) built. **phase 1 BUILT** (§12): the acceptance import passes
 (§12.4) and the Field P&L panel is in the workbench (§12.5). **Phase 2 started** (§13): step 2a,
 the scenario-agnostic MC path and a farm batch on it, steps 2b–2d (realized yield, price paths, multiplier levers and the contracted share), 2e (calibration from USDA NASS, §13.8) and 2f (the Farm MC panel, §13.7) are built: **phase 2 is complete**. Owner questions Q1–Q20 and Q22–Q25 are answered (§3, §14); Q21, Q26 and the follow-ups Q22a,
 Q23a and Q25a (§14) are open. §7 records what the primary sources on disk decide. §8 is the household
@@ -22,7 +22,7 @@ Rev 9 records the acceptance import and the questions it raised (§12.4). Rev 10
 Field P&L panel (§12.5). Rev 11 splits phase 2 into steps and records step 2a (§13). Rev 12
 records steps 2b–2f; the calibration (§13.8) adds an irrigated-only yield shock and skewed
 yield draws, both of which the data required. Rev 13 records the owners' answers to Q22–Q25
-and the follow-ups they leave (§14). Rev 14 opens phase 3 (§15).
+and the follow-ups they leave (§14). Rev 14 opens phase 3 (§15). Rev 15 records step 3c, ARC-County (§15.3).
 
 **Related:** design 98 (the sweepable parameter surface: per-record generated params become
 MC and optimizer levers), design 55 (configuration-driven parameters and record templates),
@@ -566,7 +566,7 @@ bad one for another in the same world.
 
 ## 11. Open questions
 
-Q21 (§12.3), Q26 (§13.8), Q22a, Q23a, Q25a (§14) and Q27–Q28 (§15.4) are for the owners. The fleet model (§5.6) and farm–market correlation (Q15) each
+Q21 (§12.3), Q26 (§13.8), Q22a, Q23a, Q25a (§14) and Q27–Q28 (§15.5) are for the owners. The fleet model (§5.6) and farm–market correlation (Q15) each
 need their own design later.
 
 ## 12. Phase 1 build notes (rev 8)
@@ -1109,19 +1109,75 @@ let a cash-method farmer who normally sells the crop the following year elect to
 proceeds then (Q11b asked to offer it). Step 3d builds that election with Schedule F lines
 6b–6d.
 
-### 15.3 Steps still to build
+### 15.3 Step 3c: ARC-County (built)
 
-- **3c ARC-County.** FSA farm records (base acres by crop, county, historical irrigated
-  percentage), county benchmarks read from FSA's file, the county's actual yield drawn from
-  the season's common yield shock (which is a county-level shock by construction, §13.8),
-  and the national marketing-year price from the price path over September to August. The
-  payment posts on 1 October of the year after harvest (§9017(f)). It is tested against FSA's
-  published Nebraska rates. The \$155,000 limit is per person, and an operator may be two
-  (a married couple), so the model reports when a payment exceeds it and does not cap it.
-- **3d Tax timing.** The §451(f) election for insurance proceeds, then the Schedule F lines.
+**Records.** Two flat tables. `arcBase` has one row per FSA farm and crop enrolled: operator,
+`fsaFarm`, crop, `baseAcres`, `county` and the farm's historical `irrigatedPct`. `arcCounties`
+has one row per county, crop and practice (`IRRIGATED`, `NONIRRIGATED` or `ALL`): the
+`benchmarkYield` and `benchmarkPrice` FSA publishes, and an optional `expectedYield` for the
+season, which defaults to the benchmark. The season gains `nationalPrice`, the expected
+marketing-year average (MYA) per crop. A field's `fsaFarm` places it on a farm. `npm run
+farm:arc -- --county NAME` prints a county's rows from FSA's file, with `--json` for rows to
+paste.
+
+**The formula is the statute, rounded as FSA rounds.** Benchmark revenue = benchmark yield ×
+benchmark price, the guarantee is 90% of it, the cap is 12%, and actual revenue = the county
+yield × the higher of the MYA and the loan rate (`arcCountyRate`). With each stage rounded to
+the cent, **all 339 Nebraska corn and soybean rows of FSA's 2025 file reproduce exactly**:
+benchmark revenue, guarantee, cap, actual revenue and payment rate. Without the rounding they
+differ by up to 1.2 cents. The benchmark price is rebuilt too (`arcBenchmarkPrice`). It is the
+Olympic average of the MYAs for the five crop years ending two before the program year, each
+floored at the effective reference price, which comes from the same five MYAs (§9011(8), the
+88% factor from 2025). From NASS's national prices on disk, it gives FSA's \$5.03 (corn) and
+\$12.17 (soybeans) for both 2025 and 2026. The terms before 2025 (86%, 10%, 85%) and the loan
+rates by year are tables in `farm-programs.js`. The model refuses a season outside 2019–2031.
+
+**A farm's rate is weighted by its irrigated percentage.** Where the county has separate
+practices, FSA weights the farm's benchmark revenue, guarantee and actual revenue by its
+historical irrigated percentage, and the rate comes from the weighted figures (7 CFR
+§1412.53(a)(3), (c)). The payment is rate × 85% × base acres. A blank irrigated percentage
+uses this season's irrigated share of the farm's planted acres of the crop, and the
+advisories flag it.
+
+**What a season draws.** The county's actual yield is its expected yield moved by the
+season's **common** yield shocks: k·Y for dryland, k·(β·Y + I) for irrigated, and a blend
+by the irrigated percentage for `ALL`. Those shocks are county-level by construction, since
+§13.8 calibrated them on NASS county deviations. A field's own shock never reaches the
+county, which is the basis risk ARC carries: a field can fail while the county does not. The
+MYA is the expected MYA × the mean of the local path's realized ÷ expected ratio on the 15th
+of each month from September to August. As with the harvest price, the local path stands in
+for the national one, so the price–yield link makes a short crop dearer and ARC pay less.
+A deterministic season pays on its expected figures, and with today's prices below the
+benchmark, it often pays: the demo farm's FSA farms are paid \$31–73 per payment acre.
+
+**Postings.** One `PROGRAM_PAYMENT` (Schedule F line 4a) per enrollment, on 1 October after
+the crop year (§9017(f)), so in the crop-year view and in the next calendar year's cash. It is
+paid on base acres, not on what is planted, so it is split by planted acres over the
+operator's plans **of that crop** on the FSA farm's fields. Keeping the crop stops a corn
+payment landing in a soybean field's P&L, which the first build did. With none of the crop
+planted there, it is split over all of the farm's plans; with no field on the farm, over the
+operator's acres.
+
+**Not applied, and reported instead:** the \$155,000 payment limit (it is per person, and an
+operator may be a married couple; `ARC_OVER_LIMIT`), sequestration (an OMB order, not on
+disk), and the 2025 higher-of-PLC-and-ARC rule (`ARC_2025_HIGHER_OF`).
+
+**MC.** `<scope>.arc` and `<scope>.arcPays`, as for insurance, and a Farm MC column. Each
+path also reports `<scope>.grainRevenue`, because total revenue now includes program
+payments, which rise in a short year. A step 2b test that checks grain against yield read
+total revenue and failed once ARC paid in droughts. It now reads grain revenue.
+
+**The demo farm** enrolls its three FSA farms in a placeholder county shaped like FSA's
+file, which moves the `farm-demo` golden by exactly those payments (operator A +\$9,181.51,
+operator B +\$8,329.70).
+
+### 15.4 Steps still to build
+
+- **3d Tax timing.** The §451(f) election for insurance proceeds, then the Schedule F lines
+  (4a/4b, 6a–6d).
 - **3e Panels.** The programs' lines in the Field P&L.
 
-### 15.4 Questions for the owners (Q27, Q28)
+### 15.5 Questions for the owners (Q27, Q28)
 
 **Q27 (crop insurance):** for each operator and crop, the plan (RP, RP with the harvest price
 exclusion, or YP), the coverage level, the unit structure, each unit's approved (APH) yield,

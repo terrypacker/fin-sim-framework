@@ -10,7 +10,7 @@
 
 import { categoryLine } from './schedule-f.js';
 import { TENURE, harvestDateFor, priceOn, realizedYield, categoryMultiplierField } from './farm-records.js';
-import { settleInsurance } from './farm-programs.js';
+import { settleInsurance, settleArc } from './farm-programs.js';
 
 /**
  * The farm calendar (design 134 §5.2) compiled from normalized records into dated events.
@@ -168,6 +168,37 @@ export function compileFarmEvents(farm) {
       post(policy.paymentDate, `Crop insurance indemnity — ${planId}`, {
         operatorId: u.operatorId, jobId: planId, category: 'CROP_INSURANCE_PROCEEDS', kind: 'REVENUE',
         amount, sourceId: u.insuranceId, memo: `${u.plan} ${u.unit} unit`,
+      });
+    }
+  }
+
+  // ── ARC-County (design 134 §15.3) ──────────────────────────────────────────────────
+  // Paid on the FSA farm's BASE acres, not on what is planted, so it is split by planted
+  // acres over the operator's plans of THAT crop on the farm's fields, as the source workbook
+  // spreads a farm number's payment. Keeping the crop keeps a corn payment out of a soybean
+  // field's P&L. With none of that crop planted there, over all the farm's plans; with no
+  // field on the farm at all, over the operator's acres.
+  for (const a of settleArc(farm)) {
+    if (!(a.payment > 0)) continue;
+    const base = farm.arcBase.find(b => b.id === a.arcBaseId);
+    const onFarm = farm.cropPlans
+      .map(p => [p, fieldById.get(p.fieldId)])
+      .filter(([, f]) => f && f.operatorId === a.operatorId && f.fsaFarm === a.fsaFarm);
+    const sameCrop = onFarm.filter(([p]) => p.crop === a.crop);
+    const plans = sameCrop.length ? sameCrop : onFarm;
+    const acres = plans.reduce((s, [, f]) => s + f.plantedAcres, 0);
+    const memo = `ARC-CO ${a.crop}, FSA farm ${a.fsaFarm}`;
+    if (acres > 0) {
+      for (const [plan, f] of plans) {
+        post(base.paymentDate, `ARC-County — ${plan.id}`, {
+          operatorId: a.operatorId, jobId: plan.id, category: 'PROGRAM_PAYMENT', kind: 'REVENUE',
+          amount: a.payment * f.plantedAcres / acres, sourceId: a.arcBaseId, memo,
+        });
+      }
+    } else {
+      post(base.paymentDate, `ARC-County — ${a.operatorId}`, {
+        operatorId: a.operatorId, jobId: operatorJob(a.operatorId), category: 'PROGRAM_PAYMENT',
+        kind: 'REVENUE', allocation: 'ACRES', amount: a.payment, sourceId: a.arcBaseId, memo,
       });
     }
   }

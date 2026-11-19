@@ -233,13 +233,15 @@ describe('realized yield (design 134 §13.3, step 2b)', () => {
     const { runs } = await new FarmMcRunner({ n: 4, cfgTemplate: cfg(), mcConfig: withEnabled(FARM_YIELD) }).run();
     const low = runs.reduce((a, b) => (a.params[FARM_YIELD] < b.params[FARM_YIELD] ? a : b));
     const high = runs.reduce((a, b) => (a.params[FARM_YIELD] > b.params[FARM_YIELD] ? a : b));
+    // Grain only: insurance and ARC pay MORE in a short year, which is their job (design 134
+    // §15), and would hide the bushels-versus-price effect this checks.
     // Dry fields: a good year is more bushels, and their price falls by less than they gain.
     for (const id of ['p-a-home-dry', 'p-a-west']) {
-      assert.ok(low.metrics[`plan.${id}.revenue`] < high.metrics[`plan.${id}.revenue`], id);
+      assert.ok(low.metrics[`plan.${id}.grainRevenue`] < high.metrics[`plan.${id}.grainRevenue`], id);
     }
     // An irrigated field gains only β of the bushels and takes the whole price fall: a good
     // dryland year costs it revenue. The natural hedge, the other way round.
-    assert.ok(low.metrics['plan.p-b-river.revenue'] > high.metrics['plan.p-b-river.revenue']);
+    assert.ok(low.metrics['plan.p-b-river.grainRevenue'] > high.metrics['plan.p-b-river.grainRevenue']);
   });
 });
 

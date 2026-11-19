@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-243 parameters · 36 panels · 13 node types (209 fields) · 183 action types · 97 tools · 352 state field types · 82 topics · 142 design docs
+243 parameters · 36 panels · 13 node types (209 fields) · 183 action types · 98 tools · 352 state field types · 82 topics · 142 design docs
 
 ---
 
@@ -1118,11 +1118,11 @@ Explained in [`help/nodes`](nodes/reducer.md). 0 field(s) described by a record 
 
 ---
 
-## Headless tools (97)
+## Headless tools (98)
 
 Command-line entry points under `scripts/`. **Purpose** is harvested from each script's
 docblock, not re-authored here. Arguments come from each script's declarative
-`parseFlags` spec: 82 of 82 entry points carry one (design 108 D6 — all of them).
+`parseFlags` spec: 83 of 83 entry points carry one (design 108 D6 — all of them).
 6 scripts carry no docblock naming themselves and show `(undocumented)`.
 
 ### scripts/config-converters/
@@ -1181,6 +1181,11 @@ docblock, not re-authored here. Arguments come from each script's declarative
 
 ### scripts/farm/
 
+- **`scripts/farm/farm-arc.mjs`** — `npm run farm:arc`
+  a county's ARC-County figures from FSA's published file (design 134 §15.3)
+    - `--county` (string) — county name as FSA writes it (e.g. Adams)
+    - `--year` (number) — program year (default: the newest file on disk)
+    - `--json` (flag) — emit cfg.farm.arcCounties rows as JSON
 - **`scripts/farm/farm-calibrate.mjs`** — `npm run farm:calibrate`
   the farm Monte Carlo's spreads from USDA NASS history (design 134 §13.8)
     - `--county` (string) — one Nebraska county (NASS county_name, e.g. HALL); default: all, summarized
@@ -2383,7 +2388,7 @@ what the in-app panel keys on.
 | [Event](nodes/event.md) | node | 220 | 2 panels · design 2 |
 | [Event Sourcing](concepts/event-sourcing.md) | concept | 381 | 3 panels · design 2, 16, 91 |
 | [Node History](panels/exec-history.md) | panel | 191 | 1 panel |
-| [Farm MC](panels/farm-mc.md) | panel | 249 | 1 panel · design 134 |
+| [Farm MC](panels/farm-mc.md) | panel | 247 | 1 panel · design 134 |
 | [Field P&L](panels/field-pnl.md) | panel | 235 | 1 panel · design 134 |
 | [Funding and Instalments](concepts/funding-and-instalments.md) | concept | 248 | 2 panels · 3 params · design 107 |
 | [FX](concepts/fx.md) | concept | 390 | 2 panels · 6 params · design 47, 87, 122 |
