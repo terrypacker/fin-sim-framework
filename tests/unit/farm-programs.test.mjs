@@ -167,3 +167,52 @@ test('EVT-FARM-9: the demo farm is insured and a planned season pays nothing; a 
   const paid = dry.ledger.filter(p => p.category === 'CROP_INSURANCE_PROCEEDS').reduce((s, p) => s + p.amount, 0);
   assert.ok(paid > 0, 'a drought claims');
 });
+
+// ─── step 3d: §451(f) and the Schedule F lines (design 134 §15.4) ────────────────────
+
+/** The §12(b) farm with its corn sold in December and paid in January: the deferral habit. */
+function deferringFarm({ elect = true, paidNextYear = true } = {}) {
+  const raw = exampleFarm();
+  delete raw._harvest;
+  raw.operators[0].defer451f = elect;
+  raw.sales = [{ id: 's1', operatorId: 'o1', crop: 'CORN', share: 1, saleDate: '2027-12-20',
+    paymentDate: paidNextYear ? '2028-01-10' : '2027-12-28' }];
+  return raw;
+}
+
+test('EVT-FARM-11: §451(f) moves an electing operator\'s proceeds to next year\'s line 6d', () => {
+  const r = runFarm(FarmScenario.buildDefaultConfig({ farm: deferringFarm() }));
+  const indemnity = 50 * 115 * 4.75 - 5_000 * 4.75;
+  const y = r.cash.find(c => c.year === 2027);
+  const next = r.cash.find(c => c.year === 2028);
+  close(y.income['6a'], indemnity, '6a: received in 2027');
+  close(y.income['6b'], 0, '6b: none taxable in 2027');
+  close(next.income['6d'], indemnity, '6d: included in 2028');
+  assert.equal(y.section451f.elected, true);
+  assert.match(y.section451f.reason, /line 6d/);
+  close(y.grossIncome, 0, 'line 9 leaves out 6a');
+  close(next.grossIncome, indemnity + (next.income['2'] ?? 0), 'line 9 adds 6d');
+});
+
+test('EVT-FARM-11: no deferral without the normal practice, or without the election', () => {
+  const noHabit = runFarm(FarmScenario.buildDefaultConfig({ farm: deferringFarm({ paidNextYear: false }) }));
+  const y = noHabit.cash.find(c => c.year === 2027);
+  close(y.income['6b'], y.income['6a'], 'all taxable when received');
+  assert.equal(y.section451f.deferred, 0);
+  assert.match(y.section451f.reason, /not the normal practice/);
+  const notElected = runFarm(FarmScenario.buildDefaultConfig({ farm: deferringFarm({ elect: false }) }));
+  const n = notElected.cash.find(c => c.year === 2027);
+  close(n.income['6b'], n.income['6a'], 'not elected: taxable in 2027');
+  assert.equal(notElected.cash.find(c => c.year === 2028)?.income['6d'], undefined);
+  close(n.grossIncome, n.income['6b'], 'line 9 counts 6b, not 6a as well');
+});
+
+test('EVT-FARM-11: program payments carry a taxable 4b, and line 9 counts them once', () => {
+  const r = runFarm(FarmScenario.buildDefaultConfig());
+  for (const row of r.cash) {
+    if (row.income['4a'] == null) continue;
+    assert.equal(row.income['4b'], row.income['4a']);
+    const taxable = Object.entries(row.income).filter(([l]) => !['4a', '6a'].includes(l)).reduce((s, [, v]) => s + v, 0);
+    close(row.grossIncome, taxable, `${row.operatorId} ${row.year} gross income`);
+  }
+});

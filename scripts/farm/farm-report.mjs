@@ -112,6 +112,7 @@ for (const r of cash) {
     { head: 'description', get: x => x.label.slice(0, 58), align: 'left', width: 60 },
     { head: 'amount', get: x => money(x.amount), width: 12 },
   ] });
+  if (r.section451f?.elected) note(`  §451(f): ${r.section451f.reason}.`);
   const s = r.section464;
   if (!s.assessed) note(`  §464(d): not assessed — ${s.reason}.`);
   else {

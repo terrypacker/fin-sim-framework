@@ -7,7 +7,7 @@ design: [134-farm-job-costing.md]
 sources: [src/finance/farm/farm-reports.js]
 stamps:
   panel:field-pnl: 0930cc
-  src/finance/farm/farm-reports.js: 2ece5e
+  src/finance/farm/farm-reports.js: 95cb96
 ---
 
 A farm season's profit and loss for each field, with the prices and yields that would
@@ -15,7 +15,8 @@ make each field break even. It reads a farm scenario (US Farm); a household plan
 farm records, and the panel says so.
 
 Rows open operator (or crop), then field, then the field's lines, each naming its
-Schedule F line. **Direct** costs were posted to the field itself. **Overhead** is the
+Schedule F line, crop insurance (6a) and ARC-County (4a) among them. **Direct** costs were
+posted to the field itself. **Overhead** is the
 operator's cost spread over its acres, its owned acres, or the fields a cost names (a loan).
 
 **Machinery** has two figures: custom rates (hiring the work done) and actual (the

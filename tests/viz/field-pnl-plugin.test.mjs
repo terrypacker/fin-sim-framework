@@ -177,3 +177,21 @@ test('the cost split columns are hidden until asked for, on every row kind alike
   assert.ok(!grid.classList.contains('fpl-split-off'));
   p.unmount();
 });
+
+test('programs show as their own lines: ARC on line 4a, an indemnity on line 6a (design 134 §15.4)', () => {
+  // The demo farm's ARC pays in a planned season; a drought adds insurance.
+  const cfg = FarmScenario.buildDefaultConfig();
+  cfg.farm.seasons[0].yieldShock = -0.5;
+  cfg.farm.seasons[0].irrigatedYieldShock = -0.3;
+  const run = runFarm(cfg);
+  const lines = run.jobCost.plans.flatMap(p => fieldPnlLines(p));
+  const arc = lines.filter(l => l.category === 'PROGRAM_PAYMENT');
+  const ins = lines.filter(l => l.category === 'CROP_INSURANCE_PROCEEDS');
+  assert.ok(arc.length > 0 && arc.every(l => l.line === '4a' && l.kind === 'revenue'));
+  assert.ok(ins.length > 0 && ins.every(l => l.line === '6a' && l.kind === 'revenue'));
+  assert.ok(!lines.some(l => l.category === 'OTHER'), 'nothing left in a lump');
+  for (const p of run.jobCost.plans) {
+    const rev = fieldPnlLines(p).filter(l => l.kind === 'revenue').reduce((s, l) => s + l.amount, 0);
+    assert.ok(Math.abs(rev - p.revenue.total) < 1e-6, `${p.jobId} revenue lines sum to revenue`);
+  }
+});

@@ -232,7 +232,9 @@ export function jobCostReport(farm, ledger, { machineryBasis = 'CUSTOM', pools =
 function _emptyRow(base) {
   return {
     ...base,
-    revenue: { grain: 0, grainOnHand: 0, other: 0, total: 0 },
+    // `otherByCategory` splits `other` by income category (crop insurance, program payments,
+    // …), so a field shows each program on its own Schedule F line (design 134 §15.4).
+    revenue: { grain: 0, grainOnHand: 0, other: 0, otherByCategory: {}, total: 0 },
     cost: {},            // category → direct cost
     overhead: {},        // category → allocated operator cost (excluding machinery)
     machinery: { custom: 0, actual: 0, margin: 0 },
@@ -244,7 +246,10 @@ function _emptyRow(base) {
 function _book(row, p, amount, allocated) {
   if (p.kind === 'REVENUE') {
     if (p.category === 'GRAIN_SALES') row.revenue.grain += amount;
-    else row.revenue.other += amount;
+    else {
+      row.revenue.other += amount;
+      row.revenue.otherByCategory[p.category] = (row.revenue.otherByCategory[p.category] ?? 0) + amount;
+    }
     return;
   }
   if (p.category === 'CUSTOM_RATE') { row.machinery.custom += amount; return; }
@@ -308,6 +313,9 @@ function _sumRows(list, keys, machineryBasis) {
     r.revenue.grain += x.revenue.grain;
     r.revenue.grainOnHand += x.revenue.grainOnHand;
     r.revenue.other += x.revenue.other;
+    for (const [k, v] of Object.entries(x.revenue.otherByCategory)) {
+      r.revenue.otherByCategory[k] = (r.revenue.otherByCategory[k] ?? 0) + v;
+    }
     for (const [k, v] of Object.entries(x.cost)) r.cost[k] = (r.cost[k] ?? 0) + v;
     for (const [k, v] of Object.entries(x.overhead)) r.overhead[k] = (r.overhead[k] ?? 0) + v;
     r.machinery.custom += x.machinery.custom;
@@ -395,10 +403,34 @@ export function cashReport(farm, ledger) {
     if (p.kind === 'COST' && isProductCategory(p.category) && p.cropYear > year) row.prepaidSupplies += p.amount;
   }
 
+  // §451(f) (design 134 §15.4): an electing operator's crop insurance proceeds received in the
+  // year of the damage move to the next year's line 6d. The damage year is the crop year.
+  const rowFor = (op, year) => {
+    const k = `${op}|${year}`;
+    if (!byKey.has(k)) byKey.set(k, { operatorId: op, year, partial: year !== y, income: {}, expense: {}, prepaidSupplies: 0 });
+    return byKey.get(k);
+  };
+  const deferredByOp = new Map();
+  for (const op of farm.operators) {
+    const d = section451f(farm, ledger, op);
+    if (d.deferred > 0) deferredByOp.set(op.id, d);
+    rowFor(op.id, y).section451f = d;
+  }
+  for (const [op, d] of deferredByOp) {
+    const next = rowFor(op, y + 1);
+    next.income['6d'] = (next.income['6d'] ?? 0) + d.deferred;
+  }
+
   const rows = [...byKey.values()].sort((a, b) =>
     a.operatorId < b.operatorId ? -1 : a.operatorId > b.operatorId ? 1 : a.year - b.year);
   for (const r of rows) {
-    r.grossIncome = _sum(r.income);
+    if (r.income['4a'] != null) r.income['4b'] = r.income['4a'];
+    if (r.income['6a'] != null) {
+      const deferred = r.year === y ? (deferredByOp.get(r.operatorId)?.deferred ?? 0) : 0;
+      r.income['6b'] = r.income['6a'] - deferred;
+    }
+    r.section451f ??= null;
+    r.grossIncome = _sum(Object.fromEntries(Object.entries(r.income).filter(([l]) => !SCHEDULE_F_LINES[l]?.memo)));
     r.totalExpenses = _sum(r.expense);
     r.netBefore464 = r.grossIncome - r.totalExpenses;
     r.section464 = r.partial ? { assessed: false, reason: 'partial year (design 134 §5.5)' }
@@ -406,6 +438,41 @@ export function cashReport(farm, ledger) {
     r.net = r.netBefore464 + (r.section464.deferred ?? 0);
   }
   return rows;
+}
+
+/**
+ * The §451(f) election for one operator (Reg. §1.451-6, docs/us-tax/): a cash-method farmer
+ * may include crop insurance proceeds in the year after the damage, if under the operator's
+ * normal business practice the crop's income would have been reported in a later year. One
+ * election covers all the proceeds of one trade or business (§1.451-6(a)(2)), here one
+ * operator. Proceeds already received in the next year are income then by receipt and need
+ * no election.
+ *
+ * The normal-practice test the model can see: some of the operator's grain from this crop year
+ * is paid after 31 December. Elected without it, nothing is deferred and the reason says so.
+ *
+ * @param {object} farm normalized farm
+ * @param {object[]} ledger `farmLedger(...)`
+ * @param {object} operator normalized operator
+ * @returns {{ elected: boolean, eligible: boolean, deferred: number, received: number, reason: string }}
+ */
+export function section451f(farm, ledger, operator) {
+  const y = farm.season.cropYear;
+  const year = (p) => Number(p.date.slice(0, 4));
+  const received = ledger
+    .filter(p => p.cash && p.operatorId === operator.id && p.category === 'CROP_INSURANCE_PROCEEDS'
+      && p.cropYear === y && year(p) === y)
+    .reduce((s, p) => s + p.amount, 0);
+  const laterSales = ledger.some(p => p.operatorId === operator.id && p.category === 'GRAIN_SALES'
+    && p.cropYear === y && year(p) > y);
+  const elected = operator.defer451f === true;
+  let reason, eligible = laterSales;
+  if (!elected) reason = 'not elected';
+  else if (!laterSales) reason = `none of the ${y} crop is paid after 31 December, so it is not the normal practice to report the crop the next year`;
+  else if (received === 0) reason = `no crop insurance proceeds received in ${y}`;
+  else reason = `elected: ${y} proceeds reported in ${y + 1} (line 6d)`;
+  const deferred = elected && eligible ? received : 0;
+  return { elected, eligible, deferred, received, reason };
 }
 
 /**
