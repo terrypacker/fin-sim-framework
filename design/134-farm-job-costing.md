@@ -1,6 +1,6 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** DRAFT (19 Nov 2026), rev 4. Nothing built. §3 records the decisions, including
+**Status:** DRAFT (19 Nov 2026), rev 5. Nothing built. §3 records the decisions, including
 the owners' answers to Q5–Q15 (rev 3). §7 records what the primary sources on disk decide.
 §8 is the household link. The follow-up questions in §11 are open. Rev 2 added §7 and §8, and
 corrected rev 1's guess that Nebraska credits school property tax on the income tax return
@@ -9,6 +9,9 @@ sales) from phase 5 into phases 1–2, narrows programs to ARC-County, and makes
 per-operator. Rev 4 records the follow-up answers. The main change: the custom-hire rate is a
 **costing rate for the operator's own machines**, so the cash view needs the real machinery
 costs (§5.1, §5.3). It also proposes one season plus carry-in and carry-out for Q16 (§5.5).
+Rev 5 confirms Q16 and records Q17–Q19: machinery is one annual figure per operator in
+phase 1, purchases are fully expensed in the year bought, and irrigation electricity is
+metered per field. It adds the own-versus-custom-harvest study (§5.6).
 
 **Related:** design 98 (the sweepable parameter surface: per-record generated params become
 MC and optimizer levers), design 55 (configuration-driven parameters and record templates),
@@ -96,7 +99,10 @@ What the workbook got wrong, or left out, gives the design its requirements:
 | Q13 | Programs | **ARC-County** on every FSA farm. No PLC. |
 | Q14 | Export granularity | **A calendar-year Schedule F per operator**, until a reason to go deeper appears. |
 | Q15 | Farm vs market correlation | **Independent in phase 4.** Correlation is wanted eventually and needs its own design (§8.3). |
-| Q16 | Season vs calendar year | **Proposed:** one simulated season plus a carry-in and a carry-out (§5.5). Pending confirmation. |
+| Q16 | Season vs calendar year | **One simulated season** plus a carry-in and a carry-out (§5.5). |
+| Q17 | Machinery cost input | **Phase 1: one annual machinery figure per operator, split by acre.** For tax, equipment is **deducted in full in the year it is bought**, not depreciated. Own vs custom harvest is a wanted study (§5.6). |
+| Q18 | Contracted share | **A per-crop default**, different for corn and soybeans, recorded privately. MC sweeps it. |
+| Q19 | Pumping cost | **Irrigation electricity is metered per field**: an annual \$ cost per irrigated field, not per acre-inch. |
 
 ## 4. Architecture: a new scenario type and toolsets, not a new application
 
@@ -143,7 +149,8 @@ the golden fixtures confirm that.
 | **Product** | category (seed, nitrogen, P&K, herbicide, fungicide, …), unit, unit price, discount | The shared catalog. One price change moves every plan that uses the product. |
 | **Prescription line** | crop plan, product or field operation, rate per acre, share of acres | A seed hybrid planted on 60% of a field is one line. |
 | **Field operation** | name (plant, spray, harvest, …), **custom-hire \$/acre**, passes | Q5: planting, spraying and harvesting are charged to each job at a per-acre custom rate × passes. **Job-cost view only**: no cash moves (Q5a). A prescription line references the operation. |
-| **Machinery cost** | operator, fuel, repairs, depreciation (from the operator's depreciation schedule), machinery loan interest, insurance | Q5a: the **real** cost of the operator's own machines. **Cash view only**, on Schedule F lines 14, 19, 21, 25, …. Not allocated to fields. |
+| **Machinery cost** | operator, crop year, **one annual amount** (Q17), allocation basis (acres) | Q5a, Q17: the **real** cost of the operator's own machines, split across the operator's fields by acre. A machine bought this year is in it at its **full price**, because it is deducted in full in the purchase year (§7.1). |
+| **Irrigation electricity** | irrigated field, crop year, annual \$ (metered) | Q19: a direct cost of the field (Schedule F line 30, utilities). |
 | **Overhead pool** | operator, annual amount, allocation basis (acres, owned acres) | Land debt interest, insurance, office. Q10: always one operator's. Allocated across **that operator's** fields only. |
 | **Forward contract** | operator, crop, bushels, fixed price (Q8b), delivery date, **payment date** | Q8: prices the contracted bushels. A payment date after 31 Dec is how a sale is deferred into the next tax year (Q11). |
 | **Storage** | operator, crop, **cost per bushel per month** (Q8a), from and to dates | Q8: the cost of holding unsold or contracted-later grain. |
@@ -191,11 +198,11 @@ Overhead is allocated to jobs by a declared basis when the report is built, neve
 pre-split. A changed basis then re-allocates every year at once. Overhead never crosses
 operators (Q10).
 
-**Machinery is where the two views differ by design** (Q5a). The job-cost view charges each
-field the custom rate. The cash view carries the operator's real machinery cost and charges
-the fields nothing. The reconciliation (§9 phase 5) therefore has a **machinery margin**
-line: custom value charged minus real machinery cost. That answers a question of its own:
-is owning the equipment cheaper than hiring the work done?
+**Machinery has two bases, and the report can show either** (Q5, Q5a, Q17). The **custom
+basis** charges each field the custom-hire rate × passes. The **actual basis** charges each
+field its acre share of the operator's real machinery figure; the cash view always uses this
+one. The difference is the **machinery margin**: custom value minus real cost. A positive
+margin says owning the machines is cheaper than hiring the work done (§5.6).
 
 **Grain on hand at 31 December is inventory**, not yet revenue on the cash basis. The ledger
 holds bushels by crop, operator and location (bin or contract). The crop-year report values
@@ -232,6 +239,24 @@ a **roll forward** action copies a season (fields, plans, prescriptions, contrac
 next crop year as a starting point. Going back to back later, for example to test an
 income-smoothing strategy over several years, is then configuration, not a redesign.
 
+### 5.6 Study: own machinery vs custom hire
+
+The owners want to compare their real machinery cost with paying an outside operator, for
+harvest first. The model already holds both sides: the custom rate × acres, and the real
+machinery figure. The study needs two things the phase 1 figure doesn't give:
+
+- **Harvest's share of the machinery figure.** The study needs to know which costs leave
+  with the combine (its price, fuel, repairs, labor, interest), as opposed to the whole fleet.
+- **Two ways of counting a purchase.** For tax the combine is deducted in full in the year
+  it's bought (§7.1). That makes one year look terrible and the rest look free. The
+  comparison has to be **annualised**: price less resale, spread over the years it's kept,
+  plus yearly running costs. The tax view is shown beside it, because the immediate deduction
+  has real value, and that value depends on the operator's bracket that year (a household-side
+  number, §8).
+
+This is a study, run after phase 2. It may need its own short design once the harvest cost
+split is known (§11 Q20).
+
 ## 6. What varies (the MC surface)
 
 | Variable | Shape |
@@ -246,6 +271,8 @@ income-smoothing strategy over several years, is then configuration, not a redes
 | Product prices | per product, plus a per-category multiplier lever (for example "all nitrogen +20%") |
 | Rent | per field, plus a farm-wide multiplier |
 | Custom-hire rates | per operation, plus a multiplier |
+| Machinery figure | per operator, plus a multiplier |
+| Irrigation electricity | per field, plus a farm-wide multiplier (a dry year pumps more) |
 | Interest rate | on variable-rate land debt |
 
 There are two levels of lever, because a sweep of every product price individually is
@@ -292,11 +319,12 @@ section that amends it.
   let a cash-method farmer elect to report them in the following year, if their normal
   practice is to sell the crop then. This is a per-operator option on the cash report
   (Q11b: offered, to show its effect).
-- **Machinery is depreciated on the cash side** (Q5a). The operators own their machines, so
-  the Schedule F view needs depreciation. Phase 1 takes each operator's annual depreciation
-  from their existing depreciation schedule, as an input. A new purchase, with its §179
-  (limits raised by P.L. 119-21 §70306) or §168(k) (full expensing made permanent by §70301)
-  election and its MACRS class (Pub. 946), is phase 4.
+- **Machinery is expensed when bought** (Q17). The operators deduct equipment in full in the
+  purchase year. Both routes for that are on disk: the §179 election (limits raised by
+  P.L. 119-21 §70306) and §168(k) full expensing (made permanent by §70301). So the cash view
+  has no depreciation schedule: a purchase is a deduction in its year, inside the operator's
+  machinery figure. Which route an operator uses only matters at the household level (§179 is
+  limited by taxable income; §168(k) is not). That is a phase 4 detail.
 
 ### 7.2 Federal tax: what the household side must model
 
@@ -336,10 +364,9 @@ optional method (Schedule SE instructions) does not.
 - **Irrigation is bounded by the field's Natural Resources District.** 46-739 lets an NRD
   allocate groundwater, require rotation or metering, and limit or reduce irrigated acres.
   An irrigated field therefore carries an **allocation cap** in acre-inches per acre (the
-  owners supplied it, Q12). It reaches the money only if it binds: in a dry year where the
-  crop needs more water than the cap allows, irrigated yield is capped, and pumping cost
-  (per acre-inch applied) stops rising. In a normal year it changes nothing, so it is an
-  optional input, used only for drought draws under MC.
+  owners supplied it, Q12). Pumping cost is metered per field in dollars (Q19), so the cap
+  never prices anything. It could only cap irrigated yield in a drought draw. Phase 1 does
+  not model it, and it stays recorded for a later drought study.
 - **Beginning-farmer credit.** 77-5211 gives an owner who rents to a certified beginning
   farmer a refundable Nebraska credit. It matters only if a family rental qualifies.
 
@@ -471,14 +498,8 @@ bad one for another in the same world.
 
 ## 11. Open questions
 
-All owner questions so far are answered (§3). What remains:
+Every owner question so far is answered (§3). What remains:
 
-- **Q16 — confirm the season model** (§5.5): one simulated season with a carry-in and a
-  carry-out, or three seasons back to back.
-- **Q17 — Machinery cost input.** Is each operator's annual depreciation figure (from their tax
-  depreciation schedule) enough for phase 1, with fuel, repairs and machinery interest as
-  annual amounts? Or should equipment purchases be modelled from the start?
-- **Q18 — Default contracted share.** What share of the expected crop is typically forward
-  contracted before harvest? It sets the lever's starting value; MC sweeps it either way.
-- **Q19 — Pumping cost.** Is irrigation energy a cost worth carrying per acre-inch, so the
-  allocation cap matters in a drought draw? Or is it folded into overhead?
+- **Q20 — Harvest cost split** (for the §5.6 study, not phase 1). Which parts of the machinery
+  figure belong to harvest (combine, head, grain cart, trucks, fuel, labor)? How many years is
+  a combine typically kept, and what is it worth when traded?
