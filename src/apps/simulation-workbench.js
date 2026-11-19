@@ -21,6 +21,12 @@ import { WorkbenchApp }            from './workbench-app.js';
 import { IntlRetirementScenario } from '../scenarios/intl-retirement-scenario.js';
 import { UsSingleHomeownerScenario } from '../scenarios/us-single-homeowner-scenario.js';
 import { AuSingleHomeownerScenario } from '../scenarios/au-single-homeowner-scenario.js';
+import { FarmScenario }            from '../scenarios/farm-scenario.js';
+import { seasonWindow }            from '../finance/farm/farm-records.js';
+
+// One farm season (design 134): the crop year's inputs are prepaid the December before, and
+// its grain is sold into the year after harvest, so the window is the season's own.
+const FARM_WINDOW = seasonWindow(FarmScenario.DEFAULT_CROP_YEAR);
 
 const CHART_SERIES = [
   { key: 'usSavingsAccount.balance', color: '#60a5fa', label: 'US Savings'    },
@@ -62,6 +68,14 @@ const PREBUILT_SCENARIOS = [
     active:   false,
     simStart: new Date(Date.UTC(2026, 0, 1)),
     simEnd:   new Date(Date.UTC(2066, 0, 1)),
+  },
+  {
+    // A farm with no household: the Field P&L panel (Farm view) is its report.
+    cls:      FarmScenario,
+    order:    4,
+    active:   false,
+    simStart: new Date(`${FARM_WINDOW.simStart}T00:00:00.000Z`),
+    simEnd:   new Date(`${FARM_WINDOW.simEnd}T00:00:00.000Z`),
   },
 ];
 
