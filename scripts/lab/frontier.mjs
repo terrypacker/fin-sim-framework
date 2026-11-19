@@ -67,7 +67,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 
 import { loadBaseConfig, describeSource } from '../lib/scenario-source.mjs';
-import { parseFlags } from '../lib/cli.mjs';
+import { parseFlags, printJsonAndExit } from '../lib/cli.mjs';
 import { buildVariant, baseEquityRate } from '../lib/variant.mjs';
 import { run } from '../lib/run.mjs';
 import { money, pct, columns } from '../lib/format.mjs';
@@ -197,8 +197,7 @@ const secs = ((Date.now() - started) / 1000).toFixed(0);
 // ─── report ──────────────────────────────────────────────────────────────────
 
 if (opts.json) {
-  console.log(JSON.stringify({ mode, source: base.source, levers, lo, hi, step, ...res }, null, 1));
-  process.exit(0);
+  await printJsonAndExit({ mode, source: base.source, levers, lo, hi, step, ...res }, 1);
 }
 
 console.log(`\n════ ${M.label} ════`);

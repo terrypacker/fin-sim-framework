@@ -25,7 +25,7 @@
 
 import { readFileSync } from 'node:fs';
 
-import { parseFlags }   from '../lib/cli.mjs';
+import { parseFlags, printJsonAndExit }   from '../lib/cli.mjs';
 import { money, columns, heading, note } from '../lib/format.mjs';
 
 import { FarmScenario } from '../../src/scenarios/farm-scenario.js';
@@ -64,8 +64,7 @@ finally { console.log = log; }
 const { jobCost, cash } = result;
 
 if (opts.json) {
-  console.log(JSON.stringify({ source, jobCost, cash }, null, 2));
-  process.exit(0);
+  await printJsonAndExit({ source, jobCost, cash }, 2);
 }
 
 const perBu = (n) => (n == null ? '—' : `$${n.toFixed(2)}`);
