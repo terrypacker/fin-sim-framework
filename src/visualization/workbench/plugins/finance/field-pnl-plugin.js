@@ -244,6 +244,7 @@ export class FieldPnlPlugin extends WorkbenchComponent {
     for (const [op, u] of Object.entries(report.unallocated ?? {})) {
       warn.push(`${_esc(this._operatorName(farm, op))}: ${this._money(u.cost)} cost and ${this._money(u.revenue)} revenue had no crop plan to allocate to.`);
     }
+    for (const a of report.advisories ?? []) warn.push(_esc(a.message));
     this._renderWarn(warn);
 
     const groups = fieldPnlGroups(report, this._groupBy);

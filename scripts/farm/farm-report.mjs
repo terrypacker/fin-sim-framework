@@ -97,6 +97,7 @@ columns({ title: 'Whole farm', rows: [jobCost.farm], columns: jobCols });
 for (const [op, u] of Object.entries(jobCost.unallocated)) {
   note(`  ! ${op}: ${money(u.cost)} cost and ${money(u.revenue)} revenue had no crop plan to allocate to.`);
 }
+for (const a of jobCost.advisories ?? []) note(`  ! ${a.message}`);
 
 const lines = SCHEDULE_F_LINE_ORDER.filter(l => cash.some(r => r.income[l] != null || r.expense[l] != null));
 for (const r of cash) {

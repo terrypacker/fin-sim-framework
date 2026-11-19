@@ -21,7 +21,7 @@ import assert   from 'node:assert/strict';
 
 import { FarmScenario }   from '../../src/scenarios/farm-scenario.js';
 import { ScenarioSerializer } from '../../src/scenarios/scenario-serializer.js';
-import { validateFarm, normalizeFarm, priceOn } from '../../src/finance/farm/farm-records.js';
+import { validateFarm, normalizeFarm, priceOn, farmAdvisories } from '../../src/finance/farm/farm-records.js';
 import { runFarm }        from '../../src/finance/farm/farm-run.js';
 import { categoryLine, SCHEDULE_F_LINES, SCHEDULE_F_LINE_ORDER } from '../../src/finance/farm/schedule-f.js';
 
@@ -335,6 +335,7 @@ test('EVT-FARM-6: the demo farm validates and runs', () => {
   assert.deepEqual(validateFarm(r.cfg.farm), []);
   assert.ok(r.jobCost.plans.length >= 4);
   assert.deepEqual(r.jobCost.unallocated, {});
+  assert.deepEqual(r.jobCost.advisories, [], 'the demo farm seeds every annual plan');
 });
 
 // ─── FarmLedgerReducer postconditions (design 37 §6) ─────────────────────────────
@@ -432,4 +433,21 @@ test('EVT-FARM-5: a FIELDS overhead allocates by acres over its named fields onl
   const noList = tinyFarm();
   noList.overhead[0] = { ...farm.overhead[0], fieldIds: undefined };
   assert.match(validateFarm(noList).join('\n'), /fieldIds goes with basis FIELDS/);
+});
+
+test('EVT-FARM-5: a crop plan for an annual crop with no seed cost is an advisory, never an error', () => {
+  const noSeed = tinyFarm();
+  noSeed.prescriptions = noSeed.prescriptions.filter(r => r.id !== 'rx4');
+  assert.deepEqual(validateFarm(noSeed), [], 'it still loads');
+  const { jobCost } = run(noSeed);
+  assert.deepEqual(jobCost.advisories.map(a => [a.kind, a.planId]), [['NO_SEED', 'pl-rent']]);
+  assert.deepEqual(run(tinyFarm()).jobCost.advisories, [], 'both plans seeded');
+  // A zero-rate seed line is no seed; a perennial crop needs none.
+  const zero = tinyFarm();
+  zero.prescriptions.find(r => r.id === 'rx4').ratePerAcre = 0;
+  assert.deepEqual(farmAdvisories(normalizeFarm(zero)).map(a => a.planId), ['pl-rent']);
+  const hay = tinyFarm();
+  hay.prescriptions = hay.prescriptions.filter(r => r.id !== 'rx4');
+  hay.cropPlans.find(p => p.id === 'pl-rent').crop = 'ALFALFA';
+  assert.deepEqual(farmAdvisories(normalizeFarm(hay)), []);
 });
