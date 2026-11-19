@@ -160,7 +160,8 @@ export function jobCostReport(farm, ledger, { machineryBasis = 'CUSTOM', pools =
   }
   for (const pool of Object.values(pools ?? {})) {
     if (pool.cropYear !== y || !(pool.bushels > 0)) continue;
-    const price = priceOn(farm.prices, pool.crop, lastDate) ?? 0;
+    // Grain still in the bin is worth what the season's price path ended at.
+    const price = priceOn(farm.prices, pool.crop, lastDate, 'realized') ?? 0;
     extra.push({ operatorId: pool.operatorId, crop: pool.crop, amount: pool.bushels * price });
   }
   for (const x of extra) {

@@ -2,7 +2,7 @@
 
 **Status:** rev 11 (19 Nov 2026): **phase 1 BUILT** (§12): the acceptance import passes
 (§12.4) and the Field P&L panel is in the workbench (§12.5). **Phase 2 started** (§13): step 2a,
-the scenario-agnostic MC path and a farm batch on it, and step 2b, realized yield, are built. Owner questions Q1–Q20 are answered (§3); Q21–Q25 (§12.3–§12.4) are open. §7 records what the primary sources on disk decide. §8 is the household
+the scenario-agnostic MC path and a farm batch on it, step 2b, realized yield, and step 2c, price paths, are built. Owner questions Q1–Q20 are answered (§3); Q21–Q25 (§12.3–§12.4) are open. §7 records what the primary sources on disk decide. §8 is the household
 link.
 
 Revision history: rev 2 added §7 and §8, and corrected rev 1's guess that Nebraska credits
@@ -684,7 +684,7 @@ Phase 2 is six steps. Each one ships on its own, and none changes a retirement r
 |---|---|---|
 | **2a** | The scenario-agnostic MC path (§4), and a farm batch on it: the farm records' levers as the catalog, per-path metrics, the loss and breakeven distributions, `npm run farm:mc` | **built** (§13.2) |
 | 2b | **Realized yield**, separate from expected yield (§13.3): a farm-wide factor times a per-field factor, narrower on irrigated fields | **built** (§13.4) |
-| 2c | **Price paths** per crop through the marketing year, drawn against the farm yield factor (the yield–price link, §6), replacing the step table on a path | open |
+| 2c | **Price paths** per crop through the marketing year, drawn against the farm yield factor (the yield–price link, §6), replacing the step table on a path | **built** (§13.5) |
 | 2d | **Multiplier levers** (product category, rent, custom rates, machinery, irrigation) and the contracted share per crop (Q18) | open |
 | 2e | **Calibration.** NASS county yields, RMA price elections and futures history fetched into `docs/`, then the 2b–2d distributions set from them (§6) | open |
 | 2f | **A farm MC results panel** (§4: the farm gets its own, rather than bending the retirement one) | open |
@@ -786,4 +786,48 @@ Decided in the build:
 Still open for 2e: the shape of the yield distribution. Yields are skewed to the left (a
 drought year is far below trend, and a great year is only somewhat above it), so a normal
 shock is a placeholder for whatever the county history supports.
+
+### 13.5 Step 2c: price paths
+
+Each crop's price table stays as written, and is now the **expected** path. A season runs a
+**realized** path beside it: a log random walk through the table's dates, from the plan date
+(1 January of the crop year):
+
+    L_i = L_(i−1) + σ·√Δt_i·z_i − ½σ²·Δt_i − b·Δy_i
+    realized_i = price_i · exp(L_i)
+
+- **σ** is the crop's annual price volatility, a season field (`priceVol`, per crop). **z_i**
+  is the row's standard-normal `shock`, a record lever. Because z is standard by definition,
+  its MC row has sd 1, and the calibration is σ, which is 0 until 2e.
+- **The −½σ²Δt drift** keeps each realized price's mean at the table's price, so the table
+  keeps meaning "what we expect".
+- **b** is the **yield–price link** (`priceYieldBeta`, per crop): the log price move per unit of
+  farm-wide yield shock. It is taken once, on the row **in force on the crop's harvest date**,
+  and later rows carry it. A positive b makes a short crop dearer. It is a regression
+  coefficient rather than a correlation, because it can be read straight off history (log
+  price change on yield deviation) and needs no standardisation inside the model.
+- **A row dated on or before the plan date never moves.** It is already known.
+
+What reads which path:
+
+| Reader | Path |
+|---|---|
+| A planned sale's price, a contract shortfall's market price (§6) | realized |
+| Grain still in the bin at the end of the run | realized |
+| The expected price behind the breakevens (§5.4) | expected |
+
+Decided in the build:
+
+- **The link is on the row in force at harvest, not the first row after it.** The first test
+  used "first row after harvest", which in the demo is the January row, so the price harvest
+  sales are paid at never saw the size of the crop.
+- **`farm.price.<id>.price` is no longer an MC row.** Drawing rows on their own is the defect
+  §13.3 named.
+- **Old and new crop share one table per crop.** A carry-in sale in February is priced on
+  the same path. A separate old-crop path would need its own table, and none of the data asks
+  for one yet.
+
+A contract shortfall already settled at the market price (§6, phase 1). It now settles at the
+realized market price, so a short crop in a dear year costs money on the contracted
+bushels, which is the risk §6 wanted visible. A test pins that case.
 

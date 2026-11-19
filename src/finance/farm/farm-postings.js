@@ -205,7 +205,7 @@ export function compileFarmEvents(farm) {
       data: {
         kind: 'CONTRACT', operatorId: c.operatorId, crop: c.crop, cropYear: c.cropYear,
         sourceId: c.id, receivableId: `contract:${c.id}`, bushels: c.bushels, price: c.price,
-        marketPrice: priceOn(farm.prices, c.crop, c.deliveryDate),
+        marketPrice: priceOn(farm.prices, c.crop, c.deliveryDate, 'realized'),
         buyoutPerBu: c.buyoutPerBu, paymentDate: c.paymentDate,
         storagePerBuMonth: storageRate(c.operatorId, c.crop),
       },
@@ -217,7 +217,7 @@ export function compileFarmEvents(farm) {
       type: FARM_EVENT.GRAIN_OUT, date: s.saleDate, order: 2, name: `Planned sale — ${s.id}`,
       data: {
         kind: 'SALE', operatorId: s.operatorId, crop: s.crop, cropYear: s.cropYear,
-        sourceId: s.id, receivableId: `sale:${s.id}`, share: s.share, price: s.price ?? priceOn(farm.prices, s.crop, s.saleDate),
+        sourceId: s.id, receivableId: `sale:${s.id}`, share: s.share, price: s.price ?? priceOn(farm.prices, s.crop, s.saleDate, 'realized'),
         paymentDate: s.paymentDate, storagePerBuMonth: storageRate(s.operatorId, s.crop),
       },
     });

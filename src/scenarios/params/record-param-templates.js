@@ -442,9 +442,15 @@ export const FARM_PARAM_TEMPLATES = {
         + 'crop plans by its basis.' },
   ],
   price: [
-    { field: 'price', label: 'Cash Price', type: 'Number', mc: true, opt: false,
+    // The EXPECTED path (design 134 §13.5). Not an MC row: drawing each row on its own moves a
+    // crop's harvest and winter prices independently. A run moves the path through `shock`.
+    { field: 'price', label: 'Cash Price', type: 'Number', mc: false, opt: false,
       description: 'The local cash price per bushel from this date until the next price row '
         + 'for the same crop.' },
+    { field: 'shock', label: 'Price Shock', type: 'Number', mc: true, opt: false,
+      blankValue: 0,
+      description: 'The standard-normal draw that moves the crop\'s price path over the interval '
+        + 'ending at this row, scaled by the season\'s price volatility. 0 keeps the table.' },
   ],
   storage: [
     { field: 'costPerBuMonth', label: 'Storage per Bushel-Month', type: 'Number', mc: true, opt: false,
