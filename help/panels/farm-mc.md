@@ -10,7 +10,7 @@ design: [134-farm-job-costing.md]
 sources: [src/finance/farm/farm-mc.js]
 stamps:
   panel:farm-mc: 7bf9f3
-  src/finance/farm/farm-mc.js: addd7b
+  src/finance/farm/farm-mc.js: de0d60
 ---
 
 Runs the farm season many times with its uncertain inputs drawn at random, and shows how

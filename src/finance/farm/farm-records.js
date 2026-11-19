@@ -29,7 +29,7 @@ import { settleArc, ARC_PLC_PAYMENT_LIMIT } from './farm-programs.js';
  *                     <category>Multiplier? (one per PRODUCT_CATEGORIES, e.g. nitrogenMultiplier) }],
  *   operators:     [{ id, name, farmRelated?, prior3PrepaidSupplies?, prior3FarmExpenses?, defer451f? }],
  *   fields:        [{ id, operatorId, name, tenure, rentedAcres, plantedAcres, irrigated,
- *                     rentPerAcre, propertyTax, fsaFarm?, provenYield? }],
+ *                     rentPerAcre, propertyTax, communityCollegeTax?, fsaFarm?, provenYield? }],
  *   products:      [{ id, name, category, unit, unitPrice, discountPct }],
  *   operations:    [{ id, name, customRatePerAcre }],
  *   cropPlans:     [{ id, fieldId, crop, expectedYield, yieldShock?, insurancePremiumPerAcre,
@@ -256,6 +256,9 @@ export function normalizeFarm(farm) {
     f.irrigated   = f.irrigated === true;
     f.rentPerAcre ??= 0;
     f.propertyTax ??= 0;
+    // The community-college share of the property tax bill (design 134 Q29, 77-6702(1)): a
+    // part of `propertyTax`, not on top of it. It is credited on the operator's Nebraska return.
+    f.communityCollegeTax ??= 0;
     f.rentedAcres ??= (f.tenure === TENURE.CASH_RENT ? f.plantedAcres : 0);
   }
   for (const p of out.products) p.discountPct ??= 0;
@@ -407,6 +410,10 @@ export function validateFarm(farm) {
     nonNeg('fields', r, 'rentedAcres');
     nonNeg('fields', r, 'rentPerAcre');
     nonNeg('fields', r, 'propertyTax');
+    nonNeg('fields', r, 'communityCollegeTax');
+    if ((r.communityCollegeTax ?? 0) > (r.propertyTax ?? 0)) {
+      err(`farm.fields "${r.id}": communityCollegeTax is part of the property tax bill, so it can not exceed propertyTax`);
+    }
     if (r.tenure === TENURE.OWN && r.rentPerAcre > 0) err(`farm.fields "${r.id}": an owned field pays no cash rent`);
   }
   for (const r of f.products) {

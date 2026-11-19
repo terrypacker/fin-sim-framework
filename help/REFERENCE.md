@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-243 parameters · 36 panels · 13 node types (209 fields) · 183 action types · 98 tools · 352 state field types · 82 topics · 142 design docs
+243 parameters · 36 panels · 13 node types (209 fields) · 183 action types · 99 tools · 352 state field types · 82 topics · 142 design docs
 
 ---
 
@@ -1118,11 +1118,11 @@ Explained in [`help/nodes`](nodes/reducer.md). 0 field(s) described by a record 
 
 ---
 
-## Headless tools (98)
+## Headless tools (99)
 
 Command-line entry points under `scripts/`. **Purpose** is harvested from each script's
 docblock, not re-authored here. Arguments come from each script's declarative
-`parseFlags` spec: 83 of 83 entry points carry one (design 108 D6 — all of them).
+`parseFlags` spec: 84 of 84 entry points carry one (design 108 D6 — all of them).
 6 scripts carry no docblock naming themselves and show `(undocumented)`.
 
 ### scripts/config-converters/
@@ -1193,6 +1193,14 @@ docblock, not re-authored here. Arguments come from each script's declarative
     - `--harvest` (number, default `10`) — harvest month for the price change (1–12)
     - `--data` (string) — the NASS extract (default: newest in docs/us-farm-markets/)
     - `--json` (flag) — emit the figures as JSON
+- **`scripts/farm/farm-export.mjs`** — `npm run farm:export`
+  write the farm result export a household plan imports (design 134 §8.2)
+    - `--scenario` (string) — farm scenario export ({ scenarios: [...] } or one cfg); default: the demo farm
+    - `--index` (number, default `0`) — which scenario in the file
+    - `--n` (number, default `0`) — Monte Carlo paths to carry (0 = the deterministic run only)
+    - `--enable` (string) — variables to sample: comma-separated keys or key prefixes, or "all" (see npm run farm:mc -- --list)
+    - `--out` (string) — write the export here; without it, a dry run that prints the table
+    - `--verbose` (flag) — show the simulation's own console output
 - **`scripts/farm/farm-mc.mjs`** — `npm run farm:mc`
   Monte Carlo over one farm season (design 134 phase 2)
     - `--scenario` (string) — farm scenario export ({ scenarios: [...] } or one cfg); default: the demo farm
