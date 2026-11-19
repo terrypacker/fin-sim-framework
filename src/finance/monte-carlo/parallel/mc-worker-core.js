@@ -28,6 +28,7 @@ import { runsToRows }            from '../mc-analysis.js';
 import { realRatesOf }           from '../../fx/real-basis.js';
 import { describeBootstrapWindow, describeBootstrapStart, rollingStartYears, applyRollingStart }
   from '../../economic-regimes/bootstrap-window.js';
+import { FARM_MC_SCENARIO }      from '../../farm/farm-mc-scenario.js';
 
 /**
  * The per-iteration Monte Carlo world, in one place, so the SERIAL loop and a WORKER
@@ -58,7 +59,56 @@ import { describeBootstrapWindow, describeBootstrapStart, rollingStartYears, app
  * @property {Date}    simEnd
  * @property {boolean} [mix]
  * @property {boolean} [spending]
+ * @property {string}  [scenarioKind]  which `MC_SCENARIOS` entry runs the path; absent means
+ *                                     'intl-retirement', so a context built before design 134
+ *                                     phase 2 runs exactly as it did
  */
+
+// ── Scenario descriptors (design 134 §4) ──────────────────────────────────────────
+
+/** The scenario kind a context without one runs. */
+export const DEFAULT_MC_SCENARIO_KIND = 'intl-retirement';
+
+/**
+ * The worker-side half of a Monte Carlo scenario descriptor: what a path needs to be built
+ * and read. The main-thread half (default config, variable catalog, aggregation) is the
+ * runner subclass. Keyed by the scenario class's `scenarioId()`, because a context crosses
+ * `postMessage` and a class reference cannot.
+ *
+ *   createScenario(opts)  — the scenario node, from `{ context, params, simStart, simEnd }`
+ *   paths(p, i)           — write the batch's own process switches into path i's params
+ *                           (mutate and return); the identity for a scenario with none
+ *   telemetry(ctx)        — the level a path is built at
+ *   sampler(ctx)          — the in-run sampler, or null
+ *   evaluate(ctx)         — `(sim, cfg) => result`, the per-path metrics; `cfg` is the
+ *                           template with the path's params applied and loaded
+ *
+ * @type {Record<string, object>}
+ */
+export const MC_SCENARIOS = {
+  'intl-retirement': {
+    createScenario: (opts) => new IntlRetirementScenario(opts),
+    // Design 133 §4.3 — under ROLLING, path i replays its own start year. After the process
+    // choice, because the start years are the window the path's bootstrap actually samples.
+    paths:     (p, i) => applyRollingStart(applyMcPaths(p), i),
+    telemetry: (ctx) => (ctx.spending ? 'diffs' : 'off'),
+    sampler:   (ctx) => createMcSampler({ mix: !!ctx.mix }),
+    evaluate:  retirementEvaluate,
+  },
+  'us-farm': FARM_MC_SCENARIO,
+};
+
+/**
+ * The descriptor for a scenario kind. Throws on an unknown one: a path built from the wrong
+ * scenario class would run and report numbers about a different model.
+ *
+ * @param {string} [kind]
+ */
+export function mcScenarioFor(kind = DEFAULT_MC_SCENARIO_KIND) {
+  const d = MC_SCENARIOS[kind ?? DEFAULT_MC_SCENARIO_KIND];
+  if (!d) throw new Error(`Monte Carlo has no scenario descriptor for "${kind}"`);
+  return d;
+}
 
 /**
  * Produce a perturbed parameter object for iteration i.
@@ -77,7 +127,7 @@ import { describeBootstrapWindow, describeBootstrapStart, rollingStartYears, app
  *     An unset row (a blank sale year) has none, and writing `undefined` would put a
  *     key in the bag that means nothing.
  */
-export function perturbParams(baseParams, i, variables) {
+export function perturbParams(baseParams, i, variables, scenarioKind = DEFAULT_MC_SCENARIO_KIND) {
   const rng       = makeMcSeededRng(i + 1);
   const perturbed = structuredClone(baseParams);
 
@@ -90,9 +140,9 @@ export function perturbParams(baseParams, i, variables) {
     }
   }
 
-  // Design 133 §4.3 — under ROLLING, path i replays its own start year. After the process
-  // choice, because the start years are the window the path's bootstrap actually samples.
-  return applyRollingStart(applyMcPaths(perturbed), i);
+  // The scenario's own process switches (the retirement return paths, design 98 M3), written
+  // after the draws so `r.params` records exactly what the path ran.
+  return mcScenarioFor(scenarioKind).paths(perturbed, i);
 }
 
 /**
@@ -274,14 +324,26 @@ export function samplingSignature(variables) {
  * @param {{ sampler?: object|null, telemetry?: string|null }} [opts] - telemetry defaults to
  *   the batch's own ('diffs' when recording spending, else 'off')
  */
-export function createIterationSimulation(ctx, params, seed, { sampler = null, telemetry = null } = {}) {
+export function createIterationSimulation(ctx, params, seed, opts = {}) {
+  return buildIteration(ctx, params, seed, opts).sim;
+}
+
+/**
+ * `createIterationSimulation`, also returning the loaded cfg: the template with the path's
+ * params applied, after the loader has cascaded them onto its records. A result extractor
+ * that reads records (the farm's reports do) reads them here, so it sees the path's values.
+ *
+ * @returns {{ sim: object, cfg: object }}
+ */
+export function buildIteration(ctx, params, seed, { sampler = null, telemetry = null } = {}) {
+  const descriptor  = mcScenarioFor(ctx.scenarioKind);
   const simStart    = ctx.simStart;
   const simEnd      = ctx.simEnd;
   const cfgTemplate = ctx.cfgTemplate;
   // Isolated per-iteration registry: never touches the singleton, so the
   // user's active config graph + UI bindings stay intact across MC runs.
   const registry = new ServiceRegistry();
-  const scenario = new IntlRetirementScenario({
+  const scenario = descriptor.createScenario({
     context: registry.simulationContext,
     params,
     simStart,
@@ -328,7 +390,7 @@ export function createIterationSimulation(ctx, params, seed, { sampler = null, t
   // the result is bit-identical. Still ~7x an 'off' run (design 89 §20), which is
   // why this stays opt-in.
   scenario.buildSim({
-    seed, telemetry: telemetry ?? (ctx.spending ? 'diffs' : 'off'), sampler,
+    seed, telemetry: telemetry ?? descriptor.telemetry(ctx), sampler,
     samplerCadence: MC_SAMPLER_CADENCE,
   });
 
@@ -338,7 +400,7 @@ export function createIterationSimulation(ctx, params, seed, { sampler = null, t
   applyParamBagToConfig(cfg, params);
   new ScenarioLoader().load(cfg, registry);
 
-  return scenario.sim;
+  return { sim: scenario.sim, cfg };
 }
 
 /**
@@ -351,64 +413,30 @@ export function createIterationSimulation(ctx, params, seed, { sampler = null, t
  * @returns {{ runIteration: (i: number, params?: object) => object, perturb: (i: number) => object }}
  */
 export function buildIterationRunner(ctx) {
-  const simEnd      = ctx.simEnd;
-  const sampler     = createMcSampler({ mix: !!ctx.mix });
-  // Metric (not economic) params, so one provider is correct for the whole run —
-  // see the note at the runner's call site.
-  const afterTaxOpts = afterTaxOptionsFromParams(ctx.base);
+  const descriptor = mcScenarioFor(ctx.scenarioKind);
+  const sampler    = descriptor.sampler(ctx);
+  const evaluate   = descriptor.evaluate(ctx);
+  // The loaded cfg of the path being run, for an extractor that reads records. Set by
+  // `createSimulation` and read by `evaluate` on the same thread, one path at a time.
+  let loaded = null;
 
   const runner = new ScenarioRunner({
-    createSimulation: (params, seed) => createIterationSimulation(ctx, params, seed, { sampler }),
-    evaluate: (sim) => (warnAfterTaxRate(sim.state, ctx.base), {   // issue #770
-      // Design 84 §6.4a — MC used to record NOMINAL net worth only, which prices a
-      // Roth dollar at par with a pre-tax one. On any question about WHERE wealth
-      // sits (a decant, a conversion, a wrapper swap) that is the wrong scoreboard
-      // and it favours holding by construction; G1 fixed it on the grid path and the
-      // MC path was never followed. Built from the shared factory so a grid cell, an
-      // optimizer score and an MC path are one number.
-      afterTaxNetWorthUsd: computeAfterTaxNetWorth(sim.state, simEnd, afterTaxOpts),
-      cumulativeTaxesPaid: sim.state.cumulativeTaxesPaid ?? 0,
-      finalNetWorthUsd:  computeNetWorthUsd(sim.state),
-      finalNetWorthInclSpeculative: computeNetWorthInclSpeculative(sim.state, 'USD'),  // design 88 D7
-      finalNetLiquidity: computeNetLiquidity(sim.state, simEnd),
-      scenarioFailed:    sim.state.scenarioFailed    ?? false,
-      outOfFundsDate:    sim.state.outOfFundsDate    ?? null,
-      cumulativeDeficit: sim.state.cumulativeDeficit ?? 0,
-      deficitMonths:     sim.state.deficitMonths     ?? 0,
-      timeSeries:        extractYearlyTimeSeries(sim),
-      // The rates the terminal figures above were measured at (design 79 §9): a real
-      // display restates THIS path's terminal wealth by THIS path's inflation and FX.
-      terminalRates:     realRatesOf(sim.state),
-      // Design 126 §3.5 — each random shock's drawn arrival on this path (null = it did not
-      // arrive); absent when no shock draws.
-      shockArrivals:     sim.state.shockArrivals ?? null,
-      // Lifetime stochastic house-repair spend (design 75 §6.4 C), native property currency
-      // summed across properties. Already accumulated in state by HouseRepairApplyReducer.
-      lifetimeRepairSpend: sim.state.houseRepairSpendingTotal ?? 0,
-      // Design 89 phase 6. Reduced to ~20 numbers HERE rather than kept as a cube:
-      // ~3,900 rows x n paths is hundreds of megabytes, and the whole reason an MC
-      // iteration records metrics instead of state (design 78 §4.5).
-      ...(ctx.spending
-        // `services: null` deliberately. The per-iteration registry is scoped to
-        // createSimulation and, on the compiler path, registers no accounts anyway — so
-        // the cube resolves each balance's unit from the account's own `currency.code`
-        // in live state, the fallback phase 2 added when the loan balances turned out to
-        // declare a currency KIND with a null CODE. Verified to give identical totals.
-        ? { spending: summarizeSpendingForRun(buildSpendingCube({
-            journal: sim.journal, state: sim.state, services: null, currency: 'USD',
-          })) }
-        : {}),
-    }),
+    createSimulation: (params, seed) => {
+      const built = buildIteration(ctx, params, seed, { sampler });
+      loaded = built.cfg;
+      return built.sim;
+    },
+    evaluate: (sim) => evaluate(sim, loaded),
   });
 
   return {
-    perturb: (i) => perturbParams(ctx.base, i, ctx.variables),
+    perturb: (i) => perturbParams(ctx.base, i, ctx.variables, ctx.scenarioKind),
     /**
      * Run iteration `i`. `params` is passed in by the main thread so a subclass
      * `_perturb` override still governs the serial path; a worker perturbs locally
      * from the same shared function, which is why the two agree exactly.
      */
-    runIteration(i, params = perturbParams(ctx.base, i, ctx.variables)) {
+    runIteration(i, params = perturbParams(ctx.base, i, ctx.variables, ctx.scenarioKind)) {
       // One path that throws — a strict-mode invariant, a model defect — must not take the
       // other n − 1 down with it. The path comes back as `error` with its seed and params so
       // it can be replayed; callers drop it from the statistics and report it.
@@ -420,6 +448,59 @@ export function buildIterationRunner(ctx) {
       }
     },
   };
+}
+
+/**
+ * The retirement scenario's per-path metrics (the result extractor of its descriptor).
+ *
+ * @param {McIterationContext} ctx
+ * @returns {(sim: object) => object}
+ */
+function retirementEvaluate(ctx) {
+  const simEnd = ctx.simEnd;
+  // Metric (not economic) params, so one provider is correct for the whole run —
+  // see the note at the runner's call site.
+  const afterTaxOpts = afterTaxOptionsFromParams(ctx.base);
+  return (sim) => (warnAfterTaxRate(sim.state, ctx.base), {   // issue #770
+    // Design 84 §6.4a — MC used to record NOMINAL net worth only, which prices a
+    // Roth dollar at par with a pre-tax one. On any question about WHERE wealth
+    // sits (a decant, a conversion, a wrapper swap) that is the wrong scoreboard
+    // and it favours holding by construction; G1 fixed it on the grid path and the
+    // MC path was never followed. Built from the shared factory so a grid cell, an
+    // optimizer score and an MC path are one number.
+    afterTaxNetWorthUsd: computeAfterTaxNetWorth(sim.state, simEnd, afterTaxOpts),
+    cumulativeTaxesPaid: sim.state.cumulativeTaxesPaid ?? 0,
+    finalNetWorthUsd:  computeNetWorthUsd(sim.state),
+    finalNetWorthInclSpeculative: computeNetWorthInclSpeculative(sim.state, 'USD'),  // design 88 D7
+    finalNetLiquidity: computeNetLiquidity(sim.state, simEnd),
+    scenarioFailed:    sim.state.scenarioFailed    ?? false,
+    outOfFundsDate:    sim.state.outOfFundsDate    ?? null,
+    cumulativeDeficit: sim.state.cumulativeDeficit ?? 0,
+    deficitMonths:     sim.state.deficitMonths     ?? 0,
+    timeSeries:        extractYearlyTimeSeries(sim),
+    // The rates the terminal figures above were measured at (design 79 §9): a real
+    // display restates THIS path's terminal wealth by THIS path's inflation and FX.
+    terminalRates:     realRatesOf(sim.state),
+    // Design 126 §3.5 — each random shock's drawn arrival on this path (null = it did not
+    // arrive); absent when no shock draws.
+    shockArrivals:     sim.state.shockArrivals ?? null,
+    // Lifetime stochastic house-repair spend (design 75 §6.4 C), native property currency
+    // summed across properties. Already accumulated in state by HouseRepairApplyReducer.
+    lifetimeRepairSpend: sim.state.houseRepairSpendingTotal ?? 0,
+    // Design 89 phase 6. Reduced to ~20 numbers HERE rather than kept as a cube:
+    // ~3,900 rows x n paths is hundreds of megabytes, and the whole reason an MC
+    // iteration records metrics instead of state (design 78 §4.5).
+    ...(ctx.spending
+      // `services: null` deliberately. The per-iteration registry is scoped to
+      // createSimulation and, on the compiler path, registers no accounts anyway — so
+      // the cube resolves each balance's unit from the account's own `currency.code`
+      // in live state, the fallback phase 2 added when the loan balances turned out to
+      // declare a currency KIND with a null CODE. Verified to give identical totals.
+      ? { spending: summarizeSpendingForRun(buildSpendingCube({
+          journal: sim.journal, state: sim.state, services: null, currency: 'USD',
+        })) }
+      : {}),
+  });
 }
 
 // ── Worker-side entry points ───────────────────────────────────────────────────
@@ -458,7 +539,7 @@ export function runMcIteration(payload) {
 export function gridCellParams(ctx, cell, i) {
   const base = structuredClone(ctx.base);
   for (const [k, v] of Object.entries(ctx.cells[cell].overrides)) set(base, k, v);
-  return perturbParams(base, i, ctx.variables);
+  return perturbParams(base, i, ctx.variables, ctx.scenarioKind);
 }
 
 /**
