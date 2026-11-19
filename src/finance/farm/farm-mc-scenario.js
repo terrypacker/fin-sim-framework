@@ -43,6 +43,7 @@ export const FARM_BASES = Object.freeze({ custom: 'CUSTOM', actual: 'ACTUAL' });
  *   `<scope>.net.<basis>`              net income, crop-year job-cost view
  *   `<scope>.netPerAcre.<basis>`       per planted acre
  *   `<scope>.revenue`                  grain + other revenue (basis-free)
+ *   `<scope>.grainRevenue`             grain only: without insurance and program payments
  *   `<scope>.breakevenPrice.<basis>`   (total cost − non-grain revenue) ÷ expected bushels
  *   `<scope>.breakevenUnpricedPrice.<basis>`  what the unpriced bushels must fetch
  *   `<scope>.breakevenYield.<basis>`   bushels per acre that cover cost
@@ -50,6 +51,7 @@ export const FARM_BASES = Object.freeze({ custom: 'CUSTOM', actual: 'ACTUAL' });
  *   `<scope>.insurance`                crop insurance indemnity for the crop year (§15.2)
  *   `<scope>.insurancePays`            1 when that indemnity is above 0, else 0: its mean is
  *                                      the probability a claim pays
+ *   `<scope>.arc`, `<scope>.arcPays`   the same for this crop's ARC-County payment
  *
  * where `<scope>` is `farm`, `operator.<id>`, `crop.<CROP>` or `plan.<id>`, and `<basis>` is
  * `custom` or `actual`. A breakeven is null where the report's is (a mixed-crop group, a crop
@@ -77,6 +79,7 @@ export function farmPathMetrics(cfg, sim) {
     out[`${scope}.breakevenUnpricedPrice.${basis}`] = row.breakevenUnpricedPrice ?? null;
     out[`${scope}.breakevenYield.${basis}`]         = row.breakevenYield ?? null;
     out[`${scope}.revenue`]                         = row.revenue.total;
+    out[`${scope}.grainRevenue`]                    = row.revenue.grain;
   };
   for (const [basis, r] of Object.entries(reports)) {
     put('farm', basis, r.farm);
@@ -85,25 +88,35 @@ export function farmPathMetrics(cfg, sim) {
     for (const row of r.plans) if (row.planId) put(`plan.${row.planId}`, basis, row);
   }
   const y = base.jobCost.cropYear;
-  // Crop insurance per scope, from the ledger: a plan's indemnity is charged to the plan.
+  // Program revenue per scope, from the ledger: crop insurance and ARC-County (design 134
+  // §15). A posting charged to a plan counts on its plan, operator and crop; one on an
+  // operator's job counts on the farm and the operator.
   const planRow = new Map(base.jobCost.plans.filter(r => r.planId).map(r => [r.planId, r]));
-  const indemnity = { farm: 0 };
-  for (const r of base.jobCost.plans) {
-    if (!r.planId) continue;
-    for (const scope of [`operator.${r.operatorId}`, `crop.${r.crop}`, `plan.${r.planId}`]) indemnity[scope] ??= 0;
-  }
-  for (const p of base.ledger) {
-    if (p.category !== 'CROP_INSURANCE_PROCEEDS' || p.cropYear !== y) continue;
-    const r = planRow.get(p.jobId);
-    indemnity.farm += p.amount;
-    if (!r) continue;
-    indemnity[`operator.${r.operatorId}`] += p.amount;
-    indemnity[`crop.${r.crop}`] += p.amount;
-    indemnity[`plan.${r.planId}`] += p.amount;
-  }
-  for (const [scope, v] of Object.entries(indemnity)) {
-    out[`${scope}.insurance`] = v;
-    out[`${scope}.insurancePays`] = v > 0 ? 1 : 0;
+  const PROGRAMS = { insurance: 'CROP_INSURANCE_PROCEEDS', arc: 'PROGRAM_PAYMENT' };
+  const sourceIds = { insurance: null, arc: new Set((base.farm.arcBase ?? []).map(b => b.id)) };
+  for (const [name, category] of Object.entries(PROGRAMS)) {
+    const sum = { farm: 0 };
+    for (const r of base.jobCost.plans) {
+      if (!r.planId) continue;
+      for (const scope of [`operator.${r.operatorId}`, `crop.${r.crop}`, `plan.${r.planId}`]) sum[scope] ??= 0;
+    }
+    for (const p of base.ledger) {
+      if (p.category !== category || p.cropYear !== y) continue;
+      if (sourceIds[name] && !sourceIds[name].has(p.sourceId)) continue;   // not last year's carry-in rows
+      sum.farm += p.amount;
+      const r = planRow.get(p.jobId);
+      if (r) {
+        sum[`operator.${r.operatorId}`] += p.amount;
+        sum[`crop.${r.crop}`] += p.amount;
+        sum[`plan.${r.planId}`] += p.amount;
+      } else {
+        sum[`operator.${p.operatorId}`] = (sum[`operator.${p.operatorId}`] ?? 0) + p.amount;
+      }
+    }
+    for (const [scope, v] of Object.entries(sum)) {
+      out[`${scope}.${name}`] = v;
+      out[`${scope}.${name}Pays`] = v > 0 ? 1 : 0;
+    }
   }
   for (const row of base.cash) {
     if (row.year === y) out[`operator.${row.operatorId}.scheduleF`] = row.net;
