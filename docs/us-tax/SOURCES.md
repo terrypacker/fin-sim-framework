@@ -115,3 +115,34 @@ All five by the scripted routes above (govinfo granule; eCFR renderer with `curl
 
 Check against the first year it could be checked: the 2027 tables (Rev. Proc. 2026-35) rose
 3.22–3.25% from 2026; the 2027 FICA base rose 4.23% on an AWI step of 4.23%.
+
+## Added 19 Nov 2026 for design 134 (farm job costing)
+
+A farm operator files a normal Form 1040 with a **Schedule F**. These are the sections that
+turn a crop year's job-cost ledger into that schedule and its knock-on effects. They use the
+same govinfo and eCFR routes as above. **The Code sections are the 2024 edition, which
+predates P.L. 119-21 (4 Jul 2025).** The Act is on disk in full. The farm-relevant amending
+sections are listed in the last column, so read each Code file together with its amendment.
+
+| file | section | why it is here |
+|---|---|---|
+| `USCODE-2024-…-subchapB-partVI-sec172.txt` | **§172** *Net operating loss deduction* | `(b)(1)(B)` a **farming loss** carries back 2 years. |
+| `USCODE-2024-…-subchapB-partVI-sec175.txt` | **§175** *Soil and water conservation expenditures* | Expensing instead of capitalizing (Schedule F line 12). |
+| `USCODE-2024-…-subchapB-partVI-sec179.txt` | **§179** *Election to expense certain depreciable business assets* | Machinery. **P.L. 119-21 §70306** raises the limits in `(b)(1)` and `(b)(2)` (\$2,500,000 / \$4,000,000). |
+| `USCODE-2024-…-subchapB-partVI-sec180.txt` | **§180** *Expenditures by farmers for fertilizer, etc.* | Fertilizer and lime are deductible in the year paid (Schedule F line 17). |
+| `USCODE-2024-…-subchapB-partVI-sec199A.txt` | **§199A** *Qualified business income* | The QBI deduction on farm net income. `(g)` covers patrons of agricultural cooperatives (grain sold to a co-op). **P.L. 119-21 §70105** extends and amends it. |
+| `USCODE-2024-…-subchapE-partII-subpartB-sec451.txt` | **§451** *General rule for taxable year of inclusion* | `(f)` a cash-method farmer may **defer crop insurance and disaster proceeds to the following year**. |
+| `USCODE-2024-…-subchapE-partII-subpartC-sec461.txt` | **§461** *General rule for taxable year of deduction* | `(l)` the **excess business loss** limit for noncorporate taxpayers. **P.L. 119-21 §70601** makes it permanent. |
+| `USCODE-2024-…-subchapE-partII-subpartC-sec464.txt` | **§464** *Limitations on deductions for certain farming expenses* | `(d)` the **prepaid farm supplies** rule: prepaying more than 50% of the other deductible farming expenses defers the excess, with exceptions. This bounds the December input prepay. |
+| `USCODE-2024-…-subchapQ-partI-sec1301.txt` | **§1301** *Averaging of farm income* | Schedule J: elected farm income is taxed at the 3 prior years' rates, one-third each. |
+| `USCODE-2024-title26-subtitleA-chap2-sec1401.txt`, `…-sec1402.txt` | **§1401–1402** *Self-employment tax* | SECA on Schedule F net (design 69 models it already). §1402(a)(1) covers crop-share rentals and material participation. |
+| `CFR-26-1.61-4-Gross-Income-Of-Farmers.txt` | Reg. §1.61-4 | What is farm gross income under the cash and accrual methods. |
+| `CFR-26-1.162-12-Expenses-Of-Farmers.txt` | Reg. §1.162-12 | What is deductible, the crop method, and when seed is expensed. |
+| `CFR-26-1.451-6-Election-To-Include-Crop-Insurance-Proceeds-Following-Year.txt` | Reg. §1.451-6 | The §451(f) deferral election, and its "normal business practice" test. |
+| `IRS-Pub-225-Farmers-Tax-Guide-2025.txt` | Pub. 225 (2025) | The IRS's farm guide. Covers all of the above in one place. |
+| `IRS-Schedule-F-Form-2025.txt`, `IRS-Schedule-F-Instructions-2025.txt` | Schedule F (2025) | **The expense categories the cash report must produce**: lines 10–32. |
+| `IRS-Schedule-SE-Instructions-2026.txt` | Schedule SE (2026) | The farm optional method. |
+| `IRS-Schedule-J-Instructions-2025.txt` | Schedule J (2025) | Income averaging worksheet. |
+| `IRS-Pub-946-How-To-Depreciate-Property-2025.txt` | Pub. 946 (2025) | MACRS classes for farm machinery and buildings. |
+| `IRS-Form-8995-Instructions-2025.txt` | Form 8995 (2025) | The QBI computation, as filed. |
+| `PLAW-119-21-Reconciliation-Act-2025-07-04.txt` | **P.L. 119-21** (enacted 4 Jul 2025) | Farm-relevant sections: **§10301** (reference prices, effective reference price 88%), **§10304** (PLC through 2031), **§10305** (ARC through 2031, 90% guarantee), **§10501** (beginning farmers), **§10502** (crop insurance coverage levels), **§70105** (§199A), **§70301** (§168(k) full expensing made permanent), **§70306** (§179 limits), **§70437** (gain on sale of qualified farmland), **§70601** (§461(l) permanent). |
