@@ -101,7 +101,7 @@ export class McGridRunner extends IntlRetirementMcRunner {
       : ctx.variables.filter(v => v.enabled && axisKeys.includes(v.paramKey)).map(v => v.paramKey);
     const variables = ctx.variables.map(v =>
       (v.enabled && (det || axisKeys.includes(v.paramKey))) ? { ...v, enabled: false } : v);
-    const base = det ? { ...ctx.base, mcSequenceRisk: false, mcInflationPath: false } : ctx.base;
+    const base = det ? { ...ctx.base, mcSequenceRisk: false, mcInflationPath: false, mcFarmPaths: false } : ctx.base;
 
     const cells = cartesianProduct(this.axes.map(a => a.values)).map(values => ({
       values,

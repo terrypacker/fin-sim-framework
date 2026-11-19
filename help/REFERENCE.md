@@ -9,11 +9,11 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-243 parameters · 36 panels · 13 node types (209 fields) · 184 action types · 100 tools · 353 state field types · 83 topics · 142 design docs
+245 parameters · 36 panels · 13 node types (209 fields) · 184 action types · 100 tools · 353 state field types · 83 topics · 142 design docs
 
 ---
 
-## Parameters (243)
+## Parameters (245)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
@@ -124,6 +124,13 @@ scenario's own schema), which is where to go to change it.
   Optional POLICY cap on how much loss to realize per year — blank (the default) = no cap. It is deliberately NOT the \$3,000 figure any more (design 94 §8.1h): that is §1211(b)'s limit on capital loss deductible against ORDINARY income, it is already applied on the return along with the §1212(b) carryforward, and capping the harvest at it limited the same loss twice — so the strategy could never accumulate the carryforward that is most of what it is for. Set it only if the household genuinely will not sell more than this in a year.
 - **`taxLossHarvestOnRegimeEntry`** — TLH on Regime Entry · `Boolean` · default `true` · sweep: opt · conditional · via ECONOMIC_REGIMES
   Also trigger tax-loss harvesting on PANIC_SELL_TRIGGER regime entry, not just at year-end
+
+### Business Income (2)
+
+- **`businessIncomeFarmPaths`** — Business Income: Draw Farm Paths · `Boolean` · default `false` · via US_INCOME
+  When on, each year of an imported farm's business income is one Monte Carlo path of the farm, drawn at random for that year, instead of the farm's deterministic run. Seasons are then independent of one another, and of the household's market draws. The draw follows the run's seed, so a run replays. Needs a farm export imported with its paths; a row without them always pays its deterministic figures.
+- **`mcFarmPaths`** — Monte Carlo: Farm Paths · `Boolean` · default `true` · via US_INCOME
+  When on (default), every household Monte Carlo path draws its business income from the imported farm paths, a different farm season each year. Turn off to pay the farm's deterministic figures in every path, which shows the household's risk without the farm's.
 
 ### Contributions (13)
 
@@ -1866,7 +1873,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `BOND_SLEEVE_COUPON_APPLY` | amount: currency(USD), federalTaxableAmount: currency(USD), stateTaxableAmount: currency(USD), stateKey: text, taxMode: text, residency: text | US_RETIREMENT |
 | `BONUS_APPLY` | amount: currency(USD), residency: text, personKey: text | US_INCOME |
 | `BONUS_TAX` | amount: currency(USD), residency: text, personKey: text | US_INCOME |
-| `BUSINESS_INCOME_APPLY` | amount: currency(USD), residency: text, personKey: text, businessIncomeId: text, indexBase: number | US_INCOME |
+| `BUSINESS_INCOME_APPLY` | amount: currency(USD), residency: text, personKey: text, businessIncomeId: text, indexBase: number, farmPathSeed: number | US_INCOME |
 | `CASH_SLEEVE_INTEREST_APPLY` | amount: currency(USD), stateKey: text, taxMode: text, residency: text | US_RETIREMENT |
 | `CHANGE_RESIDENCY_APPLY` | — | US_AU_CROSS_BORDER |
 | `CHANGE_STATE_RESIDENCY_APPLY` | destination: text | US_STATE_TAX |
@@ -2414,7 +2421,7 @@ what the in-app panel keys on.
 | [Event Sourcing](concepts/event-sourcing.md) | concept | 381 | 3 panels · design 2, 16, 91 |
 | [Node History](panels/exec-history.md) | panel | 191 | 1 panel |
 | [Farm MC](panels/farm-mc.md) | panel | 247 | 1 panel · design 134 |
-| [Farm Results into a Household Plan](workflows/farm-to-household.md) | workflow | 364 | 2 tools · design 134 |
+| [Farm Results into a Household Plan](workflows/farm-to-household.md) | workflow | 410 | 2 params · 2 tools · design 134 |
 | [Field P&L](panels/field-pnl.md) | panel | 243 | 1 panel · design 134 |
 | [Funding and Instalments](concepts/funding-and-instalments.md) | concept | 248 | 2 panels · 3 params · design 107 |
 | [FX](concepts/fx.md) | concept | 390 | 2 panels · 6 params · design 47, 87, 122 |

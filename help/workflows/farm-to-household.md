@@ -3,12 +3,14 @@ id: farm-to-household
 kind: workflow
 title: Farm Results into a Household Plan
 panels: []
-params: []
+params: [businessIncomeFarmPaths, mcFarmPaths]
 actions: []
 tools: [scripts/farm/farm-export.mjs, scripts/scenario/import-farm.mjs]
 design: [134-farm-job-costing.md]
 sources: [src/finance/farm/farm-export.js, src/finance/payroll/business-income.js]
 stamps:
+  param:businessIncomeFarmPaths: 4622e2
+  param:mcFarmPaths: f159da
   src/finance/farm/farm-export.js: 20aad3
   src/finance/payroll/business-income.js: 1a8c09
 ---
@@ -40,7 +42,12 @@ after are partial and are not imported.
 a self-employed wage is, and Nebraska taxes it the same way. A loss debits the household's US
 cash and offsets its other income. It is paid on 15 December, before the year's returns settle.
 
+**Under Monte Carlo** each household year draws its own farm season from the imported paths,
+so a run can have a drought year followed by a good one, and the farm's seasons are
+independent of the household's markets. A single run pays the deterministic net unless you
+turn the draw on; Monte Carlo turns it on unless you turn it off, which isolates the
+household's own risk.
+
 **What is not there yet.** The QBI deduction, the Nebraska community-college credit, the
 excess business loss limit, the farming-loss carryback and income averaging are later steps
-of design 134 phase 4. Until a household MC draws farm paths (also a later step), every year
-of every MC path pays the deterministic net.
+of design 134 phase 4.

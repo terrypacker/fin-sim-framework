@@ -171,6 +171,9 @@ export function applyMcPaths(p) {
   }
   // Design 104 — the prime rate mode (fixed/scheduled OR following inflation).
   p.primeRateModel = mcPrimeModel(p);
+  // Design 134 step 4d — an imported farm pays a drawn farm path each year. Inert without
+  // `cfg.businessIncomePaths`, so a plan with no farm runs exactly as before.
+  if (p.mcFarmPaths !== false) p.businessIncomeFarmPaths = true;
 
   return p;
 }

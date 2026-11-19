@@ -1318,3 +1318,18 @@ operator with no full crop-year Schedule F. It warns when community-college tax 
 a person who is not a Nebraska resident, when the row starts before the plan does, and when the
 paths were sampled from uncalibrated spreads. The help topic `farm-to-household`
 (`help/workflows/`) walks through both commands.
+
+### 16.7 Step 4d: a farm path per household year (built)
+
+Two params, the same pair the stochastic inflation path has. `businessIncomeFarmPaths`
+(US_INCOME, default off) is the single-run switch. `mcFarmPaths` (default on) is the
+Monte Carlo one, and `applyMcPaths` sets the first from it in every path. A deterministic grid
+cell turns it off, as it turns off the market and inflation paths.
+
+With the switch on, `US_INCOME` draws at compile, for each row and year, one of the row's
+`businessIncomePaths`. It uses `keyedRng(rngSeed, 'business-income:<id>', year)`, design 126's
+keyed stream. A year's draw therefore does not move when another row or process is added, and
+it is independent of the market draws (Q15). The event, and `BUSINESS_INCOME_APPLY`, record the
+path's `farmPathSeed`, so the journal shows which farm season paid each year. The CPI indexing
+of §16.5 applies to the drawn figures. A row with no paths pays its deterministic figures with
+the switch on or off, so a plan without a farm runs exactly as before.
