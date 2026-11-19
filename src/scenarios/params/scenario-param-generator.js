@@ -182,7 +182,13 @@ export class ScenarioParamGenerator {
       for (const r of cfg.farm?.[FARM_PARAM_TABLES[kind]] ?? []) {
         if (r?.id == null) continue;
         const name = r.name ? `${r.name}` : r.id;
-        add(this._expand('farm', 'farm', { ...r, name }, `${kind}.${r.id}`,
+        // A season's multiplier levers exist only for what the farm has (design 134 §13.6):
+        // the product categories it buys, and a variable-rate interest row.
+        const facts = kind === 'season' ? {
+          _productCategories: [...new Set((cfg.farm.products ?? []).map(p => p.category))],
+          _hasVariableRate:   (cfg.farm.overhead ?? []).some(o => o.variableRate === true),
+        } : {};
+        add(this._expand('farm', 'farm', { ...r, name, ...facts }, `${kind}.${r.id}`,
           template.map(t => ({ ...t, group: t.group ?? `Farm · ${FARM_PARAM_TABLES[kind]}` }))));
       }
     }

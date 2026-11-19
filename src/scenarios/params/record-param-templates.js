@@ -50,6 +50,8 @@
 import { ACCOUNT_TYPE } from '../../finance/assets/account.js';
 import { DIVIDEND_ELECTION_ROLES } from '../../finance/state/account-roles.js';
 import { SS_CLAIM_AGES } from '../../finance/account-rules/us/us-social-security-rules.js';
+import { SEASON_MULTIPLIERS, categoryMultiplierField } from '../../finance/farm/farm-records.js';
+import { PRODUCT_CATEGORIES } from '../../finance/farm/schedule-f.js';
 
 // Retirement-account ledger scalar exposed as a param (design 53 §2 / account-basis
 // two-concepts). Per-lot holdings and cost basis stay in the account editor (design 25).
@@ -414,6 +416,20 @@ export const FARM_PARAM_TEMPLATES = {
       blankValue: 1,
       description: 'How much of the farm-wide yield shock an irrigated field takes: 1 the '
         + 'whole shock, 0 none of it. Dry fields always take all of it.' },
+    // Design 134 §13.6 — one lever per cost family. A product category's multiplier exists only
+    // where the farm buys that category (the generator lists the categories on the season row).
+    ...Object.entries(SEASON_MULTIPLIERS).map(([field, covers]) => ({
+      field, label: _multiplierLabel(field), type: 'Number', mc: true, opt: false, blankValue: 1,
+      ...(field === 'interestMultiplier' ? { appliesTo: r => r._hasVariableRate === true } : {}),
+      description: `Multiplies ${covers} this season (1 = as authored, 1.2 = 20% more).`,
+    })),
+    ...Object.entries(PRODUCT_CATEGORIES).map(([cat, { label }]) => ({
+      field: categoryMultiplierField(cat), label: `${label} Price Multiplier`, type: 'Number',
+      mc: true, opt: false, blankValue: 1,
+      appliesTo: r => (r._productCategories ?? []).includes(cat),
+      description: `Multiplies the price of every ${label.toLowerCase()} product this season `
+        + '(1 = as authored, 1.3 = 30% dearer).',
+    })),
   ],
   plan: [
     // The PLAN yield, which the breakevens and the contracted share are measured against
@@ -440,6 +456,13 @@ export const FARM_PARAM_TEMPLATES = {
     { field: 'amount', label: 'Amount', type: 'Number', mc: false, opt: false,
       description: 'This overhead pool\'s amount for the year, allocated to its operator\'s '
         + 'crop plans by its basis.' },
+  ],
+  contract: [
+    // Q18 — the share of the expected crop contracted, only on a contract sized that way.
+    { field: 'shareOfExpected', label: 'Share of Expected Crop', type: 'Number', mc: true, opt: true,
+      appliesTo: r => r.shareOfExpected != null,
+      description: 'This contract\'s bushels as a share of the operator\'s expected crop of it '
+        + '(0.4 = 40%). Fixed at plan time: a short crop leaves a shortfall to settle.' },
   ],
   price: [
     // The EXPECTED path (design 134 §13.5). Not an MC row: drawing each row on its own moves a
@@ -476,7 +499,12 @@ export const FARM_PARAM_TEMPLATES = {
 
 /** `FARM_PARAM_TEMPLATES` kind → its `cfg.farm` table. */
 export const FARM_PARAM_TABLES = {
-  season: 'seasons', field: 'fields', product: 'products', operation: 'operations', plan: 'cropPlans',
+  season: 'seasons', contract: 'contracts', field: 'fields', product: 'products', operation: 'operations', plan: 'cropPlans',
   machinery: 'machinery', overhead: 'overhead', price: 'prices', storage: 'storage',
   sale: 'sales', otherIncome: 'otherIncome', carryOut: 'carryOut',
 };
+
+/** `customRateMultiplier` → `Custom Rate Multiplier`. */
+function _multiplierLabel(field) {
+  return field.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase());
+}

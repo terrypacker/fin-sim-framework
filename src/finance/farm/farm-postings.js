@@ -9,7 +9,7 @@
  */
 
 import { categoryLine } from './schedule-f.js';
-import { TENURE, harvestDateFor, priceOn, realizedYield } from './farm-records.js';
+import { TENURE, harvestDateFor, priceOn, realizedYield, categoryMultiplierField } from './farm-records.js';
 
 /**
  * The farm calendar (design 134 §5.2) compiled from normalized records into dated events.
@@ -68,6 +68,8 @@ export function compileFarmEvents(farm) {
   const operationById = new Map(farm.operations.map(o => [o.id, o]));
   const planById = new Map(farm.cropPlans.map(p => [p.id, p]));
   const jobOfField = (f) => planByField.get(f.id)?.id ?? fieldJob(f.id);
+  // The season's multipliers (design 134 §13.6), each 1 unless a run sets it.
+  const m = season;
 
   /** A fixed posting. `cash: false` is a costing charge (design 134 Q5a), never paid. */
   const post = (date, name, p) => {
@@ -96,7 +98,7 @@ export function compileFarmEvents(farm) {
   for (const f of farm.fields) {
     const job = jobOfField(f);
     if (f.tenure === TENURE.CASH_RENT && f.rentPerAcre > 0) {
-      const rent = f.rentedAcres * f.rentPerAcre;
+      const rent = f.rentedAcres * f.rentPerAcre * m.rentMultiplier;
       const spring = rent * cal.rentSpringShare;
       post(cal.rentSpringDate, `Rent (spring) — ${f.name ?? f.id}`,
         { operatorId: f.operatorId, jobId: job, category: 'LAND_RENT', amount: spring, sourceId: f.id });
@@ -123,7 +125,7 @@ export function compileFarmEvents(farm) {
     });
     post(cal.irrigationDate, `Irrigation electricity — ${plan.id}`, {
       operatorId: op, jobId: plan.id, category: 'IRRIGATION_ELECTRICITY',
-      amount: plan.irrigationElectricity, sourceId: plan.id,
+      amount: plan.irrigationElectricity * m.irrigationMultiplier, sourceId: plan.id,
     });
     out.push({
       type: FARM_EVENT.GRAIN_IN, date: harvestDateFor(cal, plan.crop), order: 0,
@@ -143,28 +145,29 @@ export function compileFarmEvents(farm) {
       const prepaid = cal.prepayCategories.includes(prod.category);
       post(rx.paidDate ?? (prepaid ? cal.prepayDate : cal.inputDate), `${prod.name ?? prod.id} — ${plan.id}`, {
         operatorId: f.operatorId, jobId: plan.id, category: prod.category,
-        amount: acres * rx.ratePerAcre * prod.unitPrice * (1 - prod.discountPct), sourceId: rx.id,
+        amount: acres * rx.ratePerAcre * prod.unitPrice * (1 - prod.discountPct)
+          * m[categoryMultiplierField(prod.category)], sourceId: rx.id,
       });
     } else {
       const opn = operationById.get(rx.operationId);
       post(rx.paidDate ?? cal.inputDate, `${opn.name ?? opn.id} (custom rate) — ${plan.id}`, {
         operatorId: f.operatorId, jobId: plan.id, category: 'CUSTOM_RATE', cash: false,
-        amount: acres * rx.passes * opn.customRatePerAcre, sourceId: rx.id,
+        amount: acres * rx.passes * opn.customRatePerAcre * m.customRateMultiplier, sourceId: rx.id,
       });
     }
   }
 
   // ── operator costs: machinery, overhead, the carry-out prepay ──────────────────────
-  for (const m of farm.machinery) {
-    post(m.paidDate, `Machinery — ${m.operatorId}`, {
-      operatorId: m.operatorId, jobId: operatorJob(m.operatorId), category: 'MACHINERY',
-      allocation: 'ACRES', amount: m.amount, sourceId: m.id,
+  for (const mach of farm.machinery) {
+    post(mach.paidDate, `Machinery — ${mach.operatorId}`, {
+      operatorId: mach.operatorId, jobId: operatorJob(mach.operatorId), category: 'MACHINERY',
+      allocation: 'ACRES', amount: mach.amount * m.machineryMultiplier, sourceId: mach.id,
     });
   }
   for (const o of farm.overhead) {
     post(o.paidDate, `${o.name ?? o.category} — ${o.operatorId}`, {
       operatorId: o.operatorId, jobId: operatorJob(o.operatorId), category: o.category,
-      allocation: o.basis, amount: o.amount, sourceId: o.id,
+      allocation: o.basis, amount: o.amount * (o.variableRate ? m.interestMultiplier : 1), sourceId: o.id,
     });
   }
   for (const c of farm.carryOut) {

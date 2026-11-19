@@ -18,7 +18,10 @@ import {
  * ```js
  * cfg.farm = {
  *   seasons:       [{ id, cropYear, calendar?, yieldShock?, irrigatedYieldBeta?,
- *                     priceVol?: { [crop]: σ }, priceYieldBeta?: { [crop]: b } }], // exactly one
+ *                     priceVol?: { [crop]: σ }, priceYieldBeta?: { [crop]: b },
+ *                     rentMultiplier?, customRateMultiplier?, machineryMultiplier?,
+ *                     irrigationMultiplier?, interestMultiplier?,
+ *                     <category>Multiplier? (one per PRODUCT_CATEGORIES, e.g. nitrogenMultiplier) }],
  *   operators:     [{ id, name, farmRelated?, prior3PrepaidSupplies?, prior3FarmExpenses? }],
  *   fields:        [{ id, operatorId, name, tenure, rentedAcres, plantedAcres, irrigated,
  *                     rentPerAcre, propertyTax, fsaFarm?, baseAcres?, provenYield? }],
@@ -28,10 +31,10 @@ import {
  *                     irrigationElectricity }],
  *   prescriptions: [{ id, planId, productId | operationId, ratePerAcre, passes, share, paidDate? }],
  *   machinery:     [{ id, operatorId, amount, paidDate? }],
- *   overhead:      [{ id, operatorId, name, category, amount, basis, fieldIds?, paidDate? }],
+ *   overhead:      [{ id, operatorId, name, category, amount, basis, fieldIds?, paidDate?, variableRate? }],
  *   prices:        [{ id, crop, date, price, shock? }],
- *   contracts:     [{ id, operatorId, crop, cropYear?, bushels, price, deliveryDate,
- *                     paymentDate?, buyoutPerBu? }],
+ *   contracts:     [{ id, operatorId, crop, cropYear?, bushels | shareOfExpected, price,
+ *                     deliveryDate, paymentDate?, buyoutPerBu? }],
  *   storage:       [{ id, operatorId, crop, costPerBuMonth }],
  *   sales:         [{ id, operatorId, crop, cropYear?, share, saleDate, paymentDate?, price? }],
  *   carryIn:       [{ id, operatorId, crop, bushels, cropYear? }],
@@ -70,6 +73,26 @@ export const TENURE = Object.freeze({ OWN: 'OWN', CASH_RENT: 'CASH_RENT' });
  * (`fieldIds`) — a loan secured by particular parcels, for example.
  */
 export const OVERHEAD_BASIS = Object.freeze({ ACRES: 'ACRES', OWNED_ACRES: 'OWNED_ACRES', FIELDS: 'FIELDS' });
+
+/**
+ * The season's cost multipliers (design 134 §6, §13.6): one lever moves every record it
+ * covers, so "what if fertilizer goes up 30%" is one axis. Each is a season field, 1 when
+ * blank. Product categories get one each, named by `categoryMultiplierField`.
+ */
+export const SEASON_MULTIPLIERS = Object.freeze({
+  rentMultiplier:       'cash rent on every rented field',
+  customRateMultiplier: 'every field operation\'s custom-hire rate',
+  machineryMultiplier:  'every operator\'s real machinery figure',
+  irrigationMultiplier: 'every crop plan\'s irrigation electricity',
+  interestMultiplier:   'interest on overhead rows marked variableRate',
+});
+
+/** `NITROGEN` → `nitrogenMultiplier`, `PHOSPHATE_POTASH` → `phosphatePotashMultiplier`. */
+export const categoryMultiplierField = (category) =>
+  `${category.toLowerCase().replace(/_([a-z])/g, (_, c) => c.toUpperCase())}Multiplier`;
+
+/** Interest categories a `variableRate` overhead row may carry. */
+export const INTEREST_CATEGORIES = Object.freeze(['INTEREST_MORTGAGE', 'INTEREST_OTHER']);
 
 /** Commodities. A crop plan names one; grain pools by (operator, crop, crop year). */
 export const CROPS = Object.freeze({
@@ -155,6 +178,8 @@ export function normalizeFarm(farm) {
     irrigatedYieldBeta: season0.irrigatedYieldBeta ?? 1,
     priceVol:           { ...(season0.priceVol ?? {}) },
     priceYieldBeta:     { ...(season0.priceYieldBeta ?? {}) },
+    ...Object.fromEntries([...Object.keys(SEASON_MULTIPLIERS),
+      ...Object.keys(PRODUCT_CATEGORIES).map(categoryMultiplierField)].map(k => [k, season0[k] ?? 1])),
   } : null;
   const sid = season?.id ?? null;
 
@@ -190,11 +215,26 @@ export function normalizeFarm(farm) {
     o.basis  ??= OVERHEAD_BASIS.ACRES;
     o.fieldIds = Array.isArray(o.fieldIds) ? [...o.fieldIds] : null;
     o.paidDate = day(o.paidDate) ?? calendar.overheadDate;
+    o.variableRate = o.variableRate === true;
   }
   for (const p of out.prices) { p.date = day(p.date); p.shock ??= 0; }
   if (season) applyPricePath(out);
+  // Expected bushels per (operator, crop) of this season, for a contract sized as a share.
+  const expected = new Map();
+  for (const p of out.cropPlans) {
+    const fld = out.fields.find(x => x.id === p.fieldId);
+    if (!fld) continue;
+    const k = `${fld.operatorId}|${p.crop}`;
+    expected.set(k, (expected.get(k) ?? 0) + (fld.plantedAcres ?? 0) * (p.expectedYield ?? 0));
+  }
   for (const c of out.contracts) {
     c.cropYear  ??= y;
+    c.shareOfExpected ??= null;
+    // Q18: a contract can be sized as a share of the operator's EXPECTED crop, the lever the
+    // owners sweep. It fixes the bushels at plan time; a short crop is then a shortfall.
+    if (c.shareOfExpected != null && c.cropYear === y) {
+      c.bushels = c.shareOfExpected * (expected.get(`${c.operatorId}|${c.crop}`) ?? 0);
+    }
     c.deliveryDate = day(c.deliveryDate);
     c.paymentDate  = day(c.paymentDate) ?? c.deliveryDate;
     c.buyoutPerBu ??= 0;
@@ -345,6 +385,14 @@ export function validateFarm(farm) {
     nonNeg('prices', r, 'price', { required: true });
     if (!isNum(r.shock)) err(`farm.prices "${r.id}": shock must be a number`);
   }
+  for (const k of [...Object.keys(SEASON_MULTIPLIERS), ...Object.keys(PRODUCT_CATEGORIES).map(categoryMultiplierField)]) {
+    if (!isNum(f.season[k]) || f.season[k] < 0) err(`farm.seasons[0].${k} must be a number ≥ 0`);
+  }
+  for (const r of f.overhead) {
+    if (r.variableRate && !INTEREST_CATEGORIES.includes(r.category)) {
+      err(`farm.overhead "${r.id}": variableRate goes on an interest row (${INTEREST_CATEGORIES.join(', ')})`);
+    }
+  }
   for (const [field, min] of [['priceVol', 0], ['priceYieldBeta', -Infinity]]) {
     for (const [c, v] of Object.entries(f.season[field])) {
       if (!Object.hasOwn(CROPS, c)) err(`farm.seasons[0].${field}: unknown crop "${c}"`);
@@ -354,6 +402,10 @@ export function validateFarm(farm) {
   for (const r of f.contracts) {
     need('contracts', r, 'operatorId', 'operators');
     crop('contracts', r);
+    if (r.shareOfExpected != null) {
+      share('contracts', r, 'shareOfExpected');
+      if (r.cropYear !== f.season.cropYear) err(`farm.contracts "${r.id}": shareOfExpected sizes this season's crop only`);
+    }
     nonNeg('contracts', r, 'bushels', { required: true });
     nonNeg('contracts', r, 'price', { required: true });
     nonNeg('contracts', r, 'buyoutPerBu');
