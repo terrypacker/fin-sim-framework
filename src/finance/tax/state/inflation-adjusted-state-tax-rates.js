@@ -35,7 +35,7 @@ import { BaseStateTaxRatesModule } from './base-state-tax-rates-module.js';
  * statutory figures and only 2032+ is projected.
  *
  * Scaled: bracket thresholds (MFJ + single) and the standard deductions.
- * NOT scaled: the rates themselves, `_capitalGainsAltRate`, and the treatment
+ * NOT scaled: the rates themselves, `_capitalGainsAltRate`, `_communityCollegeCreditRate`, and the treatment
  * flags (`_taxesSocialSecurity`, `_pensionExclusionFraction`, `_capitalGainsMode`),
  * none of which are money amounts.
  *
@@ -58,6 +58,7 @@ export class InflationAdjustedStateTaxRates extends BaseStateTaxRatesModule {
     this._pensionExclusionFraction = baseRates._pensionExclusionFraction;
     this._capitalGainsMode         = baseRates._capitalGainsMode;
     this._capitalGainsAltRate      = baseRates._capitalGainsAltRate;
+    this._communityCollegeCreditRate = baseRates._communityCollegeCreditRate;
 
     this._stateCode = baseRates.stateCode;
     this._baseYear  = baseRates.year;

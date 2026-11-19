@@ -371,6 +371,7 @@ I3/I4/I5 applies here.
 | `StateIncomeClassificationReducer` | I1 I7 | ✅ backfill |
 | `StateTaxSettleApplyReducer` | I1 I7 (resets YTD; chains debit) | ✅ backfill |
 | `StateTaxPaymentDebitReducer` | I3 I4 I7 (not I1 — §7.3) | ✅ backfill |
+| `StateTaxRefundCreditReducer` | I3 (design 134 step 4f) | ✅ |
 
 ### J — Misc
 

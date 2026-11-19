@@ -72,7 +72,12 @@ export const US_INCOME = {
       // accumulator the row's figures are in the money of (its first payment's).
       { type: 'BUSINESS_INCOME_APPLY', fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text(),
         businessIncomeId: ValueType.text(), indexBase: ValueType.number(), farmPathSeed: ValueType.number(),
-        qbiW2Wages: ValueType.currency('USD'), qbiUbia: ValueType.currency('USD') } },
+        qbiW2Wages: ValueType.currency('USD'), qbiUbia: ValueType.currency('USD'),
+        communityCollegeTax: ValueType.currency('USD') } },
+      // Design 134 step 4f: community-college property tax inside a year of business income
+      // (77-6706). US_STATE_TAX routes it to the state credit bucket.
+      { type: 'STATE_COMMUNITY_COLLEGE_TAX_PAID', cc: 'US',
+        fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text() } },
       // Design 134 step 4e: a year of business income's §199A inputs.
       { type: 'QBI_US_TAX', fields: { qbi: ValueType.currency('USD'), w2Wages: ValueType.currency('USD'),
         ubia: ValueType.currency('USD'), personKey: ValueType.text() } },

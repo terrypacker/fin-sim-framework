@@ -141,7 +141,7 @@ import { UsPeriodAdvanceHandler, AuPeriodAdvanceHandler, UsPeriodAdvanceReducer,
 import { UsTaxSettleHandler, AuTaxSettleHandler, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer, UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer } from '../finance/tax/tax-settle-classes.js';
 import { UsTaxFileHandler, UsTaxFileApplyReducer } from '../finance/tax/us/tax-file-classes.js';
 import { DynamicTaxReducer }  from '../finance/tax/dynamic-tax-reducer.js';
-import { StateTaxSettleHandler, StateTaxSettleApplyReducer, StateTaxPaymentDebitReducer } from '../finance/tax/state/state-tax-settle-classes.js';
+import { StateTaxSettleHandler, StateTaxSettleApplyReducer, StateTaxPaymentDebitReducer, StateTaxRefundCreditReducer } from '../finance/tax/state/state-tax-settle-classes.js';
 import { StateIncomeClassificationReducer } from '../finance/tax/state/state-income-classification.js';
 
 // ─── US account-module handlers and reducers ────────────────────────────────
@@ -318,7 +318,7 @@ const _ALL_CLASSES = [
   UsTaxFileApplyReducer,
   UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer,
   DynamicTaxReducer,
-  StateTaxSettleApplyReducer, StateTaxPaymentDebitReducer, StateIncomeClassificationReducer,
+  StateTaxSettleApplyReducer, StateTaxPaymentDebitReducer, StateTaxRefundCreditReducer, StateIncomeClassificationReducer,
   RothContributionApplyReducer, RothWithdrawalContribApplyReducer,
   RothWithdrawalEarningsApplyReducer, RothEarningsApplyReducer,
   IraContributionApplyReducer, IraWithdrawalContribApplyReducer,

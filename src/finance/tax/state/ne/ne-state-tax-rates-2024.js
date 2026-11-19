@@ -48,5 +48,9 @@ export class NeStateTaxRates2024 extends BaseStateTaxRatesModule {
     this._taxesSocialSecurity      = false; // SS exempt 2024+
     this._pensionExclusionFraction = 0;     // pensions taxed
     this._capitalGainsMode         = 'ordinary';
+    // Neb. Rev. Stat. 77-6706(4) (docs/ne-law/): for taxable years from 1 January 2024 a
+    // refundable credit equal to 100% of the community college taxes paid in the year
+    // (design 134 step 4f). Inherited by 2025.
+    this._communityCollegeCreditRate = 1;
   }
 }
