@@ -1,8 +1,9 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** rev 12 (19 Nov 2026): **phase 1 BUILT** (§12): the acceptance import passes
+**Status:** rev 13 (19 Nov 2026): **phase 1 BUILT** (§12): the acceptance import passes
 (§12.4) and the Field P&L panel is in the workbench (§12.5). **Phase 2 started** (§13): step 2a,
-the scenario-agnostic MC path and a farm batch on it, steps 2b–2d (realized yield, price paths, multiplier levers and the contracted share), 2e (calibration from USDA NASS, §13.8) and 2f (the Farm MC panel, §13.7) are built: **phase 2 is complete**. Owner questions Q1–Q20 are answered (§3); Q21–Q26 (§12.3, §12.4, §13.8) are open. §7 records what the primary sources on disk decide. §8 is the household
+the scenario-agnostic MC path and a farm batch on it, steps 2b–2d (realized yield, price paths, multiplier levers and the contracted share), 2e (calibration from USDA NASS, §13.8) and 2f (the Farm MC panel, §13.7) are built: **phase 2 is complete**. Owner questions Q1–Q20 and Q22–Q25 are answered (§3, §14); Q21, Q26 and the follow-ups Q22a,
+Q23a and Q25a (§14) are open. §7 records what the primary sources on disk decide. §8 is the household
 link.
 
 Revision history: rev 2 added §7 and §8, and corrected rev 1's guess that Nebraska credits
@@ -20,7 +21,8 @@ result, the record and ledger shapes it settled, and a §464(d) exception that �
 Rev 9 records the acceptance import and the questions it raised (§12.4). Rev 10 records the
 Field P&L panel (§12.5). Rev 11 splits phase 2 into steps and records step 2a (§13). Rev 12
 records steps 2b–2f; the calibration (§13.8) adds an irrigated-only yield shock and skewed
-yield draws, both of which the data required.
+yield draws, both of which the data required. Rev 13 records the owners' answers to Q22–Q25
+and the follow-ups they leave (§14).
 
 **Related:** design 98 (the sweepable parameter surface: per-record generated params become
 MC and optimizer levers), design 55 (configuration-driven parameters and record templates),
@@ -112,6 +114,10 @@ What the workbook got wrong, or left out, gives the design its requirements:
 | Q17 | Machinery cost input | **Phase 1: one annual machinery figure per operator, split by acre.** For tax, equipment is **deducted in full in the year it is bought**, not depreciated. Own vs custom harvest is a wanted study (§5.6). |
 | Q18 | Contracted share | **A per-crop default**, different for corn and soybeans, recorded privately. MC sweeps it. |
 | Q19 | Pumping cost | **Irrigation electricity is metered per field**: an annual \$ cost per irrigated field, not per acre-inch. |
+| Q22 | Land debt interest | **Several loans, each secured by particular fields**; some owned fields are free and clear. **Whole-farm profitability is what must be right**, so one averaged rate over the mortgaged fields is acceptable until the loans are itemized (§14). |
+| Q23 | Chemical bundles | **Different chemicals are bought for different fields**, so per-field bundle rates are real data, not errors. Whether a bundle holds fertilizer is still open (Q23a, §14). |
+| Q24 | Owned fields with no interest | **Free and clear.** No land interest is right. |
+| Q25 | A field with no seed cost | **A missing entry.** The report now flags any annual crop plan without seed (§14.1). |
 | Q20 | Own vs custom | **It is a choice per operation, not a share of one figure.** Custom options cover different sets of work (combine only, or field to bin), and each changes which machines are still needed. A whole study with its own design (§5.6). |
 
 ## 4. Architecture: a new scenario type and toolsets, not a new application
@@ -560,7 +566,7 @@ bad one for another in the same world.
 
 ## 11. Open questions
 
-Q21 (§12.3), Q22–Q25 (§12.4) and Q26 (§13.8) are for the owners. The fleet model (§5.6) and farm–market correlation (Q15) each
+Q21 (§12.3), Q26 (§13.8) and Q22a, Q23a, Q25a (§14) are for the owners. The fleet model (§5.6) and farm–market correlation (Q15) each
 need their own design later.
 
 ## 12. Phase 1 build notes (rev 8)
@@ -966,3 +972,55 @@ path replays as `applyParamBagToConfig(withPriceVol(cfg, priceVolFilled), params
   its county can read that county's own figures (`--county`) and set them on its season.
   The private scenario does that, and the design does not.
 
+## 14. Owner answers to Q22–Q25 (rev 13)
+
+None of the four needs a new mechanic. Q22 and Q24 confirm that what the import does is
+the model the owners want. Q23 and Q25 confirm that two things the sheet shows are real: the
+chemical rates differ by field, and one seed entry is missing.
+
+**Q22: several loans, but whole-farm profitability is what matters.** Each loan is secured by
+particular fields, and the sheet spreads one averaged \$/acre rate over all of them. The model
+already has one row per loan: a `FIELDS` overhead row over the loan's own fields (§12.4). The
+import cannot build per-loan rows from one averaged rate, so it keeps one pool per operator at
+that rate. The **whole-farm interest is exact**, and so is each operator's total if each
+operator pays for its own fields. A field's interest is the average, so a field's net is
+off by the gap between its own loan's rate and the average. Both panels and the CLI already
+show the whole farm. The loan details would matter for three later things: per-field
+accuracy, the `interestMultiplier` (it moves only rows marked `variableRate`, so it cannot
+tell a fixed loan from a variable one yet), and the cash side, where the interest belongs on
+the Schedule F of **whoever pays it**. **Q22a (owners), needed by phase 4, not before:** for
+each loan, which fields secure it, its annual interest (or balance and rate), fixed or
+variable, and which operator pays it.
+
+A loan secured by fields of **more than one** operator would be refused today (Q10: overhead
+is never shared). Nothing says such a loan exists, so the rule stays until Q22a shows one.
+If one does, the loan becomes its own record: the job cost follows the fields, and the cash
+follows the payer.
+
+**Q23: different chemicals for different fields.** The three soybean rates are three
+different purchases, so the import keeps three products. **Q23a (owners):** does the corn
+bundle include fertilizer (nitrogen, P&K)? It matters for more than the Schedule F line (11
+or 17). The fertilizer multipliers exist only where the farm has the category (§13.6), so
+**until the bundle is split, the imported farm has no nitrogen price lever at all**. Fertilizer
+price is one of the swings MC was built to sweep.
+
+**Q24: free and clear.** No interest on those fields is right.
+
+**Q25: a missing seed entry.** The import keeps the sheet as it is, so the acceptance still
+compares like with like, and the report now flags the gap (§14.1). **Q25a (owners):** the
+field's hybrid, seeded acres and cost, so it can be entered.
+
+### 14.1 Record advisories
+
+`farmAdvisories(farm)` lists records that load and run but are probably incomplete. They are
+advisories, not errors, because the season still costs. `jobCostReport` returns them as
+`advisories`, and the Field P&L panel and `npm run farm:report` print them with the
+unallocated-cost warnings. One check so far:
+
+- **`NO_SEED`:** a crop plan for an annual crop with no seed cost (no seed line, or a line
+  costing 0). Every annual crop is planted from seed bought for it, so the plan's costs and
+  breakevens are understated. A perennial crop (alfalfa, `CROPS.ALFALFA.perennial`) is
+  exempt, because an established stand is not reseeded each year.
+
+On the acceptance farm, it fires on the one field Q25 is about and nowhere else. The demo
+farm has none.

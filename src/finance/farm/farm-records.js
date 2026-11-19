@@ -101,7 +101,7 @@ export const CROPS = Object.freeze({
   SOYBEANS: { label: 'Soybeans', unit: 'bu' },
   WHEAT:    { label: 'Wheat',    unit: 'bu' },
   SORGHUM:  { label: 'Sorghum',  unit: 'bu' },
-  ALFALFA:  { label: 'Alfalfa',  unit: 'ton' },
+  ALFALFA:  { label: 'Alfalfa',  unit: 'ton', perennial: true },
 });
 
 /**
@@ -513,6 +513,38 @@ export function realizedYield(farm, plan, field = farm.fields.find(x => x.id ===
   const k = s.yieldShockScale?.[plan.crop] ?? 1;
   const common = field?.irrigated ? s.irrigatedYieldBeta * s.yieldShock + s.irrigatedYieldShock : s.yieldShock;
   return plan.expectedYield * Math.max(0, 1 + k * common + plan.yieldShock);
+}
+
+/**
+ * Advisories on records that load and run but are probably incomplete (design 134 §14.1).
+ * Never errors: the season still costs, but the named numbers are understated.
+ *
+ * - `NO_SEED`: a crop plan for an annual crop with no seed cost. Every annual crop is planted
+ *   from seed bought for it, so a plan without one is a missing entry (the acceptance
+ *   workbook had one, owner-confirmed, Q25), and its breakevens are too low by the seed cost.
+ *   A perennial crop (alfalfa) is exempt: an established stand is not reseeded each year.
+ *
+ * @param {object} farm normalized farm
+ * @returns {{ kind: string, planId: string, fieldId: string, message: string }[]}
+ */
+export function farmAdvisories(farm) {
+  const out = [];
+  const productById = new Map(farm.products.map(p => [p.id, p]));
+  const fieldById = new Map(farm.fields.map(f => [f.id, f]));
+  for (const plan of farm.cropPlans) {
+    if (CROPS[plan.crop]?.perennial) continue;
+    const seedCost = farm.prescriptions
+      .filter(r => r.planId === plan.id && productById.get(r.productId)?.category === 'SEED')
+      .reduce((s, r) => s + productById.get(r.productId).unitPrice * r.ratePerAcre * r.share, 0);
+    if (seedCost > 0) continue;
+    const f = fieldById.get(plan.fieldId);
+    out.push({
+      kind: 'NO_SEED', planId: plan.id, fieldId: plan.fieldId,
+      message: `${f?.name ?? plan.fieldId} (${CROPS[plan.crop]?.label ?? plan.crop}) has no seed cost: `
+        + 'probably a missing entry, so its costs and breakevens are understated.',
+    });
+  }
+  return out;
 }
 
 /** The harvest date of `crop` in a resolved season calendar. */

@@ -9,7 +9,7 @@
  */
 
 import { SCHEDULE_F_LINES, isProductCategory } from './schedule-f.js';
-import { TENURE, priceOn, harvestDateFor, realizedYield } from './farm-records.js';
+import { TENURE, priceOn, harvestDateFor, realizedYield, farmAdvisories } from './farm-records.js';
 import { poolKey } from './farm-postings.js';
 
 /**
@@ -78,7 +78,8 @@ export function farmLedger(journal) {
  * - `BUSHELS` (a grain pool's revenue and storage) by the bushels each plan harvested into it
  *   (`realizedYield`; the expected bushels in a deterministic season).
  * A posting with no plan to land on (an `OWNED_ACRES` cost for an operator with no owned field)
- * is reported as `unallocated` on the operator, never dropped.
+ * is reported as `unallocated` on the operator, never dropped. `advisories` lists records that
+ * ran but look incomplete (`farmAdvisories`: a crop plan with no seed cost).
  *
  * **Grain still on hand at the end of the run** is valued at the crop's last price and counted
  * as revenue in this view (design 134 §5.3: "the crop-year report values them at their contract
@@ -224,6 +225,7 @@ export function jobCostReport(farm, ledger, { machineryBasis = 'CUSTOM', pools =
     byCrop:     group(r => r.crop, 'crop'),
     farm:       _sumRows(planRows, {}, machineryBasis),
     unallocated,
+    advisories: farmAdvisories(farm),
   };
 }
 
