@@ -100,6 +100,29 @@ export function validateBusinessIncome(rows, persons) {
 }
 
 /**
+ * Every reason the MC path table cannot be drawn from (design 134 step 4c/4d).
+ * `cfg.businessIncomePaths` holds one flat row per farm MC path, joined to its business-income
+ * row by `businessIncomeId`: `{ businessIncomeId, seed, net, neCommunityCollegeTax? }`.
+ *
+ * @param {Array<object>} paths `cfg.businessIncomePaths`
+ * @param {Array<object>} rows  `cfg.businessIncome`
+ * @returns {string[]} empty when valid
+ */
+export function validateBusinessIncomePaths(paths, rows) {
+  if (paths == null) return [];
+  if (!Array.isArray(paths)) return ['businessIncomePaths must be a list'];
+  const ids = new Set((rows ?? []).map(r => r?.id));
+  const errors = [];
+  const orphans = new Set();
+  paths.forEach((p, i) => {
+    if (!ids.has(p?.businessIncomeId)) orphans.add(p?.businessIncomeId);
+    if (!Number.isFinite(Number(p?.net)) || p?.net == null) errors.push(`Business income path #${i}: net must be a number.`);
+  });
+  for (const id of orphans) errors.push(`Business income paths name "${id}", which is not a businessIncome row.`);
+  return errors;
+}
+
+/**
  * The payment dates of one row inside a run, by year.
  *
  * @param {object} row a valid business-income row
