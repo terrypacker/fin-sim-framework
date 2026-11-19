@@ -2,7 +2,7 @@
 
 **Status:** rev 11 (19 Nov 2026): **phase 1 BUILT** (§12): the acceptance import passes
 (§12.4) and the Field P&L panel is in the workbench (§12.5). **Phase 2 started** (§13): step 2a,
-the scenario-agnostic MC path and a farm batch on it, step 2b, realized yield, and step 2c, price paths, are built. Owner questions Q1–Q20 are answered (§3); Q21–Q25 (§12.3–§12.4) are open. §7 records what the primary sources on disk decide. §8 is the household
+the scenario-agnostic MC path and a farm batch on it, steps 2b–2d (realized yield, price paths, multiplier levers and the contracted share) are built. Owner questions Q1–Q20 are answered (§3); Q21–Q25 (§12.3–§12.4) are open. §7 records what the primary sources on disk decide. §8 is the household
 link.
 
 Revision history: rev 2 added §7 and §8, and corrected rev 1's guess that Nebraska credits
@@ -685,7 +685,7 @@ Phase 2 is six steps. Each one ships on its own, and none changes a retirement r
 | **2a** | The scenario-agnostic MC path (§4), and a farm batch on it: the farm records' levers as the catalog, per-path metrics, the loss and breakeven distributions, `npm run farm:mc` | **built** (§13.2) |
 | 2b | **Realized yield**, separate from expected yield (§13.3): a farm-wide factor times a per-field factor, narrower on irrigated fields | **built** (§13.4) |
 | 2c | **Price paths** per crop through the marketing year, drawn against the farm yield factor (the yield–price link, §6), replacing the step table on a path | **built** (§13.5) |
-| 2d | **Multiplier levers** (product category, rent, custom rates, machinery, irrigation) and the contracted share per crop (Q18) | open |
+| 2d | **Multiplier levers** (product category, rent, custom rates, machinery, irrigation) and the contracted share per crop (Q18) | **built** (§13.6) |
 | 2e | **Calibration.** NASS county yields, RMA price elections and futures history fetched into `docs/`, then the 2b–2d distributions set from them (§6) | open |
 | 2f | **A farm MC results panel** (§4: the farm gets its own, rather than bending the retirement one) | open |
 
@@ -830,4 +830,41 @@ Decided in the build:
 A contract shortfall already settled at the market price (§6, phase 1). It now settles at the
 realized market price, so a short crop in a dear year costs money on the contracted
 bushels, which is the risk §6 wanted visible. A test pins that case.
+
+### 13.6 Step 2d: multipliers and the contracted share
+
+**Multipliers** are season fields, 1 when blank, each scaling one cost family as it is posted:
+
+| Lever | Scales |
+|---|---|
+| `rentMultiplier` | cash rent on every rented field |
+| `customRateMultiplier` | every operation's custom-hire rate (job-cost view only) |
+| `machineryMultiplier` | every operator's real machinery figure |
+| `irrigationMultiplier` | every plan's irrigation electricity (a dry year pumps more, §6) |
+| `interestMultiplier` | interest on overhead rows marked `variableRate` |
+| `<category>Multiplier` | the price of every product in one category (`nitrogenMultiplier`, …) |
+
+Decided in the build:
+
+- **A lever exists only where it can move something.** A category multiplier is generated
+  only for a category the farm buys, and the interest multiplier only when an overhead row is
+  `variableRate`. That is the dead-axis rule the record templates already follow.
+- **The interest lever stands in for the rate.** §6 names "the interest rate on variable-rate
+  land debt", and the farm has no loan records, only an interest amount per operator. A
+  multiplier on a `variableRate` row is that rate's move, as a ratio. A fixed-rate row never
+  moves. `variableRate` on a non-interest row is a load error.
+- **The carry-out prepay is not multiplied.** Its amount is the operator's decision about how
+  much to prepay (§5.5), not a price.
+- **Per-record levers stay.** A multiplier and a product's own `unitPrice` compose, so
+  "nitrogen +20%" and "this one product's price" are both still available (§6's two levels).
+
+**The contracted share** (Q18) is a contract field, `shareOfExpected`. When it is set, the
+contract's bushels are that share of the operator's **expected** crop of that grain, fixed at
+plan time. A short crop is then a shortfall, settled at the realized market price (§13.5).
+It sizes only this season's crop; a share on a carry-in contract is a load error, because a
+past crop has no expected yield here. Q18's per-crop default goes on the owners' contracts,
+in the private scenario, and is not recorded here.
+
+All of these levers' MC rows are the catalog's: centred on the record, off, and at
+`FARM_MC_SPREADS`, which are 0 until 2e.
 

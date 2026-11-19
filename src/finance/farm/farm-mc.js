@@ -13,6 +13,7 @@ import { FarmScenario }        from '../../scenarios/farm-scenario.js';
 import { ScenarioSerializer }  from '../../scenarios/scenario-serializer.js';
 import { resolveRecordCenters } from '../../scenarios/scenario-param-apply.js';
 import { scenarioParamValues } from '../param-schema-utils.js';
+import { ScenarioParamGenerator } from '../../scenarios/params/scenario-param-generator.js';
 import { McConfig, variablesMissingCenter } from '../monte-carlo/mc-config.js';
 import { McRunner, summarizeProvenance, median, percentile } from '../monte-carlo/mc-runner.js';
 import { samplingSignature }   from '../monte-carlo/parallel/mc-worker-core.js';
@@ -28,7 +29,11 @@ import { samplingSignature }   from '../monte-carlo/parallel/mc-worker-core.js';
  * A batch that switches a row on is therefore a sensitivity run, and says so in its provenance.
  */
 export class FarmMcConfig extends McConfig {
-  static contributors = [({ cfg }) => buildYieldMcConfigs(cfg), ({ cfg }) => buildPriceMcConfigs(cfg)];
+  static contributors = [
+    ({ cfg }) => buildYieldMcConfigs(cfg),
+    ({ cfg }) => buildPriceMcConfigs(cfg),
+    ({ cfg }) => buildMultiplierMcConfigs(cfg),
+  ];
   static aliases = {};
   static paramSchema() { return FarmScenario.getParamSchema(); }
 }
@@ -44,6 +49,10 @@ export const FARM_MC_SPREADS = Object.freeze({
   farmYieldShockSd: 0,
   /** A field's own yield shock, dry and irrigated. */
   fieldYieldShockSd: Object.freeze({ dry: 0, irrigated: 0 }),
+  /** A season cost multiplier, by lever field (`rentMultiplier`, `nitrogenMultiplier`, …). */
+  multiplierSd: Object.freeze({}),
+  /** A contract's share of the expected crop. */
+  contractShareSd: 0,
 });
 
 /**
@@ -82,6 +91,28 @@ export function buildPriceMcConfigs(cfg) {
     type: DISTRIBUTION_TYPES.NORMAL, mean: 0, stdDev: 1, group: 'Farm · prices', enabled: false,
     effectiveDefault: true,
   }));
+}
+
+/**
+ * One row per season multiplier the farm has, and per contract sized as a share (design 134
+ * §13.6), centred on the record and at `FARM_MC_SPREADS`, so the harvest's generic spread never
+ * reaches them. Read from the generated levers, so a row exists exactly where a lever does.
+ *
+ * @param {object|null} cfg the farm scenario
+ */
+export function buildMultiplierMcConfigs(cfg, spreads = FARM_MC_SPREADS) {
+  if (!cfg?.farm) return [];
+  return ScenarioParamGenerator.generate(cfg)
+    .filter(e => /^farm\.season\.[^.]+\.\w+Multiplier$/.test(e.key) || /^farm\.contract\.[^.]+\.shareOfExpected$/.test(e.key))
+    .map(e => {
+      const field = e.key.split('.').at(-1);
+      const sd = field === 'shareOfExpected' ? spreads.contractShareSd : (spreads.multiplierSd[field] ?? 0);
+      return {
+        paramKey: e.key, label: e.label, type: DISTRIBUTION_TYPES.NORMAL, mean: e.defaultValue,
+        stdDev: sd, group: field === 'shareOfExpected' ? 'Farm · marketing' : 'Farm · multipliers',
+        enabled: false, effectiveDefault: true,
+      };
+    });
 }
 
 /**

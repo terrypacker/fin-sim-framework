@@ -26,7 +26,7 @@ import { runFarm }      from '../../src/finance/farm/farm-run.js';
 import { FarmMcRunner, FarmMcConfig, summarizeFarmMetrics, isFarmIncomeMetric }
   from '../../src/finance/farm/farm-mc.js';
 import { farmPathMetrics } from '../../src/finance/farm/farm-mc-scenario.js';
-import { normalizeFarm, priceOn } from '../../src/finance/farm/farm-records.js';
+import { normalizeFarm, priceOn, validateFarm } from '../../src/finance/farm/farm-records.js';
 import { mcScenarioFor, perturbParams } from '../../src/finance/monte-carlo/parallel/mc-worker-core.js';
 import { applyParamBagToConfig } from '../../src/scenarios/scenario-param-apply.js';
 import { McWorkerPool } from '../../src/finance/monte-carlo/parallel/mc-worker-pool.js';
@@ -318,5 +318,81 @@ describe('price paths (design 134 §13.5, step 2c)', () => {
     assert.strictEqual(new Set(runs.map(r => r.metrics['crop.SOYBEANS.revenue'])).size, 1, 'soybeans have no volatility');
     const replay = runFarm(applyParamBagToConfig(farmWith({ priceVol: { CORN: 0.25 } }), runs[1].params));
     assert.strictEqual(replay.jobCost.farm.net, runs[1].metrics['farm.net.custom']);
+  });
+});
+
+describe('multipliers and contracted share (design 134 §13.6, step 2d)', () => {
+  const withSeason = (fields, edit) => {
+    const c = cfg();
+    Object.assign(c.farm.seasons[0], fields);
+    edit?.(c.farm);
+    return c;
+  };
+  const sumCat = (r, cat) => r.ledger.filter(p => p.category === cat && p.cropYear === 2027).reduce((s, p) => s + p.amount, 0);
+
+  test('each multiplier scales exactly its cost family', () => {
+    const det = runFarm(cfg());
+    const r = runFarm(withSeason({ rentMultiplier: 1.1, nitrogenMultiplier: 1.3, customRateMultiplier: 0.9,
+      machineryMultiplier: 1.2, irrigationMultiplier: 1.5 }));
+    for (const [cat, k] of [['LAND_RENT', 1.1], ['NITROGEN', 1.3], ['CUSTOM_RATE', 0.9],
+      ['MACHINERY', 1.2], ['IRRIGATION_ELECTRICITY', 1.5]]) {
+      assert.ok(Math.abs(sumCat(r, cat) - k * sumCat(det, cat)) < 1e-6, cat);
+    }
+    for (const cat of ['SEED', 'HERBICIDE', 'PROPERTY_TAX', 'CROP_INSURANCE']) assert.strictEqual(sumCat(r, cat), sumCat(det, cat));
+  });
+
+  test('the interest multiplier moves only a variable-rate interest row', () => {
+    const det = runFarm(cfg());
+    const fixed = runFarm(withSeason({ interestMultiplier: 1.5 }));
+    assert.strictEqual(sumCat(fixed, 'INTEREST_MORTGAGE'), sumCat(det, 'INTEREST_MORTGAGE'));
+    const variable = runFarm(withSeason({ interestMultiplier: 1.5 }, f => { f.overhead.find(o => o.id === 'oh-a-int').variableRate = true; }));
+    assert.ok(Math.abs(sumCat(variable, 'INTEREST_MORTGAGE') - 1.5 * sumCat(det, 'INTEREST_MORTGAGE')) < 1e-6);
+  });
+
+  test('variableRate on a non-interest row is a load error', () => {
+    const c = withSeason({}, f => { f.overhead.find(o => o.id === 'oh-a-ins').variableRate = true; });
+    assert.ok(validateFarm(c.farm).some(e => /variableRate goes on an interest row/.test(e)));
+  });
+
+  test('a contract sized as a share of the expected crop', () => {
+    const c = withSeason({}, f => {
+      const k = f.contracts.find(x => x.id === 'k-b-corn');
+      delete k.bushels; k.shareOfExpected = 0.5;
+    });
+    const k = normalizeFarm(c.farm).contracts.find(x => x.id === 'k-b-corn');
+    assert.strictEqual(k.bushels, 0.5 * 146 * 225);
+    // A short crop below the contracted share leaves a shortfall, settled at the market.
+    const short = withSeason({ yieldShock: -0.6 }, f => {
+      const kk = f.contracts.find(x => x.id === 'k-b-corn');
+      delete kk.bushels; kk.shareOfExpected = 0.5;
+    });
+    const r = runFarm(short);
+    const moves = r.sim.journal.journal.filter(e => e.action?.type === 'FARM_GRAIN_MOVE' && (e.action.data ?? e.action).sourceId === 'k-b-corn');
+    assert.ok(moves.some(e => (e.action.data ?? e.action).shortBushels > 0));
+  });
+
+  test('a share contract for an earlier crop is refused', () => {
+    const c = withSeason({}, f => { const k = f.contracts.find(x => x.id === 'k-a-old'); k.shareOfExpected = 0.5; });
+    assert.ok(validateFarm(c.farm).some(e => /shareOfExpected sizes this season's crop only/.test(e)));
+  });
+
+  test('levers exist only for what the farm has, and the catalog owns their spreads', () => {
+    const { ctx } = new FarmMcRunner({ cfgTemplate: cfg() })._prepare();
+    const keys = ctx.variables.map(v => v.paramKey);
+    assert.ok(keys.includes('farm.season.s2027.nitrogenMultiplier'));
+    assert.ok(!keys.includes('farm.season.s2027.limeMultiplier'), 'the demo buys no lime');
+    assert.ok(!keys.includes('farm.season.s2027.interestMultiplier'), 'no variable-rate interest');
+    for (const v of ctx.variables.filter(x => /Multiplier$/.test(x.paramKey))) {
+      assert.strictEqual(v.mean, 1); assert.strictEqual(v.stdDev, 0); assert.ok(!v.harvested);
+    }
+  });
+
+  test('a sampled category multiplier reaches the products and replays', async () => {
+    const m = new FarmMcConfig();
+    m.applyOverride('farm.season.s2027.nitrogenMultiplier', { enabled: true, stdDev: 0.2 });
+    const { runs } = await new FarmMcRunner({ n: 3, cfgTemplate: cfg(), mcConfig: m }).run();
+    assert.strictEqual(new Set(runs.map(r => r.metrics['farm.net.custom'])).size, 3);
+    const replay = runFarm(applyParamBagToConfig(cfg(), runs[0].params));
+    assert.strictEqual(replay.jobCost.farm.net, runs[0].metrics['farm.net.custom']);
   });
 });
