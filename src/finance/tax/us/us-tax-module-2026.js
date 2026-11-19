@@ -985,6 +985,16 @@ export class UsTaxModule2026 extends BaseTaxModule {
         return next;
       }],
 
+      // Design 134 step 4e: a year of business income's §199A inputs. The income itself is
+      //         already booked by SE_INCOME_US_TAX; this only tells computeTax how much of it
+      //         is qualified business income, and the row's W-2 wages and UBIA.
+      ['QBI_US_TAX', (state, action) => ({
+        ...state,
+        usQbiYTD:        (state.usQbiYTD ?? 0) + (action.qbi ?? 0),
+        usQbiW2WagesYTD: (state.usQbiW2WagesYTD ?? 0) + (action.w2Wages ?? 0),
+        usQbiUbiaYTD:    (state.usQbiUbiaYTD ?? 0) + (action.ubia ?? 0),
+      })],
+
       // EVT-50: bonus — US-source ordinary income; AU ordinary income if resident,
       //         relieved by FITO.
       ['BONUS_TAX', (state, action) => {

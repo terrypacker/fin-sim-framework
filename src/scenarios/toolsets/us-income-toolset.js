@@ -71,7 +71,11 @@ export const US_INCOME = {
       // Design 134 step 4b: a year of a `cfg.businessIncome` row. `indexBase` is the US CPI
       // accumulator the row's figures are in the money of (its first payment's).
       { type: 'BUSINESS_INCOME_APPLY', fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text(),
-        businessIncomeId: ValueType.text(), indexBase: ValueType.number(), farmPathSeed: ValueType.number() } },
+        businessIncomeId: ValueType.text(), indexBase: ValueType.number(), farmPathSeed: ValueType.number(),
+        qbiW2Wages: ValueType.currency('USD'), qbiUbia: ValueType.currency('USD') } },
+      // Design 134 step 4e: a year of business income's §199A inputs.
+      { type: 'QBI_US_TAX', fields: { qbi: ValueType.currency('USD'), w2Wages: ValueType.currency('USD'),
+        ubia: ValueType.currency('USD'), personKey: ValueType.text() } },
       { type: 'BONUS_APPLY',         fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text() } },
       { type: 'BONUS_TAX',           fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , personKey: ValueType.text()} },
       { type: 'COMPANY_SALE_APPLY',  fields: { salePrice: ValueType.currency('USD'), costBasis: ValueType.currency('USD'), residency: ValueType.text(), stateKey: ValueType.text(), destinationKey: ValueType.text() } },
@@ -175,7 +179,8 @@ export const US_INCOME = {
           data:    { businessIncomeId: r.id, personId: r.personId, year,
                      net: Number((picked ?? r).net),
                      neCommunityCollegeTax: Number((picked ?? r).neCommunityCollegeTax ?? 0),
-                     farmPathSeed: picked?.seed ?? null },
+                     farmPathSeed: picked?.seed ?? null,
+                     qbiW2Wages: Number(r.qbiW2Wages ?? 0), qbiUbia: Number(r.qbiUbia ?? 0) },
           enabled: true,
           color:   '#6D4C41',
         }));

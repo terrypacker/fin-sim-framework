@@ -214,7 +214,7 @@
  },
  "checkingAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 11582.7540897,
+  "balance": 13643.9201816,
   "country": "US",
   "currency": {
    "code": "USD",
@@ -228,7 +228,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 11582.7540897,
+    "costBasis": 13643.9201816,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -239,7 +239,7 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 11582.7540897,
+    "marketValue": 13643.9201816,
     "maturityDate": null,
     "purchaseDate": null,
     "rateKey": "SAVINGS_US",
@@ -268,7 +268,7 @@
  "cumulativeConsumptionUtility": 94.852580535,
  "cumulativeConsumptionUtilityCount": 48,
  "cumulativeDeficit": 0,
- "cumulativeTaxesPaid": 183024.123708,
+ "cumulativeTaxesPaid": 176478.823361,
  "currentPeriods": {
   "AU": {
    "endMs": 1909094400000,
@@ -640,8 +640,8 @@
  },
  "marketIndexAsOfMs": 1893369600000,
  "metrics": {
-  "netLiquidity": 888400.51,
-  "netWorth": 1346637.94,
+  "netLiquidity": 895302.71,
+  "netWorth": 1353540.14,
   "offsetAppliedCapacity": 0,
   "offsetIdleCapacity": 0
  },
@@ -959,8 +959,8 @@
    }
   },
   "US": {
-   "agi": 155445.3,
-   "tax": 41677.41,
+   "agi": 155491.02,
+   "tax": 39676.33,
    "year": 2029
   }
  },
@@ -1057,6 +1057,9 @@
  "usPassiveLossCarryforward": 0,
  "usPenaltyYTD": 0,
  "usPersonHousehold": true,
+ "usQbiUbiaYTD": 0,
+ "usQbiW2WagesYTD": 0,
+ "usQbiYTD": 0,
  "usSavingsAccount": {
   "allowsEarlyWithdrawal": false,
   "balance": 10029.17,
@@ -1119,7 +1122,7 @@
  "usSsWagesYTD": 0,
  "usStockAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 140336.83,
+  "balance": 145177.86,
   "country": "US",
   "currency": {
    "code": "USD",
@@ -1133,7 +1136,7 @@
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 40287.03,
+    "costBasis": 43116.51,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -1144,9 +1147,9 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "VTV",
-    "marketValue": 68927.75,
+    "marketValue": 73768.78,
     "maturityDate": null,
-    "pricePerUnit": 125.46726192,
+    "pricePerUnit": 125.46728401,
     "purchaseDate": null,
     "rateKey": "EQUITY_US",
     "rollAtMaturity": false,
@@ -1154,7 +1157,7 @@
     "securityId": "sec-vtv",
     "taxExemption": "none",
     "taxLossPartner": null,
-    "units": 549.36840852,
+    "units": 587.95231427,
     "zeroCoupon": false
    },
    {

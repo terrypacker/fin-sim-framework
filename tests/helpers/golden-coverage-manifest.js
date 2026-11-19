@@ -50,6 +50,8 @@ export const COVERED = [
   // (the Schedule F net as ordinary income and the SECA base).
   'BUSINESS_INCOME_APPLY',
   'SE_INCOME_US_TAX',
+  // Design 134 step 4e — the row's §199A inputs.
+  'QBI_US_TAX',
   // MONTHLY equity earnings (design 127): the two wash-sale goldens run MONTHLY since phase 3,
   // because their crash preset is calibrated under it. The batched lot deltas and the
   // month-end index step fire there.

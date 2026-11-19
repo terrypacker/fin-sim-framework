@@ -53,6 +53,9 @@ const YTD_FIELDS = {
        'usInvestmentInterestYTD',
        // design 69 — self-employment tax (SECA) accumulators
        'usSeEarningsYTD', 'usSsWagesYTD',
+       // design 134 step 4e — the year's §199A inputs. The qualified business LOSS carried
+       // forward (usQbiLossCarryforward) is deliberately not here: §199A(c)(2) carries it.
+       'usQbiYTD', 'usQbiW2WagesYTD', 'usQbiUbiaYTD',
        // Design 95 phase 5 — payroll withholding, credited against the liability
        // below and then reset with the rest. It was written by the wages reducer and
        // read by NOTHING before this phase, and was not even in this list, so it
@@ -694,6 +697,13 @@ export class UsTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
     const capLoss = action.taxDetail?.capitalLoss;
     if (capLoss?.closingShort != null) patches.usShortTermCapitalLossCarryforward = +capLoss.closingShort.toFixed(2);
     if (capLoss?.closingLong  != null) patches.usLongTermCapitalLossCarryforward  = +capLoss.closingLong.toFixed(2);
+    // §199A(c)(2) qualified business loss (design 134 step 4e). Same contract as the pools
+    // above. Written only once there is something to carry or to clear, so a plan with no
+    // business income gains no key.
+    const qbi = action.taxDetail?.qbi;
+    if (qbi?.closing != null && (qbi.closing > 0 || state.usQbiLossCarryforward != null)) {
+      patches.usQbiLossCarryforward = +qbi.closing.toFixed(2);
+    }
     if (action.usTaxPaidOnUsSourceAud != null) {
       patches.usTaxPaidOnUsSourceAud = action.usTaxPaidOnUsSourceAud;
     }

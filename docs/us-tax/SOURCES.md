@@ -89,6 +89,8 @@ All five by the scripted routes above (govinfo granule; eCFR renderer with `curl
 
 | file | source | why it is here |
 |---|---|---|
+| `IRS-Rev-Proc-2023-34-Inflation-Adjustments-2024.txt` | **Rev. Proc. 2023-34** (2024 inflation adjustments) | §3.27 §199A threshold amounts and phase-in ranges for 2024 (design 134 step 4e). `https://www.irs.gov/pub/irs-drop/rp-23-34.pdf` → `pdftotext -layout`, fetched 19 Nov 2026. |
+| `IRS-Rev-Proc-2025-32-Inflation-Adjustments-2026.txt` | **Rev. Proc. 2025-32** (2026 inflation adjustments, the first under P.L. 119-21) | §3.26 §199A threshold amounts and phase-in ranges for 2026; §3.31 the §461(l) excess business loss threshold (\$256,000 / \$512,000 joint). The 2026 module's brackets already cited it without the file on disk. `https://www.irs.gov/pub/irs-drop/rp-25-32.pdf` → `pdftotext -layout`, fetched 19 Nov 2026. |
 | `IRS-Rev-Proc-2026-35-Inflation-Adjustments-2027.txt` | **Rev. Proc. 2026-35** (IR-2026-133, 5 Nov 2026) | §3.01 Tables 1–5 ordinary brackets; §3.03 maximum zero / 15% rate amounts; §3.15 standard deduction; §3.41 §911 FEIE cap. `https://www.irs.gov/pub/irs-drop/rp-26-35.pdf` → `pdftotext -layout`. |
 | `SSA-FR-2026-21796-COLA-Determinations-2027.txt` | SSA, *Cost-of-Living Increase and Other Determinations for 2027*, 91 FR (26 Oct 2026), doc 2026-21796 | The 2027 OASDI contribution and benefit base (\$192,300). ssa.gov returns 403 to scripted fetches (the fact sheet PDF and the COLA page both); the Federal Register copy is the same determination and is scriptable: `https://www.federalregister.gov/api/v1/documents/2026-21796.json` → `raw_text_url`, tags stripped + `html.unescape`. |
 

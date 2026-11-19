@@ -127,6 +127,15 @@ export class InflationAdjustedUsTaxRates extends UsTaxRatesBase {
     this._stdDeduction_single = baseRates._stdDeduction_single * bracket;
     this._ficaWageBase        = baseRates._ficaWageBase * fica;
     this._feieCap             = baseRates._feieCap      * feie;
+    // §199A (design 134 step 4e). The threshold is indexed like the brackets (§199A(e)(2)(B)),
+    // and so are the minimum deduction and its QBI floor (§199A(i)(3)). The phase-in RANGE is
+    // a fixed width in the statute (\$150,000 / \$75,000), so it is copied, not scaled.
+    this._qbiThresholdMfj     = baseRates._qbiThresholdMfj    * bracket;
+    this._qbiThresholdSingle  = baseRates._qbiThresholdSingle * bracket;
+    this._qbiPhaseInMfj       = baseRates._qbiPhaseInMfj;
+    this._qbiPhaseInSingle    = baseRates._qbiPhaseInSingle;
+    this._qbiMinDeduction     = baseRates._qbiMinDeduction    * bracket;
+    this._qbiMinActiveQbi     = baseRates._qbiMinActiveQbi    * bracket;
     this._baseYear            = baseRates.year;
   }
 
