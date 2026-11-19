@@ -95,7 +95,7 @@ const BUILT_IN_TOOLSETS = [
 import { synthesizeWeightedPriorities, resolveOwnerBanding } from './params/lever-weights.js';
 import { migrateYearFieldsToDates } from './year-date-migration.js';
 import { validateJobs, validateBonuses, bonusJobProblem, buildSpells } from '../finance/payroll/employment.js';
-import { validateBusinessIncome, validateBusinessIncomePaths } from '../finance/payroll/business-income.js';
+import { validateBusinessIncome, validateBusinessIncomePaths, validateUsPriorReturns } from '../finance/payroll/business-income.js';
 import { validateMsbsAccounts } from '../finance/account-rules/au/msbs.js';
 import { JOB_DATE_PARAM_FIELDS, FARM_PARAM_TABLES } from './params/record-param-templates.js';
 export { synthesizeWeightedPriorities } from './params/lever-weights.js';
@@ -192,6 +192,7 @@ export class ScenarioLoader {
     const businessErrors = [
       ...validateBusinessIncome(cfg.businessIncome, cfg.persons),
       ...validateBusinessIncomePaths(cfg.businessIncomePaths, cfg.businessIncome),
+      ...validateUsPriorReturns(cfg.usPriorReturns),
     ];
     if (businessErrors.length > 0) {
       throw new Error(`Scenario business income is invalid:\n  ${businessErrors.join('\n  ')}`);

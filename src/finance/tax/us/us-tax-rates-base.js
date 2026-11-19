@@ -295,9 +295,12 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // Step 1-: §461(l) and the §172 net operating loss (design 134 step 4g). A business loss
     // over the threshold is added back and carried as an NOL; a loss the rest of the return
     // cannot absorb is carried too; last years' NOL comes off here, above the line.
+    const taxYear = state.currentPeriods?.US?.startMs != null
+      ? new Date(state.currentPeriods.US.startMs).getUTCFullYear() : null;
     const nol = _computeBusinessLossLimits(state, {
       agi: agiBeforeLosses, stdDeduction, capitalLossAllowance: capLoss.allowance,
       netCapitalGain: capLoss.longTermGain + capLoss.collectibleGain + capLoss.unrecaptured1250Gain,
+      taxYear,
     }, this, usFilingSingle);
     const agi             = agiBeforeLosses + nol.excessBusinessLoss - nol.deduction;
     // Step 1a: §199A (design 134 step 4e), a deduction from taxable income, not from AGI.
@@ -456,7 +459,15 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // §904 limit in exactly the years a penalty was incurred — CY2030 of the
     // reference run had a base 12× larger than the true one.
     const penaltyTax  = Math.max(0, usPenaltyYTD);
-    const regularTax  = ordinaryTax + capitalGainsTax + collectiblesTax + unrecap1250Tax;
+    // §1301 farm income averaging (design 134 step 4g-3), an elected recomputation of the
+    // regular tax. Opt-in; with it off, or base years missing, the reduction is 0.
+    const averaging = _computeFarmIncomeAveraging(state, {
+      taxYear, ordinary: taxableOrdinary, gain: cgTaxed + collectiblesTaxed + unrecap1250Taxed,
+      seAdjustment: qbi.seAdjustment, excessBusinessLoss: nol.excessBusinessLoss,
+      brackets, ltcgBrackets,
+    });
+    const regularTax  = ordinaryTax + capitalGainsTax + collectiblesTax + unrecap1250Tax
+                        - averaging.reduction;
     const chapter1Tax = regularTax + penaltyTax;
 
     // Step 5b: Net Investment Income Tax (IRC §1411) — a flat 3.8% surtax on the
@@ -669,8 +680,15 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       // year (§199A(c)(2)); UsTaxSettleApplyReducer persists it, as it does the other pools.
       qbi,
       // §461(l) and §172 (design 134 step 4g). `closing` is the NOL carried to next year;
-      // UsTaxSettleApplyReducer persists it.
+      // UsTaxSettleApplyReducer persists it, and pays `carrybackRefund`.
       nol,
+      // §1301 (step 4g-3) and what this year's return leaves for later years' carrybacks and
+      // Schedule J (`usReturnHistory`, kept by UsTaxSettleApplyReducer).
+      averaging,
+      returnSummary: {
+        year: taxYear, ordinary: taxableOrdinary, gain: cgTaxed + collectiblesTaxed + unrecap1250Taxed,
+        nolBase: nol.base, nolUsed: nol.deduction, brackets, ltcgBrackets,
+      },
       // §1211/§1212 (design 90 §4). `closingShort`/`closingLong` are what
       // UsTaxSettleApplyReducer persists; everything else is for the worksheet and for
       // tests that need to see the netting without re-deriving it.
@@ -812,6 +830,12 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
           : []),
         ...(nol.closing > 0
           ? [{ label: 'Net Operating Loss — carried forward (§172(b))', amount: nol.closing }]
+          : []),
+        ...(nol.carrybackRefund > 0
+          ? [{ label: 'Farming Loss carried back 2 years (§172(b)(1)(B)) — refund', amount: -nol.carrybackRefund }]
+          : []),
+        ...(averaging.reduction > 0
+          ? [{ label: 'Farm Income Averaging (§1301, Schedule J)', amount: -averaging.reduction }]
           : []),
         ...(qbi.deduction > 0
           ? [{ label: 'Qualified Business Income Deduction (§199A)', amount: -qbi.deduction }]
@@ -1280,7 +1304,7 @@ function _ftcStrict() {
  * @returns {{ businessNet, threshold, excessBusinessLoss, opening, base, deduction,
  *   arising, closing }}
  */
-export function _computeBusinessLossLimits(state, { agi, stdDeduction, capitalLossAllowance, netCapitalGain }, rates, filingSingle) {
+export function _computeBusinessLossLimits(state, { agi, stdDeduction, capitalLossAllowance, netCapitalGain, taxYear = null }, rates, filingSingle) {
   const businessNet = state?.usSeEarningsYTD ?? 0;
   const rowNet      = state?.usQbiYTD ?? 0;
   const opening     = Math.max(0, state?.usNolCarryforward ?? 0);
@@ -1299,10 +1323,138 @@ export function _computeBusinessLossLimits(state, { agi, stdDeduction, capitalLo
     arising = Math.min(allowedLoss, Math.max(0, -modifiedTaxable));
   }
 
+  // The farming-loss carryback (step 4g-3). Every row is a Schedule F, so the whole NOL
+  // that arises is a farming loss ((b)(1)(B)(ii)). The §461(l) part is not: (l)(2) makes it a
+  // carryover only.
+  const { carriedBack, refund: carrybackRefund, years: carryback } =
+    _farmingLossCarryback(state, arising, taxYear);
+
   const base = Math.max(0, agi + excessBusinessLoss + gains - stdDeduction);
   const deduction = Math.min(opening, 0.80 * base);
-  const closing = opening - deduction + arising + excessBusinessLoss;
-  return { businessNet, threshold, excessBusinessLoss, opening, base, deduction, arising, closing };
+  const closing = opening - deduction + (arising - carriedBack) + excessBusinessLoss;
+  return {
+    businessNet, threshold, excessBusinessLoss, opening, base, deduction, arising,
+    carriedBack, carrybackRefund, carryback, closing,
+  };
+}
+
+/**
+ * Regular income tax on ordinary taxable income with preferential gain stacked on it, at one
+ * year's ordinary and capital-gain brackets (design 134 step 4g-3). What a carryback and
+ * Schedule J recompute a past year with. It is the 0/15/20 layer only, so collectible and
+ * §1250 gain are taxed at the capital-gain rates and no FEIE or credits are applied.
+ */
+export function _regularTaxOn(ordinary, gain, brackets, ltcgBrackets) {
+  const o = Math.max(0, ordinary);
+  const g = Math.max(0, gain);
+  return _applyBrackets(o, brackets) + _applyBrackets(o + g, ltcgBrackets) - _applyBrackets(o, ltcgBrackets);
+}
+
+/** A past year's taxable income less an NOL absorbed in it: ordinary first, then gain. */
+function _lessAbsorbed(row, absorbed) {
+  const ordinary = Math.max(0, row.ordinary);
+  return { ordinary: ordinary - Math.min(ordinary, absorbed), gain: Math.max(0, row.gain - Math.max(0, absorbed - ordinary)) };
+}
+
+/**
+ * §172(b)(1)(B) farming-loss carryback (design 134 step 4g-3): the loss goes to the second
+ * preceding year first, then the first ((b)(2)), each absorbing at most 80% of that year's
+ * taxable income figured without NOL deductions or §199A, less the NOL deductions it already
+ * took ((b)(2)(A), (C)). The refund is that year's regular tax recomputed on the lower income
+ * (Form 1045).
+ *
+ * The past years are `state.usReturnHistory`, so a year before the run carries the loss back
+ * only if Q31 gave it. With the (b)(1)(B)(iv) waiver (`usFarmingLossCarryback` false) nothing
+ * is carried back.
+ *
+ * Approximations: the recomputation is the regular tax only. A past year's §199A deduction is
+ * not refigured, though it would shrink with the income, so the refund is a little high when
+ * that year had one. Nor are its credits.
+ */
+export function _farmingLossCarryback(state, loss, taxYear) {
+  const none = { carriedBack: 0, refund: 0, years: [] };
+  if (!(loss > 0) || taxYear == null || state?.usFarmingLossCarryback === false) return none;
+  const history = Array.isArray(state?.usReturnHistory) ? state.usReturnHistory : [];
+  let left = loss;
+  let refund = 0;
+  const years = [];
+  for (const year of [taxYear - 2, taxYear - 1]) {
+    const row = history.find(r => r?.year === year);
+    if (!row || !Array.isArray(row.brackets) || left <= 0) continue;
+    const room = Math.max(0, 0.80 * Math.max(0, row.nolBase ?? row.ordinary) - Math.max(0, row.nolUsed ?? 0));
+    const absorbed = Math.min(left, room);
+    if (!(absorbed > 0)) continue;
+    const after = _lessAbsorbed(row, absorbed);
+    const yearRefund = _regularTaxOn(row.ordinary, row.gain, row.brackets, row.ltcgBrackets)
+      - _regularTaxOn(after.ordinary, after.gain, row.brackets, row.ltcgBrackets);
+    years.push({ year, absorbed, refund: yearRefund });
+    refund += yearRefund;
+    left -= absorbed;
+  }
+  return { carriedBack: loss - left, refund, years };
+}
+
+/**
+ * §1301 farm income averaging, Schedule J (design 134 step 4g-3). Opt-in
+ * (`usFarmIncomeAveraging`). Sources: `sec1301` and the Schedule J instructions on disk.
+ *
+ * Part of this year's taxable income from farming, the elected farm income (EFI), is taxed at
+ * the three base years' rates: a third added to each base year's taxable income, at that
+ * year's brackets for that year's filing status. The rest is taxed this year.
+ *
+ * - **EFI.** The rows' Schedule F net, less the farm's share of the self-employment-tax
+ *   deduction, less any excess business loss (which the instructions say is not used), capped
+ *   at taxable income.
+ * - **Choosing it.** The taxpayer elects whatever amount gives the least tax. The total is
+ *   piecewise linear in EFI, so the least is at a bracket edge or an end, and those are all
+ *   tried.
+ * - **Base years.** These are `state.usReturnHistory`, each as previously adjusted by an
+ *   earlier election or carryback, which the settle records. A base year below zero is
+ *   floored at 0, where the instructions' worksheet can allow a negative amount, so the model
+ *   errs toward less benefit. With a base year missing (before the run, with no Q31 entry)
+ *   there is no election.
+ *
+ * Only the ordinary part of EFI is averaged: the rows carry no farm capital gain. Not for
+ * AMT, which the election does not apply to.
+ *
+ * @returns {{ elected: boolean, electedFarmIncome, reduction, baseYears, unavailable? }}
+ */
+export function _computeFarmIncomeAveraging(state, { taxYear, ordinary, gain, seAdjustment = 0, excessBusinessLoss = 0, brackets, ltcgBrackets }) {
+  const none = { elected: false, electedFarmIncome: 0, reduction: 0, baseYears: [] };
+  if (state?.usFarmIncomeAveraging !== true || taxYear == null) return none;
+  const farm = (state?.usQbiYTD ?? 0) - seAdjustment - excessBusinessLoss;
+  const maxEfi = Math.min(Math.max(0, farm), Math.max(0, ordinary));
+  if (!(maxEfi > 0)) return none;
+  const history = Array.isArray(state?.usReturnHistory) ? state.usReturnHistory : [];
+  const base = [taxYear - 3, taxYear - 2, taxYear - 1].map(y => history.find(r => r?.year === y));
+  if (base.some(r => !r || !Array.isArray(r.brackets))) {
+    return { ...none, unavailable: `base years ${[taxYear - 3, taxYear - 2, taxYear - 1].filter((y, i) => !base[i]).join(', ')} not on record` };
+  }
+  const jBase = (r) => Math.max(0, r.jBase ?? r.ordinary);
+  const total = (e) => _regularTaxOn(ordinary - e, gain, brackets, ltcgBrackets)
+    + base.reduce((s, r) => s + _regularTaxOn(jBase(r) + e / 3, r.gain, r.brackets, r.ltcgBrackets)
+      - _regularTaxOn(jBase(r), r.gain, r.brackets, r.ltcgBrackets), 0);
+
+  // Every EFI where one of the schedules changes rate.
+  const edges = new Set([0, maxEfi]);
+  const add = (e) => { if (e > 0 && e < maxEfi) edges.add(e); };
+  for (const [lo] of brackets) add(ordinary - lo);
+  for (const [lo] of ltcgBrackets) { add(ordinary + gain - lo); add(ordinary - lo); }
+  for (const r of base) {
+    for (const [lo] of r.brackets) add(3 * (lo - jBase(r)));
+    for (const [lo] of r.ltcgBrackets) { add(3 * (lo - jBase(r) - r.gain)); add(3 * (lo - jBase(r))); }
+  }
+  const none0 = total(0);
+  let best = 0, bestTax = none0;
+  for (const e of [...edges].sort((a, b) => a - b)) {
+    const tx = total(e);
+    if (tx < bestTax - 1e-9) { best = e; bestTax = tx; }
+  }
+  const reduction = none0 - bestTax;
+  return {
+    elected: best > 0, electedFarmIncome: best, reduction: best > 0 ? reduction : 0,
+    baseYears: base.map(r => ({ year: r.year, taxableIncome: jBase(r), allocated: best / 3 })),
+  };
 }
 
 /**

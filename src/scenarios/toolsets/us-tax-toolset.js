@@ -80,8 +80,10 @@ export const US_TAX = {
       // A refund is a CREDIT and belongs to no debit family — netting it into the paid line
       // would report a year that over-paid as one that paid less tax, which is not what
       // happened: the tax was the same and the timing was wrong.
+      // `carryback` marks a farming-loss carryback refund (design 134 step 4g-3) from the
+      // instalment over-payment refund.
       { type: 'US_TAX_REFUND_CREDIT', cc: 'US',
-        fields: { amount: ValueType.currency('USD') } },
+        fields: { amount: ValueType.currency('USD'), carryback: ValueType.boolean() } },
       { type: 'US_TAX_PAYMENT_DEBIT', family: 'TAX_PAYMENT_DEBIT', cc: 'US',
         // `escalated` — see AU_TAX_PAYMENT_DEBIT: the cross-border re-issue of the
         // unfunded part of this same bill. Declared so "Tax Paid by Year" can

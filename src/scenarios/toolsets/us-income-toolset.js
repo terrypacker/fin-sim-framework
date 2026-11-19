@@ -20,6 +20,7 @@ import { OneOffEvent } from '../../simulation-framework/events/one-off-event.js'
 import { keyedRng } from '../../simulation-framework/simulation.js';
 import { bonusJobProblem } from '../../finance/payroll/employment.js';
 import { businessIncomeDates } from '../../finance/payroll/business-income.js';
+import { TaxSettleService } from '../../finance/tax-settle-service.js';
 
 /**
  * US_INCOME toolset — US income event mechanics (SS, wages, SE, bonus, company sale).
@@ -118,9 +119,57 @@ export const US_INCOME = {
         defaultValue: true,
         description:  'When on (default), every household Monte Carlo path draws its business income from the imported farm paths, a different farm season each year. Turn off to pay the farm\'s deterministic figures in every path, which shows the household\'s risk without the farm\'s.',
       },
+      {
+        // Design 134 step 4g-3. The law's default is the carryback; off is the
+        // §172(b)(1)(B)(iv) election to waive it.
+        key:          'usFarmingLossCarryback',
+        label:        'Farming Loss Carryback',
+        type:         'Boolean',
+        group:        'Business Income',
+        mc:           false,
+        opt:          false,
+        defaultValue: true,
+        description:  'When on (default, as the law has it), a farm loss larger than the rest of the year\'s return is carried back to the two years before it, and the tax those years paid on it comes back as a refund at the loss year\'s settle. Whatever those years cannot absorb carries forward. Turn off to make the election to carry it forward only. Years before the plan count only if their taxable income is entered (usPriorReturns).',
+      },
+      {
+        // Design 134 step 4g-3, Q11b: an option, off by default.
+        key:          'usFarmIncomeAveraging',
+        label:        'Farm Income Averaging (Schedule J)',
+        type:         'Boolean',
+        group:        'Business Income',
+        mc:           false,
+        opt:          false,
+        defaultValue: false,
+        description:  'When on, each year\'s return elects farm income averaging: whatever part of the farm\'s taxable income gives the least tax is taxed one third at each of the three prior years\' rates instead of this year\'s. It helps most in a good year after low ones. It needs three years of returns, from the run or from usPriorReturns, so a plan without prior years entered starts averaging in its fourth year.',
+      },
     ];
   },
-  state(context) { return {}; },
+  /**
+   * Design 134 step 4g-3. A plan with business income keeps a short history of its returns,
+   * for the farming-loss carryback and Schedule J, seeded with the years before the run that
+   * `cfg.usPriorReturns` gives (Q31). Those years' brackets are their published ones. The
+   * elections are stamped beside it. A plan with no business income gains none of these keys.
+   */
+  state(context) {
+    if (!(context?.businessIncome?.length > 0)) return {};
+    const p = context.parameters ?? {};
+    const single = p.usFilingSingle !== undefined ? Boolean(p.usFilingSingle) : (context.people?.length ?? 1) <= 1;
+    const rates = new TaxSettleService();
+    const prior = (context.usPriorReturns ?? []).map(r => {
+      const m = rates.ratesForYear('US', r.year);
+      const ti = Number(r.taxableIncome);
+      return {
+        year: r.year, ordinary: ti, gain: 0, jBase: ti, nolBase: Math.max(0, ti), nolUsed: 0,
+        brackets: (single ? m._brackets_single : m._brackets_mfj).map(([lo, x]) => [lo, x]),
+        ltcgBrackets: (single ? m._ltcg_single : m._ltcg_mfj).map(([lo, x]) => [lo, x]),
+      };
+    }).sort((a, b) => a.year - b.year).slice(-3);
+    return {
+      usReturnHistory: prior,
+      usFarmingLossCarryback: p.usFarmingLossCarryback !== false,
+      usFarmIncomeAveraging: p.usFarmIncomeAveraging === true,
+    };
+  },
   /**
    * One BONUS event per authored `cfg.bonuses` row inside the run. A row dated before
    * the run's start is history (the money is already in the accounts) and one after its

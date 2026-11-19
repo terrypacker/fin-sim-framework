@@ -971,6 +971,8 @@
  },
  "usCapitalGainsYTD": 0,
  "usCollectibleGainsYTD": 0,
+ "usFarmIncomeAveraging": false,
+ "usFarmingLossCarryback": true,
  "usFilingSingle": true,
  "usFilingSingleBase": true,
  "usHouseProperty": {
@@ -1061,6 +1063,164 @@
  "usQbiUbiaYTD": 0,
  "usQbiW2WagesYTD": 0,
  "usQbiYTD": 0,
+ "usReturnHistory": [
+  {
+   "brackets": [
+    [
+     0,
+     0.1
+    ],
+    [
+     12800,
+     0.12
+    ],
+    [
+     52025,
+     0.22
+    ],
+    [
+     109125,
+     0.24
+    ],
+    [
+     208325,
+     0.32
+    ],
+    [
+     264550,
+     0.35
+    ],
+    [
+     661375,
+     0.37
+    ]
+   ],
+   "gain": 5458.35,
+   "jBase": 128876.53,
+   "ltcgBrackets": [
+    [
+     0,
+     0
+    ],
+    [
+     51050,
+     0.15
+    ],
+    [
+     563200,
+     0.2
+    ]
+   ],
+   "nolBase": 143256.66,
+   "nolUsed": 0,
+   "ordinary": 128876.53,
+   "year": 2027
+  },
+  {
+   "brackets": [
+    [
+     0,
+     0.1
+    ],
+    [
+     13152,
+     0.12
+    ],
+    [
+     53455.6875,
+     0.22
+    ],
+    [
+     112125.9375,
+     0.24
+    ],
+    [
+     214053.9375,
+     0.32
+    ],
+    [
+     271825.125,
+     0.35
+    ],
+    [
+     679562.8125,
+     0.37
+    ]
+   ],
+   "gain": 3479.81,
+   "jBase": 132798.37,
+   "ltcgBrackets": [
+    [
+     0,
+     0
+    ],
+    [
+     52453.875,
+     0.15
+    ],
+    [
+     578688,
+     0.2
+    ]
+   ],
+   "nolBase": 145467.62,
+   "nolUsed": 0,
+   "ordinary": 132798.37,
+   "year": 2028
+  },
+  {
+   "brackets": [
+    [
+     0,
+     0.1
+    ],
+    [
+     13513.68,
+     0.12
+    ],
+    [
+     54925.7189063,
+     0.22
+    ],
+    [
+     115209.400781,
+     0.24
+    ],
+    [
+     219940.420781,
+     0.32
+    ],
+    [
+     279300.315938,
+     0.35
+    ],
+    [
+     698250.789844,
+     0.37
+    ]
+   ],
+   "gain": 3344.06,
+   "jBase": 130186.03,
+   "ltcgBrackets": [
+    [
+     0,
+     0
+    ],
+    [
+     53896.3565625,
+     0.15
+    ],
+    [
+     594601.92,
+     0.2
+    ]
+   ],
+   "nolBase": 141322.38,
+   "nolUsed": 0,
+   "ordinary": 130186.03,
+   "year": 2029
+  }
+ ],
  "usSavingsAccount": {
   "allowsEarlyWithdrawal": false,
   "balance": 10029.17,

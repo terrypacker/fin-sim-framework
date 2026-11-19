@@ -714,6 +714,15 @@ export class StateSchemaRegistry {
     this.register('usQbiUbiaYTD',                  ParameterValueType.currency('USD'));
     this.register('usQbiLossCarryforward',         ParameterValueType.currency('USD'));
     this.register('usNolCarryforward',             ParameterValueType.currency('USD'));   // design 134 step 4g
+    // Design 134 step 4g-3: the elections, and the last three returns' figures.
+    this.register('usFarmingLossCarryback',        ParameterValueType.boolean());
+    this.register('usFarmIncomeAveraging',         ParameterValueType.boolean());
+    this.registerPattern('usReturnHistory.*.year',            ParameterValueType.year());
+    for (const f of ['ordinary', 'gain', 'jBase', 'nolBase', 'nolUsed']) {
+      this.registerPattern(`usReturnHistory.*.${f}`, ParameterValueType.currency('USD'));
+    }
+    this.registerPattern('usReturnHistory.*.brackets.*.*',     ParameterValueType.decimal(4));
+    this.registerPattern('usReturnHistory.*.ltcgBrackets.*.*', ParameterValueType.decimal(4));
     this.register('usSsWagesYTD',                  ParameterValueType.currency('USD'));
     this.registerPattern('usSsWagesByPersonYTD.*', ParameterValueType.currency('USD'));
     this.register('usWithheldYTD',                 ParameterValueType.currency('USD'));

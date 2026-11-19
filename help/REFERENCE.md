@@ -9,11 +9,11 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-245 parameters · 36 panels · 13 node types (209 fields) · 187 action types · 100 tools · 359 state field types · 83 topics · 142 design docs
+247 parameters · 36 panels · 13 node types (209 fields) · 187 action types · 100 tools · 369 state field types · 83 topics · 142 design docs
 
 ---
 
-## Parameters (245)
+## Parameters (247)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
@@ -125,12 +125,16 @@ scenario's own schema), which is where to go to change it.
 - **`taxLossHarvestOnRegimeEntry`** — TLH on Regime Entry · `Boolean` · default `true` · sweep: opt · conditional · via ECONOMIC_REGIMES
   Also trigger tax-loss harvesting on PANIC_SELL_TRIGGER regime entry, not just at year-end
 
-### Business Income (2)
+### Business Income (4)
 
 - **`businessIncomeFarmPaths`** — Business Income: Draw Farm Paths · `Boolean` · default `false` · via US_INCOME
   When on, each year of an imported farm's business income is one Monte Carlo path of the farm, drawn at random for that year, instead of the farm's deterministic run. Seasons are then independent of one another, and of the household's market draws. The draw follows the run's seed, so a run replays. Needs a farm export imported with its paths; a row without them always pays its deterministic figures.
 - **`mcFarmPaths`** — Monte Carlo: Farm Paths · `Boolean` · default `true` · via US_INCOME
   When on (default), every household Monte Carlo path draws its business income from the imported farm paths, a different farm season each year. Turn off to pay the farm's deterministic figures in every path, which shows the household's risk without the farm's.
+- **`usFarmIncomeAveraging`** — Farm Income Averaging (Schedule J) · `Boolean` · default `false` · via US_INCOME
+  When on, each year's return elects farm income averaging: whatever part of the farm's taxable income gives the least tax is taxed one third at each of the three prior years' rates instead of this year's. It helps most in a good year after low ones. It needs three years of returns, from the run or from usPriorReturns, so a plan without prior years entered starts averaging in its fourth year.
+- **`usFarmingLossCarryback`** — Farming Loss Carryback · `Boolean` · default `true` · via US_INCOME
+  When on (default, as the law has it), a farm loss larger than the rest of the year's return is carried back to the two years before it, and the tax those years paid on it comes back as a refund at the loss year's settle. Whatever those years cannot absorb carries forward. Turn off to make the election to carry it forward only. Years before the plan count only if their taxable income is entered (usPriorReturns).
 
 ### Contributions (13)
 
@@ -2008,7 +2012,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `US_TAX_FILE_APPLY` | taxYear: number, delta: currency(USD), disallowed: currency(USD), ledger: any, remaining: any, capitalLoss: any, capitalLossAsFiled: any, basisAdjustments: any | US_TAX |
 | `US_TAX_INSTALMENT_DEBIT` | amount: currency(USD), quarter: number | US_TAX |
 | `US_TAX_PAYMENT_DEBIT` | amount: currency(USD), escalated: boolean, section988: any | US_TAX |
-| `US_TAX_REFUND_CREDIT` | amount: currency(USD) | US_TAX |
+| `US_TAX_REFUND_CREDIT` | amount: currency(USD), carryback: boolean | US_TAX |
 | `US_TAX_SETTLE_APPLY` | withheld: currency(USD), tax: number, taxDetail: any, fxRate: number, usTaxPaidOnUsSourceAud: currency(AUD) | US_TAX |
 | `WAGES_INCOME_APPLY` | amount: currency(USD), residency: text, personKey: text, targetKey: text, workCountry: text, netAmount: currency(USD), splits: any | US_INCOME |
 | `WAGES_INCOME_TAX` | amount: currency(USD), residency: text, personKey: text | US_INCOME |
@@ -2017,7 +2021,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 
 ---
 
-## State field types (359)
+## State field types (369)
 
 The scenario-INDEPENDENT half of `StateSchemaRegistry`: the globs and exact paths it
 installs in its own constructor, with the value type that decides how each formats.
@@ -2333,6 +2337,8 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `usBondInterestYTD` | currency(USD) |
 | `usCapitalGainsYTD` | currency(USD) |
 | `usCollectibleGainsYTD` | currency(USD) |
+| `usFarmIncomeAveraging` | boolean |
+| `usFarmingLossCarryback` | boolean |
 | `usFeieElected` | boolean |
 | `usFilingSingle` | boolean |
 | `usFilingSingleBase` | boolean |
@@ -2352,6 +2358,14 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `usQbiUbiaYTD` | currency(USD) |
 | `usQbiW2WagesYTD` | currency(USD) |
 | `usQbiYTD` | currency(USD) |
+| `usReturnHistory.*.brackets.*.*` | decimal |
+| `usReturnHistory.*.gain` | currency(USD) |
+| `usReturnHistory.*.jBase` | currency(USD) |
+| `usReturnHistory.*.ltcgBrackets.*.*` | decimal |
+| `usReturnHistory.*.nolBase` | currency(USD) |
+| `usReturnHistory.*.nolUsed` | currency(USD) |
+| `usReturnHistory.*.ordinary` | currency(USD) |
+| `usReturnHistory.*.year` | year |
 | `usSection988DisallowedLossYTD` | currency(USD) |
 | `usSection988GainYTD` | currency(USD) |
 | `usSeEarningsYTD` | currency(USD) |
@@ -2430,7 +2444,7 @@ what the in-app panel keys on.
 | [Event Sourcing](concepts/event-sourcing.md) | concept | 381 | 3 panels · design 2, 16, 91 |
 | [Node History](panels/exec-history.md) | panel | 191 | 1 panel |
 | [Farm MC](panels/farm-mc.md) | panel | 247 | 1 panel · design 134 |
-| [Farm Results into a Household Plan](workflows/farm-to-household.md) | workflow | 581 | 2 params · 2 tools · design 134 |
+| [Farm Results into a Household Plan](workflows/farm-to-household.md) | workflow | 593 | 4 params · 2 tools · design 134 |
 | [Field P&L](panels/field-pnl.md) | panel | 243 | 1 panel · design 134 |
 | [Funding and Instalments](concepts/funding-and-instalments.md) | concept | 248 | 2 panels · 3 params · design 107 |
 | [FX](concepts/fx.md) | concept | 390 | 2 panels · 6 params · design 47, 87, 122 |

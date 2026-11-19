@@ -3,7 +3,7 @@ id: farm-to-household
 kind: workflow
 title: Farm Results into a Household Plan
 panels: []
-params: [businessIncomeFarmPaths, mcFarmPaths]
+params: [businessIncomeFarmPaths, mcFarmPaths, usFarmingLossCarryback, usFarmIncomeAveraging]
 actions: []
 tools: [scripts/farm/farm-export.mjs, scripts/scenario/import-farm.mjs]
 design: [134-farm-job-costing.md]
@@ -11,8 +11,10 @@ sources: [src/finance/farm/farm-export.js, src/finance/payroll/business-income.j
 stamps:
   param:businessIncomeFarmPaths: 4622e2
   param:mcFarmPaths: f159da
+  param:usFarmingLossCarryback: a0bd40
+  param:usFarmIncomeAveraging: 25e5dd
   src/finance/farm/farm-export.js: 20aad3
-  src/finance/payroll/business-income.js: 91ef8b
+  src/finance/payroll/business-income.js: 5d7870
 ---
 
 A farm scenario and a household plan stay **separate scenarios**, joined by a file. The farm
@@ -56,14 +58,14 @@ expense inside the net, is also refunded in full as a credit on the operator's N
 return. It is refundable, so a household owing less gets the difference paid. A person
 living outside Nebraska gets none, and the import warns.
 
-**A loss year.** A farm loss offsets the household's other income in the year it happens,
-down to two limits. A business loss over the year's excess-business-loss threshold
-(\$256,000 single, \$512,000 joint in 2026) is not allowed that year. A loss larger than
-everything else on the return is not wasted either. Both carry forward as a net operating
-loss and come off later years' income, at most 80% of each year's taxable income. Only the
-federal return does this: the Nebraska return in this model still nets the loss in its year
-and carries nothing.
+**A loss year.** A farm loss offsets other income in its year, down to two limits. A loss
+over the year's excess-business-loss threshold (\$256,000 single, \$512,000 joint in 2026)
+waits a year, and a loss larger than everything else on the return is not wasted. By
+default that second part goes back two years first and refunds tax those returns paid;
+the rest, and the over-threshold part, comes off later years' income, at most 80% of each.
+Nebraska's return here still nets the loss in its year and carries nothing.
 
-**What is not there yet.** The farming-loss two-year carryback (today every loss carries
-forward, as if the carryback were waived) and income averaging are later steps of design 134
-phase 4.
+**Income averaging** is an election, off by default. It taxes part of a good year's farm
+income at the three prior years' rates. Both it and the carryback need prior returns: the
+run's own, or `usPriorReturns` in the plan file (year and taxable income) for the years
+before it.
