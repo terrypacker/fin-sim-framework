@@ -76,6 +76,46 @@ export class NormalDistribution {
 }
 
 /**
+ * Skew-normal distribution (Azzalini) parameterised by its mean, standard deviation and
+ * skewness, so a skewed draw keeps the spread a normal one would have. For quantities whose
+ * bad tail is longer than their good one, such as a crop yield against its trend (design 134
+ * §13.8: a drought year falls far below, a great year rises only somewhat above).
+ *
+ * A skew-normal's skewness is limited to about ±0.995; a larger one is clamped there. Skew 0
+ * is a normal. Consumes two RNG values per sample (one Box–Muller pair, both halves used).
+ */
+export class SkewNormalDistribution {
+  constructor({ mean, stdDev, skew = 0 }) {
+    if (stdDev < 0) throw new RangeError('SkewNormalDistribution: stdDev must be >= 0');
+    if (!Number.isFinite(skew)) throw new RangeError('SkewNormalDistribution: skew must be a number');
+    this.mean   = mean;
+    this.stdDev = stdDev;
+    this.skew   = Math.max(-SKEW_NORMAL_MAX_SKEW, Math.min(SKEW_NORMAL_MAX_SKEW, skew));
+    // Invert γ(δ) = (4 − π)/2 · (δb)³ / (1 − δ²b²)^{3/2}, b = √(2/π).
+    const g = Math.abs(this.skew) ** (2 / 3);
+    const delta = Math.sign(this.skew) * Math.sqrt((Math.PI / 2) * g / (g + ((4 - Math.PI) / 2) ** (2 / 3)));
+    const b = Math.sqrt(2 / Math.PI);
+    this._delta = delta;
+    this._shift = delta * b;                              // the raw draw's mean
+    this._scale = Math.sqrt(1 - delta * delta * b * b);   // and its sd
+  }
+
+  sample(rngFn) {
+    if (this.stdDev === 0) return this.mean;
+    const u1 = Math.max(rngFn(), 1e-10);
+    const u2 = rngFn();
+    const r  = Math.sqrt(-2 * Math.log(u1));
+    const z0 = r * Math.cos(2 * Math.PI * u2);
+    const z1 = r * Math.sin(2 * Math.PI * u2);
+    const x  = this._delta * Math.abs(z0) + Math.sqrt(1 - this._delta ** 2) * z1;
+    return this.mean + this.stdDev * (x - this._shift) / this._scale;
+  }
+}
+
+/** The largest skewness a skew-normal can have (its limit is ≈0.9953). */
+export const SKEW_NORMAL_MAX_SKEW = 0.995;
+
+/**
  * Log-normal distribution parameterised by the desired real-space mean and
  * standard deviation (not log-space mu/sigma).  Suitable for strictly
  * positive quantities such as account balances or growth rates > 0.
@@ -221,6 +261,7 @@ export const DISTRIBUTION_TYPES = {
   UNIFORM_DATE:      'uniformDate',
   NORMAL_DATE:       'normalDate',
   NORMAL:            'normal',
+  SKEW_NORMAL:       'skewNormal',
   LOG_NORMAL:        'logNormal',
   BERNOULLI:         'bernoulli',
   ACTUARIAL_LIFESPAN: 'actuarialLifespan',
@@ -237,6 +278,7 @@ export function createDistribution(config) {
     case DISTRIBUTION_TYPES.UNIFORM_DATE: return new UniformDateDistribution(config);
     case DISTRIBUTION_TYPES.NORMAL_DATE:  return new NormalDateDistribution(config);
     case DISTRIBUTION_TYPES.NORMAL:       return new NormalDistribution(config);
+    case DISTRIBUTION_TYPES.SKEW_NORMAL:  return new SkewNormalDistribution(config);
     case DISTRIBUTION_TYPES.LOG_NORMAL:   return new LogNormalDistribution(config);
     case DISTRIBUTION_TYPES.BERNOULLI:         return new BernoulliDistribution(config);
     case DISTRIBUTION_TYPES.ACTUARIAL_LIFESPAN: return new ActuarialLifespanDistribution(config);

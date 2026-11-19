@@ -23,10 +23,11 @@ import assert             from 'node:assert/strict';
 
 import { FarmScenario } from '../../src/scenarios/farm-scenario.js';
 import { runFarm }      from '../../src/finance/farm/farm-run.js';
-import { FarmMcRunner, FarmMcConfig, summarizeFarmMetrics, isFarmIncomeMetric }
+import { FarmMcRunner, FarmMcConfig, summarizeFarmMetrics, isFarmIncomeMetric, withPriceVol }
   from '../../src/finance/farm/farm-mc.js';
 import { farmPathMetrics } from '../../src/finance/farm/farm-mc-scenario.js';
 import { normalizeFarm, priceOn, validateFarm } from '../../src/finance/farm/farm-records.js';
+import { FARM_CALIBRATION } from '../../src/finance/farm/farm-calibration.js';
 import { mcScenarioFor, perturbParams } from '../../src/finance/monte-carlo/parallel/mc-worker-core.js';
 import { applyParamBagToConfig } from '../../src/scenarios/scenario-param-apply.js';
 import { McWorkerPool } from '../../src/finance/monte-carlo/parallel/mc-worker-pool.js';
@@ -155,10 +156,14 @@ describe('farm MC summary', () => {
   });
 });
 
+// The mechanics tests pin a UNIT shape (every field takes the whole shock, both crops alike, no
+// price link), so they test the arithmetic, not the calibration; §13.8's tests test that.
+const UNIT_SHAPE = { irrigatedYieldBeta: 1, yieldShockScale: { CORN: 1, SOYBEANS: 1 }, priceYieldBeta: { CORN: 0, SOYBEANS: 0 } };
+
 describe('realized yield (design 134 §13.3, step 2b)', () => {
   const withShocks = (season, plans = {}, beta) => {
     const c = cfg();
-    Object.assign(c.farm.seasons[0], { yieldShock: season, ...(beta != null ? { irrigatedYieldBeta: beta } : {}) });
+    Object.assign(c.farm.seasons[0], UNIT_SHAPE, { yieldShock: season, ...(beta != null ? { irrigatedYieldBeta: beta } : {}) });
     for (const p of c.farm.cropPlans) if (plans[p.id] != null) p.yieldShock = plans[p.id];
     return c;
   };
@@ -200,13 +205,16 @@ describe('realized yield (design 134 §13.3, step 2b)', () => {
     for (const p of r.jobCost.plans.filter(x => x.planId)) assert.strictEqual(p.harvestedBushels, 0);
   });
 
-  test('the yield rows are the catalog\'s, off and at zero spread until calibrated', () => {
+  test('the yield rows are the catalog\'s: off, centred on 0, the farm-wide ones calibrated', () => {
     const { ctx } = new FarmMcRunner({ cfgTemplate: cfg() })._prepare();
-    const rows = ctx.variables.filter(v => v.paramKey.endsWith('.yieldShock'));
-    assert.strictEqual(rows.length, 5, 'the season and every crop plan');
+    const rows = ctx.variables.filter(v => /\.(yieldShock|irrigatedYieldShock)$/.test(v.paramKey));
+    assert.strictEqual(rows.length, 6, 'the season\'s two and every crop plan\'s');
+    const sd = Object.fromEntries(rows.map(v => [v.paramKey, v.stdDev]));
+    assert.strictEqual(sd[FARM_YIELD], FARM_CALIBRATION.yieldShockSd);
+    assert.strictEqual(sd['farm.season.s2027.irrigatedYieldShock'], FARM_CALIBRATION.irrigatedYieldShockSd);
+    assert.strictEqual(sd[YIELD], 0, 'a field\'s own spread needs its yield history (Q26)');
     for (const v of rows) {
       assert.strictEqual(v.enabled, false);
-      assert.strictEqual(v.stdDev, 0);
       assert.strictEqual(v.mean, 0);
       assert.ok(!v.harvested, 'not the harvest\'s generic spread');
     }
@@ -215,7 +223,7 @@ describe('realized yield (design 134 §13.3, step 2b)', () => {
 
   test('switched on at zero spread, a yield row leaves every path the deterministic run', async () => {
     const c = new FarmMcConfig();
-    c.applyOverride(FARM_YIELD, { enabled: true });
+    c.applyOverride(FARM_YIELD, { enabled: true, stdDev: 0 });
     const det = runFarm(cfg());
     const { runs } = await new FarmMcRunner({ n: 2, cfgTemplate: cfg(), mcConfig: c }).run();
     for (const r of runs) assert.strictEqual(r.metrics['farm.net.custom'], det.jobCost.farm.net);
@@ -225,9 +233,13 @@ describe('realized yield (design 134 §13.3, step 2b)', () => {
     const { runs } = await new FarmMcRunner({ n: 4, cfgTemplate: cfg(), mcConfig: withEnabled(FARM_YIELD) }).run();
     const low = runs.reduce((a, b) => (a.params[FARM_YIELD] < b.params[FARM_YIELD] ? a : b));
     const high = runs.reduce((a, b) => (a.params[FARM_YIELD] > b.params[FARM_YIELD] ? a : b));
-    for (const id of ['p-a-home-dry', 'p-a-west', 'p-b-river']) {
+    // Dry fields: a good year is more bushels, and their price falls by less than they gain.
+    for (const id of ['p-a-home-dry', 'p-a-west']) {
       assert.ok(low.metrics[`plan.${id}.revenue`] < high.metrics[`plan.${id}.revenue`], id);
     }
+    // An irrigated field gains only β of the bushels and takes the whole price fall: a good
+    // dryland year costs it revenue. The natural hedge, the other way round.
+    assert.ok(low.metrics['plan.p-b-river.revenue'] > high.metrics['plan.p-b-river.revenue']);
   });
 });
 
@@ -270,7 +282,7 @@ describe('price paths (design 134 §13.5, step 2c)', () => {
   });
 
   test('a short farm crop raises the price from harvest on, by the yield–price link', () => {
-    const c = farmWith({ yieldShock: -0.2, priceYieldBeta: { CORN: 0.5 } });
+    const c = farmWith({ ...UNIT_SHAPE, yieldShock: -0.2, priceYieldBeta: { CORN: 0.5 } });
     assert.ok(Math.abs(row(c, 'pc-harvest').realized - 4.10 * Math.exp(0.1)) < 1e-12);
     assert.ok(Math.abs(row(c, 'pc-winter').realized - 4.35 * Math.exp(0.1)) < 1e-12, 'taken once, then carried');
     assert.strictEqual(row(c, 'pc-carry').realized, 4.30);
@@ -288,7 +300,7 @@ describe('price paths (design 134 §13.5, step 2c)', () => {
 
   test('a contract shortfall settles at the realized market price', () => {
     // A near-total crop failure with a dear market: opB delivers what it has and buys out the rest.
-    const c = farmWith({ yieldShock: -0.95, priceYieldBeta: { CORN: 1 } });
+    const c = farmWith({ ...UNIT_SHAPE, yieldShock: -0.95, priceYieldBeta: { CORN: 1 } });
     const r = runFarm(c);
     const k = r.ledger.find(p => p.receivableId === 'contract:k-b-corn' && p.kind === 'REVENUE');
     const market = priceOn(normalizeFarm(c.farm).prices, 'CORN', '2027-10-25', 'realized');
@@ -312,10 +324,11 @@ describe('price paths (design 134 §13.5, step 2c)', () => {
   test('sampled shocks under a volatility vary the paths and replay from their params', async () => {
     const c = farmWith({ priceVol: { CORN: 0.25 } });
     const m = new FarmMcConfig();
-    for (const p of c.farm.prices) m.applyOverride(`farm.price.${p.id}.shock`, { enabled: true });
-    const { runs } = await new FarmMcRunner({ n: 3, cfgTemplate: c, mcConfig: m }).run();
+    for (const p of c.farm.prices.filter(x => x.crop === 'CORN')) m.applyOverride(`farm.price.${p.id}.shock`, { enabled: true });
+    const { runs, summary } = await new FarmMcRunner({ n: 3, cfgTemplate: c, mcConfig: m }).run();
+    assert.deepStrictEqual(summary.provenance.priceVolFilled, {}, 'corn has its own vol');
     assert.strictEqual(new Set(runs.map(r => r.metrics['crop.CORN.revenue'])).size, 3);
-    assert.strictEqual(new Set(runs.map(r => r.metrics['crop.SOYBEANS.revenue'])).size, 1, 'soybeans have no volatility');
+    assert.strictEqual(new Set(runs.map(r => r.metrics['crop.SOYBEANS.revenue'])).size, 1, 'soybean prices are not sampled');
     const replay = runFarm(applyParamBagToConfig(farmWith({ priceVol: { CORN: 0.25 } }), runs[1].params));
     assert.strictEqual(replay.jobCost.farm.net, runs[1].metrics['farm.net.custom']);
   });
@@ -362,7 +375,8 @@ describe('multipliers and contracted share (design 134 §13.6, step 2d)', () => 
     const k = normalizeFarm(c.farm).contracts.find(x => x.id === 'k-b-corn');
     assert.strictEqual(k.bushels, 0.5 * 146 * 225);
     // A short crop below the contracted share leaves a shortfall, settled at the market.
-    const short = withSeason({ yieldShock: -0.6 }, f => {
+    // The river field is irrigated: its own common shock takes it below the contracted half.
+    const short = withSeason({ irrigatedYieldShock: -0.6 }, f => {
       const kk = f.contracts.find(x => x.id === 'k-b-corn');
       delete kk.bushels; kk.shareOfExpected = 0.5;
     });
@@ -394,5 +408,64 @@ describe('multipliers and contracted share (design 134 §13.6, step 2d)', () => 
     assert.strictEqual(new Set(runs.map(r => r.metrics['farm.net.custom'])).size, 3);
     const replay = runFarm(applyParamBagToConfig(cfg(), runs[0].params));
     assert.strictEqual(replay.jobCost.farm.net, runs[0].metrics['farm.net.custom']);
+  });
+});
+
+describe('calibrated shape (design 134 §13.8, step 2e)', () => {
+  const season = (fields) => { const c = cfg(); Object.assign(c.farm.seasons[0], fields); return c; };
+  const plan = (r, id) => r.jobCost.plans.find(p => p.planId === id);
+
+  test('blank shape fields take the calibration, and it is a no-op at zero shocks', () => {
+    const s = normalizeFarm(cfg().farm).season;
+    assert.strictEqual(s.irrigatedYieldBeta, FARM_CALIBRATION.irrigatedYieldBeta);
+    assert.deepStrictEqual(s.yieldShockScale, { ...FARM_CALIBRATION.yieldShockScale });
+    assert.deepStrictEqual(s.priceYieldBeta, { ...FARM_CALIBRATION.priceYieldBeta });
+    assert.deepStrictEqual(s.priceVol, {}, 'the vol is never defaulted into a record');
+    for (const p of normalizeFarm(cfg().farm).prices) assert.strictEqual(p.realized, p.price);
+  });
+
+  test('the dryland shock: k·Y on dry fields, k·β·Y on irrigated ones', () => {
+    const r = runFarm(season({ yieldShock: -0.2 }));
+    const { irrigatedYieldBeta: b, yieldShockScale: k } = FARM_CALIBRATION;
+    assert.ok(Math.abs(plan(r, 'p-a-home-dry').realizedYield - 50 * (1 - 0.2 * k.SOYBEANS)) < 1e-9);
+    assert.ok(Math.abs(plan(r, 'p-a-home-irr').realizedYield - 230 * (1 - 0.2 * b)) < 1e-9);
+  });
+
+  test('the irrigated shock moves irrigated fields only', () => {
+    const det = runFarm(cfg());
+    const r = runFarm(season({ irrigatedYieldShock: -0.1 }));
+    assert.ok(Math.abs(plan(r, 'p-a-home-irr').realizedYield - 230 * 0.9) < 1e-9);
+    assert.strictEqual(plan(r, 'p-a-home-dry').realizedYield, plan(det, 'p-a-home-dry').realizedYield);
+    assert.strictEqual(plan(r, 'p-a-west').realizedYield, plan(det, 'p-a-west').realizedYield);
+  });
+
+  test('the price link reads the crop\'s own scaled shock', () => {
+    const c = season({ yieldShock: -0.2 });
+    const h = normalizeFarm(c.farm).prices.find(p => p.id === 'ps-harvest');
+    const { priceYieldBeta: b, yieldShockScale: k } = FARM_CALIBRATION;
+    assert.ok(Math.abs(h.realized - h.price * Math.exp(b.SOYBEANS * k.SOYBEANS * 0.2)) < 1e-12);
+  });
+
+  test('a sampled crop with no vol of its own gets the calibrated one, and replays with it', async () => {
+    const m = new FarmMcConfig();
+    for (const p of cfg().farm.prices) m.applyOverride(`farm.price.${p.id}.shock`, { enabled: true });
+    const { runs, summary } = await new FarmMcRunner({ n: 3, cfgTemplate: cfg(), mcConfig: m }).run();
+    assert.deepStrictEqual(summary.provenance.priceVolFilled, { ...FARM_CALIBRATION.priceVol });
+    assert.strictEqual(new Set(runs.map(r => r.metrics['crop.SOYBEANS.revenue'])).size, 3);
+    const replay = runFarm(applyParamBagToConfig(withPriceVol(cfg(), summary.provenance.priceVolFilled), runs[2].params));
+    assert.strictEqual(replay.jobCost.farm.net, runs[2].metrics['farm.net.custom']);
+  });
+
+  test('a batch that samples no price leaves the vol blank', async () => {
+    const { summary } = await new FarmMcRunner({ n: 1, cfgTemplate: cfg(), mcConfig: withEnabled(FARM_YIELD) }).run();
+    assert.deepStrictEqual(summary.provenance.priceVolFilled, {});
+  });
+
+  test('the irrigated levers exist only on a farm with an irrigated field', () => {
+    const c = cfg();
+    for (const f of c.farm.fields) f.irrigated = false;
+    for (const p of c.farm.cropPlans) delete p.irrigationElectricity;
+    const { ctx } = new FarmMcRunner({ cfgTemplate: c })._prepare();
+    assert.ok(!ctx.variables.some(v => /irrigatedYieldShock$/.test(v.paramKey)));
   });
 });

@@ -11,14 +11,15 @@
 import {
   PRODUCT_CATEGORIES, COST_CATEGORIES, INCOME_CATEGORIES,
 } from './schedule-f.js';
+import { FARM_CALIBRATION } from './farm-calibration.js';
 
 /**
  * Farm records (design 134 §5.1): flat tables joined by id, in `cfg.farm`.
  *
  * ```js
  * cfg.farm = {
- *   seasons:       [{ id, cropYear, calendar?, yieldShock?, irrigatedYieldBeta?,
- *                     priceVol?: { [crop]: σ }, priceYieldBeta?: { [crop]: b },
+ *   seasons:       [{ id, cropYear, calendar?, yieldShock?, irrigatedYieldShock?, irrigatedYieldBeta?,
+ *                     yieldShockScale?: { [crop]: k }, priceVol?: { [crop]: σ }, priceYieldBeta?: { [crop]: b },
  *                     rentMultiplier?, customRateMultiplier?, machineryMultiplier?,
  *                     irrigationMultiplier?, interestMultiplier?,
  *                     <category>Multiplier? (one per PRODUCT_CATEGORIES, e.g. nitrogenMultiplier) }],
@@ -174,10 +175,16 @@ export function normalizeFarm(farm) {
   calendar.harvestDates = { ...defaultCalendar(y).harvestDates, ...(season0?.calendar?.harvestDates ?? {}) };
   const season = season0 ? {
     ...season0, cropYear: y, calendar,
-    yieldShock:         season0.yieldShock ?? 0,
-    irrigatedYieldBeta: season0.irrigatedYieldBeta ?? 1,
-    priceVol:           { ...(season0.priceVol ?? {}) },
-    priceYieldBeta:     { ...(season0.priceYieldBeta ?? {}) },
+    yieldShock:          season0.yieldShock ?? 0,
+    irrigatedYieldShock: season0.irrigatedYieldShock ?? 0,
+    // The shocks' SHAPE defaults to the NASS calibration (design 134 §13.8). Each is a no-op
+    // while the shocks are 0, so a deterministic season is unchanged by it. The price vol is
+    // not: its mean correction moves a price, so it stays blank here (FarmMcRunner fills it
+    // for a crop whose price shocks it samples).
+    irrigatedYieldBeta:  season0.irrigatedYieldBeta ?? FARM_CALIBRATION.irrigatedYieldBeta,
+    yieldShockScale:     { ...FARM_CALIBRATION.yieldShockScale, ...(season0.yieldShockScale ?? {}) },
+    priceVol:            { ...(season0.priceVol ?? {}) },
+    priceYieldBeta:      { ...FARM_CALIBRATION.priceYieldBeta, ...(season0.priceYieldBeta ?? {}) },
     ...Object.fromEntries([...Object.keys(SEASON_MULTIPLIERS),
       ...Object.keys(PRODUCT_CATEGORIES).map(categoryMultiplierField)].map(k => [k, season0[k] ?? 1])),
   } : null;
@@ -277,6 +284,7 @@ export function validateFarm(farm) {
   if (!f.season.id) err('farm.seasons[0] needs an id');
   if (!Number.isInteger(f.season.cropYear)) err('farm.seasons[0].cropYear must be a whole year');
   if (!isNum(f.season.yieldShock)) err('farm.seasons[0].yieldShock must be a number');
+  if (!isNum(f.season.irrigatedYieldShock)) err('farm.seasons[0].irrigatedYieldShock must be a number');
   if (!isNum(f.season.irrigatedYieldBeta) || f.season.irrigatedYieldBeta < 0) {
     err('farm.seasons[0].irrigatedYieldBeta must be a number ≥ 0');
   }
@@ -393,7 +401,7 @@ export function validateFarm(farm) {
       err(`farm.overhead "${r.id}": variableRate goes on an interest row (${INTEREST_CATEGORIES.join(', ')})`);
     }
   }
-  for (const [field, min] of [['priceVol', 0], ['priceYieldBeta', -Infinity]]) {
+  for (const [field, min] of [['priceVol', 0], ['priceYieldBeta', -Infinity], ['yieldShockScale', 0]]) {
     for (const [c, v] of Object.entries(f.season[field])) {
       if (!Object.hasOwn(CROPS, c)) err(`farm.seasons[0].${field}: unknown crop "${c}"`);
       if (!isNum(v) || v < min) err(`farm.seasons[0].${field}.${c} must be a number${min === 0 ? ' ≥ 0' : ''}`);
@@ -482,10 +490,14 @@ export function validateFarm(farm) {
 /**
  * The yield a crop plan actually harvests, per planted acre (design 134 §6, §13.3):
  *
- *     expectedYield × max(0, 1 + β·season.yieldShock + plan.yieldShock)
+ *     dryland:    expectedYield × max(0, 1 + k·Y + plan.yieldShock)
+ *     irrigated:  expectedYield × max(0, 1 + k·(β·Y + I) + plan.yieldShock)
  *
- * where β is `season.irrigatedYieldBeta` on an irrigated field and 1 on a dry one. The season
- * shock is the farm-wide factor every field shares; the plan shock is the field's own.
+ * Y is `season.yieldShock`, the farm-wide dryland factor (weather). I is
+ * `season.irrigatedYieldShock`, the factor irrigated fields share and dry ones do not: NASS
+ * county history shows irrigated yields move mostly on their own, taking only β (≈0.05) of
+ * the dryland shock (§13.8). k is `season.yieldShockScale[crop]`, the crop's share of both (a
+ * soybean year swings less than a corn one). The plan shock is the field's own.
  *
  * `expectedYield` stays the PLAN: the breakevens and the contracted share are measured against
  * it, and only the harvest uses this. Both shocks are 0 unless a run sets them, so a
@@ -497,8 +509,10 @@ export function validateFarm(farm) {
  * @returns {number}
  */
 export function realizedYield(farm, plan, field = farm.fields.find(x => x.id === plan.fieldId)) {
-  const beta = field?.irrigated ? farm.season.irrigatedYieldBeta : 1;
-  return plan.expectedYield * Math.max(0, 1 + beta * farm.season.yieldShock + plan.yieldShock);
+  const s = farm.season;
+  const k = s.yieldShockScale?.[plan.crop] ?? 1;
+  const common = field?.irrigated ? s.irrigatedYieldBeta * s.yieldShock + s.irrigatedYieldShock : s.yieldShock;
+  return plan.expectedYield * Math.max(0, 1 + k * common + plan.yieldShock);
 }
 
 /** The harvest date of `crop` in a resolved season calendar. */
@@ -562,7 +576,8 @@ export function applyPricePath(farm) {
   const crops = new Set(farm.prices.map(p => p.crop));
   for (const crop of crops) {
     const vol = s.priceVol[crop] ?? 0;
-    const beta = s.priceYieldBeta[crop] ?? 0;
+    // The link reads the crop's own dryland shock, k·Y: what the calibration regressed on.
+    const beta = (s.priceYieldBeta[crop] ?? 0) * (s.yieldShockScale?.[crop] ?? 1);
     const harvest = harvestDateFor(s.calendar, crop);
     const rows = farm.prices.filter(p => p.crop === crop)
       .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));

@@ -12,7 +12,7 @@ import { WorkbenchComponent } from '../../component.js';
 import { ServiceRegistry }    from '../../../../services/service-registry.js';
 import { withBom }            from '../../../../utils/csv.js';
 import { normalizeFarm, CROPS } from '../../../../finance/farm/farm-records.js';
-import { FarmMcRunner, FarmMcConfig } from '../../../../finance/farm/farm-mc.js';
+import { FarmMcRunner, FarmMcConfig, calibratedPriceVolFor } from '../../../../finance/farm/farm-mc.js';
 
 /**
  * FarmMcPlugin — Monte Carlo over the active farm season (design 134 phase 2, step 2f).
@@ -28,7 +28,8 @@ import { FarmMcRunner, FarmMcConfig } from '../../../../finance/farm/farm-mc.js'
  * p10 / p50 / p90 and its breakevens' spread.
  *
  * The variables are a typed table, one row per catalog variable: a switch and its spread.
- * The catalog's spreads are 0 until design 134 §6's sources are on disk (§13.1 step 2e), so a
+ * The farm-wide yield shocks and the price paths are calibrated from USDA NASS history (§13.8);
+ * the rest of the catalog's spreads are 0, because no source on disk sets them, so a
  * row switched on draws nothing until a spread is typed; the panel says so rather than
  * running a batch of identical paths without comment.
  *
@@ -221,7 +222,8 @@ export class FarmMcPlugin extends WorkbenchComponent {
         <td class="sec-td sec-td--num">${_num(v.mean)}</td>
         <td class="sec-td sec-td--num">${v.fixedSpread
           ? `<span class="sec-td--muted" title="A unit normal draw: its scale is the season's price volatility for this crop">z</span>`
-          : `<input type="number" min="0" step="any" value="${s.stdDev ?? 0}" style="width:7em" aria-label="Spread of ${_esc(v.label ?? v.paramKey)}">`}</td>
+          : `<input type="number" min="0" step="any" value="${s.stdDev ?? 0}" style="width:7em" aria-label="Spread of ${_esc(v.label ?? v.paramKey)}">`}${v.skew
+          ? ` <span class="sec-td--muted" title="Skew-normal: a bad year falls further below than a good one rises above (design 134 §13.8)">skew ${v.skew}</span>` : ''}</td>
       </tr>`;
     }).join('');
   }
@@ -235,20 +237,27 @@ export class FarmMcPlugin extends WorkbenchComponent {
   _renderWarn(variables = this._catalog().variables ?? []) {
     const el = this._q('warn');
     if (!el) return;
-    const items = [];
-    if (this._error) items.push(_esc(this._error));
+    const items = [];   // [icon, text]
+    if (this._error) items.push(['⚠', _esc(this._error)]);
     const on = variables.filter(v => this._setting(v).enabled);
     const flat = on.filter(v => !v.fixedSpread && !(this._setting(v).stdDev > 0));
-    const vol = this._cfg()?.farm?.seasons?.[0]?.priceVol ?? {};
-    const still = [...new Set(on.filter(v => v.fixedSpread && !(vol[v.crop] > 0)).map(v => v.crop))];
-    if (still.length) items.push(`Price shocks are sampled for ${_esc(still.join(', '))}, but the season's price volatility for it is 0, so prices do not move.`);
-    if (on.length === 0) items.push('Nothing is sampled, so every path is the deterministic season. Switch variables on and give each a spread.');
-    else if (flat.length) items.push(`${flat.length} sampled variable${flat.length === 1 ? ' has' : 's have'} a spread of 0 and draw${flat.length === 1 ? 's' : ''} nothing.`);
-    if (on.some(v => this._setting(v).stdDev > 0)) {
-      items.push('The spreads are typed here, not calibrated from a source (design 134 §6): read the results as a sensitivity run.');
+    if (on.length === 0) items.push(['⚠', 'Nothing is sampled, so every path is the deterministic season. Switch variables on.']);
+    else if (flat.length) items.push(['⚠', `${flat.length} sampled variable${flat.length === 1 ? ' has' : 's have'} a spread of 0 and draw${flat.length === 1 ? 's' : ''} nothing.`]);
+    // A spread is calibrated only where the catalog says so and it has not been retyped.
+    const typed = on.filter(v => !v.fixedSpread && this._setting(v).stdDev > 0
+      && !(v.calibrated && this._setting(v).stdDev === v.stdDev));
+    if (typed.length) {
+      items.push(['⚠', `${typed.length} sampled spread${typed.length === 1 ? ' is' : 's are'} typed here, not calibrated from a source `
+        + '(design 134 §13.8): read the results as a sensitivity run on '
+        + `${typed.length === 1 ? 'it' : 'them'}.`]);
     }
-    if (this._result?.summary?.erroredRuns?.length) items.push(`${this._result.summary.erroredRuns.length} path(s) threw and are excluded.`);
-    el.innerHTML = items.map(s => `<div>⚠ ${s}</div>`).join('');
+    const filled = calibratedPriceVolFor(this._cfg(), on.map(v => ({ ...v, enabled: true })));
+    if (Object.keys(filled).length) {
+      items.push(['ℹ', `Prices of ${_esc(Object.entries(filled).map(([c, v]) => `${CROPS[c]?.label ?? c} (${v})`).join(', '))} `
+        + 'move at the calibrated volatility (USDA NASS, Nebraska): the season sets none of its own.']);
+    }
+    if (this._result?.summary?.erroredRuns?.length) items.push(['⚠', `${this._result.summary.erroredRuns.length} path(s) threw and are excluded.`]);
+    el.innerHTML = items.map(([icon, text]) => `<div>${icon} ${text}</div>`).join('');
     el.style.display = items.length ? '' : 'none';
   }
 

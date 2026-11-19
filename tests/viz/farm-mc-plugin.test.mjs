@@ -100,6 +100,21 @@ test('Run uses the typed switches and spreads, and shows the batch\'s summary', 
   p.unmount();
 });
 
+test('a calibrated spread is not called typed; a sampled price with no vol of its own says it is calibrated', async () => {
+  const p = await quiet(() => mount());
+  const tick = (key) => {
+    const box = q(p, 'var-rows').querySelector(`tr[data-key="${key}"] input[type="checkbox"]`);
+    box.checked = true; fire(box, 'change');
+  };
+  tick('farm.season.s2027.yieldShock');
+  assert.doesNotMatch(q(p, 'warn').textContent, /sensitivity run/);
+  tick('farm.price.pc-harvest.shock');
+  assert.match(q(p, 'warn').textContent, /Corn \(0\.18\).*calibrated volatility/);
+  assert.equal(q(p, 'var-rows').querySelector('tr[data-key="farm.price.pc-harvest.shock"] input[type="number"]'), null,
+    'a price shock is a unit z: no spread to type');
+  p.unmount();
+});
+
 test('rows: farm, each operator with its plans, then each crop; basis picks the net', () => {
   const farm = normalizeFarm(FarmScenario.buildDefaultConfig().farm);
   const fieldOf = new Map(farm.fields.map(f => [f.id, f]));

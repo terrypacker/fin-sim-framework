@@ -180,6 +180,7 @@ export function variablesMissingCenter(variables) {
     switch (v.type) {
       case DISTRIBUTION_TYPES.CONSTANT:     return Number.isFinite(v.value) || isDate(v.value);
       case DISTRIBUTION_TYPES.NORMAL:
+      case DISTRIBUTION_TYPES.SKEW_NORMAL:
       case DISTRIBUTION_TYPES.LOG_NORMAL:   return Number.isFinite(v.mean);
       case DISTRIBUTION_TYPES.NORMAL_DATE:  return isDate(v.mean);
       case DISTRIBUTION_TYPES.UNIFORM_DATE: return isDate(v.min) && isDate(v.max);
