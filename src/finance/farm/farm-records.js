@@ -27,7 +27,7 @@ import {
  *                     irrigationElectricity }],
  *   prescriptions: [{ id, planId, productId | operationId, ratePerAcre, passes, share, paidDate? }],
  *   machinery:     [{ id, operatorId, amount, paidDate? }],
- *   overhead:      [{ id, operatorId, name, category, amount, basis, paidDate? }],
+ *   overhead:      [{ id, operatorId, name, category, amount, basis, fieldIds?, paidDate? }],
  *   prices:        [{ id, crop, date, price }],
  *   contracts:     [{ id, operatorId, crop, cropYear?, bushels, price, deliveryDate,
  *                     paymentDate?, buyoutPerBu? }],
@@ -63,8 +63,12 @@ export const SEASON_TABLES = Object.freeze(FARM_TABLES.filter(t => t !== 'operat
 
 export const TENURE = Object.freeze({ OWN: 'OWN', CASH_RENT: 'CASH_RENT' });
 
-/** Overhead allocation bases (design 134 §5.3). Planted acres, or owned planted acres. */
-export const OVERHEAD_BASIS = Object.freeze({ ACRES: 'ACRES', OWNED_ACRES: 'OWNED_ACRES' });
+/**
+ * Overhead allocation bases (design 134 §5.3), each by planted acres: across all the
+ * operator's fields, across its owned fields, or across a named set of its fields
+ * (`fieldIds`) — a loan secured by particular parcels, for example.
+ */
+export const OVERHEAD_BASIS = Object.freeze({ ACRES: 'ACRES', OWNED_ACRES: 'OWNED_ACRES', FIELDS: 'FIELDS' });
 
 /** Commodities. A crop plan names one; grain pools by (operator, crop, crop year). */
 export const CROPS = Object.freeze({
@@ -176,6 +180,7 @@ export function normalizeFarm(farm) {
   for (const m of out.machinery) m.paidDate = day(m.paidDate) ?? calendar.machineryDate;
   for (const o of out.overhead) {
     o.basis  ??= OVERHEAD_BASIS.ACRES;
+    o.fieldIds = Array.isArray(o.fieldIds) ? [...o.fieldIds] : null;
     o.paidDate = day(o.paidDate) ?? calendar.overheadDate;
   }
   for (const p of out.prices) p.date = day(p.date);
@@ -306,7 +311,17 @@ export function validateFarm(farm) {
   for (const r of f.overhead) {
     need('overhead', r, 'operatorId', 'operators');
     if (!COST_CATEGORIES[r.category]?.overhead) err(`farm.overhead "${r.id}": "${r.category}" is not an overhead category`);
-    if (!Object.hasOwn(OVERHEAD_BASIS, r.basis)) err(`farm.overhead "${r.id}": basis must be ACRES or OWNED_ACRES`);
+    if (!Object.hasOwn(OVERHEAD_BASIS, r.basis)) err(`farm.overhead "${r.id}": basis must be ACRES, OWNED_ACRES or FIELDS`);
+    if ((r.basis === OVERHEAD_BASIS.FIELDS) !== (r.fieldIds != null)) {
+      err(`farm.overhead "${r.id}": fieldIds goes with basis FIELDS, and only with it`);
+    }
+    for (const fid of r.fieldIds ?? []) {
+      const fld = f.fields.find(x => x.id === fid);
+      if (!fld) err(`farm.overhead "${r.id}": fieldIds names "${fid}", which is not in farm.fields`);
+      else if (fld.operatorId !== r.operatorId) {
+        err(`farm.overhead "${r.id}": field "${fid}" belongs to another operator (overhead is never shared, Q10)`);
+      }
+    }
     nonNeg('overhead', r, 'amount', { required: true });
     date('overhead', r, 'paidDate');
   }

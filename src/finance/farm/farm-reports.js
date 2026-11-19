@@ -73,7 +73,8 @@ export function farmLedger(journal) {
  * which one is in `totalCost` and `net`.
  *
  * Allocation of an operator-level posting to that operator's plans:
- * - `ACRES` by planted acres; `OWNED_ACRES` by planted acres on owned fields;
+ * - `ACRES` by planted acres; `OWNED_ACRES` by planted acres on owned fields; `FIELDS` by
+ *   planted acres on the overhead record's own `fieldIds`;
  * - `BUSHELS` (a grain pool's revenue and storage) by each plan's expected bushels in the pool.
  * A posting with no plan to land on (an `OWNED_ACRES` cost for an operator with no owned field)
  * is reported as `unallocated` on the operator, never dropped.
@@ -113,6 +114,7 @@ export function jobCostReport(farm, ledger, { machineryBasis = 'CUSTOM', pools =
     }));
   }
   const plansOf = (op) => [...rows.values()].filter(r => r.operatorId === op && r.planId);
+  const overheadById = new Map(farm.overhead.map(o => [o.id, o]));
   const unallocated = {};
 
   const weightsFor = (p) => {
@@ -120,6 +122,10 @@ export function jobCostReport(farm, ledger, { machineryBasis = 'CUSTOM', pools =
     if (p.allocation === 'BUSHELS') {
       const [, crop] = p.jobId.slice('pool:'.length).split('|');
       return plansOf(op).filter(r => r.crop === crop).map(r => [r, r.expectedBushels]);
+    }
+    if (p.allocation === 'FIELDS') {
+      const ids = new Set(overheadById.get(p.sourceId)?.fieldIds ?? []);
+      return plansOf(op).filter(r => ids.has(r.fieldId)).map(r => [r, r.acres]);
     }
     if (p.allocation === 'OWNED_ACRES') {
       return plansOf(op).filter(r => r.tenure === TENURE.OWN).map(r => [r, r.acres]);

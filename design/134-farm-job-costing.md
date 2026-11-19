@@ -1,7 +1,7 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** rev 8 (19 Nov 2026): **phase 1 in progress** (§12). Owner questions Q1–Q20 are
-answered (§3); Q21 (§12.3) is open. §7 records what the primary sources on disk decide. §8 is the household
+**Status:** rev 9 (19 Nov 2026): **phase 1 in progress** (§12); the acceptance import
+**passes** (§12.4). Owner questions Q1–Q20 are answered (§3); Q21–Q25 (§12.3–§12.4) are open. §7 records what the primary sources on disk decide. §8 is the household
 link.
 
 Revision history: rev 2 added §7 and §8, and corrected rev 1's guess that Nebraska credits
@@ -16,6 +16,7 @@ fixes the breakeven formulas (§5.4), settles contract shortfalls (§6), and sta
 acceptance test and its first spike (§9). Rev 7 records Q20, which turns the own-vs-custom
 study into an operation-by-operation fleet model with its own design (§5.6). Rev 8 records the phase 1 build: the spike
 result, the record and ledger shapes it settled, and a §464(d) exception that §7.1 missed (§12).
+Rev 9 records the acceptance import and the questions it raised (§12.4).
 
 **Related:** design 98 (the sweepable parameter surface: per-record generated params become
 MC and optimizer levers), design 55 (configuration-driven parameters and record templates),
@@ -555,7 +556,7 @@ bad one for another in the same world.
 
 ## 11. Open questions
 
-Q21 (§12.3) is for the owners. The fleet model (§5.6) and farm–market correlation (Q15) each
+Q21 (§12.3) and Q22–Q25 (§12.4) are for the owners. The fleet model (§5.6) and farm–market correlation (Q15) each
 need their own design later.
 
 ## 12. Phase 1 build notes (rev 8)
@@ -617,3 +618,32 @@ three prior years' prepaid supplies and other farm expenses), and the report say
 applied and why. **Q21, for the owners:** for each operator, is farming the principal
 business (or is the home on the farm), and what were the three prior years' prepaid supplies
 and total other farm expenses?
+
+### 12.4 Acceptance: the workbook's ledger sheets reproduce (rev 9)
+
+The private import (under `scenarios/`, as §9 requires) rebuilds the records from the
+workbook's three ledger sheets exported to CSV. It recovers each line's **rule** (acres × rate,
+hybrid acres × cost per acre, one price per crop), checks that the rule holds across the sheet,
+and writes it as records; the model recomputes every amount. **Every (job, line) total matches
+to within a cent**, the sheet's own rounding. The pivot table is not used.
+
+What the import needed from the model: one more overhead basis, **`FIELDS`**, allocating by
+planted acres over a named set of the operator's fields. The sheet spreads land debt interest
+over the owned fields a loan covers, not over every owned field.
+
+What it found, for the owners (the specifics are in the private study notes):
+
+| # | Question |
+|---|---|
+| Q22 | Land debt interest is one \$/acre rate spread over owned fields of **all three operators**, which Q10 says never happens. Is it one loan, and whose? The import splits it into one pool per operator over the same fields. |
+| Q23 | What is in each **chemical bundle**? A corn bundle large enough to hold fertilizer would belong on Schedule F line 17, not 11. And why does the soybean bundle differ between operators, with one field at about half the rate? |
+| Q24 | Two owned fields carry no land interest. Are they unmortgaged? |
+| Q25 | One rented field has no seed cost on the sheet. Is the entry missing? |
+
+Two more for the build, not the owners: the sheet books loan **principal** as an expense (the
+import drops it, §2), and the **COVID-era payments**' Schedule F line is not settled by any
+source on disk. They are on line 4a provisionally, until the IRS guidance is fetched.
+
+The reproduced net is high by design: the sheets carry no machinery, fuel, labor, drying,
+trucking or irrigation electricity (§2). Entering those records is what makes the breakeven
+real.
