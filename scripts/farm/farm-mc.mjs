@@ -28,7 +28,7 @@
 
 import { readFileSync } from 'node:fs';
 
-import { parseFlags }   from '../lib/cli.mjs';
+import { parseFlags, printJsonAndExit }   from '../lib/cli.mjs';
 import { money, columns, heading, note } from '../lib/format.mjs';
 
 import { FarmScenario } from '../../src/scenarios/farm-scenario.js';
@@ -91,8 +91,7 @@ const result = await (async () => {
 const { summary } = result;
 
 if (opts.json) {
-  console.log(JSON.stringify({ source, ...result }, null, 2));
-  process.exit(0);
+  await printJsonAndExit({ source, ...result }, 2);
 }
 
 const basis = opts.machineryBasis === 'ACTUAL' ? 'actual' : 'custom';

@@ -218,3 +218,21 @@ export function setParam(cfg, key, value) {
 /** Read a param's value from either store. */
 export const getParam = (cfg, key) =>
   cfg.params?.find(x => (x.name ?? x.key) === key)?.value ?? cfg.parameters?.[key];
+
+/**
+ * Print `value` as JSON on stdout, then exit 0 once the write has FLUSHED. Await it at top
+ * level: it never resolves, so nothing after it runs.
+ *
+ * `console.log(big); process.exit(0)` truncates on a pipe: stdout to a pipe is asynchronous,
+ * and `process.exit` drops whatever is still buffered (a 2 MB `farm:mc --json` arrived cut
+ * at 64 KB).
+ *
+ * @param {*} value
+ * @param {number} [indent=2]
+ * @returns {Promise<never>}
+ */
+export function printJsonAndExit(value, indent = 2) {
+  return new Promise(() => {
+    process.stdout.write(`${JSON.stringify(value, null, indent)}\n`, () => process.exit(0));
+  });
+}

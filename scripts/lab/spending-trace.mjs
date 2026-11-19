@@ -41,7 +41,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 
 import { loadBaseConfig, describeSource } from '../lib/scenario-source.mjs';
-import { parseFlags } from '../lib/cli.mjs';
+import { parseFlags, printJsonAndExit } from '../lib/cli.mjs';
 import { buildVariant, baseEquityRate } from '../lib/variant.mjs';
 import { traceRealSpending } from '../lib/run.mjs';
 import { money, pct, columns } from '../lib/format.mjs';
@@ -98,8 +98,7 @@ const cases = returns.map(rate => {
 });
 
 if (opts.json) {
-  console.log(JSON.stringify({ source: base.source, strategy, levers, country, cases }, null, 1));
-  process.exit(0);
+  await printJsonAndExit({ source: base.source, strategy, levers, country, cases }, 1);
 }
 
 console.log(`\n════ REALISED REAL SPENDING${strategy ? ` — ${strategy}` : ''} ════`);

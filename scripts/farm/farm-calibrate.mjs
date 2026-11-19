@@ -26,7 +26,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { gunzipSync } from 'node:zlib';
-import { parseFlags } from '../lib/cli.mjs';
+import { parseFlags, printJsonAndExit } from '../lib/cli.mjs';
 import { columns, heading, note } from '../lib/format.mjs';
 import { calibrateFromNass, FARM_CALIBRATION } from '../../src/finance/farm/farm-calibration.js';
 
@@ -53,8 +53,7 @@ const out = res.crops;
 const CROPS = Object.keys(out);
 
 if (opts.json) {
-  console.log(JSON.stringify({ source: file, from: opts.from, county: opts.county ?? null, crops: out }, null, 2));
-  process.exit(0);
+  await printJsonAndExit({ source: file, from: opts.from, county: opts.county ?? null, crops: out }, 2);
 }
 
 const f = (x, d = 3) => (x == null || !Number.isFinite(x) ? '—' : x.toFixed(d));

@@ -78,7 +78,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
 import { loadBaseConfig, describeSource } from '../lib/scenario-source.mjs';
-import { parseFlags } from '../lib/cli.mjs';
+import { parseFlags, printJsonAndExit } from '../lib/cli.mjs';
 import { runJobsParallel } from '../lib/parallel.mjs';
 import { buildGridModel, makeIdOf } from '../lib/grid-report.mjs';
 import { table, note } from '../lib/format.mjs';
@@ -157,8 +157,7 @@ if (opts.out) {
   console.error(`raw results → ${opts.out}`);
 }
 if (opts.json) {
-  console.log(JSON.stringify({ spec, source: base.source, results }, null, 1));
-  process.exit(0);
+  await printJsonAndExit({ spec, source: base.source, results }, 1);
 }
 
 // ─── report ──────────────────────────────────────────────────────────────────
