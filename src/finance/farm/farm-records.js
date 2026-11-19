@@ -21,7 +21,7 @@ import { FARM_CALIBRATION } from './farm-calibration.js';
  *   seasons:       [{ id, cropYear, calendar?, yieldShock?, irrigatedYieldShock?, irrigatedYieldBeta?,
  *                     yieldShockScale?: { [crop]: k }, priceVol?: { [crop]: σ }, priceYieldBeta?: { [crop]: b },
  *                     rentMultiplier?, customRateMultiplier?, machineryMultiplier?,
- *                     irrigationMultiplier?, interestMultiplier?,
+ *                     irrigationMultiplier?, interestMultiplier?, projectedPrice?: { [crop]: $ },
  *                     <category>Multiplier? (one per PRODUCT_CATEGORIES, e.g. nitrogenMultiplier) }],
  *   operators:     [{ id, name, farmRelated?, prior3PrepaidSupplies?, prior3FarmExpenses? }],
  *   fields:        [{ id, operatorId, name, tenure, rentedAcres, plantedAcres, irrigated,
@@ -29,7 +29,7 @@ import { FARM_CALIBRATION } from './farm-calibration.js';
  *   products:      [{ id, name, category, unit, unitPrice, discountPct }],
  *   operations:    [{ id, name, customRatePerAcre }],
  *   cropPlans:     [{ id, fieldId, crop, expectedYield, yieldShock?, insurancePremiumPerAcre,
- *                     irrigationElectricity }],
+ *                     irrigationElectricity, aphYield? }],
  *   prescriptions: [{ id, planId, productId | operationId, ratePerAcre, passes, share, paidDate? }],
  *   machinery:     [{ id, operatorId, amount, paidDate? }],
  *   overhead:      [{ id, operatorId, name, category, amount, basis, fieldIds?, paidDate?, variableRate? }],
@@ -41,6 +41,7 @@ import { FARM_CALIBRATION } from './farm-calibration.js';
  *   carryIn:       [{ id, operatorId, crop, bushels, cropYear? }],
  *   otherIncome:   [{ id, operatorId, category, amount, paymentDate, cropYear?, planId? }],
  *   carryOut:      [{ id, operatorId, category, amount, paidDate? }],
+ *   insurance:     [{ id, operatorId, crop, plan?, coverageLevel, unit?, paymentDate? }],
  * }
  * ```
  *
@@ -61,6 +62,7 @@ import { FARM_CALIBRATION } from './farm-calibration.js';
 export const FARM_TABLES = Object.freeze([
   'operators', 'fields', 'products', 'operations', 'cropPlans', 'prescriptions', 'machinery',
   'overhead', 'prices', 'contracts', 'storage', 'sales', 'carryIn', 'otherIncome', 'carryOut',
+  'insurance',
 ]);
 
 /** The tables whose rows belong to a season (all but `operators`). */
@@ -94,6 +96,32 @@ export const categoryMultiplierField = (category) =>
 
 /** Interest categories a `variableRate` overhead row may carry. */
 export const INTEREST_CATEGORIES = Object.freeze(['INTEREST_MORTGAGE', 'INTEREST_OTHER']);
+
+/**
+ * Crop insurance plans (design 134 §15.2; the Basic Provisions 27.1-BR §1 and the Coarse
+ * Grains Crop Provisions §12(b), on disk in docs/us-farm-programs/):
+ * - `RP`: revenue protection. The guarantee is valued at the higher of the projected and the
+ *   harvest price, the production at the harvest price.
+ * - `RP_HPE`: revenue protection with the harvest price exclusion. The guarantee is valued at
+ *   the projected price only, the production still at the harvest price.
+ * - `YP`: yield protection. Both at the projected price.
+ */
+export const INSURANCE_PLANS = Object.freeze({ RP: 'RP', RP_HPE: 'RP_HPE', YP: 'YP' });
+
+/**
+ * Insurance units: the acreage a loss is settled over. A shortfall on one field is offset by
+ * a surplus on another field in the same unit.
+ * - `ENTERPRISE`: all of the operator's acres of the crop.
+ * - `ENTERPRISE_BY_PRACTICE`: one unit for irrigated acres and one for dry.
+ * - `FIELD`: each field is its own unit (optional units, at their finest).
+ * One county is assumed. A farm in two counties would need a unit per county.
+ */
+export const INSURANCE_UNITS = Object.freeze({
+  ENTERPRISE: 'ENTERPRISE', ENTERPRISE_BY_PRACTICE: 'ENTERPRISE_BY_PRACTICE', FIELD: 'FIELD',
+});
+
+/** Crops the Coarse Grains Crop Provisions insure (7 CFR §457.113 §1, annual edition 2026). */
+export const INSURABLE_CROPS = Object.freeze(['CORN', 'SORGHUM', 'SOYBEANS']);
 
 /** Commodities. A crop plan names one; grain pools by (operator, crop, crop year). */
 export const CROPS = Object.freeze({
@@ -133,6 +161,10 @@ export function defaultCalendar(y) {
     propertyTaxFirstDate:  `${y}-04-30`,
     propertyTaxSecondDate: `${y}-08-31`,
     insurancePremiumDate:  `${y}-08-15`,
+    // The CEPP's harvest price discovery period for Nebraska corn and soybeans ends 31 Oct
+    // (docs/us-farm-programs/RMA-24-CEPP-0041/0081); the claim is paid after it.
+    harvestPriceDate:      `${y}-10-31`,
+    insurancePaymentDate:  `${y}-12-15`,
     irrigationDate:        `${y}-09-30`,
     machineryDate:         `${y}-07-01`,
     overheadDate:          `${y}-07-01`,
@@ -184,6 +216,7 @@ export function normalizeFarm(farm) {
     irrigatedYieldBeta:  season0.irrigatedYieldBeta ?? FARM_CALIBRATION.irrigatedYieldBeta,
     yieldShockScale:     { ...FARM_CALIBRATION.yieldShockScale, ...(season0.yieldShockScale ?? {}) },
     priceVol:            { ...(season0.priceVol ?? {}) },
+    projectedPrice:      { ...(season0.projectedPrice ?? {}) },
     priceYieldBeta:      { ...FARM_CALIBRATION.priceYieldBeta, ...(season0.priceYieldBeta ?? {}) },
     ...Object.fromEntries([...Object.keys(SEASON_MULTIPLIERS),
       ...Object.keys(PRODUCT_CATEGORIES).map(categoryMultiplierField)].map(k => [k, season0[k] ?? 1])),
@@ -211,6 +244,15 @@ export function normalizeFarm(farm) {
     p.yieldShock ??= 0;
     p.insurancePremiumPerAcre ??= 0;
     p.irrigationElectricity   ??= 0;
+    // The approved (APH) yield an insurance guarantee is built on. Blank is the plan's expected
+    // yield, which the advisories flag on an insured plan: the APH is the insurer's number.
+    p.aphDefaulted = p.aphYield == null;
+    p.aphYield ??= p.expectedYield;
+  }
+  for (const r of out.insurance) {
+    r.plan ??= INSURANCE_PLANS.RP;
+    r.unit ??= INSURANCE_UNITS.ENTERPRISE;
+    r.paymentDate = day(r.paymentDate) ?? calendar.insurancePaymentDate;
   }
   for (const rx of out.prescriptions) {
     rx.share ??= 1;
@@ -407,6 +449,39 @@ export function validateFarm(farm) {
       if (!isNum(v) || v < min) err(`farm.seasons[0].${field}.${c} must be a number${min === 0 ? ' ≥ 0' : ''}`);
     }
   }
+  for (const [c, v] of Object.entries(f.season.projectedPrice)) {
+    if (!Object.hasOwn(CROPS, c)) err(`farm.seasons[0].projectedPrice: unknown crop "${c}"`);
+    if (!isNum(v) || v <= 0) err(`farm.seasons[0].projectedPrice.${c} must be a number > 0`);
+  }
+  for (const p of f.cropPlans) {
+    if (!isNum(p.aphYield) || p.aphYield < 0) err(`farm.cropPlans "${p.id}": aphYield must be a number ≥ 0`);
+  }
+  const insured = new Set();
+  for (const r of f.insurance) {
+    need('insurance', r, 'operatorId', 'operators');
+    crop('insurance', r);
+    if (!INSURABLE_CROPS.includes(r.crop)) {
+      err(`farm.insurance "${r.id}": ${r.crop} is not under the Coarse Grains provisions (${INSURABLE_CROPS.join(', ')})`);
+    }
+    if (!Object.hasOwn(INSURANCE_PLANS, r.plan)) err(`farm.insurance "${r.id}": plan must be RP, RP_HPE or YP`);
+    if (!Object.hasOwn(INSURANCE_UNITS, r.unit)) {
+      err(`farm.insurance "${r.id}": unit must be ENTERPRISE, ENTERPRISE_BY_PRACTICE or FIELD`);
+    }
+    // Basic Provisions: additional coverage is 50% to 85% of the approved yield.
+    if (!isNum(r.coverageLevel) || r.coverageLevel < 0.5 || r.coverageLevel > 0.85) {
+      err(`farm.insurance "${r.id}": coverageLevel must be between 0.5 and 0.85`);
+    }
+    date('insurance', r, 'paymentDate');
+    if (!(f.season.projectedPrice[r.crop] > 0)) {
+      err(`farm.insurance "${r.id}": no projected price for ${r.crop} (farm.seasons[0].projectedPrice)`);
+    }
+    if (!f.prices.some(p => p.crop === r.crop)) {
+      err(`farm.insurance "${r.id}": no ${r.crop} price path to move the harvest price (farm.prices)`);
+    }
+    const k = `${r.operatorId}|${r.crop}`;
+    if (insured.has(k)) err(`farm.insurance "${r.id}": a second policy for ${r.operatorId} ${r.crop}`);
+    insured.add(k);
+  }
   for (const r of f.contracts) {
     need('contracts', r, 'operatorId', 'operators');
     crop('contracts', r);
@@ -519,6 +594,8 @@ export function realizedYield(farm, plan, field = farm.fields.find(x => x.id ===
  * Advisories on records that load and run but are probably incomplete (design 134 §14.1).
  * Never errors: the season still costs, but the named numbers are understated.
  *
+ * - `APH_DEFAULTED`: an insured crop plan with no approved (APH) yield, so its guarantee is
+ *   built on the expected yield (design 134 §15.2).
  * - `NO_SEED`: a crop plan for an annual crop with no seed cost. Every annual crop is planted
  *   from seed bought for it, so a plan without one is a missing entry (the acceptance
  *   workbook had one, owner-confirmed, Q25), and its breakevens are too low by the seed cost.
@@ -542,6 +619,16 @@ export function farmAdvisories(farm) {
       kind: 'NO_SEED', planId: plan.id, fieldId: plan.fieldId,
       message: `${f?.name ?? plan.fieldId} (${CROPS[plan.crop]?.label ?? plan.crop}) has no seed cost: `
         + 'probably a missing entry, so its costs and breakevens are understated.',
+    });
+  }
+  for (const plan of farm.cropPlans) {
+    const f = fieldById.get(plan.fieldId);
+    if (!plan.aphDefaulted || !f) continue;
+    if (!farm.insurance.some(r => r.operatorId === f.operatorId && r.crop === plan.crop)) continue;
+    out.push({
+      kind: 'APH_DEFAULTED', planId: plan.id, fieldId: plan.fieldId,
+      message: `${f.name ?? f.id} (${CROPS[plan.crop]?.label ?? plan.crop}) is insured on its expected yield: `
+        + 'no approved (APH) yield is entered, so its insurance guarantee is a guess.',
     });
   }
   return out;

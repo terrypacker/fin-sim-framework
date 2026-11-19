@@ -1,0 +1,112 @@
+  SUMMARY OF CHANGES FOR THE COMMODITY EXCHANGE PRICE PROVISIONS – SECTION II – SOYBEANS
+                                    (24-CEPP-0081)
+
+The following is a brief description of changes to the Commodity Exchange Price Provisions – Section II – Soybeans that
+will be effective for the 2024 and succeeding crop years. Please refer to the Commodity Exchange Price Provisions –
+Section II – Soybeans for complete information.
+
+Released June 2023
+    • Added “oats” and “rye” to the list of crops shown in the summary box on the top of page 1.
+24-CEPP-0081
+(Released June 2023)
+                                 UNITED STATES DEPARTMENT OF AGRICULTURE
+                                       Federal Crop Insurance Corporation
+                                      Commodity Exchange Price Provisions
+                                              Section II – Soybeans
+ The Commodity Exchange Price Provisions (CEPP) are an extension of the Common Crop Insurance Policy Basic Provisions and the
+ Area Risk Protection Insurance Basic Provisions, along with the Crop Provisions, for the following crops: barley, canola (including
+ rapeseed), corn, cotton, flax, grain sorghum, oats, rice, rye, soybeans, sunflowers, and wheat.
+ The CEPP has two sections. Section I - General Information, contains information relevant for all applicable crops, including definitions
+ and common policy material. Section II contains crop-specific projected and harvest price definitions and specifications, including
+ commodity exchanges, contracts, and discovery periods and is used in conjunction with Section I – General Information. There is a
+ separate Section II document for each crop. This is the Section II document for soybeans.
+
+Definitions
+Projected price - The harvest year’s average daily settlement price for the projected price discovery period for either the harvest
+year’s futures contract (November), or the post-harvest year’s futures contract (January), as shown in the tables below, rounded
+to the nearest whole cent. Note: Pre-harvest year’s daily settlement prices through December 31 are included in the average for
+the January 31 sales closing date.
+Harvest price - The harvest year’s average daily settlement price for the harvest price discovery period for either the harvest
+year’s futures contract (November), or the post-harvest year’s futures contract (January), as shown in the tables below, rounded
+to the nearest whole cent.
+
+SOYBEANS – January 31 Sales Closing Date
+                                                                                   Projected      Projected       Harvest       Harvest
+                                                                                     Price          Price          Price         Price
+                                                                                   Discovery      Discovery      Discovery     Discovery
+                                                                                    Period         Period         Period        Period
+                                 Commodity         Contract          Contract      Beginning       Ending        Beginning      Ending
+ State                           Exchange         Commodity           Month          Date           Date           Date          Date
+ Texas                             CBOT           Soybeans          November        Dec 15         Jan 14          Sep 1        Sep 30
+
+SOYBEANS – February 28 Sales Closing Date
+                                                                                   Projected      Projected       Harvest       Harvest
+                                                                                     Price          Price          Price         Price
+                                                                                   Discovery      Discovery      Discovery     Discovery
+                                                                                    Period         Period         Period        Period
+                                 Commodity         Contract          Contract      Beginning       Ending        Beginning      Ending
+ State                           Exchange         Commodity           Month          Date           Date           Date          Date
+ Alabama                           CBOT           Soybeans           January        Jan 15         Feb 14          Nov 1        Nov 30
+ Arkansas                          CBOT           Soybeans          November        Jan 15         Feb 14          Oct 1        Oct 31
+ Florida                           CBOT           Soybeans           January        Jan 15         Feb 14          Nov 1        Nov 30
+ Georgia                           CBOT           Soybeans           January        Jan 15         Feb 14          Nov 1        Nov 30
+ Louisiana                         CBOT           Soybeans          November        Jan 15         Feb 14          Oct 1        Oct 31
+ Mississippi                       CBOT           Soybeans          November        Jan 15         Feb 14          Oct 1        Oct 31
+ North Carolina                    CBOT           Soybeans           January        Jan 15         Feb 14          Nov 1        Nov 30
+ South Carolina                    CBOT           Soybeans           January        Jan 15         Feb 14          Nov 1        Nov 30
+ Texas                             CBOT           Soybeans          November        Jan 15         Feb 14          Oct 1        Oct 31
+
+
+
+
+                                                                  (1 of 2)
+SOYBEANS – March 15 Sales Closing Date
+                                                                          Projected    Projected     Harvest      Harvest
+                                                                            Price        Price        Price        Price
+                                                                          Discovery    Discovery    Discovery    Discovery
+                                                                           Period       Period       Period       Period
+                              Commodity       Contract        Contract    Beginning     Ending      Beginning     Ending
+ State                         Exchange      Commodity         Month        Date         Date*        Date         Date
+ Colorado                       CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+ Delaware                       CBOT         Soybeans         January       Feb 1       Feb 28        Nov 1       Nov 30
+ Illinois                       CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+ Indiana                        CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+ Iowa                           CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+ Kansas                         CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+ Kentucky                       CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+ Maine                          CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+ Maryland                       CBOT         Soybeans         January       Feb 1       Feb 28        Nov 1       Nov 30
+ Massachusetts                  CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+ Michigan                       CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+ Minnesota                      CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+ Missouri                       CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+ Montana                        CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+ Nebraska                       CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+ New Jersey                     CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+ New York                       CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+ North Dakota                   CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+ Ohio                           CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+ Oklahoma                       CBOT         Soybeans         January       Feb 1       Feb 28        Nov 1       Nov 30
+ Oregon                         CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+ Pennsylvania                   CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+ South Dakota                   CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+ Tennessee                      CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+ Texas                          CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+ Vermont                        CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+ Virginia                       CBOT         Soybeans         January       Feb 1       Feb 28        Nov 1       Nov 30
+ Washington                     CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+ West Virginia                  CBOT         Soybeans         January       Feb 1       Feb 28        Nov 1       Nov 30
+ Wisconsin                      CBOT         Soybeans        November       Feb 1       Feb 28        Oct 1       Oct 31
+*February 28 Ending Date is extended to February 29 in leap years.
+
+Organic (Certified) Practice Definitions
+Projected price - The soybeans projected price as determined above, multiplied by a factor determined by RMA, rounded to the
+nearest whole cent.
+Harvest price - The soybeans harvest price as determined above, multiplied by the same factor determined for the organic
+(certified) practice projected price, rounded to the nearest whole cent.
+
+
+
+
+                                                           (2 of 2)
+

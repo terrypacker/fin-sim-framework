@@ -31,16 +31,20 @@ Fetch the primary source here first, then cite it by path.
 | `CFR-7-1412-Agriculture-Risk-Coverage-And-Price-Loss-Coverage.txt` | **7 CFR part 1412**, live eCFR, fetched 19 Nov 2026 | FSA's implementing rules for both programs. Check its amendment notes against P.L. 119-21 before relying on any figure. |
 | `CFR-7-457.8-Common-Crop-Insurance-Policy-Basic-Provisions-2026-01-01.txt` | **7 CFR §457.8**, annual edition as of 1 Jan 2026 | The Basic Provisions: revenue protection vs yield protection, **projected price** and **harvest price**, the harvest price exclusion, the guarantee and indemnity. |
 | `CFR-7-457.113-Coarse-Grains-Crop-Provisions-2026-01-01.txt` | **7 CFR §457.113**, annual edition as of 1 Jan 2026 | The Coarse Grains Crop Provisions, which insure corn and soybeans. |
+| `FR-2026-04-01-2026-06277-Removal-of-Part-457.txt` | **91 FR 16151** (1 April 2026, effective 1 May 2026), FCIC final rule, govinfo HTML stripped to text | Removes and reserves 7 CFR part 457: crop policies are contracts, published by RMA instead of codified. Why the live eCFR shows 413–459 reserved. |
+| `RMA-27.1-BR-Common-Crop-Insurance-Policy-Basic-Provisions.pdf` (+ `.txt`) | **Basic Provisions 27.1-BR**, released June 2026, with the July 2026 summary of changes; rma.usda.gov | The current policy: production guarantee, revenue protection guarantee, projected and harvest price, harvest price exclusion. Effective 2027 for crops with a contract change date after 30 June 2026. |
+| `RMA-27-CEPP-Section-I-General-Information.pdf` (+ `.txt`) | **CEPP Section I**, 27-CEPP | General price-discovery rules. |
+| `RMA-24-CEPP-0041-Section-II-Corn.pdf` (+ `.txt`) | **CEPP Section II, corn**, 24-CEPP-0041 (updated 30 Nov 2024), the latest RMA posts | Nebraska: CBOT December corn; projected price = Feb 1–28 average, harvest price = Oct 1–31 average. |
+| `RMA-24-CEPP-0081-Section-II-Soybeans.pdf` (+ `.txt`) | **CEPP Section II, soybeans**, 24-CEPP-0081 | Nebraska: CBOT November soybeans; the same February and October windows. |
+| `FSA-arcco-2026-data-2026-01-16.xlsx` | **FSA ARC-County benchmark yields and revenues, program year 2026**, as of 16 Jan 2026 (fsa.usda.gov program data page) | Per county, crop and practice: the 2020–24 trend-adjusted yields, benchmark yield and price, benchmark revenue, guarantee and maximum payment rate. |
+| `FSA-arcco-2025-data-2026-11-02.xlsx` | **FSA ARC-County data, program year 2025**, as of 2 Nov 2026 | The same, plus the actual county yield, national price, actual revenue and payment rate. The acceptance test for design 134 step 3c. |
+| `FSA-arcco-*-NE-corn-soy.csv` | Nebraska corn and soybean rows of the two workbooks, by `fsa-arcco-extract.py` | FinSim has no xlsx reader. `python3 -I fsa-arcco-extract.py <xlsx> Nebraska` reproduces each CSV byte for byte. |
 
 ## Gaps
 
-- **7 CFR parts 413–459 show as "[Reserved]" in the live eCFR** (structure dated
-  17 Nov 2026), so part 457 is no longer in the current CFR. The two §457 files above are
-  from the 1 Jan 2026 annual edition. Before phase 3 models crop insurance, find out why the
-  part was removed (a Federal Register final rule, presumably), and where the policy text now
-  lives (RMA's own policy publications).
-- **The Commodity Exchange Price Provisions** (CEPP) define the exact projected-price and
-  harvest-price discovery for corn and soybeans. CEPP is an RMA document, not part of the
-  CFR. Not on disk.
-- **County data**: ARC-CO benchmark yields, RMA T-yields and premium rates are published as
-  data sets, not text. Not on disk, and needed only in phase 3.
+- **Closed 19 Nov 2026:** part 457's removal (91 FR 16151, above) and where the policy now
+  lives (RMA: Basic Provisions 27.1-BR). The Coarse Grains Crop Provisions are still
+  25-0041, and RMA posts no PDF of it; the 1 Jan 2026 CFR text above is that version.
+- **CEPP: closed 19 Nov 2026** (the files above).
+- **County data:** ARC-CO benchmarks are on disk (FSA, above). RMA T-yields and premium
+  rates are not; the model takes the premium from the operator's quote (design 134 §15.2).

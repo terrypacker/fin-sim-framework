@@ -76,7 +76,9 @@ export class FarmScenario extends BaseScenario {
 export function demoFarm(y) {
   const d = (yy, md) => `${yy}-${md}`;
   return {
-    seasons: [{ id: `s${y}`, cropYear: y }],
+    // Projected prices are the insurance's February futures averages (CEPP); a placeholder
+    // pair here, above the local cash table by a typical basis.
+    seasons: [{ id: `s${y}`, cropYear: y, projectedPrice: { CORN: 4.40, SOYBEANS: 10.50 } }],
     operators: [
       { id: 'opA', name: 'Operator A' },
       { id: 'opB', name: 'Operator B' },
@@ -106,13 +108,13 @@ export function demoFarm(y) {
       { id: 'harvest', name: 'Combine', customRatePerAcre: 40 },
     ],
     cropPlans: [
-      { id: 'p-a-home-irr', fieldId: 'a-home-irr', crop: 'CORN',     expectedYield: 230,
+      { id: 'p-a-home-irr', fieldId: 'a-home-irr', crop: 'CORN',     expectedYield: 230, aphYield: 221,
         insurancePremiumPerAcre: 22, irrigationElectricity: 6_500 },
-      { id: 'p-a-home-dry', fieldId: 'a-home-dry', crop: 'SOYBEANS', expectedYield: 50,
+      { id: 'p-a-home-dry', fieldId: 'a-home-dry', crop: 'SOYBEANS', expectedYield: 50, aphYield: 47,
         insurancePremiumPerAcre: 14 },
-      { id: 'p-a-west',     fieldId: 'a-west',     crop: 'SOYBEANS', expectedYield: 52,
+      { id: 'p-a-west',     fieldId: 'a-west',     crop: 'SOYBEANS', expectedYield: 52, aphYield: 48,
         insurancePremiumPerAcre: 14 },
-      { id: 'p-b-river',    fieldId: 'b-river',    crop: 'CORN',     expectedYield: 225,
+      { id: 'p-b-river',    fieldId: 'b-river',    crop: 'CORN',     expectedYield: 225, aphYield: 218,
         insurancePremiumPerAcre: 24, irrigationElectricity: 8_000 },
     ],
     prescriptions: [
@@ -195,6 +197,13 @@ export function demoFarm(y) {
         paymentDate: d(y, '10-15'), cropYear: y - 1 },
       { id: 'arc-b-prev', operatorId: 'opB', category: 'PROGRAM_PAYMENT', amount: 2_900,
         paymentDate: d(y, '10-15'), cropYear: y - 1 },
+    ],
+    // Revenue protection on every crop (design 134 §15.2). A deterministic season pays
+    // nothing: the harvest is the plan, above every guarantee.
+    insurance: [
+      { id: 'ins-a-corn', operatorId: 'opA', crop: 'CORN',     plan: 'RP', coverageLevel: 0.80, unit: 'ENTERPRISE' },
+      { id: 'ins-a-soy',  operatorId: 'opA', crop: 'SOYBEANS', plan: 'RP', coverageLevel: 0.75, unit: 'ENTERPRISE' },
+      { id: 'ins-b-corn', operatorId: 'opB', crop: 'CORN',     plan: 'RP', coverageLevel: 0.85, unit: 'ENTERPRISE' },
     ],
     carryOut: [
       // Next crop's seed and fertilizer, prepaid in December (Q11; capped by §464(d)).

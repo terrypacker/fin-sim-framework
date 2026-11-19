@@ -1,6 +1,6 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** rev 13 (19 Nov 2026): **phase 1 BUILT** (§12): the acceptance import passes
+**Status:** rev 14 (19 Nov 2026): **phase 3 started** (§15): sources settled, step 3b (revenue protection) built. **phase 1 BUILT** (§12): the acceptance import passes
 (§12.4) and the Field P&L panel is in the workbench (§12.5). **Phase 2 started** (§13): step 2a,
 the scenario-agnostic MC path and a farm batch on it, steps 2b–2d (realized yield, price paths, multiplier levers and the contracted share), 2e (calibration from USDA NASS, §13.8) and 2f (the Farm MC panel, §13.7) are built: **phase 2 is complete**. Owner questions Q1–Q20 and Q22–Q25 are answered (§3, §14); Q21, Q26 and the follow-ups Q22a,
 Q23a and Q25a (§14) are open. §7 records what the primary sources on disk decide. §8 is the household
@@ -22,7 +22,7 @@ Rev 9 records the acceptance import and the questions it raised (§12.4). Rev 10
 Field P&L panel (§12.5). Rev 11 splits phase 2 into steps and records step 2a (§13). Rev 12
 records steps 2b–2f; the calibration (§13.8) adds an irrigated-only yield shock and skewed
 yield draws, both of which the data required. Rev 13 records the owners' answers to Q22–Q25
-and the follow-ups they leave (§14).
+and the follow-ups they leave (§14). Rev 14 opens phase 3 (§15).
 
 **Related:** design 98 (the sweepable parameter surface: per-record generated params become
 MC and optimizer levers), design 55 (configuration-driven parameters and record templates),
@@ -452,8 +452,8 @@ optional method (Schedule SE instructions) does not.
   elected (7 CFR §457.8; corn and soybeans under the Coarse Grains provisions, §457.113). This
   is what makes insurance interesting under MC: it pays out on the joint yield-and-price draw
   of §6.
-- **Gap:** 7 CFR parts 413–459 show as "[Reserved]" in the live eCFR, so the §457 text on
-  disk is the 1 Jan 2026 annual edition. Before phase 3, find out where the policy now lives.
+- **Gap (closed in rev 14, §15.1):** part 457 left the CFR on 1 May 2026, and the policy text
+  is now RMA's (Basic Provisions 27.1-BR).
 
 ## 8. The household link: a farm export FinSim imports (Q6)
 
@@ -566,7 +566,7 @@ bad one for another in the same world.
 
 ## 11. Open questions
 
-Q21 (§12.3), Q26 (§13.8) and Q22a, Q23a, Q25a (§14) are for the owners. The fleet model (§5.6) and farm–market correlation (Q15) each
+Q21 (§12.3), Q26 (§13.8), Q22a, Q23a, Q25a (§14) and Q27–Q28 (§15.4) are for the owners. The fleet model (§5.6) and farm–market correlation (Q15) each
 need their own design later.
 
 ## 12. Phase 1 build notes (rev 8)
@@ -1024,3 +1024,109 @@ unallocated-cost warnings. One check so far:
 
 On the acceptance farm, it fires on the one field Q25 is about and nowhere else. The demo
 farm has none.
+
+## 15. Phase 3: programs (rev 14)
+
+Phase 3 adds the two programs §7.4 names: revenue protection crop insurance and
+ARC-County. Both pay on the joint draw of yield and price, which is why they wait for phase
+2's MC.
+
+### 15.1 What the sources settled first
+
+§7.4 left two gaps. Both are closed, and the files are in `docs/us-farm-programs/`
+(`SOURCES.md` there):
+
+- **Part 457 left the CFR.** A final rule of 1 April 2026 (91 FR 16151, effective 1 May 2026)
+  removed and reserved 7 CFR part 457: crop policies are contracts, so they no longer need to
+  be codified, and the policy text is published by RMA. The current **Basic Provisions are
+  27.1-BR** (released June 2026, effective for the 2027 crop year for crops whose contract
+  change date is after 30 June 2026). The **Coarse Grains Crop Provisions are still 25-0041**,
+  and RMA posts no newer document. Its text is the 1 January 2026 annual CFR edition already
+  on disk, which was codified before the removal.
+- **Price discovery (CEPP).** For Nebraska, the projected price is the February average of
+  the December corn and November soybean futures, and the harvest price is the October
+  average (CEPP Section II, 24-CEPP-0041 and -0081; Section I is 27-CEPP).
+- **ARC-County after P.L. 119-21.** The guarantee is 90% of benchmark revenue and the payment
+  is capped at 12% of it, for crop years 2025–2031 (§10305). The loan rates for 2026–2031 are
+  \$2.42 (corn) and \$6.82 (soybeans) (§10309). The reference prices are \$4.10 and \$10.00,
+  the effective reference price factor is 88% (§10301), and the payment limit is \$155,000,
+  indexed to CPI from 2025 (§10307). Payment acres are 85% of base acres (7 U.S.C. §9014).
+  Where a county has separate irrigated and non-irrigated yields, FSA weights the farm's
+  benchmark, guarantee and actual revenue by the farm's **historical irrigated percentage**
+  (7 CFR §1412.53(a)(3) and (c); the definition is in §1412.3).
+- **FSA's county file reproduces from the statute.** The 2025 ARC-CO data (as of
+  2 November 2026) gives, per county, crop and practice, the benchmark yield and price, the
+  guarantee, the cap, the actual yield, the national price and the payment rate. In the rows
+  checked, guarantee = 90% × benchmark, cap = 12% × benchmark and rate = min(guarantee −
+  actual, cap) hold to the cent. That makes the published file an acceptance test for step
+  3c, as the NASS file is for the calibration.
+- **For 2025, the law pays the higher of PLC and ARC-CO** per commodity (§10303(a)(3)). The
+  model has no PLC (Q13), so a 2025 season understates program payments wherever PLC would
+  have paid more.
+
+### 15.2 Step 3b: revenue protection (built)
+
+**Records.** An `insurance` row per operator and crop: `plan` (`RP`, `RP_HPE`, `YP`),
+`coverageLevel` (0.5–0.85), `unit` and an optional `paymentDate`. The season gains
+`projectedPrice` per crop. A crop plan gains `aphYield`, the approved yield, which defaults
+to its expected yield, and an insured plan without one is an advisory (`APH_DEFAULTED`).
+The premium stays on the crop plan, as the farmer-paid amount from the agent's quote:
+premium rates and subsidies are a rating question the model doesn't need to answer.
+
+**Settlement** (`settleInsurance`, `src/finance/farm/farm-programs.js`) follows Coarse Grains
+§12(b). Per field, the guarantee is acres × approved yield × coverage × the guarantee price,
+and the value to count is the harvested bushels × the value price. RP values the guarantee
+at the higher of the projected and harvest prices; the harvest price exclusion values it at
+the projected price only; yield protection values both at the projected price. A unit pays
+max(0, guarantee − value) summed over its fields. The test reproduces the provisions' own
+worked example to the cent (\$3,912.50 RP, \$3,562.50 YP).
+
+**Units.** `ENTERPRISE` (all of the operator's acres of the crop), `ENTERPRISE_BY_PRACTICE`
+(irrigated and dry apart) and `FIELD` (each field its own unit). The unit decides whether a
+good field covers a bad one, so it changes how often a claim pays. One county is assumed.
+
+**The harvest price comes from the season's own price path.** The path is local cash, not
+futures, so the harvest price is the projected price × the path's realized ÷ expected ratio
+on the row in force on 31 October. Only the random part moves it, because a futures price's
+expected change is zero, and the basis is held constant in ratio. A deterministic season's
+harvest price is its projected price. The price–yield link (§13.5) is in that ratio, so a
+farm-wide short crop raises the harvest price. That is exactly the case where revenue
+protection's harvest-price guarantee matters.
+
+**Postings.** The indemnity is settled at compile time, as the harvest is, and posts as
+`CROP_INSURANCE_PROCEEDS` (Schedule F line 6a) on the payment date (15 December by default).
+It is charged to the unit's crop plans in proportion to each field's own shortfall, so it
+lands on the fields that lost. It is non-grain revenue, so it enters the breakevens (§5.4).
+Moisture, quality, appraisals and prevented planting are not modelled.
+
+**MC.** Each path reports `<scope>.insurance` and `<scope>.insurancePays` (1 when a claim
+pays, so its mean is the claim probability), and the Farm MC panel shows both. On the demo
+farm, with every calibrated variable sampled, a claim pays in about 29% of paths. Each
+operator's and crop's own figure is 15–24%. `coverageLevel` is an optimizer lever.
+
+**Not decided here, for step 3d:** the tax year of an indemnity. §451(f) and Reg. §1.451-6
+let a cash-method farmer who normally sells the crop the following year elect to report the
+proceeds then (Q11b asked to offer it). Step 3d builds that election with Schedule F lines
+6b–6d.
+
+### 15.3 Steps still to build
+
+- **3c ARC-County.** FSA farm records (base acres by crop, county, historical irrigated
+  percentage), county benchmarks read from FSA's file, the county's actual yield drawn from
+  the season's common yield shock (which is a county-level shock by construction, §13.8),
+  and the national marketing-year price from the price path over September to August. The
+  payment posts on 1 October of the year after harvest (§9017(f)). It is tested against FSA's
+  published Nebraska rates. The \$155,000 limit is per person, and an operator may be two
+  (a married couple), so the model reports when a payment exceeds it and does not cap it.
+- **3d Tax timing.** The §451(f) election for insurance proceeds, then the Schedule F lines.
+- **3e Panels.** The programs' lines in the Field P&L.
+
+### 15.4 Questions for the owners (Q27, Q28)
+
+**Q27 (crop insurance):** for each operator and crop, the plan (RP, RP with the harvest price
+exclusion, or YP), the coverage level, the unit structure, each unit's approved (APH) yield,
+and the premium per acre. The source workbook shows a premium for one operator only: do the
+other two insure? Q26's per-field yield history is the same APH record.
+
+**Q28 (ARC-County):** for each FSA farm number, its county, its base acres by crop and its
+historical irrigated percentage (both are on the FSA-156EZ), and the 2026 election.
