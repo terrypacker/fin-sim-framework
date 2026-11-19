@@ -1301,3 +1301,20 @@ Schedule SE. The 13 existing goldens are byte-identical.
 
 Under household MC, a row's `net` is the deterministic run's for now. Drawing a farm path
 per year is step 4d.
+
+### 16.6 Step 4c: `import-farm.mjs` (built)
+
+`npm run import:farm -- --farm <export> --operator <id> --person <id> --into <plan> [--out <file>]`
+follows `import-quicken.mjs`: a dry run without `--out`, both scenarios in the output, and
+`--replace` to chain a second operator's import onto the first. Its logic is
+`scripts/lib/farm-import.mjs`. It writes one `businessIncome` row from the deterministic crop
+year, and **one `cfg.businessIncomePaths` row per MC path**: `{ businessIncomeId, seed, net,
+neCommunityCollegeTax }`. These are flat rows joined by id, which the loader checks: a path
+must name a row, and deleting a person removes that person's rows and paths. A re-import
+replaces its own row and paths and nothing else.
+
+The import refuses an operator missing from the export, a person missing from the plan, or an
+operator with no full crop-year Schedule F. It warns when community-college tax is imported for
+a person who is not a Nebraska resident, when the row starts before the plan does, and when the
+paths were sampled from uncalibrated spreads. The help topic `farm-to-household`
+(`help/workflows/`) walks through both commands.

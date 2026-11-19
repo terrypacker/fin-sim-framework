@@ -512,6 +512,8 @@ export class ScenarioSerializer {
       ...(scenario.bonuses?.length ? { bonuses: scenario.bonuses.map(b => ({ ...b })) } : {}),
       // Design 134 step 4b — business income (a Schedule F per year), joined by `personId`.
       ...(scenario.businessIncome?.length ? { businessIncome: scenario.businessIncome.map(b => ({ ...b })) } : {}),
+      // Its MC paths (one row per farm path), joined by `businessIncomeId`.
+      ...(scenario.businessIncomePaths?.length ? { businessIncomePaths: scenario.businessIncomePaths.map(p => ({ ...p })) } : {}),
       // Design 134 — the farm records, flat id-joined tables of plain authored data.
       // Emitted only when present, so no household scenario gains a key.
       ...(scenario.farm ? { farm: structuredClone(scenario.farm) } : {}),

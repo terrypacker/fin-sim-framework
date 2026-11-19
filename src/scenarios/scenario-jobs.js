@@ -112,9 +112,15 @@ export function deletePersonJobs(scenario, personId) {
   if (!scenario) return;
   // Design 134 step 4b — a business-income row naming no person is a load error too.
   if (Array.isArray(scenario.businessIncome) && scenario.businessIncome.some(r => r?.personId === personId)) {
+    const gone = new Set(scenario.businessIncome.filter(r => r?.personId === personId).map(r => r.id));
     const rest = scenario.businessIncome.filter(r => r?.personId !== personId);
     if (rest.length > 0) scenario.businessIncome = rest;
     else delete scenario.businessIncome;
+    if (Array.isArray(scenario.businessIncomePaths)) {
+      const paths = scenario.businessIncomePaths.filter(p => !gone.has(p?.businessIncomeId));
+      if (paths.length > 0) scenario.businessIncomePaths = paths;
+      else delete scenario.businessIncomePaths;
+    }
   }
   if (listPersonBonuses(scenario, personId).length > 0) _writeBonuses(scenario, personId, []);
   if (listPersonJobs(scenario, personId).length === 0) return;
