@@ -33,6 +33,7 @@
     "scenario": "node scripts/scenario/run-scenario.mjs",
     "farm:report": "node scripts/farm/farm-report.mjs",
     "farm:mc": "node scripts/farm/farm-mc.mjs",
+    "farm:calibrate": "node scripts/farm/farm-calibrate.mjs",
     "diff": "node scripts/scenario/diff-scenarios.mjs",
     "sweep": "node scripts/scenario/sweep-scenario.mjs",
     "import:quicken": "node scripts/scenario/import-quicken.mjs",

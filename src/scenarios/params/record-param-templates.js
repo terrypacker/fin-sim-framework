@@ -51,6 +51,7 @@ import { ACCOUNT_TYPE } from '../../finance/assets/account.js';
 import { DIVIDEND_ELECTION_ROLES } from '../../finance/state/account-roles.js';
 import { SS_CLAIM_AGES } from '../../finance/account-rules/us/us-social-security-rules.js';
 import { SEASON_MULTIPLIERS, categoryMultiplierField } from '../../finance/farm/farm-records.js';
+import { FARM_CALIBRATION } from '../../finance/farm/farm-calibration.js';
 import { PRODUCT_CATEGORIES } from '../../finance/farm/schedule-f.js';
 
 // Retirement-account ledger scalar exposed as a param (design 53 §2 / account-basis
@@ -412,10 +413,15 @@ export const FARM_PARAM_TEMPLATES = {
       blankValue: 0,
       description: 'The season\'s farm-wide yield deviation, as a fraction of expected yield '
         + '(−0.2 = every field 20% short). 0 harvests the plan.' },
+    { field: 'irrigatedYieldShock', label: 'Irrigated Yield Shock', type: 'Number', mc: true, opt: false,
+      blankValue: 0, appliesTo: r => r._hasIrrigated === true,
+      description: 'The yield deviation every irrigated field shares and dry fields do not, as '
+        + 'a fraction of expected yield (heat, pumping limits). 0 harvests the plan.' },
     { field: 'irrigatedYieldBeta', label: 'Irrigated Yield Beta', type: 'Number', mc: false, opt: false,
-      blankValue: 1,
+      blankValue: FARM_CALIBRATION.irrigatedYieldBeta, appliesTo: r => r._hasIrrigated === true,
       description: 'How much of the farm-wide yield shock an irrigated field takes: 1 the '
-        + 'whole shock, 0 none of it. Dry fields always take all of it.' },
+        + 'whole shock, 0 none of it. Dry fields always take all of it. Blank is the NASS '
+        + 'calibration (design 134 §13.8).' },
     // Design 134 §13.6 — one lever per cost family. A product category's multiplier exists only
     // where the farm buys that category (the generator lists the categories on the season row).
     ...Object.entries(SEASON_MULTIPLIERS).map(([field, covers]) => ({

@@ -1,8 +1,8 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** rev 11 (19 Nov 2026): **phase 1 BUILT** (§12): the acceptance import passes
+**Status:** rev 12 (19 Nov 2026): **phase 1 BUILT** (§12): the acceptance import passes
 (§12.4) and the Field P&L panel is in the workbench (§12.5). **Phase 2 started** (§13): step 2a,
-the scenario-agnostic MC path and a farm batch on it, steps 2b–2d (realized yield, price paths, multiplier levers and the contracted share) are built. Owner questions Q1–Q20 are answered (§3); Q21–Q25 (§12.3–§12.4) are open. §7 records what the primary sources on disk decide. §8 is the household
+the scenario-agnostic MC path and a farm batch on it, steps 2b–2d (realized yield, price paths, multiplier levers and the contracted share), 2e (calibration from USDA NASS, §13.8) and 2f (the Farm MC panel, §13.7) are built: **phase 2 is complete**. Owner questions Q1–Q20 are answered (§3); Q21–Q26 (§12.3, §12.4, §13.8) are open. §7 records what the primary sources on disk decide. §8 is the household
 link.
 
 Revision history: rev 2 added §7 and §8, and corrected rev 1's guess that Nebraska credits
@@ -18,7 +18,9 @@ acceptance test and its first spike (§9). Rev 7 records Q20, which turns the ow
 study into an operation-by-operation fleet model with its own design (§5.6). Rev 8 records the phase 1 build: the spike
 result, the record and ledger shapes it settled, and a §464(d) exception that §7.1 missed (§12).
 Rev 9 records the acceptance import and the questions it raised (§12.4). Rev 10 records the
-Field P&L panel (§12.5). Rev 11 splits phase 2 into steps and records step 2a (§13).
+Field P&L panel (§12.5). Rev 11 splits phase 2 into steps and records step 2a (§13). Rev 12
+records steps 2b–2f; the calibration (§13.8) adds an irrigated-only yield shock and skewed
+yield draws, both of which the data required.
 
 **Related:** design 98 (the sweepable parameter surface: per-record generated params become
 MC and optimizer levers), design 55 (configuration-driven parameters and record templates),
@@ -558,7 +560,7 @@ bad one for another in the same world.
 
 ## 11. Open questions
 
-Q21 (§12.3) and Q22–Q25 (§12.4) are for the owners. The fleet model (§5.6) and farm–market correlation (Q15) each
+Q21 (§12.3), Q22–Q25 (§12.4) and Q26 (§13.8) are for the owners. The fleet model (§5.6) and farm–market correlation (Q15) each
 need their own design later.
 
 ## 12. Phase 1 build notes (rev 8)
@@ -686,8 +688,8 @@ Phase 2 is six steps. Each one ships on its own, and none changes a retirement r
 | 2b | **Realized yield**, separate from expected yield (§13.3): a farm-wide factor times a per-field factor, narrower on irrigated fields | **built** (§13.4) |
 | 2c | **Price paths** per crop through the marketing year, drawn against the farm yield factor (the yield–price link, §6), replacing the step table on a path | **built** (§13.5) |
 | 2d | **Multiplier levers** (product category, rent, custom rates, machinery, irrigation) and the contracted share per crop (Q18) | **built** (§13.6) |
-| 2e | **Calibration.** NASS county yields, RMA price elections and futures history fetched into `docs/`, then the 2b–2d distributions set from them (§6) | open |
-| 2f | **A farm MC results panel** (§4: the farm gets its own, rather than bending the retirement one) | open |
+| 2e | **Calibration.** NASS county yields, RMA price elections and futures history fetched into `docs/`, then the 2b–2d distributions set from them (§6) | **built** (§13.8) |
+| 2f | **A farm MC results panel** (§4: the farm gets its own, rather than bending the retirement one) | **built** (§13.7) |
 
 2e gates the numbers in 2b–2d, not their mechanics: each mechanism can be built and tested
 with its spread at zero, which reproduces the deterministic run exactly. No default spread is
@@ -781,11 +783,11 @@ Decided in the build:
   spread draws nothing, and the path is the plan. Contributors now receive the scenario cfg as
   well as the params, because the farm's rows come from its records.
 - **β is 1 until calibrated**, which assumes nothing: irrigated fields take the whole shock,
-  like dry ones.
+  like dry ones. (Rev 12: calibrated to 0.05, with an irrigated-only shock beside it, §13.8.)
 
 Still open for 2e: the shape of the yield distribution. Yields are skewed to the left (a
 drought year is far below trend, and a great year is only somewhat above it), so a normal
-shock is a placeholder for whatever the county history supports.
+shock is a placeholder for whatever the county history supports. (Rev 12: skew-normal, §13.8.)
 
 ### 13.5 Step 2c: price paths
 
@@ -867,4 +869,100 @@ in the private scenario, and is not recorded here.
 
 All of these levers' MC rows are the catalog's: centred on the record, off, and at
 `FARM_MC_SPREADS`, which are 0 until 2e.
+
+### 13.7 Step 2f: the Farm MC panel
+
+`farm-mc-plugin.js`, a tab in the Farm view beside the Field P&L. It runs `FarmMcRunner` on
+the active scenario, on the worker pool where the browser has one; the pool and a serial run
+are bit-identical (§13.2).
+
+- **Variables** is a typed table, one row per catalog variable: a switch and a spread (§9's
+  "category levers" are rows here). A price shock's row has no spread field. It is a unit
+  draw, and its scale is the season's price volatility (§13.5), so a typed number there would
+  silently rescale the vol.
+- **Results** has the whole farm first, then each operator with its crop plans, then each
+  crop. Each row shows P(loss), the net at p10, p50 and p90, and the breakevens' p10–p90. An
+  operator row adds its cash Schedule F net and that net's loss probability, after §464(d).
+  The machinery switch is the Field P&L's. The CSV carries every metric's distribution.
+- **It says what a batch is.** It warns when nothing is sampled, and when a sampled row has a
+  spread of 0. It also warns when a spread is typed rather than calibrated: those results are
+  a sensitivity run. When a sampled crop's price vol comes from the calibration, it says so.
+
+Checked in the browser on the demo farm (50 paths, worker pool, no console errors). One
+finding there is economics, not a bug. An operator whose crop is mostly sold in the next tax
+year can lose money on its cash Schedule F in **every** path, while its job-cost net is
+positive. That gap between the cash view and the job-cost view is what the column exists
+to show.
+
+### 13.8 Step 2e: calibration
+
+**Source.** USDA NASS Quick Stats, via the crops bulk file of 19 Nov 2026, filtered to
+Nebraska. It gives county yields by practice (irrigated and non-irrigated, 1947–2018, the
+years NASS published the split) and the state's monthly prices received.
+`docs/us-farm-markets/` holds the extract, the filter that reproduces it byte for byte, and
+`SOURCES.md`. `npm run farm:calibrate` derives every figure, by county or as the
+distribution across counties. `tests/unit/farm-calibration.test.mjs` re-derives the shipped
+constants (`FARM_CALIBRATION`) from the file on disk, so a constant cannot drift from its
+source.
+
+**Method.** Each county's yield is divided by its own linear trend, minus 1: the same ratio
+the yield shocks are. The figures are medians across Nebraska counties, from 1995, for
+modern genetics: irrigated variance is clearly lower after 1995 than over 1980 on. Prices
+use ln(October ÷ January), annualized over nine months.
+
+| Figure | Corn | Soybeans | Shipped as |
+|---|---|---|---|
+| Dryland yield sd | 0.295 | 0.219 | `yieldShockSd` 0.30 |
+| Dryland skewness | −0.78 | −0.72 | `yieldShockSkew` −0.78 |
+| Irrigated yield sd | 0.070 | 0.058 | — |
+| Irrigated slope on dryland (β) | 0.05 | 0.12 | `irrigatedYieldBeta` 0.05 |
+| Irrigated residual sd | 0.065 | 0.049 | `irrigatedYieldShockSd` 0.065 |
+| Irrigated residual skewness | −0.22 | −0.31 | `irrigatedYieldShockSkew` −0.22 |
+| Soybean ÷ corn sd, dryland / irrigated | | 0.74 / 0.75 | `yieldShockScale.SOYBEANS` 0.74 |
+| Price vol, Jan→Oct, annualized | 0.18 | 0.17 | `priceVol` |
+| Price–yield link b, on the dryland deviation | 0.19 | 0.24 | `priceYieldBeta` |
+
+The RMA's 2026 crop-insurance volatility factors are corn 0.15 and soybeans 0.13: implied
+vols of the harvest futures, near their 15-year lows (the farmdoc article in `docs/`). Cash
+prices also move with the basis, so the history's higher figures are expected.
+
+**What the data changed in the model:**
+
+- **An irrigated-only shock.** Irrigated yields barely follow the dryland shock (β 0.05; the
+  correlation is 0.23). They do move together, though: irrigated corn and irrigated soybeans
+  correlate at 0.55 (county medians, 1995 on). With only the 2b shocks, that common part could go only into each
+  field's own shock, which would treat a farm's pivots as independent and understate its
+  risk. The season gains `irrigatedYieldShock`, common to every irrigated field. An
+  irrigated field harvests `1 + k·(β·Y + I)`, and a dry one `1 + k·Y`.
+- **A per-crop scale, k.** Dryland corn and soybean shocks correlate at 0.89, so one
+  farm-wide shock is right, but soybeans swing less. `yieldShockScale` is the ratio of the
+  soybean sd to the corn sd, and it is the same for both practices (0.74 and 0.75), so one
+  scale serves both terms. The price link reads the crop's own shock, `b·k·Y`, which is
+  what the calibration regressed on.
+- **Skewed draws.** Dryland deviations are left-skewed in three counties out of four. Below
+  2 sd they occur 3.7–4.5% of the time, and above 2 sd only 0.3–0.5%. A normal shock puts
+  2.3% in each tail, so it would understate droughts and invent bumper crops, and the loss
+  probability is the output the owners read. The two season shocks are drawn skew-normal
+  (`DISTRIBUTION_TYPES.SKEW_NORMAL`, new, mean/sd/skew parameterized). At −0.78 its tails
+  are 4.1% and 0.3%.
+
+**Defaults, and why the vol is not one.** β, k and b default to the calibration on a season
+that leaves them blank. Each one is a no-op while the shocks are 0, so a deterministic
+season, and the `farm-demo` golden, do not move. The price vol cannot default the same way:
+its mean correction (−½σ²t, §13.5) moves a price even at a zero shock. So it stays blank on
+the record, and `FarmMcRunner` fills the calibrated vol for each crop whose price shocks a
+batch samples. It records the vols it filled in `summary.provenance.priceVolFilled`, and a
+path replays as `applyParamBagToConfig(withPriceVol(cfg, priceVolFilled), params)`.
+
+**Still uncalibrated, and why:**
+
+- **A field's own yield shock** (spread 0). County history is smoother than one farm's, and
+  one field's is noisier still. It needs the farm's own yield history. **Q26 (owners):** can
+  you share each field's yearly yields, the APH records the crop insurance uses? Ten years
+  of per-field yields would set the field-level spread.
+- **The cost multipliers and the contracted share** (spread 0). They are levers to sweep,
+  not uncertainties with a published spread.
+- **A farm's county.** The shipped figures are Nebraska's county median. A plan that knows
+  its county can read that county's own figures (`--county`) and set them on its season.
+  The private scenario does that, and the design does not.
 

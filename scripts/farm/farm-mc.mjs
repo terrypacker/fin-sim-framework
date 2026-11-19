@@ -20,9 +20,10 @@
  * Reports the distribution of net income and the probability of a loss for the farm, each
  * operator, crop and crop plan, and the distribution of each breakeven (design 134 §5.4).
  *
- * The spreads are the parameter harvest's generic ones (±10% on an amount, ±20% on a rate),
- * NOT calibrated distributions: design 134 §6 sets those from public sources, which is a later
- * step. A run here is a sensitivity run, and the output says so.
+ * The farm-wide yield shocks and the price paths are calibrated from USDA NASS history
+ * (design 134 §13.8, `npm run farm:calibrate`). Every other spread is either 0 (a field's own
+ * yield, the cost multipliers: no source sets them) or the parameter harvest's generic ±10% /
+ * ±20%, which the output flags UNCALIBRATED: a run that samples those is a sensitivity run.
  */
 
 import { readFileSync } from 'node:fs';
@@ -107,6 +108,10 @@ if (picked.length === 0) note('Nothing is sampled, so every path is the determin
 if (summary.provenance.uncalibrated.length) {
   note(`UNCALIBRATED: ${summary.provenance.uncalibrated.length} sampled variable(s) use the harvest's generic spread, `
     + 'not a distribution from a source (design 134 §6). Read this as a sensitivity run.');
+}
+const filled = Object.entries(summary.provenance.priceVolFilled ?? {});
+if (filled.length) {
+  note(`Price vol from the NASS calibration (the season sets none): ${filled.map(([c, v]) => `${c} ${v}`).join(', ')}.`);
 }
 if (summary.erroredRuns.length) note(`! ${summary.erroredRuns.length} path(s) threw and are excluded.`);
 

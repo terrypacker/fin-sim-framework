@@ -388,7 +388,11 @@ Same registry pattern as `TaxEngine`. Per-year `UsAccountModule2024/2025/2026` a
 - `IntlRetirementMcRunner` — runs N simulations, evaluates objectives, returns per-run results + summary.
 - `FarmMcConfig` / `FarmMcRunner` (`src/finance/farm/farm-mc.js`) — the farm season's catalog (its
   `farm.*` record levers) and batch: net income, loss probability and breakevens per farm,
-  operator, crop and crop plan. `npm run farm:mc`.
+  operator, crop and crop plan. `npm run farm:mc`. Its yield and price spreads are calibrated
+  from USDA NASS history (`FARM_CALIBRATION`, `src/finance/farm/farm-calibration.js`; data and
+  sources in `docs/us-farm-markets/`; `npm run farm:calibrate`), and a test re-derives them.
+- `DISTRIBUTION_TYPES.SKEW_NORMAL` — mean, sd and skewness; for draws with a longer bad tail
+  than good (crop yields).
 - **Centers follow the loaded scenario.** `run()` seeds its base params from the cfgTemplate's own
   two param stores (schema defaults → scenario params → account balances → caller overrides), so a
   variable is sampled around the plan's value rather than the library default — for the UI and the

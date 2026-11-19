@@ -17,6 +17,7 @@ import { ScenarioParamGenerator } from '../../scenarios/params/scenario-param-ge
 import { McConfig, variablesMissingCenter } from '../monte-carlo/mc-config.js';
 import { McRunner, summarizeProvenance, median, percentile } from '../monte-carlo/mc-runner.js';
 import { samplingSignature }   from '../monte-carlo/parallel/mc-worker-core.js';
+import { FARM_CALIBRATION }    from './farm-calibration.js';
 
 /**
  * Monte Carlo for a farm season (design 134 phase 2): the farm's variable catalog and batch.
@@ -39,14 +40,21 @@ export class FarmMcConfig extends McConfig {
 }
 
 /**
- * The farm's own spreads (design 134 §6, §13.1 step 2e): the standard deviation of each drawn
- * factor. **All 0 until calibrated**: no spread is set before its source is on disk, so a row
- * switched on at 0 draws nothing and the path is the plan. Step 2e replaces these from USDA
- * NASS yields and the price sources, and records where each came from.
+ * The farm's own spreads (design 134 §6, §13.8): the standard deviation of each drawn factor.
+ * The two farm-wide yield shocks are calibrated from USDA NASS county history
+ * (`FARM_CALIBRATION`, `npm run farm:calibrate`). The rest are 0, because no source on disk
+ * sets them: a field's own yield shock needs the farm's yield history (owner question Q26),
+ * and the cost multipliers and contracted share are levers to sweep, not uncertainties with a
+ * published spread. A row switched on at 0 draws nothing.
  */
 export const FARM_MC_SPREADS = Object.freeze({
-  /** The farm-wide yield shock, as a fraction of expected yield. */
-  farmYieldShockSd: 0,
+  /** The farm-wide dryland yield shock, as a fraction of expected yield. */
+  farmYieldShockSd: FARM_CALIBRATION.yieldShockSd,
+  /** …and its skewness (a drought's long tail). */
+  farmYieldShockSkew: FARM_CALIBRATION.yieldShockSkew,
+  /** The shock irrigated fields share. */
+  irrigatedYieldShockSd: FARM_CALIBRATION.irrigatedYieldShockSd,
+  irrigatedYieldShockSkew: FARM_CALIBRATION.irrigatedYieldShockSkew,
   /** A field's own yield shock, dry and irrigated. */
   fieldYieldShockSd: Object.freeze({ dry: 0, irrigated: 0 }),
   /** A season cost multiplier, by lever field (`rentMultiplier`, `nitrogenMultiplier`, …). */
@@ -66,13 +74,20 @@ export function buildYieldMcConfigs(cfg, spreads = FARM_MC_SPREADS) {
   const farm = cfg?.farm;
   if (!farm?.seasons?.length) return [];
   const irrigated = new Map((farm.fields ?? []).map(f => [f.id, f.irrigated === true]));
-  const row = (paramKey, label, stdDev) => ({
-    paramKey, label, type: DISTRIBUTION_TYPES.NORMAL, mean: 0, stdDev, group: 'Farm · yield', enabled: false,
+  // The season shocks are skew-normal (§13.8): a drought's tail is longer than a bumper year's.
+  const row = (paramKey, label, stdDev, calibrated = false, skew = null) => ({
+    paramKey, label, mean: 0, stdDev, group: 'Farm · yield', enabled: false, calibrated,
+    ...(skew != null && skew !== 0 ? { type: DISTRIBUTION_TYPES.SKEW_NORMAL, skew } : { type: DISTRIBUTION_TYPES.NORMAL }),
     // The centre IS what the model reads for a blank shock (`blankValue` 0), not a made-up mean.
     effectiveDefault: true,
   });
   return [
-    ...farm.seasons.map(s => row(`farm.season.${s.id}.yieldShock`, 'Farm-wide yield shock', spreads.farmYieldShockSd)),
+    ...farm.seasons.map(s => row(`farm.season.${s.id}.yieldShock`, 'Farm-wide yield shock', spreads.farmYieldShockSd,
+      spreads === FARM_MC_SPREADS, spreads.farmYieldShockSkew)),
+    ...((farm.fields ?? []).some(f => f.irrigated === true)
+      ? farm.seasons.map(s => row(`farm.season.${s.id}.irrigatedYieldShock`, 'Irrigated yield shock', spreads.irrigatedYieldShockSd,
+        spreads === FARM_MC_SPREADS, spreads.irrigatedYieldShockSkew))
+      : []),
     ...(farm.cropPlans ?? []).map(p => row(`farm.plan.${p.id}.yieldShock`,
       `${(farm.fields ?? []).find(f => f.id === p.fieldId)?.name ?? p.fieldId} · ${p.crop} — yield shock`,
       irrigated.get(p.fieldId) ? spreads.fieldYieldShockSd.irrigated : spreads.fieldYieldShockSd.dry)),
@@ -119,6 +134,28 @@ export function buildMultiplierMcConfigs(cfg, spreads = FARM_MC_SPREADS) {
 }
 
 /**
+ * `{ crop: σ }` for each crop with a sampled price-shock row and no `priceVol` of its own on
+ * the season: the calibrated vol a batch fills in.
+ */
+export function calibratedPriceVolFor(cfg, variables) {
+  const authored = cfg?.farm?.seasons?.[0]?.priceVol ?? {};
+  const out = {};
+  for (const v of variables) {
+    if (!v.enabled || !v.fixedSpread || authored[v.crop] != null) continue;
+    const vol = FARM_CALIBRATION.priceVol[v.crop];
+    if (vol != null) out[v.crop] = vol;
+  }
+  return out;
+}
+
+/** `cfg` with `priceVol` set on its season for each crop in `filled` (a copy; cfg is untouched). */
+export function withPriceVol(cfg, filled) {
+  if (!Object.keys(filled ?? {}).length) return cfg;
+  const [s0, ...rest] = cfg.farm.seasons;
+  return { ...cfg, farm: { ...cfg.farm, seasons: [{ ...s0, priceVol: { ...(s0.priceVol ?? {}), ...filled } }, ...rest] } };
+}
+
+/**
  * The farm batch. Reuses the scenario-agnostic `McRunner`: paths are index-seeded and built by
  * the worker core from the `us-farm` descriptor (`farm-mc-scenario.js`), so a sharded run is
  * bit-identical to a serial one, as for a retirement batch.
@@ -146,6 +183,12 @@ export class FarmMcRunner extends McRunner {
     // stops (`ScenarioRunner.runScenario`), as on a retirement batch.
     const base = { ...resolveRecordCenters(raw), ...ownParams, ...baseParams, endDate: simEnd };
     const variables  = this.mcConfig.buildVariables(base, { cfg: raw });
+    // A crop whose price shocks are sampled needs a vol to scale them. Where the season leaves
+    // it blank, the calibrated one is filled in for this batch only (design 134 §13.8).
+    const priceVolFilled = calibratedPriceVolFor(raw, variables);
+    if (Object.keys(priceVolFilled).length) {
+      Object.assign(cfgTemplate, withPriceVol(cfgTemplate, priceVolFilled));
+    }
     const centerless = variablesMissingCenter(variables);
     if (centerless.length) {
       throw new Error('Monte Carlo cannot sample an enabled variable with no center: '
@@ -154,6 +197,8 @@ export class FarmMcRunner extends McRunner {
     const provenance = summarizeProvenance(variables, { ownParams, schemaDefaults: {}, who: 'FarmMcRunner' });
     // Design 134 §6: the harvested spreads are uncalibrated. Say which sampled rows use one.
     provenance.uncalibrated = variables.filter(v => v.enabled && v.harvested).map(v => v.paramKey);
+    // To replay a path: applyParamBagToConfig(withPriceVol(cfg, priceVolFilled), path.params).
+    provenance.priceVolFilled = priceVolFilled;
     return {
       ctx: { cfgTemplate, base, variables, simStart, simEnd, scenarioKind: FarmMcRunner.scenarioKind },
       provenance,

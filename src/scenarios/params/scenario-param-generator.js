@@ -187,6 +187,7 @@ export class ScenarioParamGenerator {
         const facts = kind === 'season' ? {
           _productCategories: [...new Set((cfg.farm.products ?? []).map(p => p.category))],
           _hasVariableRate:   (cfg.farm.overhead ?? []).some(o => o.variableRate === true),
+          _hasIrrigated:      (cfg.farm.fields ?? []).some(f => f.irrigated === true),
         } : {};
         add(this._expand('farm', 'farm', { ...r, name, ...facts }, `${kind}.${r.id}`,
           template.map(t => ({ ...t, group: t.group ?? `Farm · ${FARM_PARAM_TABLES[kind]}` }))));
