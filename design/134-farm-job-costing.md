@@ -1,8 +1,7 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** DRAFT (19 Nov 2026), rev 6: **ready to build phase 1.** Nothing built. Every owner
-question that shapes phases 1–2 is answered (§3, Q1–Q19). The only open question (§11, Q20)
-is for a later study. §7 records what the primary sources on disk decide. §8 is the household
+**Status:** DRAFT (19 Nov 2026), rev 7: **ready to build phase 1.** Nothing built. Every owner
+question is answered (§3, Q1–Q20); none is open. §7 records what the primary sources on disk decide. §8 is the household
 link.
 
 Revision history: rev 2 added §7 and §8, and corrected rev 1's guess that Nebraska credits
@@ -14,7 +13,8 @@ one machinery figure per operator, purchases expensed in full, and the own-vs-cu
 (§5.6). Rev 6 (final review): **the generic MC runner moves from before phase 1 to the start of
 phase 2**, because phase 1 does not need it and it is larger than rev 1 said (§4). Rev 6 also
 fixes the breakeven formulas (§5.4), settles contract shortfalls (§6), and states the phase 1
-acceptance test and its first spike (§9).
+acceptance test and its first spike (§9). Rev 7 records Q20, which turns the own-vs-custom
+study into an operation-by-operation fleet model with its own design (§5.6).
 
 **Related:** design 98 (the sweepable parameter surface: per-record generated params become
 MC and optimizer levers), design 55 (configuration-driven parameters and record templates),
@@ -106,6 +106,7 @@ What the workbook got wrong, or left out, gives the design its requirements:
 | Q17 | Machinery cost input | **Phase 1: one annual machinery figure per operator, split by acre.** For tax, equipment is **deducted in full in the year it is bought**, not depreciated. Own vs custom harvest is a wanted study (§5.6). |
 | Q18 | Contracted share | **A per-crop default**, different for corn and soybeans, recorded privately. MC sweeps it. |
 | Q19 | Pumping cost | **Irrigation electricity is metered per field**: an annual \$ cost per irrigated field, not per acre-inch. |
+| Q20 | Own vs custom | **It is a choice per operation, not a share of one figure.** Custom options cover different sets of work (combine only, or field to bin), and each changes which machines are still needed. A whole study with its own design (§5.6). |
 
 ## 4. Architecture: a new scenario type and toolsets, not a new application
 
@@ -258,23 +259,42 @@ a **roll forward** action copies a season (fields, plans, prescriptions, contrac
 next crop year as a starting point. Going back to back later, for example to test an
 income-smoothing strategy over several years, is then configuration, not a redesign.
 
-### 5.6 Study: own machinery vs custom hire
+### 5.6 Study: own machinery vs custom hire (Q20)
 
-The owners want to compare their real machinery cost with paying an outside operator, for
-harvest first. The model already holds both sides: the custom rate × acres, and the real
-machinery figure. The study needs two things the phase 1 figure doesn't give:
+The owners want to compare running their own machines with hiring work done: harvest first,
+and spraying and post-plant fertilizer application next. Q20 shows this is **not** a share of
+the machinery figure. It is a choice made per operation, and each choice changes the fleet:
 
-- **Harvest's share of the machinery figure.** The study needs to know which costs leave
-  with the combine (its price, fuel, repairs, labor, interest), as opposed to the whole fleet.
-- **Two ways of counting a purchase.** For tax the combine is deducted in full in the year
-  it's bought (§7.1). That makes one year look terrible and the rest look free. The
-  comparison has to be **annualised**: price less resale, spread over the years it's kept,
-  plus yearly running costs. The tax view is shown beside it, because the immediate deduction
-  has real value, and that value depends on the operator's bracket that year (a household-side
-  number, §8).
+- **Custom combining only.** A per-acre rate. The operator no longer needs a combine, heads or
+  grain carts, but still hauls, so still needs semis.
+- **Custom combining, field to bin.** A higher per-acre rate. Fewer semis are needed, but some
+  are still needed to haul grain out of storage to sell. Tractors are still needed for
+  planting and other work.
+- **Custom application** (spraying, fertilizer after planting). The same shape: a rate per
+  acre, and a sprayer or applicator the operator may no longer need.
 
-This is a study, run after phase 2. It may need its own short design once the harvest cost
-split is known (§11 Q20).
+So the study needs a small **fleet model**, which phase 1's single machinery figure stands in
+for:
+
+| Piece | Carries |
+|---|---|
+| **Machine** | type (combine, head, grain cart, semi, tractor, planter, sprayer, tender, …), annualised ownership cost (price less trade-in value, spread over the years kept, plus interest), yearly running cost (repairs, fuel, labor, insurance) |
+| **Operation** | which machines it needs, and in what number per acre or per bushel hauled |
+| **Custom option** | which operations it covers (for example combine, or combine and haul to bin), and its rate per acre or per bushel |
+
+A **provider choice** per operation (own, or a custom option) gives the fleet as the machines
+the owned operations still need. Shared machines (tractors, semis) shrink only as far as the
+remaining owned work allows. The study then compares fleets: their annualised cost plus the
+custom bills, against today's.
+
+Two views of a purchase are shown side by side. For tax a machine is deducted in full in the
+year it's bought (§7.1), which makes that year look terrible and the rest look free. So the
+comparison uses the **annualised** cost, with the tax view beside it, because the immediate
+deduction has real value at the operator's bracket that year (a household-side number, §8).
+
+**This gets its own design**, after phase 2. Phase 1's machinery figure and the custom-rate
+basis (§5.3) stay as they are; the fleet model later replaces the single figure with a
+computed one.
 
 ## 6. What varies (the MC surface)
 
@@ -533,8 +553,5 @@ bad one for another in the same world.
 
 ## 11. Open questions
 
-Every owner question so far is answered (§3). What remains:
-
-- **Q20 — Harvest cost split** (for the §5.6 study, not phase 1). Which parts of the machinery
-  figure belong to harvest (combine, head, grain cart, trucks, fuel, labor)? How many years is
-  a combine typically kept, and what is it worth when traded?
+None. Every owner question is answered (§3). The fleet model (§5.6) and farm–market
+correlation (Q15) each need their own design later.
