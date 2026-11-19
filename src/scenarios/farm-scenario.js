@@ -25,6 +25,9 @@ import { seasonWindow }    from '../finance/farm/farm-records.js';
  * under `scenarios/`, which is private (design 134 §2).
  */
 export class FarmScenario extends BaseScenario {
+  /** The demo farm's crop year, and so its default season window. */
+  static DEFAULT_CROP_YEAR = 2027;
+
   static scenarioId()   { return 'us-farm'; }
   static scenarioName() { return 'US Farm (job costing)'; }
 
@@ -46,7 +49,7 @@ export class FarmScenario extends BaseScenario {
    * @param {Date|string} [simEnd]   defaults to 1 January two years after it (design 134 §5.2)
    */
   static buildDefaultConfig(params = {}, simStart, simEnd) {
-    const farm = params.farm ? structuredClone(params.farm) : demoFarm(params.cropYear ?? 2027);
+    const farm = params.farm ? structuredClone(params.farm) : demoFarm(params.cropYear ?? FarmScenario.DEFAULT_CROP_YEAR);
     const y = farm.seasons[0].cropYear;
     const w = seasonWindow(y);
     const iso = (d, fallback) => (d == null ? fallback

@@ -1,7 +1,7 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** rev 9 (19 Nov 2026): **phase 1 in progress** (§12); the acceptance import
-**passes** (§12.4). Owner questions Q1–Q20 are answered (§3); Q21–Q25 (§12.3–§12.4) are open. §7 records what the primary sources on disk decide. §8 is the household
+**Status:** rev 10 (19 Nov 2026): **phase 1 BUILT** (§12): the acceptance import passes
+(§12.4) and the Field P&L panel is in the workbench (§12.5). Owner questions Q1–Q20 are answered (§3); Q21–Q25 (§12.3–§12.4) are open. §7 records what the primary sources on disk decide. §8 is the household
 link.
 
 Revision history: rev 2 added §7 and §8, and corrected rev 1's guess that Nebraska credits
@@ -16,7 +16,8 @@ fixes the breakeven formulas (§5.4), settles contract shortfalls (§6), and sta
 acceptance test and its first spike (§9). Rev 7 records Q20, which turns the own-vs-custom
 study into an operation-by-operation fleet model with its own design (§5.6). Rev 8 records the phase 1 build: the spike
 result, the record and ledger shapes it settled, and a §464(d) exception that §7.1 missed (§12).
-Rev 9 records the acceptance import and the questions it raised (§12.4).
+Rev 9 records the acceptance import and the questions it raised (§12.4). Rev 10 records the
+Field P&L panel (§12.5).
 
 **Related:** design 98 (the sweepable parameter surface: per-record generated params become
 MC and optimizer levers), design 55 (configuration-driven parameters and record templates),
@@ -647,3 +648,27 @@ source on disk. They are on line 4a provisionally, until the IRS guidance is fet
 The reproduced net is high by design: the sheets carry no machinery, fuel, labor, drying,
 trucking or irrigation electricity (§2). Entering those records is what makes the breakeven
 real.
+
+### 12.5 The Field P&L panel (rev 10)
+
+The panel (`field-pnl`, opened by the workbench's **Farm** view) calls the same
+`jobCostReport` as the CLI and the acceptance test, on the live run's journal, so the three
+cannot disagree. Rows open operator (or crop) ▸ field ▸ lines, and each line names its
+Schedule F line. A switch picks custom-rate or actual machinery; the other figure stays on
+the field as a memo.
+
+Decided in the build:
+
+- **The answer columns come first.** Net, net per acre and the four breakevens sit left of
+  the direct / overhead / machinery split, which is hidden behind a toggle. With all
+  fifteen columns, the breakevens fell off the right of a normal pane.
+- **Red only.** A breakeven above the expected price or yield is red. Green on every healthy
+  field was noise.
+- **"Season complete" is the last farm event, not `simEnd`.** The workbench's clock stops at
+  the last scheduled event, which is the season's last grain payment. A finished run read
+  "to date" until this was keyed to the compiled events.
+- **Mid-run it is the season to date**, with a warning that the breakevens are low until the
+  grain is sold.
+
+The household panels open on a farm without errors; a household plan's Field P&L says it has
+no farm records.

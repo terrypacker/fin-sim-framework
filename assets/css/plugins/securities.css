@@ -162,3 +162,15 @@
 .bond-hl td { background: var(--bg-subtle); color: var(--text); }
 .bond-roll { color: var(--blue-text); }
 .bond-sup { color: var(--text-muted); margin-left: 1px; cursor: help; }
+
+/* ── Field P&L (design 134) — borrows the Securities grid and the Bonds toolbar ── */
+.fpl-group-row td { font-weight: 600; }
+.fpl-plan-row td { font-size: 11px; }
+.fpl-line-row td { font-size: 10px; color: var(--text-muted); }
+.fpl-line-name { padding-left: 44px !important; white-space: normal; max-width: 0; }
+/* The answer is the breakevens on the right. A line label (max-width 0) never sets a column's
+   width: it wraps inside the three columns the field rows set, rather than pushing the
+   breakevens out of view. */
+.fpl-plugin .sec-name { white-space: nowrap; }
+.fpl-plugin .bond-warn div + div { margin-top: 2px; }
+.fpl-split-off .fpl-split { display: none; }
