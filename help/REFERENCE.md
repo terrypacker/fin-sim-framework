@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-243 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 94 tools · 342 state field types · 80 topics · 141 design docs
+243 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 94 tools · 342 state field types · 80 topics · 142 design docs
 
 ---
 
@@ -2393,7 +2393,7 @@ what the in-app panel keys on.
 
 ---
 
-## Design documents (141)
+## Design documents (142)
 
 Tier 3 — the full argument behind each mechanic, in `design/`. The title is each
 file's own H1, read out of it; there is no summary column, because a one-line precis
@@ -2540,6 +2540,7 @@ between 10 and 11.
 | [`131-gold-return-drivers.md`](../design/131-gold-return-drivers.md) | 131 — Gold's return drivers: inflation, real rates and replayed history |
 | [`132-au-cgt-1-july-2027-deemed-sale.md`](../design/132-au-cgt-1-july-2027-deemed-sale.md) | 132 — The 1 July 2027 deemed sale: assets held across the CGT reform |
 | [`133-bootstrap-history-window-and-start-year.md`](../design/133-bootstrap-history-window-and-start-year.md) | 133 — Historical bootstrap: the history window and a pinned start year |
+| [`134-farm-job-costing.md`](../design/134-farm-job-costing.md) | 134 — Farm job costing: a row-crop farm as a FinSim scenario |
 | [`bus-unification-plan.md`](../design/bus-unification-plan.md) | Bus Unification Plan |
 | [`inconsistencies.md`](../design/inconsistencies.md) | Inconsistencies, Rework Candidates, and Open Questions |
 | [`requirements.md`](../design/requirements.md) | Requirements Tracker |
