@@ -1,17 +1,20 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** DRAFT (19 Nov 2026), rev 5. Nothing built. §3 records the decisions, including
-the owners' answers to Q5–Q15 (rev 3). §7 records what the primary sources on disk decide.
-§8 is the household link. The follow-up questions in §11 are open. Rev 2 added §7 and §8, and
-corrected rev 1's guess that Nebraska credits school property tax on the income tax return
-(it no longer does, §7.3). Rev 3 moves grain marketing (storage, forward contracts, deferred
-sales) from phase 5 into phases 1–2, narrows programs to ARC-County, and makes overhead
-per-operator. Rev 4 records the follow-up answers. The main change: the custom-hire rate is a
-**costing rate for the operator's own machines**, so the cash view needs the real machinery
-costs (§5.1, §5.3). It also proposes one season plus carry-in and carry-out for Q16 (§5.5).
-Rev 5 confirms Q16 and records Q17–Q19: machinery is one annual figure per operator in
-phase 1, purchases are fully expensed in the year bought, and irrigation electricity is
-metered per field. It adds the own-versus-custom-harvest study (§5.6).
+**Status:** DRAFT (19 Nov 2026), rev 6: **ready to build phase 1.** Nothing built. Every owner
+question that shapes phases 1–2 is answered (§3, Q1–Q19). The only open question (§11, Q20)
+is for a later study. §7 records what the primary sources on disk decide. §8 is the household
+link.
+
+Revision history: rev 2 added §7 and §8, and corrected rev 1's guess that Nebraska credits
+school property tax on the income tax return (it no longer does, §7.3). Rev 3 moved grain
+marketing into phases 1–2, narrowed programs to ARC-County, and made overhead per-operator.
+Rev 4: the custom-hire rate is a costing rate for the operator's own machines, so the cash
+view carries the real machinery cost. Rev 5: one season with a carry-in and a carry-out (§5.5),
+one machinery figure per operator, purchases expensed in full, and the own-vs-custom study
+(§5.6). Rev 6 (final review): **the generic MC runner moves from before phase 1 to the start of
+phase 2**, because phase 1 does not need it and it is larger than rev 1 said (§4). Rev 6 also
+fixes the breakeven formulas (§5.4), settles contract shortfalls (§6), and states the phase 1
+acceptance test and its first spike (§9).
 
 **Related:** design 98 (the sweepable parameter surface: per-record generated params become
 MC and optimizer levers), design 55 (configuration-driven parameters and record templates),
@@ -124,10 +127,14 @@ own records. It is one scenario for the whole farm, with all three operators in 
   Both rest on statute and agency handbooks. Those sources are fetched into `docs/` before
   either is modelled.
 
-**The one framework change: a scenario-agnostic MC and optimizer runner.** Today
-`IntlRetirementMcRunner` builds its fallback config from `IntlRetirementScenario`, reads that
-class's full param schema for its defaults, samples from `DEFAULT_MC_VARIABLE_CONFIGS`, and
-reports `finalNetWorthUsd`. The farm needs the same machinery with three things swapped. A
+**The one framework change: a scenario-agnostic Monte Carlo runner, at the start of phase 2.**
+Today the MC path is the retirement scenario's. `IntlRetirementMcRunner` builds its fallback
+config from `IntlRetirementScenario` and reads that class's param schema for its defaults.
+`mc-worker-core.js` constructs an `IntlRetirementScenario` for every iteration and extracts
+retirement metrics (`finalNetWorthUsd`, `scenarioFailed`). The 592-line
+`intl-retirement-mc-config.js` is retirement variables. The retirement classes appear in 22
+files under `src/`, including the grid runner, the MC analysis, the optimizer problem and
+solvers, and the MC panel. The farm needs the same machinery with three things swapped. A
 **scenario descriptor** supplies them:
 
 - the scenario class (its schema and default config),
@@ -136,6 +143,13 @@ reports `finalNetWorthUsd`. The farm needs the same machinery with three things 
 
 `IntlRetirementScenario` becomes the first descriptor. Its runs must stay byte-identical, and
 the golden fixtures confirm that.
+
+**Timing and scope.** Phase 1 is deterministic and uses none of this, so it comes first. The
+generalisation opens phase 2, when the farm's own variable catalog exists and the descriptor
+can be shaped by two real users rather than guessed from one. Phase 2 needs only the **MC
+path** (runner, worker core, config split into a generic core and a per-scenario catalog).
+The grid runner, the optimizer and its solvers follow only when a farm study needs them. The
+farm gets its own MC results panel rather than bending the retirement one.
 
 ## 5. The model
 
@@ -214,11 +228,16 @@ date.
 Per crop plan, per operator, per crop and whole-farm:
 
 - revenue, direct cost, allocated overhead, net, each per acre and in total;
-- **breakeven price** (total cost ÷ expected bushels) and **breakeven yield** (total cost ÷
-  expected price);
+- **breakeven price**: (total cost − non-grain revenue) ÷ expected bushels, where non-grain
+  revenue is ARC, insurance indemnity and other operator income charged to the job;
+- **breakeven price on the unpriced bushels**: (total cost − non-grain revenue − contracted
+  revenue) ÷ bushels not under contract. This is the number a marketing decision needs: the
+  price the rest of the crop must fetch;
+- **breakeven yield**: (total cost − non-grain revenue) ÷ expected price per bushel, with the
+  contracted bushels at their contract price;
 - under MC: the distribution of net income and the probability of a loss.
 
-### 5.5 One season, a carry-in and a carry-out (Q16, proposed)
+### 5.5 One season, a carry-in and a carry-out (Q16)
 
 A calendar year's Schedule F mixes three seasons (§5.2). The design simulates **one season**
 and supplies the rest as inputs:
@@ -275,6 +294,13 @@ split is known (§11 Q20).
 | Irrigation electricity | per field, plus a farm-wide multiplier (a dry year pumps more) |
 | Interest rate | on variable-rate land debt |
 
+**A contract shortfall is settled at the market.** If a draw's crop is smaller than the
+bushels contracted, the operator delivers what it has and settles the rest at the cash price
+on the delivery date (contract price − market price, per bushel short). This is the simplest
+rule that keeps the risk visible: a short crop in a high-price year costs money on the
+contracted bushels. Any buyout fee in the real contracts is a per-bushel input, zero by
+default.
+
 There are two levels of lever, because a sweep of every product price individually is
 unreadable. **Category multipliers** answer "what if fertilizer goes up 30%?" in one axis.
 **Per-record params** stay available for the detail Q4 asks for.
@@ -323,7 +349,10 @@ section that amends it.
   purchase year. Both routes for that are on disk: the §179 election (limits raised by
   P.L. 119-21 §70306) and §168(k) full expensing (made permanent by §70301). So the cash view
   has no depreciation schedule: a purchase is a deduction in its year, inside the operator's
-  machinery figure. Which route an operator uses only matters at the household level (§179 is
+  machinery figure. In phase 1 that figure is one number, so the cash report puts it on one
+  line, labelled as mixed (Schedule F lines 14, 19, 21 and 25 in reality). That is exact for
+  the net and for SE tax, which is all the household needs. Splitting it by line is optional,
+  and needed only for §179's income limit (phase 4). Which route an operator uses only matters at the household level (§179 is
   limited by taxable income; §168(k) is not). That is a phase 4 detail.
 
 ### 7.2 Federal tax: what the household side must model
@@ -468,15 +497,21 @@ bad one for another in the same world.
 
 ## 9. Phases
 
-0. **Scenario-agnostic MC and optimizer runner** (§4). The retirement goldens stay
-   byte-identical.
 1. **Deterministic job costing.** `FarmScenario`, the §5.1 records (each category declaring
    its Schedule F line, §7.1), including forward contracts, storage and planned sales (Q8)
    and the operator's real machinery cost (Q5a), `US_FARM_OPERATIONS`, the ledger with grain
    inventory, the carry-in and carry-out (§5.5), the §464(d) prepay limit, and a Field P&L
-   panel with breakeven. Tested on a hand-built small farm. A private import reproduces the source
-   workbook's per-field totals, as the acceptance test.
-2. **Monte Carlo.** The §6 variable catalog, correlated yield and price, category levers, and
+   panel with breakeven.
+   - **First spike:** load a `FarmScenario` with no persons and no accounts through
+     `ScenarioLoader` and `ScenarioCompiler`. Both import finance modules (holdings, payroll,
+     periods, loans) and assume a household. Find out what breaks before writing farm records.
+   - **Tests:** a hand-built small farm, with golden fixtures (the sim is bit-deterministic).
+   - **Acceptance:** a private import reproduces the source workbook's per-field totals from
+     its **ledger sheets**, not its pivot table, which is stale (§2). The workbook is exported
+     to CSV first: FinSim has no runtime dependencies and no xlsx reader. The import script and
+     its data stay under `scenarios/`.
+2. **Monte Carlo.** It opens with the scenario-agnostic MC runner (§4); the retirement goldens
+   must stay byte-identical. Then the §6 variable catalog, correlated yield and price, category levers, and
    results showing the breakeven and loss distributions.
 3. **Programs.** Crop insurance (revenue protection) and ARC-County (§7.4).
 4. **Household link** (§8): the export, the business-income record, `import-farm.mjs`, then
