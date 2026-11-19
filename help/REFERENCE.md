@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-243 parameters · 36 panels · 13 node types (209 fields) · 183 action types · 99 tools · 352 state field types · 82 topics · 142 design docs
+243 parameters · 36 panels · 13 node types (209 fields) · 184 action types · 99 tools · 353 state field types · 82 topics · 142 design docs
 
 ---
 
@@ -1796,7 +1796,7 @@ docblock, not re-authored here. Arguments come from each script's declarative
 
 ---
 
-## Journal action types (183)
+## Journal action types (184)
 
 Every action a toolset declares, with its payload shape. A type declared by more than
 one toolset is one row: the toolsets compose into a single run, so it is one action in
@@ -1851,6 +1851,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `BOND_SLEEVE_COUPON_APPLY` | amount: currency(USD), federalTaxableAmount: currency(USD), stateTaxableAmount: currency(USD), stateKey: text, taxMode: text, residency: text | US_RETIREMENT |
 | `BONUS_APPLY` | amount: currency(USD), residency: text, personKey: text | US_INCOME |
 | `BONUS_TAX` | amount: currency(USD), residency: text, personKey: text | US_INCOME |
+| `BUSINESS_INCOME_APPLY` | amount: currency(USD), residency: text, personKey: text, businessIncomeId: text, indexBase: number | US_INCOME |
 | `CASH_SLEEVE_INTEREST_APPLY` | amount: currency(USD), stateKey: text, taxMode: text, residency: text | US_RETIREMENT |
 | `CHANGE_RESIDENCY_APPLY` | — | US_AU_CROSS_BORDER |
 | `CHANGE_STATE_RESIDENCY_APPLY` | destination: text | US_STATE_TAX |
@@ -1991,7 +1992,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 
 ---
 
-## State field types (352)
+## State field types (353)
 
 The scenario-INDEPENDENT half of `StateSchemaRegistry`: the globs and exact paths it
 installs in its own constructor, with the value type that decides how each formats.
@@ -2156,6 +2157,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `bracketIndexAccumulatorByYear` | decimal |
 | `bracketIndexAccumulatorByYear.**` | decimal |
 | `bracketIndexSpreads.*` | rate |
+| `businessIncomeIndexBase.*` | decimal |
 | `contributionsSuspended` | boolean |
 | `cpiAccumulator` | decimal |
 | `cpiAccumulator.*` | decimal |

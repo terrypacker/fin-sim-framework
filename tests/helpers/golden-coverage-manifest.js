@@ -46,6 +46,10 @@
 
 /** Action types at least one golden scenario actually fires. */
 export const COVERED = [
+  // Design 134 step 4b — us-farm-operator: a business-income row, which chains SE_INCOME_US_TAX
+  // (the Schedule F net as ordinary income and the SECA base).
+  'BUSINESS_INCOME_APPLY',
+  'SE_INCOME_US_TAX',
   // MONTHLY equity earnings (design 127): the two wash-sale goldens run MONTHLY since phase 3,
   // because their crash preset is calibrated under it. The batched lot deltas and the
   // month-end index step fire there.
@@ -374,7 +378,6 @@ export const KNOWN_GAPS = [
   'BONUS_TAX',
   'SE_INCOME_AU_APPLY',
   'SE_INCOME_US_APPLY',
-  'SE_INCOME_US_TAX',
 
   // ── Insolvency, spending strategy and run termination
   // No golden ever runs out of money, so the whole failure path is unguarded — including

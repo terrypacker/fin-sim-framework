@@ -348,6 +348,8 @@ export class StateSchemaRegistry {
     this.registerPattern('people.*.spells.*.realGrowth',      ParameterValueType.rate());
     // Design 116 — the wage index a job spell's sim-start base is scaled by.
     this.registerPattern('wageIndex.*', ParameterValueType.decimal(4));
+    // Design 134 step 4b — the US CPI accumulator on each business-income row's first payment.
+    this.registerPattern('businessIncomeIndexBase.*', ParameterValueType.decimal(6));
     // Person income (monthlyWage / socialSecurityMonthly) is stamped per-person and
     // per-field via registerPerson() (design 10 §Phase 5), keyed on each person's
     // wageCurrency / ssCurrency. No code-less glob remains so an unstamped person

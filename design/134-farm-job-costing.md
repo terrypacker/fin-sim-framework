@@ -1275,3 +1275,29 @@ Under MC, the farm descriptor's per-path result now carries the path's export ro
 metrics. A path keeps only its **sampled** params, which replay it with the farm scenario.
 Otherwise every lever's centre would be repeated in every path, and a 1,000-path file would
 grow from about 6 MB to about 10 MB.
+
+### 16.5 Step 4b: the business-income record (built)
+
+`cfg.businessIncome` holds flat rows joined to a person by `personId`
+(`src/finance/payroll/business-income.js`): `kind: 'SCHEDULE_F'`, `startDate`, an optional
+`endDate`, `paymentDay` (MM-DD, default 15 December), the signed `net`, and
+`neCommunityCollegeTax`. A row that cannot run is a load error, as a job is. Deleting the
+person removes the person's rows.
+
+`US_INCOME` schedules one `BUSINESS_INCOME` event a year. Its handler indexes the row by US
+CPI **from the row's first payment**: the export's figures are crop-year dollars, so a plan
+that starts before the crop year must not inflate them a second time. The reducer credits
+the US cash pool, so a loss debits it and the household funds the farm. It records the CPI
+base once and chains `SE_INCOME_US_TAX`, so the net is ordinary income and the SECA base,
+exactly as a self-employed wage is. The state classifier already maps that action to Nebraska
+ordinary income. The default payment day falls before the 31 December settle, so a year's
+net is on its own year's return.
+
+The golden `us-farm-operator` is the US single homeowner, a Nebraska resident on a W-2 wage,
+with a farm row from 2027 and a second operation's loss from 2029. It pins the index base:
+2027 is paid as written and 2028 is 1.03 times it. It also pins SECA:
+48,000 × 92.35% × 15.3% = 6,782.18, and in 2029 the loss nets against the farm on
+Schedule SE. The 13 existing goldens are byte-identical.
+
+Under household MC, a row's `net` is the deterministic run's for now. Drawing a farm path
+per year is step 4d.

@@ -95,6 +95,7 @@ const BUILT_IN_TOOLSETS = [
 import { synthesizeWeightedPriorities, resolveOwnerBanding } from './params/lever-weights.js';
 import { migrateYearFieldsToDates } from './year-date-migration.js';
 import { validateJobs, validateBonuses, bonusJobProblem, buildSpells } from '../finance/payroll/employment.js';
+import { validateBusinessIncome } from '../finance/payroll/business-income.js';
 import { validateMsbsAccounts } from '../finance/account-rules/au/msbs.js';
 import { JOB_DATE_PARAM_FIELDS, FARM_PARAM_TABLES } from './params/record-param-templates.js';
 export { synthesizeWeightedPriorities } from './params/lever-weights.js';
@@ -186,6 +187,11 @@ export class ScenarioLoader {
     const bonusErrors = validateBonuses(cfg.bonuses, cfg.persons, cfg.jobs, { checkJobs: false });
     if (bonusErrors.length > 0) {
       throw new Error(`Scenario bonuses are invalid:\n  ${bonusErrors.join('\n  ')}`);
+    }
+    // Design 134 step 4b — a business-income row that cannot run is an error, as a job is.
+    const businessErrors = validateBusinessIncome(cfg.businessIncome, cfg.persons);
+    if (businessErrors.length > 0) {
+      throw new Error(`Scenario business income is invalid:\n  ${businessErrors.join('\n  ')}`);
     }
     this._warnUnpaidBonuses(cfg);
     this._warnAuJobsWithoutFund(cfg);

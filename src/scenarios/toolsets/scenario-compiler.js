@@ -211,6 +211,9 @@ export class ScenarioCompiler {
       // Dated one-off bonuses, `cfg.bonuses`: scenario data like `jobs`, already
       // validated by ScenarioLoader. US_INCOME turns each into a BONUS event.
       bonuses:        Array.isArray(definition?.bonuses) ? definition.bonuses : [],
+      // Design 134 step 4b — `cfg.businessIncome`, validated by ScenarioLoader. US_INCOME
+      // turns each row into one BUSINESS_INCOME event a year.
+      businessIncome: Array.isArray(definition?.businessIncome) ? definition.businessIncome : [],
       spellsByPerson: buildSpellsByPerson(jobs, people, new Date(definition.simStart)),
       accounts:       services.accountService?.getAll()      ?? [],
       realProperties: services.realPropertyService?.getAll() ?? [],

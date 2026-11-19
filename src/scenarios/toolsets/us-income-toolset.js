@@ -13,10 +13,12 @@ import {
   SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer,
   SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler,
   SeIncomeUsHandler, BonusHandler, CompanySaleHandler,
+  BusinessIncomeApplyReducer, BusinessIncomeHandler,
 } from '../../finance/account-rules/us/us-income-classes.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
 import { OneOffEvent } from '../../simulation-framework/events/one-off-event.js';
 import { bonusJobProblem } from '../../finance/payroll/employment.js';
+import { businessIncomeDates } from '../../finance/payroll/business-income.js';
 
 /**
  * US_INCOME toolset — US income event mechanics (SS, wages, SE, bonus, company sale).
@@ -33,8 +35,8 @@ export const US_INCOME = {
   dependencies: ['US_TAX'],
 
   types: {
-    handlers: [SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler, SeIncomeUsHandler, BonusHandler, CompanySaleHandler],
-    reducers: [SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer, SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer],
+    handlers: [SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler, SeIncomeUsHandler, BonusHandler, CompanySaleHandler, BusinessIncomeHandler],
+    reducers: [SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer, SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer, BusinessIncomeApplyReducer],
     actions: [
       // own/spousal/survivor (design 118 §5.4): what the payment is made of, so the
       // journal can show a top-up apart from the person's own benefit.
@@ -65,6 +67,10 @@ export const US_INCOME = {
         personKey: ValueType.text(), alreadyNetted: ValueType.boolean() } },
       { type: 'SE_INCOME_US_APPLY',  fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text(), targetKey: ValueType.text(), workCountry: ValueType.text() , netAmount: ValueType.currency('USD'), splits: ValueType.any()} },
       { type: 'SE_INCOME_US_TAX',    fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text() } },
+      // Design 134 step 4b: a year of a `cfg.businessIncome` row. `indexBase` is the US CPI
+      // accumulator the row's figures are in the money of (its first payment's).
+      { type: 'BUSINESS_INCOME_APPLY', fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text(),
+        businessIncomeId: ValueType.text(), indexBase: ValueType.number() } },
       { type: 'BONUS_APPLY',         fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text() } },
       { type: 'BONUS_TAX',           fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , personKey: ValueType.text()} },
       { type: 'COMPANY_SALE_APPLY',  fields: { salePrice: ValueType.currency('USD'), costBasis: ValueType.currency('USD'), residency: ValueType.text(), stateKey: ValueType.text(), destinationKey: ValueType.text() } },
@@ -89,6 +95,10 @@ export const US_INCOME = {
    * wage is.
    */
   schedules(context) {
+    return [...this._bonusEvents(context), ...this._businessIncomeEvents(context)];
+  },
+
+  _bonusEvents(context) {
     const start  = context?.startDate?.getTime?.() ?? -Infinity;
     const end    = context?.endDate?.getTime?.()   ??  Infinity;
     const person = id => (context?.people ?? []).find(p => p?.id === id);
@@ -106,6 +116,33 @@ export const US_INCOME = {
       }));
   },
 
+  /**
+   * One BUSINESS_INCOME event per year of each `cfg.businessIncome` row inside the run
+   * (design 134 step 4b): the same year's figures every year, indexed by the handler.
+   */
+  _businessIncomeEvents(context) {
+    const start = context?.startDate, end = context?.endDate;
+    if (!start || !end) return [];
+    const person = id => (context?.people ?? []).find(p => p?.id === id);
+    const out = [];
+    for (const r of context?.businessIncome ?? []) {
+      const p = person(r.personId);
+      if (!p) continue;
+      for (const { year, date } of businessIncomeDates(r, start, end)) {
+        out.push(new OneOffEvent({
+          name:    `${r.name ?? 'Business income'} ${year} — ${p.name ?? r.personId}`,
+          type:    'BUSINESS_INCOME',
+          date,
+          data:    { businessIncomeId: r.id, personId: r.personId, year,
+                     net: Number(r.net), neCommunityCollegeTax: Number(r.neCommunityCollegeTax ?? 0) },
+          enabled: true,
+          color:   '#6D4C41',
+        }));
+      }
+    }
+    return out;
+  },
+
   handlers(context) {
     return [
       new SsIncomeHandler(),
@@ -114,6 +151,7 @@ export const US_INCOME = {
       new SeIncomeUsHandler(),
       new BonusHandler(),
       new CompanySaleHandler(),
+      new BusinessIncomeHandler(),
     ];
   },
 
@@ -127,6 +165,7 @@ export const US_INCOME = {
       new SeIncomeUsApplyReducer({ accountService, stateRegistry }),
       new BonusApplyReducer({ accountService, stateRegistry }),
       new CompanySaleApplyReducer({ accountService, stateRegistry }),
+      new BusinessIncomeApplyReducer({ accountService, stateRegistry }),
     ];
   },
 };
