@@ -73,6 +73,9 @@ export class UsTaxRates2027 extends UsTaxRatesBase {
     this._qbiPhaseInSingle   = 75_000;
     this._qbiMinDeduction    = 415;
     this._qbiMinActiveQbi    = 1_030;
+    // §461(l)(3)(A)(ii)(II) excess business loss threshold (design 134 step 4g): Rev. Proc. 2026-35 §3.33.
+    this._eblThresholdMfj    = 528_000;
+    this._eblThresholdSingle = 264_000;
 
     this._ficaWageBase        = ficaWageBase(2027);  // §3121(a)(1), from fica-rates.js
     this._feieCap             = 137_300; // §3.41 — Foreign Earned Income Exclusion (IRC §911)

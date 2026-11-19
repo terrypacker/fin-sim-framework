@@ -75,6 +75,9 @@ export class UsTaxRates2025 extends UsTaxRatesBase {
     this._qbiPhaseInSingle   = 50_000;
     this._qbiMinDeduction    = 0;
     this._qbiMinActiveQbi    = 1_000;
+    // §461(l)(3)(A)(ii)(II) excess business loss threshold (design 134 step 4g): Rev. Proc. 2024-40 §3.32 (docs/us-tax/IRS-Rev-Proc-2024-40-Inflation-Adjustments-2025.txt).
+    this._eblThresholdMfj    = 626_000;
+    this._eblThresholdSingle = 313_000;
 
     this._ficaWageBase        = ficaWageBase(2025);  // §3121(a)(1), from fica-rates.js
     this._feieCap             = 130_000; // Foreign Earned Income Exclusion cap 2025 (IRC §911)

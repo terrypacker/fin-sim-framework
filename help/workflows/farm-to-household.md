@@ -20,11 +20,9 @@ runs one crop year on a dense calendar; the household runs decades. Each operato
 own Schedule F, so each household imports only its own operator's slice.
 
 **1. Export the farm.** `npm run farm:export -- --scenario farm.json --out farm-result.json`
-writes a calendar-year Schedule F for every operator: the lines, the net, and what the
-household's return needs from it (the Schedule SE line 1a amount, the QBI before the
-household's own adjustments, and the Nebraska community-college tax paid that year). Add
-`--n 500 --enable all` to carry Monte Carlo paths as well, each one a whole farm history with
-its seed. Run it without `--out` first to read the table.
+writes a calendar-year Schedule F for every operator, and what the household's return needs
+from it. Add `--n 500 --enable all` to carry Monte Carlo paths too, each a whole farm history
+with its seed. Run it without `--out` first to read the table.
 
 **2. Import one operator.** `npm run import:farm -- --farm farm-result.json --operator <id>
 --person <id> --into plan.json --out plan-farm.json`. Without `--out` it is a dry run. The
@@ -34,9 +32,8 @@ A second operator in the same household chains on with `--replace`.
 **What the household gets.** One business-income row for the person, paying the operator's
 **crop-year** Schedule F net every year from 1 January of the crop year (`--start`, `--end`
 to change it), indexed by US CPI from its first payment. The crop year is the one full
-Schedule F a one-season run produces. It already includes last season's carry-in and next
-season's prepay, so repeating it treats each season as a typical one. The years before and
-after are partial and are not imported.
+Schedule F a one-season run produces, carry-in and prepay included, so repeating it treats
+each season as a typical one.
 
 **How it is taxed.** The net is ordinary income and the self-employment tax base, exactly as
 a self-employed wage is, and Nebraska taxes it the same way. A loss debits the household's US
@@ -48,19 +45,25 @@ independent of the household's markets. A single run pays the deterministic net 
 turn the draw on; Monte Carlo turns it on unless you turn it off, which isolates the
 household's own risk.
 
-**The QBI deduction.** The farm net is qualified business income, less its share of the
-deductible half of self-employment tax, and the return takes 20% of it as a deduction from
-taxable income, capped at 20% of taxable income less net capital gain. Above the year's
-threshold the deduction is limited by the farm's W-2 wages and the basis of its machinery
-(`qbiW2Wages`, `qbiUbia` on the row). With neither entered it phases out across the range
-and only the minimum deduction (from 2026) is left. A net loss carries to next year's QBI.
-All the household's farm rows count as one business.
+**The QBI deduction.** The return deducts 20% of the farm net (less its share of the
+self-employment tax deduction), capped at 20% of taxable income less net capital gain.
+Above the year's threshold the farm's W-2 wages and machinery basis (`qbiW2Wages`, `qbiUbia`
+on the row) limit it; with neither, only the minimum deduction (from 2026) is left. All the
+household's farm rows count as one business.
 
-**The Nebraska credit.** The community-college share of the farm's property tax is already
-a farm expense inside the net. Nebraska also refunds all of it as a credit on the
-operator's return, in the year the tax was paid. Because the credit is refundable, a
-household that owes less Nebraska tax than the credit gets the difference paid back. For a
-person living outside Nebraska there is no credit, and the import warns about it.
+**The Nebraska credit.** The community-college share of the farm's property tax, already an
+expense inside the net, is also refunded in full as a credit on the operator's Nebraska
+return. It is refundable, so a household owing less gets the difference paid. A person
+living outside Nebraska gets none, and the import warns.
 
-**What is not there yet.** The excess business loss limit, the farming-loss carryback and
-income averaging are later steps of design 134 phase 4.
+**A loss year.** A farm loss offsets the household's other income in the year it happens,
+down to two limits. A business loss over the year's excess-business-loss threshold
+(\$256,000 single, \$512,000 joint in 2026) is not allowed that year. A loss larger than
+everything else on the return is not wasted either. Both carry forward as a net operating
+loss and come off later years' income, at most 80% of each year's taxable income. Only the
+federal return does this: the Nebraska return in this model still nets the loss in its year
+and carries nothing.
+
+**What is not there yet.** The farming-loss two-year carryback (today every loss carries
+forward, as if the carryback were waived) and income averaging are later steps of design 134
+phase 4.

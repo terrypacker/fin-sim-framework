@@ -713,6 +713,7 @@ export class StateSchemaRegistry {
     this.register('usQbiW2WagesYTD',               ParameterValueType.currency('USD'));
     this.register('usQbiUbiaYTD',                  ParameterValueType.currency('USD'));
     this.register('usQbiLossCarryforward',         ParameterValueType.currency('USD'));
+    this.register('usNolCarryforward',             ParameterValueType.currency('USD'));   // design 134 step 4g
     this.register('usSsWagesYTD',                  ParameterValueType.currency('USD'));
     this.registerPattern('usSsWagesByPersonYTD.*', ParameterValueType.currency('USD'));
     this.register('usWithheldYTD',                 ParameterValueType.currency('USD'));
