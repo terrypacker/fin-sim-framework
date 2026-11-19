@@ -24,13 +24,18 @@
  * rather than filed silently under one of the four.
  */
 
-/** @typedef {{ label: string, part: 'INCOME'|'EXPENSE' }} ScheduleFLine */
+/** @typedef {{ label: string, part: 'INCOME'|'EXPENSE', memo?: boolean }} ScheduleFLine */
 
 /** @type {Readonly<Record<string, ScheduleFLine>>} */
 export const SCHEDULE_F_LINES = Object.freeze({
   '2':   { part: 'INCOME',  label: 'Sales of livestock, produce, grains, and other products you raised' },
-  '4a':  { part: 'INCOME',  label: 'Agricultural program payments' },
-  '6a':  { part: 'INCOME',  label: 'Crop insurance proceeds and federal crop disaster payments' },
+  // 4a and 6a are amounts RECEIVED, shown on the form but not added into line 9: 4b and 6b are
+  // the taxable amounts, and 6d brings in last year's deferred proceeds (Schedule F 2025).
+  '4a':  { part: 'INCOME',  label: 'Agricultural program payments received', memo: true },
+  '4b':  { part: 'INCOME',  label: 'Agricultural program payments: taxable amount' },
+  '6a':  { part: 'INCOME',  label: 'Crop insurance proceeds and federal crop disaster payments received', memo: true },
+  '6b':  { part: 'INCOME',  label: 'Crop insurance proceeds: taxable amount' },
+  '6d':  { part: 'INCOME',  label: 'Crop insurance proceeds deferred from the prior year' },
   '7':   { part: 'INCOME',  label: 'Custom hire (machine work) income' },
   '8':   { part: 'INCOME',  label: 'Other income' },
   '10':  { part: 'EXPENSE', label: 'Car and truck expenses' },
@@ -65,7 +70,7 @@ export const SCHEDULE_F_LINES = Object.freeze({
  * (`'2'`, `'10'`) enumerate before its other keys (`'4a'`), which would print line 4a after 32.
  */
 export const SCHEDULE_F_LINE_ORDER = Object.freeze([
-  '2', '4a', '6a', '7', '8',
+  '2', '4a', '4b', '6a', '6b', '6d', '7', '8',
   '10', '11', '12', '13', '14', '17', '18', '19', '20', '21a', '21b', '22', '24a', '24b',
   '25', '26', '27', '28', '29', '30', '32', 'MIXED_MACHINERY',
 ]);

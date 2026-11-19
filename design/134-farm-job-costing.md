@@ -1,6 +1,6 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** rev 15 (19 Nov 2026): **phase 3 in progress** (§15): sources settled, steps 3b (revenue protection) and 3c (ARC-County) built. **phase 1 BUILT** (§12): the acceptance import passes
+**Status:** rev 16 (19 Nov 2026): **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
 (§12.4) and the Field P&L panel is in the workbench (§12.5). **Phase 2 started** (§13): step 2a,
 the scenario-agnostic MC path and a farm batch on it, steps 2b–2d (realized yield, price paths, multiplier levers and the contracted share), 2e (calibration from USDA NASS, §13.8) and 2f (the Farm MC panel, §13.7) are built: **phase 2 is complete**. Owner questions Q1–Q20 and Q22–Q25 are answered (§3, §14); Q21, Q26 and the follow-ups Q22a,
 Q23a and Q25a (§14) are open. §7 records what the primary sources on disk decide. §8 is the household
@@ -22,7 +22,7 @@ Rev 9 records the acceptance import and the questions it raised (§12.4). Rev 10
 Field P&L panel (§12.5). Rev 11 splits phase 2 into steps and records step 2a (§13). Rev 12
 records steps 2b–2f; the calibration (§13.8) adds an irrigated-only yield shock and skewed
 yield draws, both of which the data required. Rev 13 records the owners' answers to Q22–Q25
-and the follow-ups they leave (§14). Rev 14 opens phase 3 (§15). Rev 15 records step 3c, ARC-County (§15.3).
+and the follow-ups they leave (§14). Rev 14 opens phase 3 (§15). Rev 15 records step 3c, ARC-County (§15.3). Rev 16 records 3d and 3e, which complete phase 3 (§15.4).
 
 **Related:** design 98 (the sweepable parameter surface: per-record generated params become
 MC and optimizer levers), design 55 (configuration-driven parameters and record templates),
@@ -1104,10 +1104,7 @@ pays, so its mean is the claim probability), and the Farm MC panel shows both. O
 farm, with every calibrated variable sampled, a claim pays in about 29% of paths. Each
 operator's and crop's own figure is 15–24%. `coverageLevel` is an optimizer lever.
 
-**Not decided here, for step 3d:** the tax year of an indemnity. §451(f) and Reg. §1.451-6
-let a cash-method farmer who normally sells the crop the following year elect to report the
-proceeds then (Q11b asked to offer it). Step 3d builds that election with Schedule F lines
-6b–6d.
+**The tax year of an indemnity** is step 3d's (§15.4).
 
 ### 15.3 Step 3c: ARC-County (built)
 
@@ -1171,11 +1168,30 @@ total revenue and failed once ARC paid in droughts. It now reads grain revenue.
 file, which moves the `farm-demo` golden by exactly those payments (operator A +\$9,181.51,
 operator B +\$8,329.70).
 
-### 15.4 Steps still to build
+### 15.4 Steps 3d and 3e: tax timing and the Field P&L (built)
 
-- **3d Tax timing.** The §451(f) election for insurance proceeds, then the Schedule F lines
-  (4a/4b, 6a–6d).
-- **3e Panels.** The programs' lines in the Field P&L.
+**Schedule F lines 4a–6d.** Line 9 adds the taxable lines, not the received ones (Schedule F
+2025 and its instructions, on disk). Lines 4a and 6a are what was received, shown but not
+added (`memo` in `SCHEDULE_F_LINES`). 4b is the taxable program payment, all of it for ARC.
+6b is the taxable insurance, 6a less any deferral, and 6d brings in last year's deferral.
+Before 3d the cash report added 6a straight into gross income, which was right only while
+nothing was deferred.
+
+**The §451(f) election** (Reg. §1.451-6, on disk) is an operator field, `defer451f`, as Q11b
+asked. A cash-method farmer may report crop insurance proceeds in the year after the damage
+if, under its normal business practice, the crop's income would have been reported then. One
+election covers all of one business's proceeds (§1.451-6(a)(2)), which is one operator here.
+The model can see one test of normal practice: some of the operator's grain from the crop
+year is paid after 31 December. Elected without it, nothing is deferred and the cash row's
+`section451f.reason` says why. Proceeds received in the next year need no election, since
+they are that year's income by receipt. The damage year is taken as the crop year.
+`npm run farm:report` prints the election's outcome under each Schedule F.
+
+**The Field P&L** shows each kind of non-grain revenue as its own line, with its Schedule F
+line: the crop insurance indemnity (6a, charged to the fields that lost) and ARC-County (4a,
+noted as paid on base acres the October after harvest). Before 3e they were one "Other income"
+lump. The job-cost row carries the split as `revenue.otherByCategory`, and the lines still sum
+to the row's revenue.
 
 ### 15.5 Questions for the owners (Q27, Q28)
 

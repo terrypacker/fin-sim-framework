@@ -402,7 +402,20 @@ export function fieldPnlLines(p, machineryBasis = 'CUSTOM') {
     out.push({ kind: 'revenue', category: 'GRAIN_ON_HAND', label: 'Grain owed or in the bin', line: null,
       amount: p.revenue.grainOnHand, note: 'at contract or last price; not yet income' });
   }
-  if (p.revenue.other !== 0) out.push({ kind: 'revenue', category: 'OTHER', label: 'Other income', line: null, amount: p.revenue.other });
+  // Non-grain revenue, one line per category: crop insurance (6a), ARC-County and other
+  // program payments (4a), other income. ARC is this crop's but paid the next October.
+  const NOTE = {
+    CROP_INSURANCE_PROCEEDS: 'indemnity on this field\'s shortfall',
+    PROGRAM_PAYMENT: 'on base acres; paid the October after harvest',
+  };
+  const byCat = p.revenue.otherByCategory ?? {};
+  const listed = Object.values(byCat).reduce((s, v) => s + v, 0);
+  for (const [c, v] of _byAmount(byCat)) {
+    out.push({ kind: 'revenue', category: c, label: categoryLabel(c), line: line(c), amount: v, ...(NOTE[c] ? { note: NOTE[c] } : {}) });
+  }
+  if (Math.abs(p.revenue.other - listed) > 1e-9) {
+    out.push({ kind: 'revenue', category: 'OTHER', label: 'Other income', line: null, amount: p.revenue.other - listed });
+  }
   for (const [c, v] of _byAmount(p.cost)) out.push({ kind: 'direct', category: c, label: categoryLabel(c), line: line(c), amount: v });
   if (p.storage) out.push({ kind: 'direct', category: 'STORAGE', label: categoryLabel('STORAGE'), line: line('STORAGE'), amount: p.storage });
   for (const [c, v] of _byAmount(p.overhead)) {

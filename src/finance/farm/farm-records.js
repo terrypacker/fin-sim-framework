@@ -27,7 +27,7 @@ import { settleArc, ARC_PLC_PAYMENT_LIMIT } from './farm-programs.js';
  *                     irrigationMultiplier?, interestMultiplier?, projectedPrice?: { [crop]: $ },
  *                     nationalPrice?: { [crop]: $ },
  *                     <category>Multiplier? (one per PRODUCT_CATEGORIES, e.g. nitrogenMultiplier) }],
- *   operators:     [{ id, name, farmRelated?, prior3PrepaidSupplies?, prior3FarmExpenses? }],
+ *   operators:     [{ id, name, farmRelated?, prior3PrepaidSupplies?, prior3FarmExpenses?, defer451f? }],
  *   fields:        [{ id, operatorId, name, tenure, rentedAcres, plantedAcres, irrigated,
  *                     rentPerAcre, propertyTax, fsaFarm?, provenYield? }],
  *   products:      [{ id, name, category, unit, unitPrice, discountPct }],
@@ -250,6 +250,7 @@ export function normalizeFarm(farm) {
     o.farmRelated ??= null;
     o.prior3PrepaidSupplies ??= null;
     o.prior3FarmExpenses ??= null;
+    o.defer451f = o.defer451f === true;
   }
   for (const f of out.fields) {
     f.irrigated   = f.irrigated === true;
