@@ -1375,3 +1375,31 @@ A projected year indexes the threshold and the minimum like the brackets (§199A
 = 44,608.91, and the deduction is 8,921.78, under the 27,560 income cap. Taxable income falls
 by exactly that, and ordinary tax by 24% of it. Taxes paid over the run fall by \$6,545. The
 other 13 goldens are byte-identical.
+
+### 16.9 Step 4f: the Nebraska community-college credit (built)
+
+**The law** (`docs/ne-law/NE-Rev-Stat-77-6706-…txt`). Subsection (1) makes it a refundable
+credit against Nebraska income tax. From 2024, subsection (4) sets it at 100% of the
+community-college taxes paid in the taxable year. Under subsection (5), an S corporation,
+partnership, LLC, trust or estate that pays the tax claims the credit itself. A Schedule F row
+is a sole proprietor, so the person claims it, and a future entity-owned farm would not.
+
+**The model.**
+
+- **The chain.** `BUSINESS_INCOME_APPLY` chains `STATE_COMMUNITY_COLLEGE_TAX_PAID` with the
+  row's indexed `neCommunityCollegeTax`. The shared state classifier routes it to
+  `stateCommunityCollegeTaxYTD`, residency-gated like any state income.
+- **The credit.** Each state's rates module has a `_communityCollegeCreditRate`: 1 for Nebraska
+  from 2024, inherited by 2025 and by projected years, and 0 for every other state. A person
+  living outside Nebraska gets no credit, and the import already warns about that.
+- **The refund.** The credit comes off the liability after the brackets and may take it below
+  zero. `StateTaxSettleApplyReducer` chains `STATE_TAX_REFUND_CREDIT` for a negative liability,
+  and that reducer (on the refund-credit base) credits US cash.
+- **The new bucket.** The credit bucket is reset at the settle but kept out of
+  `STATE_YTD_FIELDS`, so plans with nothing creditable gain no state key.
+- **Timing.** The tax is credited in the crop year, the year it was paid, because the row pays
+  on 15 December, inside that year's return.
+
+**Effect on `us-farm-operator`.** Only its fixture moved. The credit is 680 in 2027, then 680
+indexed by CPI. No golden household's credit exceeds its Nebraska tax, so the refund path is a
+KNOWN_GAP in the coverage manifest, unit-tested instead.

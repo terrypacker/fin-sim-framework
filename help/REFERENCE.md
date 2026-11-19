@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-245 parameters · 36 panels · 13 node types (209 fields) · 185 action types · 100 tools · 357 state field types · 83 topics · 142 design docs
+245 parameters · 36 panels · 13 node types (209 fields) · 187 action types · 100 tools · 358 state field types · 83 topics · 142 design docs
 
 ---
 
@@ -1818,7 +1818,7 @@ docblock, not re-authored here. Arguments come from each script's declarative
 
 ---
 
-## Journal action types (185)
+## Journal action types (187)
 
 Every action a toolset declares, with its payload shape. A type declared by more than
 one toolset is one row: the toolsets compose into a single run, so it is one action in
@@ -1873,7 +1873,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `BOND_SLEEVE_COUPON_APPLY` | amount: currency(USD), federalTaxableAmount: currency(USD), stateTaxableAmount: currency(USD), stateKey: text, taxMode: text, residency: text | US_RETIREMENT |
 | `BONUS_APPLY` | amount: currency(USD), residency: text, personKey: text | US_INCOME |
 | `BONUS_TAX` | amount: currency(USD), residency: text, personKey: text | US_INCOME |
-| `BUSINESS_INCOME_APPLY` | amount: currency(USD), residency: text, personKey: text, businessIncomeId: text, indexBase: number, farmPathSeed: number, qbiW2Wages: currency(USD), qbiUbia: currency(USD) | US_INCOME |
+| `BUSINESS_INCOME_APPLY` | amount: currency(USD), residency: text, personKey: text, businessIncomeId: text, indexBase: number, farmPathSeed: number, qbiW2Wages: currency(USD), qbiUbia: currency(USD), communityCollegeTax: currency(USD) | US_INCOME |
 | `CASH_SLEEVE_INTEREST_APPLY` | amount: currency(USD), stateKey: text, taxMode: text, residency: text | US_RETIREMENT |
 | `CHANGE_RESIDENCY_APPLY` | — | US_AU_CROSS_BORDER |
 | `CHANGE_STATE_RESIDENCY_APPLY` | destination: text | US_STATE_TAX |
@@ -1971,7 +1971,9 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `SS_ENTITLEMENT_APPLY` | personKey: text, entitledMs: number | AU_RETIREMENT, US_RETIREMENT |
 | `SS_INCOME_APPLY` | amount: currency(USD), residency: text, personKey: text, own: currency(USD), spousal: currency(USD), survivor: currency(USD) | US_INCOME |
 | `SS_INCOME_TAX` | amount: currency(USD), residency: text, personKey: text | US_INCOME |
+| `STATE_COMMUNITY_COLLEGE_TAX_PAID` | amount: currency(USD), residency: text, personKey: text | US_INCOME |
 | `STATE_TAX_PAYMENT_DEBIT` | amount: currency(USD), escalated: boolean | US_STATE_TAX |
+| `STATE_TAX_REFUND_CREDIT` | amount: currency(USD) | US_STATE_TAX |
 | `STATE_TAX_SETTLE_APPLY` | tax: number, taxDetail: any, fxRate: number | US_STATE_TAX |
 | `STOCK_CONTRIBUTION_APPLY` | amount: currency(USD) | US_BROKERAGE |
 | `STOCK_DIVIDEND_APPLY` | amount: currency(USD), residency: text, stateKey: text | US_BROKERAGE |
@@ -2015,7 +2017,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 
 ---
 
-## State field types (357)
+## State field types (358)
 
 The scenario-INDEPENDENT half of `StateSchemaRegistry`: the globs and exact paths it
 installs in its own constructor, with the value type that decides how each formats.
@@ -2317,6 +2319,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `securityReturnDriftComp.*` | rate |
 | `securityReturnOverlay.*` | rate |
 | `stateCapitalGainsYTD` | currency(USD) |
+| `stateCommunityCollegeTaxYTD` | currency(USD) |
 | `stateOrdinaryIncomeYTD` | currency(USD) |
 | `statePensionIncomeYTD` | currency(USD) |
 | `stateSsIncomeYTD` | currency(USD) |
@@ -2426,7 +2429,7 @@ what the in-app panel keys on.
 | [Event Sourcing](concepts/event-sourcing.md) | concept | 381 | 3 panels · design 2, 16, 91 |
 | [Node History](panels/exec-history.md) | panel | 191 | 1 panel |
 | [Farm MC](panels/farm-mc.md) | panel | 247 | 1 panel · design 134 |
-| [Farm Results into a Household Plan](workflows/farm-to-household.md) | workflow | 509 | 2 params · 2 tools · design 134 |
+| [Farm Results into a Household Plan](workflows/farm-to-household.md) | workflow | 580 | 2 params · 2 tools · design 134 |
 | [Field P&L](panels/field-pnl.md) | panel | 243 | 1 panel · design 134 |
 | [Funding and Instalments](concepts/funding-and-instalments.md) | concept | 248 | 2 panels · 3 params · design 107 |
 | [FX](concepts/fx.md) | concept | 390 | 2 panels · 6 params · design 47, 87, 122 |

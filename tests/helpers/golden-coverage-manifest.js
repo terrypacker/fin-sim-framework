@@ -52,6 +52,8 @@ export const COVERED = [
   'SE_INCOME_US_TAX',
   // Design 134 step 4e — the row's §199A inputs.
   'QBI_US_TAX',
+  // Design 134 step 4f — the Nebraska community-college tax inside the row.
+  'STATE_COMMUNITY_COLLEGE_TAX_PAID',
   // MONTHLY equity earnings (design 127): the two wash-sale goldens run MONTHLY since phase 3,
   // because their crash preset is calibrated under it. The batched lot deltas and the
   // month-end index step fire there.
@@ -208,6 +210,13 @@ export const COVERED = [
  * this file exists to prevent.
  */
 export const KNOWN_GAPS = [
+  // ── Design 134 step 4f — a state REFUND. Fires only when a refundable credit (Nebraska's
+  // community-college credit) exceeds the year's state tax, which no golden household does:
+  // us-farm-operator's W-2 wage keeps its Nebraska tax far above the credit. A farm
+  // household with little other income would clear it. Unit-tested in
+  // state-community-college-credit.test.mjs.
+  'STATE_TAX_REFUND_CREDIT',
+
   // ── Harvest skipped for want of a substitute (design 101 §7.1)
   // `wash-sale-two-books` reached it only by accident. The located rebalance used to shuttle a
   // class between its two brokerage books every half-year, and on 31 Dec 2032 that left a

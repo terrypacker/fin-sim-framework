@@ -209,6 +209,8 @@ export const COVERED = [
   // F/G/I/J — backfill (reducer-postconditions-backfill.test.mjs)
   'AddRegimeReducer', 'RevalueAssetReducer', 'AssetAppreciateReducer', 'FxTransferApplyReducer',
   'StateIncomeClassificationReducer', 'StateTaxSettleApplyReducer', 'StateTaxPaymentDebitReducer',
+  // design 134 step 4f — a refundable state credit paid out (state-community-college-credit.test.mjs)
+  'StateTaxRefundCreditReducer',
   'UsMortgagePaymentApplyReducer', 'AuMortgagePaymentApplyReducer',
   'LoanPaymentApplyReducer', // evt-loan.test.mjs — amortization split + negative-amort + cash debit
 

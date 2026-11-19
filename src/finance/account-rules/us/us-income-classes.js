@@ -164,11 +164,12 @@ export class BusinessIncomeApplyReducer extends AccountServiceReducer {
     this.accountService = accountService;
     this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['BUSINESS_INCOME_APPLY'];
-    this.generatedActionTypes = ['SE_INCOME_US_TAX', 'QBI_US_TAX'];
+    this.generatedActionTypes = ['SE_INCOME_US_TAX', 'QBI_US_TAX', 'STATE_COMMUNITY_COLLEGE_TAX_PAID'];
   }
 
   reduce(state, action) {
-    const { amount, residency, personKey, businessIncomeId, indexBase, qbiW2Wages = 0, qbiUbia = 0 } = action;
+    const { amount, residency, personKey, businessIncomeId, indexBase, qbiW2Wages = 0, qbiUbia = 0,
+      communityCollegeTax = 0 } = action;
     this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], amount, null);
     const bases = state.businessIncomeIndexBase ?? {};
     const updates = bases[businessIncomeId] == null
@@ -178,6 +179,10 @@ export class BusinessIncomeApplyReducer extends AccountServiceReducer {
       { type: 'SE_INCOME_US_TAX', amount, residency, personKey },
       // §199A (design 134 step 4e): the whole net is QBI before the household's adjustments.
       { type: 'QBI_US_TAX', qbi: amount, w2Wages: qbiW2Wages, ubia: qbiUbia, personKey },
+      // Nebraska's community-college credit (step 4f): the property tax inside the net.
+      ...(communityCollegeTax > 0
+        ? [{ type: 'STATE_COMMUNITY_COLLEGE_TAX_PAID', amount: communityCollegeTax, residency, personKey }]
+        : []),
     ]);
   }
 }
@@ -396,14 +401,15 @@ export class BusinessIncomeHandler extends HandlerEntry {
     const residency = state.people?.[personKey]?.residency ?? null;
     const accNow    = state.inflationAccumulator?.US ?? 1;
     const accBase   = state.businessIncomeIndexBase?.[data.businessIncomeId] ?? null;
-    const { net, factor } = businessIncomeAmounts(data, accNow, accBase);
+    const { net, neCommunityCollegeTax, factor } = businessIncomeAmounts(data, accNow, accBase);
     return [
       { type: 'BUSINESS_INCOME_APPLY', amount: net, residency, personKey,
         businessIncomeId: data.businessIncomeId, indexBase: accBase ?? accNow,
         // Which farm MC path paid this year (design 134 step 4d); null for the deterministic run.
         farmPathSeed: data.farmPathSeed ?? null,
         // §199A wage and property limits (design 134 Q30), in the row's first-year money.
-        qbiW2Wages: Number(data.qbiW2Wages ?? 0) * factor, qbiUbia: Number(data.qbiUbia ?? 0) * factor },
+        qbiW2Wages: Number(data.qbiW2Wages ?? 0) * factor, qbiUbia: Number(data.qbiUbia ?? 0) * factor,
+        communityCollegeTax: neCommunityCollegeTax },
       new FieldValueAction('business_income', 'Business Income (Schedule F)', net),
       new RecordBalanceAction(`${cashKey}.balance`, cashKey),
     ];

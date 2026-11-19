@@ -454,6 +454,7 @@ export class StateSchemaRegistry {
 
     // US state income tax YTD (design 34) — USD
     this.register('stateOrdinaryIncomeYTD',      ParameterValueType.currency('USD'));
+    this.register('stateCommunityCollegeTaxYTD', ParameterValueType.currency('USD'));   // design 134 step 4f
     this.register('statePensionIncomeYTD',       ParameterValueType.currency('USD'));
     this.register('stateSsIncomeYTD',            ParameterValueType.currency('USD'));
     this.register('stateCapitalGainsYTD',        ParameterValueType.currency('USD'));

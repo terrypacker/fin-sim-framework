@@ -33,6 +33,10 @@ import { toCcy } from '../tax-fx.js';
  * (a state subtraction; deferred — see design 34 §12).
  */
 export const STATE_INCOME_ROUTING = Object.freeze({
+  // ── Credits, not income (design 134 step 4f) ──
+  // Nebraska community-college property tax paid (77-6706). Each state's rates module
+  // decides whether it earns a credit; the bucket only records what was paid.
+  STATE_COMMUNITY_COLLEGE_TAX_PAID: { bucket: 'stateCommunityCollegeTaxYTD', field: 'amount' },
   // ── Ordinary income (action.amount) ──
   WAGES_INCOME_TAX:            { bucket: 'stateOrdinaryIncomeYTD', field: 'amount' },
   SE_INCOME_US_TAX:            { bucket: 'stateOrdinaryIncomeYTD', field: 'amount' },
@@ -88,6 +92,16 @@ export const STATE_YTD_FIELDS = Object.freeze([
   'statePensionIncomeYTD',
   'stateSsIncomeYTD',
   'stateCapitalGainsYTD',
+]);
+
+/**
+ * Accumulators of amounts that earn a state CREDIT rather than being income (design 134
+ * step 4f). Reset at the state settle like the income buckets, but kept out of
+ * `STATE_YTD_FIELDS` because that list is seeded at 0 into every state-taxed plan's opening
+ * state, and a plan with nothing creditable should gain no key.
+ */
+export const STATE_CREDIT_YTD_FIELDS = Object.freeze([
+  'stateCommunityCollegeTaxYTD',
 ]);
 
 /**

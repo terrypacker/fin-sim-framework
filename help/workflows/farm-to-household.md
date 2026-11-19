@@ -56,5 +56,11 @@ threshold the deduction is limited by the farm's W-2 wages and the basis of its 
 and only the minimum deduction (from 2026) is left. A net loss carries to next year's QBI.
 All the household's farm rows count as one business.
 
-**What is not there yet.** The Nebraska community-college credit, the excess business loss
-limit, the farming-loss carryback and income averaging are later steps of design 134 phase 4.
+**The Nebraska credit.** The community-college share of the farm's property tax is already
+a farm expense inside the net. Nebraska also refunds all of it as a credit on the
+operator's return, in the year the tax was paid. Because the credit is refundable, a
+household that owes less Nebraska tax than the credit gets the difference paid back. For a
+person living outside Nebraska there is no credit, and the import warns about it.
+
+**What is not there yet.** The excess business loss limit, the farming-loss carryback and
+income averaging are later steps of design 134 phase 4.

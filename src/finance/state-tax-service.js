@@ -11,6 +11,7 @@
 import { EventSeries } from '../simulation-framework/events/event-series.js';
 import {
   StateTaxSettleHandler, StateTaxSettleApplyReducer, StateTaxPaymentDebitReducer,
+  StateTaxRefundCreditReducer,
 } from './tax/state/state-tax-settle-classes.js';
 import { buildStateClassificationReducers, STATE_YTD_FIELDS } from './tax/state/state-income-classification.js';
 
@@ -48,6 +49,7 @@ export class StateTaxService {
     const reducers = [
       new StateTaxSettleApplyReducer(),
       new StateTaxPaymentDebitReducer({ accountService, stateRegistry }),
+      new StateTaxRefundCreditReducer({ accountService, stateRegistry }),
       ...buildStateClassificationReducers(),
     ];
 

@@ -370,7 +370,7 @@ import { NeStateTaxRates2025 } from './finance/tax/state/ne/ne-state-tax-rates-2
 import { SdStateTaxRates2024 } from './finance/tax/state/sd/sd-state-tax-rates-2024.js';
 import { STATE_INCOME_ROUTING, STATE_YTD_FIELDS, StateIncomeClassificationReducer, buildStateClassificationReducers } from './finance/tax/state/state-income-classification.js';
 import { StateTaxDocumentReporter } from './finance/tax/state/state-tax-document.js';
-import { StateTaxSettleHandler, StateTaxSettleApplyReducer, StateTaxPaymentDebitReducer } from './finance/tax/state/state-tax-settle-classes.js';
+import { StateTaxSettleHandler, StateTaxSettleApplyReducer, StateTaxPaymentDebitReducer, StateTaxRefundCreditReducer } from './finance/tax/state/state-tax-settle-classes.js';
 import { StateTaxSettleService } from './finance/tax/state/state-tax-settle-service.js';
 import { US_STATES, US_STATE_CODES, usStateName, usStateOptionPairs } from './finance/tax/state/us-states.js';
 import { indexLimit, ROUNDING } from './finance/tax/statutory-indexation.js';
@@ -1884,6 +1884,7 @@ export const Finance = {
   StateTaxSettleHandler,
   StateTaxSettleApplyReducer,
   StateTaxPaymentDebitReducer,
+  StateTaxRefundCreditReducer,
   StateTaxSettleService,
   US_STATES,
   US_STATE_CODES,

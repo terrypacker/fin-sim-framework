@@ -52,6 +52,9 @@ export class BaseStateTaxRatesModule {
   _pensionExclusionFraction = 0;      // 0 = pension fully taxable; 1 = fully excluded (HI)
   _capitalGainsMode         = 'ordinary'; // 'ordinary' | 'alternative'
   _capitalGainsAltRate      = 0;      // used when mode === 'alternative' (HI 0.0725)
+  // Design 134 step 4f — the share of community-college property tax paid that the state
+  // refunds as an income tax credit. 0 everywhere but Nebraska (77-6706(4): 100% from 2024).
+  _communityCollegeCreditRate = 0;
 
   computeTax(state) {
     const {
@@ -59,6 +62,7 @@ export class BaseStateTaxRatesModule {
       statePensionIncomeYTD  = 0,
       stateSsIncomeYTD       = 0,
       stateCapitalGainsYTD   = 0,
+      stateCommunityCollegeTaxYTD = 0,
       usFilingSingle         = false,
     } = state;
 
@@ -88,7 +92,10 @@ export class BaseStateTaxRatesModule {
     // rate instead of folding into the ordinary base.
     const capitalGainsTax = this._capitalGainsMode === 'alternative' ? cg * this._capitalGainsAltRate : 0;
 
-    const netLiability = Math.max(0, ordinaryTax + capitalGainsTax);
+    // A REFUNDABLE credit (design 134 step 4f): it may take the liability below zero, and
+    // the settle then refunds the difference.
+    const communityCollegeCredit = this._communityCollegeCreditRate * Math.max(0, stateCommunityCollegeTaxYTD);
+    const netLiability = Math.max(0, ordinaryTax + capitalGainsTax) - communityCollegeCredit;
 
     const totalGrossIncome = stateOrdinaryIncomeYTD + Math.max(0, statePensionIncomeYTD) + Math.max(0, stateSsIncomeYTD) + cg;
     const effectiveRate    = totalGrossIncome > 0 ? netLiability / totalGrossIncome : 0;
@@ -109,6 +116,7 @@ export class BaseStateTaxRatesModule {
       taxableIncome:   taxableOrdinary,
       ordinaryTax,
       capitalGainsTax,
+      communityCollegeCredit,
       netLiability,
       effectiveRate,
       marginalRate,
@@ -132,6 +140,9 @@ export class BaseStateTaxRatesModule {
         { label: 'Taxable Income',                 amount:  taxableOrdinary },
         { label: 'Tax on Ordinary Income',         amount:  ordinaryTax },
         { label: 'Capital Gains Tax (alternative)', amount:  capitalGainsTax },
+        ...(communityCollegeCredit > 0
+          ? [{ label: 'Community College Tax Credit (refundable)', amount: -communityCollegeCredit }]
+          : []),
         { label: 'Net State Tax Liability',        amount:  netLiability },
       ],
     };

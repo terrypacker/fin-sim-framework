@@ -11,6 +11,7 @@
 import { StateTaxService } from '../../finance/state-tax-service.js';
 import {
   StateTaxSettleHandler, StateTaxSettleApplyReducer, StateTaxPaymentDebitReducer,
+  StateTaxRefundCreditReducer,
 } from '../../finance/tax/state/state-tax-settle-classes.js';
 import { StateIncomeClassificationReducer } from '../../finance/tax/state/state-income-classification.js';
 import { ChangeStateResidencyHandler }
@@ -51,7 +52,7 @@ export const US_STATE_TAX = {
   types: {
     handlers: [StateTaxSettleHandler, ChangeStateResidencyHandler],
     reducers: [
-      StateTaxSettleApplyReducer, StateTaxPaymentDebitReducer,
+      StateTaxSettleApplyReducer, StateTaxPaymentDebitReducer, StateTaxRefundCreditReducer,
       StateIncomeClassificationReducer, ChangeStateResidencyApplyReducer,
     ],
     actions: [
@@ -62,6 +63,10 @@ export const US_STATE_TAX = {
         // unfunded part of this same bill. Declared so "US State Tax by Year" and
         // "Tax Paid by Year" can exclude it rather than double-count.
         fields: { amount: ValueType.currency('USD'), escalated: ValueType.boolean() } },
+      // Design 134 step 4f: a refundable state credit above the year's tax. A credit, so in
+      // no debit family (see US_TAX_REFUND_CREDIT).
+      { type: 'STATE_TAX_REFUND_CREDIT', cc: 'US',
+        fields: { amount: ValueType.currency('USD') } },
       { type: 'CHANGE_STATE_RESIDENCY_APPLY', cc: 'US',
         fields: { destination: ValueType.text() } },
     ],

@@ -12,7 +12,8 @@ import { Reducer, PRIORITY }  from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }        from '../../../simulation-framework/handlers.js';
 import { ACCOUNT_ROLES }       from '../../state/account-roles.js';
 import { StateTaxSettleService } from './state-tax-settle-service.js';
-import { STATE_YTD_FIELDS }    from './state-income-classification.js';
+import { STATE_YTD_FIELDS, STATE_CREDIT_YTD_FIELDS } from './state-income-classification.js';
+import { TaxRefundCreditReducerBase } from '../tax-instalment-classes.js';
 import { taxFxRate }           from '../tax-fx.js';
 import { DRAWDOWN_TAX_ACTION_TYPES } from '../tax-settle-classes.js';
 import { escalateShortfall } from '../../account-rules/shortfall-escalation.js';
@@ -59,12 +60,12 @@ export class StateTaxSettleHandler extends HandlerEntry {
 export class StateTaxSettleApplyReducer extends Reducer {
   static type        = 'StateTaxSettleApplyReducer';
   static category    = 'reducer';
-  static description = 'Resets state YTD tax fields after settlement; chains STATE_TAX_PAYMENT_DEBIT when tax > 0.';
+  static description = 'Resets state YTD tax fields after settlement; chains STATE_TAX_PAYMENT_DEBIT when tax > 0, or STATE_TAX_REFUND_CREDIT when a refundable credit exceeds it.';
 
   constructor() {
     super('State Tax Settle Apply', PRIORITY.TAX_APPLY);
     this.reducedActionTypes   = ['STATE_TAX_SETTLE_APPLY'];
-    this.generatedActionTypes = ['STATE_TAX_PAYMENT_DEBIT'];
+    this.generatedActionTypes = ['STATE_TAX_PAYMENT_DEBIT', 'STATE_TAX_REFUND_CREDIT'];
   }
 
   static fromJSON(d) {
@@ -76,11 +77,15 @@ export class StateTaxSettleApplyReducer extends Reducer {
   reduce(state, action) {
     const { tax } = action;
     const resets = {};
-    for (const field of STATE_YTD_FIELDS) {
+    for (const field of [...STATE_YTD_FIELDS, ...STATE_CREDIT_YTD_FIELDS]) {
       if (field in state) resets[field] = 0;
     }
     if (tax > 0) {
       return this.newState({ ...state, ...resets }, {}, [{ type: 'STATE_TAX_PAYMENT_DEBIT', amount: tax }]);
+    }
+    // A refundable credit larger than the tax (design 134 step 4f) is paid out.
+    if (tax < -0.005) {
+      return this.newState({ ...state, ...resets }, {}, [{ type: 'STATE_TAX_REFUND_CREDIT', amount: -tax }]);
     }
     return this.newState({ ...state, ...resets });
   }
@@ -161,4 +166,17 @@ export class StateTaxPaymentDebitReducer extends Reducer {
       [accountKey]: { ...cashAccount },   // explicit new reference so the balance change shows in diffs
     }, [...crossBorderTransfers, ...pendingTaxActions, ...residualActions]);
   }
+}
+
+/**
+ * Design 134 step 4f: a state refund (a refundable credit larger than the year's state tax,
+ * such as Nebraska's community-college credit) credited to the US cash account.
+ */
+export class StateTaxRefundCreditReducer extends TaxRefundCreditReducerBase {
+  static type        = 'StateTaxRefundCreditReducer';
+  static category    = 'reducer';
+  static cc          = 'US State';
+  static actionType  = 'STATE_TAX_REFUND_CREDIT';
+  static savingsRole = ACCOUNT_ROLES.US_SAVINGS;
+  static description = 'Credits a US state refund (a refundable credit above the year\'s state tax) to the US cash account.';
 }
