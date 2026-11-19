@@ -403,9 +403,27 @@ export const FARM_PARAM_TEMPLATES = {
       description: 'The custom-hire rate per acre per pass for this field operation. A costing '
         + 'rate for the operator\'s own machines: charged to each crop plan, never paid.' },
   ],
+  season: [
+    // Design 134 §13.3 — the farm-wide yield factor every field shares. Its spread is set by
+    // FarmMcConfig, not the harvest; it is 0 (the plan) unless a run draws it.
+    { field: 'yieldShock', label: 'Farm-wide Yield Shock', type: 'Number', mc: true, opt: false,
+      blankValue: 0,
+      description: 'The season\'s farm-wide yield deviation, as a fraction of expected yield '
+        + '(−0.2 = every field 20% short). 0 harvests the plan.' },
+    { field: 'irrigatedYieldBeta', label: 'Irrigated Yield Beta', type: 'Number', mc: false, opt: false,
+      blankValue: 1,
+      description: 'How much of the farm-wide yield shock an irrigated field takes: 1 the '
+        + 'whole shock, 0 none of it. Dry fields always take all of it.' },
+  ],
   plan: [
-    { field: 'expectedYield', label: 'Expected Yield', type: 'Number', mc: true, opt: false,
+    // The PLAN yield, which the breakevens and the contracted share are measured against
+    // (design 134 §5.4). Not an MC row: a short crop is a yield shock, below (§13.3).
+    { field: 'expectedYield', label: 'Expected Yield', type: 'Number', mc: false, opt: false,
       description: 'Expected yield of this crop plan in bushels (or tons) per planted acre.' },
+    { field: 'yieldShock', label: 'Yield Shock', type: 'Number', mc: true, opt: false,
+      blankValue: 0,
+      description: 'This field\'s own yield deviation this season, as a fraction of expected '
+        + 'yield, on top of the farm-wide shock. 0 harvests the plan.' },
     { field: 'insurancePremiumPerAcre', label: 'Insurance Premium per Acre', type: 'Number', mc: false, opt: false,
       appliesTo: r => (r.insurancePremiumPerAcre ?? 0) > 0,
       description: 'The farmer-paid crop insurance premium per planted acre.' },
@@ -452,7 +470,7 @@ export const FARM_PARAM_TEMPLATES = {
 
 /** `FARM_PARAM_TEMPLATES` kind → its `cfg.farm` table. */
 export const FARM_PARAM_TABLES = {
-  field: 'fields', product: 'products', operation: 'operations', plan: 'cropPlans',
+  season: 'seasons', field: 'fields', product: 'products', operation: 'operations', plan: 'cropPlans',
   machinery: 'machinery', overhead: 'overhead', price: 'prices', storage: 'storage',
   sale: 'sales', otherIncome: 'otherIncome', carryOut: 'carryOut',
 };

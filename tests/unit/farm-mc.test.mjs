@@ -33,12 +33,13 @@ import { nodeMcSpawn }  from './helpers/node-mc-spawn.mjs';
 
 const cfg = () => FarmScenario.buildDefaultConfig();
 const RENT = 'farm.field.b-river.rentPerAcre';
-const YIELD = 'farm.plan.p-a-home-irr.expectedYield';
+const YIELD = 'farm.plan.p-a-home-irr.yieldShock';
+const FARM_YIELD = 'farm.season.s2027.yieldShock';
 
 /** A catalog with the given rows switched on, at their harvested spreads. */
 function withEnabled(...keys) {
   const c = new FarmMcConfig();
-  for (const k of keys) c.applyOverride(k, { enabled: true });
+  for (const k of keys) c.applyOverride(k, { enabled: true, ...(/yieldShock$/.test(k) ? { stdDev: 0.1 } : {}) });
   return c;
 }
 
@@ -150,5 +151,81 @@ describe('farm MC summary', () => {
     assert.ok('crop.SOYBEANS.breakevenYield.actual' in m);
     // A mixed-crop group has no price breakeven.
     assert.strictEqual(m['farm.breakevenPrice.custom'], null);
+  });
+});
+
+describe('realized yield (design 134 §13.3, step 2b)', () => {
+  const withShocks = (season, plans = {}, beta) => {
+    const c = cfg();
+    Object.assign(c.farm.seasons[0], { yieldShock: season, ...(beta != null ? { irrigatedYieldBeta: beta } : {}) });
+    for (const p of c.farm.cropPlans) if (plans[p.id] != null) p.yieldShock = plans[p.id];
+    return c;
+  };
+  const plan = (r, id) => r.jobCost.plans.find(p => p.planId === id);
+
+  test('a yield shock moves the harvest and the net, never the plan or its breakevens', () => {
+    const det = runFarm(cfg());
+    const short = runFarm(withShocks(-0.2));
+    for (const id of ['p-a-home-dry', 'p-a-home-irr', 'p-a-west', 'p-b-river']) {
+      const d = plan(det, id), s = plan(short, id);
+      assert.strictEqual(s.expectedBushels, d.expectedBushels);
+      assert.ok(Math.abs(s.harvestedBushels - 0.8 * d.harvestedBushels) < 1e-6);
+      // The breakevens divide by the PLAN's bushels. Their cost side is what the season
+      // spent, which a short crop changes only through storage (fewer bushels held).
+      assert.strictEqual(s.breakevenPrice, (s.totalCost - s.revenue.other) / s.expectedBushels);
+      assert.strictEqual(s.directCost - s.storage, d.directCost - d.storage);
+    }
+    assert.ok(short.jobCost.farm.net < det.jobCost.farm.net);
+  });
+
+  test('irrigated fields take β of the farm-wide shock; dry fields take all of it', () => {
+    const r = runFarm(withShocks(-0.2, {}, 0.25));
+    assert.ok(Math.abs(plan(r, 'p-a-home-irr').realizedYield - 230 * 0.95) < 1e-9);
+    assert.ok(Math.abs(plan(r, 'p-a-home-dry').realizedYield - 50 * 0.8) < 1e-9);
+  });
+
+  test('a field shock is the field\'s own, and pool revenue follows the harvested bushels', () => {
+    const det = runFarm(cfg());
+    const r = runFarm(withShocks(0, { 'p-a-west': -0.5 }));
+    assert.strictEqual(plan(r, 'p-a-home-dry').harvestedBushels, plan(det, 'p-a-home-dry').harvestedBushels);
+    // opA's two soybean fields share one pool: the short field's share of its revenue falls.
+    const share = (x) => plan(x, 'p-a-west').revenue.grain
+      / (plan(x, 'p-a-west').revenue.grain + plan(x, 'p-a-home-dry').revenue.grain);
+    assert.ok(share(r) < share(det));
+  });
+
+  test('a yield shock can not take a harvest below zero', () => {
+    const r = runFarm(withShocks(-3));
+    for (const p of r.jobCost.plans.filter(x => x.planId)) assert.strictEqual(p.harvestedBushels, 0);
+  });
+
+  test('the yield rows are the catalog\'s, off and at zero spread until calibrated', () => {
+    const { ctx } = new FarmMcRunner({ cfgTemplate: cfg() })._prepare();
+    const rows = ctx.variables.filter(v => v.paramKey.endsWith('.yieldShock'));
+    assert.strictEqual(rows.length, 5, 'the season and every crop plan');
+    for (const v of rows) {
+      assert.strictEqual(v.enabled, false);
+      assert.strictEqual(v.stdDev, 0);
+      assert.strictEqual(v.mean, 0);
+      assert.ok(!v.harvested, 'not the harvest\'s generic spread');
+    }
+    assert.ok(!ctx.variables.some(v => v.paramKey.endsWith('.expectedYield')), 'the plan yield is not sampled');
+  });
+
+  test('switched on at zero spread, a yield row leaves every path the deterministic run', async () => {
+    const c = new FarmMcConfig();
+    c.applyOverride(FARM_YIELD, { enabled: true });
+    const det = runFarm(cfg());
+    const { runs } = await new FarmMcRunner({ n: 2, cfgTemplate: cfg(), mcConfig: c }).run();
+    for (const r of runs) assert.strictEqual(r.metrics['farm.net.custom'], det.jobCost.farm.net);
+  });
+
+  test('a sampled farm-wide shock moves every field together', async () => {
+    const { runs } = await new FarmMcRunner({ n: 4, cfgTemplate: cfg(), mcConfig: withEnabled(FARM_YIELD) }).run();
+    const low = runs.reduce((a, b) => (a.params[FARM_YIELD] < b.params[FARM_YIELD] ? a : b));
+    const high = runs.reduce((a, b) => (a.params[FARM_YIELD] > b.params[FARM_YIELD] ? a : b));
+    for (const id of ['p-a-home-dry', 'p-a-west', 'p-b-river']) {
+      assert.ok(low.metrics[`plan.${id}.revenue`] < high.metrics[`plan.${id}.revenue`], id);
+    }
   });
 });

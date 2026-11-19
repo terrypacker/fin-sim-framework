@@ -2375,7 +2375,7 @@ what the in-app panel keys on.
 | [Event](nodes/event.md) | node | 220 | 2 panels · design 2 |
 | [Event Sourcing](concepts/event-sourcing.md) | concept | 381 | 3 panels · design 2, 16, 91 |
 | [Node History](panels/exec-history.md) | panel | 191 | 1 panel |
-| [Field P&L](panels/field-pnl.md) | panel | 246 | 1 panel · design 134 |
+| [Field P&L](panels/field-pnl.md) | panel | 243 | 1 panel · design 134 |
 | [Funding and Instalments](concepts/funding-and-instalments.md) | concept | 248 | 2 panels · 3 params · design 107 |
 | [FX](concepts/fx.md) | concept | 390 | 2 panels · 6 params · design 47, 87, 122 |
 | [Handler](nodes/handler.md) | node | 208 | 2 panels · design 2 |

@@ -9,7 +9,7 @@
  */
 
 import { categoryLine } from './schedule-f.js';
-import { TENURE, harvestDateFor, priceOn } from './farm-records.js';
+import { TENURE, harvestDateFor, priceOn, realizedYield } from './farm-records.js';
 
 /**
  * The farm calendar (design 134 §5.2) compiled from normalized records into dated events.
@@ -130,7 +130,7 @@ export function compileFarmEvents(farm) {
       name: `Harvest — ${plan.id}`,
       data: {
         kind: 'HARVEST', operatorId: op, crop: plan.crop, cropYear: y, planId: plan.id,
-        bushels: acres * plan.expectedYield, sourceId: plan.id,
+        bushels: acres * realizedYield(farm, plan, f), sourceId: plan.id,
       },
     });
   }

@@ -368,7 +368,11 @@ export class ScenarioParamGenerator {
           // A template field may file itself outside its record's group — the move-in
           // date sits in "Cross Border" beside moveDate, the lever it is swept against.
           group:        t.group ?? group,
-          defaultValue: record?.[t.deriveDefaultFrom ?? t.field],
+          // `blankValue`: what the model reads for a field the record leaves out (a farm
+          // yield shock is 0), so a lever on it still has a centre (design 134 §13.3).
+          // An explicit null stays null (a blank sale date means something).
+          defaultValue: record?.[t.deriveDefaultFrom ?? t.field] === undefined
+            ? t.blankValue : record[t.deriveDefaultFrom ?? t.field],
           node,
           mc:           t.mc  ?? false,
           opt:          t.opt ?? false,

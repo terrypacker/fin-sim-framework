@@ -2,7 +2,7 @@
 
 **Status:** rev 11 (19 Nov 2026): **phase 1 BUILT** (§12): the acceptance import passes
 (§12.4) and the Field P&L panel is in the workbench (§12.5). **Phase 2 started** (§13): step 2a,
-the scenario-agnostic MC path and a farm batch on it, is built. Owner questions Q1–Q20 are answered (§3); Q21–Q25 (§12.3–§12.4) are open. §7 records what the primary sources on disk decide. §8 is the household
+the scenario-agnostic MC path and a farm batch on it, and step 2b, realized yield, are built. Owner questions Q1–Q20 are answered (§3); Q21–Q25 (§12.3–§12.4) are open. §7 records what the primary sources on disk decide. §8 is the household
 link.
 
 Revision history: rev 2 added §7 and §8, and corrected rev 1's guess that Nebraska credits
@@ -683,7 +683,7 @@ Phase 2 is six steps. Each one ships on its own, and none changes a retirement r
 | Step | Scope | State |
 |---|---|---|
 | **2a** | The scenario-agnostic MC path (§4), and a farm batch on it: the farm records' levers as the catalog, per-path metrics, the loss and breakeven distributions, `npm run farm:mc` | **built** (§13.2) |
-| 2b | **Realized yield**, separate from expected yield (§13.3): a farm-wide factor times a per-field factor, narrower on irrigated fields | open |
+| 2b | **Realized yield**, separate from expected yield (§13.3): a farm-wide factor times a per-field factor, narrower on irrigated fields | **built** (§13.4) |
 | 2c | **Price paths** per crop through the marketing year, drawn against the farm yield factor (the yield–price link, §6), replacing the step table on a path | open |
 | 2d | **Multiplier levers** (product category, rent, custom rates, machinery, irrigation) and the contracted share per crop (Q18) | open |
 | 2e | **Calibration.** NASS county yields, RMA price elections and futures history fetched into `docs/`, then the 2b–2d distributions set from them (§6) | open |
@@ -749,4 +749,41 @@ samples them answers a narrower question than it appears to:
   replaces it.
 
 Until then the two are useful for "what if this one number were different", and that is all.
+
+### 13.4 Step 2b: realized yield
+
+A crop plan now harvests its **realized** yield, per planted acre:
+
+    expectedYield × max(0, 1 + β·(season yield shock) + (plan yield shock))
+
+The **season shock** is the farm-wide factor every field shares. The **plan shock** is the
+field's own. **β** is a season field, `irrigatedYieldBeta`, and applies to irrigated fields
+only: it is how much of the farm-wide shock an irrigated field takes (a dry year hurts a
+pivot less). Dry fields take all of it. The floor at zero keeps a large draw from harvesting
+negative bushels.
+
+Decided in the build:
+
+- **The shocks are record fields, not scenario params.** `farm.season.<id>.yieldShock` and
+  `farm.plan.<id>.yieldShock` ride the same record-lever cascade as every other farm lever, so
+  a path's params replay through `applyParamBagToConfig` like any other. A blank shock is 0
+  (a template's new `blankValue`), so a lever on one still has a centre to sample around.
+- **`expectedYield` is no longer an MC row.** It is the plan. The breakevens divide by its
+  bushels, and the contracted share is measured against it.
+- **The cost side of a breakeven is what the season spent.** A short crop holds fewer
+  bushels, so its storage and its total cost fall, and the breakevens move with them. That is
+  correct: only the yield side is the plan.
+- **A grain pool's revenue and storage follow the bushels each plan harvested**, not its
+  expected bushels. A short field earns a smaller share of its pool. In a deterministic season
+  the two are equal, so the `farm-demo` golden did not move.
+- **The spreads are the catalog's, not the harvest's.** `FarmMcConfig` contributes one row
+  per shock at `FARM_MC_SPREADS`, which are **0 until step 2e**. A row switched on at zero
+  spread draws nothing, and the path is the plan. Contributors now receive the scenario cfg as
+  well as the params, because the farm's rows come from its records.
+- **β is 1 until calibrated**, which assumes nothing: irrigated fields take the whole shock,
+  like dry ones.
+
+Still open for 2e: the shape of the yield distribution. Yields are skewed to the left (a
+drought year is far below trend, and a great year is only somewhat above it), so a normal
+shock is a placeholder for whatever the county history supports.
 
