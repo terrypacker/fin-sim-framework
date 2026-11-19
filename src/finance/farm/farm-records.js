@@ -17,7 +17,8 @@ import {
  *
  * ```js
  * cfg.farm = {
- *   seasons:       [{ id, cropYear, calendar?, yieldShock?, irrigatedYieldBeta? }], // exactly one
+ *   seasons:       [{ id, cropYear, calendar?, yieldShock?, irrigatedYieldBeta?,
+ *                     priceVol?: { [crop]: σ }, priceYieldBeta?: { [crop]: b } }], // exactly one
  *   operators:     [{ id, name, farmRelated?, prior3PrepaidSupplies?, prior3FarmExpenses? }],
  *   fields:        [{ id, operatorId, name, tenure, rentedAcres, plantedAcres, irrigated,
  *                     rentPerAcre, propertyTax, fsaFarm?, baseAcres?, provenYield? }],
@@ -28,7 +29,7 @@ import {
  *   prescriptions: [{ id, planId, productId | operationId, ratePerAcre, passes, share, paidDate? }],
  *   machinery:     [{ id, operatorId, amount, paidDate? }],
  *   overhead:      [{ id, operatorId, name, category, amount, basis, fieldIds?, paidDate? }],
- *   prices:        [{ id, crop, date, price }],
+ *   prices:        [{ id, crop, date, price, shock? }],
  *   contracts:     [{ id, operatorId, crop, cropYear?, bushels, price, deliveryDate,
  *                     paymentDate?, buyoutPerBu? }],
  *   storage:       [{ id, operatorId, crop, costPerBuMonth }],
@@ -152,6 +153,8 @@ export function normalizeFarm(farm) {
     ...season0, cropYear: y, calendar,
     yieldShock:         season0.yieldShock ?? 0,
     irrigatedYieldBeta: season0.irrigatedYieldBeta ?? 1,
+    priceVol:           { ...(season0.priceVol ?? {}) },
+    priceYieldBeta:     { ...(season0.priceYieldBeta ?? {}) },
   } : null;
   const sid = season?.id ?? null;
 
@@ -188,7 +191,8 @@ export function normalizeFarm(farm) {
     o.fieldIds = Array.isArray(o.fieldIds) ? [...o.fieldIds] : null;
     o.paidDate = day(o.paidDate) ?? calendar.overheadDate;
   }
-  for (const p of out.prices) p.date = day(p.date);
+  for (const p of out.prices) { p.date = day(p.date); p.shock ??= 0; }
+  if (season) applyPricePath(out);
   for (const c of out.contracts) {
     c.cropYear  ??= y;
     c.deliveryDate = day(c.deliveryDate);
@@ -339,6 +343,13 @@ export function validateFarm(farm) {
     crop('prices', r);
     date('prices', r, 'date');
     nonNeg('prices', r, 'price', { required: true });
+    if (!isNum(r.shock)) err(`farm.prices "${r.id}": shock must be a number`);
+  }
+  for (const [field, min] of [['priceVol', 0], ['priceYieldBeta', -Infinity]]) {
+    for (const [c, v] of Object.entries(f.season[field])) {
+      if (!Object.hasOwn(CROPS, c)) err(`farm.seasons[0].${field}: unknown crop "${c}"`);
+      if (!isNum(v) || v < min) err(`farm.seasons[0].${field}.${c} must be a number${min === 0 ? ' ≥ 0' : ''}`);
+    }
   }
   for (const r of f.contracts) {
     need('contracts', r, 'operatorId', 'operators');
@@ -445,19 +456,74 @@ export function harvestDateFor(calendar, crop) {
 
 /**
  * The cash price of `crop` on `date`: the latest `farm.prices` row on or before it, else the
- * earliest. A step function, deliberately: phase 1 is deterministic and a price is a number
- * someone wrote down; phase 2 replaces this with a sampled path through the marketing year
- * (design 134 §6).
+ * earliest. A step function: a price row holds until the next one.
+ *
+ * `field` picks which price: `price` is the table as written, the season's EXPECTED path, which
+ * the breakevens are planned against; `realized` is the path the season actually ran
+ * (`applyPricePath`), which the sales are paid at. The two are equal unless a run draws shocks.
  *
  * @param {object[]} prices normalized `farm.prices`
  * @param {string} crop
  * @param {string} date YYYY-MM-DD
+ * @param {'price'|'realized'} [field='price']
  * @returns {number|null}
  */
-export function priceOn(prices, crop, date) {
+export function priceOn(prices, crop, date, field = 'price') {
   const rows = prices.filter(p => p.crop === crop).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   if (rows.length === 0) return null;
   let pick = rows[0];
   for (const r of rows) if (r.date <= date) pick = r;
-  return pick.price;
+  return pick[field] ?? pick.price;
+}
+
+const DAY_MS = 86_400_000;
+const yearsBetween = (a, b) => (Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / (365.25 * DAY_MS);
+
+/**
+ * The season's price path (design 134 §6, §13.5): set `realized` on every price row. Mutates
+ * the normalized farm it is given.
+ *
+ * Each crop's table is the expected path. A run moves it by a log random walk through the
+ * table's dates, from the season's plan date (1 January of the crop year, when the carry-in is
+ * counted and the plan is made):
+ *
+ *     L_i = L_(i−1) + σ·√Δt_i·z_i − ½σ²·Δt_i − b·Δy_i
+ *     realized_i = price_i · exp(L_i)
+ *
+ * - `σ` is the crop's annual price volatility (`season.priceVol[crop]`), `Δt_i` the years since
+ *   the previous row (or the plan date), and `z_i` the row's standard-normal `shock`. The −½σ²Δt
+ *   term keeps each realized price's mean at the table's price.
+ * - `b` is the crop's **yield–price link** (`season.priceYieldBeta[crop]`): the log price move
+ *   per unit of farm-wide yield shock, taken once, on the row IN FORCE on the crop's harvest
+ *   date (the latest one on or before it; the first after it when none is), when the size of the
+ *   crop is known. `Δy` is the season yield shock there and 0 elsewhere, and later rows carry
+ *   it. A positive `b` makes a short crop dearer.
+ * - A row dated on or before the plan date is already known: it never moves.
+ *
+ * With σ and b at 0 (the defaults) every realized price is the table's, exactly.
+ *
+ * @param {object} farm normalized farm (its `season` and `prices`)
+ */
+export function applyPricePath(farm) {
+  const s = farm.season;
+  const t0 = `${s.cropYear}-01-01`;
+  const crops = new Set(farm.prices.map(p => p.crop));
+  for (const crop of crops) {
+    const vol = s.priceVol[crop] ?? 0;
+    const beta = s.priceYieldBeta[crop] ?? 0;
+    const harvest = harvestDateFor(s.calendar, crop);
+    const rows = farm.prices.filter(p => p.crop === crop)
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    const moving = rows.filter(r => r.date != null && r.date > t0);
+    const linkRow = moving.filter(r => r.date <= harvest).at(-1) ?? moving.find(r => r.date > harvest) ?? null;
+    let L = 0, prev = t0;
+    for (const r of rows) {
+      if (r.date == null || r.date <= t0 || (vol === 0 && beta === 0)) { r.realized = r.price; continue; }
+      const dt = Math.max(0, yearsBetween(prev, r.date));
+      L += vol * Math.sqrt(dt) * r.shock - 0.5 * vol * vol * dt;
+      if (r === linkRow) L -= beta * s.yieldShock;
+      r.realized = r.price * Math.exp(L);
+      prev = r.date;
+    }
+  }
 }

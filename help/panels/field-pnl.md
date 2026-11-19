@@ -7,7 +7,7 @@ design: [134-farm-job-costing.md]
 sources: [src/finance/farm/farm-reports.js]
 stamps:
   panel:field-pnl: 0930cc
-  src/finance/farm/farm-reports.js: b2d9e0
+  src/finance/farm/farm-reports.js: ded5ec
 ---
 
 A farm season's profit and loss for each field, with the prices and yields that would

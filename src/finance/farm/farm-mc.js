@@ -28,7 +28,7 @@ import { samplingSignature }   from '../monte-carlo/parallel/mc-worker-core.js';
  * A batch that switches a row on is therefore a sensitivity run, and says so in its provenance.
  */
 export class FarmMcConfig extends McConfig {
-  static contributors = [({ cfg }) => buildYieldMcConfigs(cfg)];
+  static contributors = [({ cfg }) => buildYieldMcConfigs(cfg), ({ cfg }) => buildPriceMcConfigs(cfg)];
   static aliases = {};
   static paramSchema() { return FarmScenario.getParamSchema(); }
 }
@@ -67,6 +67,21 @@ export function buildYieldMcConfigs(cfg, spreads = FARM_MC_SPREADS) {
     ...(farm.cropPlans ?? []).map(p => row(`farm.plan.${p.id}.yieldShock`, `${p.id} — yield shock`,
       irrigated.get(p.fieldId) ? spreads.fieldYieldShockSd.irrigated : spreads.fieldYieldShockSd.dry)),
   ];
+}
+
+/**
+ * One row per price row for its path shock (design 134 §13.5): a STANDARD normal, by
+ * definition, because the scale is the season's `priceVol`. So sd 1 is not a calibration; the
+ * volatility is, and it is 0 until step 2e. Off until then too.
+ *
+ * @param {object|null} cfg the farm scenario
+ */
+export function buildPriceMcConfigs(cfg) {
+  return (cfg?.farm?.prices ?? []).filter(p => p?.id != null).map(p => ({
+    paramKey: `farm.price.${p.id}.shock`, label: `${p.crop} ${p.date} — price shock`,
+    type: DISTRIBUTION_TYPES.NORMAL, mean: 0, stdDev: 1, group: 'Farm · prices', enabled: false,
+    effectiveDefault: true,
+  }));
 }
 
 /**

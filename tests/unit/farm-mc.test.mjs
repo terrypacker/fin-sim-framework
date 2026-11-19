@@ -26,6 +26,7 @@ import { runFarm }      from '../../src/finance/farm/farm-run.js';
 import { FarmMcRunner, FarmMcConfig, summarizeFarmMetrics, isFarmIncomeMetric }
   from '../../src/finance/farm/farm-mc.js';
 import { farmPathMetrics } from '../../src/finance/farm/farm-mc-scenario.js';
+import { normalizeFarm, priceOn } from '../../src/finance/farm/farm-records.js';
 import { mcScenarioFor, perturbParams } from '../../src/finance/monte-carlo/parallel/mc-worker-core.js';
 import { applyParamBagToConfig } from '../../src/scenarios/scenario-param-apply.js';
 import { McWorkerPool } from '../../src/finance/monte-carlo/parallel/mc-worker-pool.js';
@@ -227,5 +228,95 @@ describe('realized yield (design 134 §13.3, step 2b)', () => {
     for (const id of ['p-a-home-dry', 'p-a-west', 'p-b-river']) {
       assert.ok(low.metrics[`plan.${id}.revenue`] < high.metrics[`plan.${id}.revenue`], id);
     }
+  });
+});
+
+describe('price paths (design 134 §13.5, step 2c)', () => {
+  const farmWith = (season = {}, shocks = {}) => {
+    const c = cfg();
+    Object.assign(c.farm.seasons[0], season);
+    for (const p of c.farm.prices) if (shocks[p.id] != null) p.shock = shocks[p.id];
+    return c;
+  };
+  const prices = (c) => normalizeFarm(c.farm).prices;
+  const row = (c, id) => prices(c).find(p => p.id === id);
+
+  test('at zero volatility and zero link the realized path is the table', () => {
+    for (const p of prices(farmWith({}, { 'pc-harvest': 2, 'pc-winter': -1 }))) assert.strictEqual(p.realized, p.price);
+  });
+
+  test('a shock moves its row and every later row of the crop, not the other crop', () => {
+    const c = farmWith({ priceVol: { CORN: 0.2 } }, { 'pc-harvest': 1 });
+    const h = row(c, 'pc-harvest'), w = row(c, 'pc-winter'), sp = row(c, 'pc-spring');
+    // Plan date 1 Jan 2027 → 1 Oct 2027.
+    const dt = (Date.parse('2027-10-01') - Date.parse('2027-01-01')) / (365.25 * 86_400_000);
+    assert.ok(Math.abs(h.realized - 4.10 * Math.exp(0.2 * Math.sqrt(dt) - 0.02 * dt)) < 1e-12);
+    // A later row inherits the move (less its own drift), so the path is one path.
+    assert.ok(w.realized / w.price > 1 && sp.realized / sp.price > 1);
+    assert.ok(w.realized / w.price < h.realized / h.price);
+    for (const p of prices(c).filter(x => x.crop === 'SOYBEANS')) assert.strictEqual(p.realized, p.price);
+    // A row on or before the plan date is already known.
+    assert.strictEqual(row(c, 'pc-carry').realized, row(c, 'pc-carry').price);
+  });
+
+  test('the drift keeps the mean of a realized price at the table', () => {
+    // E[exp(σ√t·z − ½σ²t)] = 1: average over a symmetric normal quadrature.
+    const zs = [-2.651961, -1.673552, -0.816288, 0, 0.816288, 1.673552, 2.651961];
+    const ws = [0.000971781, 0.054515583, 0.425607252, 0.810264618, 0.425607252, 0.054515583, 0.000971781];
+    // Gauss–Hermite nodes x for weight e^(−x²); a standard normal draw is √2·x.
+    const mean = zs.reduce((s, x, i) => s + ws[i] * row(farmWith({ priceVol: { CORN: 0.3 } }, { 'pc-harvest': Math.SQRT2 * x }), 'pc-harvest').realized, 0)
+      / Math.sqrt(Math.PI);
+    assert.ok(Math.abs(mean / 4.10 - 1) < 1e-5, `mean ${mean}`);
+  });
+
+  test('a short farm crop raises the price from harvest on, by the yield–price link', () => {
+    const c = farmWith({ yieldShock: -0.2, priceYieldBeta: { CORN: 0.5 } });
+    assert.ok(Math.abs(row(c, 'pc-harvest').realized - 4.10 * Math.exp(0.1)) < 1e-12);
+    assert.ok(Math.abs(row(c, 'pc-winter').realized - 4.35 * Math.exp(0.1)) < 1e-12, 'taken once, then carried');
+    assert.strictEqual(row(c, 'pc-carry').realized, 4.30);
+  });
+
+  test('sales are paid on the realized path; the breakevens keep the planned price', () => {
+    const det = runFarm(cfg());
+    const up = runFarm(farmWith({ priceVol: { CORN: 0.2, SOYBEANS: 0.2 } }, { 'pc-harvest': 1.5, 'ps-harvest': 1.5 }));
+    const plan = (r, id) => r.jobCost.plans.find(p => p.planId === id);
+    assert.ok(up.jobCost.farm.revenue.total > det.jobCost.farm.revenue.total);
+    for (const id of ['p-a-home-irr', 'p-b-river', 'p-a-west']) {
+      assert.strictEqual(plan(up, id).expectedPrice, plan(det, id).expectedPrice);
+    }
+  });
+
+  test('a contract shortfall settles at the realized market price', () => {
+    // A near-total crop failure with a dear market: opB delivers what it has and buys out the rest.
+    const c = farmWith({ yieldShock: -0.95, priceYieldBeta: { CORN: 1 } });
+    const r = runFarm(c);
+    const k = r.ledger.find(p => p.receivableId === 'contract:k-b-corn' && p.kind === 'REVENUE');
+    const market = priceOn(normalizeFarm(c.farm).prices, 'CORN', '2027-10-25', 'realized');
+    const harvested = 146 * 225 * Math.max(0, 1 - 0.95);
+    const expected = harvested * 4.35 + (12_000 - harvested) * (4.35 - market);
+    assert.ok(market > 4.35, 'the market is above the contract');
+    assert.ok(Math.abs(k.amount - expected) < 1e-6, `${k.amount} vs ${expected}`);
+  });
+
+  test('the catalog offers one standard-normal shock per price row, and no raw price rows', () => {
+    const { ctx } = new FarmMcRunner({ cfgTemplate: cfg() })._prepare();
+    const rows = ctx.variables.filter(v => v.paramKey.startsWith('farm.price.'));
+    assert.strictEqual(rows.length, cfg().farm.prices.length);
+    for (const v of rows) {
+      assert.ok(v.paramKey.endsWith('.shock'));
+      assert.strictEqual(v.stdDev, 1);
+      assert.strictEqual(v.enabled, false);
+    }
+  });
+
+  test('sampled shocks under a volatility vary the paths and replay from their params', async () => {
+    const c = farmWith({ priceVol: { CORN: 0.25 } });
+    const m = new FarmMcConfig();
+    for (const p of c.farm.prices) m.applyOverride(`farm.price.${p.id}.shock`, { enabled: true });
+    const { runs } = await new FarmMcRunner({ n: 3, cfgTemplate: c, mcConfig: m }).run();
+    assert.strictEqual(new Set(runs.map(r => r.metrics['crop.CORN.revenue'])).size, 3);
+    assert.strictEqual(new Set(runs.map(r => r.metrics['crop.SOYBEANS.revenue'])).size, 1, 'soybeans have no volatility');
+    const replay = runFarm(applyParamBagToConfig(farmWith({ priceVol: { CORN: 0.25 } }), runs[1].params));
+    assert.strictEqual(replay.jobCost.farm.net, runs[1].metrics['farm.net.custom']);
   });
 });
