@@ -11,6 +11,7 @@
 import { FarmScenario }  from '../../scenarios/farm-scenario.js';
 import { farmReports }   from './farm-run.js';
 import { jobCostReport } from './farm-reports.js';
+import { exportOperators } from './farm-export.js';
 
 /**
  * The farm's worker-side Monte Carlo descriptor (design 134 §4, phase 2): how one path is
@@ -28,7 +29,12 @@ export const FARM_MC_SCENARIO = {
   paths:     (p) => p,
   telemetry: () => 'journal',
   sampler:   () => null,
-  evaluate:  () => (sim, cfg) => ({ metrics: farmPathMetrics(cfg, sim) }),
+  // `scheduleF` is the path's export rows (design 134 §8.2): each operator's calendar-year
+  // Schedule F, which the farm export carries per path for the household to draw.
+  evaluate:  () => (sim, cfg) => {
+    const r = farmReports(cfg, sim);
+    return { metrics: farmPathMetrics(cfg, sim, r), scheduleF: exportOperators(r.farm, r.ledger, r.cash) };
+  },
 };
 
 /** The two machinery bases (design 134 §5.3); every net is reported under both. */
@@ -59,10 +65,10 @@ export const FARM_BASES = Object.freeze({ custom: 'CUSTOM', actual: 'ACTUAL' });
  *
  * @param {object} cfg the path's loaded cfg (its params applied to `cfg.farm`)
  * @param {object} sim the path's stepped simulation
+ * @param {object} [base] `farmReports(cfg, sim)` at the custom basis, when the caller has it
  * @returns {Record<string, number|null>}
  */
-export function farmPathMetrics(cfg, sim) {
-  const base = farmReports(cfg, sim, { machineryBasis: FARM_BASES.custom });
+export function farmPathMetrics(cfg, sim, base = farmReports(cfg, sim, { machineryBasis: FARM_BASES.custom })) {
   const reports = {
     custom: base.jobCost,
     actual: jobCostReport(base.farm, base.ledger, {

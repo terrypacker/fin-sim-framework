@@ -87,9 +87,9 @@ export function demoFarm(y) {
     ],
     fields: [
       { id: 'a-home-irr', operatorId: 'opA', name: 'Home quarter (irrigated)', tenure: 'OWN',
-        plantedAcres: 125, irrigated: true, propertyTax: 9_000, fsaFarm: '1001' },
+        plantedAcres: 125, irrigated: true, propertyTax: 9_000, communityCollegeTax: 600, fsaFarm: '1001' },
       { id: 'a-home-dry', operatorId: 'opA', name: 'Home quarter (dry corners)', tenure: 'OWN',
-        plantedAcres: 30, irrigated: false, propertyTax: 1_200, fsaFarm: '1001' },
+        plantedAcres: 30, irrigated: false, propertyTax: 1_200, communityCollegeTax: 80, fsaFarm: '1001' },
       { id: 'a-west', operatorId: 'opA', name: 'West rented', tenure: 'CASH_RENT',
         rentedAcres: 80, plantedAcres: 78, irrigated: false, rentPerAcre: 190, fsaFarm: '1002' },
       { id: 'b-river', operatorId: 'opB', name: 'River rented (irrigated)', tenure: 'CASH_RENT',

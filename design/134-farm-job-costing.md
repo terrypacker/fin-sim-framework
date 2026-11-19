@@ -1,6 +1,6 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** rev 16 (19 Nov 2026): **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
+**Status:** rev 17 (19 Nov 2026): **phase 4 started** (§16): what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
 (§12.4) and the Field P&L panel is in the workbench (§12.5). **Phase 2 started** (§13): step 2a,
 the scenario-agnostic MC path and a farm batch on it, steps 2b–2d (realized yield, price paths, multiplier levers and the contracted share), 2e (calibration from USDA NASS, §13.8) and 2f (the Farm MC panel, §13.7) are built: **phase 2 is complete**. Owner questions Q1–Q20 and Q22–Q25 are answered (§3, §14); Q21, Q26 and the follow-ups Q22a,
 Q23a and Q25a (§14) are open. §7 records what the primary sources on disk decide. §8 is the household
@@ -22,7 +22,7 @@ Rev 9 records the acceptance import and the questions it raised (§12.4). Rev 10
 Field P&L panel (§12.5). Rev 11 splits phase 2 into steps and records step 2a (§13). Rev 12
 records steps 2b–2f; the calibration (§13.8) adds an irrigated-only yield shock and skewed
 yield draws, both of which the data required. Rev 13 records the owners' answers to Q22–Q25
-and the follow-ups they leave (§14). Rev 14 opens phase 3 (§15). Rev 15 records step 3c, ARC-County (§15.3). Rev 16 records 3d and 3e, which complete phase 3 (§15.4).
+and the follow-ups they leave (§14). Rev 14 opens phase 3 (§15). Rev 15 records step 3c, ARC-County (§15.3). Rev 16 records 3d and 3e, which complete phase 3 (§15.4). Rev 17 opens phase 4 (§16).
 
 **Related:** design 98 (the sweepable parameter surface: per-record generated params become
 MC and optimizer levers), design 55 (configuration-driven parameters and record templates),
@@ -566,7 +566,7 @@ bad one for another in the same world.
 
 ## 11. Open questions
 
-Q21 (§12.3), Q26 (§13.8), Q22a, Q23a, Q25a (§14) and Q27–Q28 (§15.5) are for the owners. The fleet model (§5.6) and farm–market correlation (Q15) each
+Q21 (§12.3), Q26 (§13.8), Q22a, Q23a, Q25a (§14), Q27–Q28 (§15.5) and Q29–Q31 (§16.3) are for the owners. The fleet model (§5.6) and farm–market correlation (Q15) each
 need their own design later.
 
 ## 12. Phase 1 build notes (rev 8)
@@ -1202,3 +1202,76 @@ other two insure? Q26's per-field yield history is the same APH record.
 
 **Q28 (ARC-County):** for each FSA farm number, its county, its base acres by crop and its
 historical irrigated percentage (both are on the FSA-156EZ), and the 2026 election.
+
+## 16. Phase 4: the household link (rev 17)
+
+### 16.1 What the years after the export are (decided)
+
+The export covers one season: a full Schedule F for the crop year *Y*, and partial years
+*Y − 1* and *Y + 1* (§5.5). A household plan runs for decades. **The business-income record
+repeats year *Y* every year from its start until an end date the person sets** (retiring
+from farming, for instance), indexed to the household's inflation. Year *Y* is the right year
+to repeat because it is the only full one: it already holds last season's carry-in and next
+season's prepay, so repeating it assumes each season's carry-out equals the next one's
+carry-in. The partial years stay in the export for reading but are not imported.
+
+Under household MC, **each household year draws its own farm path** from the export, on its
+own keyed RNG stream (design 107 §15.5). Seasons are then independent of one another, and of
+the household's market draws (Q15). A deterministic household run uses the export's
+deterministic run.
+
+Two other shapes were rejected. Importing only the exported years would drop the farm's
+spread after year *Y* in a long plan. Repeating one drawn path in every year of a run would
+make every season of a run equally good or bad, which overstates the risk.
+
+### 16.2 Steps
+
+| Step | What | Section |
+|---|---|---|
+| 4a | The farm export: per operator and calendar year, the Schedule F lines and the household inputs; under MC, every path with its seed | §8.2 |
+| 4b | The business-income record on a person, into US tax (ordinary income, the SECA base) and Nebraska tax | §8.3 |
+| 4c | `import-farm.mjs`, on the `import-quicken.mjs` pattern | §8.3 |
+| 4d | Household MC draws a farm path per year | §8.3, §16.1 |
+| 4e | §199A, with P.L. 119-21's minimum deduction. The 2026 thresholds are in Rev. Proc. 2025-32, which is fetched first | §7.2 |
+| 4f | The Nebraska community-college credit (77-6706(4)) | §7.3 |
+| 4g | §461(l), the §172(b)(1)(B) farming-loss carryback, and §1301 averaging as an option | §7.2 |
+
+The export's optional owned-land-and-debt section (§8.2) waits for Q22a.
+
+### 16.3 Questions for the owners (Q29–Q31)
+
+None of these blocks a step. Each has a default the build uses until it is answered.
+
+**Q29 (community-college tax):** for each owned field, the community-college share of its
+property tax bill. 77-6702(1) counts the community-college area's levy, excluding bonded debt
+and voter-approved overrides. Until it is entered, the credit is 0.
+
+**Q30 (§199A above the threshold):** for each operator, the W-2 wages paid (hired labor) and
+the unadjusted basis of qualified property (machinery). Above the §199A threshold, the
+deduction is limited by these figures. Until they are entered they are 0, which gives the
+smaller deduction, and only a household above the threshold is affected.
+
+**Q31 (§1301):** for each operator's household, the taxable income of the three prior years.
+This is needed only if income averaging is elected.
+
+### 16.4 Step 4a: the farm export (built)
+
+`src/finance/farm/farm-export.js` builds the document and `npm run farm:export` writes it
+(`--n N --enable <keys>` adds MC paths; without `--out` it is a dry run). For each operator
+and calendar year a row carries the Schedule F income and expense lines, which of them are
+memo lines (4a, 6a), the gross, the expenses, the §464(d) deferral and the net. The row's
+`household` block carries what the operator's return needs:
+
+- **Schedule SE line 1a** is the Schedule F net (SE instructions 2026). The 92.35% factor
+  and the wage-base coordination stay on the household side, because they depend on its wages.
+- **QBI before adjustments** is also the net. The Form 8995 instructions reduce QBI by the
+  deductible part of SE tax, the SE health insurance deduction and retirement contributions,
+  and all three are figured on the household return (step 4e).
+- **The community-college tax paid.** A field's new `communityCollegeTax` (Q29) is part of its
+  `propertyTax` bill, and a larger value is a load error. It is spread over that field's
+  property tax payments in proportion, so it lands in the year paid, as 77-6706(4) credits it.
+
+Under MC, the farm descriptor's per-path result now carries the path's export rows beside its
+metrics. A path keeps only its **sampled** params, which replay it with the farm scenario.
+Otherwise every lever's centre would be repeated in every path, and a 1,000-path file would
+grow from about 6 MB to about 10 MB.
