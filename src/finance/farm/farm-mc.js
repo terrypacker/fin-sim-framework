@@ -8,6 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { DISTRIBUTION_TYPES }  from '../../simulation-framework/distributions.js';
 import { FarmScenario }        from '../../scenarios/farm-scenario.js';
 import { ScenarioSerializer }  from '../../scenarios/scenario-serializer.js';
 import { resolveRecordCenters } from '../../scenarios/scenario-param-apply.js';
@@ -27,9 +28,45 @@ import { samplingSignature }   from '../monte-carlo/parallel/mc-worker-core.js';
  * A batch that switches a row on is therefore a sensitivity run, and says so in its provenance.
  */
 export class FarmMcConfig extends McConfig {
-  static contributors = [];
+  static contributors = [({ cfg }) => buildYieldMcConfigs(cfg)];
   static aliases = {};
   static paramSchema() { return FarmScenario.getParamSchema(); }
+}
+
+/**
+ * The farm's own spreads (design 134 §6, §13.1 step 2e): the standard deviation of each drawn
+ * factor. **All 0 until calibrated**: no spread is set before its source is on disk, so a row
+ * switched on at 0 draws nothing and the path is the plan. Step 2e replaces these from USDA
+ * NASS yields and the price sources, and records where each came from.
+ */
+export const FARM_MC_SPREADS = Object.freeze({
+  /** The farm-wide yield shock, as a fraction of expected yield. */
+  farmYieldShockSd: 0,
+  /** A field's own yield shock, dry and irrigated. */
+  fieldYieldShockSd: Object.freeze({ dry: 0, irrigated: 0 }),
+});
+
+/**
+ * One row for the season's farm-wide yield shock and one per crop plan for its own (design 134
+ * §13.3), keyed on the generated levers so a draw lands on the record. Off, and at
+ * `FARM_MC_SPREADS`, so the harvest's generic ±20% never reaches them.
+ *
+ * @param {object|null} cfg the farm scenario
+ */
+export function buildYieldMcConfigs(cfg, spreads = FARM_MC_SPREADS) {
+  const farm = cfg?.farm;
+  if (!farm?.seasons?.length) return [];
+  const irrigated = new Map((farm.fields ?? []).map(f => [f.id, f.irrigated === true]));
+  const row = (paramKey, label, stdDev) => ({
+    paramKey, label, type: DISTRIBUTION_TYPES.NORMAL, mean: 0, stdDev, group: 'Farm · yield', enabled: false,
+    // The centre IS what the model reads for a blank shock (`blankValue` 0), not a made-up mean.
+    effectiveDefault: true,
+  });
+  return [
+    ...farm.seasons.map(s => row(`farm.season.${s.id}.yieldShock`, 'Farm-wide yield shock', spreads.farmYieldShockSd)),
+    ...(farm.cropPlans ?? []).map(p => row(`farm.plan.${p.id}.yieldShock`, `${p.id} — yield shock`,
+      irrigated.get(p.fieldId) ? spreads.fieldYieldShockSd.irrigated : spreads.fieldYieldShockSd.dry)),
+  ];
 }
 
 /**

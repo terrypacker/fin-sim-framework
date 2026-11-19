@@ -17,13 +17,13 @@ import {
  *
  * ```js
  * cfg.farm = {
- *   seasons:       [{ id, cropYear, calendar? }],            // phase 1: exactly one
+ *   seasons:       [{ id, cropYear, calendar?, yieldShock?, irrigatedYieldBeta? }], // exactly one
  *   operators:     [{ id, name, farmRelated?, prior3PrepaidSupplies?, prior3FarmExpenses? }],
  *   fields:        [{ id, operatorId, name, tenure, rentedAcres, plantedAcres, irrigated,
  *                     rentPerAcre, propertyTax, fsaFarm?, baseAcres?, provenYield? }],
  *   products:      [{ id, name, category, unit, unitPrice, discountPct }],
  *   operations:    [{ id, name, customRatePerAcre }],
- *   cropPlans:     [{ id, fieldId, crop, expectedYield, insurancePremiumPerAcre,
+ *   cropPlans:     [{ id, fieldId, crop, expectedYield, yieldShock?, insurancePremiumPerAcre,
  *                     irrigationElectricity }],
  *   prescriptions: [{ id, planId, productId | operationId, ratePerAcre, passes, share, paidDate? }],
  *   machinery:     [{ id, operatorId, amount, paidDate? }],
@@ -148,7 +148,11 @@ export function normalizeFarm(farm) {
   const y = Number(season0?.cropYear);
   const calendar = { ...defaultCalendar(y), ...(season0?.calendar ?? {}) };
   calendar.harvestDates = { ...defaultCalendar(y).harvestDates, ...(season0?.calendar?.harvestDates ?? {}) };
-  const season = season0 ? { ...season0, cropYear: y, calendar } : null;
+  const season = season0 ? {
+    ...season0, cropYear: y, calendar,
+    yieldShock:         season0.yieldShock ?? 0,
+    irrigatedYieldBeta: season0.irrigatedYieldBeta ?? 1,
+  } : null;
   const sid = season?.id ?? null;
 
   const rows = (t) => (Array.isArray(src[t]) ? src[t] : []).map(r => ({ ...r }));
@@ -169,6 +173,7 @@ export function normalizeFarm(farm) {
   }
   for (const p of out.products) p.discountPct ??= 0;
   for (const p of out.cropPlans) {
+    p.yieldShock ??= 0;
     p.insurancePremiumPerAcre ??= 0;
     p.irrigationElectricity   ??= 0;
   }
@@ -227,6 +232,10 @@ export function validateFarm(farm) {
   }
   if (!f.season.id) err('farm.seasons[0] needs an id');
   if (!Number.isInteger(f.season.cropYear)) err('farm.seasons[0].cropYear must be a whole year');
+  if (!isNum(f.season.yieldShock)) err('farm.seasons[0].yieldShock must be a number');
+  if (!isNum(f.season.irrigatedYieldBeta) || f.season.irrigatedYieldBeta < 0) {
+    err('farm.seasons[0].irrigatedYieldBeta must be a number ≥ 0');
+  }
 
   const ids = new Map();
   for (const t of FARM_TABLES) {
@@ -281,6 +290,7 @@ export function validateFarm(farm) {
     need('cropPlans', r, 'fieldId', 'fields');
     crop('cropPlans', r);
     nonNeg('cropPlans', r, 'expectedYield', { required: true });
+    if (!isNum(r.yieldShock)) err(`farm.cropPlans "${r.id}": yieldShock must be a number`);
     nonNeg('cropPlans', r, 'insurancePremiumPerAcre');
     nonNeg('cropPlans', r, 'irrigationElectricity');
     const field = f.fields.find(x => x.id === r.fieldId);
@@ -404,6 +414,28 @@ export function validateFarm(farm) {
     date('carryOut', r, 'paidDate');
   }
   return errs;
+}
+
+/**
+ * The yield a crop plan actually harvests, per planted acre (design 134 §6, §13.3):
+ *
+ *     expectedYield × max(0, 1 + β·season.yieldShock + plan.yieldShock)
+ *
+ * where β is `season.irrigatedYieldBeta` on an irrigated field and 1 on a dry one. The season
+ * shock is the farm-wide factor every field shares; the plan shock is the field's own.
+ *
+ * `expectedYield` stays the PLAN: the breakevens and the contracted share are measured against
+ * it, and only the harvest uses this. Both shocks are 0 unless a run sets them, so a
+ * deterministic season harvests exactly what it planned.
+ *
+ * @param {object} farm normalized farm
+ * @param {object} plan normalized crop plan
+ * @param {object} [field] the plan's field (looked up when omitted)
+ * @returns {number}
+ */
+export function realizedYield(farm, plan, field = farm.fields.find(x => x.id === plan.fieldId)) {
+  const beta = field?.irrigated ? farm.season.irrigatedYieldBeta : 1;
+  return plan.expectedYield * Math.max(0, 1 + beta * farm.season.yieldShock + plan.yieldShock);
 }
 
 /** The harvest date of `crop` in a resolved season calendar. */

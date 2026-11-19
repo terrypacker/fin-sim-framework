@@ -193,7 +193,8 @@ export function variablesMissingCenter(variables) {
  * A Monte Carlo variable catalog. Subclass it and set the static hooks above.
  */
 export class McConfig {
-  /** `({ params }) => rows[]`, run in order; their rows come first. */
+  /** `({ params, cfg }) => rows[]`, run in order; their rows come first. `cfg` is the loaded
+   *  scenario (null for library callers), for a catalog whose rows come from its records. */
   static contributors = [];
   /** Legacy key → successor key. */
   static aliases = {};
@@ -237,7 +238,7 @@ export class McConfig {
    */
   buildVariables(params, { cfg = null } = {}) {
     const C = this.constructor;
-    const contributed = C.contributors.flatMap(fn => fn({ params }));
+    const contributed = C.contributors.flatMap(fn => fn({ params, cfg }));
     const schema = [
       ...C.paramSchema(),
       ...(cfg ? ScenarioParamGenerator.generate(cfg) : []),

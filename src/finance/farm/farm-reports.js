@@ -9,7 +9,7 @@
  */
 
 import { SCHEDULE_F_LINES, isProductCategory } from './schedule-f.js';
-import { TENURE, priceOn, harvestDateFor } from './farm-records.js';
+import { TENURE, priceOn, harvestDateFor, realizedYield } from './farm-records.js';
 import { poolKey } from './farm-postings.js';
 
 /**
@@ -75,7 +75,8 @@ export function farmLedger(journal) {
  * Allocation of an operator-level posting to that operator's plans:
  * - `ACRES` by planted acres; `OWNED_ACRES` by planted acres on owned fields; `FIELDS` by
  *   planted acres on the overhead record's own `fieldIds`;
- * - `BUSHELS` (a grain pool's revenue and storage) by each plan's expected bushels in the pool.
+ * - `BUSHELS` (a grain pool's revenue and storage) by the bushels each plan harvested into it
+ *   (`realizedYield`; the expected bushels in a deterministic season).
  * A posting with no plan to land on (an `OWNED_ACRES` cost for an operator with no owned field)
  * is reported as `unallocated` on the operator, never dropped.
  *
@@ -102,6 +103,8 @@ export function jobCostReport(farm, ledger, { machineryBasis = 'CUSTOM', pools =
       operatorId: f.operatorId, crop: plan.crop, irrigated: f.irrigated, tenure: f.tenure,
       acres: f.plantedAcres, expectedYield: plan.expectedYield,
       expectedBushels: f.plantedAcres * plan.expectedYield,
+      realizedYield: realizedYield(farm, plan, f),
+      harvestedBushels: f.plantedAcres * realizedYield(farm, plan, f),
     }));
   }
   // A field with no crop plan still carries its rent and tax, on a job of its own.
@@ -111,6 +114,7 @@ export function jobCostReport(farm, ledger, { machineryBasis = 'CUSTOM', pools =
       jobId: `field:${f.id}`, planId: null, fieldId: f.id, fieldName: f.name ?? f.id,
       operatorId: f.operatorId, crop: null, irrigated: f.irrigated, tenure: f.tenure,
       acres: f.plantedAcres, expectedYield: 0, expectedBushels: 0,
+      realizedYield: 0, harvestedBushels: 0,
     }));
   }
   const plansOf = (op) => [...rows.values()].filter(r => r.operatorId === op && r.planId);
@@ -121,7 +125,8 @@ export function jobCostReport(farm, ledger, { machineryBasis = 'CUSTOM', pools =
     const op = p.operatorId;
     if (p.allocation === 'BUSHELS') {
       const [, crop] = p.jobId.slice('pool:'.length).split('|');
-      return plansOf(op).filter(r => r.crop === crop).map(r => [r, r.expectedBushels]);
+      // A pool's revenue and storage follow the bushels each plan put into it (§13.3).
+      return plansOf(op).filter(r => r.crop === crop).map(r => [r, r.harvestedBushels]);
     }
     if (p.allocation === 'FIELDS') {
       const ids = new Set(overheadById.get(p.sourceId)?.fieldIds ?? []);
@@ -160,9 +165,15 @@ export function jobCostReport(farm, ledger, { machineryBasis = 'CUSTOM', pools =
   }
   for (const x of extra) {
     const targets = plansOf(x.operatorId).filter(r => r.crop === x.crop);
-    const total = targets.reduce((s, r) => s + r.expectedBushels, 0);
+    const total = targets.reduce((s, r) => s + r.harvestedBushels, 0);
+    if (!(total > 0)) {
+      // No plan harvested any of this crop (a failed crop, or carry-in grain only): the value
+      // is the operator's, reported unallocated rather than dropped.
+      (unallocated[x.operatorId] ??= { cost: 0, revenue: 0 }).revenue += x.amount;
+      continue;
+    }
     for (const r of targets) {
-      const share = x.amount * (r.expectedBushels / total);
+      const share = x.amount * (r.harvestedBushels / total);
       r.revenue.grainOnHand += share;
       r.revenue.grain += share;
     }
@@ -284,12 +295,13 @@ export function breakevens(r) {
 
 function _sumRows(list, keys, machineryBasis) {
   const r = _emptyRow({
-    ...keys, acres: 0, expectedBushels: 0, expectedYield: null,
+    ...keys, acres: 0, expectedBushels: 0, expectedYield: null, harvestedBushels: 0, realizedYield: null,
   });
   let priceWeight = 0, priceSum = 0;
   for (const x of list) {
     r.acres += x.acres;
     r.expectedBushels += x.expectedBushels;
+    r.harvestedBushels += x.harvestedBushels;
     r.revenue.grain += x.revenue.grain;
     r.revenue.grainOnHand += x.revenue.grainOnHand;
     r.revenue.other += x.revenue.other;
