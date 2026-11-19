@@ -64,7 +64,7 @@ test('WagesWithheld: debits US cash pool and increments usWithheldYTD (I3)', () 
   assert.equal(next.usWithheldYTD, 1700);
 });
 
-test('BusinessIncome: credits a year of income, chains SE tax, records its CPI base once (I3)', () => {
+test('BusinessIncome: credits a year of income, chains SE tax and QBI, records its CPI base once (I3)', () => {
   const r = new BusinessIncomeApplyReducer(makeServices());
   const action = { type: 'BUSINESS_INCOME_APPLY', amount: 4000, residency: 'US', personKey: 'p',
     businessIncomeId: 'farm', indexBase: 1.03 };
@@ -72,7 +72,7 @@ test('BusinessIncome: credits a year of income, chains SE tax, records its CPI b
   const next = runAcct(r, state, action);
   assert.equal(next.usSavingsAccount.balance, 14000);
   assert.deepEqual(next.businessIncomeIndexBase, { farm: 1.03 });
-  assert.deepEqual(r.reduce(state, action, DATE).next.map(a => a.type), ['SE_INCOME_US_TAX']);
+  assert.deepEqual(r.reduce(state, action, DATE).next.map(a => a.type), ['SE_INCOME_US_TAX', 'QBI_US_TAX']);
   // A later year keeps the first year's base.
   const again = runAcct(r, next, { ...action, indexBase: 1.06 });
   assert.deepEqual(again.businessIncomeIndexBase, { farm: 1.03 });

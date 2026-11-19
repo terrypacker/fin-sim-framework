@@ -12,7 +12,7 @@ stamps:
   param:businessIncomeFarmPaths: 4622e2
   param:mcFarmPaths: f159da
   src/finance/farm/farm-export.js: 20aad3
-  src/finance/payroll/business-income.js: 1a8c09
+  src/finance/payroll/business-income.js: 91ef8b
 ---
 
 A farm scenario and a household plan stay **separate scenarios**, joined by a file. The farm
@@ -48,6 +48,13 @@ independent of the household's markets. A single run pays the deterministic net 
 turn the draw on; Monte Carlo turns it on unless you turn it off, which isolates the
 household's own risk.
 
-**What is not there yet.** The QBI deduction, the Nebraska community-college credit, the
-excess business loss limit, the farming-loss carryback and income averaging are later steps
-of design 134 phase 4.
+**The QBI deduction.** The farm net is qualified business income, less its share of the
+deductible half of self-employment tax, and the return takes 20% of it as a deduction from
+taxable income, capped at 20% of taxable income less net capital gain. Above the year's
+threshold the deduction is limited by the farm's W-2 wages and the basis of its machinery
+(`qbiW2Wages`, `qbiUbia` on the row). With neither entered it phases out across the range
+and only the minimum deduction (from 2026) is left. A net loss carries to next year's QBI.
+All the household's farm rows count as one business.
+
+**What is not there yet.** The Nebraska community-college credit, the excess business loss
+limit, the farming-loss carryback and income averaging are later steps of design 134 phase 4.

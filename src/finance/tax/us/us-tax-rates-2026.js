@@ -64,6 +64,15 @@ export class UsTaxRates2026 extends UsTaxRatesBase {
     ];
 
     this._stdDeduction_single = 16_100;
+
+    // §199A (design 134 step 4e): Rev. Proc. 2025-32 §3.26 (docs/us-tax/IRS-Rev-Proc-2025-32-Inflation-Adjustments-2026.txt). Phase-in: P.L. 119-21 §70105(a) range; §199A(i) minimum $400 on $1,000 of active QBI, unindexed in 2026.
+    this._qbiThresholdMfj    = 403_500;
+    this._qbiThresholdSingle = 201_750;
+    this._qbiPhaseInMfj      = 150_000;
+    this._qbiPhaseInSingle   = 75_000;
+    this._qbiMinDeduction    = 400;
+    this._qbiMinActiveQbi    = 1_000;
+
     this._ficaWageBase        = ficaWageBase(2026);  // §3121(a)(1), from fica-rates.js
     this._feieCap             = 132_900; // Foreign Earned Income Exclusion cap 2026 (IRC §911)
   }

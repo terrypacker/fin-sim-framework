@@ -151,7 +151,8 @@ export class SeIncomeUsApplyReducer extends AccountServiceReducer {
  * Design 134 step 4b: a person's business income (`cfg.businessIncome`), one signed amount a
  * year. Credits the US cash pool (a loss debits it: the household funds the farm's loss) and
  * chains SE_INCOME_US_TAX, so the Schedule F net is ordinary income AND the SECA base, exactly
- * as a self-employed wage is. Records the row's CPI base on its first payment.
+ * as a self-employed wage is, and QBI_US_TAX, its §199A inputs (step 4e). Records the row's CPI
+ * base on its first payment.
  */
 export class BusinessIncomeApplyReducer extends AccountServiceReducer {
   static type        = 'BusinessIncomeApplyReducer';
@@ -163,17 +164,21 @@ export class BusinessIncomeApplyReducer extends AccountServiceReducer {
     this.accountService = accountService;
     this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['BUSINESS_INCOME_APPLY'];
-    this.generatedActionTypes = ['SE_INCOME_US_TAX'];
+    this.generatedActionTypes = ['SE_INCOME_US_TAX', 'QBI_US_TAX'];
   }
 
   reduce(state, action) {
-    const { amount, residency, personKey, businessIncomeId, indexBase } = action;
+    const { amount, residency, personKey, businessIncomeId, indexBase, qbiW2Wages = 0, qbiUbia = 0 } = action;
     this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], amount, null);
     const bases = state.businessIncomeIndexBase ?? {};
     const updates = bases[businessIncomeId] == null
       ? { businessIncomeIndexBase: { ...bases, [businessIncomeId]: indexBase } }
       : {};
-    return this.newState(state, updates, [{ type: 'SE_INCOME_US_TAX', amount, residency, personKey }]);
+    return this.newState(state, updates, [
+      { type: 'SE_INCOME_US_TAX', amount, residency, personKey },
+      // §199A (design 134 step 4e): the whole net is QBI before the household's adjustments.
+      { type: 'QBI_US_TAX', qbi: amount, w2Wages: qbiW2Wages, ubia: qbiUbia, personKey },
+    ]);
   }
 }
 
@@ -391,12 +396,14 @@ export class BusinessIncomeHandler extends HandlerEntry {
     const residency = state.people?.[personKey]?.residency ?? null;
     const accNow    = state.inflationAccumulator?.US ?? 1;
     const accBase   = state.businessIncomeIndexBase?.[data.businessIncomeId] ?? null;
-    const { net } = businessIncomeAmounts(data, accNow, accBase);
+    const { net, factor } = businessIncomeAmounts(data, accNow, accBase);
     return [
       { type: 'BUSINESS_INCOME_APPLY', amount: net, residency, personKey,
         businessIncomeId: data.businessIncomeId, indexBase: accBase ?? accNow,
         // Which farm MC path paid this year (design 134 step 4d); null for the deterministic run.
-        farmPathSeed: data.farmPathSeed ?? null },
+        farmPathSeed: data.farmPathSeed ?? null,
+        // §199A wage and property limits (design 134 Q30), in the row's first-year money.
+        qbiW2Wages: Number(data.qbiW2Wages ?? 0) * factor, qbiUbia: Number(data.qbiUbia ?? 0) * factor },
       new FieldValueAction('business_income', 'Business Income (Schedule F)', net),
       new RecordBalanceAction(`${cashKey}.balance`, cashKey),
     ];

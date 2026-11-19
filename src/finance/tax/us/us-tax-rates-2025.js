@@ -67,6 +67,15 @@ export class UsTaxRates2025 extends UsTaxRatesBase {
     ];
 
     this._stdDeduction_single = 15_000;
+
+    // §199A (design 134 step 4e): Form 8995 instructions 2025, Exceptions 1–2 (docs/us-tax/IRS-Form-8995-Instructions-2025.txt). Phase-in: P.L. 119-21 §70105 widens the range only from 2026.
+    this._qbiThresholdMfj    = 394_600;
+    this._qbiThresholdSingle = 197_300;
+    this._qbiPhaseInMfj      = 100_000;
+    this._qbiPhaseInSingle   = 50_000;
+    this._qbiMinDeduction    = 0;
+    this._qbiMinActiveQbi    = 1_000;
+
     this._ficaWageBase        = ficaWageBase(2025);  // §3121(a)(1), from fica-rates.js
     this._feieCap             = 130_000; // Foreign Earned Income Exclusion cap 2025 (IRC §911)
   }

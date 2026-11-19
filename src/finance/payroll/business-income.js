@@ -19,6 +19,8 @@
  *   paymentDay?,                  // 'MM-DD', default '12-15'
  *   net,                          // the year's Schedule F net, signed: a loss is negative
  *   neCommunityCollegeTax?,       // Nebraska community-college tax paid that year (77-6706)
+ *   qbiW2Wages?, qbiUbia?,        // §199A W-2 wages paid and unadjusted basis of qualified
+ *                                 // property (design 134 Q30); default 0
  *   source? }                     // where it came from (the farm export), for reading only
  * ```
  *
@@ -94,6 +96,9 @@ export function validateBusinessIncome(rows, persons) {
     if (!Number.isFinite(Number(r.net)) || r.net === '' || r.net == null) errors.push(`${label}: net must be a number.`);
     if (r.neCommunityCollegeTax != null && !(Number(r.neCommunityCollegeTax) >= 0)) {
       errors.push(`${label}: neCommunityCollegeTax must be 0 or more.`);
+    }
+    for (const f of ['qbiW2Wages', 'qbiUbia']) {
+      if (r[f] != null && !(Number(r[f]) >= 0)) errors.push(`${label}: ${f} must be 0 or more.`);
     }
   }
   return errors;

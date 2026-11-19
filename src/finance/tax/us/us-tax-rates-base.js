@@ -96,6 +96,19 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
   _ficaWageBase     = 0;
 
   /**
+   * §199A (design 134 step 4e). The threshold amount (§199A(e)(2)), the width of the
+   * phase-in range (§199A(b)(3)(B)), and the §199A(i) minimum deduction with the active QBI
+   * it needs. Zero thresholds in a module that sets none phase the wage limit in at once,
+   * which with no W-2 wages is the smaller deduction.
+   */
+  _qbiThresholdMfj    = 0;
+  _qbiThresholdSingle = 0;
+  _qbiPhaseInMfj      = 100_000;
+  _qbiPhaseInSingle   = 50_000;
+  _qbiMinDeduction    = 0;
+  _qbiMinActiveQbi    = 1_000;
+
+  /**
    * Foreign Earned Income Exclusion cap (Form 2555), USD (design 52 §4.2).
    * Year-specific statutory amount set on each subclass; 0 on the base means no
    * exclusion. Inflation-indexed by InflationAdjustedUsTaxRates like the brackets,
@@ -272,7 +285,16 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     const agi             = usOrdinaryIncomeYTD + capLoss.shortTermGain - capLoss.allowance
                             - usNegativeIncomeYTD - seDeduction - usSection988LossYTD
                             - invInt.allowed;
-    const taxableOrdinary = Math.max(0, agi - stdDeduction);
+    // Step 1a: §199A (design 134 step 4e), a deduction from taxable income, not from AGI.
+    // It enters exactly where the standard deduction does, so every reader below that
+    // stacks gains on taxable ordinary income, or keeps the Form 1116 identity, sees one
+    // deduction figure.
+    const qbi = _computeQbiDeduction(state, {
+      agi, stdDeduction, seDeduction, usSeEarningsYTD,
+      netCapitalGain: capLoss.longTermGain + capLoss.collectibleGain + capLoss.unrecaptured1250Gain,
+    }, this, usFilingSingle);
+    const belowTheLine    = stdDeduction + qbi.deduction;
+    const taxableOrdinary = Math.max(0, agi - belowTheLine);
 
     // The part of the deduction ordinary income could not absorb. Form 1040 line 15 is
     // AGI *less* the deduction, and AGI includes capital gain — so a deduction larger
@@ -290,7 +312,7 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // same for 28-percent rate gain against whatever is left. So the order is §1250
     // first, then collectibles, then the 0/15/20 layer last. That is the most expensive
     // order for the taxpayer of the three available, and it is the one the statute names.
-    const unusedDeduction = Math.max(0, stdDeduction - agi);
+    const unusedDeduction = Math.max(0, belowTheLine - agi);
     const shelter1250     = Math.min(capLoss.unrecaptured1250Gain, unusedDeduction);
     const shelterColl     = Math.min(capLoss.collectibleGain,      unusedDeduction - shelter1250);
     const shelterLtcg     = Math.min(capLoss.longTermGain,         unusedDeduction - shelter1250 - shelterColl);
@@ -515,7 +537,7 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     const totalGrossIncome      = usOrdinaryIncomeYTD + bondDeflationLoss
                                   + capLoss.shortTermGain + cg + collectibles + unrecap1250;
     const grossIncomeAllSources = Math.max(0, totalGrossIncome);
-    const unrelatedDeductions   = stdDeduction + seDeduction + Math.max(0, usNegativeIncomeYTD)
+    const unrelatedDeductions   = belowTheLine + seDeduction + Math.max(0, usNegativeIncomeYTD)
                                   + bondDeflationLoss
                                   + Math.max(0, usSection988LossYTD)
                                   // §163(d) investment interest (design 86 G3 error 1).
@@ -620,9 +642,13 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
         penalties:           usPenaltyYTD,
         foreignEarnedIncomeExclusion: feieExcluded,
         standardDeduction:   stdDeduction,
+        qbiDeduction:        qbi.deduction,
       },
       adjustedGrossIncome: agi,
       taxableIncome:       taxableOrdinary,
+      // §199A (design 134 step 4e). `closing` is the qualified business loss carried to next
+      // year (§199A(c)(2)); UsTaxSettleApplyReducer persists it, as it does the other pools.
+      qbi,
       // §1211/§1212 (design 90 §4). `closingShort`/`closingLong` are what
       // UsTaxSettleApplyReducer persists; everything else is for the worksheet and for
       // tests that need to see the netting without re-deriving it.
@@ -756,6 +782,12 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
           : []),
         { label: 'Adjusted Gross Income',               amount:  agi },
         { label: 'Standard Deduction',                  amount: -stdDeduction },
+        ...(qbi.deduction > 0
+          ? [{ label: 'Qualified Business Income Deduction (§199A)', amount: -qbi.deduction }]
+          : []),
+        ...(qbi.closing > 0
+          ? [{ label: 'Qualified Business Loss — carried forward (§199A(c)(2))', amount: qbi.closing }]
+          : []),
         { label: 'Taxable Ordinary Income',             amount:  taxableOrdinary },
         ...(feieExcluded > 0
           ? [{ label: 'Foreign Earned Income Exclusion (Form 2555)', amount: -excludedStacked }]
@@ -1180,6 +1212,79 @@ function _ftcStrict() {
  *   `adjustment` is added to `usOrdinaryIncomeYTD`; `foreignAdjustment` is its
  *   foreign-source share, added to the passive basket's gross.
  */
+/**
+ * IRC §199A, the qualified business income deduction (design 134 step 4e;
+ * docs/us-tax/…-sec199A.txt as amended by P.L. 119-21 §70105).
+ *
+ * **What QBI is here.** `usQbiYTD` is the year's business-income rows (Schedule F nets),
+ * signed. QBI is reduced by "the deductible part of self-employment tax" attributable to the
+ * business (Form 8995 instructions 2025): the ½ SE-tax deduction × the business's share of
+ * the year's SE earnings. Health insurance and retirement contributions are the other two
+ * adjustments the instructions list; the model has neither for a business. A self-employed
+ * JOB is not fed in: whether it is a specified service trade (§199A(d)) is a question the
+ * model cannot answer, and including it would change every self-employed plan.
+ *
+ * **One trade or business.** All the household's rows are treated as one aggregated trade
+ * (Reg. §1.199A-4 lets commonly controlled businesses elect that), so their W-2 wages and
+ * UBIA (`usQbiW2WagesYTD`, `usQbiUbiaYTD`) are summed, and a loss row nets against a profitable
+ * one before the 20%.
+ *
+ * **The steps**, in the statute's order:
+ *   1. QBI = Σ rows − the SE-tax adjustment − last year's qualified business loss (§199A(c)(2)).
+ *      If that is negative there is no deduction, and it carries forward (`closing`).
+ *   2. 20% × QBI, limited above the threshold by the greater of 50% of W-2 wages or 25% of
+ *      W-2 wages + 2.5% of UBIA (§199A(b)(2)); phased in linearly across the range
+ *      (§199A(b)(3)(B)). With no wages or UBIA, the deduction phases out to 0 across the range.
+ *   3. The lesser of that and 20% × (taxable income − net capital gain) (§199A(a)), taxable
+ *      income figured without this deduction (§199A(e)(1)).
+ *   4. From 2026, at least the minimum deduction (§199A(i)) when active QBI is at least its
+ *      floor. An operator materially participates, so a farm row is active.
+ *
+ * Pure, like the other limitation helpers: the FITO counterfactual re-runs computeTax, so
+ * the settle persists `closing` rather than this drawing a pool down.
+ *
+ * @returns {{ qbiIncome, seAdjustment, opening, qbi, w2Wages, ubia, taxableIncome, threshold,
+ *   phaseIn, twentyPercent, wageLimit, component, incomeCap, minimum, deduction, closing }}
+ */
+export function _computeQbiDeduction(state, { agi, stdDeduction, seDeduction, usSeEarningsYTD, netCapitalGain }, rates, filingSingle) {
+  const qbiIncome = state?.usQbiYTD ?? 0;
+  const opening   = Math.max(0, state?.usQbiLossCarryforward ?? 0);
+  const w2Wages   = Math.max(0, state?.usQbiW2WagesYTD ?? 0);
+  const ubia      = Math.max(0, state?.usQbiUbiaYTD ?? 0);
+  const zero = {
+    qbiIncome, seAdjustment: 0, opening, qbi: 0, w2Wages, ubia, taxableIncome: 0,
+    threshold: 0, phaseIn: 0, twentyPercent: 0, wageLimit: 0, component: 0, incomeCap: 0,
+    minimum: false, deduction: 0, closing: 0,
+  };
+  if (qbiIncome === 0 && opening === 0) return zero;
+
+  const share = qbiIncome > 0 && usSeEarningsYTD > 0 ? Math.min(1, qbiIncome / usSeEarningsYTD) : 0;
+  const seAdjustment = seDeduction * share;
+  const qbi = qbiIncome - seAdjustment - opening;
+  if (qbi <= 0) return { ...zero, seAdjustment, qbi, closing: -qbi };
+
+  const threshold = filingSingle ? rates._qbiThresholdSingle : rates._qbiThresholdMfj;
+  const phaseIn   = filingSingle ? rates._qbiPhaseInSingle   : rates._qbiPhaseInMfj;
+  const gains     = Math.max(0, netCapitalGain);
+  const taxableIncome = Math.max(0, agi + gains - stdDeduction);
+
+  const twentyPercent = 0.20 * qbi;
+  const wageLimit = Math.max(0.50 * w2Wages, 0.25 * w2Wages + 0.025 * ubia);
+  let component;
+  if (taxableIncome <= threshold || wageLimit >= twentyPercent) component = twentyPercent;
+  else if (taxableIncome >= threshold + phaseIn) component = wageLimit;
+  else component = twentyPercent - (twentyPercent - wageLimit) * (taxableIncome - threshold) / phaseIn;
+
+  const incomeCap = 0.20 * Math.max(0, taxableIncome - gains);
+  let deduction = Math.min(component, incomeCap);
+  const minimum = rates._qbiMinDeduction > 0 && qbi >= rates._qbiMinActiveQbi && deduction < rates._qbiMinDeduction;
+  if (minimum) deduction = rates._qbiMinDeduction;
+  return {
+    qbiIncome, seAdjustment, opening, qbi, w2Wages, ubia, taxableIncome, threshold, phaseIn,
+    twentyPercent, wageLimit, component, incomeCap, minimum, deduction, closing: 0,
+  };
+}
+
 /**
  * IRC §163(d) investment interest limitation — design 86 G3 error 1.
  *

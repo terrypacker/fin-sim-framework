@@ -61,6 +61,15 @@ export class UsTaxRates2024 extends UsTaxRatesBase {
     ];
 
     this._stdDeduction_single = 14_600;
+
+    // §199A (design 134 step 4e): Rev. Proc. 2023-34 §3.27 (docs/us-tax/IRS-Rev-Proc-2023-34-Inflation-Adjustments-2024.txt). Phase-in: the pre-P.L. 119-21 $50,000 / $100,000 range; no minimum deduction before 2026.
+    this._qbiThresholdMfj    = 383_900;
+    this._qbiThresholdSingle = 191_950;
+    this._qbiPhaseInMfj      = 100_000;
+    this._qbiPhaseInSingle   = 50_000;
+    this._qbiMinDeduction    = 0;
+    this._qbiMinActiveQbi    = 1_000;
+
     this._ficaWageBase        = 168_600; // IRS Social Security wage base 2024
     this._feieCap             = 126_500; // Foreign Earned Income Exclusion cap 2024 (IRC §911)
   }

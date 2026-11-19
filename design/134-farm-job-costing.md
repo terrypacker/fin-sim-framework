@@ -1333,3 +1333,45 @@ it is independent of the market draws (Q15). The event, and `BUSINESS_INCOME_APP
 path's `farmPathSeed`, so the journal shows which farm season paid each year. The CPI indexing
 of §16.5 applies to the drawn figures. A row with no paths pays its deterministic figures with
 the switch on or off, so a plan without a farm runs exactly as before.
+
+### 16.8 Step 4e: §199A (built)
+
+**Sources first.** Rev. Proc. 2025-32 (2026) and Rev. Proc. 2023-34 (2024) are now on disk.
+The 2026 rates module already cited the first for its brackets without the file. The
+thresholds:
+
+| Year | Joint | Other | Range (joint/other) | Minimum | Source |
+|---|---|---|---|---|---|
+| 2024 | 383,900 | 191,950 | 100,000 / 50,000 | none | Rev. Proc. 2023-34 §3.27 |
+| 2025 | 394,600 | 197,300 | 100,000 / 50,000 | none | Form 8995 instructions 2025 |
+| 2026 | 403,500 | 201,750 | 150,000 / 75,000 | 400 on 1,000 | Rev. Proc. 2025-32 §3.26; P.L. 119-21 §70105 |
+| 2027 | 416,600 | 208,300 | 150,000 / 75,000 | 415 on 1,030 | Rev. Proc. 2026-35 §3.28 |
+
+A projected year indexes the threshold and the minimum like the brackets (§199A(e)(2)(B),
+(i)(3)). The range is a fixed width in the statute, so it is not indexed.
+
+**The model** (`_computeQbiDeduction`):
+
+- **QBI.** The business-income rows chain `QBI_US_TAX`. QBI is their net less the deductible
+  half of SE tax in proportion to their share of SE earnings (Form 8995 instructions), less
+  last year's qualified business loss (§199A(c)(2)).
+- **The limits.** The deduction is 20% of QBI. Above the threshold it is limited by the
+  §199A(b)(2) wage and property limit, phased in linearly across the range, then capped at
+  20% of taxable income less net capital gain. From 2026 it is at least the minimum. An
+  operator materially participates, so a farm row is an active trade.
+- **Where it enters.** It is a deduction from taxable income, not from AGI, and enters
+  exactly where the standard deduction does, so the gain stacking and the Form 1116 identity
+  see one deduction. Nebraska starts from federal AGI and does not see it.
+- **The carryforward.** A net loss carries forward through the settle, which writes
+  `usQbiLossCarryforward`, as it does the other pools.
+- **One trade or business.** All the household's rows are treated as one aggregated trade
+  (Reg. §1.199A-4 allows that for commonly controlled businesses). Their W-2 wages and UBIA
+  are the row fields `qbiW2Wages` and `qbiUbia` (Q30), summed and indexed like the net.
+- **Self-employed jobs stay out.** A self-employed job is not fed in. Whether it is a
+  specified service trade (§199A(d)) is a question the model cannot answer, and feeding it in
+  would change every self-employed plan. That is a gap, recorded here.
+
+**Effect on `us-farm-operator`.** Only its fixture moved. In 2027 QBI is 48,000 − 3,391.09
+= 44,608.91, and the deduction is 8,921.78, under the 27,560 income cap. Taxable income falls
+by exactly that, and ordinary tax by 24% of it. Taxes paid over the run fall by \$6,545. The
+other 13 goldens are byte-identical.

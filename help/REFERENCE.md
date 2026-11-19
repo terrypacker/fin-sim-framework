@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-245 parameters · 36 panels · 13 node types (209 fields) · 184 action types · 100 tools · 353 state field types · 83 topics · 142 design docs
+245 parameters · 36 panels · 13 node types (209 fields) · 185 action types · 100 tools · 357 state field types · 83 topics · 142 design docs
 
 ---
 
@@ -1818,7 +1818,7 @@ docblock, not re-authored here. Arguments come from each script's declarative
 
 ---
 
-## Journal action types (184)
+## Journal action types (185)
 
 Every action a toolset declares, with its payload shape. A type declared by more than
 one toolset is one row: the toolsets compose into a single run, so it is one action in
@@ -1873,7 +1873,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `BOND_SLEEVE_COUPON_APPLY` | amount: currency(USD), federalTaxableAmount: currency(USD), stateTaxableAmount: currency(USD), stateKey: text, taxMode: text, residency: text | US_RETIREMENT |
 | `BONUS_APPLY` | amount: currency(USD), residency: text, personKey: text | US_INCOME |
 | `BONUS_TAX` | amount: currency(USD), residency: text, personKey: text | US_INCOME |
-| `BUSINESS_INCOME_APPLY` | amount: currency(USD), residency: text, personKey: text, businessIncomeId: text, indexBase: number, farmPathSeed: number | US_INCOME |
+| `BUSINESS_INCOME_APPLY` | amount: currency(USD), residency: text, personKey: text, businessIncomeId: text, indexBase: number, farmPathSeed: number, qbiW2Wages: currency(USD), qbiUbia: currency(USD) | US_INCOME |
 | `CASH_SLEEVE_INTEREST_APPLY` | amount: currency(USD), stateKey: text, taxMode: text, residency: text | US_RETIREMENT |
 | `CHANGE_RESIDENCY_APPLY` | — | US_AU_CROSS_BORDER |
 | `CHANGE_STATE_RESIDENCY_APPLY` | destination: text | US_STATE_TAX |
@@ -1938,6 +1938,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `POOL_FLOW_APPLY` | flowId: text, from: text, to: text, amountBase: number, year: number | ECONOMIC_REGIMES |
 | `PROPERTY_PURCHASE_APPLY` | stateKey: text, price: number, cashDue: number, purchaseMs: number, section988: any | AU_REAL_PROPERTY, US_REAL_PROPERTY |
 | `PROPERTY_RETURN_STEP_APPLY` | marketDev: number, deviation: any, driftComp: any | ECONOMIC_REGIMES |
+| `QBI_US_TAX` | qbi: currency(USD), w2Wages: currency(USD), ubia: currency(USD), personKey: text | US_INCOME |
 | `REBALANCE_TO_TARGET_APPLY` | stateKey: text, role: text, taxable: any, country: text, legs: any | ECONOMIC_REGIMES |
 | `RECOMPUTE_REGIMES` | — | ECONOMIC_REGIMES |
 | `RECORD_BALANCE` | fieldPath: text, metricKey: text | AU_TAX, US_TAX |
@@ -2014,7 +2015,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 
 ---
 
-## State field types (353)
+## State field types (357)
 
 The scenario-INDEPENDENT half of `StateSchemaRegistry`: the globs and exact paths it
 installs in its own constructor, with the value type that decides how each formats.
@@ -2343,6 +2344,10 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `usPassiveLossCarryforward` | currency(USD) |
 | `usPenaltyYTD` | currency(USD) |
 | `usPersonHousehold` | boolean |
+| `usQbiLossCarryforward` | currency(USD) |
+| `usQbiUbiaYTD` | currency(USD) |
+| `usQbiW2WagesYTD` | currency(USD) |
+| `usQbiYTD` | currency(USD) |
 | `usSection988DisallowedLossYTD` | currency(USD) |
 | `usSection988GainYTD` | currency(USD) |
 | `usSeEarningsYTD` | currency(USD) |
@@ -2421,7 +2426,7 @@ what the in-app panel keys on.
 | [Event Sourcing](concepts/event-sourcing.md) | concept | 381 | 3 panels · design 2, 16, 91 |
 | [Node History](panels/exec-history.md) | panel | 191 | 1 panel |
 | [Farm MC](panels/farm-mc.md) | panel | 247 | 1 panel · design 134 |
-| [Farm Results into a Household Plan](workflows/farm-to-household.md) | workflow | 410 | 2 params · 2 tools · design 134 |
+| [Farm Results into a Household Plan](workflows/farm-to-household.md) | workflow | 509 | 2 params · 2 tools · design 134 |
 | [Field P&L](panels/field-pnl.md) | panel | 243 | 1 panel · design 134 |
 | [Funding and Instalments](concepts/funding-and-instalments.md) | concept | 248 | 2 panels · 3 params · design 107 |
 | [FX](concepts/fx.md) | concept | 390 | 2 panels · 6 params · design 47, 87, 122 |

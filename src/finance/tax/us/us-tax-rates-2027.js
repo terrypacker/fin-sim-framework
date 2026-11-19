@@ -65,6 +65,15 @@ export class UsTaxRates2027 extends UsTaxRatesBase {
     ];
 
     this._stdDeduction_single = 16_600;   // §3.15
+
+    // §199A (design 134 step 4e): Rev. Proc. 2026-35 §3.28 (docs/us-tax/IRS-Rev-Proc-2026-35-Inflation-Adjustments-2027.txt). Phase-in: §199A(i)(3) indexed minimum, §3.28(2).
+    this._qbiThresholdMfj    = 416_600;
+    this._qbiThresholdSingle = 208_300;
+    this._qbiPhaseInMfj      = 150_000;
+    this._qbiPhaseInSingle   = 75_000;
+    this._qbiMinDeduction    = 415;
+    this._qbiMinActiveQbi    = 1_030;
+
     this._ficaWageBase        = ficaWageBase(2027);  // §3121(a)(1), from fica-rates.js
     this._feieCap             = 137_300; // §3.41 — Foreign Earned Income Exclusion (IRC §911)
   }

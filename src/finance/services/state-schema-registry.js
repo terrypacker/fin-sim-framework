@@ -707,6 +707,11 @@ export class StateSchemaRegistry {
 
     // US payroll, withholding, §988 and 401(k) accumulators — the US return is in USD.
     this.register('usSeEarningsYTD',               ParameterValueType.currency('USD'));
+    // Design 134 step 4e — §199A inputs and the qualified business loss carried forward.
+    this.register('usQbiYTD',                      ParameterValueType.currency('USD'));
+    this.register('usQbiW2WagesYTD',               ParameterValueType.currency('USD'));
+    this.register('usQbiUbiaYTD',                  ParameterValueType.currency('USD'));
+    this.register('usQbiLossCarryforward',         ParameterValueType.currency('USD'));
     this.register('usSsWagesYTD',                  ParameterValueType.currency('USD'));
     this.registerPattern('usSsWagesByPersonYTD.*', ParameterValueType.currency('USD'));
     this.register('usWithheldYTD',                 ParameterValueType.currency('USD'));
