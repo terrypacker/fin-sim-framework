@@ -379,6 +379,7 @@ I3/I4/I5 applies here.
 | `AssetAppreciateReducer` | I1 I4 I7 (scalar value) | ✅ backfill |
 | `UsMortgagePaymentApplyReducer` | I3 I4 I5 I7 (not I1 — §7.3) | ✅ backfill |
 | `AuMortgagePaymentApplyReducer` | I3 I4 I5 I7 (not I1 — §7.3) | ✅ backfill |
+| `FarmLedgerReducer` (design 134) | I1 I2 I4 I7 (pools, receivables, cash net) | ✅ `evt-farm-job-costing` |
 
 ---
 

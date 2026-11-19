@@ -181,7 +181,7 @@ export async function collectActions() {
 
 /* ──────────────────────────────── tools ──────────────────────────────── */
 
-const TOOL_DIRS = ['scenario', 'lab', 'montecarlo', 'probes', 'tax', 'dev', 'config-converters'];
+const TOOL_DIRS = ['scenario', 'farm', 'lab', 'montecarlo', 'probes', 'tax', 'dev', 'config-converters'];
 
 /**
  * Pull the one-line purpose out of a script's docblock.

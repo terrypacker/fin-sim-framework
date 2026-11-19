@@ -190,6 +190,8 @@ export const COVERED = [
   // `bond-par-conservation`, which needs a rebalance running across dated bonds because
   // the sell leg is where par was silently left behind (design 93 §2.3).
   'REBALANCE_TO_TARGET_APPLY',
+  // design 134 — the farm ledger (`farm-demo`: costs, grain pools, receivables paid later)
+  'FARM_LEDGER_POST', 'FARM_GRAIN_MOVE', 'FARM_RECEIVABLE_OPEN',
 ];
 
 /**

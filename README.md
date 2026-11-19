@@ -310,7 +310,7 @@ export const US_RETIREMENT = {
 };
 ```
 
-`ToolsetRegistry` maps IDs → toolset objects. `ScenarioLoader` ships with the production set: `US_BANKING`, `US_TAX`, `US_RETIREMENT`, `US_INCOME`, `US_BROKERAGE`, `US_REAL_PROPERTY`, `US_COLLECTIBLES`, `US_ROTH_CONVERSION`, `AU_BANKING`, `AU_TAX`, `AU_RETIREMENT`, `AU_INCOME`, `AU_BROKERAGE`, `AU_REAL_PROPERTY`, `US_AU_CROSS_BORDER`.
+`ToolsetRegistry` maps IDs → toolset objects. `ScenarioLoader` ships with the production set: `US_BANKING`, `US_TAX`, `US_RETIREMENT`, `US_INCOME`, `US_BROKERAGE`, `US_REAL_PROPERTY`, `US_COLLECTIBLES`, `US_ROTH_CONVERSION`, `AU_BANKING`, `AU_TAX`, `AU_RETIREMENT`, `AU_INCOME`, `AU_BROKERAGE`, `AU_REAL_PROPERTY`, `US_AU_CROSS_BORDER`, and the farm's `US_FARM_OPERATIONS` (design 134).
 
 `ScenarioCompiler.compile()`:
 1. Resolves the toolset dependency graph (DFS, no duplicates).
@@ -326,6 +326,8 @@ Three, registered in `PREBUILT_SCENARIOS` (`src/apps/simulation-workbench.js`) a
 - **`IntlRetirementScenario`** — the reference scenario. A married couple emigrating US→AU: all US + AU + cross-border toolsets, ~50 typed parameters via `getParamSchema()`, defaults in `INTL_RETIREMENT_DEFAULTS`. `src/scenarios/intl-retirement-scenario.js`.
 - **`UsSingleHomeownerScenario`** — one US person, age 45 to 85, deliberately the reference scenario's opposite in every dimension: single rather than married, single-country, accumulating rather than decumulating. Twenty working years of wages and payroll contributions, a mortgaged primary residence, Nebraska state income and inheritance tax, a non-gold collectible. `src/scenarios/us-single-homeowner-scenario.js`.
 - **`AuSingleHomeownerScenario`** — the same person in Australia, every figure in AUD, so the pair isolates the two tax systems rather than two different people. Superannuation Guarantee and Div 295 fund tax, a variable-rate mortgage tracking RBA cash + spread, franked resident dividends, and a classic car sold mid-run — the only AU-resident disposal of a true (non-gold) collectible in the suite. It is also the only household with no US person in it. `src/scenarios/au-single-homeowner-scenario.js`.
+
+**`FarmScenario`** (`src/scenarios/farm-scenario.js`, design 134) is registered in `SCENARIO_CLASS_BY_ID` but not yet in the workbench. It is not a household: no persons, no accounts, one toolset (`US_FARM_OPERATIONS`), and its records are flat id-joined tables in `cfg.farm` (`src/finance/farm/farm-records.js`). The journal is its job-cost ledger; `farm-reports.js` builds the per-field P&L with breakevens and a calendar-year Schedule F per operator from it, and `npm run farm:report` prints both. Its demo farm is the `farm-demo` golden.
 
 A new scenario class is one file: `scenarioId/scenarioName/getParamSchema/getToolsets/buildDefaultConfig`, plus an entry in each of those two registries. Per-record params (balances, property values, mortgage fields, sale years, the bequest year) are GENERATED from the records by `ScenarioParamGenerator`, so `getParamSchema()` should carry only what no single record owns.
 

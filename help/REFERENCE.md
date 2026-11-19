@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-243 parameters · 34 panels · 13 node types (209 fields) · 180 action types · 94 tools · 342 state field types · 80 topics · 142 design docs
+243 parameters · 34 panels · 13 node types (209 fields) · 183 action types · 95 tools · 352 state field types · 80 topics · 142 design docs
 
 ---
 
@@ -1116,11 +1116,11 @@ Explained in [`help/nodes`](nodes/reducer.md). 0 field(s) described by a record 
 
 ---
 
-## Headless tools (94)
+## Headless tools (95)
 
 Command-line entry points under `scripts/`. **Purpose** is harvested from each script's
 docblock, not re-authored here. Arguments come from each script's declarative
-`parseFlags` spec: 79 of 79 entry points carry one (design 108 D6 — all of them).
+`parseFlags` spec: 80 of 80 entry points carry one (design 108 D6 — all of them).
 6 scripts carry no docblock naming themselves and show `(undocumented)`.
 
 ### scripts/config-converters/
@@ -1176,6 +1176,16 @@ docblock, not re-authored here. Arguments come from each script's declarative
     - `--ref` (string) — restamp only this one reference
     - `--all` (flag) — restamp every topic (a bulk change that really did touch everything)
     - `--dry-run` (flag) — report what would change and write nothing
+
+### scripts/farm/
+
+- **`scripts/farm/farm-report.mjs`** — `npm run farm:report`
+  run one farm season and print its job-cost and cash reports (design 134)
+    - `--scenario` (string) — farm scenario export ({ scenarios: [...] } or one cfg); default: the demo farm
+    - `--index` (number, default `0`) — which scenario in the file
+    - `--machinery-basis` (string, default `CUSTOM`, one of CUSTOM|ACTUAL) — machinery in the job-cost net: custom-hire rates, or the real machinery figure
+    - `--json` (flag) — emit the reports as JSON
+    - `--verbose` (flag) — show the simulation's own console output
 
 ### scripts/lab/
 
@@ -1754,7 +1764,7 @@ docblock, not re-authored here. Arguments come from each script's declarative
 
 ---
 
-## Journal action types (180)
+## Journal action types (183)
 
 Every action a toolset declares, with its payload shape. A type declared by more than
 one toolset is one row: the toolsets compose into a single run, so it is one action in
@@ -1821,6 +1831,9 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `EQUITY_RETURN_STEP_APPLY` | marketDev: number, deviation: any, driftComp: any, bootstrap: any, marketShock: any, monthShape: any | ECONOMIC_REGIMES |
 | `EXPENSE_DEBIT` | amount: number, realizedAmount: number, priceLevel: number, spendCategory: text, capitalFraction: number, targetKey: text, section988: any | AU_RETIREMENT, US_RETIREMENT |
 | `EXPENSE_EVENT_APPLY` | amount: number, category: text, currency: text, propertyKey: text, capitalizeAmount: number, personId: text | AU_RETIREMENT, US_RETIREMENT |
+| `FARM_GRAIN_MOVE` | kind: enum, operatorId: text, crop: text, cropYear: number, pool: text, planId: text, bushels: number, shortBushels: number, sourceId: text | US_FARM_OPERATIONS |
+| `FARM_LEDGER_POST` | operatorId: text, jobId: text, cropYear: number, category: text, line: text, kind: enum, cash: boolean, allocation: text, amount: currency(USD), sourceId: text, receivableId: text, bushels: number, memo: text | US_FARM_OPERATIONS |
+| `FARM_RECEIVABLE_OPEN` | receivableId: text, sourceId: text, kind: enum, operatorId: text, crop: text, cropYear: number, pool: text, bushels: number, amount: currency(USD), paymentDate: text | US_FARM_OPERATIONS |
 | `FIXED_INCOME_CONTRIBUTION_APPLY` | amount: currency(USD) | US_BROKERAGE |
 | `FIXED_INCOME_EARNINGS_APPLY` | amount: currency(USD), stateKey: text, residency: text | US_BROKERAGE |
 | `FIXED_INCOME_EARNINGS_TAX` | amount: currency(USD), residency: text, stateKey: text | US_BROKERAGE |
@@ -1946,7 +1959,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 
 ---
 
-## State field types (342)
+## State field types (352)
 
 The scenario-INDEPENDENT half of `StateSchemaRegistry`: the globs and exact paths it
 installs in its own constructor, with the value type that decides how each formats.
@@ -2151,6 +2164,16 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `expenseRebaseRates.*` | fxRate |
 | `expenses.discretionary` | currency(USD) |
 | `expenses.essential` | currency(USD) |
+| `farm.cash.*` | currency |
+| `farm.contracted.*` | decimal |
+| `farm.cropYear` | year |
+| `farm.pools.*.bushels` | decimal |
+| `farm.pools.*.cropYear` | year |
+| `farm.pools.*.enteredMs` | date |
+| `farm.pools.*.harvested` | decimal |
+| `farm.receivables.*.amount` | currency |
+| `farm.receivables.*.bushels` | decimal |
+| `farm.receivables.*.cropYear` | year |
 | `foreignGeneralCapGainsYTD` | currency(USD) |
 | `foreignGeneralIncomeYTD` | currency(USD) |
 | `foreignPassiveCapGainsYTD` | currency(USD) |

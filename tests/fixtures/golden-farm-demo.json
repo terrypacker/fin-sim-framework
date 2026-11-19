@@ -1,0 +1,90 @@
+{
+ "farm": {
+  "cash": {
+   "opA": 27763.6238193,
+   "opB": -6432.22145791
+  },
+  "contracted": {
+   "opA|CORN|2026": 6000,
+   "opA|CORN|2027": 10000,
+   "opA|SOYBEANS|2027": 2500,
+   "opB|CORN|2027": 12000
+  },
+  "cropYear": 2027,
+  "pools": {
+   "opA|CORN|2026": {
+    "bushels": 0,
+    "crop": "CORN",
+    "cropYear": 2026,
+    "enteredMs": 1798761600000,
+    "harvested": 9000,
+    "operatorId": "opA"
+   },
+   "opA|CORN|2027": {
+    "bushels": 0,
+    "crop": "CORN",
+    "cropYear": 2027,
+    "enteredMs": 1823990400000,
+    "harvested": 28750,
+    "operatorId": "opA"
+   },
+   "opA|SOYBEANS|2027": {
+    "bushels": 0,
+    "crop": "SOYBEANS",
+    "cropYear": 2027,
+    "enteredMs": 1822348800000,
+    "harvested": 5556,
+    "operatorId": "opA"
+   },
+   "opB|CORN|2027": {
+    "bushels": 0,
+    "crop": "CORN",
+    "cropYear": 2027,
+    "enteredMs": 1823990400000,
+    "harvested": 32850,
+    "operatorId": "opB"
+   }
+  },
+  "receivables": {}
+ },
+ "metrics": {
+  "netLiquidity": 0,
+  "netWorth": 0,
+  "offsetAppliedCapacity": 0,
+  "offsetIdleCapacity": 0
+ },
+ "securities": {
+  "sec-auto-EQUITY_AU": {
+   "beta": 1,
+   "id": "sec-auto-EQUITY_AU",
+   "idioVol": 0,
+   "name": "Australian market index",
+   "rateKey": "EQUITY_AU",
+   "symbol": ""
+  },
+  "sec-auto-EQUITY_INTL_EX_AU": {
+   "beta": 1,
+   "id": "sec-auto-EQUITY_INTL_EX_AU",
+   "idioVol": 0,
+   "name": "International ex-AU market index",
+   "rateKey": "EQUITY_INTL_EX_AU",
+   "symbol": ""
+  },
+  "sec-auto-EQUITY_INTL_EX_US": {
+   "beta": 1,
+   "id": "sec-auto-EQUITY_INTL_EX_US",
+   "idioVol": 0,
+   "name": "International ex-US market index",
+   "rateKey": "EQUITY_INTL_EX_US",
+   "symbol": ""
+  },
+  "sec-auto-EQUITY_US": {
+   "beta": 1,
+   "id": "sec-auto-EQUITY_US",
+   "idioVol": 0,
+   "name": "US market index",
+   "rateKey": "EQUITY_US",
+   "symbol": ""
+  }
+ }
+}

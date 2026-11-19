@@ -267,6 +267,18 @@ export class StateSchemaRegistry {
     // CRRA running utility of consumption (design 39 §4) — a unitless utility sum.
     this.register('cumulativeConsumptionUtility', ParameterValueType.decimal(2));
 
+    // Design 134 — the farm ledger's state (`farm-classes.js`). Bushels are counts, not money.
+    this.register('farm.cropYear',                       ParameterValueType.year());
+    this.registerPattern('farm.cash.*',                  ParameterValueType.currency());
+    this.registerPattern('farm.contracted.*',            ParameterValueType.decimal(0));
+    this.registerPattern('farm.pools.*.bushels',         ParameterValueType.decimal(0));
+    this.registerPattern('farm.pools.*.harvested',       ParameterValueType.decimal(0));
+    this.registerPattern('farm.pools.*.cropYear',        ParameterValueType.year());
+    this.registerPattern('farm.pools.*.enteredMs',       ParameterValueType.date());
+    this.registerPattern('farm.receivables.*.amount',    ParameterValueType.currency());
+    this.registerPattern('farm.receivables.*.bushels',   ParameterValueType.decimal(0));
+    this.registerPattern('farm.receivables.*.cropYear',  ParameterValueType.year());
+
     // Holdings (design 25 §5.6). Per-account exact paths take precedence
     // when an account stamps them with its specific currency; globs cover
     // anything the per-account stamp misses.

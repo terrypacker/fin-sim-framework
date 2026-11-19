@@ -31,6 +31,7 @@
     "help:gate": "node scripts/dev/check-help.mjs",
     "help:restamp": "node scripts/dev/restamp-help.mjs",
     "scenario": "node scripts/scenario/run-scenario.mjs",
+    "farm:report": "node scripts/farm/farm-report.mjs",
     "diff": "node scripts/scenario/diff-scenarios.mjs",
     "sweep": "node scripts/scenario/sweep-scenario.mjs",
     "import:quicken": "node scripts/scenario/import-quicken.mjs",
