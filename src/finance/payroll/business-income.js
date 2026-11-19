@@ -128,6 +128,31 @@ export function validateBusinessIncomePaths(paths, rows) {
 }
 
 /**
+ * Every reason `cfg.usPriorReturns` cannot be read (design 134 step 4g-3, Q31). One flat row
+ * per year before the run, `{ year, taxableIncome }`: the household's federal taxable income
+ * that year (Form 1040 line 15), which may be negative. The farming-loss carryback and
+ * Schedule J read the last three.
+ *
+ * @param {Array<object>} rows
+ * @returns {string[]} empty when valid
+ */
+export function validateUsPriorReturns(rows) {
+  if (rows == null) return [];
+  if (!Array.isArray(rows)) return ['usPriorReturns must be a list'];
+  const errors = [];
+  const seen = new Set();
+  for (const r of rows) {
+    if (!Number.isInteger(r?.year)) { errors.push('Prior return: `year` must be a whole year.'); continue; }
+    if (seen.has(r.year)) errors.push(`Prior return ${r.year}: duplicate year.`);
+    seen.add(r.year);
+    if (r.taxableIncome == null || r.taxableIncome === '' || !Number.isFinite(Number(r.taxableIncome))) {
+      errors.push(`Prior return ${r.year}: taxableIncome must be a number.`);
+    }
+  }
+  return errors;
+}
+
+/**
  * The payment dates of one row inside a run, by year.
  *
  * @param {object} row a valid business-income row

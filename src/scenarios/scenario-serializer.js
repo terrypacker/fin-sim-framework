@@ -514,6 +514,8 @@ export class ScenarioSerializer {
       ...(scenario.businessIncome?.length ? { businessIncome: scenario.businessIncome.map(b => ({ ...b })) } : {}),
       // Its MC paths (one row per farm path), joined by `businessIncomeId`.
       ...(scenario.businessIncomePaths?.length ? { businessIncomePaths: scenario.businessIncomePaths.map(p => ({ ...p })) } : {}),
+      // Design 134 step 4g-3 (Q31): taxable income of the years before the run.
+      ...(scenario.usPriorReturns?.length ? { usPriorReturns: scenario.usPriorReturns.map(r => ({ ...r })) } : {}),
       // Design 134 — the farm records, flat id-joined tables of plain authored data.
       // Emitted only when present, so no household scenario gains a key.
       ...(scenario.farm ? { farm: structuredClone(scenario.farm) } : {}),

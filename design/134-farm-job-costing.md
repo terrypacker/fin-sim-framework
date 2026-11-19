@@ -1,6 +1,6 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** rev 17 (19 Nov 2026): **phase 4 started** (§16): what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
+**Status:** rev 18 (19 Nov 2026): **phase 4 COMPLETE** (§16) bar the export's land-and-debt section (Q22a): the export and import (4a–4c), a farm path per household year (4d), §199A (4e), the Nebraska community-college credit (4f), and the NOL, §461(l), the farming-loss carryback and §1301 averaging (4g, §16.10–16.11). Rev 17: phase 4 started, what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
 (§12.4) and the Field P&L panel is in the workbench (§12.5). **Phase 2 started** (§13): step 2a,
 the scenario-agnostic MC path and a farm batch on it, steps 2b–2d (realized yield, price paths, multiplier levers and the contracted share), 2e (calibration from USDA NASS, §13.8) and 2f (the Farm MC panel, §13.7) are built: **phase 2 is complete**. Owner questions Q1–Q20 and Q22–Q25 are answered (§3, §14); Q21, Q26 and the follow-ups Q22a,
 Q23a and Q25a (§14) are open. §7 records what the primary sources on disk decide. §8 is the household
@@ -1448,3 +1448,56 @@ nets the loss in its year and carries nothing.
 **Effect.** All goldens are byte-identical: none loses more than its other income. A test
 household with a 400,000 drought loss in 2027 disallows 136,000 (over 2027's 264,000
 threshold). Its wage absorbs the rest, and 2028 deducts the 136,000.
+
+### 16.11 Step 4g-3: the farming-loss carryback and §1301 averaging (built)
+
+Both need past returns, which a simulation has to keep itself.
+
+**The return history** (`usReturnHistory`). It is seeded only for a plan with business-income
+rows. Each settle appends the year's taxable income, preferential gain, NOL base, NOL used and
+the brackets it was taxed at, then keeps the last three years. Keeping the brackets lets a past
+year be recomputed at its own (possibly projected) rates and filing status, which Schedule J
+requires. The April re-filing (design 94) recomputes from a state pre-image, so the rows hold
+everything and nothing has to be looked up later.
+
+Years before the run come from **`cfg.usPriorReturns`** (Q31): one flat row per year,
+`{year, taxableIncome}`, at that year's published brackets. A year before 2024 uses 2024's
+table, the oldest registered.
+
+**The carryback** (`_farmingLossCarryback`, inside the loss limits).
+
+- **What carries back.** The whole NOL that arises is a farming loss, since every row is a
+  Schedule F ((b)(1)(B)(ii)). The §461(l) excess carries forward only ((l)(2)).
+- **Order and limit.** The loss goes to the second year back, then the first ((b)(2)). Each
+  takes at most 80% of its taxable income before NOL deductions and §199A, less the NOL
+  deductions it already took ((b)(2)(A), (C)).
+- **The refund.** Each year's regular tax is recomputed on the lower income, ordinary first
+  (Form 1045). The settle chains `US_TAX_REFUND_CREDIT {carryback: true}` and amends those
+  years' rows.
+- **The election.** `usFarmingLossCarryback` defaults to on, the statute's default. Off is the
+  (b)(1)(B)(iv) waiver.
+- **Approximation, recorded.** A past year's §199A deduction and credits are not refigured, so
+  the refund runs a little high for a year that took the deduction.
+
+**§1301** (`_computeFarmIncomeAveraging`, opt-in `usFarmIncomeAveraging`, Q11b).
+
+- **EFI.** The rows' net, less the farm's share of the SE-tax deduction, less any excess
+  business loss, capped at taxable income (Schedule J instructions, line 2a).
+- **The tax.** This year's regular tax on TI − EFI, plus each base year's extra regular tax on
+  base TI + EFI/3 at that year's brackets. The election takes the EFI with the least total.
+  The total is piecewise linear, so every bracket edge and both ends are tried, which is
+  exact.
+- **Applied as.** A reduction of `regularTax`.
+- **Base years.** Each is "as previously adjusted": the settle adds EFI/3 to each, and bases
+  this year on TI − EFI (Schedule J line 3).
+- **Recorded gaps.** A negative base year is floored at 0, where the worksheet can allow a
+  negative, so the model understates the benefit. Only ordinary EFI is averaged. FTC limits
+  are not refigured. There is no election without three base years.
+
+**Effect.** All goldens' money is byte-identical. `us-farm-operator` gains only the history
+and the two election keys. In a test household, a 250,000 drought in 2027 after a good 2026,
+with 2025 from Q31, makes an NOL of 99,636. 40,000 (80% of 2025) goes to 2025 and 59,636 to
+2026, for a 19,227 refund, and nothing carries forward.
+
+**Phase 4 is complete** apart from the export's owned-land-and-debt section, which waits for
+Q22a.

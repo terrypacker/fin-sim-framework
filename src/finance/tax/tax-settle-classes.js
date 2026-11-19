@@ -599,6 +599,7 @@ class TaxSettleApplyReducerBase extends Reducer {
     const next = [];
     if (balanceDue > 0) next.push({ type: this.constructor.debitActionType, amount: balanceDue });
     if (refund > 0.01) next.push({ type: this.constructor.refundActionType, amount: +refund.toFixed(2) });
+    next.push(...this._extraActions(state, action));
     return this.newState({ ...state, ...resets, ...extra, ...pendingSnapshot }, {}, next);
   }
 
@@ -608,6 +609,9 @@ class TaxSettleApplyReducerBase extends Reducer {
    * pools + the FITO handoff; AU funds the US §904 current-year foreign tax.
    */
   _extraStatePatches(_state, _action) { return {}; }
+
+  /** Further actions the settle chains (design 134 step 4g-3: a carryback refund). */
+  _extraActions(_state, _action) { return []; }
 }
 
 /** Where the settle leaves the return's inputs for the April filing (design 94 §8.1l). */
@@ -659,6 +663,17 @@ export class UsTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
   static refundActionType = 'US_TAX_REFUND_CREDIT';
   static description     = 'Resets US YTD tax fields after settlement; persists the drawn-down §904 FTC pools + FITO handoff; chains US_TAX_PAYMENT_DEBIT when tax > 0.';
 
+  constructor() {
+    super();
+    this.generatedActionTypes = [...this.generatedActionTypes, 'US_TAX_REFUND_CREDIT'];
+  }
+
+  /** A farming-loss carryback's refund of the two prior years' tax (design 134 step 4g-3). */
+  _extraActions(_state, action) {
+    const refund = action.taxDetail?.nol?.carrybackRefund ?? 0;
+    return refund > 0.01 ? [{ type: 'US_TAX_REFUND_CREDIT', amount: +refund.toFixed(2), carryback: true }] : [];
+  }
+
   /**
    * Persist the per-basket FTC carryforward pools (drawn down + aged in
    * computeTax, design 52 §4.3) and the FITO handoff usTaxPaidOnUsSourceAud
@@ -708,6 +723,11 @@ export class UsTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
     const nol = action.taxDetail?.nol;
     if (nol?.closing != null && (nol.closing > 0.005 || state.usNolCarryforward != null)) {
       patches.usNolCarryforward = +nol.closing.toFixed(2);
+    }
+    // The return history carrybacks and Schedule J read (design 134 step 4g-3). Seeded only
+    // for a plan with business income, so no other plan gains the key.
+    if (Array.isArray(state.usReturnHistory)) {
+      patches.usReturnHistory = nextReturnHistory(state.usReturnHistory, action.taxDetail);
     }
     if (action.usTaxPaidOnUsSourceAud != null) {
       patches.usTaxPaidOnUsSourceAud = action.usTaxPaidOnUsSourceAud;
@@ -1317,4 +1337,47 @@ export class AuTaxPaymentDebitReducer extends TaxPaymentDebitReducerBase {
   static actionType  = 'AU_TAX_PAYMENT_DEBIT';
   static savingsRole = ACCOUNT_ROLES.AU_SAVINGS;
   static description = 'Debits the AU savings account for the tax amount; replenishes from investment accounts first when the balance is short.';
+}
+
+/**
+ * The return history after this year's settle (design 134 step 4g-3): the last three years'
+ * taxable income and brackets, which a farming-loss carryback and Schedule J read.
+ *
+ * - **Amended for a carryback.** Each year the loss was carried back to gets its taxable
+ *   income lowered and its NOL deduction raised.
+ * - **Adjusted for an election.** Schedule J adds a third of the EFI to each base year, "as
+ *   previously adjusted".
+ * - **This year appended.** Its Schedule J base is the taxable income less the EFI
+ *   (Schedule J line 3).
+ */
+export function nextReturnHistory(history, taxDetail) {
+  const s = taxDetail?.returnSummary;
+  if (!s || s.year == null) return history;
+  const rows = history.map(r => ({ ...r }));
+  for (const c of taxDetail?.nol?.carryback ?? []) {
+    const r = rows.find(x => x.year === c.year);
+    if (!r) continue;
+    const ord = Math.max(0, r.ordinary);
+    const fromOrd = Math.min(ord, c.absorbed);
+    r.ordinary = ord - fromOrd;
+    r.gain = Math.max(0, r.gain - (c.absorbed - fromOrd));
+    r.jBase = (r.jBase ?? ord) - c.absorbed;
+    r.nolUsed = (r.nolUsed ?? 0) + c.absorbed;
+  }
+  const av = taxDetail?.averaging;
+  if (av?.elected) {
+    for (const b of av.baseYears) {
+      const r = rows.find(x => x.year === b.year);
+      if (r) r.jBase = (r.jBase ?? r.ordinary) + b.allocated;
+    }
+  }
+  const efi = av?.elected ? av.electedFarmIncome : 0;
+  const round = (x) => +x.toFixed(2);
+  const row = {
+    year: s.year, ordinary: round(s.ordinary), gain: round(s.gain), jBase: round(s.ordinary - efi),
+    nolBase: round(s.nolBase), nolUsed: round(s.nolUsed),
+    brackets: s.brackets.map(([lo, r]) => [lo, r]), ltcgBrackets: s.ltcgBrackets.map(([lo, r]) => [lo, r]),
+  };
+  return [...rows.filter(r => r.year !== s.year), row]
+    .sort((a, b) => a.year - b.year).slice(-3);
 }

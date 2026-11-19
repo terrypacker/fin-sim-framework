@@ -216,6 +216,8 @@ export class ScenarioCompiler {
       businessIncome: Array.isArray(definition?.businessIncome) ? definition.businessIncome : [],
       // Its farm MC paths (step 4d), drawn one per year when `businessIncomeFarmPaths` is on.
       businessIncomePaths: Array.isArray(definition?.businessIncomePaths) ? definition.businessIncomePaths : [],
+      // Step 4g-3 (Q31): the household's taxable income in the years before the run.
+      usPriorReturns: Array.isArray(definition?.usPriorReturns) ? definition.usPriorReturns : [],
       spellsByPerson: buildSpellsByPerson(jobs, people, new Date(definition.simStart)),
       accounts:       services.accountService?.getAll()      ?? [],
       realProperties: services.realPropertyService?.getAll() ?? [],
