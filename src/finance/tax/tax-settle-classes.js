@@ -704,6 +704,11 @@ export class UsTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
     if (qbi?.closing != null && (qbi.closing > 0 || state.usQbiLossCarryforward != null)) {
       patches.usQbiLossCarryforward = +qbi.closing.toFixed(2);
     }
+    // §172 net operating loss (design 134 step 4g), the same contract.
+    const nol = action.taxDetail?.nol;
+    if (nol?.closing != null && (nol.closing > 0.005 || state.usNolCarryforward != null)) {
+      patches.usNolCarryforward = +nol.closing.toFixed(2);
+    }
     if (action.usTaxPaidOnUsSourceAud != null) {
       patches.usTaxPaidOnUsSourceAud = action.usTaxPaidOnUsSourceAud;
     }

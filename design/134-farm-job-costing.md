@@ -1403,3 +1403,48 @@ is a sole proprietor, so the person claims it, and a future entity-owned farm wo
 **Effect on `us-farm-operator`.** Only its fixture moved. The credit is 680 in 2027, then 680
 indexed by CPI. No golden household's credit exceeds its Nebraska tax, so the refund path is a
 KNOWN_GAP in the coverage manifest, unit-tested instead.
+
+### 16.10 Step 4g-1/2: the net operating loss and §461(l) (built)
+
+FinSim had **no net operating loss at all**. A loss larger than the rest of the return
+sheltered its capital gains and then vanished. §461(l)(2) turns a disallowed loss into an
+NOL, so the NOL had to come first. That splits 4g:
+
+| Sub-step | What | Status |
+|---|---|---|
+| 4g-1 | The §172 NOL: the year's loss under the (d) modifications, the 80% deduction, the carryforward | built |
+| 4g-2 | §461(l): the excess over the threshold added back and carried as an NOL | built |
+| 4g-3 | The §172(b)(1)(B) farming-loss carryback and §1301 averaging, both of which need prior years' returns | next |
+
+**Thresholds** (`_eblThresholdMfj`/`_Single`). A projected year indexes them (§461(l)(3)(C)).
+
+| Year | Joint | Other | Source |
+|---|---|---|---|
+| 2024 | 610,000 | 305,000 | Rev. Proc. 2023-34 §3.32 |
+| 2025 | 626,000 | 313,000 | Rev. Proc. 2024-40 §3.32 |
+| 2026 | 512,000 | 256,000 | Rev. Proc. 2025-32 §3.31; P.L. 119-21 §70601(b) re-based the index to 2024 |
+| 2027 | 528,000 | 264,000 | Rev. Proc. 2026-35 §3.33 |
+
+**The model** (`_computeBusinessLossLimits`, computed after AGI and before §199A):
+
+- **§461(l).** The business net is `usSeEarningsYTD`: the rows plus any self-employed job,
+  with no wages ((3)(A)'s last sentence). A loss over the threshold is added back to AGI.
+- **The year's NOL.** It comes only from a row's loss, the allowed part, and is what the rest
+  of the return cannot absorb. The capital loss allowance is added back ((d)(2)), and the
+  standard deduction counts only against nonbusiness income ((d)(4)). Nonbusiness income is
+  approximated as income less gross wages and positive SE earnings, which errs toward a
+  smaller NOL.
+- **The deduction.** It is the lesser of the carry and 80% of taxable income figured without
+  it and without §199A ((a)(2)(B); every loss in a run arises after 2017). It is taken above
+  the line, so AGI, §199A, NIIT and the §904 identity all see it. The add-back is gross income
+  for §904, and the deduction is an unrelated deduction.
+- **The carryforward.** The settle persists `usNolCarryforward`, written only once there is a
+  carry.
+
+**Gap, recorded: the state return.** Nebraska starts from federal AGI, so in law it sees both
+the add-back and the NOL deduction. This model's state base is its own sum of incomes, so it
+nets the loss in its year and carries nothing.
+
+**Effect.** All goldens are byte-identical: none loses more than its other income. A test
+household with a 400,000 drought loss in 2027 disallows 136,000 (over 2027's 264,000
+threshold). Its wage absorbs the rest, and 2028 deducts the 136,000.

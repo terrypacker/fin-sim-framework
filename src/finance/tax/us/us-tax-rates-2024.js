@@ -69,6 +69,9 @@ export class UsTaxRates2024 extends UsTaxRatesBase {
     this._qbiPhaseInSingle   = 50_000;
     this._qbiMinDeduction    = 0;
     this._qbiMinActiveQbi    = 1_000;
+    // §461(l)(3)(A)(ii)(II) excess business loss threshold (design 134 step 4g): Rev. Proc. 2023-34 §3.32 (docs/us-tax/IRS-Rev-Proc-2023-34-Inflation-Adjustments-2024.txt).
+    this._eblThresholdMfj    = 610_000;
+    this._eblThresholdSingle = 305_000;
 
     this._ficaWageBase        = 168_600; // IRS Social Security wage base 2024
     this._feieCap             = 126_500; // Foreign Earned Income Exclusion cap 2024 (IRC §911)

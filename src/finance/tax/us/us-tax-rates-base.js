@@ -109,6 +109,13 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
   _qbiMinActiveQbi    = 1_000;
 
   /**
+   * §461(l) excess business loss threshold (design 134 step 4g). Infinity in a module that sets
+   * none: no limit, rather than disallowing every business loss.
+   */
+  _eblThresholdMfj    = Infinity;
+  _eblThresholdSingle = Infinity;
+
+  /**
    * Foreign Earned Income Exclusion cap (Form 2555), USD (design 52 §4.2).
    * Year-specific statutory amount set on each subclass; 0 on the base means no
    * exclusion. Inflation-indexed by InflationAdjustedUsTaxRates like the brackets,
@@ -282,9 +289,17 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // step 4): `usNegativeIncomeYTD` and `usSection988LossYTD` are the documented pair
     // whose above-the-line treatment keeps the Form 1116 identity exact, and a capital
     // loss deduction belongs in the same place (§62(a)(3)).
-    const agi             = usOrdinaryIncomeYTD + capLoss.shortTermGain - capLoss.allowance
+    const agiBeforeLosses = usOrdinaryIncomeYTD + capLoss.shortTermGain - capLoss.allowance
                             - usNegativeIncomeYTD - seDeduction - usSection988LossYTD
                             - invInt.allowed;
+    // Step 1-: §461(l) and the §172 net operating loss (design 134 step 4g). A business loss
+    // over the threshold is added back and carried as an NOL; a loss the rest of the return
+    // cannot absorb is carried too; last years' NOL comes off here, above the line.
+    const nol = _computeBusinessLossLimits(state, {
+      agi: agiBeforeLosses, stdDeduction, capitalLossAllowance: capLoss.allowance,
+      netCapitalGain: capLoss.longTermGain + capLoss.collectibleGain + capLoss.unrecaptured1250Gain,
+    }, this, usFilingSingle);
+    const agi             = agiBeforeLosses + nol.excessBusinessLoss - nol.deduction;
     // Step 1a: §199A (design 134 step 4e), a deduction from taxable income, not from AGI.
     // It enters exactly where the standard deduction does, so every reader below that
     // stacks gains on taxable ordinary income, or keeps the Form 1116 identity, sees one
@@ -534,11 +549,13 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // to US-source income. That last one costs slightly less credit, never more, which
     // is the same direction as the §988 and §163(d) entries below.
     const bondDeflationLoss     = Math.max(0, -usBondInterestYTD);
-    const totalGrossIncome      = usOrdinaryIncomeYTD + bondDeflationLoss
+    // The §461(l) add-back (design 134 step 4g) is income the loss could not cancel, so it
+    // is gross income here; the NOL deduction joins the unrelated deductions below.
+    const totalGrossIncome      = usOrdinaryIncomeYTD + bondDeflationLoss + nol.excessBusinessLoss
                                   + capLoss.shortTermGain + cg + collectibles + unrecap1250;
     const grossIncomeAllSources = Math.max(0, totalGrossIncome);
     const unrelatedDeductions   = belowTheLine + seDeduction + Math.max(0, usNegativeIncomeYTD)
-                                  + bondDeflationLoss
+                                  + bondDeflationLoss + nol.deduction
                                   + Math.max(0, usSection988LossYTD)
                                   // §163(d) investment interest (design 86 G3 error 1).
                                   // Form 1116 would apportion it against the investment
@@ -643,12 +660,17 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
         foreignEarnedIncomeExclusion: feieExcluded,
         standardDeduction:   stdDeduction,
         qbiDeduction:        qbi.deduction,
+        nolDeduction:        nol.deduction,
+        excessBusinessLoss:  nol.excessBusinessLoss,
       },
       adjustedGrossIncome: agi,
       taxableIncome:       taxableOrdinary,
       // §199A (design 134 step 4e). `closing` is the qualified business loss carried to next
       // year (§199A(c)(2)); UsTaxSettleApplyReducer persists it, as it does the other pools.
       qbi,
+      // §461(l) and §172 (design 134 step 4g). `closing` is the NOL carried to next year;
+      // UsTaxSettleApplyReducer persists it.
+      nol,
       // §1211/§1212 (design 90 §4). `closingShort`/`closingLong` are what
       // UsTaxSettleApplyReducer persists; everything else is for the worksheet and for
       // tests that need to see the netting without re-deriving it.
@@ -782,6 +804,15 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
           : []),
         { label: 'Adjusted Gross Income',               amount:  agi },
         { label: 'Standard Deduction',                  amount: -stdDeduction },
+        ...(nol.excessBusinessLoss > 0
+          ? [{ label: 'Excess Business Loss disallowed (§461(l))', amount: nol.excessBusinessLoss }]
+          : []),
+        ...(nol.deduction > 0
+          ? [{ label: 'Net Operating Loss Deduction (§172)', amount: -nol.deduction }]
+          : []),
+        ...(nol.closing > 0
+          ? [{ label: 'Net Operating Loss — carried forward (§172(b))', amount: nol.closing }]
+          : []),
         ...(qbi.deduction > 0
           ? [{ label: 'Qualified Business Income Deduction (§199A)', amount: -qbi.deduction }]
           : []),
@@ -1212,6 +1243,68 @@ function _ftcStrict() {
  *   `adjustment` is added to `usOrdinaryIncomeYTD`; `foreignAdjustment` is its
  *   foreign-source share, added to the passive basket's gross.
  */
+/**
+ * §461(l) excess business loss and the §172 net operating loss, for an individual
+ * (design 134 step 4g). Sources: `sec461`, `sec172` and the Rev. Procs in docs/us-tax/.
+ *
+ * **§461(l).** The household's aggregate business net is `usSeEarningsYTD`: the
+ * business-income rows (signed) plus any self-employed job. Wages are left out, as
+ * (3)(A)'s last sentence requires. A net business loss over the year's threshold is
+ * disallowed: it is added back to income this year (`excessBusinessLoss`) and joins the
+ * NOL carried out (§461(l)(2)).
+ *
+ * **The year's NOL** (§172(c), (d)). Only a business loss makes one, and in this model that
+ * is a business-income row's loss (`usQbiYTD` < 0), since a job pays no negative wage. It is
+ * the part of the allowed loss that the rest of the return cannot absorb, figured with the
+ * §172(d) modifications:
+ * - no NOL deduction, so the carry-in is ignored ((d)(1));
+ * - a capital loss counts only against capital gains, so the §1211(b) allowance is added
+ *   back ((d)(2));
+ * - the standard deduction counts only against nonbusiness income ((d)(4)).
+ *
+ * Nonbusiness income is approximated as income less gross W-2 wages and positive
+ * self-employment earnings. A §402(g) deferral therefore lowers it a little, which makes
+ * the NOL a little smaller, never larger.
+ *
+ * **The NOL deduction** (§172(a)(2)(B)). Every loss in a run arises after 2017, so the
+ * deduction is the lesser of the carry-in and 80% of taxable income figured without it and
+ * without §199A. It is taken above the line (Schedule 1 line 8a), so it lowers AGI and
+ * everything read from AGI after it. In a year that makes a new NOL, taxable income is 0, so
+ * no carry-in is used. A carryforward has no time limit ((b)(1)(A)(ii)(II)).
+ *
+ * The farming-loss 2-year carryback (§172(b)(1)(B)) is not here. This helper treats every
+ * loss as carried forward, as the (b)(3) waiver election does.
+ *
+ * Pure: the settle persists `closing`.
+ *
+ * @returns {{ businessNet, threshold, excessBusinessLoss, opening, base, deduction,
+ *   arising, closing }}
+ */
+export function _computeBusinessLossLimits(state, { agi, stdDeduction, capitalLossAllowance, netCapitalGain }, rates, filingSingle) {
+  const businessNet = state?.usSeEarningsYTD ?? 0;
+  const rowNet      = state?.usQbiYTD ?? 0;
+  const opening     = Math.max(0, state?.usNolCarryforward ?? 0);
+  const threshold   = filingSingle ? rates._eblThresholdSingle : rates._eblThresholdMfj;
+  const excessBusinessLoss = Math.max(0, -businessNet - threshold);
+  const gains = Math.max(0, netCapitalGain);
+
+  // The year's NOL, from the loss left after §461(l).
+  let arising = 0;
+  const allowedLoss = Math.max(0, -rowNet - excessBusinessLoss);
+  if (allowedLoss > 0) {
+    const income = agi + excessBusinessLoss + Math.max(0, capitalLossAllowance) + gains;
+    const businessIncome = Math.max(0, state?.usSsWagesYTD ?? 0) + Math.max(0, businessNet - rowNet);
+    const nonbusiness = Math.max(0, income + allowedLoss - businessIncome);
+    const modifiedTaxable = income - Math.min(stdDeduction, nonbusiness);
+    arising = Math.min(allowedLoss, Math.max(0, -modifiedTaxable));
+  }
+
+  const base = Math.max(0, agi + excessBusinessLoss + gains - stdDeduction);
+  const deduction = Math.min(opening, 0.80 * base);
+  const closing = opening - deduction + arising + excessBusinessLoss;
+  return { businessNet, threshold, excessBusinessLoss, opening, base, deduction, arising, closing };
+}
+
 /**
  * IRC §199A, the qualified business income deduction (design 134 step 4e;
  * docs/us-tax/…-sec199A.txt as amended by P.L. 119-21 §70105).

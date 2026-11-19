@@ -136,6 +136,9 @@ export class InflationAdjustedUsTaxRates extends UsTaxRatesBase {
     this._qbiPhaseInSingle    = baseRates._qbiPhaseInSingle;
     this._qbiMinDeduction     = baseRates._qbiMinDeduction    * bracket;
     this._qbiMinActiveQbi     = baseRates._qbiMinActiveQbi    * bracket;
+    // §461(l)(3)(C): the excess business loss threshold is indexed like the brackets.
+    this._eblThresholdMfj     = baseRates._eblThresholdMfj    * bracket;
+    this._eblThresholdSingle  = baseRates._eblThresholdSingle * bracket;
     this._baseYear            = baseRates.year;
   }
 

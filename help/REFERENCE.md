@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-245 parameters · 36 panels · 13 node types (209 fields) · 187 action types · 100 tools · 358 state field types · 83 topics · 142 design docs
+245 parameters · 36 panels · 13 node types (209 fields) · 187 action types · 100 tools · 359 state field types · 83 topics · 142 design docs
 
 ---
 
@@ -2017,7 +2017,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 
 ---
 
-## State field types (358)
+## State field types (359)
 
 The scenario-INDEPENDENT half of `StateSchemaRegistry`: the globs and exact paths it
 installs in its own constructor, with the value type that decides how each formats.
@@ -2342,6 +2342,7 @@ framework, so listing one plan's accounts would be wrong for every other plan.
 | `usLongTermCapitalLossCarryforward` | currency(USD) |
 | `usNegativeIncomeYTD` | currency(USD) |
 | `usNetInvestmentIncomeYTD` | currency(USD) |
+| `usNolCarryforward` | currency(USD) |
 | `usOrdinaryIncomeYTD` | currency(USD) |
 | `usPassiveActivityIncomeYTD` | currency(USD) |
 | `usPassiveLossCarryforward` | currency(USD) |
@@ -2429,7 +2430,7 @@ what the in-app panel keys on.
 | [Event Sourcing](concepts/event-sourcing.md) | concept | 381 | 3 panels · design 2, 16, 91 |
 | [Node History](panels/exec-history.md) | panel | 191 | 1 panel |
 | [Farm MC](panels/farm-mc.md) | panel | 247 | 1 panel · design 134 |
-| [Farm Results into a Household Plan](workflows/farm-to-household.md) | workflow | 580 | 2 params · 2 tools · design 134 |
+| [Farm Results into a Household Plan](workflows/farm-to-household.md) | workflow | 581 | 2 params · 2 tools · design 134 |
 | [Field P&L](panels/field-pnl.md) | panel | 243 | 1 panel · design 134 |
 | [Funding and Instalments](concepts/funding-and-instalments.md) | concept | 248 | 2 panels · 3 params · design 107 |
 | [FX](concepts/fx.md) | concept | 390 | 2 panels · 6 params · design 47, 87, 122 |
