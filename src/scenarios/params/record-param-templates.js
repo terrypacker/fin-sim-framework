@@ -422,6 +422,13 @@ export const FARM_PARAM_TEMPLATES = {
       description: 'How much of the farm-wide yield shock an irrigated field takes: 1 the '
         + 'whole shock, 0 none of it. Dry fields always take all of it. Blank is the NASS '
         + 'calibration (design 134 §13.8).' },
+    // Design 134 §17.8 — the machine labor wage. Only where an operation's hours are priced
+    // (an acres per hour and a crew), else nothing reads it.
+    { field: 'laborPerHour', label: 'Machine Labor Wage', type: 'Number', mc: true, opt: false,
+      blankValue: 0, appliesTo: r => r._hasComputedLabor === true,
+      description: 'The hourly wage of whoever runs the operator\'s own machines, in dollars. '
+        + 'Each operation\'s hours (acres ÷ acres per hour × crew) are paid at it. 0 computes '
+        + 'no machine labor.' },
     // Design 134 §13.6 — one lever per cost family. A product category's multiplier exists only
     // where the farm buys that category (the generator lists the categories on the season row).
     ...Object.entries(SEASON_MULTIPLIERS).map(([field, covers]) => ({

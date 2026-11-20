@@ -1900,7 +1900,7 @@ machines (§17.6).
 | `operations` | `fuelPerAcre` | fuel per acre per trip (blank 0) |
 | `operations` | `acresPerHour` | throughput. With the wage it prices the hours. Blank computes no labor, and the advisory `LABOR_NO_THROUGHPUT` says so when a wage is set. `acresPerHourRange` keeps a range the importer priced at its midpoint. |
 | `prescriptions` (an operation) | `applications` | trips the operator's machines make, default `passes`. Spraying is charged per season (`passes` 1) but driven 3–4 times. |
-| `seasons` | `laborPerHour` | the wage of whoever runs the machines (blank 0) |
+| `seasons` | `laborPerHour` | the wage of whoever runs the machines (blank 0). A season lever, `farm.season.<id>.laborPerHour`, generated where an operation has acres per hour and a crew |
 | `trucking` (new table) | `operatorId, crop, leg, perBu` | `FIELD`: every harvested bushel. `STORAGE_TO_SALE`: a stored bushel, again. |
 
 **Postings.** Per operation prescription:

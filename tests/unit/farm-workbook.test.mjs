@@ -21,6 +21,7 @@ import { importFarmWorkbook, parseCsv, cellNumber, PRO_RATA } from '../../src/fi
 import { FarmScenario } from '../../src/scenarios/farm-scenario.js';
 import { runFarm }      from '../../src/finance/farm/farm-run.js';
 import { validateFarm } from '../../src/finance/farm/farm-records.js';
+import { ScenarioParamGenerator } from '../../src/scenarios/params/scenario-param-generator.js';
 import { latestPriceMonth, priceHistory } from '../../src/finance/farm/farm-price-history.js';
 
 // Columns as the owners' sheet has them, with its heading row, trailing spaces and mixed case.
@@ -299,6 +300,21 @@ describe('computed operation costs (design 134 §17.8)', () => {
     const dear = run({ ...farm, seasons: [{ ...farm.seasons[0], fuelMultiplier: 1.5 }] });
     near(total(dear, 'MACHINE_FUEL'), 1.5 * total(base, 'MACHINE_FUEL'));
     near(total(dear, 'MACHINE_LABOR'), total(base, 'MACHINE_LABOR'));
+  });
+
+  test('the machine labor wage is a lever where hours are priced, and scales only the labor', () => {
+    const { farm } = imp();
+    const keys = ScenarioParamGenerator.generate({ farm }).map(e => e.key);
+    const key = `farm.season.${farm.seasons[0].id}.laborPerHour`;
+    assert.ok(keys.includes(key), 'an operation with acres per hour prices its hours');
+    const noHours = { ...farm, operations: farm.operations.map(({ acresPerHour, ...o }) => o) };
+    assert.ok(!ScenarioParamGenerator.generate({ farm: noHours }).some(e => e.key === key), 'no hours: nothing reads the wage');
+    const base = run(farm);
+    const cfg = FarmScenario.buildDefaultConfig({ farm });
+    cfg.parameters = { [key]: 54 };
+    const dear = quiet(() => runFarm(cfg));
+    near(total(dear, 'MACHINE_LABOR'), 2 * total(base, 'MACHINE_LABOR'));
+    near(total(dear, 'MACHINE_FUEL'), total(base, 'MACHINE_FUEL'));
   });
 
   test('trucking: every bushel out of the field; again from storage only for what leaves after harvest', () => {

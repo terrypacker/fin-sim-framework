@@ -189,6 +189,7 @@ export class ScenarioParamGenerator {
           _hasVariableRate:   (cfg.farm.overhead ?? []).some(o => o.variableRate === true),
           _hasIrrigated:      (cfg.farm.fields ?? []).some(f => f.irrigated === true),
           _hasComputedFuel:   (cfg.farm.operations ?? []).some(o => o.fuelPerAcre > 0),
+          _hasComputedLabor:  (cfg.farm.operations ?? []).some(o => o.acresPerHour > 0 && o.crew !== 0),
         } : {};
         add(this._expand('farm', 'farm', { ...r, name, ...facts }, `${kind}.${r.id}`,
           template.map(t => ({ ...t, group: t.group ?? `Farm · ${FARM_PARAM_TABLES[kind]}` }))));
