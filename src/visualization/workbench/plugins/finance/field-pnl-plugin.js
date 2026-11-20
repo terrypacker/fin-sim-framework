@@ -133,6 +133,7 @@ export class FieldPnlPlugin extends WorkbenchComponent {
             <th class="sec-th">Field</th>
             <th class="sec-th">Crop</th>
             <th class="sec-th sec-th--num">Acres</th>
+            <th class="sec-th sec-th--num" title="Bushels harvested (tons for alfalfa): planted acres × the realized yield. A row mixing crops shows none, since corn and bean bushels do not add">Bushels</th>
             <th class="sec-th sec-th--num" title="Grain paid for, grain still owed or in the bin at its last price, and other income (program payments, insurance proceeds)">Revenue</th>
             <th class="sec-th sec-th--num" title="Direct + overhead + machinery (on the basis the switch picks)">Cost</th>
             <th class="sec-th sec-th--num">Net</th>
@@ -533,7 +534,7 @@ export class FieldPnlPlugin extends WorkbenchComponent {
       const where = l.line ? ` <span class="sec-td--muted">Sch F ${_esc(l.line === 'MIXED_MACHINERY' ? 'several lines' : l.line)}</span>` : '';
       return `
       <tr class="fpl-line-row">
-        <td class="sec-td fpl-line-name" colspan="3">${_esc(l.label)}${where}${l.note ? ` <span class="sec-td--muted">${_esc(l.note)}</span>` : ''}</td>
+        <td class="sec-td fpl-line-name" colspan="4">${_esc(l.label)}${where}${l.note ? ` <span class="sec-td--muted">${_esc(l.note)}</span>` : ''}</td>
         ${cell(l.kind === 'revenue', this._money(l.amount))}
         ${cell(isCost, this._money(l.amount), memo)}
         <td class="sec-td"></td>
@@ -555,6 +556,7 @@ export class FieldPnlPlugin extends WorkbenchComponent {
         <td class="sec-td sec-name ${nameCls}"${title ? ` title="${_esc(title)}"` : ''}>${caret ? `<span class="sec-caret">${caret}</span>` : ''}${raw ? label : _esc(label)}</td>
         <td class="sec-td">${r.crop ? _esc(_cropLabel(r.crop)) : '—'}</td>
         <td class="sec-td sec-td--num">${_fmt(r.acres, 1)}</td>
+        <td class="sec-td sec-td--num">${_fmt(fieldPnlBushels(r), 0)}</td>
         <td class="sec-td sec-td--num">${this._money(r.revenue.total)}</td>
         <td class="sec-td sec-td--num">${this._money(r.totalCost)}</td>
         <td class="sec-td sec-td--num ${_signCls(r.net)}">${this._money(r.net)}</td>
@@ -671,8 +673,13 @@ export function fieldPnlLines(p, machineryBasis = 'CUSTOM') {
 }
 
 /** The CSV columns, in order. Money is USD. */
+/** A row's harvested bushels, or null where it mixes crops (bushels of two crops do not add). */
+export function fieldPnlBushels(r) {
+  return r.crop ? r.harvestedBushels ?? null : null;
+}
+
 export const FIELD_PNL_CSV_COLUMNS = Object.freeze(['scope', 'operator', 'job', 'field', 'crop', 'tenure',
-  'irrigated', 'acres', 'revenue', 'directCost', 'overheadCost', 'machineryCost', 'machineryBasis', 'net',
+  'irrigated', 'acres', 'bushels', 'revenue', 'directCost', 'overheadCost', 'machineryCost', 'machineryBasis', 'net',
   'netPerAcre', 'expectedPrice', 'breakevenPrice', 'breakevenUnpricedPrice', 'expectedYield', 'breakevenYield',
   'category', 'scheduleFLine', 'amount']);
 
@@ -680,7 +687,7 @@ export const FIELD_PNL_CSV_COLUMNS = Object.freeze(['scope', 'operator', 'job', 
 export function fieldPnlCsv(report, farm) {
   const out = [];
   const opName = (id) => farm?.operators?.find(o => o.id === id)?.name ?? id;
-  const fig = (r) => [r.acres, r.revenue.total, r.directCost, r.overheadCost, r.machineryCost, report.machineryBasis,
+  const fig = (r) => [r.acres, fieldPnlBushels(r), r.revenue.total, r.directCost, r.overheadCost, r.machineryCost, report.machineryBasis,
     r.net, r.perAcre.net, r.expectedPrice, r.breakevenPrice, r.breakevenUnpricedPrice, r.expectedYield, r.breakevenYield];
   for (const g of fieldPnlGroups(report, 'operator')) {
     out.push(['OPERATOR', opName(g.key), '', '', '', '', '', ...fig(g.row), '', '', '']);
@@ -688,7 +695,7 @@ export function fieldPnlCsv(report, farm) {
       out.push(['FIELD', opName(p.operatorId), p.jobId, p.fieldName, p.crop ?? '', p.tenure, p.irrigated, ...fig(p), '', '', '']);
       for (const l of fieldPnlLines(p, report.machineryBasis)) {
         out.push([`LINE_${l.kind.toUpperCase()}`, opName(p.operatorId), p.jobId, p.fieldName, p.crop ?? '', '', '',
-          ...new Array(13).fill(''), l.category, l.line ?? '', +l.amount.toFixed(2)]);
+          ...new Array(14).fill(''), l.category, l.line ?? '', +l.amount.toFixed(2)]);
       }
     }
   }

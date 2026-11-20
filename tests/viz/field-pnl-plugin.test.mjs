@@ -92,9 +92,10 @@ test('operator ▸ field ▸ lines; the footer is the report\'s whole-farm row',
   assert.equal(q(p, 'rows').querySelectorAll('tr.fpl-plan-row').length, 0, 'closed until clicked');
 
   const foot = cells(q(p, 'foot').querySelector('tr'));
-  assert.equal(foot[5], `$${Math.round(RUN.jobCost.farm.net)}`, 'net');
-  assert.equal(foot[4], `$${Math.round(RUN.jobCost.farm.totalCost)}`, 'cost');
-  assert.equal(foot[3], `$${Math.round(RUN.jobCost.farm.revenue.total)}`, 'revenue');
+  assert.equal(foot[6], `$${Math.round(RUN.jobCost.farm.net)}`, 'net');
+  assert.equal(foot[5], `$${Math.round(RUN.jobCost.farm.totalCost)}`, 'cost');
+  assert.equal(foot[4], `$${Math.round(RUN.jobCost.farm.revenue.total)}`, 'revenue');
+  assert.equal(foot[3], '—', 'the farm grows two crops: no bushel total');
   assert.match(q(p, 'asof').textContent, /season complete/);
 
   click(groups[0]);
@@ -103,6 +104,31 @@ test('operator ▸ field ▸ lines; the footer is the report\'s whole-farm row',
   click(plans[0]);
   assert.ok(q(p, 'rows').querySelectorAll('tr.fpl-line-row').length > 0);
   p.unmount();
+});
+
+test('Bushels: each field\'s harvest, a one-crop group\'s sum, none for a mixed group; in the CSV too', () => {
+  const p = mount();
+  // A click re-renders the rows, so each group is looked up afresh.
+  for (const g of fieldPnlGroups(RUN.jobCost, 'operator')) click(q(p, 'rows').querySelector(`tr[data-key="g:${g.key}"]`));
+  const rows = [...q(p, 'rows').querySelectorAll('tr.fpl-plan-row')];
+  assert.equal(rows.length, RUN.jobCost.plans.length);
+  const fmt = (n) => n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  for (const tr of rows) {
+    const plan = RUN.jobCost.plans.find(x => x.jobId === tr.dataset.key.slice(2));
+    assert.equal(cells(tr)[3], fmt(plan.harvestedBushels), plan.jobId);
+  }
+  for (const g of fieldPnlGroups(RUN.jobCost, 'operator')) {
+    const tr = q(p, 'rows').querySelector(`tr[data-key="g:${g.key}"]`);
+    const crops = new Set(g.plans.map(x => x.crop));
+    assert.equal(cells(tr)[3], crops.size === 1 ? fmt(g.plans.reduce((s, x) => s + x.harvestedBushels, 0)) : '—', g.key);
+  }
+  p.unmount();
+  const csv = fieldPnlCsv(RUN.jobCost, RUN.farm).split('\n');
+  const col = FIELD_PNL_CSV_COLUMNS.indexOf('bushels');
+  const plan = RUN.jobCost.plans[0];
+  const line = csv.find(l => l.startsWith(`FIELD,`) && l.split(',')[2] === plan.jobId).split(',');
+  close(Number(line[col]), plan.harvestedBushels, 'CSV bushels');
+  assert.ok(csv.slice(1).every(l => l.split(',').length === FIELD_PNL_CSV_COLUMNS.length), 'every CSV row is as wide as the header');
 });
 
 test('each field\'s lines sum to its revenue, direct, overhead and machinery columns', () => {
@@ -125,9 +151,9 @@ test('the machinery switch moves machinery and the net, not revenue or direct co
   click(q(p, 'basis').querySelector('button[data-v="ACTUAL"]'));
   const after = cells(q(p, 'foot').querySelector('tr'));
   const actual = runFarmQuiet({ machineryBasis: 'ACTUAL' }).jobCost.farm;
-  assert.equal(after[14], `$${Math.round(actual.machineryCost)}`);
-  assert.equal(after[5], `$${Math.round(actual.net)}`);
-  assert.deepEqual([after[3], after[12], after[13]], [before[3], before[12], before[13]], 'revenue, direct, overhead');
+  assert.equal(after[15], `$${Math.round(actual.machineryCost)}`);
+  assert.equal(after[6], `$${Math.round(actual.net)}`);
+  assert.deepEqual([after[3], after[4], after[13], after[14]], [before[3], before[4], before[13], before[14]], 'bushels, revenue, direct, overhead');
   assert.match(q(p, 'mach-head').textContent, /actual/);
   p.unmount();
 });
@@ -182,7 +208,7 @@ test('the cost split columns are hidden until asked for, on every row kind alike
   assert.ok(grid.classList.contains('fpl-split-off'));
   for (const tr of grid.querySelectorAll('tr')) {
     const n = [...tr.children].reduce((s, c) => s + (c.colSpan || 1), 0);
-    assert.equal(n, 15, `every row spans the 15 columns (${tr.className})`);
+    assert.equal(n, 16, `every row spans the 16 columns (${tr.className})`);
     assert.equal(tr.querySelectorAll('.fpl-split').length, 3, `three split cells (${tr.className})`);
   }
   const box = q(p, 'split');
