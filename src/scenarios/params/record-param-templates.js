@@ -427,6 +427,7 @@ export const FARM_PARAM_TEMPLATES = {
     ...Object.entries(SEASON_MULTIPLIERS).map(([field, covers]) => ({
       field, label: _multiplierLabel(field), type: 'Number', mc: true, opt: false, blankValue: 1,
       ...(field === 'interestMultiplier' ? { appliesTo: r => r._hasVariableRate === true } : {}),
+      ...(field === 'fuelMultiplier' ? { appliesTo: r => r._hasComputedFuel === true } : {}),
       description: `Multiplies ${covers} this season (1 = as authored, 1.2 = 20% more).`,
     })),
     ...Object.entries(PRODUCT_CATEGORIES).map(([cat, { label }]) => ({

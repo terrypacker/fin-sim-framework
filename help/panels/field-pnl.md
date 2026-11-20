@@ -7,7 +7,7 @@ design: [134-farm-job-costing.md]
 sources: [src/finance/farm/farm-reports.js]
 stamps:
   panel:field-pnl: 0930cc
-  src/finance/farm/farm-reports.js: 1c43ec
+  src/finance/farm/farm-reports.js: 8f6df0
 ---
 
 A farm season's profit and loss per field, with the price and yield that would make each
@@ -16,8 +16,8 @@ field break even.
 Rows open operator (or crop), then field, then the field's lines, each naming its
 Schedule F line. **Direct** costs were posted to the field; **overhead** is the operator's
 cost spread by acres, owned acres, or the fields a cost names. **Machinery** is custom
-rates (hiring the work done) or actual (the operator's real cost by acre); the switch moves
-the net and the breakevens.
+rates (hiring the work done) or actual (the machinery figure plus computed fuel and
+labor); the switch moves the net and breakevens.
 
 **The breakevens**: *BE unpriced* is the price the uncontracted bushels must fetch, red when
 above the expected price. They use the planned yield.
