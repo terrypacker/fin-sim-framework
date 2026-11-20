@@ -11,6 +11,7 @@
 import { BaseScenario }    from './base-scenario.js';
 import { ServiceRegistry } from '../services/service-registry.js';
 import { seasonWindow }    from '../finance/farm/farm-records.js';
+import { FARM_PRICE_HISTORY } from '../finance/farm/farm-price-history-data.js';
 
 /**
  * FarmScenario — a row-crop farm as job costing (design 134).
@@ -40,16 +41,70 @@ export class FarmScenario extends BaseScenario {
     });
   }
 
-  static getParamSchema() { return []; }
+  /**
+   * The demo's crop year (design 134 §17.5). Only the DEMO moves with it: its illustrative
+   * costs stay as they are, so a past year shows the charts against that year's real prices,
+   * not that year's farm. A farm from a file (`cfg.farm` with no `farmDemo` mark) ignores it.
+   * The earliest year is the first with a published year before it (the demo carries grain
+   * in from the year before).
+   */
+  static getParamSchema() {
+    return [{
+      key: 'farmDemoCropYear', label: 'Demo crop year', type: 'Number', group: 'Farm',
+      min: FarmScenario.MIN_DEMO_CROP_YEAR, max: FarmScenario.DEFAULT_CROP_YEAR, step: 1,
+      mc: false, opt: false,
+      defaultValue: FarmScenario.DEFAULT_CROP_YEAR,
+      description: 'Crop year of the US Farm demo. The demo farm, its season window and its '
+        + 'dated records move to this year, so the Field P&L charts read that year\'s published '
+        + 'prices; the demo\'s illustrative costs do not change. Ignored by a farm loaded from a file.',
+    }];
+  }
+
+  static MIN_DEMO_CROP_YEAR = FARM_PRICE_HISTORY.from + 1;
+
+  /**
+   * Whether an uploaded scenario record with no `scenarioId` is a farm: it has `cfg.farm`.
+   * The upload uses this so a farm file opens as a farm, not as the first prebuilt.
+   */
+  static claimsConfig(cfg) { return cfg?.farm != null && typeof cfg.farm === 'object'; }
+
+  /**
+   * Bring a demo record to its `farmDemoCropYear` param before the sim is built: a new demo
+   * farm and season window for that year. Runs from ScenarioService.createActiveScenario,
+   * because the window must be set before buildSim. No-op for a farm from a file, or a year
+   * outside [MIN_DEMO_CROP_YEAR, DEFAULT_CROP_YEAR] (the editor's min/max).
+   *
+   * @param {object} rec    the scenario record (mutated)
+   * @param {object} params name → value
+   * @returns {boolean} whether the record changed
+   */
+  static prepareRecord(rec, params = {}) {
+    if (!rec?.farmDemo) return false;
+    const y = Number(params.farmDemoCropYear);
+    if (!Number.isInteger(y) || y < FarmScenario.MIN_DEMO_CROP_YEAR || y > FarmScenario.DEFAULT_CROP_YEAR) return false;
+    if (rec.farm?.seasons?.[0]?.cropYear === y) return false;
+    const w = seasonWindow(y);
+    rec.farm = demoFarm(y);
+    rec.simStart = w.simStart;
+    rec.simEnd = w.simEnd;
+    // A saved compiled graph belongs to the old year.
+    rec.events = []; rec.handlers = []; rec.actions = []; rec.reducers = []; rec.initialState = {};
+    return true;
+  }
   static getToolsets()    { return ['US_FARM_OPERATIONS']; }
 
   /**
-   * @param {object} [params]   `{ cropYear, farm }`: a whole `farm` replaces the demo.
+   * @param {object} [params]   `{ farmDemoCropYear, cropYear, farm }`: a whole `farm` replaces the
+   *   demo; otherwise the demo is built for `farmDemoCropYear` (or `cropYear`), and the record is
+   *   marked `farmDemo` so a later change of that param moves it (`prepareRecord`).
    * @param {Date|string} [simStart] defaults to 1 January of the year before the crop year
    * @param {Date|string} [simEnd]   defaults to 1 January two years after it (design 134 §5.2)
    */
   static buildDefaultConfig(params = {}, simStart, simEnd) {
-    const farm = params.farm ? structuredClone(params.farm) : demoFarm(params.cropYear ?? FarmScenario.DEFAULT_CROP_YEAR);
+    const isDemo = !params.farm;
+    const farm = isDemo
+      ? demoFarm(params.farmDemoCropYear ?? params.cropYear ?? FarmScenario.DEFAULT_CROP_YEAR)
+      : structuredClone(params.farm);
     const y = farm.seasons[0].cropYear;
     const w = seasonWindow(y);
     const iso = (d, fallback) => (d == null ? fallback
@@ -64,6 +119,7 @@ export class FarmScenario extends BaseScenario {
       realProperties: [],
       collectibles:   [],
       farm,
+      ...(isDemo ? { farmDemo: true } : {}),
     };
   }
 }

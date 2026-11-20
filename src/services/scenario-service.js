@@ -230,6 +230,16 @@ export class ScenarioService {
     scenario.accounts       = structuredClone(defaults.accounts       ?? []);
     scenario.realProperties = structuredClone(defaults.realProperties ?? []);
     scenario.collectibles   = structuredClone(defaults.collectibles   ?? []);
+    // Design 134: a farm scenario's records are its `farm` tables.
+    // Its window is the default season's, not the dates passed in (the demo's crop year may
+    // have moved them).
+    if (defaults.farm) {
+      const own = ScenarioCls.buildDefaultConfig(defaultParams);
+      scenario.farm = structuredClone(own.farm);
+      if (own.farmDemo) scenario.farmDemo = true; else delete scenario.farmDemo;
+      scenario.simStart = own.simStart;
+      scenario.simEnd = own.simEnd;
+    }
 
     // Drop the saved compiled graph so the next ScenarioLoader.load() takes the
     // compile branch and rebuilds events/handlers/reducers from the toolsets.
@@ -262,7 +272,7 @@ export class ScenarioService {
 
     const cls =
       active.scenarioClass
-      ?? this._registry.get(active.scenarioId)?.scenarioClass
+      ?? this._registry.get(this._registry.resolveScenarioId(active))?.scenarioClass
       // Blank scenarios carry scenarioId 'blank' but no prebuilt record. On a
       // reload from storage scenarioClass isn't serialized, so resolve it here
       // before the generic "first prebuilt" fallback drags in a finance class.
@@ -270,8 +280,13 @@ export class ScenarioService {
       ?? this._registry.getPrebuiltScenarios()[0]?.scenarioClass;
     if (!cls) throw new Error('No scenario class available');
 
+    // A class may bring the record up to its params before the sim is built (the farm demo's
+    // crop year moves its season window, which buildSim reads).
+    const params = this._getParams(active);
+    if (cls.prepareRecord?.(active, params)) this._registry.save(active, true);
+
     return cls.instantiate(
-      this._getParams(active),
+      params,
       new Date(active.simStart),
       new Date(active.simEnd),
     );
