@@ -1,6 +1,6 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** rev 23 (20 Nov 2026): phase 8 steps 8a and 8b built: the price-history module, this season's real prices with its marketing windows on the Field P&L charts, a farm file opening as a farm, and the demo's crop year (§17.5). Rev 20: phase 8, price history and marketing windows, planned (§17.5), with owner question Q32. Rev 19 (20 Nov 2026): phases 5 (the yearly workbook importer) and 6 (in-app record editors) planned (§17); reconciliation moves to phase 7; the panel charts built (§17.4). Rev 18 (19 Nov 2026): **phase 4 COMPLETE** (§16) bar the export's land-and-debt section (Q22a): the export and import (4a–4c), a farm path per household year (4d), §199A (4e), the Nebraska community-college credit (4f), and the NOL, §461(l), the farming-loss carryback and §1301 averaging (4g, §16.10–16.11). Rev 17: phase 4 started, what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
+**Status:** rev 24 (20 Nov 2026): owner answers from the 2026 workbook review (§17.6): Q22a and Q27 closed as declined, Q23a answered (not all nitrogen), and computed operation costs planned with phase 5, with owner questions Q23b and Q33. Rev 23 (20 Nov 2026): phase 8 steps 8a and 8b built: the price-history module, this season's real prices with its marketing windows on the Field P&L charts, a farm file opening as a farm, and the demo's crop year (§17.5). Rev 20: phase 8, price history and marketing windows, planned (§17.5), with owner question Q32. Rev 19 (20 Nov 2026): phases 5 (the yearly workbook importer) and 6 (in-app record editors) planned (§17); reconciliation moves to phase 7; the panel charts built (§17.4). Rev 18 (19 Nov 2026): **phase 4 COMPLETE** (§16) bar the export's land-and-debt section (Q22a): the export and import (4a–4c), a farm path per household year (4d), §199A (4e), the Nebraska community-college credit (4f), and the NOL, §461(l), the farming-loss carryback and §1301 averaging (4g, §16.10–16.11). Rev 17: phase 4 started, what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
 (§12.4) and the Field P&L panel is in the workbench (§12.5). **Phase 2 started** (§13): step 2a,
 the scenario-agnostic MC path and a farm batch on it, steps 2b–2d (realized yield, price paths, multiplier levers and the contracted share), 2e (calibration from USDA NASS, §13.8) and 2f (the Farm MC panel, §13.7) are built: **phase 2 is complete**. Owner questions Q1–Q20 and Q22–Q25 are answered (§3, §14); Q21, Q26 and the follow-ups Q22a,
 Q23a and Q25a (§14) are open. §7 records what the primary sources on disk decide. §8 is the household
@@ -576,7 +576,7 @@ bad one for another in the same world.
 
 ## 11. Open questions
 
-Q21 (§12.3), Q26 (§13.8), Q22a, Q23a, Q25a (§14), Q27–Q28 (§15.5) and Q29–Q31 (§16.3) and Q32 (§17.5) are for the owners. The phase 5 template's columns (§17.2) are being settled by the owners. The fleet model (§5.6) and farm–market correlation (Q15) each
+Q21 (§12.3), Q26 (§13.8), Q25a (§14), Q28 (§15.5), Q29–Q31 (§16.3), Q32 (§17.5) and Q23b and Q33 (§17.6) are for the owners. Q22a and Q27 were declined and are closed (§17.6), and Q23a is answered there. The phase 5 template's columns (§17.2) are being settled by the owners. The fleet model (§5.6) and farm–market correlation (Q15) each
 need their own design later.
 
 ## 12. Phase 1 build notes (rev 8)
@@ -1756,3 +1756,38 @@ historical point by that amount.
 - The 8c share and first month agree with a hand count over the same seasons.
 - Every chart that draws history says which limit applies: monthly, state average, and
   unadjusted for basis until Q32 is answered.
+
+### 17.6 Owner answers from the 2026 workbook review (rev 24)
+
+The owners answered the private review of their 2026 workbook. The values stay private, and
+this section records what each answer decides.
+
+| Q | Answer | Decision |
+|---|---|---|
+| **Q23a** | The corn fertilizer bundle is **not all nitrogen**. | A fertilizer bundle imports as one fertilizer product (Schedule F line 17) that is **not** in the NITROGEN category, so `nitrogenMultiplier` never moves P&K. A nitrogen-only lever exists only once the template gives N and P&K as separate Rates rows. **Q23b (owners):** a rough N vs P&K split per crop. |
+| **Q22a** | **Declined:** no per-loan securing fields, fixed/variable or payer. | **Closed.** Interest stays one pool per operator (§14), and `interestMultiplier` moves all of an operator's interest or none. The Loans and Loan fields tabs become optional. Per-loan interest and principal paid are still accepted where given, and principal is never an expense. The export's land-and-debt section (§8.2) is built only from what a template supplies. |
+| **Q27** | **Declined** for the operators without a premium on the sheet. | **Closed.** Insurance is modelled only where a premium is given. An operator without one runs uninsured, and the per-operator MC result carries an advisory that its downside is overstated if it does insure. |
+| Q18 | The forward contracts are confirmed. | Each contract row still needs an operator id (§17.2). |
+| Q8a | Confirmed. | Storage stays a costing rate per bushel per month. |
+| — | Corn-on-corn is a crop of its own. | Crop code `CORN_ON_CORN` with its own crop plan. Extra nitrogen goes in a Field override. |
+| — | The spraying custom rate is **per season**. | A per-season rate is `basis PER_ACRE` with `passes = 1`. The yearly spray count drives only per-application fuel and sprayer hours. Rule 8 already requires a stated basis. |
+| — | Two-part premiums are separate units, split by parcel. | Each part is its own Insurance units row. |
+| — | One FSA farm did not enroll in ARC, and the sheet's "PLC payment" label is generic. | A farm that is not enrolled has no `arcBase` row. Nothing reads the column label. |
+| — | Missing rent and insurance for some operators can't be supplied. | A blank stays an advisory (rule 6), never a guessed figure. |
+
+Still open: Q26 (per-field yield history), the program-payment rulings (§17.2), and two
+sheet questions in the private review.
+
+**Computed operation costs (new, planned with phase 5).** The owners want the application
+to **compute** fuel, labor and trucking from the rates they give, not to enter totals. The
+template's costing rates carry the inputs: per-acre custom rates, fuel per acre per
+application, machine throughput (acres per hour) per operation, a labor wage, and trucking
+per bushel (field to bin, and bin to sale). The computed costs go on the **actual** side
+(`MACHINERY` and its siblings), not the custom-rate side. A custom rate already includes
+the machine, fuel and operator, so charging both on one field would count fuel and labor
+twice. Trucking is the exception: no custom rate includes it, so it is charged in both views.
+A throughput given as a range (for example 30–40 acres an hour) imports as a low/high pair
+that MC can sweep, with the midpoint used by the deterministic run. Irrigation electricity
+(Q19), drying, repairs and machinery ownership still come only as entered figures (the
+Operator costs tab). **Q33 (owners):** does "fuel per application" count planting and
+harvest passes, or only sprays?
