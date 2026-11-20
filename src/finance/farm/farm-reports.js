@@ -301,6 +301,58 @@ export function breakevens(r) {
   return { breakevenPrice, breakevenUnpricedPrice, breakevenYield };
 }
 
+/**
+ * Sum job-cost rows into one, as the report's operator, crop and farm rows are: a caller can
+ * total any subset of `report.plans` (one operator's corn, say). A group of more than one crop
+ * has no price breakevens (null), since a price across crops means nothing.
+ *
+ * @param {object[]} list rows of `jobCostReport(...).plans`
+ * @param {object} [keys] fields copied onto the row (`{ operatorId }`, …)
+ * @param {'CUSTOM'|'ACTUAL'} [machineryBasis='CUSTOM']
+ */
+export function sumPlanRows(list, keys = {}, machineryBasis = 'CUSTOM') {
+  return _sumRows(list, keys, machineryBasis);
+}
+
+/**
+ * The cumulative cash net through the run, month by month, for the farm and each operator:
+ * every cash posting, revenue in and cost out, before §464(d) and §451(f), which move income
+ * between tax years rather than move cash. Non-cash costing postings (custom rates, Q5a) are
+ * not cash and are left out.
+ *
+ * The months are the whole season window (`seasonWindow`), so every path of a batch has the
+ * same grid and its percentiles can be taken month by month.
+ *
+ * @param {object} farm normalized farm
+ * @param {object[]} ledger `farmLedger(...)`
+ * @returns {{ months: string[], series: Record<string, number[]> }} `months` are `YYYY-MM`;
+ *   each series is the cumulative net at the END of each month, keyed `farm` and
+ *   `operator.<id>`
+ */
+export function farmCashSeries(farm, ledger) {
+  const y = farm.season.cropYear;
+  const months = [];
+  for (let yr = y - 1; yr <= y + 1; yr++) for (let m = 1; m <= 12; m++) months.push(`${yr}-${String(m).padStart(2, '0')}`);
+  const index = new Map(months.map((m, i) => [m, i]));
+  const scopes = ['farm', ...farm.operators.map(o => `operator.${o.id}`)];
+  const flow = Object.fromEntries(scopes.map(k => [k, new Array(months.length).fill(0)]));
+  for (const p of ledger) {
+    if (!p.cash) continue;
+    const i = index.get(p.date.slice(0, 7));
+    if (i == null) continue;
+    const v = p.kind === 'REVENUE' ? p.amount : -p.amount;
+    flow.farm[i] += v;
+    const k = `operator.${p.operatorId}`;
+    if (flow[k]) flow[k][i] += v;
+  }
+  const series = {};
+  for (const [k, f] of Object.entries(flow)) {
+    let run = 0;
+    series[k] = f.map(v => (run += v));
+  }
+  return { months, series };
+}
+
 function _sumRows(list, keys, machineryBasis) {
   const r = _emptyRow({
     ...keys, acres: 0, expectedBushels: 0, expectedYield: null, harvestedBushels: 0, realizedYield: null,

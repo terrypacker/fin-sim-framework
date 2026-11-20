@@ -8,13 +8,16 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import * as echarts from 'echarts';
 import { WorkbenchComponent } from '../../component.js';
+import { readThemeColor }     from '../../../theme.js';
 import { WB_EVENTS }          from '../../workbench-runtime.js';
 import { ServiceRegistry }    from '../../../../services/service-registry.js';
 import { withBom }            from '../../../../utils/csv.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../../../simulation-framework/bus-messages.js';
-import { normalizeFarm, CROPS } from '../../../../finance/farm/farm-records.js';
-import { farmLedger, jobCostReport } from '../../../../finance/farm/farm-reports.js';
+import { normalizeFarm, CROPS, priceOn, harvestDateFor } from '../../../../finance/farm/farm-records.js';
+import { farmLedger, jobCostReport, sumPlanRows } from '../../../../finance/farm/farm-reports.js';
+import { planFarm } from '../../../../finance/farm/farm-run.js';
 import { compileFarmEvents } from '../../../../finance/farm/farm-postings.js';
 import { categoryLabel, categoryLine } from '../../../../finance/farm/schedule-f.js';
 
@@ -37,6 +40,18 @@ import { categoryLabel, categoryLine } from '../../../../finance/farm/schedule-f
  *
  * Machinery is charged at custom-hire rates or at the operator's real machinery figure
  * (§5.3); the switch changes the net and the breakevens, not the ledger.
+ *
+ * ─── the chart ───────────────────────────────────────────────────────────────────
+ *
+ * Above the table, one crop's cash price through the season against the price the scope's
+ * unpriced grain must fetch to break even, with its contracts and planned sales as points and
+ * a marker at the run's current date. The scope is the row last clicked: the whole farm (the
+ * footer), an operator or crop group, or a field.
+ *
+ * The breakeven is the PLANNED season's (`planFarm`: the same farm run to its end on an
+ * isolated registry), not the table's season to date, whose breakevens are too low until the
+ * grain is sold. So the line stays put as the run steps, and the "now" marker and the price
+ * at it are what move.
  */
 export class FieldPnlPlugin extends WorkbenchComponent {
   constructor(runtime) {
@@ -52,6 +67,11 @@ export class FieldPnlPlugin extends WorkbenchComponent {
     this._machineryBasis = 'CUSTOM';
     this._cache = null;
     this._sig   = null;
+    this._chartScope = { kind: 'farm' };   // or { kind: 'operator'|'crop'|'plan', id }
+    this._chartCrop  = null;               // null = the scope's first crop
+    this._plan    = null;                  // { sig, data | reason, reports: { [basis]: report } }
+    this._chart   = null;
+    this._ro      = null;
   }
 
   setServices(services) { this._servicesOverride = services ?? null; }
@@ -81,6 +101,14 @@ export class FieldPnlPlugin extends WorkbenchComponent {
       <div class="sec-body" data-fpl="body">
         <div class="bond-warn" data-fpl="warn" style="display:none"></div>
         <div class="sec-placeholder" data-fpl="placeholder">Run a simulation to cost the farm season.</div>
+        <div class="fpl-chart-wrap" data-fpl="chart-wrap" style="display:none">
+          <div class="fpl-chart-head">
+            <span class="mc-section-label" data-fpl="chart-label">Cash price vs breakeven</span>
+            <span class="bond-seg" data-fpl="crop" title="Which crop the chart shows"></span>
+          </div>
+          <div class="fpl-chart" data-fpl="chart"></div>
+          <div class="bond-caption" data-fpl="caption"></div>
+        </div>
         <table class="sec-grid fpl-split-off" data-fpl="grid" style="display:none">
           <thead><tr>
             <th class="sec-th">Field</th>
@@ -126,24 +154,59 @@ export class FieldPnlPlugin extends WorkbenchComponent {
     const rows = this._q('rows');
     if (rows && !rows._fplBound) {
       // Delegated: rows are re-rendered every step, and a per-row listener would leak.
+      // A click opens or closes the row and points the chart at it.
       rows.addEventListener('click', (e) => {
         const tr = e.target.closest('tr[data-key]');
         if (!tr) return;
         const key = tr.dataset.key;
         if (this._expanded.has(key)) this._expanded.delete(key); else this._expanded.add(key);
+        const id = key.slice(2);
+        this._chartScope = key.startsWith('p:') ? { kind: 'plan', id }
+          : { kind: this._groupBy === 'crop' ? 'crop' : 'operator', id };
         this._render();
       });
       rows._fplBound = true;
     }
+    const foot = this._q('foot');
+    if (foot && !foot._fplBound) {
+      foot.addEventListener('click', () => { this._chartScope = { kind: 'farm' }; this._render(); });
+      foot._fplBound = true;
+    }
+    const crop = this._q('crop');
+    if (crop && !crop._fplBound) {
+      crop.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-v]');
+        if (!btn) return;
+        this._chartCrop = btn.dataset.v;
+        this._render();
+      });
+      crop._fplBound = true;
+    }
     this._render();
   }
 
-  onActivate() { this._render(); }
+  onActivate() {
+    // ECharts cannot size itself in a hidden pane.
+    this._chart?.resize();
+    this._render();
+  }
+
+  onAdopt() { this._chart?.resize(); }
+
+  onUnmount() { this._disposeChart(); }
 
   destroy() {
     this._unsubSimBus?.();
     this._unsubSimBus = null;
+    this._disposeChart();
     super.destroy?.();
+  }
+
+  _disposeChart() {
+    this._ro?.disconnect();
+    this._ro = null;
+    this._chart?.dispose();
+    this._chart = null;
   }
 
   _bindSeg(name, apply) {
@@ -229,6 +292,7 @@ export class FieldPnlPlugin extends WorkbenchComponent {
       this._q('placeholder').textContent = r.reason ?? 'Nothing posted yet: step the run into the season.';
       this._q('rows').innerHTML = '';
       this._q('foot').innerHTML = '';
+      this._q('chart-wrap').style.display = 'none';
       this._renderWarn([]);
       if (asof) asof.textContent = r.report ? `crop year ${r.report.cropYear}` : '—';
       return;
@@ -250,8 +314,95 @@ export class FieldPnlPlugin extends WorkbenchComponent {
     const groups = fieldPnlGroups(report, this._groupBy);
     this._q('rows').innerHTML = groups.map(g => this._groupHtml(farm, g)).join('');
     this._q('foot').innerHTML = this._rowHtml(report.farm, {
-      cls: 'sec-total-row', label: `Whole farm — ${report.plans.length} job${report.plans.length === 1 ? '' : 's'}`,
+      cls: 'sec-total-row fpl-clickable', label: `Whole farm — ${report.plans.length} job${report.plans.length === 1 ? '' : 's'}`,
     });
+    this._renderChart(farm);
+  }
+
+  // ─── Chart ───────────────────────────────────────────────────────────────
+
+  /** The planned season's job-cost report on the current basis, or `{ reason }`. Cached on the cfg. */
+  _planReport() {
+    const cfg = this._cfg();
+    if (!cfg?.farm) return { reason: 'no farm' };
+    let sig;
+    try { sig = JSON.stringify([cfg.farm, cfg.params ?? null, cfg.parameters ?? null, cfg.simStart, cfg.simEnd]); }
+    catch { sig = null; }
+    if (!this._plan || sig == null || this._plan.sig !== sig) {
+      try { this._plan = { sig, data: planFarm(cfg), reports: {} }; }
+      catch (e) {
+        console.warn('[FieldPnlPlugin] could not run the planned season', e);
+        this._plan = { sig, reason: `The planned season failed: ${e.message}`, reports: {} };
+      }
+    }
+    if (this._plan.reason) return { reason: this._plan.reason };
+    const b = this._machineryBasis;
+    const d = this._plan.data;
+    this._plan.reports[b] ??= jobCostReport(d.farm, d.ledger, { machineryBasis: b, pools: d.pools, receivables: d.receivables });
+    return { farm: d.farm, report: this._plan.reports[b] };
+  }
+
+  _renderChart(farm) {
+    const wrap = this._q('chart-wrap');
+    if (!wrap) return;
+    const plan = this._planReport();
+    if (plan.reason) { wrap.style.display = 'none'; return; }
+    const now = this._sim?.currentDate ? this._sim.currentDate.toISOString().slice(0, 10) : null;
+    const data = breakevenChartData(plan.farm, plan.report, this._chartScope, this._chartCrop, now);
+    if (!data) { wrap.style.display = 'none'; return; }
+    wrap.style.display = '';
+    this._q('crop').innerHTML = data.crops.map(c =>
+      `<button data-v="${_esc(c)}" class="${c === data.crop ? 'on' : ''}">${_esc(_cropLabel(c))}</button>`).join('');
+    const scopeLabel = this._scopeLabel(farm, this._chartScope);
+    this._q('chart-label').textContent = `${_cropLabel(data.crop)} · ${scopeLabel} — cash price vs breakeven`;
+    this._q('caption').textContent = breakevenCaption(data, {
+      basis: this._machineryBasis === 'ACTUAL' ? 'actual machinery' : 'custom rates', date: (d) => this._fmtDate(d),
+    });
+    if (!this._canvasAvailable()) return;
+    const host = this._q('chart');
+    if (!this._chart) {
+      this._chart = echarts.init(host, null, { renderer: 'canvas' });
+      if (typeof ResizeObserver === 'function') {
+        this._ro = new ResizeObserver(() => this._chart?.resize());
+        this._ro.observe(host);
+      }
+    }
+    this._chart.setOption(breakevenChartOption(data, { colors: this._colors() }), true);
+  }
+
+  _scopeLabel(farm, scope) {
+    if (scope.kind === 'operator') return this._operatorName(farm, scope.id);
+    if (scope.kind === 'crop') return `all ${_cropLabel(scope.id).toLowerCase()}`;
+    if (scope.kind === 'plan') {
+      const plan = farm.cropPlans.find(p => p.id === scope.id);
+      const f = farm.fields.find(x => x.id === (plan?.fieldId ?? scope.id));
+      return f?.name ?? scope.id;
+    }
+    return 'Whole farm';
+  }
+
+  _colors() {
+    const c = (name, fallback) => {
+      const v = typeof document !== 'undefined' ? readThemeColor(name) : '';
+      return /^#[0-9a-f]{6}$/i.test(v) ? v : fallback;
+    };
+    return {
+      price: c('--blue-muted', '#60a5fa'), red: c('--red', '#ff4455'), green: c('--green', '#34d399'),
+      amber: c('--warning', '#f59e0b'), dim: c('--text-dim', '#94a3b8'), border: c('--border', '#334155'),
+      borderHi: c('--border-hi', '#475569'), text: c('--text-primary', '#e2e8f0'), muted: c('--text-muted', '#64748b'),
+      panel: c('--bg-panel2', '#1e293b'),
+    };
+  }
+
+  /** jsdom has no 2D canvas, and ECharts fails inside setOption rather than init. */
+  _canvasAvailable() {
+    if (this._hasCanvas === undefined) {
+      try {
+        const probe = document.createElement('canvas');
+        this._hasCanvas = typeof probe.getContext === 'function' && !!probe.getContext('2d');
+      } catch { this._hasCanvas = false; }
+    }
+    return this._hasCanvas;
   }
 
   _renderWarn(items) {
@@ -461,9 +612,154 @@ export function fieldPnlCsv(report, farm) {
   return [FIELD_PNL_CSV_COLUMNS.join(','), ...out.map(row => row.map(cell).join(','))].join('\n');
 }
 
+/**
+ * What the breakeven chart draws for one scope and crop, from the PLANNED season's report.
+ *
+ * - `row`: the scope's plans of that crop summed (a field's own row for a field), so the
+ *   breakevens are that crop's even where the scope grows two;
+ * - `prices`: the crop's cash price table as a step series (`realized`, which is the table's
+ *   price in a deterministic run), from the plan date to after the last dated point;
+ * - `contracts` and `sales`: the season's points for the scope's operators;
+ * - `priceNow`: the cash price on `now`, null before the window.
+ *
+ * @param {object} farm normalized farm
+ * @param {object} report `jobCostReport` of the planned season
+ * @param {{ kind: 'farm'|'operator'|'crop'|'plan', id?: string }} scope
+ * @param {string|null} crop wanted crop; the scope's first when null or not grown there
+ * @param {string|null} now `YYYY-MM-DD`
+ * @returns {object|null} null when the scope has no priced crop
+ */
+export function breakevenChartData(farm, report, scope, crop, now) {
+  const y = farm.season.cropYear;
+  const plans = report.plans.filter(p => p.planId && p.crop && (
+    scope.kind === 'operator' ? p.operatorId === scope.id
+      : scope.kind === 'crop' ? p.crop === scope.id
+        : scope.kind === 'plan' ? p.jobId === scope.id || p.planId === scope.id
+          : true));
+  const priced = new Set(farm.prices.map(p => p.crop));
+  const crops = [...new Set(plans.map(p => p.crop))].filter(c => priced.has(c));
+  if (!crops.length) return null;
+  const c = crops.includes(crop) ? crop : crops[0];
+  const ofCrop = plans.filter(p => p.crop === c);
+  const row = scope.kind === 'plan' && ofCrop.length === 1 ? ofCrop[0] : sumPlanRows(ofCrop, {}, report.machineryBasis);
+  const ops = new Set(ofCrop.map(p => p.operatorId));
+  const table = farm.prices.filter(p => p.crop === c).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const contracts = farm.contracts.filter(k => k.crop === c && k.cropYear === y && ops.has(k.operatorId))
+    .map(k => ({ date: k.deliveryDate, price: k.price, bushels: k.bushels, operatorId: k.operatorId }));
+  const sales = farm.sales.filter(k => k.crop === c && k.cropYear === y && ops.has(k.operatorId))
+    .map(k => ({ date: k.saleDate, price: k.price ?? priceOn(farm.prices, c, k.saleDate, 'realized'), share: k.share, operatorId: k.operatorId }));
+  const start = `${y}-01-01`;
+  const dated = [harvestDateFor(farm.season.calendar, c), ...table.map(p => p.date), ...contracts.map(k => k.date), ...sales.map(k => k.date)]
+    .filter(Boolean).sort();
+  const end = _addDays(dated.at(-1) ?? `${y}-12-31`, 31);
+  const prices = [[start, priceOn(farm.prices, c, start, 'realized')]];
+  for (const p of table) if (p.date > start && p.date <= end) prices.push([p.date, p.realized ?? p.price]);
+  prices.push([end, priceOn(farm.prices, c, end, 'realized')]);
+  const inWindow = now != null && now >= start && now <= end;
+  return {
+    crop: c, crops, row,
+    breakevenUnpricedPrice: row.breakevenUnpricedPrice ?? null,
+    breakevenPrice: row.breakevenPrice ?? null,
+    expectedPrice: row.expectedPrice ?? null,
+    contractedShare: row.expectedBushels > 0 ? row.contractedBushels / row.expectedBushels : 0,
+    prices, contracts, sales, start, end,
+    now, nowInWindow: inWindow,
+    priceNow: now != null && now >= start ? priceOn(farm.prices, c, now, 'realized') : null,
+  };
+}
+
+/** The sentence under the chart: the breakeven, and today's price against it. */
+export function breakevenCaption(d, { basis = 'custom rates', date = (x) => x } = {}) {
+  const be = d.breakevenUnpricedPrice ?? d.breakevenPrice;
+  const what = d.breakevenUnpricedPrice != null
+    ? `the unpriced grain (${(100 * (1 - d.contractedShare)).toFixed(0)}% of the crop) must fetch`
+    : 'the crop is fully contracted; all of it must average';
+  const parts = [be == null ? 'No breakeven: no expected bushels.'
+    : `Planned season, ${basis}: ${what} ${_perBu(be)}/bu to break even.`];
+  if (d.priceNow != null && be != null) {
+    const diff = d.priceNow - be;
+    parts.push(`Cash price on ${date(d.now)}: ${_perBu(d.priceNow)}, ${_perBu(Math.abs(diff))} ${diff >= 0 ? 'above' : 'below'} it.`);
+  } else if (d.now != null && !d.nowInWindow) {
+    parts.push(`The run is at ${date(d.now)}, before the crop year's prices.`);
+  }
+  return parts.join(' ');
+}
+
+/**
+ * ECharts option for the breakeven chart. The zone below the breakeven is shaded red, so a
+ * price inside it reads as a loss on the unpriced grain. (A visualMap colouring the line red
+ * below the breakeven was tried first: ECharts throws while rendering when the whole line is
+ * on one side of it, and then draws none of the series.)
+ */
+export function breakevenChartOption(d, { colors }) {
+  const be = d.breakevenUnpricedPrice ?? d.breakevenPrice;
+  const ts = (iso) => Date.parse(`${iso}T00:00:00Z`);
+  const marks = [];
+  if (be != null) {
+    marks.push({ yAxis: be, name: 'breakeven', lineStyle: { color: colors.red, type: 'dashed', width: 1.5 },
+      label: { formatter: `BE ${_perBu(be)}`, color: colors.red, fontSize: 10, position: 'insideEndTop' } });
+  }
+  if (d.breakevenUnpricedPrice != null && d.breakevenPrice != null && Math.abs(d.breakevenPrice - d.breakevenUnpricedPrice) > 0.005) {
+    marks.push({ yAxis: d.breakevenPrice, name: 'breakeven, all bushels', lineStyle: { color: colors.muted, type: 'dotted', width: 1 },
+      label: { formatter: `BE all bu ${_perBu(d.breakevenPrice)}`, color: colors.muted, fontSize: 9, position: 'insideStartTop' } });
+  }
+  if (d.nowInWindow) {
+    marks.push({ xAxis: ts(d.now), name: 'now', lineStyle: { color: colors.amber, type: 'solid', width: 1 },
+      label: { formatter: 'now', color: colors.amber, fontSize: 10, position: 'end' } });
+  }
+  const ys = [...d.prices.map(p => p[1]), ...d.contracts.map(k => k.price), ...d.sales.map(k => k.price), be, d.breakevenPrice]
+    .filter(v => v != null && Number.isFinite(v));
+  const lo = Math.min(...ys), hi = Math.max(...ys);
+  const pad = Math.max(0.05, (hi - lo) * 0.12);
+  const yMin = +(lo - pad).toFixed(2);
+  return {
+    backgroundColor: 'transparent',
+    animation: false,
+    grid: { top: 18, right: 24, bottom: 24, left: 16, containLabel: true },
+    xAxis: {
+      type: 'time', min: ts(d.start), max: ts(d.end),
+      axisLabel: { color: colors.dim, fontSize: 10, fontFamily: 'monospace' },
+      splitLine: { show: false }, axisLine: { lineStyle: { color: colors.border } },
+    },
+    yAxis: {
+      type: 'value', min: yMin, max: +(hi + pad).toFixed(2),
+      axisLabel: { color: colors.dim, fontSize: 10, fontFamily: 'monospace', formatter: (v) => `$${v.toFixed(2)}` },
+      splitLine: { lineStyle: { color: colors.border } },
+    },
+    tooltip: {
+      trigger: 'item', backgroundColor: colors.panel, borderColor: colors.borderHi, borderWidth: 1,
+      textStyle: { color: colors.text, fontSize: 10, fontFamily: 'monospace' },
+      formatter: (p) => {
+        const v = p.value ?? [];
+        const day = new Date(v[0]).toISOString().slice(0, 10);
+        if (p.seriesId === 'contracts') return `Contract ${day}: <b>${_perBu(v[1])}</b>${v[2] != null ? ` × ${Math.round(v[2]).toLocaleString()} bu` : ''}`;
+        if (p.seriesId === 'sales') return `Planned sale ${day}: <b>${_perBu(v[1])}</b>${v[2] != null ? `, ${(100 * v[2]).toFixed(0)}% of unpriced` : ''}`;
+        return `Cash price from ${day}: <b>${_perBu(v[1])}</b>`;
+      },
+    },
+    series: [
+      { id: 'price', name: 'Cash price', type: 'line', step: 'end', symbol: 'circle', symbolSize: 4,
+        data: d.prices.map(([day, v]) => [ts(day), v]), lineStyle: { width: 2, color: colors.price },
+        itemStyle: { color: colors.price },
+        markLine: { silent: true, symbol: 'none', data: marks },
+        ...(be == null ? {} : { markArea: { silent: true, itemStyle: { color: colors.red + '14' },
+          data: [[{ yAxis: yMin, name: 'below breakeven' }, { yAxis: be }]],
+          label: { show: true, position: 'insideBottomLeft', color: colors.red, fontSize: 9, formatter: 'below breakeven' } } }) },
+      { id: 'contracts', name: 'Contracts', type: 'scatter', symbol: 'diamond', symbolSize: 10,
+        itemStyle: { color: colors.green }, data: d.contracts.map(k => [ts(k.date), k.price, k.bushels]) },
+      { id: 'sales', name: 'Planned sales', type: 'scatter', symbol: 'triangle', symbolSize: 9,
+        itemStyle: { color: colors.amber }, data: d.sales.map(k => [ts(k.date), k.price, k.share]) },
+    ],
+  };
+}
+
+function _addDays(iso, n) {
+  return new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+}
+
 const _byAmount = (o) => Object.entries(o).filter(([, v]) => v !== 0).sort((a, b) => b[1] - a[1]);
 const _cropLabel = (c) => (CROPS[c]?.label ?? (c ? c.charAt(0) + c.slice(1).toLowerCase() : '—'));
-const _perBu = (n) => (n == null ? '—' : `$${n.toFixed(2)}`);
+const _perBu = (n) => (n == null ? '—' : `${n < 0 ? '-' : ''}$${Math.abs(n).toFixed(2)}`);
 const _fmt = (n, d) => (n == null ? '—' : n.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d }));
 
 function _signCls(n) {

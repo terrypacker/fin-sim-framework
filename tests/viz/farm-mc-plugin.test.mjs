@@ -18,7 +18,8 @@
 
 import assert from 'node:assert/strict';
 import v8 from 'node:v8';
-import { FarmMcPlugin, farmMcRows, farmMcCsv }
+import * as echarts from 'echarts';
+import { FarmMcPlugin, farmMcRows, farmMcCsv, farmCashFan, farmNetHistogram, farmFanOption, farmHistOption }
   from '../../src/visualization/workbench/plugins/finance/farm-mc-plugin.js';
 import { FarmScenario } from '../../src/scenarios/farm-scenario.js';
 import { FarmMcRunner, FarmMcConfig } from '../../src/finance/farm/farm-mc.js';
@@ -142,4 +143,78 @@ test('rows: farm, each operator with its plans, then each crop; basis picks the 
 test('the CSV carries every metric', () => {
   const csv = farmMcCsv({ metrics: { 'farm.net.custom': { n: 2, mean: 1, p10: 0, p50: 1, p90: 2, min: 0, max: 2, lossProbability: 0 } } });
   assert.equal(csv.split('\n')[1], 'farm.net.custom,2,1,0,1,2,0,2,0');
+});
+
+// ─── The charts ──────────────────────────────────────────────────────────────────
+
+test('every path carries its monthly cash series; the fan and histogram are taken across paths', async () => {
+  const cfg = FarmScenario.buildDefaultConfig();
+  const mc = new FarmMcConfig();
+  mc.applyOverride(KEY, { enabled: true, stdDev: 0.2, centerDirty: false });
+  const { runs, summary } = await quiet(() => new FarmMcRunner({ n: 12, cfgTemplate: cfg, mcConfig: mc, parallel: false }).run());
+  const farm = normalizeFarm(cfg.farm);
+  for (const r of runs) {
+    assert.equal(r.cashSeries.months.length, 36);
+    // The farm is the sum of its operators, month by month.
+    r.cashSeries.months.forEach((_, i) => {
+      const ops = farm.operators.reduce((t, o) => t + r.cashSeries.series[`operator.${o.id}`][i], 0);
+      assert.ok(Math.abs(ops - r.cashSeries.series.farm[i]) < 1e-6);
+    });
+  }
+  const fan = farmCashFan(runs, 'farm');
+  assert.ok(fan.months.length > 1 && fan.months.length <= 36);
+  assert.equal(fan.p50[0], 0, 'the fan opens on a flat month at 0');
+  fan.months.forEach((_, i) => assert.ok(fan.p10[i] <= fan.p25[i] && fan.p25[i] <= fan.p50[i]
+    && fan.p50[i] <= fan.p75[i] && fan.p75[i] <= fan.p90[i]));
+  const h = farmNetHistogram(runs, 'farm', 'custom');
+  assert.equal(h.counts.reduce((a, b) => a + b, 0), 12);
+  assert.equal(h.edges.length, h.counts.length + 1);
+  assert.equal(h.lossProbability, summary.metrics['farm.net.custom'].lossProbability);
+  const opt = farmFanOption(fan, { colors: { band: '#000000', red: '#ff0000', dim: '#999999', border: '#333333',
+    borderHi: '#444444', text: '#eeeeee', muted: '#666666', panel: '#111111' }, money: String });
+  assert.deepEqual(opt.xAxis.data, fan.months);
+  assert.equal(farmCashFan([{ metrics: {} }], 'farm'), null);
+  // Both options render headless (jsdom has no canvas, so the panel itself skips ECharts).
+  const colors = { band: '#0000ff', red: '#ff0000', dim: '#999999',
+    border: '#333333', borderHi: '#444444', text: '#eeeeee', muted: '#666666', panel: '#111111' };
+  for (const o of [farmFanOption(fan, { colors, money: String }), farmHistOption(h, { colors, money: String })]) {
+    const chart = echarts.init(null, null, { renderer: 'svg', ssr: true, width: 800, height: 240 });
+    try { chart.setOption(o); assert.ok(chart.renderToSVGString().includes('#0000ff')); } finally { chart.dispose(); }
+  }
+});
+
+test('the charts appear after a run with a scope per operator; the run bar uses the app\'s controls', async () => {
+  const p = mount();
+  assert.equal(q(p, 'charts').style.display, 'none');
+  assert.ok(q(p, 'run').classList.contains('btn') && q(p, 'run').classList.contains('btn-primary'));
+  assert.ok(q(p, 'n').classList.contains('mc-iters-input'));
+  p._n = 6;
+  await quiet(() => p.run());
+  assert.equal(q(p, 'charts').style.display, '');
+  const scopes = [...q(p, 'scope').querySelectorAll('button')].map(b => b.dataset.v);
+  assert.equal(scopes[0], 'farm');
+  assert.ok(scopes.length > 1);
+  fire(q(p, 'scope').querySelector(`button[data-v="${scopes[1]}"]`), 'click');
+  assert.ok(q(p, 'scope').querySelector(`button[data-v="${scopes[1]}"]`).classList.contains('on'));
+  assert.match(q(p, 'hist-label').textContent, /6 paths/);
+  p.unmount();
+});
+
+test('a band whose low end is below $0 is stacked on that low end, not on $0', () => {
+  // ECharts' default stackStrategy ('samesign') stacked the band's positive height on 0 when
+  // P10 was negative, so the shading stopped at the $0 line. Read what ECharts actually stacked.
+  const fan = { months: ['2027-01', '2027-02'], p10: [-100, -50], p25: [-60, -20], p50: [-30, 0], p75: [10, 30], p90: [40, 80] };
+  const colors = { band: '#0000ff', red: '#ff0000', dim: '#999999', border: '#333333', borderHi: '#444444',
+    text: '#eeeeee', muted: '#666666', panel: '#111111' };
+  const chart = echarts.init(null, null, { renderer: 'svg', ssr: true, width: 600, height: 200 });
+  try {
+    chart.setOption(farmFanOption(fan, { colors, money: String }));
+    const top = (id) => {
+      const data = chart.getModel().getSeries().find(s => s.id === id).getData();
+      const dim = data.getCalculationInfo('stackResultDimension');
+      return [0, 1].map(i => data.get(dim, i));
+    };
+    assert.deepEqual(top('outer-fill'), fan.p90, 'the outer band tops out at P90');
+    assert.deepEqual(top('inner-fill'), fan.p75, 'the inner band tops out at P75');
+  } finally { chart.dispose(); }
 });

@@ -210,13 +210,15 @@ export class FarmMcRunner extends McRunner {
    *
    * @param {object}   [baseParams={}]  param overrides (`farm.<kind>.<id>.<field>` keys)
    * @param {Function} [onProgress]     `(completed, total)`
-   * @returns {Promise<{ runs: Array<{ seed, params, metrics, scheduleF }>, summary: object }>}
-   *   `scheduleF` is the path's export rows per operator (`exportOperators`, design 134 §8.2)
+   * @returns {Promise<{ runs: Array<{ seed, params, metrics, scheduleF, cashSeries }>, summary: object }>}
+   *   `scheduleF` is the path's export rows per operator (`exportOperators`, design 134 §8.2);
+   *   `cashSeries` its cumulative cash net by month (`farmCashSeries`)
    */
   async run(baseParams = {}, onProgress) {
     const { ctx, provenance, mcRuns, erroredRuns } = await this._runAll(baseParams, onProgress);
     const runs = mcRuns.map(r => ({
       seed: r.seed, params: r.params, metrics: r.result.metrics, scheduleF: r.result.scheduleF ?? null,
+      cashSeries: r.result.cashSeries ?? null,
     }));
     return {
       runs,

@@ -10,7 +10,7 @@
 
 import { FarmScenario }  from '../../scenarios/farm-scenario.js';
 import { farmReports }   from './farm-run.js';
-import { jobCostReport } from './farm-reports.js';
+import { jobCostReport, farmCashSeries } from './farm-reports.js';
 import { exportOperators } from './farm-export.js';
 
 /**
@@ -31,9 +31,15 @@ export const FARM_MC_SCENARIO = {
   sampler:   () => null,
   // `scheduleF` is the path's export rows (design 134 §8.2): each operator's calendar-year
   // Schedule F, which the farm export carries per path for the household to draw.
+  // `cashSeries` is the path's cumulative cash net by month (`farmCashSeries`), which the
+  // Farm MC panel draws as a fan.
   evaluate:  () => (sim, cfg) => {
     const r = farmReports(cfg, sim);
-    return { metrics: farmPathMetrics(cfg, sim, r), scheduleF: exportOperators(r.farm, r.ledger, r.cash) };
+    return {
+      metrics:    farmPathMetrics(cfg, sim, r),
+      scheduleF:  exportOperators(r.farm, r.ledger, r.cash),
+      cashSeries: farmCashSeries(r.farm, r.ledger),
+    };
   },
 };
 
