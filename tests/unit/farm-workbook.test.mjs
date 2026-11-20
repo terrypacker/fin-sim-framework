@@ -20,6 +20,7 @@ import assert             from 'node:assert/strict';
 import { importFarmWorkbook, parseCsv, cellNumber, PRO_RATA } from '../../src/finance/farm/farm-workbook.js';
 import { FarmScenario } from '../../src/scenarios/farm-scenario.js';
 import { runFarm }      from '../../src/finance/farm/farm-run.js';
+import { validateFarm } from '../../src/finance/farm/farm-records.js';
 import { latestPriceMonth, priceHistory } from '../../src/finance/farm/farm-price-history.js';
 
 // Columns as the owners' sheet has them, with its heading row, trailing spaces and mixed case.
@@ -243,5 +244,77 @@ describe('farm workbook import (design 134 §17.2)', () => {
     near(north, 100 * (120 + 200 + 30 + 60 + 15));
     // The custom application is cash custom hire (line 13).
     assert.ok(run.ledger.some(p => p.category === 'CUSTOM_APPLICATION' && p.cash && p.line === '13'));
+  });
+});
+
+describe('computed operation costs (design 134 §17.8)', () => {
+  const quiet = (fn) => { const log = console.log; console.log = () => {}; try { return fn(); } finally { console.log = log; } };
+  const run = (farm, basis = 'CUSTOM') => quiet(() => runFarm(FarmScenario.buildDefaultConfig({ farm }), { machineryBasis: basis }));
+  const total = (r, cat, pred = () => true) => r.ledger.filter(p => p.category === cat && pred(p)).reduce((s, p) => s + p.amount, 0);
+  const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-6, `${a} vs ${b}`);
+
+  test('the importer fills fuel, throughput (range → midpoint), sprays per crop, the wage and trucking', () => {
+    const r = imp();
+    const ops = Object.fromEntries(r.farm.operations.map(o => [o.id, o]));
+    assert.equal(ops.plant.fuelPerAcre, 1);
+    assert.equal(ops.plant.acresPerHour, 35);
+    assert.deepEqual(ops.plant.acresPerHourRange, [30, 40]);
+    assert.equal(ops.harvest.acresPerHour, 30);
+    assert.equal(r.farm.seasons[0].laborPerHour, 27);
+    const spray = (planId) => r.farm.prescriptions.find(x => x.planId === planId && x.operationId === 'spray');
+    assert.equal(spray('plan-north').applications, 3);
+    assert.equal(spray('plan-hill').applications, 4);
+    assert.equal(spray('plan-hill').passes, 1);              // the custom rate is still per season
+    assert.equal(r.farm.trucking.length, 2 * 2);             // 2 rates × 2 operators
+    assert.ok(kinds(r).includes('FUEL_APPLICATIONS_ASSUMED'));
+  });
+
+  test('fuel and labor per trip; on the ACTUAL machinery side only, and cash on lines 19 and 22', () => {
+    const { farm } = imp();
+    const custom = run(farm, 'CUSTOM');
+    const actual = run(farm, 'ACTUAL');
+    // North: 100 ac, corn: plant + harvest + 3 sprays = 5 trips.
+    const north = (p) => p.jobId === 'plan-north';
+    near(total(custom, 'MACHINE_FUEL', north), 100 * 5 * 1);
+    near(total(custom, 'MACHINE_LABOR', north), 100 * (1 / 35 + 1 / 30 + 3 / 100) * 27);
+    assert.ok(custom.ledger.some(p => p.category === 'MACHINE_FUEL' && p.cash && p.line === '19'));
+    assert.ok(custom.ledger.some(p => p.category === 'MACHINE_LABOR' && p.cash && p.line === '22'));
+    const row = (rep) => rep.jobCost.plans.find(x => x.planId === 'plan-north');
+    const fuelLabor = total(custom, 'MACHINE_FUEL', north) + total(custom, 'MACHINE_LABOR', north);
+    near(row(custom).machinery.actual, fuelLabor);
+    near(row(custom).machineryCost, row(custom).machinery.custom);   // never counted twice
+    near(row(actual).machineryCost, fuelLabor);
+    assert.equal(row(custom).cost.MACHINE_FUEL, undefined);
+  });
+
+  test('fuelMultiplier moves the computed fuel and nothing else', () => {
+    const { farm } = imp();
+    const base = run(farm);
+    const dear = run({ ...farm, seasons: [{ ...farm.seasons[0], fuelMultiplier: 1.5 }] });
+    near(total(dear, 'MACHINE_FUEL'), 1.5 * total(base, 'MACHINE_FUEL'));
+    near(total(dear, 'MACHINE_LABOR'), total(base, 'MACHINE_LABOR'));
+  });
+
+  test('trucking: every bushel out of the field; again from storage only for what leaves after harvest', () => {
+    const { farm } = imp({ contractOperator: 'A' });
+    const r = run(farm);
+    // A's corn: 100·200 + 50·220 = 31,000 bu out of the field at $0.15.
+    // (The field leg's source is the plan itself; a storage leg's is the contract or sale.)
+    near(total(r, 'TRUCKING', p => /plan-(north|river)/.test(p.jobId) && p.sourceId === p.jobId), 31000 * 0.15);
+    // The storage leg is for beans only here, and A's beans contract is delivered out of the
+    // field (at harvest), and the rest sold at harvest: no storage leg at all.
+    near(total(r, 'TRUCKING', p => p.operatorId === 'A' && p.jobId === 'plan-hill'), 80 * 60 * 0);
+    // Sold in December instead, A's unpriced beans (4,800 − 1,000 contracted) pay the second leg.
+    const late = run({ ...farm, sales: farm.sales.map(s => ({ ...s, saleDate: '2026-12-01' })) });
+    near(total(late, 'TRUCKING', p => p.jobId === 'plan-hill'), 3800 * 0.1);
+  });
+
+  test('a wage with no throughput is an advisory; a bad trucking row is refused', () => {
+    const { farm } = imp();
+    const ops = farm.operations.map(o => (o.id === 'spray' ? { ...o, acresPerHour: null } : o));
+    const r = run({ ...farm, operations: ops });
+    assert.ok(r.jobCost.advisories.some(a => a.kind === 'LABOR_NO_THROUGHPUT' && a.operationId === 'spray'));
+    const bad = { ...farm, trucking: [{ id: 't', operatorId: 'A', crop: 'CORN', leg: 'BARGE', perBu: 1 }] };
+    assert.ok(validateFarm(bad).some(e => /leg must be FIELD or STORAGE_TO_SALE/.test(e)));
   });
 });

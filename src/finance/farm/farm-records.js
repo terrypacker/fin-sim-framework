@@ -23,7 +23,7 @@ import { settleArc, ARC_PLC_PAYMENT_LIMIT } from './farm-programs.js';
  * cfg.farm = {
  *   seasons:       [{ id, cropYear, calendar?, yieldShock?, irrigatedYieldShock?, irrigatedYieldBeta?,
  *                     yieldShockScale?: { [crop]: k }, priceVol?: { [crop]: σ }, priceYieldBeta?: { [crop]: b },
- *                     rentMultiplier?, customRateMultiplier?, machineryMultiplier?,
+ *                     laborPerHour?, rentMultiplier?, customRateMultiplier?, machineryMultiplier?,
  *                     irrigationMultiplier?, interestMultiplier?, projectedPrice?: { [crop]: $ },
  *                     nationalPrice?: { [crop]: $ },
  *                     <category>Multiplier? (one per PRODUCT_CATEGORIES, e.g. nitrogenMultiplier) }],
@@ -31,16 +31,18 @@ import { settleArc, ARC_PLC_PAYMENT_LIMIT } from './farm-programs.js';
  *   fields:        [{ id, operatorId, name, tenure, rentedAcres, plantedAcres, irrigated,
  *                     rentPerAcre, propertyTax, communityCollegeTax?, fsaFarm?, provenYield? }],
  *   products:      [{ id, name, category, unit, unitPrice, discountPct }],
- *   operations:    [{ id, name, customRatePerAcre }],
+ *   operations:    [{ id, name, customRatePerAcre, fuelPerAcre?, acresPerHour? }],
  *   cropPlans:     [{ id, fieldId, crop, expectedYield, yieldShock?, insurancePremiumPerAcre,
  *                     irrigationElectricity, aphYield? }],
- *   prescriptions: [{ id, planId, productId | operationId, ratePerAcre, passes, share, paidDate? }],
+ *   prescriptions: [{ id, planId, productId | operationId, ratePerAcre, passes, applications?,
+ *                     share, paidDate? }],
  *   machinery:     [{ id, operatorId, amount, paidDate? }],
  *   overhead:      [{ id, operatorId, name, category, amount, basis, fieldIds?, paidDate?, variableRate? }],
  *   prices:        [{ id, crop, date, price, shock? }],
  *   contracts:     [{ id, operatorId, crop, cropYear?, bushels | shareOfExpected, price,
  *                     deliveryDate, paymentDate?, buyoutPerBu? }],
  *   storage:       [{ id, operatorId, crop, costPerBuMonth }],
+ *   trucking:      [{ id, operatorId, crop, leg: 'FIELD' | 'STORAGE_TO_SALE', perBu }],
  *   sales:         [{ id, operatorId, crop, cropYear?, share, saleDate, paymentDate?, price? }],
  *   carryIn:       [{ id, operatorId, crop, bushels, cropYear? }],
  *   otherIncome:   [{ id, operatorId, category, amount, paymentDate, cropYear?, planId? }],
@@ -68,8 +70,14 @@ import { settleArc, ARC_PLC_PAYMENT_LIMIT } from './farm-programs.js';
 export const FARM_TABLES = Object.freeze([
   'operators', 'fields', 'products', 'operations', 'cropPlans', 'prescriptions', 'machinery',
   'overhead', 'prices', 'contracts', 'storage', 'sales', 'carryIn', 'otherIncome', 'carryOut',
-  'insurance', 'arcBase', 'arcCounties',
+  'insurance', 'arcBase', 'arcCounties', 'trucking',
 ]);
+
+/**
+ * Trucking legs (design 134 §17.8): every harvested bushel is hauled out of the field, and a
+ * bushel that is stored is hauled again from storage to the buyer.
+ */
+export const TRUCKING_LEGS = Object.freeze({ FIELD: 'FIELD', STORAGE_TO_SALE: 'STORAGE_TO_SALE' });
 
 /** The tables whose rows belong to a season (all but `operators`). */
 export const SEASON_TABLES = Object.freeze(FARM_TABLES.filter(t => t !== 'operators'));
@@ -94,6 +102,7 @@ export const SEASON_MULTIPLIERS = Object.freeze({
   machineryMultiplier:  'every operator\'s real machinery figure',
   irrigationMultiplier: 'every crop plan\'s irrigation electricity',
   interestMultiplier:   'interest on overhead rows marked variableRate',
+  fuelMultiplier:       'the computed fuel of every operation done with the operator\'s own machines',
 });
 
 /** `NITROGEN` → `nitrogenMultiplier`, `PHOSPHATE_POTASH` → `phosphatePotashMultiplier`. */
@@ -226,6 +235,9 @@ export function normalizeFarm(farm) {
     ...season0, cropYear: y, calendar,
     yieldShock:          season0.yieldShock ?? 0,
     irrigatedYieldShock: season0.irrigatedYieldShock ?? 0,
+    // The wage of the person running the operator's own machines (design 134 §17.8). With an
+    // operation's acres per hour it prices the hours; 0 (blank) computes no machine labor.
+    laborPerHour:        season0.laborPerHour ?? 0,
     // The shocks' SHAPE defaults to the NASS calibration (design 134 §13.8). Each is a no-op
     // while the shocks are 0, so a deterministic season is unchanged by it. The price vol is
     // not: its mean correction moves a price, so it stays blank here (FarmMcRunner fills it
@@ -262,6 +274,7 @@ export function normalizeFarm(farm) {
     f.rentedAcres ??= (f.tenure === TENURE.CASH_RENT ? f.plantedAcres : 0);
   }
   for (const p of out.products) p.discountPct ??= 0;
+  for (const o of out.operations) { o.fuelPerAcre ??= 0; o.acresPerHour ??= null; }
   for (const p of out.cropPlans) {
     p.yieldShock ??= 0;
     p.insurancePremiumPerAcre ??= 0;
@@ -296,7 +309,12 @@ export function normalizeFarm(farm) {
   }
   for (const rx of out.prescriptions) {
     rx.share ??= 1;
-    if (rx.operationId != null) rx.passes ??= 1;
+    if (rx.operationId != null) {
+      rx.passes ??= 1;
+      // The trips the operator's own machines make. A custom rate may be charged per season
+      // (one pass) while the sprayer goes over the field three or four times (rev 24).
+      rx.applications ??= rx.passes;
+    }
     rx.paidDate = day(rx.paidDate);
   }
   for (const m of out.machinery) m.paidDate = day(m.paidDate) ?? calendar.machineryDate;
@@ -421,7 +439,24 @@ export function validateFarm(farm) {
     nonNeg('products', r, 'unitPrice', { required: true });
     share('products', r, 'discountPct');
   }
-  for (const r of f.operations) nonNeg('operations', r, 'customRatePerAcre', { required: true });
+  for (const r of f.operations) {
+    nonNeg('operations', r, 'customRatePerAcre', { required: true });
+    nonNeg('operations', r, 'fuelPerAcre');
+    if (r.acresPerHour != null && !(isNum(r.acresPerHour) && r.acresPerHour > 0)) {
+      err(`farm.operations "${r.id}": acresPerHour must be a number > 0`);
+    }
+  }
+  if (!isNum(f.season.laborPerHour) || f.season.laborPerHour < 0) err('farm.seasons[0].laborPerHour must be a number ≥ 0');
+  const truckKeys = new Set();
+  for (const r of f.trucking) {
+    need('trucking', r, 'operatorId', 'operators');
+    crop('trucking', r);
+    if (!Object.hasOwn(TRUCKING_LEGS, r.leg)) err(`farm.trucking "${r.id}": leg must be FIELD or STORAGE_TO_SALE`);
+    nonNeg('trucking', r, 'perBu', { required: true });
+    const k = `${r.operatorId}|${r.crop}|${r.leg}`;
+    if (truckKeys.has(k)) err(`farm.trucking "${r.id}": a second ${r.leg} rate for ${r.operatorId} ${r.crop}`);
+    truckKeys.add(k);
+  }
 
   const plansByField = new Map();
   for (const r of f.cropPlans) {
@@ -447,7 +482,11 @@ export function validateFarm(farm) {
       continue;
     }
     if (isProduct) { need('prescriptions', r, 'productId', 'products'); nonNeg('prescriptions', r, 'ratePerAcre', { required: true }); }
-    if (isOperation) { need('prescriptions', r, 'operationId', 'operations'); nonNeg('prescriptions', r, 'passes'); }
+    if (isOperation) {
+      need('prescriptions', r, 'operationId', 'operations');
+      nonNeg('prescriptions', r, 'passes');
+      nonNeg('prescriptions', r, 'applications');
+    }
     share('prescriptions', r, 'share');
     if (r.paidDate != null) date('prescriptions', r, 'paidDate');
   }
@@ -682,6 +721,8 @@ export function realizedYield(farm, plan, field = farm.fields.find(x => x.id ===
  * - `ARC_OVER_LIMIT`: an operator's ARC payment above the per-person limit, which is not applied.
  * - `APH_DEFAULTED`: an insured crop plan with no approved (APH) yield, so its guarantee is
  *   built on the expected yield (design 134 §15.2).
+ * - `LABOR_NO_THROUGHPUT`: a season with a machine-labor wage and an operation in use with no
+ *   acres per hour, so that operation's labor is not computed (design 134 §17.8).
  * - `NO_SEED`: a crop plan for an annual crop with no seed cost. Every annual crop is planted
  *   from seed bought for it, so a plan without one is a missing entry (the acceptance
  *   workbook had one, owner-confirmed, Q25), and its breakevens are too low by the seed cost.
@@ -706,6 +747,16 @@ export function farmAdvisories(farm) {
       message: `${f?.name ?? plan.fieldId} (${CROPS[plan.crop]?.label ?? plan.crop}) has no seed cost: `
         + 'probably a missing entry, so its costs and breakevens are understated.',
     });
+  }
+  if (farm.season?.laborPerHour > 0) {
+    const used = new Set(farm.prescriptions.filter(r => r.operationId != null).map(r => r.operationId));
+    for (const o of farm.operations) {
+      if (!used.has(o.id) || o.acresPerHour != null) continue;
+      out.push({
+        kind: 'LABOR_NO_THROUGHPUT', operationId: o.id,
+        message: `${o.name ?? o.id} has no acres per hour, so its machine labor is not computed.`,
+      });
+    }
   }
   for (const b of farm.arcBase) {
     if (!b.irrigatedPctDefaulted) continue;

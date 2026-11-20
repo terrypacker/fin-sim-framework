@@ -23,7 +23,8 @@ import { priceHistory, latestPriceMonth } from './farm-price-history.js';
  *   operator is a section heading.
  * - **Admin**: label-keyed blocks. Input rates (`CORN FERT`, \$/corn acre), the forward
  *   contracts (`Corn - Dec Delivery`, bushels, price), the loans paid this year (principal,
- *   interest), the custom farming rates and the "actual rates" notes.
+ *   interest), the custom farming rates and the "actual rates" notes, from which the fuel,
+ *   machine labor and trucking are computed (step 5b, §17.8).
  * - **Direct Expenses**: `(job code, code, amount)`: property taxes, cash rent, crop insurance.
  * - **Income**: `(job code, code, amount)`: a field's program payment, and an operator's
  *   payments on its `<operator> OVERHEAD` job.
@@ -403,6 +404,33 @@ export function importFarmWorkbook(csv, opts = {}) {
       if (!read) advise('ADMIN_ROW_IGNORED', `Admin: "${text}" is not a recognised costing note`);
     }
   }
+  // Step 5b (§17.8): the work done with the operator's own machines, from the actual rates.
+  // A throughput range is priced at its midpoint; the range is kept for a later MC lever.
+  for (const o of operations) {
+    if (costing.fuelPerAcrePerApplication != null) o.fuelPerAcre = costing.fuelPerAcrePerApplication;
+    const r = costing.acresPerHour[o.id];
+    if (r) { o.acresPerHour = (r[0] + r[1]) / 2; if (r[0] !== r[1]) o.acresPerHourRange = r; }
+  }
+  for (const rx of prescriptions) {
+    if (rx.operationId !== 'spray') continue;
+    const n = costing.applications[cropPlans.find(p => p.id === rx.planId).crop];
+    if (n > 0) rx.applications = n;
+  }
+  const trucking = [];
+  for (const t of costing.trucking) {
+    for (const o of operators) {
+      trucking.push({ id: `truck-${o.id.toLowerCase()}-${slug(t.crop)}-${slug(t.leg)}`, operatorId: o.id, ...t });
+    }
+  }
+  if (costing.fuelPerAcrePerApplication != null && operations.length) {
+    advise('FUEL_APPLICATIONS_ASSUMED', 'Fuel per acre per application is charged on every trip: planting, harvest '
+      + 'and each spray (Q33 asks whether planting and harvest count).');
+  }
+  if (operations.some(o => o.acresPerHourRange)) {
+    advise('THROUGHPUT_MIDPOINT', `Acres per hour given as a range are priced at the midpoint: `
+      + operations.filter(o => o.acresPerHourRange).map(o => `${o.id} ${o.acresPerHourRange.join('–')} → ${o.acresPerHour}`).join(', ') + '.');
+  }
+
   if (contracts.length && contractOperator === PRO_RATA) {
     advise('CONTRACT_OPERATOR_ASSUMED', 'The forward contracts name no operator, so each is split between the '
       + 'operators by their expected bushels of its crop. Pass contractOperator to give them to one.');
@@ -550,9 +578,10 @@ export function importFarmWorkbook(csv, opts = {}) {
   advise('NO_MACHINERY', 'The sheet has no machinery figure for any operator, so the ACTUAL machinery basis is $0.');
 
   const farm = {
-    seasons: [{ id: `s${y}`, cropYear: y }],
+    seasons: [{ id: `s${y}`, cropYear: y, ...(costing.laborPerHour != null ? { laborPerHour: costing.laborPerHour } : {}) }],
     operators, fields, products, operations, cropPlans, prescriptions, machinery: [], overhead, prices,
     contracts, storage, sales, carryIn: [], otherIncome, carryOut: [], insurance: [], arcBase: [], arcCounties: [],
+    trucking,
   };
   const errs = validateFarm(farm);
   if (errs.length) throw new Error(`the imported farm does not validate:\n  ${errs.join('\n  ')}`);

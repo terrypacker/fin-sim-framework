@@ -1,6 +1,6 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** rev 25 (20 Nov 2026): phase 5 step 5a built, the importer of the owners' own workbook layout, which replaces the proposed template; the 2020 ledger layout is unsupported (§17.7). Rev 24 (20 Nov 2026): owner answers from the 2026 workbook review (§17.6): Q22a and Q27 closed as declined, Q23a answered (not all nitrogen), and computed operation costs planned with phase 5, with owner questions Q23b and Q33. Rev 23 (20 Nov 2026): phase 8 steps 8a and 8b built: the price-history module, this season's real prices with its marketing windows on the Field P&L charts, a farm file opening as a farm, and the demo's crop year (§17.5). Rev 20: phase 8, price history and marketing windows, planned (§17.5), with owner question Q32. Rev 19 (20 Nov 2026): phases 5 (the yearly workbook importer) and 6 (in-app record editors) planned (§17); reconciliation moves to phase 7; the panel charts built (§17.4). Rev 18 (19 Nov 2026): **phase 4 COMPLETE** (§16) bar the export's land-and-debt section (Q22a): the export and import (4a–4c), a farm path per household year (4d), §199A (4e), the Nebraska community-college credit (4f), and the NOL, §461(l), the farming-loss carryback and §1301 averaging (4g, §16.10–16.11). Rev 17: phase 4 started, what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
+**Status:** rev 26 (20 Nov 2026): phase 5 step 5b built, fuel, machine labor and trucking computed from the operations' actual rates (§17.8). Rev 25: phase 5 step 5a built, the importer of the owners' own workbook layout, which replaces the proposed template; the 2020 ledger layout is unsupported (§17.7). Rev 24 (20 Nov 2026): owner answers from the 2026 workbook review (§17.6): Q22a and Q27 closed as declined, Q23a answered (not all nitrogen), and computed operation costs planned with phase 5, with owner questions Q23b and Q33. Rev 23 (20 Nov 2026): phase 8 steps 8a and 8b built: the price-history module, this season's real prices with its marketing windows on the Field P&L charts, a farm file opening as a farm, and the demo's crop year (§17.5). Rev 20: phase 8, price history and marketing windows, planned (§17.5), with owner question Q32. Rev 19 (20 Nov 2026): phases 5 (the yearly workbook importer) and 6 (in-app record editors) planned (§17); reconciliation moves to phase 7; the panel charts built (§17.4). Rev 18 (19 Nov 2026): **phase 4 COMPLETE** (§16) bar the export's land-and-debt section (Q22a): the export and import (4a–4c), a farm path per household year (4d), §199A (4e), the Nebraska community-college credit (4f), and the NOL, §461(l), the farming-loss carryback and §1301 averaging (4g, §16.10–16.11). Rev 17: phase 4 started, what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
 (§12.4) and the Field P&L panel is in the workbench (§12.5). **Phase 2 started** (§13): step 2a,
 the scenario-agnostic MC path and a farm batch on it, steps 2b–2d (realized yield, price paths, multiplier levers and the contracted share), 2e (calibration from USDA NASS, §13.8) and 2f (the Farm MC panel, §13.7) are built: **phase 2 is complete**. Owner questions Q1–Q20 and Q22–Q25 are answered (§3, §14); Q21, Q26 and the follow-ups Q22a,
 Q23a and Q25a (§14) are open. §7 records what the primary sources on disk decide. §8 is the household
@@ -1844,7 +1844,53 @@ the Admin rates. The unit tests use a synthetic workbook in the owners' layout: 
 sheet, its quirks (heading rows, trailing spaces, mixed case, `$-`, `#REF!`), every default
 and every refusal.
 
-**Next: step 5b, computed operation costs** (§17.6). Fuel, labor and trucking come from
-`sheet.costing`, on the actual side. That needs a home in the record model: fuel and
-throughput on `operations`, the spray count per crop on the prescription, a labor wage, and a
-trucking rate per bushel by leg.
+**Next: step 5b**, computed operation costs, built in rev 26 (§17.8).
+
+### 17.8 Phase 5b: computed operation costs (built, rev 26)
+
+The owners give rates, and the model computes the cost of doing the work with their own
+machines (§17.6).
+
+**Records.**
+
+| Record | New field | Meaning |
+|---|---|---|
+| `operations` | `fuelPerAcre` | fuel per acre per trip (blank 0) |
+| `operations` | `acresPerHour` | throughput. With the wage it prices the hours. Blank computes no labor, and the advisory `LABOR_NO_THROUGHPUT` says so when a wage is set. `acresPerHourRange` keeps a range the importer priced at its midpoint. |
+| `prescriptions` (an operation) | `applications` | trips the operator's machines make, default `passes`. Spraying is charged per season (`passes` 1) but driven 3–4 times. |
+| `seasons` | `laborPerHour` | the wage of whoever runs the machines (blank 0) |
+| `trucking` (new table) | `operatorId, crop, leg, perBu` | `FIELD`: every harvested bushel. `STORAGE_TO_SALE`: a stored bushel, again. |
+
+**Postings.** Per operation prescription:
+
+- `MACHINE_FUEL` (line 19) = acres × share × applications × fuel per acre × `fuelMultiplier`.
+- `MACHINE_LABOR` (line 22) = the same trips ÷ acres per hour × the wage.
+
+Both are cash, on the operation's date, and booked to the job cost's **actual** machinery
+side (`machineWork` on the category), next to `MACHINERY`. Under the custom basis they stay
+out of the net, because the custom rate already holds them. They show in the machinery
+margin (custom − actual). `fuelMultiplier` is a new season lever, generated only where an
+operation has fuel.
+
+`TRUCKING` (line 18) is a direct cost in both views. It is settled at compile time from the
+realized yields, like the harvest. Each plan's harvested bushels pay the field leg on the
+harvest date. Then each (operator, crop) pool of the season is walked in date order: a
+contract moves its bushels, a planned sale its share of the unpriced bushels, each capped by
+what is left. A move after the harvest date pays the storage leg on its own date, split over
+the pool's plans by their bushels. Grain delivered at harvest is hauled once.
+
+**The importer** sets these from the Admin sheet's actual rates. Fuel goes on every
+operation, so planting and harvest count as trips too until Q33 says otherwise (advisory
+`FUEL_APPLICATIONS_ASSUMED`). A throughput range is priced at its midpoint
+(`THROUGHPUT_MIDPOINT`). Each spray prescription takes its crop's spray count. The wage goes on
+the season, and the trucking rates go on every operator.
+
+**Limits.** The actual side still has no machinery ownership (depreciation, repairs, interest
+on machines). Until an operator's machinery figure is entered, the actual basis understates
+owning, and the machinery margin overstates what owning saves. Drying and irrigation
+electricity are entered figures only. The throughput ranges are not yet an MC lever.
+
+**Acceptance.** On the owners' 2026 workbook, fuel, labor and both trucking legs match a hand
+count from the Admin rates, and the sheet's stated amounts still reconcile to the cent. Unit
+tests: per-trip fuel and labor, actual-side booking and never in the custom net, the lever,
+both trucking legs including a December sale, and the refusals.

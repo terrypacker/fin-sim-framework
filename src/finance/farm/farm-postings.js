@@ -9,7 +9,9 @@
  */
 
 import { categoryLine } from './schedule-f.js';
-import { TENURE, harvestDateFor, priceOn, realizedYield, categoryMultiplierField } from './farm-records.js';
+import {
+  TENURE, TRUCKING_LEGS, harvestDateFor, priceOn, realizedYield, categoryMultiplierField,
+} from './farm-records.js';
 import { settleInsurance, settleArc } from './farm-programs.js';
 
 /**
@@ -151,10 +153,25 @@ export function compileFarmEvents(farm) {
       });
     } else {
       const opn = operationById.get(rx.operationId);
-      post(rx.paidDate ?? cal.inputDate, `${opn.name ?? opn.id} (custom rate) — ${plan.id}`, {
+      const date = rx.paidDate ?? cal.inputDate;
+      post(date, `${opn.name ?? opn.id} (custom rate) — ${plan.id}`, {
         operatorId: f.operatorId, jobId: plan.id, category: 'CUSTOM_RATE', cash: false,
         amount: acres * rx.passes * opn.customRatePerAcre * m.customRateMultiplier, sourceId: rx.id,
       });
+      // The same work with the operator's own machines (design 134 §17.8): fuel per acre per
+      // application, and the hours (acres ÷ acres per hour) at the season's wage. Cash, and on
+      // the ACTUAL machinery side of the job cost.
+      const trips = acres * rx.applications;
+      post(date, `${opn.name ?? opn.id} fuel — ${plan.id}`, {
+        operatorId: f.operatorId, jobId: plan.id, category: 'MACHINE_FUEL',
+        amount: trips * opn.fuelPerAcre * m.fuelMultiplier, sourceId: rx.id,
+      });
+      if (opn.acresPerHour > 0) {
+        post(date, `${opn.name ?? opn.id} labor — ${plan.id}`, {
+          operatorId: f.operatorId, jobId: plan.id, category: 'MACHINE_LABOR',
+          amount: trips / opn.acresPerHour * season.laborPerHour, sourceId: rx.id,
+        });
+      }
     }
   }
 
@@ -273,8 +290,72 @@ export function compileFarmEvents(farm) {
     out.push(paymentSpec(`sale:${s.id}`, s.paymentDate, `Sale payment — ${s.id}`));
   }
 
+  for (const t of truckingPostings(farm)) post(t.date, t.name, t);
+
   // Events that tie on (date, order) keep this array's order: the toolset registers them in
   // it, and the queue breaks remaining ties by insertion (design 134; queue total order).
+  return out;
+}
+
+/**
+ * Trucking (design 134 §17.8), per bushel: every harvested bushel out of the field on the
+ * harvest date, and every bushel that leaves storage AFTER harvest again, on the day it goes.
+ *
+ * Settled at compile time like the harvest, from the realized yields. Each of this season's
+ * pools is walked in date order: a contract moves its bushels, a planned sale its share of
+ * the unpriced bushels (harvested less contracted), each capped by what is still in the bin.
+ * Grain delivered on the harvest date goes straight from the field and is hauled once. A
+ * storage-leg charge is split over the pool's plans by their harvested bushels.
+ *
+ * @param {object} farm normalized farm
+ * @returns {object[]} postings for `post`, each with its `date` and `name`
+ */
+function truckingPostings(farm) {
+  if (!farm.trucking.length) return [];
+  const y = farm.season.cropYear;
+  const cal = farm.season.calendar;
+  const rate = (op, crop, leg) =>
+    farm.trucking.find(t => t.operatorId === op && t.crop === crop && t.leg === leg)?.perBu ?? 0;
+  const out = [];
+  const pools = new Map();
+  for (const plan of farm.cropPlans) {
+    const f = farm.fields.find(x => x.id === plan.fieldId);
+    const bu = f.plantedAcres * realizedYield(farm, plan, f);
+    const k = `${f.operatorId}|${plan.crop}`;
+    if (!pools.has(k)) pools.set(k, { op: f.operatorId, crop: plan.crop, plans: [], bu: 0 });
+    const pool = pools.get(k);
+    pool.plans.push([plan, bu]);
+    pool.bu += bu;
+    const field = rate(f.operatorId, plan.crop, TRUCKING_LEGS.FIELD);
+    out.push({
+      date: harvestDateFor(cal, plan.crop), name: `Trucking out of the field — ${plan.id}`,
+      operatorId: f.operatorId, jobId: plan.id, category: 'TRUCKING', amount: bu * field, sourceId: plan.id,
+    });
+  }
+  for (const pool of pools.values()) {
+    const perBu = rate(pool.op, pool.crop, TRUCKING_LEGS.STORAGE_TO_SALE);
+    if (!(perBu > 0) || !(pool.bu > 0)) continue;
+    const harvest = harvestDateFor(cal, pool.crop);
+    const mine = (r) => r.operatorId === pool.op && r.crop === pool.crop && r.cropYear === y;
+    const contracts = farm.contracts.filter(mine);
+    const unpriced = Math.max(0, pool.bu - contracts.reduce((s, c) => s + c.bushels, 0));
+    const moves = [
+      ...contracts.map(c => ({ date: c.deliveryDate, order: 1, want: c.bushels, id: c.id })),
+      ...farm.sales.filter(mine).map(s => ({ date: s.saleDate, order: 2, want: s.share * unpriced, id: s.id })),
+    ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.order - b.order));
+    let left = pool.bu;
+    for (const mv of moves) {
+      const bu = Math.min(mv.want, left);
+      left -= bu;
+      if (mv.date <= harvest || !(bu > 0)) continue;
+      for (const [plan, planBu] of pool.plans) {
+        out.push({
+          date: mv.date, name: `Trucking from storage — ${plan.id}`, operatorId: pool.op, jobId: plan.id,
+          category: 'TRUCKING', amount: bu * perBu * planBu / pool.bu, sourceId: mv.id,
+        });
+      }
+    }
+  }
   return out;
 }
 

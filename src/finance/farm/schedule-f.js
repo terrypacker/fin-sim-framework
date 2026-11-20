@@ -110,6 +110,14 @@ export const COST_CATEGORIES = Object.freeze({
   CROP_INSURANCE:         { line: '20',  label: 'Crop insurance premium' },
   IRRIGATION_ELECTRICITY: { line: '30',  label: 'Irrigation electricity' },
   MACHINERY:              { line: 'MIXED_MACHINERY', label: 'Machinery (own)' },
+  // Computed from the operations' actual rates (design 134 §17.8): the cost of doing the work
+  // with the operator's own machines. `machineWork` puts them on the ACTUAL machinery side of
+  // the job cost, beside MACHINERY, because a custom rate already includes the fuel and the
+  // operator; charging both would count them twice.
+  MACHINE_FUEL:           { line: '19',  label: 'Fuel (own machines, computed)', machineWork: true },
+  MACHINE_LABOR:          { line: '22',  label: 'Machine labor (computed)',      machineWork: true },
+  // Hauling grain, per bushel. No custom rate includes it, so it is a cost in both views.
+  TRUCKING:               { line: '18',  label: 'Trucking (computed)' },
   STORAGE:                { line: '27',  label: 'Grain storage' },
   // Overhead categories — an operator's pooled costs (design 134 Q10).
   INTEREST_MORTGAGE:      { line: '21a', label: 'Land debt interest', overhead: true },
