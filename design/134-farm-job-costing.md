@@ -1,6 +1,6 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** rev 19 (20 Nov 2026): phases 5 (the yearly workbook importer) and 6 (in-app record editors) planned (§17); reconciliation moves to phase 7. Rev 18 (19 Nov 2026): **phase 4 COMPLETE** (§16) bar the export's land-and-debt section (Q22a): the export and import (4a–4c), a farm path per household year (4d), §199A (4e), the Nebraska community-college credit (4f), and the NOL, §461(l), the farming-loss carryback and §1301 averaging (4g, §16.10–16.11). Rev 17: phase 4 started, what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
+**Status:** rev 20 (20 Nov 2026): phase 8, price history and marketing windows, planned (§17.5), with owner question Q32. Rev 19 (20 Nov 2026): phases 5 (the yearly workbook importer) and 6 (in-app record editors) planned (§17); reconciliation moves to phase 7; the panel charts built (§17.4). Rev 18 (19 Nov 2026): **phase 4 COMPLETE** (§16) bar the export's land-and-debt section (Q22a): the export and import (4a–4c), a farm path per household year (4d), §199A (4e), the Nebraska community-college credit (4f), and the NOL, §461(l), the farming-loss carryback and §1301 averaging (4g, §16.10–16.11). Rev 17: phase 4 started, what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
 (§12.4) and the Field P&L panel is in the workbench (§12.5). **Phase 2 started** (§13): step 2a,
 the scenario-agnostic MC path and a farm batch on it, steps 2b–2d (realized yield, price paths, multiplier levers and the contracted share), 2e (calibration from USDA NASS, §13.8) and 2f (the Farm MC panel, §13.7) are built: **phase 2 is complete**. Owner questions Q1–Q20 and Q22–Q25 are answered (§3, §14); Q21, Q26 and the follow-ups Q22a,
 Q23a and Q25a (§14) are open. §7 records what the primary sources on disk decide. §8 is the household
@@ -22,7 +22,7 @@ Rev 9 records the acceptance import and the questions it raised (§12.4). Rev 10
 Field P&L panel (§12.5). Rev 11 splits phase 2 into steps and records step 2a (§13). Rev 12
 records steps 2b–2f; the calibration (§13.8) adds an irrigated-only yield shock and skewed
 yield draws, both of which the data required. Rev 13 records the owners' answers to Q22–Q25
-and the follow-ups they leave (§14). Rev 14 opens phase 3 (§15). Rev 15 records step 3c, ARC-County (§15.3). Rev 16 records 3d and 3e, which complete phase 3 (§15.4). Rev 17 opens phase 4 (§16). Rev 18 completes it. Rev 19 plans phases 5 and 6, getting a farm in (§17).
+and the follow-ups they leave (§14). Rev 14 opens phase 3 (§15). Rev 15 records step 3c, ARC-County (§15.3). Rev 16 records 3d and 3e, which complete phase 3 (§15.4). Rev 17 opens phase 4 (§16). Rev 18 completes it. Rev 19 plans phases 5 and 6, getting a farm in (§17). Rev 20 plans phase 8 (§17.5).
 
 **Related:** design 98 (the sweepable parameter surface: per-record generated params become
 MC and optimizer levers), design 55 (configuration-driven parameters and record templates),
@@ -557,6 +557,10 @@ bad one for another in the same world.
    template.
 7. **Reconciliation.** The crop-year to cash reconciliation report. Marketing moved into
    phases 1–2 in rev 3. Then a separate design for farm and household correlation (Q15).
+8. **Price history and marketing windows** (§17.5). Real prices on the Field P&L charts: this
+   season's so far, and past seasons' paths against this season's breakeven, showing when a
+   breakeven was reachable. Then the same question asked of the Monte Carlo paths. It depends
+   on none of phases 5–7 and can be built at any point.
 
 ## 10. Not in scope
 
@@ -572,7 +576,7 @@ bad one for another in the same world.
 
 ## 11. Open questions
 
-Q21 (§12.3), Q26 (§13.8), Q22a, Q23a, Q25a (§14), Q27–Q28 (§15.5) and Q29–Q31 (§16.3) are for the owners. The phase 5 template's columns (§17.2) are being settled by the owners. The fleet model (§5.6) and farm–market correlation (Q15) each
+Q21 (§12.3), Q26 (§13.8), Q22a, Q23a, Q25a (§14), Q27–Q28 (§15.5) and Q29–Q31 (§16.3) and Q32 (§17.5) are for the owners. The phase 5 template's columns (§17.2) are being settled by the owners. The fleet model (§5.6) and farm–market correlation (Q15) each
 need their own design later.
 
 ## 12. Phase 1 build notes (rev 8)
@@ -1655,3 +1659,72 @@ The Schedule F line a program payment lands on (4a or 6a) and whether it qualifi
   over a negative P10 was stacked on \$0 and its shading stopped there. Both fans (this one
   and the retirement MC panel's, whose net liquidity can go negative) now use `'all'`. A test
   reads the stack ECharts computes.
+
+### 17.5 Phase 8: price history and marketing windows (planned, rev 20)
+
+**The question.** The Field P&L charts (§17.4) show the season's price table, a plan, against
+the breakeven. The owners want real prices on them too: at what point in a season could the
+unpriced grain have been sold at or above breakeven, and how often does a season offer that
+window at all.
+
+**What is on disk.** `docs/us-farm-markets/` holds USDA NASS prices received, \$/bu, for
+Nebraska and the US, monthly and by marketing year, from 1908 (corn) and 1913 (soybeans). The
+calibration (§13.8) already reads it. It has three limits, and the chart says each one:
+
+1. **Monthly averages.** A month's figure smooths out the short rallies that are often the
+   best chance to sell. So it understates how often a breakeven was briefly reachable.
+2. **A state average.** It is Nebraska's price received, not the local elevator's bid, which
+   sits above or below it by a local basis (Q32).
+3. **Not daily.** Daily futures settlements are not freely licensed. A daily Nebraska cash
+   series (USDA AMS Market News may publish one) must be found and fetched to disk before it
+   is used (step 8d). Nothing here assumes it exists.
+
+**Steps.**
+
+- **8a. A price-history module.** The panel runs in the browser and cannot read the gzipped
+  file, so the calibration's pattern is followed. A script, `npm run farm:price-history`,
+  writes `FARM_PRICE_HISTORY` (Nebraska monthly price per crop, from a start year chosen to
+  keep it small), and a test re-derives it from the file on disk. Refreshing it means
+  re-running `fetch-sources.sh`, then the script, and nothing else.
+- **8b. This season so far.** On each crop's chart, the months of the crop year that NASS has
+  published, as points beside the plan's price line. The months at or above the breakeven are
+  shaded green: these are the **marketing windows**, when the unpriced grain could have been
+  sold at breakeven. The caption names the first such month, or says none has come yet. This
+  is the "at what point in the season" answer for the live season.
+- **8c. Past seasons against this plan.** Faint lines for the last N seasons' paths, each
+  **rebased** to this season's price on the plan date (1 January of the crop year). A past
+  path keeps its shape (its monthly log changes) but not its level, because a 1990s price
+  level says nothing about this year's breakeven. This is the same quantity the price
+  volatility is calibrated from. From the rebased paths the panel reports, against this
+  breakeven:
+  - the share of seasons in which the price reached it before the last planned sale date;
+  - the median first month it did.
+  The choice of N, and of rebasing over raw levels, is a panel switch, never a hidden
+  constant.
+- **8d. A daily source (research first).** Look for a free daily Nebraska cash series, fetch
+  it to `docs/us-farm-markets/` with its terms recorded in SOURCES.md, and only then draw it.
+  If there is none, 8b and 8c stay monthly, and the limit stays on the chart.
+- **8e. The Monte Carlo version.** "The chance the price reaches breakeven at some point
+  between harvest and the last sale date", per crop and scope, from the sampled price paths.
+  A path today has points only on the price table's dates (§13.5), so a touch between them is
+  never seen. The step either adds monthly points to the path (a price row per month, each
+  with its own shock, at the same calibrated volatility) or reports the probability on the
+  table's dates and says so. The choice is made when the step is built, from how much a
+  monthly path moves the existing Farm MC results; the retirement goldens must not move.
+
+**Basis (Q32).** History is a state average. A local elevator's bid differs from it by a
+basis that varies through the year (wide at harvest, narrower in spring). Until Q32 is
+answered, the history is drawn unadjusted and labelled "Nebraska average".
+
+**Q32 (owners):** the typical difference between your elevator's cash bid and the Nebraska
+average price, per crop, at harvest and in spring. A rough figure is enough: it shifts every
+historical point by that amount.
+
+**Acceptance.**
+
+- The module test reproduces `FARM_PRICE_HISTORY` byte for byte from the file on disk.
+- On the 2020 acceptance farm (§12.4), the chart's monthly points for crop year 2020 equal
+  NASS's Nebraska figures for those months.
+- The 8c share and first month agree with a hand count over the same seasons.
+- Every chart that draws history says which limit applies: monthly, state average, and
+  unadjusted for basis until Q32 is answered.
