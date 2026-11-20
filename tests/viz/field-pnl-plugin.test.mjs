@@ -21,11 +21,13 @@ import assert from 'node:assert/strict';
 import v8 from 'node:v8';
 import * as echarts from 'echarts';
 import { FieldPnlPlugin, fieldPnlGroups, fieldPnlLines, fieldPnlCsv, FIELD_PNL_CSV_COLUMNS,
-  breakevenChartData, breakevenChartSet, breakevenCaption, breakevenChartOption }
+  breakevenChartData, breakevenChartSet, breakevenCaption, breakevenChartOption,
+  grainChartData, grainChartSet, grainCaption, grainChartOption, GRAIN_BANDS }
   from '../../src/visualization/workbench/plugins/finance/field-pnl-plugin.js';
 import { sumPlanRows } from '../../src/finance/farm/farm-reports.js';
 import { FarmScenario } from '../../src/scenarios/farm-scenario.js';
-import { runFarm } from '../../src/finance/farm/farm-run.js';
+import { runFarm, planFarm } from '../../src/finance/farm/farm-run.js';
+import { farmGrainMoves } from '../../src/finance/farm/farm-reports.js';
 import { compileFarmEvents } from '../../src/finance/farm/farm-postings.js';
 import { FINANCE_PLUGINS, FINANCE_VIEW_TEMPLATES }
   from '../../src/visualization/workbench/plugins/finance/finance-plugin-package.js';
@@ -317,6 +319,91 @@ test('the chart set: one entry per crop, all on one date range, each with its ow
   const plan = jobCost.plans.find(r => r.planId);
   assert.equal(breakevenChartSet(farm, jobCost, { kind: 'plan', id: plan.jobId }, now).length, 1);
   assert.match(breakevenCaption(set[0], { label: 'Corn' }), /^Corn: /);
+});
+
+// ─── Where the grain is (design 134 §17.10) ───────────────────────────────────────
+
+describe('the grain chart', () => {
+  const moves = () => farmGrainMoves(RUN.sim.journal.journal);
+  const bin = (p) => p.binContracted + p.binUnpriced;
+
+  test('every bushel in is in storage, delivered or sold, on every date', () => {
+    const ms = moves();
+    for (const crop of ['CORN', 'SOYBEANS']) {
+      const d = grainChartData(RUN.farm, ms, RUN.ledger, { kind: 'farm' }, crop, null);
+      for (const p of d.points) {
+        const into = ms.filter(m => m.crop === crop && m.bushels > 0 && m.date <= p.date).reduce((s, m) => s + m.bushels, 0);
+        close(bin(p) + p.delivered + p.sold, into, `${crop} ${p.date}`);
+        assert.ok(p.binContracted <= bin(p) + 1e-9 && p.binUnpriced >= -1e-9);
+      }
+      close(d.harvested + d.carriedIn, ms.filter(m => m.crop === crop && m.bushels > 0).reduce((s, m) => s + m.bushels, 0), crop);
+    }
+  });
+
+  test('storage that a later contract delivery takes is contracted; the carry-in shows from its date', () => {
+    const d = grainChartData(RUN.farm, moves(), RUN.ledger, { kind: 'farm' }, 'CORN', null);
+    const y = RUN.farm.season.cropYear;
+    // opA carried 9,000 bu of 2026 corn in on 1 Jan; 6,000 of it is owed to k-a-old on 1 Mar.
+    const jan = d.points.find(p => p.date === `${y}-01-01`);
+    close(bin(jan), 9000, 'the carry-in is in storage');
+    close(jan.binContracted, 6000, 'the old contract is spoken for');
+    assert.ok(jan.moves.some(m => m.kind === 'CARRY_IN'));
+    close(d.carriedIn, 9000, 'carried in');
+    const storage = RUN.ledger.filter(r => r.category === 'STORAGE' && /CORN/.test(r.jobId)).reduce((s, r) => s + r.amount, 0);
+    close(d.storageCost, storage, 'the pools\' storage cost');
+    assert.ok(d.storedPeak > 0 && d.lastOut > d.harvestDay);
+  });
+
+  test('a field shows its operator\'s pool of its crop and says so; a crop scope only that crop', () => {
+    const ms = moves();
+    const plan = RUN.farm.cropPlans.find(p => p.id === 'p-b-river');
+    const set = grainChartSet(RUN.farm, ms, RUN.ledger, { kind: 'plan', id: plan.id }, null);
+    assert.deepEqual(set.map(d => d.crop), [plan.crop]);
+    assert.equal(set[0].pooledFrom, 'opB');
+    const opB = grainChartData(RUN.farm, ms, RUN.ledger, { kind: 'operator', id: 'opB' }, plan.crop, null);
+    assert.deepEqual(set[0].points.map(bin), opB.points.map(bin));
+    assert.match(grainCaption(set[0], { poolOf: 'Operator B' }), /Operator B's whole pool/);
+    assert.deepEqual(grainChartSet(RUN.farm, ms, RUN.ledger, { kind: 'crop', id: 'SOYBEANS' }, null).map(d => d.crop), ['SOYBEANS']);
+  });
+
+  test('the set shares one date range, and the planned season carries the moves', () => {
+    const set = grainChartSet(RUN.farm, moves(), RUN.ledger, { kind: 'farm' }, null);
+    assert.equal(new Set(set.map(d => `${d.start}|${d.end}`)).size, 1);
+    const planned = quiet(() => planFarm(RUN.cfg));
+    assert.deepEqual(planned.grain, moves());
+  });
+
+  test('the option stacks the four bands and RENDERS', () => {
+    const d = grainChartData(RUN.farm, moves(), RUN.ledger, { kind: 'farm' }, 'CORN', `${RUN.farm.season.cropYear}-11-01`);
+    const opt = grainChartOption(d, { colors: COLORS, title: 'Corn' });
+    assert.deepEqual(opt.series.map(s => s.id), GRAIN_BANDS.map(b => b.id));
+    assert.ok(opt.series.every(s => s.stack === 'grain' && s.step === 'end'));
+    assert.ok(opt.series[0].markLine.data.some(m => m.name === 'harvest') && opt.series[0].markLine.data.some(m => m.name === 'now'));
+    const chart = echarts.init(null, null, { renderer: 'svg', ssr: true, width: 800, height: 240 });
+    try { chart.setOption(opt); assert.ok(chart.renderToSVGString().includes('<path')); } finally { chart.dispose(); }
+  });
+
+  test('the tooltip gives the bands and that day\'s moves with their prices', () => {
+    const d = grainChartData(RUN.farm, moves(), RUN.ledger, { kind: 'farm' }, 'CORN', null);
+    const opt = grainChartOption(d, { colors: COLORS });
+    const day = d.points.find(p => p.moves.some(m => m.kind === 'DELIVER'));
+    const tip = opt.tooltip.formatter([{ value: [Date.parse(`${day.date}T00:00:00Z`), 0] }]);
+    for (const b of GRAIN_BANDS) assert.ok(tip.includes(b.label), b.label);
+    const k = RUN.farm.contracts.find(c => c.id === day.moves.find(m => m.kind === 'DELIVER').label
+      || c.name === day.moves.find(m => m.kind === 'DELIVER').label);
+    assert.ok(tip.includes(`$${k.price.toFixed(2)}`), 'the contract price');
+    assert.match(tip, /moves that day/);
+  });
+
+  test('the panel draws the grain section with a caption per crop', () => {
+    const p = mount();
+    try {
+      assert.equal(q(p, 'grain-wrap').style.display, '');
+      const caps = [...p.el.querySelectorAll('[data-fpl-grain-caption]')].map(e => e.textContent);
+      assert.equal(caps.length, 2);
+      assert.ok(caps.every(c => /harvested/.test(c)));
+    } finally { p.unmount(); }
+  });
 });
 
 // ─── Step 8b: this season's real prices and its marketing windows ───────────────

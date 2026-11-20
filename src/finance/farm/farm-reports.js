@@ -60,6 +60,36 @@ export function farmLedger(journal) {
   return rows;
 }
 
+/**
+ * The grain moves, from a sim journal: each harvest, carry-in, contract delivery and sale, in
+ * journal order. Bushels in are positive and bushels out negative. A grain pool is one
+ * operator's crop of one crop year, so a move names no field (design 134 §5.3).
+ *
+ * @param {object[]} journal `sim.journal.journal`
+ * @returns {object[]} `{ date, kind, operatorId, crop, cropYear, pool, planId, bushels,
+ *   shortBushels, sourceId }`; `kind` is HARVEST, CARRY_IN, DELIVER or SELL
+ */
+export function farmGrainMoves(journal) {
+  const rows = [];
+  for (const e of journal ?? []) {
+    if (e?.action?.type !== 'FARM_GRAIN_MOVE') continue;
+    const d = e.action.data ?? e.action;
+    rows.push({
+      date:         (e.date instanceof Date ? e.date.toISOString() : String(e.date)).slice(0, 10),
+      kind:         d.kind,
+      operatorId:   d.operatorId,
+      crop:         d.crop,
+      cropYear:     d.cropYear,
+      pool:         d.pool,
+      planId:       orNull(d.planId),
+      bushels:      d.bushels,
+      shortBushels: d.shortBushels ?? 0,
+      sourceId:     orNull(d.sourceId),
+    });
+  }
+  return rows;
+}
+
 // ─── job-cost report ──────────────────────────────────────────────────────────────
 
 /**

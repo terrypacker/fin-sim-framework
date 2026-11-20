@@ -1,6 +1,6 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** rev 29 (20 Nov 2026): owner answers on the revised sheet; machinery ownership rates are costing only (§17.9). Rev 28 (20 Nov 2026): phase 5 step 5c built, the revised Admin sheet: per-crop operations, a crew on an operation, actual fuel, irrigation and machinery ownership rates (§17.9). Rev 27 (20 Nov 2026): §11 lists every open and declined owner question with its reason (new Q34–Q40). Rev 26 (20 Nov 2026): phase 5 step 5b built, fuel, machine labor and trucking computed from the operations' actual rates (§17.8). Rev 25: phase 5 step 5a built, the importer of the owners' own workbook layout, which replaces the proposed template; the 2020 ledger layout is unsupported (§17.7). Rev 24 (20 Nov 2026): owner answers from the 2026 workbook review (§17.6): Q22a and Q27 closed as declined, Q23a answered (not all nitrogen), and computed operation costs planned with phase 5, with owner questions Q23b and Q33. Rev 23 (20 Nov 2026): phase 8 steps 8a and 8b built: the price-history module, this season's real prices with its marketing windows on the Field P&L charts, a farm file opening as a farm, and the demo's crop year (§17.5). Rev 20: phase 8, price history and marketing windows, planned (§17.5), with owner question Q32. Rev 19 (20 Nov 2026): phases 5 (the yearly workbook importer) and 6 (in-app record editors) planned (§17); reconciliation moves to phase 7; the panel charts built (§17.4). Rev 18 (19 Nov 2026): **phase 4 COMPLETE** (§16) bar the export's land-and-debt section (Q22a): the export and import (4a–4c), a farm path per household year (4d), §199A (4e), the Nebraska community-college credit (4f), and the NOL, §461(l), the farming-loss carryback and §1301 averaging (4g, §16.10–16.11). Rev 17: phase 4 started, what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
+**Status:** rev 30 (20 Nov 2026): the machine labor wage is a season lever, and the Field P&L draws where the grain is (§17.10). Rev 29 (20 Nov 2026): owner answers on the revised sheet; machinery ownership rates are costing only (§17.9). Rev 28 (20 Nov 2026): phase 5 step 5c built, the revised Admin sheet: per-crop operations, a crew on an operation, actual fuel, irrigation and machinery ownership rates (§17.9). Rev 27 (20 Nov 2026): §11 lists every open and declined owner question with its reason (new Q34–Q40). Rev 26 (20 Nov 2026): phase 5 step 5b built, fuel, machine labor and trucking computed from the operations' actual rates (§17.8). Rev 25: phase 5 step 5a built, the importer of the owners' own workbook layout, which replaces the proposed template; the 2020 ledger layout is unsupported (§17.7). Rev 24 (20 Nov 2026): owner answers from the 2026 workbook review (§17.6): Q22a and Q27 closed as declined, Q23a answered (not all nitrogen), and computed operation costs planned with phase 5, with owner questions Q23b and Q33. Rev 23 (20 Nov 2026): phase 8 steps 8a and 8b built: the price-history module, this season's real prices with its marketing windows on the Field P&L charts, a farm file opening as a farm, and the demo's crop year (§17.5). Rev 20: phase 8, price history and marketing windows, planned (§17.5), with owner question Q32. Rev 19 (20 Nov 2026): phases 5 (the yearly workbook importer) and 6 (in-app record editors) planned (§17); reconciliation moves to phase 7; the panel charts built (§17.4). Rev 18 (19 Nov 2026): **phase 4 COMPLETE** (§16) bar the export's land-and-debt section (Q22a): the export and import (4a–4c), a farm path per household year (4d), §199A (4e), the Nebraska community-college credit (4f), and the NOL, §461(l), the farming-loss carryback and §1301 averaging (4g, §16.10–16.11). Rev 17: phase 4 started, what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
 (§12.4) and the Field P&L panel is in the workbench (§12.5). **Phase 2 started** (§13): step 2a,
 the scenario-agnostic MC path and a farm batch on it, steps 2b–2d (realized yield, price paths, multiplier levers and the contracted share), 2e (calibration from USDA NASS, §13.8) and 2f (the Farm MC panel, §13.7) are built: **phase 2 is complete**. Owner questions Q1–Q20 and Q22–Q25 are answered (§3, §14); Q21, Q26 and the follow-ups Q22a,
 Q23a and Q25a (§14) are open. §7 records what the primary sources on disk decide. §8 is the household
@@ -1989,3 +1989,35 @@ that was a spreadsheet error, and the model's count over all acres stands. One s
 covers both crops. The grain cart, irrigation and ownership rates are as recorded above.
 
 **Open.** A cash machinery figure for Schedule F, which the sheet does not give.
+
+### 17.10 The labor wage lever and where the grain is (built, rev 30)
+
+**The labor wage is a lever.** `farm.season.<id>.laborPerHour` ("Machine Labor Wage") joins
+the season's generated levers. It is the wage, not a multiplier, so a sweep reads in dollars an
+hour. It is generated only where an operation has acres per hour and a crew other than 0, the
+only place a wage is read. The importer still sets its centre from the Admin sheet's labor
+block.
+
+**Where the grain is.** Grain moves (harvest, carry-in, contract delivery, sale) were in the
+journal but no report read them. `farmGrainMoves(journal)` reads them as `farmLedger` reads the
+postings, and `planFarm` returns them. The Field P&L draws one chart per crop under the price
+charts, on their date range, of the planned season's bushels after each day's moves, stacked:
+
+| Band | Bushels |
+|---|---|
+| In storage, contracted | in the pool, and taken by a contract delivery dated later |
+| In storage, unpriced | the rest of the pool |
+| Delivered on contract | gone on contracts so far |
+| Sold | gone on planned sales so far |
+
+The four always sum to what has come in (harvest and carry-in). A pool is (operator, crop,
+crop year), so storage is an operator's, never a field's. A field's scope shows its operator's
+pool and the caption says so. Grain delivered on its harvest date never shows in storage,
+because the harvest and the delivery fall on the same day, as with trucking's single haul
+(§17.8). The caption gives the bushels harvested and delivered that day, the peak in storage,
+the last day out, any contract shortfall and the pools' storage cost. The tooltip lists each
+day's moves with their prices.
+
+**Not modelled.** A bin, an elevator or a buyer: a contract names no destination and storage is
+one rate per operator and crop; not yet asked of the owners. Which fields fill a contract:
+revenue is split by harvested bushels at the pool's average price (§13).

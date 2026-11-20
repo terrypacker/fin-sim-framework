@@ -194,3 +194,5 @@
 .fpl-clickable td { cursor: pointer; }
 .fmc-plugin details[data-fmc="vars-box"] { margin-top: 6px; }
 .fpl-crop-chart:last-child .fpl-chart { height: 170px; }
+/* The grain chart has a legend row above its plot. */
+.fpl-crop-chart .fpl-chart.fpl-grain-chart { height: 180px; }
