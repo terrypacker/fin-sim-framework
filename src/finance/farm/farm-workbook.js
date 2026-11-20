@@ -520,7 +520,7 @@ export function importFarmWorkbook(csv, opts = {}) {
     if (Number.isNaN(amt)) throw new Error(`Income: ${job} ${code} amount "${r[iAmt]}" is not a number`);
     if (!amt) continue;
     const f = fieldByJob.get(job);
-    const opJob = /^([a-z0-9]+)\s+overhead$/.exec(job);
+    const opJob = /^([a-z0-9]+)(?:\s+|\s*-\s*)overhead$/.exec(job);   // "D OVERHEAD" or "D-OVERHEAD"
     if (f) {
       if (!/plc|arc|program/.test(code)) {
         advise('INCOME_CODE_IGNORED', `Income: code "${r[iCode].trim()}" on ${job} is not read`, { fieldId: f.id });

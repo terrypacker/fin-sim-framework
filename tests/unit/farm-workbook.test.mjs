@@ -199,6 +199,12 @@ describe('farm workbook import (design 134 §17.2)', () => {
     assert.ok(kinds(r).includes('PROGRAM_LINE_UNDECIDED'));
   });
 
+  test('an overhead job code may be hyphenated like a field job ("A-OVERHEAD")', () => {
+    const r = importFarmWorkbook({ ...WB, income: INCOME.replace('A OVERHEAD', 'A-OVERHEAD') },
+      { cropYear: 2026, prices: PRICES });
+    assert.equal(r.farm.otherIncome.find(i => i.name === 'SDR PAYMENT').operatorId, 'A');
+  });
+
   test('costing inputs are read for the computed operation costs', () => {
     const { costing } = imp().sheet;
     assert.equal(costing.fuelPerAcrePerApplication, 1);

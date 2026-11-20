@@ -19,7 +19,8 @@
  *   npm run farm:workbook -- --dir <folder> --contract-operator D --price CORN=4.10
  *
  * The folder holds the workbook's four sheets exported as CSV, found by name: Fields, Admin,
- * Direct Expenses (DirectExpenses) and Income. The crop year comes from `--crop-year`, else
+ * Direct Expenses (DirectExpenses) and Income; `python3 scripts/farm/xlsx-to-csv.py <workbook.xlsx>
+ * <folder>` writes them without Excel. The crop year comes from `--crop-year`, else
  * from the first 20xx in the folder's or a file's name.
  *
  * After the import the season is run, and each amount the sheet states (rent, property tax,

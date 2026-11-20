@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-247 parameters · 36 panels · 13 node types (209 fields) · 187 action types · 102 tools · 369 state field types · 83 topics · 142 design docs
+247 parameters · 36 panels · 13 node types (209 fields) · 187 action types · 103 tools · 369 state field types · 83 topics · 142 design docs
 
 ---
 
@@ -1129,7 +1129,7 @@ Explained in [`help/nodes`](nodes/reducer.md). 0 field(s) described by a record 
 
 ---
 
-## Headless tools (102)
+## Headless tools (103)
 
 Command-line entry points under `scripts/`. **Purpose** is harvested from each script's
 docblock, not re-authored here. Arguments come from each script's declarative
@@ -1245,6 +1245,8 @@ docblock, not re-authored here. Arguments come from each script's declarative
     - `--sale-date` (string) — YYYY-MM-DD the unpriced grain is sold (default: each crop's harvest)
     - `--check` (flag) — print advisories and the reconciliation; write nothing
     - `--json` (flag) — emit the result as JSON
+- **`scripts/farm/xlsx-to-csv.py`**
+  : write each sheet of an .xlsx workbook as a CSV, the input that
 
 ### scripts/lab/
 

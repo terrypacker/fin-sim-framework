@@ -173,6 +173,8 @@ average. The reporter prints medians and low percentiles only.
 |---|---|
 | `farm-report.mjs` (`npm run farm:report`) | what does each field earn this season, where is its breakeven, and what does each operator's calendar-year Schedule F look like? With no `--scenario` it runs the demo farm. |
 | `farm-mc.mjs` (`npm run farm:mc`) | across a sampled season, how likely is each field, crop and operator to lose money, and how wide are the breakevens? `--list` shows the variables, `--enable` picks them. The farm-wide yield shocks and price vols are calibrated (`farm-calibrate.mjs`); a field's own yield spread and the cost multipliers are not. |
+| `farm-workbook.mjs` (`npm run farm:workbook`) | what farm does the owners' yearly job-cost workbook describe, and does the model's ledger reconcile to the amounts it states? Reads the four sheets as CSVs from `--dir`. |
+| `xlsx-to-csv.py` | how do I get those CSVs without Excel? `python3 scripts/farm/xlsx-to-csv.py <workbook.xlsx> <dir>` writes each sheet's saved values, rounded the way they're displayed (standard library only). |
 | `farm-calibrate.mjs` (`npm run farm:calibrate`) | where do the farm MC's yield and price spreads come from? Re-derives them from the USDA NASS extract in `docs/us-farm-markets/` (Nebraska counties, median and IQR, or one county with `--county`). |
 
 ---
