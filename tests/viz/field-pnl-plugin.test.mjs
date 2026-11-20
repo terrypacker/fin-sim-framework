@@ -21,7 +21,7 @@ import assert from 'node:assert/strict';
 import v8 from 'node:v8';
 import * as echarts from 'echarts';
 import { FieldPnlPlugin, fieldPnlGroups, fieldPnlLines, fieldPnlCsv, FIELD_PNL_CSV_COLUMNS,
-  breakevenChartData, breakevenCaption, breakevenChartOption }
+  breakevenChartData, breakevenChartSet, breakevenCaption, breakevenChartOption }
   from '../../src/visualization/workbench/plugins/finance/field-pnl-plugin.js';
 import { sumPlanRows } from '../../src/finance/farm/farm-reports.js';
 import { FarmScenario } from '../../src/scenarios/farm-scenario.js';
@@ -244,9 +244,13 @@ test('the caption says how far today\'s price is from the breakeven; the option 
   const text = breakevenCaption(d);
   assert.match(text, new RegExp(`\\$${d.breakevenUnpricedPrice.toFixed(2)}/bu to break even`));
   assert.match(text, /above it|below it/);
-  const opt = breakevenChartOption(d, { colors: { price: '#000000', red: '#ff0000', green: '#00ff00', amber: '#ffaa00',
-    dim: '#999999', border: '#333333', borderHi: '#444444', text: '#eeeeee', muted: '#666666', panel: '#111111' } });
+  const colors = { price: '#000000', red: '#ff0000', green: '#00ff00', amber: '#ffaa00',
+    dim: '#999999', border: '#333333', borderHi: '#444444', text: '#eeeeee', muted: '#666666', panel: '#111111' };
+  const opt = breakevenChartOption(d, { colors });
   const marks = opt.series[0].markLine.data.map(m => m.name);
+  const nowPoint = opt.series.find(x => x.id === 'now');
+  assert.deepEqual(nowPoint.data[0], [Date.parse(`${d.now}T00:00:00Z`), d.priceNow], 'today\'s price is a labelled point');
+  assert.equal(breakevenChartOption({ ...d, nowInWindow: false }, { colors }).series.some(x => x.id === 'now'), false);
   assert.ok(marks.includes('breakeven') && marks.includes('now'));
   assert.equal(opt.series[0].markArea.data[0][1].yAxis, d.breakevenUnpricedPrice);
   assert.equal(opt.visualMap, undefined, 'a visualMap breaks rendering when the line is on one side');
@@ -256,16 +260,24 @@ test('the panel\'s breakeven is the PLANNED season\'s: mid-run it matches the fi
   const sim = { ...RUN.sim, currentDate: new Date(`${RUN.farm.season.cropYear}-06-01T00:00:00Z`) };
   const p = quiet(() => mount({ sim }));
   assert.equal(q(p, 'chart-wrap').style.display, '');
-  const corn = RUN.jobCost.byCrop.find(r => r.crop === 'CORN');
-  assert.match(q(p, 'caption').textContent, new RegExp(`\\$${corn.breakevenUnpricedPrice.toFixed(2)}/bu`));
-  // A field row's click points the chart at that field.
+  // The whole farm grows two crops: one chart each, each captioned with ITS breakeven.
+  const charts = () => [...q(p, 'charts').querySelectorAll('.fpl-crop-chart')].map(el => el.dataset.crop);
+  assert.deepEqual([...charts()].sort(), ['CORN', 'SOYBEANS']);
+  for (const crop of ['CORN', 'SOYBEANS']) {
+    const row = RUN.jobCost.byCrop.find(r => r.crop === crop);
+    const caption = q(p, 'charts').querySelector(`[data-fpl-caption="${crop}"]`).textContent;
+    assert.ok(caption.includes(`$${row.breakevenUnpricedPrice.toFixed(2)}/bu`), `${crop}: ${caption}`);
+  }
+  // A field row's click points the chart at that field: one crop, one chart.
   click(q(p, 'rows').querySelector('tr[data-key^="g:"]'));
   const fieldRow = q(p, 'rows').querySelector('tr[data-key^="p:"]');
   click(fieldRow);
   const plan = RUN.jobCost.plans.find(r => `p:${r.jobId}` === fieldRow.dataset.key);
   assert.ok(q(p, 'chart-label').textContent.includes(plan.fieldName));
+  assert.deepEqual(charts(), [plan.crop]);
   click(q(p, 'foot').querySelector('tr'));
   assert.match(q(p, 'chart-label').textContent, /Whole farm/);
+  assert.equal(charts().length, 2);
   p.unmount();
 });
 
@@ -286,4 +298,21 @@ test('the chart option RENDERS, with the price wholly above the breakeven and wh
       assert.ok(svg.includes('#00ff00'), 'the contracts are drawn');
     } finally { chart.dispose(); }
   }
+});
+
+test('the chart set: one entry per crop, all on one date range, each with its own breakeven', () => {
+  const { farm, jobCost } = RUN;
+  const now = `${farm.season.cropYear}-06-01`;
+  const set = breakevenChartSet(farm, jobCost, { kind: 'farm' }, now);
+  assert.deepEqual(set.map(d => d.crop).sort(), ['CORN', 'SOYBEANS']);
+  assert.equal(new Set(set.map(d => `${d.start}|${d.end}`)).size, 1, 'one shared date range');
+  for (const d of set) {
+    close(d.breakevenUnpricedPrice, jobCost.byCrop.find(r => r.crop === d.crop).breakevenUnpricedPrice, d.crop);
+    assert.equal(d.prices.at(-1)[0], d.end, 'each price line runs to the shared end');
+    assert.ok(d.nowInWindow);
+  }
+  assert.notEqual(set[0].breakevenUnpricedPrice, set[1].breakevenUnpricedPrice);
+  const plan = jobCost.plans.find(r => r.planId);
+  assert.equal(breakevenChartSet(farm, jobCost, { kind: 'plan', id: plan.jobId }, now).length, 1);
+  assert.match(breakevenCaption(set[0], { label: 'Corn' }), /^Corn: /);
 });

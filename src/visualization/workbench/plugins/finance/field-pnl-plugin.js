@@ -43,10 +43,12 @@ import { categoryLabel, categoryLine } from '../../../../finance/farm/schedule-f
  *
  * ─── the chart ───────────────────────────────────────────────────────────────────
  *
- * Above the table, one crop's cash price through the season against the price the scope's
- * unpriced grain must fetch to break even, with its contracts and planned sales as points and
- * a marker at the run's current date. The scope is the row last clicked: the whole farm (the
- * footer), an operator or crop group, or a field.
+ * Above the table, ONE CHART PER CROP the scope grows: the crop's cash price through the
+ * season against the price its unpriced grain must fetch to break even, with its contracts
+ * and planned sales as points and a marker at the run's current date. The scope is the row
+ * last clicked: the whole farm (the footer), an operator or crop group, or a field. Crops sell
+ * at different prices, so a scope growing two has two breakevens: each chart keeps its own
+ * price axis, and they share one date range so the "now" markers line up.
  *
  * The breakeven is the PLANNED season's (`planFarm`: the same farm run to its end on an
  * isolated registry), not the table's season to date, whose breakevens are too low until the
@@ -68,9 +70,9 @@ export class FieldPnlPlugin extends WorkbenchComponent {
     this._cache = null;
     this._sig   = null;
     this._chartScope = { kind: 'farm' };   // or { kind: 'operator'|'crop'|'plan', id }
-    this._chartCrop  = null;               // null = the scope's first crop
     this._plan    = null;                  // { sig, data | reason, reports: { [basis]: report } }
-    this._chart   = null;
+    this._charts  = new Map();             // crop → ECharts instance
+    this._chartCrops = '';                 // the crops the chart DOM was built for
     this._ro      = null;
   }
 
@@ -104,10 +106,8 @@ export class FieldPnlPlugin extends WorkbenchComponent {
         <div class="fpl-chart-wrap" data-fpl="chart-wrap" style="display:none">
           <div class="fpl-chart-head">
             <span class="mc-section-label" data-fpl="chart-label">Cash price vs breakeven</span>
-            <span class="bond-seg" data-fpl="crop" title="Which crop the chart shows"></span>
           </div>
-          <div class="fpl-chart" data-fpl="chart"></div>
-          <div class="bond-caption" data-fpl="caption"></div>
+          <div data-fpl="charts"></div>
         </div>
         <table class="sec-grid fpl-split-off" data-fpl="grid" style="display:none">
           <thead><tr>
@@ -172,26 +172,16 @@ export class FieldPnlPlugin extends WorkbenchComponent {
       foot.addEventListener('click', () => { this._chartScope = { kind: 'farm' }; this._render(); });
       foot._fplBound = true;
     }
-    const crop = this._q('crop');
-    if (crop && !crop._fplBound) {
-      crop.addEventListener('click', (e) => {
-        const btn = e.target.closest('button[data-v]');
-        if (!btn) return;
-        this._chartCrop = btn.dataset.v;
-        this._render();
-      });
-      crop._fplBound = true;
-    }
     this._render();
   }
 
   onActivate() {
     // ECharts cannot size itself in a hidden pane.
-    this._chart?.resize();
+    for (const c of this._charts.values()) c.resize();
     this._render();
   }
 
-  onAdopt() { this._chart?.resize(); }
+  onAdopt() { for (const c of this._charts.values()) c.resize(); }
 
   onUnmount() { this._disposeChart(); }
 
@@ -205,8 +195,9 @@ export class FieldPnlPlugin extends WorkbenchComponent {
   _disposeChart() {
     this._ro?.disconnect();
     this._ro = null;
-    this._chart?.dispose();
-    this._chart = null;
+    for (const c of this._charts.values()) c.dispose();
+    this._charts.clear();
+    this._chartCrops = '';
   }
 
   _bindSeg(name, apply) {
@@ -348,26 +339,47 @@ export class FieldPnlPlugin extends WorkbenchComponent {
     const plan = this._planReport();
     if (plan.reason) { wrap.style.display = 'none'; return; }
     const now = this._sim?.currentDate ? this._sim.currentDate.toISOString().slice(0, 10) : null;
-    const data = breakevenChartData(plan.farm, plan.report, this._chartScope, this._chartCrop, now);
-    if (!data) { wrap.style.display = 'none'; return; }
+    const set = breakevenChartSet(plan.farm, plan.report, this._chartScope, now);
+    if (!set.length) { wrap.style.display = 'none'; return; }
     wrap.style.display = '';
-    this._q('crop').innerHTML = data.crops.map(c =>
-      `<button data-v="${_esc(c)}" class="${c === data.crop ? 'on' : ''}">${_esc(_cropLabel(c))}</button>`).join('');
-    const scopeLabel = this._scopeLabel(farm, this._chartScope);
-    this._q('chart-label').textContent = `${_cropLabel(data.crop)} · ${scopeLabel} — cash price vs breakeven`;
-    this._q('caption').textContent = breakevenCaption(data, {
-      basis: this._machineryBasis === 'ACTUAL' ? 'actual machinery' : 'custom rates', date: (d) => this._fmtDate(d),
-    });
-    if (!this._canvasAvailable()) return;
-    const host = this._q('chart');
-    if (!this._chart) {
-      this._chart = echarts.init(host, null, { renderer: 'canvas' });
-      if (typeof ResizeObserver === 'function') {
-        this._ro = new ResizeObserver(() => this._chart?.resize());
-        this._ro.observe(host);
-      }
+    const basis = this._machineryBasis === 'ACTUAL' ? 'actual machinery' : 'custom rates';
+    this._q('chart-label').textContent =
+      `${this._scopeLabel(farm, this._chartScope)} — cash price vs breakeven (planned season, ${basis})`;
+
+    // The chart DOM is rebuilt only when the crops change, so the ECharts instances survive
+    // the run stepping (a rebuild every step would re-init every chart).
+    const host = this._q('charts');
+    const key = set.map(d => d.crop).join('|');
+    if (key !== this._chartCrops) {
+      this._disposeChart();
+      host.innerHTML = set.map(d => `
+        <div class="fpl-crop-chart" data-crop="${_esc(d.crop)}">
+          <div class="fpl-chart" data-fpl-chart="${_esc(d.crop)}"></div>
+          <div class="bond-caption" data-fpl-caption="${_esc(d.crop)}"></div>
+        </div>`).join('');
+      this._chartCrops = key;
     }
-    this._chart.setOption(breakevenChartOption(data, { colors: this._colors() }), true);
+    const date = (d) => this._fmtDate(d);
+    for (const d of set) {
+      host.querySelector(`[data-fpl-caption="${d.crop}"]`).textContent = breakevenCaption(d, { date, label: _cropLabel(d.crop) });
+    }
+    if (!this._canvasAvailable()) return;
+    const colors = this._colors();
+    set.forEach((d, i) => {
+      const el = host.querySelector(`[data-fpl-chart="${d.crop}"]`);
+      let chart = this._charts.get(d.crop);
+      if (!chart) {
+        chart = echarts.init(el, null, { renderer: 'canvas' });
+        this._charts.set(d.crop, chart);
+        if (typeof ResizeObserver === 'function') {
+          this._ro ??= new ResizeObserver(() => { for (const c of this._charts.values()) c.resize(); });
+          this._ro.observe(el);
+        }
+      }
+      chart.setOption(breakevenChartOption(d, {
+        colors, title: _cropLabel(d.crop), xLabels: i === set.length - 1,
+      }), true);
+    });
   }
 
   _scopeLabel(farm, scope) {
@@ -668,14 +680,35 @@ export function breakevenChartData(farm, report, scope, crop, now) {
   };
 }
 
-/** The sentence under the chart: the breakeven, and today's price against it. */
-export function breakevenCaption(d, { basis = 'custom rates', date = (x) => x } = {}) {
+/**
+ * Every crop's chart data for one scope: `breakevenChartData` per crop the scope grows, all on
+ * the widest date range among them, so stacked charts share their time axis and the "now"
+ * markers line up.
+ *
+ * @returns {object[]} one entry per crop, in the order the scope's plans list them; empty
+ *   when the scope has no priced crop
+ */
+export function breakevenChartSet(farm, report, scope, now) {
+  const first = breakevenChartData(farm, report, scope, null, now);
+  if (!first) return [];
+  const set = first.crops.map(c => (c === first.crop ? first : breakevenChartData(farm, report, scope, c, now)));
+  const start = set.map(d => d.start).sort()[0];
+  const end = set.map(d => d.end).sort().at(-1);
+  return set.map(d => {
+    const prices = d.prices.map(p => [...p]);
+    if (prices.at(-1)[0] < end) prices.push([end, prices.at(-1)[1]]);
+    return { ...d, prices, start, end, nowInWindow: now != null && now >= start && now <= end };
+  });
+}
+
+/** The sentence under a crop's chart: its breakeven, and today's price against it. */
+export function breakevenCaption(d, { date = (x) => x, label = null } = {}) {
   const be = d.breakevenUnpricedPrice ?? d.breakevenPrice;
   const what = d.breakevenUnpricedPrice != null
     ? `the unpriced grain (${(100 * (1 - d.contractedShare)).toFixed(0)}% of the crop) must fetch`
-    : 'the crop is fully contracted; all of it must average';
-  const parts = [be == null ? 'No breakeven: no expected bushels.'
-    : `Planned season, ${basis}: ${what} ${_perBu(be)}/bu to break even.`];
+    : 'fully contracted; all of it must average';
+  const parts = [`${label ? `${label}: ` : ''}${be == null ? 'no breakeven (no expected bushels).'
+    : `${what} ${_perBu(be)}/bu to break even.`}`];
   if (d.priceNow != null && be != null) {
     const diff = d.priceNow - be;
     parts.push(`Cash price on ${date(d.now)}: ${_perBu(d.priceNow)}, ${_perBu(Math.abs(diff))} ${diff >= 0 ? 'above' : 'below'} it.`);
@@ -691,7 +724,7 @@ export function breakevenCaption(d, { basis = 'custom rates', date = (x) => x } 
  * below the breakeven was tried first: ECharts throws while rendering when the whole line is
  * on one side of it, and then draws none of the series.)
  */
-export function breakevenChartOption(d, { colors }) {
+export function breakevenChartOption(d, { colors, title = null, xLabels = true }) {
   const be = d.breakevenUnpricedPrice ?? d.breakevenPrice;
   const ts = (iso) => Date.parse(`${iso}T00:00:00Z`);
   const marks = [];
@@ -715,15 +748,19 @@ export function breakevenChartOption(d, { colors }) {
   return {
     backgroundColor: 'transparent',
     animation: false,
-    grid: { top: 18, right: 24, bottom: 24, left: 16, containLabel: true },
+    // A FIXED left margin, not containLabel: stacked charts must put their plot areas at the
+    // same x, or their "now" markers drift apart by the width of their price labels.
+    grid: { top: title ? 22 : 18, right: 24, bottom: xLabels ? 24 : 8, left: 64, containLabel: false },
+    ...(title ? { title: { text: title, left: 4, top: 0, textStyle: { color: colors.dim, fontSize: 10, fontWeight: 600, fontFamily: 'monospace' } } } : {}),
     xAxis: {
       type: 'time', min: ts(d.start), max: ts(d.end),
-      axisLabel: { color: colors.dim, fontSize: 10, fontFamily: 'monospace' },
+      axisLabel: { show: xLabels, color: colors.dim, fontSize: 10, fontFamily: 'monospace' },
       splitLine: { show: false }, axisLine: { lineStyle: { color: colors.border } },
     },
     yAxis: {
       type: 'value', min: yMin, max: +(hi + pad).toFixed(2),
-      axisLabel: { color: colors.dim, fontSize: 10, fontFamily: 'monospace', formatter: (v) => `$${v.toFixed(2)}` },
+      // The max is padded, not a round number, so its label would read like $11.48.
+      axisLabel: { color: colors.dim, fontSize: 10, fontFamily: 'monospace', showMaxLabel: false, formatter: (v) => `$${v.toFixed(2)}` },
       splitLine: { lineStyle: { color: colors.border } },
     },
     tooltip: {
@@ -733,6 +770,7 @@ export function breakevenChartOption(d, { colors }) {
         const v = p.value ?? [];
         const day = new Date(v[0]).toISOString().slice(0, 10);
         if (p.seriesId === 'contracts') return `Contract ${day}: <b>${_perBu(v[1])}</b>${v[2] != null ? ` × ${Math.round(v[2]).toLocaleString()} bu` : ''}`;
+        if (p.seriesId === 'now') return `Cash price on ${day}: <b>${_perBu(v[1])}</b>${be != null ? `, ${_perBu(Math.abs(v[1] - be))} ${v[1] >= be ? 'above' : 'below'} breakeven` : ''}`;
         if (p.seriesId === 'sales') return `Planned sale ${day}: <b>${_perBu(v[1])}</b>${v[2] != null ? `, ${(100 * v[2]).toFixed(0)}% of unpriced` : ''}`;
         return `Cash price from ${day}: <b>${_perBu(v[1])}</b>`;
       },
@@ -743,12 +781,19 @@ export function breakevenChartOption(d, { colors }) {
         itemStyle: { color: colors.price },
         markLine: { silent: true, symbol: 'none', data: marks },
         ...(be == null ? {} : { markArea: { silent: true, itemStyle: { color: colors.red + '14' },
-          data: [[{ yAxis: yMin, name: 'below breakeven' }, { yAxis: be }]],
-          label: { show: true, position: 'insideBottomLeft', color: colors.red, fontSize: 9, formatter: 'below breakeven' } } }) },
+          data: [[{ yAxis: yMin, name: 'below breakeven' }, { yAxis: be }]], label: { show: false } } }) },
       { id: 'contracts', name: 'Contracts', type: 'scatter', symbol: 'diamond', symbolSize: 10,
         itemStyle: { color: colors.green }, data: d.contracts.map(k => [ts(k.date), k.price, k.bushels]) },
       { id: 'sales', name: 'Planned sales', type: 'scatter', symbol: 'triangle', symbolSize: 9,
         itemStyle: { color: colors.amber }, data: d.sales.map(k => [ts(k.date), k.price, k.share]) },
+      // Today's cash price: where the "now" marker crosses the price line, labelled, green
+      // above the breakeven and red below it.
+      ...(d.nowInWindow && d.priceNow != null ? [{
+        id: 'now', name: 'Cash price now', type: 'scatter', symbol: 'circle', symbolSize: 9, z: 5,
+        itemStyle: { color: be == null || d.priceNow >= be ? colors.green : colors.red, borderColor: colors.text, borderWidth: 1 },
+        label: { show: true, position: 'top', distance: 6, formatter: _perBu(d.priceNow), color: colors.text, fontSize: 10, fontWeight: 600 },
+        data: [[ts(d.now), d.priceNow]],
+      }] : []),
     ],
   };
 }
