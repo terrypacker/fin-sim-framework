@@ -1,6 +1,6 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** rev 21 (20 Nov 2026): phase 8 step 8a built, the price-history module (§17.5). Rev 20: phase 8, price history and marketing windows, planned (§17.5), with owner question Q32. Rev 19 (20 Nov 2026): phases 5 (the yearly workbook importer) and 6 (in-app record editors) planned (§17); reconciliation moves to phase 7; the panel charts built (§17.4). Rev 18 (19 Nov 2026): **phase 4 COMPLETE** (§16) bar the export's land-and-debt section (Q22a): the export and import (4a–4c), a farm path per household year (4d), §199A (4e), the Nebraska community-college credit (4f), and the NOL, §461(l), the farming-loss carryback and §1301 averaging (4g, §16.10–16.11). Rev 17: phase 4 started, what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
+**Status:** rev 22 (20 Nov 2026): phase 8 steps 8a and 8b built: the price-history module, and this season's real prices with its marketing windows on the Field P&L charts (§17.5). Rev 20: phase 8, price history and marketing windows, planned (§17.5), with owner question Q32. Rev 19 (20 Nov 2026): phases 5 (the yearly workbook importer) and 6 (in-app record editors) planned (§17); reconciliation moves to phase 7; the panel charts built (§17.4). Rev 18 (19 Nov 2026): **phase 4 COMPLETE** (§16) bar the export's land-and-debt section (Q22a): the export and import (4a–4c), a farm path per household year (4d), §199A (4e), the Nebraska community-college credit (4f), and the NOL, §461(l), the farming-loss carryback and §1301 averaging (4g, §16.10–16.11). Rev 17: phase 4 started, what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
 (§12.4) and the Field P&L panel is in the workbench (§12.5). **Phase 2 started** (§13): step 2a,
 the scenario-agnostic MC path and a farm batch on it, steps 2b–2d (realized yield, price paths, multiplier levers and the contracted share), 2e (calibration from USDA NASS, §13.8) and 2f (the Farm MC panel, §13.7) are built: **phase 2 is complete**. Owner questions Q1–Q20 and Q22–Q25 are answered (§3, §14); Q21, Q26 and the follow-ups Q22a,
 Q23a and Q25a (§14) are open. §7 records what the primary sources on disk decide. §8 is the household
@@ -22,7 +22,7 @@ Rev 9 records the acceptance import and the questions it raised (§12.4). Rev 10
 Field P&L panel (§12.5). Rev 11 splits phase 2 into steps and records step 2a (§13). Rev 12
 records steps 2b–2f; the calibration (§13.8) adds an irrigated-only yield shock and skewed
 yield draws, both of which the data required. Rev 13 records the owners' answers to Q22–Q25
-and the follow-ups they leave (§14). Rev 14 opens phase 3 (§15). Rev 15 records step 3c, ARC-County (§15.3). Rev 16 records 3d and 3e, which complete phase 3 (§15.4). Rev 17 opens phase 4 (§16). Rev 18 completes it. Rev 19 plans phases 5 and 6, getting a farm in (§17). Rev 20 plans phase 8 (§17.5). Rev 21 builds step 8a.
+and the follow-ups they leave (§14). Rev 14 opens phase 3 (§15). Rev 15 records step 3c, ARC-County (§15.3). Rev 16 records 3d and 3e, which complete phase 3 (§15.4). Rev 17 opens phase 4 (§16). Rev 18 completes it. Rev 19 plans phases 5 and 6, getting a farm in (§17). Rev 20 plans phase 8 (§17.5). Rev 21 builds step 8a, rev 22 step 8b.
 
 **Related:** design 98 (the sweepable parameter surface: per-record generated params become
 MC and optimizer levers), design 55 (configuration-driven parameters and record templates),
@@ -1700,6 +1700,15 @@ calibration (§13.8) already reads it. It has three limits, and the chart says e
   shaded green: these are the **marketing windows**, when the unpriced grain could have been
   sold at breakeven. The caption names the first such month, or says none has come yet. This
   is the "at what point in the season" answer for the live season.
+  **Built (rev 22).** `seasonHistory` (field-pnl-plugin.js) takes a crop's published months
+  within the chart's window, so the crop year and the months after it to the last sale, and
+  marks those at or above the chart's breakeven. Each month is drawn at its 15th. A window
+  spans its whole month, as a green band. The months are drawn whatever the run's date,
+  because they are published facts, not the plan. The caption counts the windows and names
+  the first, or says every published month was below. The three limits are said once, under
+  the last chart with any history. A season with no published months (the 2027 demo) draws
+  nothing and says nothing. The tests inject a history whose answer is known, and one more
+  reads the real 2026 months.
 - **8c. Past seasons against this plan.** Faint lines for the last N seasons' paths, each
   **rebased** to this season's price on the plan date (1 January of the crop year). A past
   path keeps its shape (its monthly log changes) but not its level, because a 1990s price

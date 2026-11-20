@@ -18,6 +18,8 @@ import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../../../simulation-framew
 import { normalizeFarm, CROPS, priceOn, harvestDateFor } from '../../../../finance/farm/farm-records.js';
 import { farmLedger, jobCostReport, sumPlanRows } from '../../../../finance/farm/farm-reports.js';
 import { planFarm } from '../../../../finance/farm/farm-run.js';
+import { priceHistoryBetween, PRICE_HISTORY_LIMITS } from '../../../../finance/farm/farm-price-history.js';
+import { FARM_PRICE_HISTORY } from '../../../../finance/farm/farm-price-history-data.js';
 import { compileFarmEvents } from '../../../../finance/farm/farm-postings.js';
 import { categoryLabel, categoryLine } from '../../../../finance/farm/schedule-f.js';
 
@@ -360,9 +362,12 @@ export class FieldPnlPlugin extends WorkbenchComponent {
       this._chartCrops = key;
     }
     const date = (d) => this._fmtDate(d);
-    for (const d of set) {
-      host.querySelector(`[data-fpl-caption="${d.crop}"]`).textContent = breakevenCaption(d, { date, label: _cropLabel(d.crop) });
-    }
+    // The history's limits are said once, under the last chart that draws any history.
+    const lastWithHistory = set.map(d => d.history?.length > 0).lastIndexOf(true);
+    set.forEach((d, i) => {
+      host.querySelector(`[data-fpl-caption="${d.crop}"]`).textContent =
+        breakevenCaption(d, { date, label: _cropLabel(d.crop), limits: i === lastWithHistory });
+    });
     if (!this._canvasAvailable()) return;
     const colors = this._colors();
     set.forEach((d, i) => {
@@ -632,16 +637,20 @@ export function fieldPnlCsv(report, farm) {
  * - `prices`: the crop's cash price table as a step series (`realized`, which is the table's
  *   price in a deterministic run), from the plan date to after the last dated point;
  * - `contracts` and `sales`: the season's points for the scope's operators;
- * - `priceNow`: the cash price on `now`, null before the window.
+ * - `priceNow`: the cash price on `now`, null before the window;
+ * - `history` and `windows`: the crop's REAL monthly prices published within the window
+ *   (`seasonHistory`, design 134 §17.5 step 8b) and the months among them at or above the
+ *   breakeven.
  *
  * @param {object} farm normalized farm
  * @param {object} report `jobCostReport` of the planned season
  * @param {{ kind: 'farm'|'operator'|'crop'|'plan', id?: string }} scope
  * @param {string|null} crop wanted crop; the scope's first when null or not grown there
  * @param {string|null} now `YYYY-MM-DD`
+ * @param {{ history?: object }} [opts] the price history (default `FARM_PRICE_HISTORY`; tests)
  * @returns {object|null} null when the scope has no priced crop
  */
-export function breakevenChartData(farm, report, scope, crop, now) {
+export function breakevenChartData(farm, report, scope, crop, now, { history = FARM_PRICE_HISTORY } = {}) {
   const y = farm.season.cropYear;
   const plans = report.plans.filter(p => p.planId && p.crop && (
     scope.kind === 'operator' ? p.operatorId === scope.id
@@ -668,8 +677,10 @@ export function breakevenChartData(farm, report, scope, crop, now) {
   for (const p of table) if (p.date > start && p.date <= end) prices.push([p.date, p.realized ?? p.price]);
   prices.push([end, priceOn(farm.prices, c, end, 'realized')]);
   const inWindow = now != null && now >= start && now <= end;
+  const be = row.breakevenUnpricedPrice ?? row.breakevenPrice ?? null;
   return {
     crop: c, crops, row,
+    ...seasonHistory(c, start, end, be, history),
     breakevenUnpricedPrice: row.breakevenUnpricedPrice ?? null,
     breakevenPrice: row.breakevenPrice ?? null,
     expectedPrice: row.expectedPrice ?? null,
@@ -688,21 +699,50 @@ export function breakevenChartData(farm, report, scope, crop, now) {
  * @returns {object[]} one entry per crop, in the order the scope's plans list them; empty
  *   when the scope has no priced crop
  */
-export function breakevenChartSet(farm, report, scope, now) {
-  const first = breakevenChartData(farm, report, scope, null, now);
+export function breakevenChartSet(farm, report, scope, now, { history = FARM_PRICE_HISTORY } = {}) {
+  const first = breakevenChartData(farm, report, scope, null, now, { history });
   if (!first) return [];
-  const set = first.crops.map(c => (c === first.crop ? first : breakevenChartData(farm, report, scope, c, now)));
+  const set = first.crops.map(c => (c === first.crop ? first : breakevenChartData(farm, report, scope, c, now, { history })));
   const start = set.map(d => d.start).sort()[0];
   const end = set.map(d => d.end).sort().at(-1);
   return set.map(d => {
     const prices = d.prices.map(p => [...p]);
     if (prices.at(-1)[0] < end) prices.push([end, prices.at(-1)[1]]);
-    return { ...d, prices, start, end, nowInWindow: now != null && now >= start && now <= end };
+    const be = d.breakevenUnpricedPrice ?? d.breakevenPrice;
+    return { ...d, ...seasonHistory(d.crop, start, end, be, history), prices, start, end,
+      nowInWindow: now != null && now >= start && now <= end };
   });
 }
 
+/**
+ * A crop's REAL prices within a chart's window, and its marketing windows (design 134 §17.5,
+ * step 8b): the published months at or above the breakeven, when the unpriced grain could
+ * have been sold at breakeven.
+ *
+ * The history is Nebraska's monthly average price received (`FARM_PRICE_HISTORY`), so each
+ * month is drawn at its middle and its window spans the whole month. It is shown whatever the
+ * run's date: these are published facts, not the plan.
+ *
+ * @param {string} crop
+ * @param {string} start `YYYY-MM-DD`, the window's first day
+ * @param {string} end `YYYY-MM-DD`, its last
+ * @param {number|null} be the breakeven the chart draws
+ * @param {object} [history=FARM_PRICE_HISTORY]
+ * @returns {{ history: Array<[string, number]>, windows: { months: string[], first: string|null,
+ *   published: number, historyLatest: string|null } }} months are `YYYY-MM`
+ */
+export function seasonHistory(crop, start, end, be, history = FARM_PRICE_HISTORY) {
+  const months = priceHistoryBetween(crop, start.slice(0, 7), end.slice(0, 7), history);
+  const above = be == null ? [] : months.filter(([, p]) => p >= be).map(([m]) => m);
+  return {
+    history: months,
+    windows: { months: above, first: above[0] ?? null, published: months.length,
+      historyLatest: months.at(-1)?.[0] ?? null },
+  };
+}
+
 /** The sentence under a crop's chart: its breakeven, and today's price against it. */
-export function breakevenCaption(d, { date = (x) => x, label = null } = {}) {
+export function breakevenCaption(d, { date = (x) => x, label = null, limits = true } = {}) {
   const be = d.breakevenUnpricedPrice ?? d.breakevenPrice;
   const what = d.breakevenUnpricedPrice != null
     ? `the unpriced grain (${(100 * (1 - d.contractedShare)).toFixed(0)}% of the crop) must fetch`
@@ -714,6 +754,14 @@ export function breakevenCaption(d, { date = (x) => x, label = null } = {}) {
     parts.push(`Cash price on ${date(d.now)}: ${_perBu(d.priceNow)}, ${_perBu(Math.abs(diff))} ${diff >= 0 ? 'above' : 'below'} it.`);
   } else if (d.now != null && !d.nowInWindow) {
     parts.push(`The run is at ${date(d.now)}, before the crop year's prices.`);
+  }
+  if (d.history?.length && be != null) {
+    const w = d.windows;
+    const n = `${w.published} published month${w.published === 1 ? '' : 's'}`;
+    parts.push(w.first
+      ? `Nebraska average so far: at or above it in ${w.months.length} of ${n}, first in ${_monthLabel(w.first)}.`
+      : `Nebraska average so far: below it in all ${n}.`);
+    if (limits) parts.push(`(${PRICE_HISTORY_LIMITS.join('; ')}.)`);
   }
   return parts.join(' ');
 }
@@ -740,7 +788,12 @@ export function breakevenChartOption(d, { colors, title = null, xLabels = true }
     marks.push({ xAxis: ts(d.now), name: 'now', lineStyle: { color: colors.amber, type: 'solid', width: 1 },
       label: { formatter: 'now', color: colors.amber, fontSize: 10, position: 'end' } });
   }
-  const ys = [...d.prices.map(p => p[1]), ...d.contracts.map(k => k.price), ...d.sales.map(k => k.price), be, d.breakevenPrice]
+  const hist = d.history ?? [];
+  const mid = (m) => ts(`${m}-15`);
+  const monthStart = (m) => ts(`${m}-01`);
+  const monthEnd = (m) => { const [y, mo] = m.split('-').map(Number); return Date.UTC(mo === 12 ? y + 1 : y, mo === 12 ? 0 : mo, 1); };
+  const ys = [...d.prices.map(p => p[1]), ...d.contracts.map(k => k.price), ...d.sales.map(k => k.price),
+    ...hist.map(h => h[1]), be, d.breakevenPrice]
     .filter(v => v != null && Number.isFinite(v));
   const lo = Math.min(...ys), hi = Math.max(...ys);
   const pad = Math.max(0.05, (hi - lo) * 0.12);
@@ -770,6 +823,11 @@ export function breakevenChartOption(d, { colors, title = null, xLabels = true }
         const v = p.value ?? [];
         const day = new Date(v[0]).toISOString().slice(0, 10);
         if (p.seriesId === 'contracts') return `Contract ${day}: <b>${_perBu(v[1])}</b>${v[2] != null ? ` × ${Math.round(v[2]).toLocaleString()} bu` : ''}`;
+        if (p.seriesId === 'history') {
+          const m = new Date(v[0]).toISOString().slice(0, 7);
+          return `Nebraska average, ${_monthLabel(m)}: <b>${_perBu(v[1])}</b>${be != null ? `, ${_perBu(Math.abs(v[1] - be))} ${v[1] >= be ? 'above' : 'below'} breakeven` : ''}`
+            + `<br/><span style="color:${colors.muted}">monthly average price received; not a local bid</span>`;
+        }
         if (p.seriesId === 'now') return `Cash price on ${day}: <b>${_perBu(v[1])}</b>${be != null ? `, ${_perBu(Math.abs(v[1] - be))} ${v[1] >= be ? 'above' : 'below'} breakeven` : ''}`;
         if (p.seriesId === 'sales') return `Planned sale ${day}: <b>${_perBu(v[1])}</b>${v[2] != null ? `, ${(100 * v[2]).toFixed(0)}% of unpriced` : ''}`;
         return `Cash price from ${day}: <b>${_perBu(v[1])}</b>`;
@@ -786,6 +844,15 @@ export function breakevenChartOption(d, { colors, title = null, xLabels = true }
         itemStyle: { color: colors.green }, data: d.contracts.map(k => [ts(k.date), k.price, k.bushels]) },
       { id: 'sales', name: 'Planned sales', type: 'scatter', symbol: 'triangle', symbolSize: 9,
         itemStyle: { color: colors.amber }, data: d.sales.map(k => [ts(k.date), k.price, k.share]) },
+      // The real monthly prices published so far (step 8b), drawn at mid-month, with each
+      // month at or above the breakeven shaded green across its width: a marketing window.
+      ...(hist.length ? [{
+        id: 'history', name: 'Nebraska average', type: 'line', symbol: 'circle', symbolSize: 5, z: 4,
+        lineStyle: { color: colors.text, width: 1, type: 'dotted', opacity: 0.7 }, itemStyle: { color: colors.text },
+        data: hist.map(([m, v]) => [mid(m), v]),
+        markArea: { silent: true, itemStyle: { color: colors.green + '1f' },
+          data: (d.windows?.months ?? []).map(m => [{ xAxis: monthStart(m) }, { xAxis: monthEnd(m) }]) },
+      }] : []),
       // Today's cash price: where the "now" marker crosses the price line, labelled, green
       // above the breakeven and red below it.
       ...(d.nowInWindow && d.priceNow != null ? [{
@@ -796,6 +863,13 @@ export function breakevenChartOption(d, { colors, title = null, xLabels = true }
       }] : []),
     ],
   };
+}
+
+const _MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** `2026-03` → `Mar 2026`. */
+function _monthLabel(m) {
+  const [y, mo] = m.split('-').map(Number);
+  return `${_MONTH_NAMES[mo - 1]} ${y}`;
 }
 
 function _addDays(iso, n) {
