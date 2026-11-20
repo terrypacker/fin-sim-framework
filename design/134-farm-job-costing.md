@@ -1636,6 +1636,12 @@ The Schedule F line a program payment lands on (4a or 6a) and whether it qualifi
   (`sumPlanRows`). A visualMap colouring the line by the breakeven was dropped: ECharts throws
   inside render when the whole line is on one side of it, and then draws no series. A headless
   SVG render test now covers that case.
+  - **One chart per crop** (rev 19, after review). A scope growing corn and soybeans has two
+    breakevens, and the crops sell at different prices, so a single chart with a crop switch
+    hid half the answer. `breakevenChartSet` gives one entry per crop on the widest date range
+    among them, so the stacked charts share a time axis. Each keeps its own price axis, and a
+    fixed left margin keeps the "now" markers at the same x. Today's cash price is a labelled
+    point on the marker, green above the breakeven and red below.
 - **Farm MC: a cash fan and a net histogram.** Each path now carries `cashSeries`
   (`farmCashSeries`): the cumulative cash net at each month end over the season window, for
   the farm and each operator. Every path has the same 36-month grid, so percentiles are taken

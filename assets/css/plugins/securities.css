@@ -177,7 +177,8 @@
 .fpl-chart-wrap { border-bottom: 1px solid var(--border); padding-top: 4px; }
 .fpl-chart-head { display: flex; align-items: center; gap: 8px; padding: 0 10px; }
 .fpl-chart-head .mc-section-label { flex: 1 1 auto; min-width: 0; }
-.fpl-chart { height: 220px; }
+.fpl-chart { height: 150px; }
+.fpl-crop-chart + .fpl-crop-chart { margin-top: 2px; }
 
 /* ── Farm MC (design 134) — the run bar uses the app's .btn and the MC panel's inputs ── */
 .fmc-n-label {
@@ -192,3 +193,4 @@
 .fmc-charts .bond-caption { padding: 0 0 4px; }
 .fpl-clickable td { cursor: pointer; }
 .fmc-plugin details[data-fmc="vars-box"] { margin-top: 6px; }
+.fpl-crop-chart:last-child .fpl-chart { height: 170px; }
