@@ -154,6 +154,10 @@ export const INCOME_CATEGORIES = Object.freeze({
  */
 export const COSTING_CATEGORIES = Object.freeze({
   CUSTOM_RATE: { line: null, label: 'Machine work at custom-hire rates (costing only)' },
+  // Owning the machines at the owners' per-acre rates: economic depreciation, insurance and the
+  // opportunity cost of the capital (design 134 §17.9, rev 29). An ACTUAL-basis cost, never
+  // paid as such, so never on Schedule F, where the real machinery figure goes.
+  MACHINERY_OWNERSHIP: { line: null, label: 'Machinery ownership at per-acre rates (costing only)', machineWork: true },
 });
 
 /**

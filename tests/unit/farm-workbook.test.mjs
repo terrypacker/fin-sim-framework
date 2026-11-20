@@ -324,3 +324,107 @@ describe('computed operation costs (design 134 §17.8)', () => {
     assert.ok(validateFarm(bad).some(e => /leg must be FIELD or STORAGE_TO_SALE/.test(e)));
   });
 });
+
+// The owners' later layout (§17.9): per-crop spraying, a grain cart, actual fuel, machinery
+// ownership per acre and labor blocks with a crew. No "Actual Rates" notes.
+const ADMIN_V2 = ADMIN.split('\n').slice(0, ADMIN.split('\n').indexOf('Custom Farming Rates:,,,')).concat([
+  'Custom Farming Rates:,,,',
+  '"Storing Grain, bin rental", $0.03 ,Per Bushel/Month,',
+  'Planting Corn or soybeans, $30.00 ,per acre,',
+  'Harvesting Corn or Soybeans, $50.00 ,per acre,',
+  'Grain Cart Hauling Corn or Soybeans, $6.00 ,per acre,',
+  'Spraying Beans, $40.00 ,per acre,',
+  'Spraying Corn, $30.00 ,per acre,',
+  'Fuel,Use actual Fuel Cost,,',
+  'Trucking Corn out of field, $0.15 ,per bushel',
+  ',,,',
+  'Actual Depreciation/Financing/Insurance Rates,,,',
+  'Combine & Heads,20,per acre,',
+  'Sprayer,10,per acre (ignoring number sprays),',
+  ',,,',
+  'Combining corn actual labor rates,25,acres an hour,',
+  'Total Hours,6,,',
+  'Times 5 people,30,hour,',
+  'Times $20 an hour,600,Total wages corn harvesting,',
+  ',,,',
+  'Spraying Rates,80,acres per hour,',
+  'Total Hours,1,,',
+  'Times 1 person x 4 applications,4,,',
+  'Times $20 an hour,80,Total wages spraying,',
+]).join('\n');
+const DIRECT_V2 = DIRECT + '\nA-OVERHEAD,ACTUALFUEL,9000\nA-I-RIVER ,IRRIGATION,1500\nB-I-WEST,IRRIGATION,700';
+const WB2 = { ...WB, admin: ADMIN_V2, directExpenses: DIRECT_V2 };
+const imp2 = (opts = {}) => importFarmWorkbook(WB2, { cropYear: 2026, prices: PRICES, ...opts });
+
+describe('the later layout: per-crop operations, crews, actual fuel, ownership (design 134 §17.9)', () => {
+  const quiet = (fn) => { const log = console.log; console.log = () => {}; try { return fn(); } finally { console.log = log; } };
+  const run = (farm) => quiet(() => runFarm(FarmScenario.buildDefaultConfig({ farm })));
+  const total = (r, cat, pred = () => true) => r.ledger.filter(p => p.category === cat && pred(p)).reduce((s, p) => s + p.amount, 0);
+  const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-6, `${a} vs ${b}`);
+
+  test('an operation splits by crop when the custom rate or labor block names one; else one covers both', () => {
+    const ops = Object.fromEntries(imp2().farm.operations.map(o => [o.id, o]));
+    assert.deepEqual(Object.keys(ops).sort(),
+      ['cart', 'harvest-corn', 'harvest-soybeans', 'plant', 'spray-corn', 'spray-soybeans']);
+    assert.equal(ops['spray-corn'].customRatePerAcre, 30);
+    assert.equal(ops['spray-soybeans'].customRatePerAcre, 40);
+    assert.equal(ops['harvest-corn'].customRatePerAcre, 50);            // one rate, both crops
+    assert.equal(ops['harvest-corn'].acresPerHour, 25);
+    assert.equal(ops['harvest-corn'].crew, 5);
+    assert.equal(ops['harvest-soybeans'].acresPerHour, undefined);   // no beans block
+    assert.equal(ops['spray-soybeans'].crew, 1);
+    assert.equal(ops.cart.customRatePerAcre, 6);
+    assert.equal(ops.cart.crew, 0);                                     // labor is in the harvest crew
+    assert.equal(imp2().farm.seasons[0].laborPerHour, 20);
+  });
+
+  test('labor is hours × crew × wage, and a block\'s applications reach every crop it covers', () => {
+    const { farm } = imp2();
+    const r = run(farm);
+    const spray = farm.prescriptions.filter(x => x.operationId?.startsWith('spray-'));
+    assert.ok(spray.every(x => x.applications === 4));
+    // North: 100 ac corn. Harvest 100/25 h × 5 × $20; spray 100·4/80 h × 1 × $20.
+    near(total(r, 'MACHINE_LABOR', p => p.jobId === 'plan-north'), 100 / 25 * 5 * 20 + 100 * 4 / 80 * 20);
+    assert.equal(total(r, 'MACHINE_FUEL'), 0);                    // fuel is the actual figure
+  });
+
+  test('actual fuel is an operator FUEL overhead; irrigation is the field\'s; ownership is costing only', () => {
+    const r = imp2();
+    const fuel = r.farm.overhead.find(o => o.category === 'FUEL');
+    assert.deepEqual([fuel.operatorId, fuel.amount, fuel.basis], ['A', 9000, 'ACRES']);
+    assert.equal(r.farm.cropPlans.find(p => p.id === 'plan-river').irrigationElectricity, 1500);
+    assert.equal(r.sheet.irrigation, 2200);
+    // A has 230 ac, B 180 ac; $20 + $10 per acre each.
+    const mach = (op) => r.farm.machinery.filter(m => m.operatorId === op).reduce((s, m) => s + m.amount, 0);
+    near(mach('A'), 230 * 30);
+    near(mach('B'), 180 * 30);
+    assert.ok(kinds(r).includes('FUEL_ACTUAL'));
+    assert.ok(kinds(r).includes('MACHINERY_FROM_RATES'));
+    assert.ok(!kinds(r).includes('NO_MACHINERY'));
+    assert.ok(!kinds(r).includes('FUEL_APPLICATIONS_ASSUMED'));
+    const ran = run(r.farm);
+    const noThroughput = ran.jobCost.advisories.filter(a => a.kind === 'LABOR_NO_THROUGHPUT').map(a => a.operationId);
+    assert.ok(noThroughput.includes('plant') && !noThroughput.includes('cart'));     // the cart's crew is 0
+    near(total(ran, 'FUEL'), 9000);
+    // Ownership is costing only: on the actual machinery side, never cash or on Schedule F.
+    near(total(ran, 'MACHINERY_OWNERSHIP'), 410 * 30);
+    assert.equal(total(ran, 'MACHINERY'), 0);
+    assert.ok(ran.ledger.filter(p => p.category === 'MACHINERY_OWNERSHIP').every(p => !p.cash && p.line === null));
+    assert.ok(ran.jobCost.farm.machinery.actual >= 410 * 30 - 1e-6);
+    assert.ok(kinds(r).includes('NO_MACHINERY_CASH'));
+  });
+
+  test('trucking is read outside the old notes block; the sheet\'s labor totals are kept', () => {
+    const r = imp2();
+    assert.equal(r.farm.trucking.length, 2);                 // 1 rate × 2 operators
+    assert.deepEqual(r.sheet.costing.labor.map(b => b.sheetWages), [600, 80]);
+    assert.ok(!r.advisories.some(a => a.kind === 'ADMIN_ROW_IGNORED'), JSON.stringify(r.advisories.filter(a => a.kind === 'ADMIN_ROW_IGNORED')));
+  });
+
+  test('refusals: two wages, irrigation on a dry field', () => {
+    assert.throws(() => importFarmWorkbook({ ...WB2, admin: ADMIN_V2.replace('Times $20 an hour,80', 'Times $21 an hour,80') },
+      { cropYear: 2026, prices: PRICES }), /two labor wages/);
+    assert.throws(() => importFarmWorkbook({ ...WB2, directExpenses: DIRECT_V2 + '\nA-D-NORTH,IRRIGATION,100' },
+      { cropYear: 2026, prices: PRICES }), /irrigation on "North", which Fields marks dry/);
+  });
+});

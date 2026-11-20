@@ -31,12 +31,12 @@ import { settleArc, ARC_PLC_PAYMENT_LIMIT } from './farm-programs.js';
  *   fields:        [{ id, operatorId, name, tenure, rentedAcres, plantedAcres, irrigated,
  *                     rentPerAcre, propertyTax, communityCollegeTax?, fsaFarm?, provenYield? }],
  *   products:      [{ id, name, category, unit, unitPrice, discountPct }],
- *   operations:    [{ id, name, customRatePerAcre, fuelPerAcre?, acresPerHour? }],
+ *   operations:    [{ id, name, customRatePerAcre, fuelPerAcre?, acresPerHour?, crew? }],
  *   cropPlans:     [{ id, fieldId, crop, expectedYield, yieldShock?, insurancePremiumPerAcre,
  *                     irrigationElectricity, aphYield? }],
  *   prescriptions: [{ id, planId, productId | operationId, ratePerAcre, passes, applications?,
  *                     share, paidDate? }],
- *   machinery:     [{ id, operatorId, amount, paidDate? }],
+ *   machinery:     [{ id, operatorId, amount, paidDate?, name?, costingOnly? }],
  *   overhead:      [{ id, operatorId, name, category, amount, basis, fieldIds?, paidDate?, variableRate? }],
  *   prices:        [{ id, crop, date, price, shock? }],
  *   contracts:     [{ id, operatorId, crop, cropYear?, bushels | shareOfExpected, price,
@@ -274,7 +274,7 @@ export function normalizeFarm(farm) {
     f.rentedAcres ??= (f.tenure === TENURE.CASH_RENT ? f.plantedAcres : 0);
   }
   for (const p of out.products) p.discountPct ??= 0;
-  for (const o of out.operations) { o.fuelPerAcre ??= 0; o.acresPerHour ??= null; }
+  for (const o of out.operations) { o.fuelPerAcre ??= 0; o.acresPerHour ??= null; o.crew ??= 1; }
   for (const p of out.cropPlans) {
     p.yieldShock ??= 0;
     p.insurancePremiumPerAcre ??= 0;
@@ -445,6 +445,10 @@ export function validateFarm(farm) {
     if (r.acresPerHour != null && !(isNum(r.acresPerHour) && r.acresPerHour > 0)) {
       err(`farm.operations "${r.id}": acresPerHour must be a number > 0`);
     }
+    // A crew of 0: the operation's labor is counted in another's crew (a grain cart's, in harvest).
+    if (r.crew != null && !(isNum(r.crew) && r.crew >= 0)) {
+      err(`farm.operations "${r.id}": crew must be a number ≥ 0`);
+    }
   }
   if (!isNum(f.season.laborPerHour) || f.season.laborPerHour < 0) err('farm.seasons[0].laborPerHour must be a number ≥ 0');
   const truckKeys = new Set();
@@ -494,6 +498,7 @@ export function validateFarm(farm) {
     need('machinery', r, 'operatorId', 'operators');
     nonNeg('machinery', r, 'amount', { required: true });
     date('machinery', r, 'paidDate');
+    if (r.costingOnly != null && typeof r.costingOnly !== 'boolean') err(`farm.machinery "${r.id}": costingOnly must be true or false`);
   }
   for (const r of f.overhead) {
     need('overhead', r, 'operatorId', 'operators');
@@ -722,7 +727,8 @@ export function realizedYield(farm, plan, field = farm.fields.find(x => x.id ===
  * - `APH_DEFAULTED`: an insured crop plan with no approved (APH) yield, so its guarantee is
  *   built on the expected yield (design 134 §15.2).
  * - `LABOR_NO_THROUGHPUT`: a season with a machine-labor wage and an operation in use with no
- *   acres per hour, so that operation's labor is not computed (design 134 §17.8).
+ *   acres per hour, so that operation's labor is not computed (design 134 §17.8). An operation
+ *   with a crew of 0 has its labor in another's crew, and is not reported (§17.9).
  * - `NO_SEED`: a crop plan for an annual crop with no seed cost. Every annual crop is planted
  *   from seed bought for it, so a plan without one is a missing entry (the acceptance
  *   workbook had one, owner-confirmed, Q25), and its breakevens are too low by the seed cost.
@@ -751,7 +757,7 @@ export function farmAdvisories(farm) {
   if (farm.season?.laborPerHour > 0) {
     const used = new Set(farm.prescriptions.filter(r => r.operationId != null).map(r => r.operationId));
     for (const o of farm.operations) {
-      if (!used.has(o.id) || o.acresPerHour != null) continue;
+      if (!used.has(o.id) || o.acresPerHour != null || o.crew === 0) continue;
       out.push({
         kind: 'LABOR_NO_THROUGHPUT', operationId: o.id,
         message: `${o.name ?? o.id} has no acres per hour, so its machine labor is not computed.`,

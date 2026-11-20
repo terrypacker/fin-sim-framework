@@ -24,7 +24,9 @@
  * from the first 20xx in the folder's or a file's name.
  *
  * After the import the season is run, and each amount the sheet states (rent, property tax,
- * crop insurance, program income, interest) is reconciled against the model's ledger.
+ * crop insurance, program income, interest, actual fuel, irrigation, machinery) is reconciled
+ * against the model's ledger. Where the sheet works out its own machine-labor wages, they are
+ * shown beside the model's.
  */
 
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
@@ -107,11 +109,28 @@ const recon = [
   ['Crop insurance', sheet.cropInsurance, posted(p => p.category === 'CROP_INSURANCE')],
   ['Program income', sheet.programIncome, posted(p => p.category === 'PROGRAM_PAYMENT')],
   ['Interest', sheet.interest, posted(p => p.category === 'INTEREST_MORTGAGE' || p.category === 'INTEREST_OTHER')],
+  ['Fuel (actual)', sheet.fuel, posted(p => p.category === 'FUEL')],
+  ['Irrigation', sheet.irrigation, posted(p => p.category === 'IRRIGATION_ELECTRICITY')],
+  ['Machinery', sheet.machinery, posted(p => p.category === 'MACHINERY' || p.category === 'MACHINERY_OWNERSHIP')],
 ].map(([item, s, m]) => ({ item, sheet: s, model: m, diff: m - s, ok: Math.abs(m - s) < 0.005 }));
+
+// The sheet's own labor arithmetic beside the model's: information, not a check, because the
+// sheet multiplies its own hour counts.
+const rxById = new Map(farm.prescriptions.map(x => [x.id, x]));
+const planById = new Map(farm.cropPlans.map(x => [x.id, x]));
+const labor = sheet.costing.labor.filter(b => b.sheetWages != null).map(b => {
+  const model = posted(p => {
+    if (p.category !== 'MACHINE_LABOR') return false;
+    const rx = rxById.get(p.sourceId);
+    const opId = rx?.operationId ?? '';
+    return (opId === b.op || opId.startsWith(`${b.op}-`)) && (!b.crop || planById.get(rx.planId).crop === b.crop);
+  });
+  return { item: b.label, sheet: b.sheetWages, model, diff: model - b.sheetWages };
+});
 
 const out = opts.out ?? join(opts.dir, `farm-${cropYear}.json`);
 if (opts.json) {
-  await printJsonAndExit({ cropYear, out: opts.check ? null : out, advisories, reconciliation: recon, costing: sheet.costing, cfg }, 2);
+  await printJsonAndExit({ cropYear, out: opts.check ? null : out, advisories, reconciliation: recon, labor, costing: sheet.costing, cfg }, 2);
 }
 
 heading(`Farm workbook ${cropYear} — ${opts.dir}`);
@@ -124,6 +143,14 @@ columns({ title: 'Reconciliation: the sheet\'s amounts vs the model\'s ledger', 
   { head: 'model', get: r => money(r.model), width: 12 },
   { head: 'diff', get: r => (r.ok ? '0' : money(r.diff)), width: 10 },
 ] });
+if (labor.length) {
+  columns({ title: 'Machine labor: the sheet\'s own arithmetic vs the model (information)', rows: labor, columns: [
+    { head: 'block', get: r => r.item, align: 'left', width: 34 },
+    { head: 'sheet', get: r => money(r.sheet), width: 10 },
+    { head: 'model', get: r => money(r.model), width: 10 },
+    { head: 'diff', get: r => money(r.diff), width: 10 },
+  ] });
+}
 note('\nAdvisories:');
 for (const a of [...advisories, ...result.jobCost.advisories]) note(`  ! [${a.kind}] ${a.message}`);
 const f = result.jobCost.farm;

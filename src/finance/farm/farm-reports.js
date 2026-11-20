@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { SCHEDULE_F_LINES, COST_CATEGORIES, isProductCategory } from './schedule-f.js';
+import { SCHEDULE_F_LINES, COST_CATEGORIES, COSTING_CATEGORIES, isProductCategory } from './schedule-f.js';
 import { TENURE, priceOn, harvestDateFor, realizedYield, farmAdvisories } from './farm-records.js';
 import { poolKey } from './farm-postings.js';
 
@@ -253,7 +253,7 @@ function _book(row, p, amount, allocated) {
     return;
   }
   if (p.category === 'CUSTOM_RATE') { row.machinery.custom += amount; return; }
-  if (p.category === 'MACHINERY' || COST_CATEGORIES[p.category]?.machineWork) {
+  if (p.category === 'MACHINERY' || COST_CATEGORIES[p.category]?.machineWork || COSTING_CATEGORIES[p.category]?.machineWork) {
     row.machinery.actual += amount;
     return;
   }

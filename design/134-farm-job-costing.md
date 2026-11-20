@@ -1,6 +1,6 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** rev 27 (20 Nov 2026): §11 lists every open and declined owner question with its reason (new Q34–Q40). Rev 26 (20 Nov 2026): phase 5 step 5b built, fuel, machine labor and trucking computed from the operations' actual rates (§17.8). Rev 25: phase 5 step 5a built, the importer of the owners' own workbook layout, which replaces the proposed template; the 2020 ledger layout is unsupported (§17.7). Rev 24 (20 Nov 2026): owner answers from the 2026 workbook review (§17.6): Q22a and Q27 closed as declined, Q23a answered (not all nitrogen), and computed operation costs planned with phase 5, with owner questions Q23b and Q33. Rev 23 (20 Nov 2026): phase 8 steps 8a and 8b built: the price-history module, this season's real prices with its marketing windows on the Field P&L charts, a farm file opening as a farm, and the demo's crop year (§17.5). Rev 20: phase 8, price history and marketing windows, planned (§17.5), with owner question Q32. Rev 19 (20 Nov 2026): phases 5 (the yearly workbook importer) and 6 (in-app record editors) planned (§17); reconciliation moves to phase 7; the panel charts built (§17.4). Rev 18 (19 Nov 2026): **phase 4 COMPLETE** (§16) bar the export's land-and-debt section (Q22a): the export and import (4a–4c), a farm path per household year (4d), §199A (4e), the Nebraska community-college credit (4f), and the NOL, §461(l), the farming-loss carryback and §1301 averaging (4g, §16.10–16.11). Rev 17: phase 4 started, what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
+**Status:** rev 29 (20 Nov 2026): owner answers on the revised sheet; machinery ownership rates are costing only (§17.9). Rev 28 (20 Nov 2026): phase 5 step 5c built, the revised Admin sheet: per-crop operations, a crew on an operation, actual fuel, irrigation and machinery ownership rates (§17.9). Rev 27 (20 Nov 2026): §11 lists every open and declined owner question with its reason (new Q34–Q40). Rev 26 (20 Nov 2026): phase 5 step 5b built, fuel, machine labor and trucking computed from the operations' actual rates (§17.8). Rev 25: phase 5 step 5a built, the importer of the owners' own workbook layout, which replaces the proposed template; the 2020 ledger layout is unsupported (§17.7). Rev 24 (20 Nov 2026): owner answers from the 2026 workbook review (§17.6): Q22a and Q27 closed as declined, Q23a answered (not all nitrogen), and computed operation costs planned with phase 5, with owner questions Q23b and Q33. Rev 23 (20 Nov 2026): phase 8 steps 8a and 8b built: the price-history module, this season's real prices with its marketing windows on the Field P&L charts, a farm file opening as a farm, and the demo's crop year (§17.5). Rev 20: phase 8, price history and marketing windows, planned (§17.5), with owner question Q32. Rev 19 (20 Nov 2026): phases 5 (the yearly workbook importer) and 6 (in-app record editors) planned (§17); reconciliation moves to phase 7; the panel charts built (§17.4). Rev 18 (19 Nov 2026): **phase 4 COMPLETE** (§16) bar the export's land-and-debt section (Q22a): the export and import (4a–4c), a farm path per household year (4d), §199A (4e), the Nebraska community-college credit (4f), and the NOL, §461(l), the farming-loss carryback and §1301 averaging (4g, §16.10–16.11). Rev 17: phase 4 started, what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
 (§12.4) and the Field P&L panel is in the workbench (§12.5). **Phase 2 started** (§13): step 2a,
 the scenario-agnostic MC path and a farm batch on it, steps 2b–2d (realized yield, price paths, multiplier levers and the contracted share), 2e (calibration from USDA NASS, §13.8) and 2f (the Farm MC panel, §13.7) are built: **phase 2 is complete**. Owner questions Q1–Q20 and Q22–Q25 are answered (§3, §14); Q21, Q26 and the follow-ups Q22a,
 Q23a and Q25a (§14) are open. §7 records what the primary sources on disk decide. §8 is the household
@@ -1936,3 +1936,56 @@ electricity are entered figures only. The throughput ranges are not yet an MC le
 count from the Admin rates, and the sheet's stated amounts still reconcile to the cent. Unit
 tests: per-trip fuel and labor, actual-side booking and never in the custom net, the lever,
 both trucking legs including a December sale, and the refusals.
+
+### 17.9 Phase 5c: the owners' revised Admin sheet (built, rev 28; owner answers rev 29)
+
+The owners revised the Admin sheet for a one-operator workbook. It replaces the "actual rates"
+notes with figures, and it adds what §17.8 listed as missing: owning the machines, actual fuel
+and irrigation.
+
+**What the sheet now says, and where it goes.**
+
+| Sheet | Becomes |
+|---|---|
+| A custom rate that names a crop (spraying beans, spraying corn) | one operation per crop, ids `<op>-<crop>` |
+| A grain cart hauling rate per acre | a new operation `cart`, on every plan, with `crew` 0: it runs with the harvest crew and is fully depreciated (owners, rev 29) |
+| "Fuel: use actual fuel cost", and an `<op>-OVERHEAD` fuel row on Direct Expenses | an operator `FUEL` overhead row (line 19), allocated by acres. No fuel is computed per trip. |
+| `IRRIGATION` on an irrigated field's job | the plan's `irrigationElectricity` (line 30): all electricity, since any pumping fuel is in the actual fuel (owners, rev 29). On a dry field the import is refused, as the model already refuses it. |
+| "Actual Depreciation/Financing/Insurance Rates", per acre | one `machinery` row per operator and rate, `costingOnly`: the rate × the operator's planted acres (of the crop, when the label names one) |
+| A labor block: a heading with acres per hour, then "Times N people [x K applications]" and "Times \$W an hour" | the operation's `acresPerHour`, its new `crew`, its prescriptions' `applications`, and the season wage |
+| Trucking rows | read wherever they sit. They moved out of the notes block. |
+
+**Model.** `operations.crew` (default 1) multiplies the hours, so `MACHINE_LABOR` = trips ÷ acres
+per hour × crew × wage. A default of 1 leaves every existing scenario unchanged. A crew of 0
+means the operation's labor is in another operation's crew, so `LABOR_NO_THROUGHPUT` is not
+raised for it.
+
+`machinery.costingOnly` posts the row as `MACHINERY_OWNERSHIP`: a costing category (no line,
+never cash) on the job cost's actual machinery side. A row without it is still the cash
+machinery figure on Schedule F (`MIXED_MACHINERY`).
+
+**Splitting by crop.** An operation splits into one per crop grown when its custom rate or its
+labor block names a crop. Otherwise one operation covers every crop. A crop-specific labor block
+is looked up first, then a crop-agnostic one, then the old notes. A labor block's applications
+go to every crop it covers. The sheet's "Total Hours" and products are its own arithmetic, so
+the model redoes them. The CLI shows the sheet's total wage beside the model's, as information,
+because the sheet's own hour counts can be wrong.
+
+**Fuel under the custom basis.** The actual fuel is a cost in both views. The owners list it
+beside the custom rates, so their custom rate excludes fuel. Advisory `FUEL_ACTUAL`.
+
+**Machinery ownership is costing only (owners, rev 29).** The rates' "financing" is the
+opportunity cost of the capital in the machines at the operating-loan rate, not the loans'
+interest, so nothing is counted twice. But an opportunity cost is never paid or deducted, and
+the depreciation is economic, not tax depreciation (the model expenses purchases in full, rev
+5). So the rates are an actual-basis cost only. Schedule F and the household export carry no
+machinery cost until a cash figure (tax depreciation or §179, machine insurance, repairs) is
+entered, and the advisory `NO_MACHINERY_CASH` says so.
+
+**Reconciliation** adds actual fuel, irrigation and machinery to the to-the-cent check.
+
+**Owner answers (rev 29).** The sheet's planting and spraying hours counted only the bean acres;
+that was a spreadsheet error, and the model's count over all acres stands. One spray count
+covers both crops. The grain cart, irrigation and ownership rates are as recorded above.
+
+**Open.** A cash machinery figure for Schedule F, which the sheet does not give.

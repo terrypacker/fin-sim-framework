@@ -159,8 +159,8 @@ export function compileFarmEvents(farm) {
         amount: acres * rx.passes * opn.customRatePerAcre * m.customRateMultiplier, sourceId: rx.id,
       });
       // The same work with the operator's own machines (design 134 §17.8): fuel per acre per
-      // application, and the hours (acres ÷ acres per hour) at the season's wage. Cash, and on
-      // the ACTUAL machinery side of the job cost.
+      // application, and the hours (acres ÷ acres per hour) × the crew at the season's wage.
+      // Cash, and on the ACTUAL machinery side of the job cost.
       const trips = acres * rx.applications;
       post(date, `${opn.name ?? opn.id} fuel — ${plan.id}`, {
         operatorId: f.operatorId, jobId: plan.id, category: 'MACHINE_FUEL',
@@ -169,7 +169,7 @@ export function compileFarmEvents(farm) {
       if (opn.acresPerHour > 0) {
         post(date, `${opn.name ?? opn.id} labor — ${plan.id}`, {
           operatorId: f.operatorId, jobId: plan.id, category: 'MACHINE_LABOR',
-          amount: trips / opn.acresPerHour * season.laborPerHour, sourceId: rx.id,
+          amount: trips / opn.acresPerHour * opn.crew * season.laborPerHour, sourceId: rx.id,
         });
       }
     }
@@ -222,8 +222,10 @@ export function compileFarmEvents(farm) {
 
   // ── operator costs: machinery, overhead, the carry-out prepay ──────────────────────
   for (const mach of farm.machinery) {
-    post(mach.paidDate, `Machinery — ${mach.operatorId}`, {
-      operatorId: mach.operatorId, jobId: operatorJob(mach.operatorId), category: 'MACHINERY',
+    // `costingOnly`: an ownership charge at per-acre rates (§17.9), not the cash figure.
+    post(mach.paidDate, `${mach.costingOnly ? (mach.name ?? 'Machinery ownership') : 'Machinery'} — ${mach.operatorId}`, {
+      operatorId: mach.operatorId, jobId: operatorJob(mach.operatorId),
+      category: mach.costingOnly ? 'MACHINERY_OWNERSHIP' : 'MACHINERY', ...(mach.costingOnly ? { cash: false } : {}),
       allocation: 'ACRES', amount: mach.amount * m.machineryMultiplier, sourceId: mach.id,
     });
   }

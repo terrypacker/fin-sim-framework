@@ -2463,7 +2463,7 @@ what the in-app panel keys on.
 | [Node History](panels/exec-history.md) | panel | 191 | 1 panel |
 | [Farm MC](panels/farm-mc.md) | panel | 236 | 1 panel · design 134 |
 | [Farm Results into a Household Plan](workflows/farm-to-household.md) | workflow | 593 | 4 params · 2 tools · design 134 |
-| [Field P&L](panels/field-pnl.md) | panel | 248 | 1 panel · design 134 |
+| [Field P&L](panels/field-pnl.md) | panel | 250 | 1 panel · design 134 |
 | [Funding and Instalments](concepts/funding-and-instalments.md) | concept | 248 | 2 panels · 3 params · design 107 |
 | [FX](concepts/fx.md) | concept | 390 | 2 panels · 6 params · design 47, 87, 122 |
 | [Handler](nodes/handler.md) | node | 208 | 2 panels · design 2 |

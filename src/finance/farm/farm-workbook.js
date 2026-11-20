@@ -121,6 +121,23 @@ function productCategory(label) {
   return null;
 }
 
+/** The operator whose overhead job this is ("D OVERHEAD" or "D-OVERHEAD"), or null. */
+function overheadOperator(job, operators) {
+  const m = /^([a-z0-9]+)(?:\s+|\s*-\s*)overhead$/.exec(job);
+  const id = m?.[1].toUpperCase();
+  return id && operators.some(o => o.id === id) ? id : null;
+}
+
+/** The machine operation a custom-rate or labor label names, or null. */
+function operationOf(label) {
+  const t = norm(label);
+  if (/grain cart|\bcart\b|hauling/.test(t)) return 'cart';
+  if (/plant/.test(t)) return 'plant';
+  if (/harvest|combin/.test(t)) return 'harvest';
+  if (/spray/.test(t)) return 'spray';
+  return null;
+}
+
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
 /** Find the header row (the first holding every `required` header) and map columns by name. */
@@ -161,7 +178,10 @@ export function importFarmWorkbook(csv, opts = {}) {
   const advisories = [];
   const advise = (kind, message, extra = {}) => advisories.push({ kind, message, ...extra });
   let errorCells = 0;
-  const sheet = { rent: 0, propertyTax: 0, cropInsurance: 0, programIncome: 0, interest: 0, principal: 0 };
+  const sheet = {
+    rent: 0, propertyTax: 0, cropInsurance: 0, programIncome: 0, interest: 0, principal: 0,
+    fuel: 0, irrigation: 0, machinery: 0,
+  };
 
   // ─── Fields ────────────────────────────────────────────────────────────────────
   const fRows = parseCsv(csv.fields);
@@ -244,7 +264,17 @@ export function importFarmWorkbook(csv, opts = {}) {
   const storage = [];
   const contracts = [];
   const overhead = [];
-  const costing = { fuelPerAcrePerApplication: null, acresPerHour: {}, applications: {}, laborPerHour: null, trucking: [] };
+  const costing = {
+    fuelPerAcrePerApplication: null, fuelActual: false, acresPerHour: {}, applications: {}, laborPerHour: null,
+    trucking: [], labor: [], ownership: [],
+  };
+  const customRates = [];               // { op, crop | null, rate, label }
+  const setWage = (w) => {
+    if (costing.laborPerHour != null && costing.laborPerHour !== w) {
+      throw new Error(`Admin: two labor wages, $${costing.laborPerHour} and $${w} an hour`);
+    }
+    costing.laborPerHour = w;
+  };
   const addRx = (plan, extra) => prescriptions.push({ id: `rx-${prescriptions.length + 1}`, planId: plan.id, ...extra });
 
   let section = 'rates';
@@ -260,6 +290,26 @@ export function importFarmWorkbook(csv, opts = {}) {
     if (lower.includes('principal') && lower.includes('interest')) { section = 'loans'; continue; }
     if (/^custom farming rates/.test(l)) { section = 'custom'; continue; }
     if (/^actual rates/.test(l)) { section = 'actual'; continue; }
+    if (/^actual (depreciation|ownership|financing)/.test(l)) { section = 'ownership'; continue; }
+    // A labor block's heading: "Combining corn actual labor rates | 25 | acres an hour".
+    const laborOp = /\brates?\b/.test(l) && /acres? (an|per) hour/.test(norm(cells[2])) ? operationOf(l) : null;
+    if (laborOp) {
+      const aph = cellNumber(cells[1]);
+      if (!(aph > 0)) throw new Error(`Admin: labor block "${label}" has no acres per hour`);
+      costing.labor.push({ op: laborOp, crop: cropIn(label), acresPerHour: aph, label });
+      section = 'labor';
+      continue;
+    }
+
+    // Trucking is read wherever it sits: the owners have moved it between blocks.
+    if (/^trucking/.test(l) && section !== 'rates') {
+      const rate = cellNumber(cells[1]);
+      const crop = cropIn(label);
+      const leg = /storage/.test(l) ? 'STORAGE_TO_SALE' : /field/.test(l) ? 'FIELD' : null;
+      if (crop && leg && rate > 0 && /bushel/.test(norm(cells[2]))) costing.trucking.push({ crop, leg, perBu: rate });
+      else advise('ADMIN_ROW_IGNORED', `Admin: trucking row "${cells.filter(Boolean).join(' | ')}" is not per bushel by crop and leg`);
+      continue;
+    }
 
     if (section === 'rates') {
       const price = cellNumber(cells[1]);
@@ -350,6 +400,11 @@ export function importFarmWorkbook(csv, opts = {}) {
     } else if (section === 'custom') {
       const rate = cellNumber(cells[1]);
       const basis = norm(cells[2]);
+      if (/^fuel/.test(l) && /actual/.test(norm(cells.slice(1).join(' ')))) {
+        // "Fuel: use actual fuel cost": the fuel is the operator's own figure on Direct Expenses.
+        costing.fuelActual = true;
+        continue;
+      }
       if (rate == null || Number.isNaN(rate)) {
         advise('ADMIN_ROW_IGNORED', `Admin: custom rate "${label}" has no rate`);
         continue;
@@ -365,15 +420,41 @@ export function importFarmWorkbook(csv, opts = {}) {
       } else if (/^fuel/.test(l)) {
         costing.fuelPerAcrePerApplication = rate;
       } else {
-        const op = /plant/.test(l) ? 'plant' : /harvest|combin/.test(l) ? 'harvest' : /spray/.test(l) ? 'spray' : null;
+        const op = operationOf(l);
         if (!op || !/acre/.test(basis)) {
           advise('ADMIN_ROW_IGNORED', `Admin: custom rate "${label}" (${cells[2]}) is not a per-acre operation`);
           continue;
         }
         const crop = cropIn(label);
-        // The spraying rate is per SEASON (owners, rev 24): one pass, however many sprays.
-        operations.push({ id: op, name: label, customRatePerAcre: rate });
-        for (const plan of cropPlans.filter(p => !crop || p.crop === crop)) addRx(plan, { operationId: op, passes: 1 });
+        if (customRates.some(x => x.op === op && x.crop === crop)) throw new Error(`Admin: two custom rates for "${label}"`);
+        customRates.push({ op, crop, rate, label });
+      }
+    } else if (section === 'ownership') {
+      // "Actual Depreciation/Financing/Insurance Rates": owning the machines, per acre.
+      const rate = cellNumber(cells[1]);
+      if (!label || rate == null || Number.isNaN(rate) || !/acre/.test(norm(cells[2]))) {
+        advise('ADMIN_ROW_IGNORED', `Admin: "${cells.filter(Boolean).join(' | ')}" is not a per-acre ownership rate`);
+        continue;
+      }
+      costing.ownership.push({ label, perAcre: rate, crop: cropIn(label) });
+    } else if (section === 'labor') {
+      // A labor block: its heading row (read above) gives the throughput, then "Times 7 people",
+      // "Times 1 person x 4 applications" and "Times $27 an hour". "Total Hours" and the products
+      // are the sheet's own arithmetic, which the model redoes; the total wage is kept to compare.
+      const block = costing.labor[costing.labor.length - 1];
+      const t = norm(cells.filter(Boolean).join(' '));
+      const crew = /^times (\d+(?:\.\d+)?) (?:people|persons?|men|operators?)\b/.exec(t);
+      const apps = /(\d+) applications?/.exec(t);
+      const wage = /^times \$(\d+(?:\.\d+)?) (?:an|per|\/) ?h/.exec(t);
+      if (crew) {
+        block.crew = Number(crew[1]);
+        if (apps) block.applications = Number(apps[1]);
+      } else if (wage) {
+        setWage(Number(wage[1]));
+        const total = cellNumber(cells[1]);
+        if (total > 0) block.sheetWages = total;
+      } else if (!/^total hours/.test(t)) {
+        advise('ADMIN_ROW_IGNORED', `Admin: "${cells.filter(Boolean).join(' | ')}" is not a recognised labor row`);
       }
     } else if (section === 'actual') {
       const text = cells.filter(Boolean).join(' ');
@@ -391,30 +472,48 @@ export function importFarmWorkbook(csv, opts = {}) {
         if (m) { costing.applications[crop] = Number(m[1]); read = true; }
       }
       const wage = /(?:labor|wage)[^$]*\$(\d+(?:\.\d+)?)\s*(?:an|per|\/)\s*h/.exec(t);
-      if (wage) { costing.laborPerHour = Number(wage[1]); read = true; }
-      if (/trucking/.test(t)) {
-        const rate = cellNumber(cells[1]);
-        const crop = cropIn(label);
-        const leg = /storage/.test(l) ? 'STORAGE_TO_SALE' : /field/.test(l) ? 'FIELD' : null;
-        if (crop && leg && rate > 0 && /bushel/.test(norm(cells[2]))) {
-          costing.trucking.push({ crop, leg, perBu: rate });
-          read = true;
-        }
-      }
+      if (wage) { setWage(Number(wage[1])); read = true; }
       if (!read) advise('ADMIN_ROW_IGNORED', `Admin: "${text}" is not a recognised costing note`);
     }
   }
-  // Step 5b (§17.8): the work done with the operator's own machines, from the actual rates.
-  // A throughput range is priced at its midpoint; the range is kept for a later MC lever.
-  for (const o of operations) {
-    if (costing.fuelPerAcrePerApplication != null) o.fuelPerAcre = costing.fuelPerAcrePerApplication;
-    const r = costing.acresPerHour[o.id];
-    if (r) { o.acresPerHour = (r[0] + r[1]) / 2; if (r[0] !== r[1]) o.acresPerHourRange = r; }
+  // The operations (step 5b, §17.8; per crop and crew, §17.9). An operation is split by crop
+  // when the sheet distinguishes the crops, in its custom rate or its labor block; otherwise
+  // one operation covers every crop. A throughput range is priced at its midpoint, and the
+  // range is kept for a later MC lever.
+  const laborFor = (op, crop) => costing.labor.find(b => b.op === op && b.crop === crop)
+    ?? costing.labor.find(b => b.op === op && b.crop == null);
+  for (const op of [...new Set(customRates.map(x => x.op))]) {
+    const split = customRates.some(x => x.op === op && x.crop) || costing.labor.some(b => b.op === op && b.crop);
+    for (const crop of split ? cropsGrown : [null]) {
+      const plans = cropPlans.filter(p => !crop || p.crop === crop);
+      if (!plans.length) continue;
+      const cr = customRates.find(x => x.op === op && x.crop === crop) ?? customRates.find(x => x.op === op && x.crop == null);
+      if (!cr) {
+        advise('CUSTOM_RATE_MISSING', `Admin: no custom ${op} rate for ${crop}, so its ${op} is not charged.`, { crop });
+        continue;
+      }
+      const block = crop ? laborFor(op, crop) : laborFor(op, null);
+      const o = { id: crop ? `${op}-${slug(crop)}` : op, name: cr.crop || !crop ? cr.label : `${cr.label} (${crop.toLowerCase()})`,
+        customRatePerAcre: cr.rate };
+      if (costing.fuelPerAcrePerApplication != null) o.fuelPerAcre = costing.fuelPerAcrePerApplication;
+      const r = block ? [block.acresPerHour, block.acresPerHour] : costing.acresPerHour[op];
+      if (r) { o.acresPerHour = (r[0] + r[1]) / 2; if (r[0] !== r[1]) o.acresPerHourRange = r; }
+      if (block?.crew != null) o.crew = block.crew;
+      // The grain cart runs with the harvest crew and is fully depreciated (owners, rev 29), so
+      // it has no labor or ownership of its own: only its custom rate, for the custom basis.
+      if (op === 'cart') o.crew = 0;
+      operations.push(o);
+      // The spraying rate is per SEASON (owners, rev 24): one pass, however many sprays.
+      for (const plan of plans) {
+        const n = block?.applications ?? (op === 'spray' ? costing.applications[plan.crop] : null);
+        addRx(plan, { operationId: o.id, passes: 1, ...(n > 0 ? { applications: n } : {}) });
+      }
+    }
   }
-  for (const rx of prescriptions) {
-    if (rx.operationId !== 'spray') continue;
-    const n = costing.applications[cropPlans.find(p => p.id === rx.planId).crop];
-    if (n > 0) rx.applications = n;
+  for (const b of costing.labor) {
+    if (!customRates.some(x => x.op === b.op)) {
+      advise('ADMIN_ROW_IGNORED', `Admin: labor block "${b.label}" has no custom ${b.op} rate to attach to, so it is not read.`);
+    }
   }
   const trucking = [];
   for (const t of costing.trucking) {
@@ -422,7 +521,27 @@ export function importFarmWorkbook(csv, opts = {}) {
       trucking.push({ id: `truck-${o.id.toLowerCase()}-${slug(t.crop)}-${slug(t.leg)}`, operatorId: o.id, ...t });
     }
   }
-  if (costing.fuelPerAcrePerApplication != null && operations.length) {
+  // Machinery ownership (§17.9): a per-acre rate times the operator's acres (of the crop, when
+  // the label names one) is its MACHINERY figure, the ACTUAL basis's owning cost.
+  const machinery = [];
+  for (const w of costing.ownership) {
+    for (const o of operators) {
+      const acres = acresOf(o.id, f => !w.crop || planOf(f).crop === w.crop);
+      if (!(acres > 0)) continue;
+      machinery.push({ id: `machinery-${o.id.toLowerCase()}-${slug(w.label)}`, operatorId: o.id, name: w.label,
+        amount: w.perAcre * acres, costingOnly: true });
+      sheet.machinery += w.perAcre * acres;
+    }
+  }
+  if (costing.ownership.length) {
+    // The rates hold economic depreciation, insurance and the opportunity cost of the capital at
+    // the operating-loan rate, not the loans' interest (owners, rev 29). So they are a costing
+    // charge on the ACTUAL basis, never cash: Schedule F's machinery figure is the real one.
+    advise('MACHINERY_FROM_RATES', `Machinery ownership is ${costing.ownership.map(w => `${w.label} ${usd(w.perAcre, 2)}/ac`).join(', ')}, `
+      + 'charged on every planted acre (of the crop, where the label names one) in the job cost\'s actual basis. '
+      + 'It is costing only, never on Schedule F: it includes the opportunity cost of the capital.');
+  }
+  if (operations.some(o => o.fuelPerAcre > 0)) {
     advise('FUEL_APPLICATIONS_ASSUMED', 'Fuel per acre per application is charged on every trip: planting, harvest '
       + 'and each spray (Q33 asks whether planting and harvest count).');
   }
@@ -463,10 +582,27 @@ export function importFarmWorkbook(csv, opts = {}) {
     if (!job && !code) continue;
     if (isErrorCell(r[dCode]) || isErrorCell(r[dAmt])) { errorCells++; continue; }
     const f = fieldByJob.get(job);
-    if (!f) throw new Error(`Direct Expenses: job code "${job}" is not on the Fields sheet`);
+    const op = overheadOperator(job, operators);
+    if (!f && !op) throw new Error(`Direct Expenses: job code "${job}" is not on the Fields sheet or an operator's overhead job`);
     const amt = cellNumber(r[dAmt]);
     if (Number.isNaN(amt)) throw new Error(`Direct Expenses: ${job} ${code} amount "${r[dAmt]}" is not a number`);
-    if (/property tax/.test(code)) {
+    if (op) {
+      // An operator's own cost, spread over its acres (§17.9). Only fuel is read so far.
+      if (amt == null) continue;
+      if (/fuel/.test(code)) {
+        overhead.push({ id: `fuel-${op.toLowerCase()}-${slug(code)}`, operatorId: op, name: r[dCode].trim(),
+          category: 'FUEL', amount: amt, basis: 'ACRES' });
+        sheet.fuel += amt;
+      } else {
+        advise('EXPENSE_CODE_IGNORED', `Direct Expenses: code "${r[dCode].trim()}" on ${job} is not read`, { operatorId: op });
+      }
+    } else if (/irrigat/.test(code)) {
+      // All electricity (owners, rev 29): any pumping fuel is in the actual fuel.
+      if (amt == null) continue;
+      if (!f.irrigated) throw new Error(`Direct Expenses: irrigation on "${f.name}", which Fields marks dry`);
+      planOf(f).irrigationElectricity = (planOf(f).irrigationElectricity ?? 0) + amt;
+      sheet.irrigation += amt;
+    } else if (/property tax/.test(code)) {
       if (amt != null) { f.propertyTax += amt; sheet.propertyTax += amt; }
     } else if (/cash rent|^rent/.test(code)) {
       if (amt == null) { rentMissing.push(f); continue; }
@@ -480,6 +616,12 @@ export function importFarmWorkbook(csv, opts = {}) {
     } else {
       advise('EXPENSE_CODE_IGNORED', `Direct Expenses: code "${r[dCode].trim()}" on ${job} is not read`, { fieldId: f.id });
     }
+  }
+  if (costing.fuelActual) {
+    advise(sheet.fuel > 0 ? 'FUEL_ACTUAL' : 'FUEL_ACTUAL_MISSING', sheet.fuel > 0
+      ? `Fuel is the actual cost (${usd(sheet.fuel)}), spread over the operator's acres, so no fuel is computed per trip. `
+        + 'It is a cost under the custom basis too: the owners list it beside the custom rates.'
+      : 'Admin says to use the actual fuel cost, but Direct Expenses has no fuel row, so the farm has no fuel.');
   }
   for (const [fid, amt] of premium) {
     const f = fields.find(x => x.id === fid);
@@ -520,7 +662,7 @@ export function importFarmWorkbook(csv, opts = {}) {
     if (Number.isNaN(amt)) throw new Error(`Income: ${job} ${code} amount "${r[iAmt]}" is not a number`);
     if (!amt) continue;
     const f = fieldByJob.get(job);
-    const opJob = /^([a-z0-9]+)(?:\s+|\s*-\s*)overhead$/.exec(job);   // "D OVERHEAD" or "D-OVERHEAD"
+    const opJob = overheadOperator(job, operators);
     if (f) {
       if (!/plc|arc|program/.test(code)) {
         advise('INCOME_CODE_IGNORED', `Income: code "${r[iCode].trim()}" on ${job} is not read`, { fieldId: f.id });
@@ -532,8 +674,8 @@ export function importFarmWorkbook(csv, opts = {}) {
         amount: amt, paymentDate: cal.arcPaymentDate, planId: planOf(f).id,
       });
       sheet.programIncome += amt;
-    } else if (opJob && operators.some(o => o.id === opJob[1].toUpperCase())) {
-      const op = opJob[1].toUpperCase();
+    } else if (opJob) {
+      const op = opJob;
       otherIncome.push({
         id: `income-${op.toLowerCase()}-${slug(code)}`, operatorId: op, name: r[iCode].trim(),
         category: 'PROGRAM_PAYMENT', amount: amt, paymentDate: `${y}-12-01`,
@@ -575,11 +717,16 @@ export function importFarmWorkbook(csv, opts = {}) {
   if (!opts.saleDate) {
     advise('SALE_DATE_ASSUMED', 'The grain not under contract is sold at harvest: the sheet gives no sale dates.');
   }
-  advise('NO_MACHINERY', 'The sheet has no machinery figure for any operator, so the ACTUAL machinery basis is $0.');
+  if (!machinery.length) {
+    advise('NO_MACHINERY', 'The sheet has no machinery figure for any operator, so the ACTUAL machinery basis is $0.');
+  } else if (machinery.every(m => m.costingOnly)) {
+    advise('NO_MACHINERY_CASH', 'The sheet has no cash machinery figure (tax depreciation or §179, machine insurance, '
+      + 'repairs), so Schedule F and the household export carry no machinery cost.');
+  }
 
   const farm = {
     seasons: [{ id: `s${y}`, cropYear: y, ...(costing.laborPerHour != null ? { laborPerHour: costing.laborPerHour } : {}) }],
-    operators, fields, products, operations, cropPlans, prescriptions, machinery: [], overhead, prices,
+    operators, fields, products, operations, cropPlans, prescriptions, machinery, overhead, prices,
     contracts, storage, sales, carryIn: [], otherIncome, carryOut: [], insurance: [], arcBase: [], arcCounties: [],
     trucking,
   };
