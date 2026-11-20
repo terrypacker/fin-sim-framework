@@ -298,6 +298,7 @@ export class ScenarioRegistry {
       s.simStart = ScenarioSerializer.toDateStr(s.simStart);
       s.simEnd   = ScenarioSerializer.toDateStr(s.simEnd);
       if (!s.id || !s.id.startsWith('u:')) s.id = 'u:' + nextIndex++;
+      s.scenarioId = this.resolveScenarioId(s);
       if (s.active) activeId = s.id;
       this._upsert(s);
     });
@@ -308,6 +309,28 @@ export class ScenarioRegistry {
       this._persistLastUsed(activeId);
     }
     this._persistUserScenarios();
+  }
+
+  /**
+   * The prebuilt (`p:<id>`) a user scenario record belongs to, so the right class builds it.
+   *
+   * A record names its prebuilt as `p:<id>` (what Copy stores) or a bare `<id>` (what a
+   * scenario class's own id is, and what a script writes). A record with neither is claimed by
+   * the first prebuilt whose class says it is one of its own (`claimsConfig`, e.g. a farm file
+   * by its `farm` table). Without this, an uploaded farm was built as the first prebuilt.
+   *
+   * @param {object} rec
+   * @returns {string|null} the prebuilt id, or the record's own value when nothing matches
+   */
+  resolveScenarioId(rec) {
+    const id = rec?.scenarioId;
+    if (id) {
+      if (this.get(id)) return id;
+      if (!id.startsWith('p:') && this.get('p:' + id)) return 'p:' + id;
+      return id;
+    }
+    const owner = this.getPrebuiltScenarios().find(p => p.scenarioClass?.claimsConfig?.(rec));
+    return owner?.id ?? id ?? null;
   }
 
   // ─── Private ────────────────────────────────────────────────────────────────

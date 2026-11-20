@@ -26,7 +26,8 @@ above the expected price. They use the planned yield.
 diamonds, planned sales as triangles, today's price as a dot. Click a row to chart it (the
 footer is the whole farm). The breakeven is the **planned** season's, so it stays put as the
 run steps. White dots are the crop year's real Nebraska monthly prices published so far; a
-month shaded green was at or above breakeven, a chance to sell there.
+month shaded green was at or above breakeven, a chance to sell there. To see a past season, set
+**Demo crop year** under Parameters (the demo's costs stay put).
 
 Grain still owed or in the bin counts at its contract or latest price: revenue, not yet
 cash. Mid-run the table is the season to date, with breakevens too low.
