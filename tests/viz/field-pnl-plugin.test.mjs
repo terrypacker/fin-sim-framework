@@ -57,6 +57,8 @@ function mount({ cfg = RUN.cfg, sim = RUN.sim } = {}) {
 const q = (p, name) => p.el.querySelector(`[data-fpl="${name}"]`);
 const cells = (tr) => [...tr.querySelectorAll('td')].map(td => td.textContent.trim());
 const click = (el) => el.dispatchEvent(new Event('click', { bubbles: true }));
+const COLORS = { price: '#000000', red: '#ff0000', green: '#00ff00', amber: '#ffaa00', dim: '#999999',
+  border: '#333333', borderHi: '#444444', text: '#eeeeee', muted: '#666666', panel: '#111111' };
 const quiet = (f) => { const { log } = console; console.log = () => {}; try { return f(); } finally { console.log = log; } };
 const close = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-6, `${msg}: ${a} vs ${b}`);
 
@@ -315,4 +317,66 @@ test('the chart set: one entry per crop, all on one date range, each with its ow
   const plan = jobCost.plans.find(r => r.planId);
   assert.equal(breakevenChartSet(farm, jobCost, { kind: 'plan', id: plan.jobId }, now).length, 1);
   assert.match(breakevenCaption(set[0], { label: 'Corn' }), /^Corn: /);
+});
+
+// ─── Step 8b: this season's real prices and its marketing windows ───────────────
+
+describe('the season so far (design 134 §17.5 step 8b)', () => {
+  let RUN26;
+  beforeAll(() => {
+    const { log } = console; console.log = () => {};
+    try { RUN26 = runFarm(FarmScenario.buildDefaultConfig({ cropYear: 2026 })); } finally { console.log = log; }
+  });
+  // A history whose answer is known: corn climbs through the year, soybeans stay flat.
+  const HISTORY = { crops: {
+    CORN:     { start: '2026-01', values: [2.0, 2.5, 3.0, 3.5, 4.0, 4.5] },
+    SOYBEANS: { start: '2026-01', values: [3.0, 3.0, 3.0] },
+  } };
+
+  test('the windows are exactly the published months at or above the breakeven', () => {
+    const { farm, jobCost } = RUN26;
+    const set = breakevenChartSet(farm, jobCost, { kind: 'farm' }, '2026-06-01', { history: HISTORY });
+    const corn = set.find(d => d.crop === 'CORN');
+    const be = corn.breakevenUnpricedPrice;
+    const want = HISTORY.crops.CORN.values.map((v, i) => [`2026-0${i + 1}`, v]).filter(([, v]) => v >= be).map(([m]) => m);
+    assert.ok(want.length > 0 && want.length < 6, `the fixture straddles the breakeven ${be}`);
+    assert.deepEqual(corn.windows.months, want);
+    assert.equal(corn.windows.first, want[0]);
+    assert.equal(corn.windows.published, 6);
+    const soy = set.find(d => d.crop === 'SOYBEANS');
+    assert.ok(soy.breakevenUnpricedPrice > 3, 'soybeans never reach it');
+    assert.deepEqual(soy.windows.months, []);
+    assert.match(breakevenCaption(soy, { label: 'Soybeans' }), /below it in all 3 published months/);
+    assert.match(breakevenCaption(corn, { label: 'Corn' }), new RegExp(`in ${want.length} of 6 published months, first in`));
+    assert.match(breakevenCaption(corn), /Nebraska average price received/, 'the limits are said');
+    assert.doesNotMatch(breakevenCaption(corn, { limits: false }), /not a local bid/);
+  });
+
+  test('a season with no published months draws no history and says nothing about it', () => {
+    const d = breakevenChartData(RUN.farm, RUN.jobCost, { kind: 'farm' }, 'CORN', null, { history: HISTORY });
+    assert.deepEqual(d.history, []);
+    assert.doesNotMatch(breakevenCaption(d), /Nebraska average/);
+    assert.equal(breakevenChartOption(d, { colors: COLORS }).series.some(x => x.id === 'history'), false);
+  });
+
+  test('the option draws the months at mid-month with a green band per window, and renders', () => {
+    const { farm, jobCost } = RUN26;
+    const corn = breakevenChartSet(farm, jobCost, { kind: 'farm' }, '2026-06-01', { history: HISTORY }).find(d => d.crop === 'CORN');
+    const opt = breakevenChartOption(corn, { colors: COLORS });
+    const h = opt.series.find(x => x.id === 'history');
+    assert.deepEqual(h.data.map(p => new Date(p[0]).toISOString().slice(0, 10)),
+      HISTORY.crops.CORN.values.map((_, i) => `2026-0${i + 1}-15`));
+    assert.equal(h.markArea.data.length, corn.windows.months.length);
+    assert.equal(new Date(h.markArea.data[0][0].xAxis).toISOString().slice(0, 10), `${corn.windows.first}-01`);
+    const chart = echarts.init(null, null, { renderer: 'svg', ssr: true, width: 800, height: 240 });
+    try { chart.setOption(opt); assert.ok(chart.renderToSVGString().includes('#eeeeee')); } finally { chart.dispose(); }
+  });
+
+  test('by default the chart reads the real NASS history for the crop year', () => {
+    const { farm, jobCost } = RUN26;
+    const corn = breakevenChartSet(farm, jobCost, { kind: 'farm' }, null).find(d => d.crop === 'CORN');
+    assert.ok(corn.history.length > 0, 'the extract on disk has 2026 months');
+    assert.equal(corn.history[0][0], '2026-01');
+    assert.ok(corn.history.every(([m]) => m.startsWith('2026') || m.startsWith('2027')));
+  });
 });

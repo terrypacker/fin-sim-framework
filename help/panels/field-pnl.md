@@ -11,7 +11,7 @@ stamps:
 ---
 
 A farm season's profit and loss per field, with the price and yield that would make each
-field break even. It reads a farm scenario (US Farm).
+field break even.
 
 Rows open operator (or crop), then field, then the field's lines, each naming its
 Schedule F line. **Direct** costs were posted to the field; **overhead** is the operator's
@@ -22,14 +22,13 @@ the net and the breakevens.
 **The breakevens**: *BE unpriced* is the price the uncontracted bushels must fetch, red when
 above the expected price. They use the planned yield.
 
-**The charts**, one per crop, show its cash price through the season against its own
-breakeven, the zone below shaded, contracts as diamonds, planned sales as triangles, and
-today's price as a dot on the run's date. Click a row to chart it (the footer is the whole
-farm). The line is the **planned** season's (the farm run to its end out of sight), so it
-stays put as the run steps.
+**The charts**, one per crop, show its cash price against its own breakeven: contracts as
+diamonds, planned sales as triangles, today's price as a dot. Click a row to chart it (the
+footer is the whole farm). The breakeven is the **planned** season's, so it stays put as the
+run steps. White dots are the crop year's real Nebraska monthly prices published so far; a
+month shaded green was at or above breakeven, a chance to sell there.
 
 Grain still owed or in the bin counts at its contract or latest price: revenue, not yet
 cash. Mid-run the table is the season to date, with breakevens too low.
 
-Warnings name what the totals leave out: a cost with no crop plan to land on, or a plan that
-looks incomplete, such as an annual crop with no seed cost.
+Warnings name what the totals leave out, such as a crop plan with no seed cost.
