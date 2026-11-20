@@ -1,6 +1,6 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** rev 24 (20 Nov 2026): owner answers from the 2026 workbook review (§17.6): Q22a and Q27 closed as declined, Q23a answered (not all nitrogen), and computed operation costs planned with phase 5, with owner questions Q23b and Q33. Rev 23 (20 Nov 2026): phase 8 steps 8a and 8b built: the price-history module, this season's real prices with its marketing windows on the Field P&L charts, a farm file opening as a farm, and the demo's crop year (§17.5). Rev 20: phase 8, price history and marketing windows, planned (§17.5), with owner question Q32. Rev 19 (20 Nov 2026): phases 5 (the yearly workbook importer) and 6 (in-app record editors) planned (§17); reconciliation moves to phase 7; the panel charts built (§17.4). Rev 18 (19 Nov 2026): **phase 4 COMPLETE** (§16) bar the export's land-and-debt section (Q22a): the export and import (4a–4c), a farm path per household year (4d), §199A (4e), the Nebraska community-college credit (4f), and the NOL, §461(l), the farming-loss carryback and §1301 averaging (4g, §16.10–16.11). Rev 17: phase 4 started, what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
+**Status:** rev 25 (20 Nov 2026): phase 5 step 5a built, the importer of the owners' own workbook layout, which replaces the proposed template; the 2020 ledger layout is unsupported (§17.7). Rev 24 (20 Nov 2026): owner answers from the 2026 workbook review (§17.6): Q22a and Q27 closed as declined, Q23a answered (not all nitrogen), and computed operation costs planned with phase 5, with owner questions Q23b and Q33. Rev 23 (20 Nov 2026): phase 8 steps 8a and 8b built: the price-history module, this season's real prices with its marketing windows on the Field P&L charts, a farm file opening as a farm, and the demo's crop year (§17.5). Rev 20: phase 8, price history and marketing windows, planned (§17.5), with owner question Q32. Rev 19 (20 Nov 2026): phases 5 (the yearly workbook importer) and 6 (in-app record editors) planned (§17); reconciliation moves to phase 7; the panel charts built (§17.4). Rev 18 (19 Nov 2026): **phase 4 COMPLETE** (§16) bar the export's land-and-debt section (Q22a): the export and import (4a–4c), a farm path per household year (4d), §199A (4e), the Nebraska community-college credit (4f), and the NOL, §461(l), the farming-loss carryback and §1301 averaging (4g, §16.10–16.11). Rev 17: phase 4 started, what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
 (§12.4) and the Field P&L panel is in the workbench (§12.5). **Phase 2 started** (§13): step 2a,
 the scenario-agnostic MC path and a farm batch on it, steps 2b–2d (realized yield, price paths, multiplier levers and the contracted share), 2e (calibration from USDA NASS, §13.8) and 2f (the Farm MC panel, §13.7) are built: **phase 2 is complete**. Owner questions Q1–Q20 and Q22–Q25 are answered (§3, §14); Q21, Q26 and the follow-ups Q22a,
 Q23a and Q25a (§14) are open. §7 records what the primary sources on disk decide. §8 is the household
@@ -1531,6 +1531,17 @@ load error whichever way it came in (§12.2).
 
 ### 17.2 Phase 5: the yearly template and importer (loose: the template is being settled)
 
+> **Superseded in part by rev 25 (§17.7).** The owners will keep the layout of their 2026
+> workbook from year to year, so phase 5 reads **that** layout, and the template below is
+> not required of them. The 2020 ledger layout is unsupported. Its private acceptance
+> importer (§12.4) is frozen as a record of phase 1 and is not maintained. The rules below
+> still say what the importer enforces where the owners' layout allows: header-keyed columns,
+> normalized keys, blank is not 0, error cells refused. They also list what a later version
+> of the owners' sheet could add (a stable field id, an operator on each contract, loan
+> payers). The module is `src/finance/farm/farm-workbook.js` and the CLI
+> `scripts/farm/farm-workbook.mjs`, since `farm-import` already names the household import
+> (step 4c).
+
 **Shape.**
 
 - One CSV per tab, named after the tab, exported **values only** (the workbook keeps its
@@ -1791,3 +1802,49 @@ that MC can sweep, with the midpoint used by the deterministic run. Irrigation e
 (Q19), drying, repairs and machinery ownership still come only as entered figures (the
 Operator costs tab). **Q33 (owners):** does "fuel per application" count planting and
 harvest passes, or only sprays?
+
+### 17.7 Phase 5a: the owners' workbook importer (built, rev 25)
+
+The owners keep their 2026 layout going forward, so the importer reads it as it is:
+four sheets exported as CSV (Fields, Admin, Direct Expenses, Income).
+`importFarmWorkbook(csv, { cropYear, contractOperator, loanOperator, prices, saleDate })` is
+pure and returns `{ farm, advisories, sheet }`. `npm run farm:workbook -- --dir <folder>`
+finds the four files by name, imports, runs the season, reconciles, and writes
+`farm-<year>.json` (`scenarioId: 'p:us-farm'`). `--check` writes nothing.
+
+**What each sheet becomes.**
+
+| Sheet | Read as | → |
+|---|---|---|
+| Fields | a row per field, found by header. The name column is the one with a blank header. A row with a name and no operator is a section heading. Crop `C`/`C2`/`B`. `C2` is corn with `rotation: 'CORN_ON_CORN'`, because grain still pools as corn. | `operators`, `fields`, `cropPlans` (yield = expected yield) |
+| Admin, input rates | `label, price, basis`. The category comes from the label. A fertilizer bundle is `OTHER_FERTILIZER`, not nitrogen (Q23a). Custom application is a new product category `CUSTOM_APPLICATION`: cash custom hire, line 13. The crop comes from the label or the basis ("per corn acre"). | `products`, plus a prescription on every plan of the crop. Per acre: rate 1. Per unit: seed units ÷ acres. |
+| Admin, contracts | after the `Bushels, Price` header: `<crop> - <when>`. "Sold out of field" is delivered on the crop's harvest date. A month name is delivered on the 15th of that month, in the year after the crop year when the month comes before harvest. | `contracts` |
+| Admin, loans | after the `Principal, Interest` header: interest is an overhead row. Land debt (21a, by owned acres) unless the name says operating, bin or equipment (21b, by acres). Principal is not an expense. | `overhead` |
+| Admin, custom rates | bin rental is `storage` for every operator and crop. Planting, harvest and spraying are `operations` at one pass each: the spraying rate is per season (rev 24). Fuel is kept for 5b. | `operations`, `storage`, prescriptions |
+| Admin, actual rates | free-text notes, read by pattern: throughput (acres an hour, a range kept as low/high), sprays per crop, the labor wage, and trucking per bushel by leg. | `sheet.costing`, for step 5b |
+| Direct Expenses | `(job code, code, amount)`: property taxes, cash rent (lump ÷ planted acres), crop insurance (÷ acres, two parts summed). | `fields`, `cropPlans.insurancePremiumPerAcre` |
+| Income | a field's program payment goes on its plan, paid on the ARC date (the sheet's "PLC" label is generic). `<operator> OVERHEAD` rows are operator income, put on line 4a provisionally. | `otherIncome` |
+
+**What the sheet does not say, and the default.** Each default is an advisory on every import:
+
+- Whose the forward contracts are: split by each operator's expected bushels of the crop
+  (`--contract-operator` gives them all to one).
+- Who pays each loan: land debt by owned acres, the rest by planted acres (`--loan-operator`).
+  No loan is marked variable-rate.
+- The price of grain not under contract: NASS's latest Nebraska price received (§17.5),
+  unadjusted for basis (Q32), unless `--price CROP=x` is given. It is sold at harvest unless
+  `--sale-date` is given.
+- No machinery figure, no insurance terms (so premiums only, with no indemnity), blank rent,
+  and an operator with no premium. Each is named, never filled with a guess.
+
+**Acceptance.** On the owners' 2026 workbook, every amount the sheet states (cash rent,
+property tax, crop insurance, program income, interest) comes back out of the model's ledger
+to the cent. The input cost per acre by crop matches the private review's hand count from
+the Admin rates. The unit tests use a synthetic workbook in the owners' layout: a reordered
+sheet, its quirks (heading rows, trailing spaces, mixed case, `$-`, `#REF!`), every default
+and every refusal.
+
+**Next: step 5b, computed operation costs** (§17.6). Fuel, labor and trucking come from
+`sheet.costing`, on the actual side. That needs a home in the record model: fuel and
+throughput on `operations`, the spray count per crop on the prescription, a labor wage, and a
+trucking rate per bushel by leg.

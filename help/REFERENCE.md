@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-247 parameters · 36 panels · 13 node types (209 fields) · 187 action types · 101 tools · 369 state field types · 83 topics · 142 design docs
+247 parameters · 36 panels · 13 node types (209 fields) · 187 action types · 102 tools · 369 state field types · 83 topics · 142 design docs
 
 ---
 
@@ -1129,11 +1129,11 @@ Explained in [`help/nodes`](nodes/reducer.md). 0 field(s) described by a record 
 
 ---
 
-## Headless tools (101)
+## Headless tools (102)
 
 Command-line entry points under `scripts/`. **Purpose** is harvested from each script's
 docblock, not re-authored here. Arguments come from each script's declarative
-`parseFlags` spec: 86 of 86 entry points carry one (design 108 D6 — all of them).
+`parseFlags` spec: 87 of 87 entry points carry one (design 108 D6 — all of them).
 6 scripts carry no docblock naming themselves and show `(undocumented)`.
 
 ### scripts/config-converters/
@@ -1234,6 +1234,17 @@ docblock, not re-authored here. Arguments come from each script's declarative
     - `--machinery-basis` (string, default `CUSTOM`, one of CUSTOM|ACTUAL) — machinery in the job-cost net: custom-hire rates, or the real machinery figure
     - `--json` (flag) — emit the reports as JSON
     - `--verbose` (flag) — show the simulation's own console output
+- **`scripts/farm/farm-workbook.mjs`** — `npm run farm:workbook`
+  import the owners' yearly job-cost workbook into a farm scenario
+    - `--dir` (string) — folder holding Fields, Admin, Direct Expenses and Income CSVs
+    - `--crop-year` (number) — the crop year (default: the first 20xx in the folder or file names)
+    - `--out` (string) — output scenario file (default: <dir>/farm-<year>.json)
+    - `--contract-operator` (string) — operator id the forward contracts belong to, or PRO_RATA
+    - `--loan-operator` (string) — operator id who pays the loans, or PRO_RATA
+    - `--price` (list, default ``) — CROP=\$/bu for grain not under contract (default: latest NASS)
+    - `--sale-date` (string) — YYYY-MM-DD the unpriced grain is sold (default: each crop's harvest)
+    - `--check` (flag) — print advisories and the reconciliation; write nothing
+    - `--json` (flag) — emit the result as JSON
 
 ### scripts/lab/
 

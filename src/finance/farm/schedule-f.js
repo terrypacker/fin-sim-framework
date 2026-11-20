@@ -95,6 +95,9 @@ export const PRODUCT_CATEGORIES = Object.freeze({
   INSECTICIDE:      { line: '11', label: 'Insecticide' },
   OTHER_CHEMICAL:   { line: '11', label: 'Other chemical' },
   SUPPLIES:         { line: '28', label: 'Supplies' },
+  // Application bought with the input, per acre (the owners' workbook: custom application of
+  // fertilizer). Paid to the dealer, so it is cash custom hire (line 13), not a costing rate.
+  CUSTOM_APPLICATION: { line: '13', label: 'Custom application' },
 });
 
 /**

@@ -37,6 +37,7 @@
     "farm:price-history": "node scripts/farm/farm-price-history.mjs",
     "farm:arc": "node scripts/farm/farm-arc.mjs",
     "farm:export": "node scripts/farm/farm-export.mjs",
+    "farm:workbook": "node scripts/farm/farm-workbook.mjs",
     "diff": "node scripts/scenario/diff-scenarios.mjs",
     "sweep": "node scripts/scenario/sweep-scenario.mjs",
     "import:quicken": "node scripts/scenario/import-quicken.mjs",
