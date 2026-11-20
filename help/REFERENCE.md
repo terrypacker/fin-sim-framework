@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-247 parameters · 36 panels · 13 node types (209 fields) · 187 action types · 100 tools · 369 state field types · 83 topics · 142 design docs
+247 parameters · 36 panels · 13 node types (209 fields) · 187 action types · 101 tools · 369 state field types · 83 topics · 142 design docs
 
 ---
 
@@ -1129,11 +1129,11 @@ Explained in [`help/nodes`](nodes/reducer.md). 0 field(s) described by a record 
 
 ---
 
-## Headless tools (100)
+## Headless tools (101)
 
 Command-line entry points under `scripts/`. **Purpose** is harvested from each script's
 docblock, not re-authored here. Arguments come from each script's declarative
-`parseFlags` spec: 85 of 85 entry points carry one (design 108 D6 — all of them).
+`parseFlags` spec: 86 of 86 entry points carry one (design 108 D6 — all of them).
 6 scripts carry no docblock naming themselves and show `(undocumented)`.
 
 ### scripts/config-converters/
@@ -1222,6 +1222,11 @@ docblock, not re-authored here. Arguments come from each script's declarative
     - `--list` (flag) — list the variables and exit
     - `--json` (flag) — emit the runs and summary as JSON
     - `--verbose` (flag) — show the simulation's own console output
+- **`scripts/farm/farm-price-history.mjs`** — `npm run farm:price-history`
+  write the farm charts' price history from USDA NASS (design 134
+    - `--from` (number) — first year written
+    - `--data` (string) — the NASS extract (default: newest in docs/us-farm-markets/)
+    - `--check` (flag) — exit 1 if the data file is not what the extract gives; write nothing
 - **`scripts/farm/farm-report.mjs`** — `npm run farm:report`
   run one farm season and print its job-cost and cash reports (design 134)
     - `--scenario` (string) — farm scenario export ({ scenarios: [...] } or one cfg); default: the demo farm

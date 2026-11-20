@@ -3,8 +3,14 @@
 The data behind the farm Monte Carlo's yield and price spreads (design 134 §13.8).
 `npm run farm:calibrate` derives every figure from these files, and
 `tests/unit/farm-calibration.test.mjs` checks that `FARM_CALIBRATION`
-(`src/finance/farm/farm-calibration.js`) still matches them. Re-fetch with
-`fetch-sources.sh`.
+(`src/finance/farm/farm-calibration.js`) still matches them.
+
+The same extract's Nebraska monthly prices received are the farm charts' price history
+(design 134 §17.5): `npm run farm:price-history` writes them into
+`src/finance/farm/farm-price-history-data.js`, and `tests/unit/farm-price-history.test.mjs`
+checks that file byte for byte against the extract.
+
+Re-fetch with `fetch-sources.sh`, then re-run both scripts.
 
 ## nass-qs-corn-soy-ne-us-20261119.tsv.gz
 

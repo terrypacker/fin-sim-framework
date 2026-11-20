@@ -34,6 +34,7 @@
     "farm:report": "node scripts/farm/farm-report.mjs",
     "farm:mc": "node scripts/farm/farm-mc.mjs",
     "farm:calibrate": "node scripts/farm/farm-calibrate.mjs",
+    "farm:price-history": "node scripts/farm/farm-price-history.mjs",
     "farm:arc": "node scripts/farm/farm-arc.mjs",
     "farm:export": "node scripts/farm/farm-export.mjs",
     "diff": "node scripts/scenario/diff-scenarios.mjs",
