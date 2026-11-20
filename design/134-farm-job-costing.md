@@ -1,6 +1,6 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** rev 18 (19 Nov 2026): **phase 4 COMPLETE** (§16) bar the export's land-and-debt section (Q22a): the export and import (4a–4c), a farm path per household year (4d), §199A (4e), the Nebraska community-college credit (4f), and the NOL, §461(l), the farming-loss carryback and §1301 averaging (4g, §16.10–16.11). Rev 17: phase 4 started, what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
+**Status:** rev 19 (20 Nov 2026): phases 5 (the yearly workbook importer) and 6 (in-app record editors) planned (§17); reconciliation moves to phase 7. Rev 18 (19 Nov 2026): **phase 4 COMPLETE** (§16) bar the export's land-and-debt section (Q22a): the export and import (4a–4c), a farm path per household year (4d), §199A (4e), the Nebraska community-college credit (4f), and the NOL, §461(l), the farming-loss carryback and §1301 averaging (4g, §16.10–16.11). Rev 17: phase 4 started, what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
 (§12.4) and the Field P&L panel is in the workbench (§12.5). **Phase 2 started** (§13): step 2a,
 the scenario-agnostic MC path and a farm batch on it, steps 2b–2d (realized yield, price paths, multiplier levers and the contracted share), 2e (calibration from USDA NASS, §13.8) and 2f (the Farm MC panel, §13.7) are built: **phase 2 is complete**. Owner questions Q1–Q20 and Q22–Q25 are answered (§3, §14); Q21, Q26 and the follow-ups Q22a,
 Q23a and Q25a (§14) are open. §7 records what the primary sources on disk decide. §8 is the household
@@ -22,7 +22,7 @@ Rev 9 records the acceptance import and the questions it raised (§12.4). Rev 10
 Field P&L panel (§12.5). Rev 11 splits phase 2 into steps and records step 2a (§13). Rev 12
 records steps 2b–2f; the calibration (§13.8) adds an irrigated-only yield shock and skewed
 yield draws, both of which the data required. Rev 13 records the owners' answers to Q22–Q25
-and the follow-ups they leave (§14). Rev 14 opens phase 3 (§15). Rev 15 records step 3c, ARC-County (§15.3). Rev 16 records 3d and 3e, which complete phase 3 (§15.4). Rev 17 opens phase 4 (§16).
+and the follow-ups they leave (§14). Rev 14 opens phase 3 (§15). Rev 15 records step 3c, ARC-County (§15.3). Rev 16 records 3d and 3e, which complete phase 3 (§15.4). Rev 17 opens phase 4 (§16). Rev 18 completes it. Rev 19 plans phases 5 and 6, getting a farm in (§17).
 
 **Related:** design 98 (the sweepable parameter surface: per-record generated params become
 MC and optimizer levers), design 55 (configuration-driven parameters and record templates),
@@ -549,7 +549,13 @@ bad one for another in the same world.
 3. **Programs.** Crop insurance (revenue protection) and ARC-County (§7.4).
 4. **Household link** (§8): the export, the business-income record, `import-farm.mjs`, then
    §199A and the other §7.2 provisions in the US tax module.
-5. **Reconciliation.** The crop-year to cash reconciliation report. Marketing moved into
+5. **The yearly workbook importer** (§17.2). A fixed template the owners fill each year, one
+   tab per `cfg.farm` table, and a product importer that turns its CSVs into a farm scenario.
+   Loosely designed: the owners are settling the template's columns now.
+6. **In-app record editors** (§17.3). Row-list editors for the `cfg.farm` tables, for small
+   changes and what-ifs without a trip back to the spreadsheet, and an export back to the
+   template.
+7. **Reconciliation.** The crop-year to cash reconciliation report. Marketing moved into
    phases 1–2 in rev 3. Then a separate design for farm and household correlation (Q15).
 
 ## 10. Not in scope
@@ -566,7 +572,7 @@ bad one for another in the same world.
 
 ## 11. Open questions
 
-Q21 (§12.3), Q26 (§13.8), Q22a, Q23a, Q25a (§14), Q27–Q28 (§15.5) and Q29–Q31 (§16.3) are for the owners. The fleet model (§5.6) and farm–market correlation (Q15) each
+Q21 (§12.3), Q26 (§13.8), Q22a, Q23a, Q25a (§14), Q27–Q28 (§15.5) and Q29–Q31 (§16.3) are for the owners. The phase 5 template's columns (§17.2) are being settled by the owners. The fleet model (§5.6) and farm–market correlation (Q15) each
 need their own design later.
 
 ## 12. Phase 1 build notes (rev 8)
@@ -1501,3 +1507,145 @@ with 2025 from Q31, makes an NOL of 99,636. 40,000 (80% of 2025) goes to 2025 an
 
 **Phase 4 is complete** apart from the export's owned-land-and-debt section, which waits for
 Q22a.
+
+## 17. Phases 5 and 6: getting a farm in (rev 19)
+
+### 17.1 Why
+
+A farm reaches FinSim today in only two ways. One is a hand-written `cfg.farm`, as the demo
+farm is. The other is the private acceptance importer (§12.4), and it reads only one year's
+workbook layout. The workbench panels show results and the generated `farm.*` levers move
+numbers, but nothing in the product adds a field, an operator or a prescription. The owners'
+next workbook arrived in a new layout, and a private review of it found it holds **rates and
+field facts, not a ledger**. That is close to the §5.1 record model, so a fixed template maps
+almost one to one onto `cfg.farm`.
+
+Two routes are planned. The importer is the bulk path, since a whole year arrives at once
+from a spreadsheet the owners already keep. The editors handle small changes. Both produce the
+same `cfg.farm` and go through the same `normalizeFarm` / `validateFarm`, so a bad row is a
+load error whichever way it came in (§12.2).
+
+### 17.2 Phase 5: the yearly template and importer (loose: the template is being settled)
+
+**Shape.**
+
+- One CSV per tab, named after the tab, exported **values only** (the workbook keeps its
+  formulas, the CSV doesn't need them).
+- The parsing lives in a pure module, `src/finance/farm/farm-import.js`: text in,
+  `{ farm, advisories }` out, no `node:fs`. That way phase 6 can import the same files in the
+  browser. `scripts/farm/import-farm-workbook.mjs` is a thin CLI over it, on `parseFlags`,
+  writing a farm scenario file the existing `farm:report`, `farm:mc` and `farm:export` read.
+- The private acceptance importer stays as it is. It reads the old ledger layout.
+
+**Template rules** (the importer enforces them, and the template should make them easy):
+
+1. **A stable id column on every tab that others reference**: field, operator, product,
+   loan, insurance unit, contract. A field's id must not be derived from its name, operator or
+   practice. Fields move between operators and get renamed between years, and comparing years
+   needs the id to survive both. A display name sits in its own column.
+2. **One fact per column.** Crop, practice (irrigated or dry) and tenure each get a column of
+   their own, from a fixed code list: crop `CORN`, `CORN_ON_CORN`, `SOYBEANS`, …; practice
+   `IRR`/`DRY`; tenure `OWN`/`RENT`. Nothing is packed into a job code, and a job-code column
+   is ignored if present.
+3. **Long, not wide, for anything keyed by crop or practice.** A rate is one row per
+   (item, crop, practice), not one column per crop. Adding a crop then means adding rows,
+   not columns.
+4. **Defaults plus overrides.** The Rates tab gives the default prescription for a (crop,
+   practice). An optional Field overrides tab replaces or adds a line for one field: a
+   different chemical program, extra nitrogen on corn-on-corn, a seeding rate. This is how
+   per-field differences are entered without a full prescription table.
+5. **Shares are rows, not formulas.** Anything shared across fields (an insurance unit's
+   premium, a seed lot split, a loan securing several fields, an overhead pool on some fields)
+   is a link tab: `(group id, field id, share)`. A blank share means "by acres". The importer
+   checks that explicit shares sum to 1.
+6. **Blank means unknown, 0 means zero.** A blank required cell is an advisory that names the
+   tab, row and column, like `NO_SEED` (§14.1), never a silent \$0. An error cell (`#REF!`,
+   `#N/A`, `#VALUE!`) is refused.
+7. **Money and dates are plain.** Money as a number. The importer still tolerates a currency
+   symbol, thousands separators and surrounding spaces, because spreadsheets export them. Dates
+   as `YYYY-MM-DD`, or `YYYY-MM` for a month, which reads as the 15th. Delivery and payment are
+   separate columns, since the payment date decides the tax year (Q11).
+8. **Units stated.** Each rate row has a unit and a basis (`PER_ACRE`, `PER_UNIT`,
+   `PER_BU`, `PER_BU_MONTH`, `PER_PASS`), so "per pass or per season" never has to be guessed.
+9. **Keys are normalized**: headers and codes are trimmed and case-folded before matching.
+   Columns are found by header, never by position. An unknown header is an advisory, not an
+   error, so the owners can keep notes columns.
+10. **A Meta tab**: crop year, template version, farm name. The importer refuses a version it
+    doesn't know rather than misreading a changed layout.
+
+**Tabs** (each → its `cfg.farm` tables):
+
+| Tab | Columns | → |
+|---|---|---|
+| Meta | template version, crop year, farm name | `seasons` |
+| Operators | operator id, name, household, `farmRelated`, §451(f) election, W-2 wages, UBIA (Q30) | `operators`, export row fields |
+| Fields | field id, name, operator id, legal description, FSA farm, practice, tenure, rented acres, planted acres, crop, expected yield, APH yield, rent (\$/acre **or** lump, one required for RENT), property tax, community-college share (Q29), metered electricity | `fields`, `cropPlans` |
+| Rates | item id, name, Schedule F category, crop, practice, unit, basis, price, discount, passes | `products`, `operations`, default `prescriptions` |
+| Field overrides | field id, item id, rate, passes, share, `REPLACE`/`ADD` | `prescriptions` |
+| Contracts | contract id, operator id, crop, crop year, bushels **or** share of expected, price, delivery date, payment date | `contracts` |
+| Planned sales | operator id, crop, crop year, share of unpriced bushels, sale date, payment date | `sales` |
+| Prices | crop, date, price (projected and harvest price for insurance; the step table for the deterministic run) | `prices`, `seasons.projectedPrice` |
+| Loans | loan id, payer operator id, balance, rate, fixed/variable, interest paid, principal paid | `overhead` (interest), the export's land-and-debt section (Q22a) |
+| Loan fields | loan id, field id, share | `overhead.fieldIds`, land-and-debt section |
+| Insurance units | unit id, operator id, crop, plan, coverage, unit structure, premium | `insurance`, `cropPlans.insurancePremiumPerAcre` |
+| Insurance unit fields | unit id, field id, share | premium split |
+| Program income | operator id, program, Schedule F line, FSA farm, amount, payment date | `otherIncome` |
+| FSA base | operator id, FSA farm, crop, base acres, county, irrigated % (Q28) | `arcBase` |
+| Operator costs | operator id, item (machinery, fuel, labor, repairs, drying, office, …), Schedule F category, amount, basis, paid date | `machinery`, `overhead` |
+| Storage | operator id, crop, cost per bushel per month | `storage` |
+
+The Schedule F line a program payment lands on (4a or 6a) and whether it qualifies for
+§451(f) are decided from the program rules on disk, per program, before a row is accepted
+(the private review lists programs that have no ruling yet).
+
+**Acceptance.**
+
+- The import of the owners' first template-format year reproduces that workbook's own
+  per-field and per-operator totals to the cent, the way §12.4 did for the ledger layout.
+- Re-importing an unchanged file gives a byte-identical farm (the sim is bit-deterministic).
+- A `--check` mode prints the advisories and the per-operator totals without writing.
+- With two years imported, a `--diff` of field ids shows the fields added, dropped, renamed or
+  moved between operators.
+
+### 17.3 Phase 6: in-app record editors
+
+- **A Farm Records panel** in the Farm view, with one row-list editor table per `cfg.farm`
+  table. The tables stay flat and are joined by id: an id column is a select over the
+  referenced table, never a nested form or a JSON text area. Its form-field prose lives in
+  `help/nodes/` (design 111).
+- **Validation is the loader's.** An edit is applied through `normalizeFarm` / `validateFarm`,
+  and the panel shows the same errors and advisories the importer reports, beside the row.
+- **Import and export in the panel.** Dropping the template's CSVs runs `farm-import.js` in the
+  browser. An export writes the current records back out as the template, so the owners can
+  take an edited year back to Excel. Import → export → import must be byte-identical.
+- **Levers are unchanged.** The editors change the authored records. The `farm.*` generated
+  params still sweep around them.
+- **Order.** Operators, fields and crop plans come first, since they are what a what-if
+  changes most. Then products, operations and prescriptions, then the marketing and program
+  tables.
+
+### 17.4 Panel charts (built, rev 19)
+
+- **Field P&L: cash price vs breakeven.** One crop's cash price (the step table) through the
+  season against the breakeven for the unpriced grain, with the zone below it shaded, the
+  season's contracts and planned sales as points, and a marker at the run's date. The scope is
+  the row last clicked. The breakeven is the **planned** season's: `planFarm` runs the farm to
+  its end on an isolated `ServiceRegistry` (the MC worker's pattern), because the table's
+  season-to-date breakevens are too low until the grain is sold. An operator row's own
+  breakevens are null (it mixes crops), so the chart sums that operator's plans of one crop
+  (`sumPlanRows`). A visualMap colouring the line by the breakeven was dropped: ECharts throws
+  inside render when the whole line is on one side of it, and then draws no series. A headless
+  SVG render test now covers that case.
+- **Farm MC: a cash fan and a net histogram.** Each path now carries `cashSeries`
+  (`farmCashSeries`): the cumulative cash net at each month end over the season window, for
+  the farm and each operator. Every path has the same 36-month grid, so percentiles are taken
+  month by month. It is cash before §464(d)/§451(f), and without the non-cash custom-rate
+  charges. The histogram is the crop-year job-cost net on the panel's basis. Both follow the
+  retirement MC panel's charts. The results now sit above the variables table.
+- **Run bar.** The paths input and Run button use the app's `.mc-iters-input` and `.btn
+  btn-primary`.
+- **Bands below \$0.** Each band is a hidden base with its height stacked on it. ECharts'
+  default `stackStrategy: 'samesign'` stacks positive and negative values apart, so a band
+  over a negative P10 was stacked on \$0 and its shading stopped there. Both fans (this one
+  and the retirement MC panel's, whose net liquidity can go negative) now use `'all'`. A test
+  reads the stack ECharts computes.

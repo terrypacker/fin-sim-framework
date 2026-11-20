@@ -1945,10 +1945,13 @@ export class McResultsPanel extends BaseComponent {
       p10: p10[i][1], p25: p25[i][1], p50: v, p75: p75[i][1], p90: p90[i][1]
     }]));
 
+    // A band is a hidden base with its height stacked on it. ECharts' default stackStrategy
+    // 'samesign' stacks positive and negative values apart, so over a negative base (net
+    // liquidity below zero) the band was stacked on 0 instead; 'all' stacks on the base.
     const baseSeriesOpts = {
       type: 'line', symbol: 'none', smooth: true,
       lineStyle: { opacity: 0 }, areaStyle: { opacity: 0 },
-      emphasis: { disabled: true }, tooltip: { show: false },
+      emphasis: { disabled: true }, tooltip: { show: false }, stackStrategy: 'all',
     };
 
     const blueMuted  = readThemeColor('--blue-muted');

@@ -7,28 +7,29 @@ design: [134-farm-job-costing.md]
 sources: [src/finance/farm/farm-reports.js]
 stamps:
   panel:field-pnl: 0930cc
-  src/finance/farm/farm-reports.js: 95cb96
+  src/finance/farm/farm-reports.js: 1c43ec
 ---
 
-A farm season's profit and loss for each field, with the prices and yields that would
-make each field break even. It reads a farm scenario (US Farm); a household plan has no
-farm records, and the panel says so.
+A farm season's profit and loss per field, with the price and yield that would make each
+field break even. It reads a farm scenario (US Farm).
 
 Rows open operator (or crop), then field, then the field's lines, each naming its
-Schedule F line, crop insurance (6a) and ARC-County (4a) among them. **Direct** costs were
-posted to the field itself. **Overhead** is the
-operator's cost spread over its acres, its owned acres, or the fields a cost names (a loan).
+Schedule F line. **Direct** costs were posted to the field; **overhead** is the operator's
+cost spread by acres, owned acres, or the fields a cost names. **Machinery** is custom
+rates (hiring the work done) or actual (the operator's real cost by acre); the switch moves
+the net and the breakevens.
 
-**Machinery** has two figures: custom rates (hiring the work done) and actual (the
-operator's real machinery cost by acre). The switch changes the net and the breakevens.
+**The breakevens**: *BE unpriced* is the price the uncontracted bushels must fetch, red when
+above the expected price. They use the planned yield.
 
-**The breakevens** say what price the grain must fetch and what yield the field must make.
-*BE unpriced* is the price the uncontracted bushels must fetch, red when above the expected
-price. They use the **planned** yield; when a season harvests more or less, a field's share
-of the pool's revenue follows the bushels it put in the bin.
+**The chart** shows one crop's cash price through the season against that breakeven, the
+zone below it shaded, contracts as diamonds, planned sales as triangles and a marker at the
+run's date. Click a row to chart it (the footer is the whole farm); pick a crop where the
+scope grows two. The line is the **planned** season's (the farm run to its end out of sight),
+so it stays put as the run steps.
 
-Grain still owed or in the bin at the end counts at its contract or latest price: revenue,
-not yet cash. Mid-run the panel shows the season to date, with breakevens too low.
+Grain still owed or in the bin counts at its contract or latest price: revenue, not yet
+cash. Mid-run the table is the season to date, with breakevens too low.
 
 Warnings name what the totals leave out: a cost with no crop plan to land on, or a plan that
 looks incomplete, such as an annual crop with no seed cost.

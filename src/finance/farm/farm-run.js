@@ -43,6 +43,37 @@ export function runFarm(cfg, { machineryBasis = 'CUSTOM', telemetry = 'journal' 
 }
 
 /**
+ * The planned season: the farm run to its end on its own isolated service registry, so a
+ * panel can read the full season's breakevens while the workbench's own run is part-way
+ * through it. It never touches the singleton registry, so the active scenario and its UI
+ * bindings stay as they are (the Monte Carlo worker's pattern, mc-worker-core.js).
+ *
+ * @param {object} cfg the farm scenario cfg; it is cloned, never mutated. The clone is a JSON
+ *   round trip, as a saved scenario is: the workbench's live cfg carries class references
+ *   (its scenario class) that `structuredClone` refuses.
+ * @returns {{ farm: object, ledger: object[], pools: object, receivables: object }} what
+ *   `jobCostReport` needs, at either machinery basis
+ */
+export function planFarm(cfg) {
+  const registry = new ServiceRegistry();
+  const scenario = new BaseScenario({
+    context:  registry.simulationContext,
+    simStart: new Date(cfg.simStart),
+    simEnd:   new Date(cfg.simEnd),
+  });
+  scenario.buildSim({ telemetry: 'journal' });
+  new ScenarioLoader().load(JSON.parse(JSON.stringify(cfg)), registry);
+  const sim = scenario.sim;
+  sim.stepTo(new Date(cfg.simEnd));
+  return {
+    farm:        normalizeFarm(cfg.farm),
+    ledger:      farmLedger(sim.journal?.journal),
+    pools:       sim.state.farm?.pools ?? {},
+    receivables: sim.state.farm?.receivables ?? {},
+  };
+}
+
+/**
  * The reports of a farm sim that has already run.
  *
  * @param {object} cfg

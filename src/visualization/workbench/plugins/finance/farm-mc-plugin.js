@@ -8,7 +8,9 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import * as echarts from 'echarts';
 import { WorkbenchComponent } from '../../component.js';
+import { readThemeColor }     from '../../../theme.js';
 import { ServiceRegistry }    from '../../../../services/service-registry.js';
 import { withBom }            from '../../../../utils/csv.js';
 import { normalizeFarm, CROPS } from '../../../../finance/farm/farm-records.js';
@@ -23,9 +25,17 @@ import { FarmMcRunner, FarmMcConfig, calibratedPriceVolFor } from '../../../../f
  *
  * ─── layout ──────────────────────────────────────────────────────────────────────
  *
- * A run bar (paths, Run, the machinery basis), the VARIABLES the batch samples, and the
- * RESULTS: farm, operators, crops and crop plans, each with its loss probability, its net at
- * p10 / p50 / p90 and its breakevens' spread.
+ * A run bar (paths, Run, the machinery basis), the RESULTS once a batch has run, and the
+ * VARIABLES the batch samples beneath them (they are a long table, and after a run the results
+ * are what is read). The results are two charts for one scope (the whole farm or an
+ * operator), then the table of farm, operators, crops and crop plans, each with its loss
+ * probability, its net at p10 / p50 / p90 and its breakevens' spread.
+ *
+ * The charts follow the retirement MC panel's: a fan of the cumulative CASH net month by
+ * month through the season window (P10–P90 and P25–P75 bands, the P50 line), and a histogram
+ * of the crop-year job-cost net with the losing paths in red. The fan is cash, so it is before
+ * the custom-rate costing charges and before §464(d)/§451(f) move income between tax years;
+ * the histogram is the table's net, on the machinery basis the switch picks.
  *
  * The variables are a typed table, one row per catalog variable: a switch and its spread.
  * The farm-wide yield shocks and the price paths are calibrated from USDA NASS history (§13.8);
@@ -46,7 +56,11 @@ export class FarmMcPlugin extends WorkbenchComponent {
     this._n        = 200;
     this._basis    = 'custom';
     this._settings = new Map();      // paramKey → { enabled, stdDev }
-    this._result   = null;           // { summary, farm, source }
+    this._result   = null;           // { summary, runs, farm }
+    this._scope    = 'farm';         // 'farm' | 'operator.<id>': what the charts show
+    this._fanChart  = null;
+    this._histChart = null;
+    this._ro        = null;
     this._running  = false;
     this._error    = null;
   }
@@ -62,8 +76,9 @@ export class FarmMcPlugin extends WorkbenchComponent {
     root.className = 'fmc-plugin sec-plugin wb-plugin-fill';
     root.innerHTML = `
       <div class="sec-toolbar">
-        <label title="Number of sampled seasons">paths <input type="number" min="1" max="20000" step="1" data-fmc="n" style="width:6em"></label>
-        <button data-fmc="run" title="Run the batch on the active farm scenario">&#9654; Run</button>
+        <label class="fmc-n-label" title="Number of sampled seasons">Paths
+          <input type="number" class="mc-iters-input fmc-n-input" min="1" max="20000" step="1" data-fmc="n"></label>
+        <button class="btn btn-primary btn-sm" data-fmc="run" title="Run the batch on the active farm scenario">&#9654; Run</button>
         <span class="bond-seg" data-fmc="basis" title="Machinery in the nets: custom-hire rates, or the operator's real machinery cost (design 134 §5.3)">
           <button data-v="custom" class="on">custom rates</button><button data-v="actual">actual machinery</button>
         </span>
@@ -74,17 +89,16 @@ export class FarmMcPlugin extends WorkbenchComponent {
       <div class="sec-body" data-fmc="body">
         <div class="bond-warn" data-fmc="warn" style="display:none"></div>
         <div class="sec-placeholder" data-fmc="placeholder">—</div>
-        <details data-fmc="vars-box" open>
-          <summary>Variables <span class="sec-td--muted" data-fmc="vars-count"></span></summary>
-          <table class="sec-grid" data-fmc="vars">
-            <thead><tr>
-              <th class="sec-th">Sample</th><th class="sec-th">Variable</th><th class="sec-th">Group</th>
-              <th class="sec-th sec-th--num" title="The record's value: the centre every draw is around">Centre</th>
-              <th class="sec-th sec-th--num" title="Standard deviation of the draw. 0 draws nothing.">Spread (sd)</th>
-            </tr></thead>
-            <tbody data-fmc="var-rows"></tbody>
-          </table>
-        </details>
+        <div class="fmc-charts" data-fmc="charts" style="display:none">
+          <div class="fmc-chart-head">
+            <span class="mc-section-label" data-fmc="fan-label">Cumulative cash net — confidence bands</span>
+            <span class="bond-seg" data-fmc="scope" title="Which scope the charts show"></span>
+          </div>
+          <div class="mc-fan-wrap"><div class="mc-chart-fill" data-fmc="fan"></div></div>
+          <div class="bond-caption" data-fmc="fan-caption"></div>
+          <div class="mc-section-label" data-fmc="hist-label">Crop-year net — distribution</div>
+          <div class="mc-hist-wrap"><div class="mc-chart-fill" data-fmc="hist"></div></div>
+        </div>
         <table class="sec-grid" data-fmc="grid" style="display:none">
           <thead><tr>
             <th class="sec-th">Scope</th>
@@ -100,6 +114,17 @@ export class FarmMcPlugin extends WorkbenchComponent {
           </tr></thead>
           <tbody data-fmc="rows"></tbody>
         </table>
+        <details data-fmc="vars-box" open>
+          <summary>Variables <span class="sec-td--muted" data-fmc="vars-count"></span></summary>
+          <table class="sec-grid" data-fmc="vars">
+            <thead><tr>
+              <th class="sec-th">Sample</th><th class="sec-th">Variable</th><th class="sec-th">Group</th>
+              <th class="sec-th sec-th--num" title="The record's value: the centre every draw is around">Centre</th>
+              <th class="sec-th sec-th--num" title="Standard deviation of the draw. 0 draws nothing.">Spread (sd)</th>
+            </tr></thead>
+            <tbody data-fmc="var-rows"></tbody>
+          </table>
+        </details>
       </div>
     `;
     return root;
@@ -127,6 +152,16 @@ export class FarmMcPlugin extends WorkbenchComponent {
       });
       basis._fmcBound = true;
     }
+    const scope = this._q('scope');
+    if (scope && !scope._fmcBound) {
+      scope.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-v]');
+        if (!btn) return;
+        this._scope = btn.dataset.v;
+        this._renderCharts();
+      });
+      scope._fmcBound = true;
+    }
     const vars = this._q('var-rows');
     if (vars && !vars._fmcBound) {
       // Delegated: the rows are rebuilt whenever the scenario changes.
@@ -145,7 +180,30 @@ export class FarmMcPlugin extends WorkbenchComponent {
     this._render();
   }
 
-  onActivate() { this._render(); }
+  onActivate() {
+    // ECharts cannot size itself in a hidden pane.
+    this._fanChart?.resize();
+    this._histChart?.resize();
+    this._render();
+  }
+
+  onAdopt() { this._fanChart?.resize(); this._histChart?.resize(); }
+
+  onUnmount() { this._disposeCharts(); }
+
+  destroy() {
+    this._disposeCharts();
+    super.destroy?.();
+  }
+
+  _disposeCharts() {
+    this._ro?.disconnect();
+    this._ro = null;
+    this._fanChart?.dispose();
+    this._histChart?.dispose();
+    this._fanChart = null;
+    this._histChart = null;
+  }
 
   // ─── Data ────────────────────────────────────────────────────────────────
 
@@ -180,8 +238,9 @@ export class FarmMcPlugin extends WorkbenchComponent {
       const runner = new FarmMcRunner({
         n: this._n, cfgTemplate: cat.cfg, mcConfig: this._mcConfig(), parallel: this._parallel,
       });
-      const { summary } = await runner.run({}, (done, total) => this._setStatus(`running… ${done} / ${total}`));
-      this._result = { summary, farm: normalizeFarm(cat.cfg.farm) };
+      const { summary, runs } = await runner.run({}, (done, total) => this._setStatus(`running… ${done} / ${total}`));
+      this._result = { summary, runs, farm: normalizeFarm(cat.cfg.farm) };
+      if (this._scope !== 'farm' && !this._result.farm.operators.some(o => `operator.${o.id}` === this._scope)) this._scope = 'farm';
     } catch (e) {
       this._error = `The batch failed: ${e.message}`;
       this._result = null;
@@ -201,6 +260,7 @@ export class FarmMcPlugin extends WorkbenchComponent {
       ph.textContent = cat.reason; ph.style.display = '';
       this._q('vars-box').style.display = 'none';
       this._q('grid').style.display = 'none';
+      this._q('charts').style.display = 'none';
       this._renderWarn();
       this._setStatus('—');
       return;
@@ -224,7 +284,7 @@ export class FarmMcPlugin extends WorkbenchComponent {
         <td class="sec-td sec-td--num">${_num(v.mean)}</td>
         <td class="sec-td sec-td--num">${v.fixedSpread
           ? `<span class="sec-td--muted" title="A unit normal draw: its scale is the season's price volatility for this crop">z</span>`
-          : `<input type="number" min="0" step="any" value="${s.stdDev ?? 0}" style="width:7em" aria-label="Spread of ${_esc(v.label ?? v.paramKey)}">`}${v.skew
+          : `<input type="number" class="mc-num-input fmc-spread-input" min="0" step="any" value="${s.stdDev ?? 0}" aria-label="Spread of ${_esc(v.label ?? v.paramKey)}">`}${v.skew
           ? ` <span class="sec-td--muted" title="Skew-normal: a bad year falls further below than a good one rises above (design 134 §13.8)">skew ${v.skew}</span>` : ''}</td>
       </tr>`;
     }).join('');
@@ -268,6 +328,7 @@ export class FarmMcPlugin extends WorkbenchComponent {
     const ph = this._q('placeholder');
     if (!this._result) {
       grid.style.display = 'none';
+      this._q('charts').style.display = 'none';
       ph.textContent = this._running ? 'Running…' : 'Pick the variables to sample, then Run.';
       ph.style.display = '';
       if (!this._running) this._setStatus('—');
@@ -290,6 +351,69 @@ export class FarmMcPlugin extends WorkbenchComponent {
         <td class="sec-td sec-td--num">${r.insurance ? `${this._money(r.insurance.mean)} · ${_pct(r.insurancePays?.mean)}` : ''}</td>
         <td class="sec-td sec-td--num">${r.arc ? `${this._money(r.arc.mean)} · ${_pct(r.arcPays?.mean)}` : ''}</td>
       </tr>`).join('');
+    this._renderCharts();
+  }
+
+  // ─── Charts ──────────────────────────────────────────────────────────────
+
+  _renderCharts() {
+    const wrap = this._q('charts');
+    if (!wrap) return;
+    if (!this._result?.runs?.length) { wrap.style.display = 'none'; return; }
+    wrap.style.display = '';
+    const { runs, farm } = this._result;
+    const scopes = [['farm', 'Whole farm'], ...farm.operators.map(o => [`operator.${o.id}`, o.name ?? o.id])];
+    this._q('scope').innerHTML = scopes.map(([v, label]) =>
+      `<button data-v="${_esc(v)}" class="${v === this._scope ? 'on' : ''}">${_esc(label)}</button>`).join('');
+    const scopeLabel = scopes.find(([v]) => v === this._scope)?.[1] ?? '';
+    const fan  = farmCashFan(runs, this._scope);
+    const hist = farmNetHistogram(runs, this._scope, this._basis);
+    this._q('fan-label').textContent = `${scopeLabel} — cumulative cash net, confidence bands`;
+    this._q('hist-label').textContent = `${scopeLabel} — crop-year net (${this._basis === 'actual' ? 'actual machinery' : 'custom rates'}), `
+      + `${hist.n} paths, ${_pct(hist.lossProbability)} below \$0`;
+    this._q('fan-caption').textContent = fan
+      ? 'Cash in and out on the day it moves (before the custom-rate costing charges and before §464(d) and §451(f) '
+        + `move income between tax years). Ends ${fan.months.at(-1)} at P50 ${this._money(fan.p50.at(-1))}.`
+      : 'These paths carry no cash series.';
+    if (!this._canvasAvailable()) return;
+    const colors = this._colors();
+    const fanHost = this._q('fan');
+    const histHost = this._q('hist');
+    if (!this._fanChart) {
+      this._fanChart  = echarts.init(fanHost, null, { renderer: 'canvas' });
+      this._histChart = echarts.init(histHost, null, { renderer: 'canvas' });
+      if (typeof ResizeObserver === 'function') {
+        this._ro = new ResizeObserver(() => { this._fanChart?.resize(); this._histChart?.resize(); });
+        this._ro.observe(fanHost);
+      }
+    }
+    const money = (n) => _moneyK(n);
+    if (fan) this._fanChart.setOption(farmFanOption(fan, { colors, money }), true);
+    else this._fanChart.clear();
+    this._histChart.setOption(farmHistOption(hist, { colors, money }), true);
+  }
+
+  _colors() {
+    const c = (name, fallback) => {
+      const v = typeof document !== 'undefined' ? readThemeColor(name) : '';
+      return /^#[0-9a-f]{6}$/i.test(v) ? v : fallback;
+    };
+    return {
+      band: c('--blue-muted', '#60a5fa'), red: c('--red', '#ff4455'), dim: c('--text-dim', '#94a3b8'),
+      border: c('--border', '#334155'), borderHi: c('--border-hi', '#475569'), text: c('--text-primary', '#e2e8f0'),
+      muted: c('--text-muted', '#64748b'), panel: c('--bg-panel2', '#1e293b'),
+    };
+  }
+
+  /** jsdom has no 2D canvas, and ECharts fails inside setOption rather than init. */
+  _canvasAvailable() {
+    if (this._hasCanvas === undefined) {
+      try {
+        const probe = document.createElement('canvas');
+        this._hasCanvas = typeof probe.getContext === 'function' && !!probe.getContext('2d');
+      } catch { this._hasCanvas = false; }
+    }
+    return this._hasCanvas;
   }
 
   _setStatus(text) { const s = this._q('status'); if (s) s.textContent = text; }
@@ -361,6 +485,154 @@ export function farmMcRows(summary, farm, basis = 'custom') {
   return out.filter(r => r.net != null);
 }
 
+/**
+ * The cash-net fan for one scope: P10/P25/P50/P75/P90 of the paths' cumulative cash net at
+ * each month end. Months before the first cash movement of any path, and after the last, are
+ * trimmed: they are the flat ends of the season window.
+ *
+ * @param {Array<{ cashSeries?: { months: string[], series: Record<string, number[]> } }>} runs
+ * @param {string} scope `farm` or `operator.<id>`
+ * @returns {{ months: string[], p10: number[], p25: number[], p50: number[], p75: number[], p90: number[] }|null}
+ *   null when no path carries the scope's series
+ */
+export function farmCashFan(runs, scope) {
+  const paths = (runs ?? []).map(r => r.cashSeries).filter(c => c?.series?.[scope]);
+  if (!paths.length) return null;
+  const months = paths[0].months;
+  const cols = months.map((_, i) => paths.map(c => c.series[scope][i]).sort((a, b) => a - b));
+  let first = 0;
+  while (first < months.length && cols[first].every(v => v === 0)) first++;
+  let last = months.length - 1;
+  const same = (a, b) => a.every((v, j) => v === b[j]);
+  while (last > first && same(cols[last], cols[last - 1])) last--;
+  // One flat month before the first movement shows the season start at 0.
+  const from = Math.max(0, first - 1);
+  const out = { months: months.slice(from, last + 1), p10: [], p25: [], p50: [], p75: [], p90: [] };
+  for (const col of cols.slice(from, last + 1)) {
+    out.p10.push(_quantile(col, 0.10)); out.p25.push(_quantile(col, 0.25)); out.p50.push(_quantile(col, 0.50));
+    out.p75.push(_quantile(col, 0.75)); out.p90.push(_quantile(col, 0.90));
+  }
+  return out;
+}
+
+/**
+ * The crop-year net's histogram for one scope, on `basis`: equal-width buckets, each flagged
+ * when it lies below \$0 (its lower edge is negative).
+ *
+ * @returns {{ n: number, lossProbability: number|null, edges: number[], counts: number[] }}
+ *   `edges` has one more entry than `counts`
+ */
+export function farmNetHistogram(runs, scope, basis = 'custom', buckets = 24) {
+  const xs = (runs ?? []).map(r => r.metrics?.[`${scope}.net.${basis}`]).filter(x => x != null && Number.isFinite(x));
+  if (!xs.length) return { n: 0, lossProbability: null, edges: [], counts: [] };
+  const lo = Math.min(...xs), hi = Math.max(...xs);
+  const k = lo === hi ? 1 : buckets;
+  const w = (hi - lo) / k || 1;
+  const edges = Array.from({ length: k + 1 }, (_, i) => lo + i * w);
+  const counts = new Array(k).fill(0);
+  for (const x of xs) counts[Math.min(k - 1, Math.floor((x - lo) / w))]++;
+  return { n: xs.length, lossProbability: xs.filter(x => x < 0).length / xs.length, edges, counts };
+}
+
+/** ECharts option for the cash fan, drawn as the retirement MC panel's fan is. */
+export function farmFanOption(fan, { colors, money }) {
+  const { months, p10, p25, p50, p75, p90 } = fan;
+  // Each band is a hidden base (P10, P25) with the band's height stacked on it. ECharts'
+  // default stackStrategy 'samesign' stacks positive and negative values apart, so a positive
+  // height over a negative base was stacked on $0 and the band never went below zero; 'all'
+  // stacks every value on the one before it.
+  const base = {
+    type: 'line', symbol: 'none', lineStyle: { opacity: 0 }, areaStyle: { opacity: 0 },
+    emphasis: { disabled: true }, tooltip: { show: false }, stackStrategy: 'all',
+  };
+  const diff = (hi, lo) => hi.map((v, i) => v - lo[i]);
+  return {
+    backgroundColor: 'transparent',
+    animation: false,
+    grid: { top: 16, right: 16, bottom: 28, left: 16, containLabel: true },
+    xAxis: {
+      type: 'category', data: months, boundaryGap: false,
+      axisLabel: { color: colors.dim, fontSize: 10, fontFamily: 'monospace' },
+      axisLine: { lineStyle: { color: colors.border } }, axisTick: { lineStyle: { color: colors.border } },
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { color: colors.dim, fontSize: 10, fontFamily: 'monospace', formatter: money },
+      splitLine: { lineStyle: { color: colors.border } },
+    },
+    tooltip: {
+      trigger: 'axis', backgroundColor: colors.panel, borderColor: colors.borderHi, borderWidth: 1,
+      textStyle: { color: colors.text, fontSize: 10, fontFamily: 'monospace' },
+      formatter: (params) => {
+        const i = params[0]?.dataIndex;
+        if (i == null) return '';
+        return `<span style="color:${colors.muted}">${months[i]}</span><br/>`
+          + `P90: <b>${money(p90[i])}</b><br/>P75: <b>${money(p75[i])}</b><br/>P50: <b>${money(p50[i])}</b><br/>`
+          + `P25: <b>${money(p25[i])}</b><br/>P10: <b>${money(p10[i])}</b>`;
+      },
+    },
+    series: [
+      { ...base, id: 'outer-base', data: p10, stack: 'outer' },
+      { ...base, id: 'outer-fill', data: diff(p90, p10), stack: 'outer', areaStyle: { color: colors.band + '17', opacity: 1 } },
+      { ...base, id: 'inner-base', data: p25, stack: 'inner' },
+      { ...base, id: 'inner-fill', data: diff(p75, p25), stack: 'inner', areaStyle: { color: colors.band + '29', opacity: 1 } },
+      { id: 'p90-line', type: 'line', data: p90, symbol: 'none', lineStyle: { color: colors.band + '47', width: 1 }, tooltip: { show: false } },
+      { id: 'p10-line', type: 'line', data: p10, symbol: 'none', lineStyle: { color: colors.band + '47', width: 1 }, tooltip: { show: false } },
+      { id: 'p50', name: 'Median (P50)', type: 'line', data: p50, symbol: 'none', lineStyle: { color: colors.band, width: 2.5 },
+        markLine: { silent: true, symbol: 'none', data: [{ yAxis: 0 }], lineStyle: { color: colors.muted, type: 'dashed', width: 1 }, label: { show: false } } },
+    ],
+  };
+}
+
+/** ECharts option for the net histogram: losing buckets red, as the retirement panel's are. */
+export function farmHistOption(hist, { colors, money }) {
+  const labels = hist.counts.map((_, i) => money(hist.edges[i]));
+  return {
+    backgroundColor: 'transparent',
+    animation: false,
+    grid: { top: 10, right: 16, bottom: 48, left: 16, containLabel: true },
+    xAxis: {
+      type: 'category', data: labels,
+      axisLabel: { color: colors.dim, fontSize: 9, fontFamily: 'monospace', rotate: 45,
+        interval: Math.max(0, Math.floor(labels.length / 10) - 1) },
+      axisLine: { lineStyle: { color: colors.border } }, axisTick: { lineStyle: { color: colors.border } },
+    },
+    yAxis: {
+      type: 'value', minInterval: 1,
+      axisLabel: { color: colors.dim, fontSize: 10, fontFamily: 'monospace' },
+      splitLine: { lineStyle: { color: colors.border } },
+    },
+    tooltip: {
+      trigger: 'axis', backgroundColor: colors.panel, borderColor: colors.borderHi, borderWidth: 1,
+      textStyle: { color: colors.text, fontSize: 10, fontFamily: 'monospace' },
+      formatter: (params) => {
+        const i = params[0]?.dataIndex;
+        if (i == null) return '';
+        const c = hist.counts[i];
+        return `${money(hist.edges[i])} – ${money(hist.edges[i + 1])}: <b>${c} path${c === 1 ? '' : 's'}</b>`;
+      },
+    },
+    series: [{
+      type: 'bar', barMaxWidth: 40, itemStyle: { borderRadius: [2, 2, 0, 0] },
+      data: hist.counts.map((v, i) => ({ value: v, itemStyle: { color: (hist.edges[i] < 0 ? colors.red : colors.band) + 'bf' } })),
+    }],
+  };
+}
+
+function _quantile(sorted, q) {
+  const pos = (sorted.length - 1) * q;
+  const lo = Math.floor(pos), hi = Math.ceil(pos);
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
+}
+
+function _moneyK(n) {
+  if (n == null || !Number.isFinite(n)) return '—';
+  const a = Math.abs(n), sign = n < 0 ? '-' : '';
+  if (a >= 1e6) return `${sign}$${(a / 1e6).toFixed(a >= 1e7 ? 0 : 1)}M`;
+  if (a >= 1e3) return `${sign}$${(a / 1e3).toFixed(a >= 1e5 ? 0 : 1)}k`;
+  return `${sign}$${Math.round(a)}`;
+}
+
 /** Every metric's distribution as CSV: one row per metric key. */
 export function farmMcCsv(summary) {
   const cols = ['metric', 'n', 'mean', 'p10', 'p50', 'p90', 'min', 'max', 'lossProbability'];
@@ -370,7 +642,7 @@ export function farmMcCsv(summary) {
 }
 
 const _pct = (x) => (x == null ? '—' : `${(100 * x).toFixed(1)}%`);
-const _perBu = (n) => (n == null ? '—' : `$${n.toFixed(2)}`);
+const _perBu = (n) => (n == null ? '—' : `${n < 0 ? '-' : ''}$${Math.abs(n).toFixed(2)}`);
 const _num = (n, d) => (n == null || !Number.isFinite(n) ? '—'
   : (d == null ? String(+n.toPrecision(6)) : n.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d })));
 const _range = (s, fmt) => (s?.p10 == null ? '—' : (s.p10 === s.p90 ? fmt(s.p50) : `${fmt(s.p10)} – ${fmt(s.p90)}`));

@@ -18,8 +18,12 @@
  */
 
 import assert from 'node:assert/strict';
-import { FieldPnlPlugin, fieldPnlGroups, fieldPnlLines, fieldPnlCsv, FIELD_PNL_CSV_COLUMNS }
+import v8 from 'node:v8';
+import * as echarts from 'echarts';
+import { FieldPnlPlugin, fieldPnlGroups, fieldPnlLines, fieldPnlCsv, FIELD_PNL_CSV_COLUMNS,
+  breakevenChartData, breakevenCaption, breakevenChartOption }
   from '../../src/visualization/workbench/plugins/finance/field-pnl-plugin.js';
+import { sumPlanRows } from '../../src/finance/farm/farm-reports.js';
 import { FarmScenario } from '../../src/scenarios/farm-scenario.js';
 import { runFarm } from '../../src/finance/farm/farm-run.js';
 import { compileFarmEvents } from '../../src/finance/farm/farm-postings.js';
@@ -30,6 +34,11 @@ const RUNTIME = { bus: { subscribe: () => () => {} } };
 
 let RUN;
 beforeAll(() => {
+  // jsdom has no structuredClone, which the chart's planned-season run uses. v8's serializer
+  // is the same algorithm (it keeps Dates, unlike a JSON round trip).
+  if (typeof global.structuredClone !== 'function') {
+    global.structuredClone = (obj) => v8.deserialize(v8.serialize(obj));
+  }
   const { log } = console; console.log = () => {};
   try { RUN = runFarm(FarmScenario.buildDefaultConfig()); } finally { console.log = log; }
 });
@@ -48,6 +57,7 @@ function mount({ cfg = RUN.cfg, sim = RUN.sim } = {}) {
 const q = (p, name) => p.el.querySelector(`[data-fpl="${name}"]`);
 const cells = (tr) => [...tr.querySelectorAll('td')].map(td => td.textContent.trim());
 const click = (el) => el.dispatchEvent(new Event('click', { bubbles: true }));
+const quiet = (f) => { const { log } = console; console.log = () => {}; try { return f(); } finally { console.log = log; } };
 const close = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-6, `${msg}: ${a} vs ${b}`);
 
 test('registered as a panel and opened by the Farm view', () => {
@@ -193,5 +203,87 @@ test('programs show as their own lines: ARC on line 4a, an indemnity on line 6a 
   for (const p of run.jobCost.plans) {
     const rev = fieldPnlLines(p).filter(l => l.kind === 'revenue').reduce((s, l) => s + l.amount, 0);
     assert.ok(Math.abs(rev - p.revenue.total) < 1e-6, `${p.jobId} revenue lines sum to revenue`);
+  }
+});
+
+// ─── The breakeven chart ─────────────────────────────────────────────────────────
+
+test('chart data: the farm\'s corn breakeven is the report\'s corn row; a field is its own row', () => {
+  const { farm, jobCost } = RUN;
+  const corn = jobCost.byCrop.find(r => r.crop === 'CORN');
+  const d = breakevenChartData(farm, jobCost, { kind: 'farm' }, 'CORN', `${farm.season.cropYear}-06-01`);
+  close(d.breakevenUnpricedPrice, corn.breakevenUnpricedPrice, 'farm corn BE');
+  assert.deepEqual([...d.crops].sort(), ['CORN', 'SOYBEANS']);
+  assert.ok(d.nowInWindow && d.priceNow > 0);
+  // Every contract drawn is this season's (last year's carry-in contracts are not).
+  assert.ok(d.contracts.length > 0);
+  assert.ok(farm.contracts.some(c => c.cropYear !== farm.season.cropYear), 'the demo farm has a carry-in contract');
+  assert.equal(d.contracts.length, farm.contracts.filter(c => c.crop === 'CORN' && c.cropYear === farm.season.cropYear).length);
+
+  const plan = jobCost.plans.find(r => r.planId && r.crop === 'SOYBEANS');
+  const f = breakevenChartData(farm, jobCost, { kind: 'plan', id: plan.jobId }, null, null);
+  assert.equal(f.crop, 'SOYBEANS');
+  assert.deepEqual(f.crops, ['SOYBEANS']);
+  close(f.breakevenUnpricedPrice, plan.breakevenUnpricedPrice, 'field BE');
+  assert.equal(f.priceNow, null);
+});
+
+test('chart data: an operator growing two crops gets ONE crop\'s breakeven (its row would be null)', () => {
+  const { farm, jobCost } = RUN;
+  const op = jobCost.byOperator.find(r => new Set(jobCost.plans.filter(p => p.planId && p.operatorId === r.operatorId).map(p => p.crop)).size > 1);
+  assert.ok(op, 'the demo farm has a two-crop operator');
+  assert.equal(op.breakevenUnpricedPrice, null);
+  const d = breakevenChartData(farm, jobCost, { kind: 'operator', id: op.operatorId }, 'CORN', null);
+  const want = sumPlanRows(jobCost.plans.filter(p => p.planId && p.operatorId === op.operatorId && p.crop === 'CORN'));
+  close(d.breakevenUnpricedPrice, want.breakevenUnpricedPrice, 'operator corn BE');
+});
+
+test('the caption says how far today\'s price is from the breakeven; the option marks BE and now', () => {
+  const { farm, jobCost } = RUN;
+  const d = breakevenChartData(farm, jobCost, { kind: 'farm' }, 'CORN', `${farm.season.cropYear}-06-01`);
+  const text = breakevenCaption(d);
+  assert.match(text, new RegExp(`\\$${d.breakevenUnpricedPrice.toFixed(2)}/bu to break even`));
+  assert.match(text, /above it|below it/);
+  const opt = breakevenChartOption(d, { colors: { price: '#000000', red: '#ff0000', green: '#00ff00', amber: '#ffaa00',
+    dim: '#999999', border: '#333333', borderHi: '#444444', text: '#eeeeee', muted: '#666666', panel: '#111111' } });
+  const marks = opt.series[0].markLine.data.map(m => m.name);
+  assert.ok(marks.includes('breakeven') && marks.includes('now'));
+  assert.equal(opt.series[0].markArea.data[0][1].yAxis, d.breakevenUnpricedPrice);
+  assert.equal(opt.visualMap, undefined, 'a visualMap breaks rendering when the line is on one side');
+});
+
+test('the panel\'s breakeven is the PLANNED season\'s: mid-run it matches the finished run, not the table', () => {
+  const sim = { ...RUN.sim, currentDate: new Date(`${RUN.farm.season.cropYear}-06-01T00:00:00Z`) };
+  const p = quiet(() => mount({ sim }));
+  assert.equal(q(p, 'chart-wrap').style.display, '');
+  const corn = RUN.jobCost.byCrop.find(r => r.crop === 'CORN');
+  assert.match(q(p, 'caption').textContent, new RegExp(`\\$${corn.breakevenUnpricedPrice.toFixed(2)}/bu`));
+  // A field row's click points the chart at that field.
+  click(q(p, 'rows').querySelector('tr[data-key^="g:"]'));
+  const fieldRow = q(p, 'rows').querySelector('tr[data-key^="p:"]');
+  click(fieldRow);
+  const plan = RUN.jobCost.plans.find(r => `p:${r.jobId}` === fieldRow.dataset.key);
+  assert.ok(q(p, 'chart-label').textContent.includes(plan.fieldName));
+  click(q(p, 'foot').querySelector('tr'));
+  assert.match(q(p, 'chart-label').textContent, /Whole farm/);
+  p.unmount();
+});
+
+test('the chart option RENDERS, with the price wholly above the breakeven and wholly below it', () => {
+  // jsdom never draws a canvas, so the panel skips ECharts there. ECharts' SVG renderer runs
+  // headless: a visualMap colouring the line by the breakeven threw inside render when every
+  // price sat on one side of it, and then drew no series at all.
+  const { farm, jobCost } = RUN;
+  const d = breakevenChartData(farm, jobCost, { kind: 'farm' }, 'CORN', `${farm.season.cropYear}-06-01`);
+  const colors = { price: '#0000ff', red: '#ff0000', green: '#00ff00', amber: '#ffaa00', dim: '#999999',
+    border: '#333333', borderHi: '#444444', text: '#eeeeee', muted: '#666666', panel: '#111111' };
+  for (const be of [d.breakevenUnpricedPrice, 99]) {
+    const chart = echarts.init(null, null, { renderer: 'svg', ssr: true, width: 800, height: 240 });
+    try {
+      chart.setOption(breakevenChartOption({ ...d, breakevenUnpricedPrice: be }, { colors }));
+      const svg = chart.renderToSVGString();
+      assert.ok(svg.includes('#0000ff'), 'the price line is drawn');
+      assert.ok(svg.includes('#00ff00'), 'the contracts are drawn');
+    } finally { chart.dispose(); }
   }
 });
