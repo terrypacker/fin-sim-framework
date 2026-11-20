@@ -1,6 +1,6 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** rev 20 (20 Nov 2026): phase 8, price history and marketing windows, planned (§17.5), with owner question Q32. Rev 19 (20 Nov 2026): phases 5 (the yearly workbook importer) and 6 (in-app record editors) planned (§17); reconciliation moves to phase 7; the panel charts built (§17.4). Rev 18 (19 Nov 2026): **phase 4 COMPLETE** (§16) bar the export's land-and-debt section (Q22a): the export and import (4a–4c), a farm path per household year (4d), §199A (4e), the Nebraska community-college credit (4f), and the NOL, §461(l), the farming-loss carryback and §1301 averaging (4g, §16.10–16.11). Rev 17: phase 4 started, what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
+**Status:** rev 21 (20 Nov 2026): phase 8 step 8a built, the price-history module (§17.5). Rev 20: phase 8, price history and marketing windows, planned (§17.5), with owner question Q32. Rev 19 (20 Nov 2026): phases 5 (the yearly workbook importer) and 6 (in-app record editors) planned (§17); reconciliation moves to phase 7; the panel charts built (§17.4). Rev 18 (19 Nov 2026): **phase 4 COMPLETE** (§16) bar the export's land-and-debt section (Q22a): the export and import (4a–4c), a farm path per household year (4d), §199A (4e), the Nebraska community-college credit (4f), and the NOL, §461(l), the farming-loss carryback and §1301 averaging (4g, §16.10–16.11). Rev 17: phase 4 started, what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
 (§12.4) and the Field P&L panel is in the workbench (§12.5). **Phase 2 started** (§13): step 2a,
 the scenario-agnostic MC path and a farm batch on it, steps 2b–2d (realized yield, price paths, multiplier levers and the contracted share), 2e (calibration from USDA NASS, §13.8) and 2f (the Farm MC panel, §13.7) are built: **phase 2 is complete**. Owner questions Q1–Q20 and Q22–Q25 are answered (§3, §14); Q21, Q26 and the follow-ups Q22a,
 Q23a and Q25a (§14) are open. §7 records what the primary sources on disk decide. §8 is the household
@@ -22,7 +22,7 @@ Rev 9 records the acceptance import and the questions it raised (§12.4). Rev 10
 Field P&L panel (§12.5). Rev 11 splits phase 2 into steps and records step 2a (§13). Rev 12
 records steps 2b–2f; the calibration (§13.8) adds an irrigated-only yield shock and skewed
 yield draws, both of which the data required. Rev 13 records the owners' answers to Q22–Q25
-and the follow-ups they leave (§14). Rev 14 opens phase 3 (§15). Rev 15 records step 3c, ARC-County (§15.3). Rev 16 records 3d and 3e, which complete phase 3 (§15.4). Rev 17 opens phase 4 (§16). Rev 18 completes it. Rev 19 plans phases 5 and 6, getting a farm in (§17). Rev 20 plans phase 8 (§17.5).
+and the follow-ups they leave (§14). Rev 14 opens phase 3 (§15). Rev 15 records step 3c, ARC-County (§15.3). Rev 16 records 3d and 3e, which complete phase 3 (§15.4). Rev 17 opens phase 4 (§16). Rev 18 completes it. Rev 19 plans phases 5 and 6, getting a farm in (§17). Rev 20 plans phase 8 (§17.5). Rev 21 builds step 8a.
 
 **Related:** design 98 (the sweepable parameter surface: per-record generated params become
 MC and optimizer levers), design 55 (configuration-driven parameters and record templates),
@@ -1686,6 +1686,15 @@ calibration (§13.8) already reads it. It has three limits, and the chart says e
   writes `FARM_PRICE_HISTORY` (Nebraska monthly price per crop, from a start year chosen to
   keep it small), and a test re-derives it from the file on disk. Refreshing it means
   re-running `fetch-sources.sh`, then the script, and nothing else.
+  **Built (rev 21).** `src/finance/farm/farm-price-history.js` parses the extract
+  (`parseNassMonthlyPrices`: Nebraska STATE rows with a MONTHLY frequency only; a withheld
+  value is left out, never read as 0) and renders the data module. The module,
+  `farm-price-history-data.js`, holds both crops from January 1975 to the extract's last
+  month. That is 621 months each for the 19 Nov 2026 extract, with no gaps, in 9 KB. 1975
+  falls after the early-1970s break in grain prices, and `--from` changes it.
+  `npm run farm:price-history -- --check` exits 1 when the file is stale, and the test compares it
+  byte for byte, so a value changed by hand fails both. `PRICE_HISTORY_LIMITS` carries the
+  three limits for any chart that draws the series.
 - **8b. This season so far.** On each crop's chart, the months of the crop year that NASS has
   published, as points beside the plan's price line. The months at or above the breakeven are
   shaded green: these are the **marketing windows**, when the unpriced grain could have been
