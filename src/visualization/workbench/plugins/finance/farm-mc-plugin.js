@@ -14,6 +14,7 @@ import { ServiceRegistry }    from '../../../../services/service-registry.js';
 import { normalizeFarm, CROPS } from '../../../../finance/farm/farm-records.js';
 import { FarmMcRunner, FarmMcConfig, calibratedPriceVolFor } from '../../../../finance/farm/farm-mc.js';
 import { farmMcStore }        from './farm-mc-store.js';
+import { decorateSweepRows }  from '../../../help/sweep-row-help.js';
 
 // The results moved to the Farm MC Results panel (design 134 §17.12); their helpers are
 // exported from here too, so an import of them from this module keeps working.
@@ -204,7 +205,7 @@ export class FarmMcPlugin extends WorkbenchComponent {
       return `
       <tr data-key="${_esc(v.paramKey)}" class="sec-row">
         <td class="sec-td"><input type="checkbox" ${s.enabled ? 'checked' : ''} aria-label="Sample ${_esc(v.label ?? v.paramKey)}"></td>
-        <td class="sec-td" title="${_esc(v.paramKey)}">${_esc(v.label ?? v.paramKey)}</td>
+        <td class="sec-td"><span class="fmc-var-label" title="${_esc(v.paramKey)}">${_esc(v.label ?? v.paramKey)}</span></td>
         <td class="sec-td sec-td--muted">${_esc(v.group ?? '')}</td>
         <td class="sec-td sec-td--num">${v.bootstrap ? '—' : _num(v.mean)}</td>
         <td class="sec-td sec-td--num">${v.bootstrap
@@ -215,6 +216,27 @@ export class FarmMcPlugin extends WorkbenchComponent {
           ? ` <span class="sec-td--muted" title="Skew-normal: a bad year falls further below than a good one rises above (design 134 §13.8)">skew ${v.skew}</span>` : ''}</td>
       </tr>`;
     }).join('');
+    this._decorateHelp(variables);
+  }
+
+  /**
+   * Each row's `?` and hover, as the retirement Monte Carlo panel's rows have them: the
+   * words are the record field's own (sweep-row-help.js routes the key). Asynchronous; a
+   * rebuild before the index lands only decorates rows already detached.
+   */
+  _decorateHelp(variables) {
+    const byKey = new Map(variables.map(v => [v.paramKey, v]));
+    const rows = [...this._q('var-rows').querySelectorAll('tr[data-key]')].map(tr => ({
+      cfg: byKey.get(tr.dataset.key), refs: { labelEl: tr.querySelector('.fmc-var-label') },
+    }));
+    return decorateSweepRows(rows, { onOpenHelp: (ref) => this._openHelp(ref) });
+  }
+
+  /** Activate Help first: it subscribes on its first mount (workbench-app `_openHelp`). */
+  _openHelp(ref) {
+    const bus = this._runtime?.bus;
+    bus?.publish?.({ type: WB_EVENTS.PANEL_OPEN, id: 'help' });
+    bus?.publish?.({ type: WB_EVENTS.HELP_OPEN, ...ref });
   }
 
   /** A variable's switch and spread: this panel's setting, else the catalog's. */

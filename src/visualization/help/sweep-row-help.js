@@ -75,6 +75,14 @@ const TOPIC_BY_PREFIX = Object.freeze({
 });
 
 /**
+ * MC-only draws with no record field behind them → the panel topic that explains them.
+ * The historical yield year (design 134 §17.13) writes the season's shocks; it is not a lever.
+ */
+const TOPIC_BY_PATTERN = Object.freeze([
+  [/^farm\.season\.[^.]+\.yieldYear$/, 'farm-mc'],
+]);
+
+/**
  * Where a row's `?` should go, and the words for its hover.
  *
  * @param {string} paramKey
@@ -95,6 +103,12 @@ export function sweepRowHelp(paramKey, index, aliases = new Map()) {
   if (param && !otherClass) return { ref: { param: paramKey }, description: param.description ?? null };
 
   if (successor && successor !== paramKey) return sweepRowHelp(successor, index, new Map());
+
+  const patternTopic = TOPIC_BY_PATTERN.find(([re]) => re.test(paramKey))?.[1];
+  if (patternTopic) {
+    const topic = index.topics?.find(t => t.id === patternTopic);
+    return topic ? { ref: { topic: patternTopic }, description: null } : null;
+  }
 
   const prefix = paramKey.match(/^([A-Za-z]+)[.[]/)?.[1];
   if (!prefix) return null;

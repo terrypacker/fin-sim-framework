@@ -156,3 +156,15 @@ test('SRH-6: every farm template field has a record-param entry, with its descri
   assert.equal(matchRecordParam('farm.plan.a.b.expectedYield', INDEX.recordParams), null);
   assert.equal(matchRecordParam('farm.plan..expectedYield', INDEX.recordParams), null);
 });
+
+test('SRH-7: every Farm MC variable row has a ? that lands — the MC-only historical year included', async () => {
+  // The Farm MC panel decorates its rows with sweepRowHelp too. Its catalog adds draws no
+  // record template declares (the historical yield year), which route to the panel topic.
+  const { FarmMcRunner } = await import('../../src/finance/farm/farm-mc.js');
+  const { ctx } = new FarmMcRunner({ cfgTemplate: FarmScenario.buildDefaultConfig() })._prepare();
+  const keys = ctx.variables.map(v => v.paramKey);
+  assert.ok(keys.some(k => k.endsWith('.yieldYear')), 'the demo farm offers a historical year');
+  const homeless = keys.filter(k => { const h = sweepRowHelp(k, INDEX, ALIASES); return !h || !landsOnSomething(h.ref); });
+  assert.deepEqual(homeless, [], 'Farm MC rows whose ? would open nothing');
+  assert.deepEqual(sweepRowHelp('farm.season.s2027.yieldYear', INDEX).ref, { topic: 'farm-mc' });
+});

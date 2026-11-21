@@ -24,6 +24,9 @@ import { FarmMcPlugin, farmMcRows, farmMcCsv, farmCashFan, farmNetHistogram, far
 import { FarmScenario } from '../../src/scenarios/farm-scenario.js';
 import { FarmMcRunner, FarmMcConfig } from '../../src/finance/farm/farm-mc.js';
 import { normalizeFarm } from '../../src/finance/farm/farm-records.js';
+import { loadHelpIndex, _resetHelpIndex } from '../../src/visualization/help/help-index-source.js';
+import { buildHelpIndex } from '../../scripts/lib/help-index.mjs';
+import { WB_EVENTS } from '../../src/visualization/workbench/workbench-runtime.js';
 import { FINANCE_PLUGINS, FINANCE_VIEW_TEMPLATES }
   from '../../src/visualization/workbench/plugins/finance/finance-plugin-package.js';
 
@@ -139,6 +142,27 @@ test('the historical yield year has no spread to type, and says when it replaces
   assert.match(q(p, 'warn').textContent, /the sampled shock row is replaced by it/);
   p.unmount();
 });
+
+test('every variable row has a ? that opens Help on its own words', async () => {
+  // The retirement MC rows have one (sweep-row-help.js); the farm rows route the same way.
+  loadHelpIndex(await buildHelpIndex());
+  try {
+    const rt = runtime();
+    const p = await quiet(() => mount(FarmScenario.buildDefaultConfig(), rt));
+    await new Promise(r => setTimeout(r, 0));
+    const rows = [...q(p, 'var-rows').querySelectorAll('tr[data-key]')];
+    const bare = rows.filter(tr => !tr.querySelector('.param-help-btn')).map(tr => tr.dataset.key);
+    assert.deepEqual(bare, [], 'rows with no ?');
+    const tr = rows.find(r => r.dataset.key === KEY);
+    assert.ok(tr.querySelector('.fmc-var-label').title.length > 0, 'the label hovers the description');
+    tr.querySelector('.param-help-btn').click();
+    assert.deepEqual(rt.published.slice(-2), [
+      { type: WB_EVENTS.PANEL_OPEN, id: 'help' }, { type: WB_EVENTS.HELP_OPEN, param: KEY }]);
+    rows.find(r => r.dataset.key === 'farm.season.s2027.yieldYear').querySelector('.param-help-btn').click();
+    assert.deepEqual(rt.published.at(-1), { type: WB_EVENTS.HELP_OPEN, topic: 'farm-mc' });
+    p.unmount();
+  } finally { _resetHelpIndex(); }
+}, 120_000);
 
 test('rows: farm, each operator with its plans, then each crop; basis picks the net', () => {
   const farm = normalizeFarm(FarmScenario.buildDefaultConfig().farm);

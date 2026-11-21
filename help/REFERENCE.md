@@ -2627,7 +2627,7 @@ what the in-app panel keys on.
 | [Event](nodes/event.md) | node | 220 | 2 panels · design 2 |
 | [Event Sourcing](concepts/event-sourcing.md) | concept | 381 | 3 panels · design 2, 16, 91 |
 | [Node History](panels/exec-history.md) | panel | 191 | 1 panel |
-| [Farm MC](panels/farm-mc.md) | panel | 179 | 1 panel · design 134 |
+| [Farm MC](panels/farm-mc.md) | panel | 197 | 1 panel · design 134 |
 | [Farm MC Results](panels/farm-mc-results.md) | panel | 227 | 1 panel · design 134 |
 | [Farm Results into a Household Plan](workflows/farm-to-household.md) | workflow | 593 | 4 params · 2 tools · design 134 |
 | [Field P&L](panels/field-pnl.md) | panel | 229 | 1 panel · 1 param · design 134 |

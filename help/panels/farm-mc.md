@@ -22,6 +22,9 @@ calibrated from USDA history for Nebraska counties (`npm run farm:calibrate`). E
 row starts at a spread of 0, because no source sets it, so type one; the panel calls that a
 sensitivity run.
 
+Each variable's **?** opens what that input means on the farm record. Hover the name for the
+short version.
+
 **Historical yield year** draws a real season instead of a shock: one Nebraska county-year
 from USDA, your farm's county's when it names one NASS reports. It sets both farm-wide yield shocks, so
 tick it instead of them. The fitted shocks give a total crop failure far more often than
