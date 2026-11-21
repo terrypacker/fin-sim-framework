@@ -1243,6 +1243,7 @@ docblock, not re-authored here. Arguments come from each script's declarative
     - `--contract-operator` (string) — operator id the forward contracts belong to, or PRO_RATA
     - `--loan-operator` (string) — operator id who pays the loans, or PRO_RATA
     - `--price` (list, default ``) — CROP=\$/bu for grain not under contract (default: latest NASS)
+    - `--county` (string) — the farm's county, e.g. Wayne: Farm MC draws its NASS yield years
     - `--sale-date` (string) — YYYY-MM-DD the unpriced grain is sold (default: each crop's harvest)
     - `--check` (flag) — print advisories and the reconciliation; write nothing
     - `--json` (flag) — emit the result as JSON
@@ -2466,7 +2467,7 @@ what the in-app panel keys on.
 | [Event](nodes/event.md) | node | 220 | 2 panels · design 2 |
 | [Event Sourcing](concepts/event-sourcing.md) | concept | 381 | 3 panels · design 2, 16, 91 |
 | [Node History](panels/exec-history.md) | panel | 191 | 1 panel |
-| [Farm MC](panels/farm-mc.md) | panel | 177 | 1 panel · design 134 |
+| [Farm MC](panels/farm-mc.md) | panel | 179 | 1 panel · design 134 |
 | [Farm MC Results](panels/farm-mc-results.md) | panel | 227 | 1 panel · design 134 |
 | [Farm Results into a Household Plan](workflows/farm-to-household.md) | workflow | 593 | 4 params · 2 tools · design 134 |
 | [Field P&L](panels/field-pnl.md) | panel | 229 | 1 panel · design 134 |

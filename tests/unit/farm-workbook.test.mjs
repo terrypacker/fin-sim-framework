@@ -95,6 +95,11 @@ const imp = (opts = {}) => importFarmWorkbook(WB, { cropYear: 2026, prices: PRIC
 const kinds = (r) => r.advisories.map(a => a.kind);
 
 describe('farm workbook import (design 134 §17.2)', () => {
+  test('the workbook does not state the county: the importer takes it, and leaves it out otherwise', () => {
+    assert.equal(imp({ county: ' Wayne ' }).farm.county, 'Wayne');
+    assert.ok(!('county' in imp().farm));
+  });
+
   test('cells: CSV quotes, money, the accounting dash and negatives', () => {
     assert.deepEqual(parseCsv('a,"b,c",""\r\n"d""e",f'), [['a', 'b,c', ''], ['d"e', 'f']]);
     assert.equal(cellNumber(' $1,234.50 '), 1234.5);

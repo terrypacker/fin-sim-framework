@@ -13,7 +13,7 @@
  *
  * Pinned: the generated table is exactly what the NASS extract gives; a county-year's two
  * shocks put back the county's own dryland and irrigated deviations under the model's β; a
- * farm draws from its own county when it names one; a Monte Carlo path's yield is a real
+ * farm draws from its own county when it names one (`farm.county` or an ARC row); a Monte Carlo path's yield is a real
  * county-year (so no path is worse than the worst on record) and replays from its params.
  */
 
@@ -24,6 +24,7 @@ import { resolve } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import {
   parseNassCountyCornYields, yieldHistoryData, renderYieldHistoryModule, farmCounty, yieldYearPool, expandYieldYears,
+  OWN_COUNTY_MIN_YEARS, POOL_MIN_YEARS,
 } from '../../src/finance/farm/farm-yield-history.js';
 import { FARM_YIELD_HISTORY } from '../../src/finance/farm/farm-yield-history-data.js';
 import { FARM_CALIBRATION, trendDeviations } from '../../src/finance/farm/farm-calibration.js';
@@ -31,6 +32,7 @@ import { EmpiricalDistribution, createDistribution, DISTRIBUTION_TYPES } from '.
 import { FarmScenario } from '../../src/scenarios/farm-scenario.js';
 import { FarmMcRunner, FarmMcConfig, applyFarmPath } from '../../src/finance/farm/farm-mc.js';
 import { runFarm } from '../../src/finance/farm/farm-run.js';
+import { normalizeFarm, validateFarm, farmAdvisories } from '../../src/finance/farm/farm-records.js';
 
 const ROOT = resolve(import.meta.dirname, '../..');
 const YEAR = 'farm.season.s2027.yieldYear';
@@ -62,10 +64,10 @@ describe('the yield history table', () => {
     }
   });
 
-  test('joint years only, to 2018, from counties with 20 of them; no deviation below −100%', () => {
+  test('joint years only, to 2018, from counties with 15 of them; no deviation below −100%', () => {
     const rows = Object.values(FARM_YIELD_HISTORY.counties).flat();
     assert.ok(Object.keys(FARM_YIELD_HISTORY.counties).length > 50);
-    assert.ok(Object.values(FARM_YIELD_HISTORY.counties).every(c => c.length >= 20));
+    assert.ok(Object.values(FARM_YIELD_HISTORY.counties).every(c => c.length >= OWN_COUNTY_MIN_YEARS));
     assert.ok(rows.every(([y]) => y >= 1995 && y <= 2018));
     assert.ok(rows.every(([, Y]) => Y >= -1.0001), 'a yield cannot fall below zero');
   });
@@ -76,12 +78,49 @@ describe('a farm\'s pool of years', () => {
     const cfg = FarmScenario.buildDefaultConfig();
     assert.equal(farmCounty(cfg.farm), null, 'the demo county is "Demo"');
     const all = yieldYearPool(cfg.farm);
-    assert.equal(all.rows.length, Object.values(FARM_YIELD_HISTORY.counties).flat().length);
+    assert.equal(all.rows.length, Object.values(FARM_YIELD_HISTORY.counties).filter(c => c.length >= POOL_MIN_YEARS).flat().length);
     for (const r of cfg.farm.arcCounties) r.county = 'Dundy';
     const own = yieldYearPool(cfg.farm);
     assert.equal(own.county, 'DUNDY');
     assert.equal(own.rows.length, FARM_YIELD_HISTORY.counties.DUNDY.length);
     assert.ok(own.rows.every(r => r.county === 'DUNDY'));
+  });
+
+  test('a county short of the pool\'s minimum is its own farm\'s pool but not every county\'s (Wayne: split ends 2013)', () => {
+    const wayne = FARM_YIELD_HISTORY.counties.WAYNE;
+    assert.equal(wayne.length, 19);
+    assert.ok(wayne.length >= OWN_COUNTY_MIN_YEARS && wayne.length < POOL_MIN_YEARS);
+    assert.deepEqual(wayne.find(r => r[0] === 2012).slice(0, 2), [2012, -0.7369]);
+    const own = yieldYearPool({ county: 'Wayne', fields: [] });
+    assert.equal(own.county, 'WAYNE');
+    assert.equal(own.rows.length, 19);
+    const all = yieldYearPool({ fields: [] });
+    assert.ok(all.rows.every(r => r.county !== 'WAYNE'));
+    assert.equal(all.rows.length, Object.values(FARM_YIELD_HISTORY.counties).filter(c => c.length >= POOL_MIN_YEARS).flat().length);
+  });
+
+  test('farm.county names the county, however it is written, ahead of the ARC rows', () => {
+    for (const n of ['Wayne', 'wayne', 'Wayne County', 'Wayne County NE', 'Wayne, Nebraska', ' WAYNE ']) {
+      assert.equal(farmCounty({ county: n }), 'WAYNE', n);
+    }
+    assert.equal(farmCounty({ county: 'Wayne', arcCounties: [{ county: 'Dundy' }] }), 'WAYNE');
+    assert.equal(farmCounty({ county: 'Atlantis', arcCounties: [{ county: 'Dundy' }] }), 'DUNDY');
+    assert.equal(farmCounty({ county: 'Atlantis' }), null);
+  });
+
+  test('the county is a farm record: normalized, validated, and advised on when NASS lacks it', () => {
+    const cfg = FarmScenario.buildDefaultConfig();
+    assert.equal(normalizeFarm(cfg.farm).county, null);
+    assert.equal(normalizeFarm({ ...cfg.farm, county: '  Wayne ' }).county, 'Wayne');
+    assert.deepEqual(validateFarm({ ...cfg.farm, county: 'Wayne' }), []);
+    assert.ok(validateFarm({ ...cfg.farm, county: 7 }).some(e => /farm\.county/.test(e)));
+    const kinds = (c) => farmAdvisories(normalizeFarm({ ...cfg.farm, county: c })).map(a => a.kind);
+    assert.ok(!kinds('Wayne').includes('COUNTY_NO_YIELD_HISTORY'));
+    assert.ok(kinds('Atlantis').includes('COUNTY_NO_YIELD_HISTORY'));
+    const { ctx } = new FarmMcRunner({ cfgTemplate: FarmScenario.buildDefaultConfig({ farm: { ...cfg.farm, county: 'Wayne' } }) })._prepare();
+    const row = ctx.variables.find(v => v.paramKey === YEAR);
+    assert.equal(row.label, 'Historical yield year (Wayne County)');
+    assert.equal(row.values.length, 19);
   });
 
   test('no irrigated field, no irrigated shock', () => {

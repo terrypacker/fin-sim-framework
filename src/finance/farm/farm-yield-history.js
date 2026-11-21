@@ -27,9 +27,18 @@ import { FARM_YIELD_HISTORY } from './farm-yield-history-data.js';
  * failure about once in 270 seasons; history has none in 1,425 county-years (§17.13).
  *
  * Detrending is the calibration's (`countyYieldStats`): each series on its own trend over
- * every year it has since `from`. The irrigated split ends in 2018 in NASS, so the years run
- * to 2018. A county needs `minYears` joint years to be kept, as the calibration needs.
+ * every year it has since `from`. The irrigated split ends in 2018 in NASS (earlier in some
+ * counties: Wayne's ends in 2013), so the years run to 2018 at most.
+ *
+ * The table keeps a county with `OWN_COUNTY_MIN_YEARS` joint years, so a farm in it can draw
+ * its own seasons. The pool of every county takes only those with `POOL_MIN_YEARS`, the
+ * calibration's minimum, so a short county does not weigh on a farm with no county.
  */
+
+/** The joint years a county needs before a farm in it draws its own seasons. */
+export const OWN_COUNTY_MIN_YEARS = 15;
+/** The joint years a county needs to join the every-county pool (the calibration's minimum). */
+export const POOL_MIN_YEARS = 20;
 
 /** Rounding of the stored shocks: 4 decimals is 0.01% of yield. */
 const DIGITS = 4;
@@ -76,7 +85,7 @@ export function parseNassCountyCornYields(tsv, { from = 1995 } = {}) {
  * @param {ReturnType<typeof parseNassCountyCornYields>} yields
  * @param {{ source: string, from: number, beta: number, minYears?: number }} opts
  */
-export function yieldHistoryData(yields, { source, from, beta, minYears = 20 }) {
+export function yieldHistoryData(yields, { source, from, beta, minYears = OWN_COUNTY_MIN_YEARS }) {
   const counties = {};
   for (const name of [...yields.keys()].sort()) {
     const { dry, irr } = yields.get(name);
@@ -129,11 +138,16 @@ ${Object.keys(data.counties).map(county).join('\n')}
 `;
 }
 
-/** The NASS county name a farm names, or null: its first ARC county, matched without case. */
+/**
+ * The NASS county a farm is in, or null: its `county`, else its first ARC county, matched
+ * without case and without a trailing "County" or state ("Wayne County NE" is WAYNE).
+ */
 export function farmCounty(farm, history = FARM_YIELD_HISTORY) {
-  const names = [...(farm?.arcCounties ?? []), ...(farm?.arcBase ?? [])].map(r => r?.county).filter(Boolean);
+  const names = [farm?.county, ...(farm?.arcCounties ?? []).map(r => r?.county), ...(farm?.arcBase ?? []).map(r => r?.county)]
+    .filter(n => typeof n === 'string' && n.trim());
+  const key = (n) => n.trim().toUpperCase().replace(/[,.]/g, ' ').replace(/\s+(NE|NEBRASKA)$/, '').replace(/\s+COUNTY$/, '').trim();
   for (const n of names) {
-    const hit = Object.keys(history.counties).find(k => k.toUpperCase() === String(n).trim().toUpperCase());
+    const hit = Object.keys(history.counties).find(k => k === key(n));
     if (hit) return hit;
   }
   return null;
@@ -141,7 +155,7 @@ export function farmCounty(farm, history = FARM_YIELD_HISTORY) {
 
 /**
  * The years a farm's season draws from: its own county's when the farm names a county NASS
- * has, otherwise every county's (a Nebraska county-year at random). Each row is what the
+ * has, otherwise every county's with `POOL_MIN_YEARS` of them (a Nebraska county-year at random). Each row is what the
  * draw writes: `{ county, year, yieldShock, irrigatedYieldShock }`; the irrigated shock is
  * null on a farm with no irrigated field, where the model reads none.
  *
@@ -151,7 +165,7 @@ export function farmCounty(farm, history = FARM_YIELD_HISTORY) {
 export function yieldYearPool(farm, history = FARM_YIELD_HISTORY) {
   const county = farmCounty(farm, history);
   const irrigated = (farm?.fields ?? []).some(f => f.irrigated === true);
-  const names = county ? [county] : Object.keys(history.counties);
+  const names = county ? [county] : Object.keys(history.counties).filter(n => history.counties[n].length >= POOL_MIN_YEARS);
   const rows = [];
   for (const name of names) {
     for (const [year, Y, I] of history.counties[name]) {

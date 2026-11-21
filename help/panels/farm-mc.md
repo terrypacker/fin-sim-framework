@@ -10,7 +10,7 @@ design: [134-farm-job-costing.md]
 sources: [src/finance/farm/farm-mc.js]
 stamps:
   panel:farm-mc: 7bf9f3
-  src/finance/farm/farm-mc.js: 43c2eb
+  src/finance/farm/farm-mc.js: bb4555
 ---
 
 Sets up and runs the farm season many times with its uncertain inputs drawn at random. It
@@ -23,7 +23,7 @@ row starts at a spread of 0, because no source sets it, so type one; the panel c
 sensitivity run.
 
 **Historical yield year** draws a real season instead of a shock: one Nebraska county-year
-from USDA, your ARC county's when NASS reports it. It sets both farm-wide yield shocks, so
+from USDA, your farm's county's when it names one NASS reports. It sets both farm-wide yield shocks, so
 tick it instead of them. The fitted shocks give a total crop failure far more often than
 history does.
 

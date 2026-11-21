@@ -162,6 +162,7 @@ function headerMap(rows, required, sheet, advise) {
  *   to split land debt by owned acres and other loans by planted acres
  * @param {Record<string, number>} [opts.prices] \$/bu per crop for the grain not under
  *   contract; a crop left out takes NASS's latest Nebraska price received
+ * @param {string} [opts.county] the farm's county (`farm.county`); the workbook does not state it
  * @param {string} [opts.saleDate] when the unpriced grain is sold; default each crop's harvest
  * @returns {{ farm: object, advisories: object[], sheet: object }} `sheet` holds the sheet's
  *   own totals by kind, for reconciliation, and the costing inputs the import read
@@ -725,6 +726,7 @@ export function importFarmWorkbook(csv, opts = {}) {
   }
 
   const farm = {
+    ...(opts.county ? { county: String(opts.county).trim() } : {}),
     seasons: [{ id: `s${y}`, cropYear: y, ...(costing.laborPerHour != null ? { laborPerHour: costing.laborPerHour } : {}) }],
     operators, fields, products, operations, cropPlans, prescriptions, machinery, overhead, prices,
     contracts, storage, sales, carryIn: [], otherIncome, carryOut: [], insurance: [], arcBase: [], arcCounties: [],

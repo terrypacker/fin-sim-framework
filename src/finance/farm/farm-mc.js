@@ -87,7 +87,7 @@ export function buildYieldMcConfigs(cfg, spreads = FARM_MC_SPREADS) {
   const pool = yieldYearPool(farm);
   const yearRows = pool.rows.length ? farm.seasons.map(s => ({
     paramKey: `farm.season.${s.id}.yieldYear`,
-    label: `Historical yield year (${pool.county ? `${pool.county} county` : 'any Nebraska county'})`,
+    label: `Historical yield year (${pool.county ? `${pool.county[0]}${pool.county.slice(1).toLowerCase()} County` : 'any Nebraska county'})`,
     type: DISTRIBUTION_TYPES.EMPIRICAL, values: pool.rows, mean: 0, stdDev: 0,
     group: 'Farm · yield', enabled: false, calibrated: true, bootstrap: true,
     county: pool.county, years: pool.rows.length,

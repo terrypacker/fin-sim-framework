@@ -48,6 +48,7 @@ const opts = parseFlags(process.argv.slice(2), {
   contractOperator: { type: 'string', default: PRO_RATA, help: 'operator id the forward contracts belong to, or PRO_RATA' },
   loanOperator:     { type: 'string', default: PRO_RATA, help: 'operator id who pays the loans, or PRO_RATA' },
   price:            { type: 'list', default: [], help: 'CROP=$/bu for grain not under contract (default: latest NASS)' },
+  county:           { type: 'string', help: 'the farm\'s county, e.g. Wayne: Farm MC draws its NASS yield years' },
   saleDate:         { type: 'string', help: 'YYYY-MM-DD the unpriced grain is sold (default: each crop\'s harvest)' },
   check:            { type: 'flag', help: 'print advisories and the reconciliation; write nothing' },
   json:             { type: 'flag', help: 'emit the result as JSON' },
@@ -85,7 +86,7 @@ let imported;
 try {
   imported = importFarmWorkbook(csv, {
     cropYear, contractOperator: opts.contractOperator, loanOperator: opts.loanOperator, prices,
-    saleDate: opts.saleDate,
+    saleDate: opts.saleDate, county: opts.county,
   });
 } catch (e) {
   console.error(`import failed: ${e.message}`);

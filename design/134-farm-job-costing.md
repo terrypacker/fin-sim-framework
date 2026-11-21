@@ -2121,10 +2121,14 @@ county-year per path and writes both season shocks from it:
 - I, its irrigated deviation computed the same way, − β·Y (`season.irrigatedYieldShock`), with
   the calibrated β the model applies, so β·Y + I is the irrigated deviation the county had.
 
-The years are 1995–2018, the ones with both practices (the irrigated split ends in 2018), from
-63 counties with at least 20 of them: 1,405 county-years. A farm whose ARC county NASS reports
-draws from that county's years. Otherwise it draws from every county, a Nebraska county-year at
-random, which is wider than the median county because counties differ. The table is generated
+The years are 1995–2018, the ones with both practices (the irrigated split ends in 2018, and
+earlier in some counties). The table keeps the 78 counties with at least 15 of them (1,671
+county-years). A farm names its county in `farm.county` (or an ARC row) and draws that county's
+years: Wayne's split ends in 2013, so a Wayne farm draws 19 seasons, the worst 2012 at −74%.
+A farm with no county, or one NASS does not report (an advisory says so), draws from every
+county with at least 20 years (63 counties, 1,405 county-years), a Nebraska county-year at
+random, which is wider than the median county because counties differ. The workbook does not
+state the county, so `npm run farm:workbook -- --county <name>` takes it. The table is generated
 from the extract on disk (`npm run farm:yield-history`, `src/finance/farm/farm-yield-history-data.js`),
 and a test checks it byte for byte, as the price history is checked (§17.5).
 

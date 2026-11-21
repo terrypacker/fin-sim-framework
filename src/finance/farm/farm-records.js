@@ -12,6 +12,7 @@ import {
   PRODUCT_CATEGORIES, COST_CATEGORIES, INCOME_CATEGORIES,
 } from './schedule-f.js';
 import { FARM_CALIBRATION } from './farm-calibration.js';
+import { farmCounty } from './farm-yield-history.js';
 // farm-programs imports this module too; the cycle is safe because each side reads the other's
 // exports only inside functions, never at module evaluation.
 import { settleArc, ARC_PLC_PAYMENT_LIMIT } from './farm-programs.js';
@@ -21,6 +22,7 @@ import { settleArc, ARC_PLC_PAYMENT_LIMIT } from './farm-programs.js';
  *
  * ```js
  * cfg.farm = {
+ *   county:        'Wayne' | null,   the farm's county, which picks its yield history (§17.13)
  *   seasons:       [{ id, cropYear, calendar?, yieldShock?, irrigatedYieldShock?, irrigatedYieldBeta?,
  *                     yieldShockScale?: { [crop]: k }, priceVol?: { [crop]: σ }, priceYieldBeta?: { [crop]: b },
  *                     laborPerHour?, rentMultiplier?, customRateMultiplier?, machineryMultiplier?,
@@ -254,7 +256,8 @@ export function normalizeFarm(farm) {
   const sid = season?.id ?? null;
 
   const rows = (t) => (Array.isArray(src[t]) ? src[t] : []).map(r => ({ ...r }));
-  const out = { seasons: seasons.map(s => ({ ...s })), season };
+  const county = typeof src.county === 'string' && src.county.trim() ? src.county.trim() : null;
+  const out = { county, seasons: seasons.map(s => ({ ...s })), season };
   for (const t of FARM_TABLES) out[t] = rows(t);
   for (const t of SEASON_TABLES) for (const r of out[t]) r.seasonId ??= sid;
 
@@ -377,6 +380,7 @@ export function validateFarm(farm) {
   const errs = [];
   const err = (m) => errs.push(m);
 
+  if (farm.county != null && typeof farm.county !== 'string') err('farm.county must be a county name');
   if (f.seasons.length !== 1) {
     err(`farm.seasons must hold exactly one season in phase 1 (found ${f.seasons.length})`);
     return errs;
@@ -799,6 +803,13 @@ export function farmAdvisories(farm) {
       kind: 'APH_DEFAULTED', planId: plan.id, fieldId: plan.fieldId,
       message: `${f.name ?? f.id} (${CROPS[plan.crop]?.label ?? plan.crop}) is insured on its expected yield: `
         + 'no approved (APH) yield is entered, so its insurance guarantee is a guess.',
+    });
+  }
+  if (farm.county && !farmCounty(farm)) {
+    out.push({
+      kind: 'COUNTY_NO_YIELD_HISTORY',
+      message: `NASS has no county yield years for "${farm.county}", so the historical yield year draws `
+        + 'from every Nebraska county.',
     });
   }
   return out;
