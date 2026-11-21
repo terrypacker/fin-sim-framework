@@ -23,6 +23,7 @@
  * copies serving the old help forever.
  */
 
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
@@ -40,9 +41,10 @@ const EXCLUDE = [
 /**
  * @param {{ path: string, bytes: Buffer|Uint8Array|string }[]} files  dist-relative, '/'-separated
  * @param {string} [base]  the app's public base path (vite `base`)
- * @returns {{ build: string, urls: string[] }}  urls sorted, so the output is reproducible
+ * @param {object|null} [release]  releaseInfo(), carried so a waiting worker can name its commit
+ * @returns {{ build: string, urls: string[], release: object|null }}  urls sorted, so the output is reproducible
  */
-export function precacheManifest(files, base = '/') {
+export function precacheManifest(files, base = '/', release = null) {
   const kept = files
     .filter(f => !EXCLUDE.some(re => re.test(f.path)))
     .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
@@ -50,7 +52,29 @@ export function precacheManifest(files, base = '/') {
   const h = createHash('sha256');
   for (const f of kept) h.update(f.path).update('\0').update(f.bytes).update('\0');
 
-  return { build: h.digest('hex').slice(0, 16), urls: kept.map(f => base + f.path) };
+  return { build: h.digest('hex').slice(0, 16), urls: kept.map(f => base + f.path), release };
+}
+
+/**
+ * The commit being built, for the status-bar build stamp and the update prompt:
+ * `{ sha, date, dirty }`, or nulls when git is unavailable.
+ *
+ * `date` is the COMMIT date, not the build time, so rebuilding a commit stays byte-identical
+ * (the build id hashes the bundle, and the stamp is compiled into it). `dirty` marks a local
+ * build with uncommitted tracked changes, which the stamp shows as a trailing '+'.
+ */
+export function releaseInfo({ cwd = process.cwd(), git = runGit } = {}) {
+  try {
+    const [sha, date] = git(['log', '-1', '--format=%H%n%cI'], cwd).trim().split('\n');
+    const dirty = git(['status', '--porcelain', '--untracked-files=no'], cwd).trim() !== '';
+    return { sha, date, dirty };
+  } catch {
+    return { sha: null, date: null, dirty: false };
+  }
+}
+
+function runGit(args, cwd) {
+  return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
 }
 
 /** Every file under `dir`, as `{ path, bytes }` with a '/'-separated relative path. */

@@ -3,8 +3,14 @@ import { dirname, resolve }                       from 'node:path';
 
 import { defineConfig } from 'vite';
 
-import { SW_FILENAME, precacheManifest, readTree, renderServiceWorker }
+import { SW_FILENAME, precacheManifest, readTree, releaseInfo, renderServiceWorker }
   from './scripts/lib/pwa-precache.mjs';
+
+/**
+ * The commit being built: compiled into the app (build stamp) and into sw.js (update prompt).
+ * Read once per config load; `vite dev` does not use it, as HEAD would go stale under HMR.
+ */
+const RELEASE = releaseInfo({ cwd: import.meta.dirname });
 
 /**
  * Regenerate the help index when a tier-2 topic changes (design 108 §8).
@@ -59,18 +65,20 @@ function serviceWorkerPlugin() {
       base   = config.base;
     },
     closeBundle() {
-      const manifest = precacheManifest(readTree(outDir), base);
+      const manifest = precacheManifest(readTree(outDir), base, RELEASE);
       const source   = readFileSync(resolve(import.meta.dirname, 'src/pwa/service-worker.js'), 'utf8');
       writeFileSync(resolve(outDir, SW_FILENAME), renderServiceWorker(source, manifest));
     },
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   root: '.',
   base: '/',
   publicDir: 'public',
   plugins: [helpTopicsWatcher(), serviceWorkerPlugin()],
+  // Build-only: under `vite dev` the stamp reads "dev build" (register-service-worker.js).
+  define: command === 'build' ? { __FINSIM_RELEASE__: JSON.stringify(RELEASE) } : {},
   build: {
     outDir: 'dist',
     emptyOutDir: true,
@@ -79,4 +87,4 @@ export default defineConfig({
     port: 10001,
     open: false,
   },
-});
+}));

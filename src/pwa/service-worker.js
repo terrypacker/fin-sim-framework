@@ -12,7 +12,7 @@
  * service-worker.js — offline support for the installed app.
  *
  * NOT imported by the app. The `finsim-service-worker` plugin in vite.config.js prefixes
- * this file with `self.__FINSIM_SW__ = { build, urls }` (scripts/lib/pwa-precache.mjs)
+ * this file with `self.__FINSIM_SW__ = { build, urls, release }` (scripts/lib/pwa-precache.mjs)
  * and writes it to dist/sw.js, so it is only ever served from a production build.
  *
  * Strategy: one cache per build, holding the whole app.
@@ -26,7 +26,7 @@
  *              the app keeps its fonts offline. Everything else passes through.
  */
 
-const { build, urls } = self.__FINSIM_SW__;
+const { build, urls, release = null } = self.__FINSIM_SW__;
 
 const APP_CACHE  = `finsim-app-${build}`;
 const FONT_CACHE = 'finsim-fonts';
@@ -50,6 +50,8 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('message', (event) => {
   if (event.data === 'SKIP_WAITING') self.skipWaiting();
+  // The page asks a waiting worker which commit it holds, to name it in the update prompt.
+  if (event.data === 'GET_RELEASE') event.ports[0]?.postMessage(release);
 });
 
 self.addEventListener('fetch', (event) => {

@@ -31,7 +31,8 @@ import { SimulationWorkbench } from './apps/simulation-workbench.js';
 import { ServiceRegistry }      from './services/service-registry.js';
 import { hydrateAppStorage, getAppStorage, clearMigratedLegacyKeys,
          requestPersistentStorage } from './storage/create-storage.js';
-import { registerServiceWorker } from './pwa/register-service-worker.js';
+import { forceUpdateIfRequested, registerServiceWorker, showBuildStamp }
+  from './pwa/register-service-worker.js';
 
 const STORAGE_STATUS = {
   'persisted':   { text: 'Storage: persistent',
@@ -53,6 +54,9 @@ function showStorageStatus(el, result) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // `?update=force`: drop the worker and its caches and reload clean, before anything boots.
+  if (await forceUpdateIfRequested()) return;
+
   // MUST complete before anything constructs ServiceRegistry: the scenario,
   // decision-graph and decision-record registries all load from storage in their
   // constructors, so an un-hydrated adapter would read as an empty profile and
@@ -64,6 +68,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   app.initView();
   app.initScenario();
 
+  showBuildStamp(document.getElementById('appBuildStamp'));
   registerServiceWorker({ statusEl: document.getElementById('appUpdateStatus') });
   if (storage.backendName !== 'memory') {
     requestPersistentStorage().then(r => showStorageStatus(document.getElementById('storageStatus'), r));
