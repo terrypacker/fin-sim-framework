@@ -1,6 +1,6 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** rev 32 (21 Nov 2026): Farm MC Results, the batch's paths and Replay onto the scenario (§17.12). Rev 31 (21 Nov 2026): the Field P&L draws what the grain is worth on each date, against what it must earn (§17.11). Rev 30 (20 Nov 2026): the machine labor wage is a season lever, and the Field P&L draws where the grain is (§17.10). Rev 29 (20 Nov 2026): owner answers on the revised sheet; machinery ownership rates are costing only (§17.9). Rev 28 (20 Nov 2026): phase 5 step 5c built, the revised Admin sheet: per-crop operations, a crew on an operation, actual fuel, irrigation and machinery ownership rates (§17.9). Rev 27 (20 Nov 2026): §11 lists every open and declined owner question with its reason (new Q34–Q40). Rev 26 (20 Nov 2026): phase 5 step 5b built, fuel, machine labor and trucking computed from the operations' actual rates (§17.8). Rev 25: phase 5 step 5a built, the importer of the owners' own workbook layout, which replaces the proposed template; the 2020 ledger layout is unsupported (§17.7). Rev 24 (20 Nov 2026): owner answers from the 2026 workbook review (§17.6): Q22a and Q27 closed as declined, Q23a answered (not all nitrogen), and computed operation costs planned with phase 5, with owner questions Q23b and Q33. Rev 23 (20 Nov 2026): phase 8 steps 8a and 8b built: the price-history module, this season's real prices with its marketing windows on the Field P&L charts, a farm file opening as a farm, and the demo's crop year (§17.5). Rev 20: phase 8, price history and marketing windows, planned (§17.5), with owner question Q32. Rev 19 (20 Nov 2026): phases 5 (the yearly workbook importer) and 6 (in-app record editors) planned (§17); reconciliation moves to phase 7; the panel charts built (§17.4). Rev 18 (19 Nov 2026): **phase 4 COMPLETE** (§16) bar the export's land-and-debt section (Q22a): the export and import (4a–4c), a farm path per household year (4d), §199A (4e), the Nebraska community-college credit (4f), and the NOL, §461(l), the farming-loss carryback and §1301 averaging (4g, §16.10–16.11). Rev 17: phase 4 started, what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
+**Status:** rev 33 (21 Nov 2026): the farm-wide yield shocks can be drawn as real NASS county-years instead of a skew-normal (§17.13). Rev 32 (21 Nov 2026): Farm MC Results, the batch's paths and Replay onto the scenario (§17.12). Rev 31 (21 Nov 2026): the Field P&L draws what the grain is worth on each date, against what it must earn (§17.11). Rev 30 (20 Nov 2026): the machine labor wage is a season lever, and the Field P&L draws where the grain is (§17.10). Rev 29 (20 Nov 2026): owner answers on the revised sheet; machinery ownership rates are costing only (§17.9). Rev 28 (20 Nov 2026): phase 5 step 5c built, the revised Admin sheet: per-crop operations, a crew on an operation, actual fuel, irrigation and machinery ownership rates (§17.9). Rev 27 (20 Nov 2026): §11 lists every open and declined owner question with its reason (new Q34–Q40). Rev 26 (20 Nov 2026): phase 5 step 5b built, fuel, machine labor and trucking computed from the operations' actual rates (§17.8). Rev 25: phase 5 step 5a built, the importer of the owners' own workbook layout, which replaces the proposed template; the 2020 ledger layout is unsupported (§17.7). Rev 24 (20 Nov 2026): owner answers from the 2026 workbook review (§17.6): Q22a and Q27 closed as declined, Q23a answered (not all nitrogen), and computed operation costs planned with phase 5, with owner questions Q23b and Q33. Rev 23 (20 Nov 2026): phase 8 steps 8a and 8b built: the price-history module, this season's real prices with its marketing windows on the Field P&L charts, a farm file opening as a farm, and the demo's crop year (§17.5). Rev 20: phase 8, price history and marketing windows, planned (§17.5), with owner question Q32. Rev 19 (20 Nov 2026): phases 5 (the yearly workbook importer) and 6 (in-app record editors) planned (§17); reconciliation moves to phase 7; the panel charts built (§17.4). Rev 18 (19 Nov 2026): **phase 4 COMPLETE** (§16) bar the export's land-and-debt section (Q22a): the export and import (4a–4c), a farm path per household year (4d), §199A (4e), the Nebraska community-college credit (4f), and the NOL, §461(l), the farming-loss carryback and §1301 averaging (4g, §16.10–16.11). Rev 17: phase 4 started, what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
 (§12.4) and the Field P&L panel is in the workbench (§12.5). **Phase 2 started** (§13): step 2a,
 the scenario-agnostic MC path and a farm batch on it, steps 2b–2d (realized yield, price paths, multiplier levers and the contracted share), 2e (calibration from USDA NASS, §13.8) and 2f (the Farm MC panel, §13.7) are built: **phase 2 is complete**. Owner questions Q1–Q20 and Q22–Q25 are answered (§3, §14); Q21, Q26 and the follow-ups Q22a,
 Q23a and Q25a (§14) are open. §7 records what the primary sources on disk decide. §8 is the household
@@ -2097,3 +2097,53 @@ A batch run on another scenario cannot be replayed onto this one.
 
 **Not built.** A baseline batch and paired comparison (design 100) for the farm, and a path
 replayed at the Monte Carlo's own settings beyond its draws: the farm has none.
+
+### 17.13 Historical yield years (built, rev 33)
+
+**Why.** The farm-wide dryland shock is a skew-normal with the median county's sd (0.30) and
+skew (−0.78) (§13.8). Measured against the 1,425 detrended dryland-corn county-years it was
+fitted to, it matches the body (the 5th and 10th percentiles) but not the far left tail:
+
+| | History | Skew-normal |
+|---|---|---|
+| 1st percentile | −76% | −85% |
+| Below −80% | 0.28% | 1.36% |
+| Below −90% | 0.07% | 0.73% |
+| −100% or worse (yield clamps to 0) | one county-year (Garfield 2002) | 0.37% |
+
+A skew-normal is smooth and unbounded on the left. Real droughts (2002, 2012) cluster between
+−60% and −85%, and a yield cannot fall below zero.
+
+**What.** The Farm MC catalog has a **historical yield year** row per season. It draws one NASS
+county-year per path and writes both season shocks from it:
+
+- Y, the county's dryland corn yield ÷ its own linear trend − 1 (`season.yieldShock`);
+- I, its irrigated deviation computed the same way, − β·Y (`season.irrigatedYieldShock`), with
+  the calibrated β the model applies, so β·Y + I is the irrigated deviation the county had.
+
+The years are 1995–2018, the ones with both practices (the irrigated split ends in 2018), from
+63 counties with at least 20 of them: 1,405 county-years. A farm whose ARC county NASS reports
+draws from that county's years. Otherwise it draws from every county, a Nebraska county-year at
+random, which is wider than the median county because counties differ. The table is generated
+from the extract on disk (`npm run farm:yield-history`, `src/finance/farm/farm-yield-history-data.js`),
+and a test checks it byte for byte, as the price history is checked (§17.5).
+
+**How it runs.** The draw is one `EMPIRICAL` distribution over the pool's rows (new in
+`distributions.js`: a value from a list, each equally likely), so the two shocks always come
+from the same year. The farm descriptor's `paths` hook (`expandYieldYears`) turns the drawn row
+into the two shock params and keeps the draw key as a label (`2002 · DUNDY`). A path's params
+therefore say what it ran: Replay (§17.12) and the reports need nothing new. The row is off by
+default, like every row, and the panel warns when a shock row it replaces is also sampled.
+Farm MC Results ranks every param that varies, not only the sampled keys, and shows a path's
+drawn year above its values.
+
+**Measured** on the demo farm (500 paths each, price shocks on in both): paths with a dryland
+shock below −80% fall from 1.8% to 0.4%; the worst shock goes from −108% to −100% (Garfield
+2002, drawn once); the net's P90 goes from \$111k to \$105k, with P10 and the median within
+\$1.5k. The demo farm never loses in either arm, because insurance and the price–yield link
+absorb the bad years, so it cannot show the change in P(loss).
+
+**Not modelled.** Soybeans still take k·Y of the corn year (`yieldShockScale`), not the
+soybean deviation that year. The price paths stay normal shocks with the calibrated vol and the
+price–yield link; a year's own price move is not replayed with its yield. The per-field shock
+(Q26) is still 0, so a farm is as volatile as its county.

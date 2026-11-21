@@ -206,8 +206,10 @@ export class FarmMcPlugin extends WorkbenchComponent {
         <td class="sec-td"><input type="checkbox" ${s.enabled ? 'checked' : ''} aria-label="Sample ${_esc(v.label ?? v.paramKey)}"></td>
         <td class="sec-td" title="${_esc(v.paramKey)}">${_esc(v.label ?? v.paramKey)}</td>
         <td class="sec-td sec-td--muted">${_esc(v.group ?? '')}</td>
-        <td class="sec-td sec-td--num">${_num(v.mean)}</td>
-        <td class="sec-td sec-td--num">${v.fixedSpread
+        <td class="sec-td sec-td--num">${v.bootstrap ? '—' : _num(v.mean)}</td>
+        <td class="sec-td sec-td--num">${v.bootstrap
+          ? `<span class="sec-td--muted" title="Each path is one real season: a NASS county-year, both yield shocks from the same year (design 134 §17.13)">history · ${v.years} years</span>`
+          : v.fixedSpread
           ? `<span class="sec-td--muted" title="A unit normal draw: its scale is the season's price volatility for this crop">z</span>`
           : `<input type="number" class="mc-num-input fmc-spread-input" min="0" step="any" value="${s.stdDev ?? 0}" aria-label="Spread of ${_esc(v.label ?? v.paramKey)}">`}${v.skew
           ? ` <span class="sec-td--muted" title="Skew-normal: a bad year falls further below than a good one rises above (design 134 §13.8)">skew ${v.skew}</span>` : ''}</td>
@@ -227,16 +229,23 @@ export class FarmMcPlugin extends WorkbenchComponent {
     const items = [];   // [icon, text]
     if (this._error) items.push(['⚠', _esc(this._error)]);
     const on = variables.filter(v => this._setting(v).enabled);
-    const flat = on.filter(v => !v.fixedSpread && !(this._setting(v).stdDev > 0));
+    const flat = on.filter(v => !v.fixedSpread && !v.bootstrap && !(this._setting(v).stdDev > 0));
     if (on.length === 0) items.push(['⚠', 'Nothing is sampled, so every path is the deterministic season. Switch variables on.']);
     else if (flat.length) items.push(['⚠', `${flat.length} sampled variable${flat.length === 1 ? ' has' : 's have'} a spread of 0 and draw${flat.length === 1 ? 's' : ''} nothing.`]);
     // A spread is calibrated only where the catalog says so and it has not been retyped.
-    const typed = on.filter(v => !v.fixedSpread && this._setting(v).stdDev > 0
+    const typed = on.filter(v => !v.fixedSpread && !v.bootstrap && this._setting(v).stdDev > 0
       && !(v.calibrated && this._setting(v).stdDev === v.stdDev));
     if (typed.length) {
       items.push(['⚠', `${typed.length} sampled spread${typed.length === 1 ? ' is' : 's are'} typed here, not calibrated from a source `
         + '(design 134 §13.8): read the results as a sensitivity run on '
         + `${typed.length === 1 ? 'it' : 'them'}.`]);
+    }
+    // A historical year writes both season shocks, so a shock row sampled with it draws for nothing.
+    const onKeys = new Set(on.map(v => v.paramKey));
+    const shadowed = on.filter(v => v.bootstrap).flatMap(v => (v.replaces ?? []).filter(k => onKeys.has(k)));
+    if (shadowed.length) {
+      items.push(['⚠', `The historical yield year sets the season's yield shocks, so ${shadowed.length === 1 ? 'the sampled shock row is' : `${shadowed.length} sampled shock rows are`} `
+        + 'replaced by it. Untick one or the other.']);
     }
     const filled = calibratedPriceVolFor(this._cfg(), on.map(v => ({ ...v, enabled: true })));
     if (Object.keys(filled).length) {

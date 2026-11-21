@@ -122,6 +122,24 @@ test('a calibrated spread is not called typed; a sampled price with no vol of it
   p.unmount();
 });
 
+test('the historical yield year has no spread to type, and says when it replaces a sampled shock', async () => {
+  const p = await quiet(() => mount());
+  const tr = q(p, 'var-rows').querySelector('tr[data-key="farm.season.s2027.yieldYear"]');
+  assert.ok(tr, 'the row exists');
+  assert.match(tr.textContent, /Historical yield year \(any Nebraska county\)/);
+  assert.match(tr.textContent, /history · \d+ years/);
+  assert.equal(tr.querySelector('input[type="number"]'), null);
+  const tick = (key) => {
+    const box = q(p, 'var-rows').querySelector(`tr[data-key="${key}"] input[type="checkbox"]`);
+    box.checked = true; fire(box, 'change');
+  };
+  tick('farm.season.s2027.yieldYear');
+  assert.doesNotMatch(q(p, 'warn').textContent, /spread of 0|sensitivity run|replaced/);
+  tick('farm.season.s2027.yieldShock');
+  assert.match(q(p, 'warn').textContent, /the sampled shock row is replaced by it/);
+  p.unmount();
+});
+
 test('rows: farm, each operator with its plans, then each crop; basis picks the net', () => {
   const farm = normalizeFarm(FarmScenario.buildDefaultConfig().farm);
   const fieldOf = new Map(farm.fields.map(f => [f.id, f]));

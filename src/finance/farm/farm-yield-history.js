@@ -1,0 +1,181 @@
+/*
+ * Copyright (c) 2026 Terry Packer.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ */
+
+import { trendDeviations, sharedYears } from './farm-calibration.js';
+import { FARM_YIELD_HISTORY } from './farm-yield-history-data.js';
+
+/**
+ * The farm's historical yield years (design 134 §17.13): every Nebraska county-year in which
+ * NASS reports both dryland and irrigated corn, as the two season shocks the model reads.
+ *
+ *     Y = the county's dryland yield ÷ its own linear trend − 1        (season.yieldShock)
+ *     I = the irrigated deviation, the same way, − β·Y                  (season.irrigatedYieldShock)
+ *
+ * β is the calibrated `irrigatedYieldBeta` the model applies (`realizedYield`), so a drawn year
+ * puts back the irrigated deviation the county actually had: β·Y + I = that deviation.
+ *
+ * The Monte Carlo draws one county-year per path instead of a skew-normal shock, so the
+ * season's weather is a season that happened. The skew-normal fitted the body of these
+ * deviations but put about five times their weight below −80%, and gave a total dryland
+ * failure about once in 270 seasons; history has none in 1,425 county-years (§17.13).
+ *
+ * Detrending is the calibration's (`countyYieldStats`): each series on its own trend over
+ * every year it has since `from`. The irrigated split ends in 2018 in NASS, so the years run
+ * to 2018. A county needs `minYears` joint years to be kept, as the calibration needs.
+ */
+
+/** Rounding of the stored shocks: 4 decimals is 0.01% of yield. */
+const DIGITS = 4;
+const round = (x) => Math.round(x * 10 ** DIGITS) / 10 ** DIGITS;
+
+/**
+ * Nebraska county corn yields by practice, from a NASS Quick Stats extract (tab-separated).
+ * Only COUNTY rows of the YEAR period with a dryland (`NON-IRRIGATED`) or `IRRIGATED` practice
+ * are read; the "OTHER (COMBINED) COUNTIES" rows and withheld values are left out.
+ *
+ * @param {string} tsv
+ * @param {{ from?: number }} [opts]
+ * @returns {Map<string, { dry: Map<number, number>, irr: Map<number, number> }>} county → series
+ */
+export function parseNassCountyCornYields(tsv, { from = 1995 } = {}) {
+  const lines = tsv.split('\n');
+  const col = Object.fromEntries(lines[0].split('\t').map((h, i) => [h, i]));
+  for (const need of ['commodity_desc', 'state_alpha', 'statisticcat_desc', 'agg_level_desc', 'reference_period_desc',
+    'prodn_practice_desc', 'county_name', 'year', 'value']) {
+    if (col[need] == null) throw new Error(`the NASS extract has no "${need}" column`);
+  }
+  const practice = { 'NON-IRRIGATED': 'dry', IRRIGATED: 'irr' };
+  const out = new Map();
+  for (const line of lines.slice(1)) {
+    if (!line) continue;
+    const r = line.split('\t');
+    if (r[col.commodity_desc] !== 'CORN' || r[col.state_alpha] !== 'NE' || r[col.statisticcat_desc] !== 'YIELD'
+        || r[col.agg_level_desc] !== 'COUNTY' || r[col.reference_period_desc] !== 'YEAR') continue;
+    const p = practice[r[col.prodn_practice_desc]];
+    const name = r[col.county_name];
+    const year = Number(r[col.year]);
+    const v = Number(String(r[col.value]).replace(/,/g, ''));
+    if (!p || !name || name.startsWith('OTHER') || year < from || !Number.isFinite(v)) continue;
+    const c = out.get(name) ?? { dry: new Map(), irr: new Map() };
+    out.set(name, c);
+    c[p].set(year, v);
+  }
+  return out;
+}
+
+/**
+ * The data module's content: per county, its joint years as `[year, Y, I]`.
+ *
+ * @param {ReturnType<typeof parseNassCountyCornYields>} yields
+ * @param {{ source: string, from: number, beta: number, minYears?: number }} opts
+ */
+export function yieldHistoryData(yields, { source, from, beta, minYears = 20 }) {
+  const counties = {};
+  for (const name of [...yields.keys()].sort()) {
+    const { dry, irr } = yields.get(name);
+    if (dry.size < minYears || irr.size < minYears) continue;
+    const dDry = trendDeviations(dry);
+    const dIrr = trendDeviations(irr);
+    const years = sharedYears(dDry, dIrr);
+    if (years.length < minYears) continue;
+    counties[name] = years.map(y => {
+      const Y = dDry.get(y);
+      return [y, round(Y), round(dIrr.get(y) - beta * Y)];
+    });
+  }
+  return { source, from, beta, region: 'Nebraska counties', crop: 'CORN', counties };
+}
+
+/**
+ * The generated module's text, byte for byte. The script writes it and the test compares the
+ * file on disk to it, so one function owns the format.
+ */
+export function renderYieldHistoryModule(data) {
+  const county = (name) => {
+    const rows = data.counties[name];
+    const lines = [];
+    for (let i = 0; i < rows.length; i += 6) lines.push(`      ${rows.slice(i, i + 6).map(r => `[${r.join(', ')}]`).join(', ')},`);
+    return `    ${JSON.stringify(name)}: Object.freeze([\n${lines.join('\n')}\n    ]),`;
+  };
+  return `/*
+ * GENERATED by \`npm run farm:yield-history\` (scripts/farm/farm-yield-history.mjs) from
+ * ${data.source}.
+ * Do not edit: re-run the script. tests/unit/farm-yield-history.test.mjs checks this file is
+ * exactly what that extract gives.
+ */
+
+/**
+ * Nebraska county corn yield years as the farm's two season shocks (design 134 §17.13):
+ * per county, [year, dryland deviation Y, irrigated deviation − β·Y], each series detrended
+ * on its own linear trend.
+ */
+export const FARM_YIELD_HISTORY = Object.freeze({
+  source: ${JSON.stringify(data.source)},
+  from: ${data.from},
+  beta: ${data.beta},
+  region: ${JSON.stringify(data.region)},
+  crop: ${JSON.stringify(data.crop)},
+  counties: Object.freeze({
+${Object.keys(data.counties).map(county).join('\n')}
+  }),
+});
+`;
+}
+
+/** The NASS county name a farm names, or null: its first ARC county, matched without case. */
+export function farmCounty(farm, history = FARM_YIELD_HISTORY) {
+  const names = [...(farm?.arcCounties ?? []), ...(farm?.arcBase ?? [])].map(r => r?.county).filter(Boolean);
+  for (const n of names) {
+    const hit = Object.keys(history.counties).find(k => k.toUpperCase() === String(n).trim().toUpperCase());
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/**
+ * The years a farm's season draws from: its own county's when the farm names a county NASS
+ * has, otherwise every county's (a Nebraska county-year at random). Each row is what the
+ * draw writes: `{ county, year, yieldShock, irrigatedYieldShock }`; the irrigated shock is
+ * null on a farm with no irrigated field, where the model reads none.
+ *
+ * @param {object} farm the farm records (`cfg.farm`)
+ * @returns {{ county: string|null, rows: object[] }}
+ */
+export function yieldYearPool(farm, history = FARM_YIELD_HISTORY) {
+  const county = farmCounty(farm, history);
+  const irrigated = (farm?.fields ?? []).some(f => f.irrigated === true);
+  const names = county ? [county] : Object.keys(history.counties);
+  const rows = [];
+  for (const name of names) {
+    for (const [year, Y, I] of history.counties[name]) {
+      rows.push({ county: name, year, yieldShock: Y, irrigatedYieldShock: irrigated ? I : null });
+    }
+  }
+  return { county, rows };
+}
+
+/**
+ * Expand each drawn historical year in a path's params into the season shocks it stands for
+ * (the farm MC descriptor's `paths`, design 134 §17.13). The draw `farm.season.<id>.yieldYear`
+ * is a pool row; it becomes `farm.season.<id>.yieldShock` (and `irrigatedYieldShock` where the
+ * row has one), and the draw key keeps a label (`"2012 · DUNDY"`) so a path says which season
+ * it replayed. Mutates and returns `p`.
+ */
+export function expandYieldYears(p) {
+  for (const key of Object.keys(p)) {
+    const m = /^farm\.season\.([^.]+)\.yieldYear$/.exec(key);
+    const row = p[key];
+    if (!m || row == null || typeof row !== 'object') continue;
+    p[`farm.season.${m[1]}.yieldShock`] = row.yieldShock;
+    if (row.irrigatedYieldShock != null) p[`farm.season.${m[1]}.irrigatedYieldShock`] = row.irrigatedYieldShock;
+    p[key] = `${row.year} · ${row.county}`;
+  }
+  return p;
+}

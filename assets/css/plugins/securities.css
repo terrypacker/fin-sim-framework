@@ -206,3 +206,4 @@
 .fmr-sort[data-dir="desc"]::after { content: ' ▼'; }
 .fmr-path-grid tbody[data-fmr="rep-rows"] tr:last-child td { border-bottom: 1px solid var(--border-hi); }
 .fmr-drivers { margin: 2px 0 6px 16px; width: auto; }
+.fmr-drawn { margin: 2px 0 2px 16px; font-size: 10px; }

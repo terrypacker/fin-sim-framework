@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-247 parameters · 37 panels · 13 node types (209 fields) · 187 action types · 103 tools · 369 state field types · 84 topics · 142 design docs
+247 parameters · 37 panels · 13 node types (209 fields) · 187 action types · 104 tools · 369 state field types · 84 topics · 142 design docs
 
 ---
 
@@ -1130,11 +1130,11 @@ Explained in [`help/nodes`](nodes/reducer.md). 0 field(s) described by a record 
 
 ---
 
-## Headless tools (103)
+## Headless tools (104)
 
 Command-line entry points under `scripts/`. **Purpose** is harvested from each script's
 docblock, not re-authored here. Arguments come from each script's declarative
-`parseFlags` spec: 87 of 87 entry points carry one (design 108 D6 — all of them).
+`parseFlags` spec: 88 of 88 entry points carry one (design 108 D6 — all of them).
 6 scripts carry no docblock naming themselves and show `(undocumented)`.
 
 ### scripts/config-converters/
@@ -1246,6 +1246,10 @@ docblock, not re-authored here. Arguments come from each script's declarative
     - `--sale-date` (string) — YYYY-MM-DD the unpriced grain is sold (default: each crop's harvest)
     - `--check` (flag) — print advisories and the reconciliation; write nothing
     - `--json` (flag) — emit the result as JSON
+- **`scripts/farm/farm-yield-history.mjs`** — `npm run farm:yield-history`
+  write the farm Monte Carlo's historical yield years from USDA NASS
+    - `--data` (string) — the NASS extract (default: newest in docs/us-farm-markets/)
+    - `--check` (flag) — exit 1 if the data file is not what the extract gives; write nothing
 - **`scripts/farm/xlsx-to-csv.py`**
   : write each sheet of an .xlsx workbook as a CSV, the input that
 
@@ -2462,8 +2466,8 @@ what the in-app panel keys on.
 | [Event](nodes/event.md) | node | 220 | 2 panels · design 2 |
 | [Event Sourcing](concepts/event-sourcing.md) | concept | 381 | 3 panels · design 2, 16, 91 |
 | [Node History](panels/exec-history.md) | panel | 191 | 1 panel |
-| [Farm MC](panels/farm-mc.md) | panel | 128 | 1 panel · design 134 |
-| [Farm MC Results](panels/farm-mc-results.md) | panel | 215 | 1 panel · design 134 |
+| [Farm MC](panels/farm-mc.md) | panel | 177 | 1 panel · design 134 |
+| [Farm MC Results](panels/farm-mc-results.md) | panel | 227 | 1 panel · design 134 |
 | [Farm Results into a Household Plan](workflows/farm-to-household.md) | workflow | 593 | 4 params · 2 tools · design 134 |
 | [Field P&L](panels/field-pnl.md) | panel | 229 | 1 panel · design 134 |
 | [Funding and Instalments](concepts/funding-and-instalments.md) | concept | 248 | 2 panels · 3 params · design 107 |

@@ -156,6 +156,24 @@ export class BernoulliDistribution {
 }
 
 /**
+ * Empirical distribution: one of `values`, each equally likely (a bootstrap of observed
+ * outcomes, design 134 §17.13). A value may be anything, an object included, so one draw can
+ * carry several numbers that belong together (a county-year's two yield shocks); the scenario
+ * that reads it expands it. One uniform per draw.
+ */
+export class EmpiricalDistribution {
+  constructor({ values }) {
+    if (!Array.isArray(values) || values.length === 0)
+      throw new RangeError('EmpiricalDistribution: values must be a non-empty array');
+    this.values = values;
+  }
+
+  sample(rngFn) {
+    return this.values[Math.min(this.values.length - 1, Math.floor(rngFn() * this.values.length))];
+  }
+}
+
+/**
  * Uniform distribution over a date range [min, max].
  * Accepts min/max as ISO date strings or Date objects.
  * Returns a YYYY-MM-DD string so it can be stored as a scenario param.
@@ -265,6 +283,7 @@ export const DISTRIBUTION_TYPES = {
   LOG_NORMAL:        'logNormal',
   BERNOULLI:         'bernoulli',
   ACTUARIAL_LIFESPAN: 'actuarialLifespan',
+  EMPIRICAL:         'empirical',
 };
 
 /**
@@ -282,6 +301,7 @@ export function createDistribution(config) {
     case DISTRIBUTION_TYPES.LOG_NORMAL:   return new LogNormalDistribution(config);
     case DISTRIBUTION_TYPES.BERNOULLI:         return new BernoulliDistribution(config);
     case DISTRIBUTION_TYPES.ACTUARIAL_LIFESPAN: return new ActuarialLifespanDistribution(config);
+    case DISTRIBUTION_TYPES.EMPIRICAL:    return new EmpiricalDistribution(config);
     default: throw new Error(`Unknown distribution type: ${config.type}`);
   }
 }

@@ -336,8 +336,10 @@ export class FarmMcResultsPlugin extends WorkbenchComponent {
     if (!r?.runs?.length) { wrap.style.display = 'none'; return; }
     wrap.style.display = '';
     const paths = farmMcPaths(r.runs, this._scope, this._basis);
-    const keys = (r.summary?.pairing?.sampled ?? []).map(s => s.key);
-    const drivers = farmMcDrivers(r.runs, keys);
+    // Every param that varies, not only the sampled keys: a historical yield year is sampled as
+    // one draw and lands as the two shocks it stands for (design 134 §17.13).
+    const drivers = farmMcDrivers(r.runs, Object.keys(r.runs[0]?.params ?? {}));
+    const sampledText = (r.summary?.pairing?.sampled ?? []).map(x => x.key);
     const canReplay = this._sameScenario();
     const reps = farmMcRepresentatives(paths);
     const losses = paths.filter(p => p.net != null && p.net < 0).length;
@@ -361,8 +363,10 @@ export class FarmMcResultsPlugin extends WorkbenchComponent {
       </tr>`;
       if (!open) return main;
       const ds = drivers.of(p.index);
+      const drawn = sampledText.map(k => [k, r.runs[p.index].params?.[k]]).filter(([, v]) => typeof v === 'string');
       return main + `
       <tr class="sec-detail-row"><td class="sec-td" colspan="6">
+        ${drawn.map(([k, v]) => `<div class="fmr-drawn">${_esc(r.labels?.[k] ?? k)}: <b>${_esc(v)}</b></div>`).join('')}
         ${ds.length ? `<table class="sec-grid fmr-drivers"><thead><tr>
           <th class="sec-th">Drawn value</th><th class="sec-th sec-th--num">This path</th>
           <th class="sec-th sec-th--num">Batch median</th><th class="sec-th sec-th--num" title="(this path − median) ÷ the batch's standard deviation">From median</th>

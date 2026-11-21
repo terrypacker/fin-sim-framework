@@ -18,6 +18,7 @@ import { McConfig, variablesMissingCenter } from '../monte-carlo/mc-config.js';
 import { McRunner, summarizeProvenance, median, percentile } from '../monte-carlo/mc-runner.js';
 import { samplingSignature }   from '../monte-carlo/parallel/mc-worker-core.js';
 import { FARM_CALIBRATION }    from './farm-calibration.js';
+import { yieldYearPool }       from './farm-yield-history.js';
 
 /**
  * Monte Carlo for a farm season (design 134 phase 2): the farm's variable catalog and batch.
@@ -81,7 +82,20 @@ export function buildYieldMcConfigs(cfg, spreads = FARM_MC_SPREADS) {
     // The centre IS what the model reads for a blank shock (`blankValue` 0), not a made-up mean.
     effectiveDefault: true,
   });
+  // The historical year (§17.13): one NASS county-year per path, the farm's own county when it
+  // names one NASS has. It writes both season shocks, so it replaces the two rows after it.
+  const pool = yieldYearPool(farm);
+  const yearRows = pool.rows.length ? farm.seasons.map(s => ({
+    paramKey: `farm.season.${s.id}.yieldYear`,
+    label: `Historical yield year (${pool.county ? `${pool.county} county` : 'any Nebraska county'})`,
+    type: DISTRIBUTION_TYPES.EMPIRICAL, values: pool.rows, mean: 0, stdDev: 0,
+    group: 'Farm · yield', enabled: false, calibrated: true, bootstrap: true,
+    county: pool.county, years: pool.rows.length,
+    replaces: [`farm.season.${s.id}.yieldShock`, `farm.season.${s.id}.irrigatedYieldShock`],
+    effectiveDefault: true,
+  })) : [];
   return [
+    ...yearRows,
     ...farm.seasons.map(s => row(`farm.season.${s.id}.yieldShock`, 'Farm-wide yield shock', spreads.farmYieldShockSd,
       spreads === FARM_MC_SPREADS, spreads.farmYieldShockSkew)),
     ...((farm.fields ?? []).some(f => f.irrigated === true)

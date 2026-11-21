@@ -10,7 +10,7 @@ design: [134-farm-job-costing.md]
 sources: [src/visualization/workbench/plugins/finance/farm-mc-results-plugin.js]
 stamps:
   panel:farm-mc-results: f52087
-  src/visualization/workbench/plugins/finance/farm-mc-results-plugin.js: 551f4f
+  src/visualization/workbench/plugins/finance/farm-mc-results-plugin.js: 79656f
 ---
 
 The last [Farm MC](farm-mc.md) batch, opened when it finishes. It keeps the batch until the
@@ -24,8 +24,9 @@ percentiles, the breakevens' range, and how often insurance and ARC pay.
 
 **Paths** lists the seasons behind those numbers: worst, 10th percentile, median, 90th and
 best first, then every path, sortable, or the losing ones only. Click a path to see what it
-drew, ranked by how far each value sits from the batch median in the batch's own spread. The
-value at the top is usually what made that season.
+drew, ranked by how far each value sits from the batch median in the batch's own spread. A historical
+yield year shows as the year and county it replayed. The value at the top is usually what made
+that season.
 
 **Replay** writes that path onto the scenario, rebuilds, runs the season and opens the
 [Field P&L](field-pnl.md), so the breakevens, grain and value charts are that season's. A

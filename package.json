@@ -35,6 +35,7 @@
     "farm:mc": "node scripts/farm/farm-mc.mjs",
     "farm:calibrate": "node scripts/farm/farm-calibrate.mjs",
     "farm:price-history": "node scripts/farm/farm-price-history.mjs",
+    "farm:yield-history": "node scripts/farm/farm-yield-history.mjs",
     "farm:arc": "node scripts/farm/farm-arc.mjs",
     "farm:export": "node scripts/farm/farm-export.mjs",
     "farm:workbook": "node scripts/farm/farm-workbook.mjs",

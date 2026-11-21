@@ -12,6 +12,7 @@ import { FarmScenario }  from '../../scenarios/farm-scenario.js';
 import { farmReports }   from './farm-run.js';
 import { jobCostReport, farmCashSeries } from './farm-reports.js';
 import { exportOperators } from './farm-export.js';
+import { expandYieldYears } from './farm-yield-history.js';
 
 /**
  * The farm's worker-side Monte Carlo descriptor (design 134 §4, phase 2): how one path is
@@ -21,12 +22,13 @@ import { exportOperators } from './farm-export.js';
  * reports read it, and at `off` they would be empty. A farm season is a few hundred events, so
  * the journal costs nothing next to a retirement path.
  *
- * A farm has no return paths, so `paths` is the identity: Monte Carlo writes nothing into a
- * path's params beyond the sampled variables.
+ * A farm has no return paths. `paths` expands a drawn historical yield year into the two
+ * season shocks it stands for (`expandYieldYears`, §17.13), so a path's params say exactly
+ * what it ran and a replay applies them as they are.
  */
 export const FARM_MC_SCENARIO = {
   createScenario: (opts) => new FarmScenario(opts),
-  paths:     (p) => p,
+  paths:     (p) => expandYieldYears(p),
   telemetry: () => 'journal',
   sampler:   () => null,
   // `scheduleF` is the path's export rows (design 134 §8.2): each operator's calendar-year
