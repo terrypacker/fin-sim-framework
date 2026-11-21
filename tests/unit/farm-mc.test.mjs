@@ -23,13 +23,13 @@ import assert             from 'node:assert/strict';
 
 import { FarmScenario } from '../../src/scenarios/farm-scenario.js';
 import { runFarm }      from '../../src/finance/farm/farm-run.js';
-import { FarmMcRunner, FarmMcConfig, summarizeFarmMetrics, isFarmIncomeMetric, withPriceVol }
-  from '../../src/finance/farm/farm-mc.js';
+import { FarmMcRunner, FarmMcConfig, summarizeFarmMetrics, isFarmIncomeMetric, withPriceVol,
+  applyFarmPath, farmPathBag, snapshotFarmPriceVol, restoreFarmPriceVol } from '../../src/finance/farm/farm-mc.js';
 import { farmPathMetrics } from '../../src/finance/farm/farm-mc-scenario.js';
 import { normalizeFarm, priceOn, validateFarm } from '../../src/finance/farm/farm-records.js';
 import { FARM_CALIBRATION } from '../../src/finance/farm/farm-calibration.js';
 import { mcScenarioFor, perturbParams } from '../../src/finance/monte-carlo/parallel/mc-worker-core.js';
-import { applyParamBagToConfig } from '../../src/scenarios/scenario-param-apply.js';
+import { applyParamBagToConfig, snapshotParamStores, restoreParamStores } from '../../src/scenarios/scenario-param-apply.js';
 import { McWorkerPool } from '../../src/finance/monte-carlo/parallel/mc-worker-pool.js';
 import { nodeMcSpawn }  from './helpers/node-mc-spawn.mjs';
 
@@ -469,5 +469,45 @@ describe('calibrated shape (design 134 §13.8, step 2e)', () => {
     for (const p of c.farm.cropPlans) delete p.irrigationElectricity;
     const { ctx } = new FarmMcRunner({ cfgTemplate: c })._prepare();
     assert.ok(!ctx.variables.some(v => /irrigatedYieldShock$/.test(v.paramKey)));
+  });
+});
+
+describe('replaying a path on the live scenario (design 134 §17.12)', () => {
+  const PRICE = 'farm.price.pc-harvest.shock';
+
+  test('applyFarmPath gives the batch\'s numbers, price vol included, and writes no endDate', async () => {
+    const { runs, summary } = await new FarmMcRunner({ n: 4, cfgTemplate: cfg(), mcConfig: withEnabled(RENT, PRICE) }).run();
+    assert.ok(Object.keys(summary.provenance.priceVolFilled).length, 'the batch filled a vol');
+    const live = cfg();
+    applyFarmPath(live, runs[1], summary.provenance.priceVolFilled);
+    assert.ok(!('endDate' in live.parameters), 'the scenario keeps its own simEnd');
+    assert.deepStrictEqual(live.farm.seasons[0].priceVol, summary.provenance.priceVolFilled);
+    const replay = runFarm(live);
+    assert.strictEqual(replay.jobCost.farm.net, runs[1].metrics['farm.net.custom']);
+    assert.ok('endDate' in runs[1].params, 'every path carries it, which is why it is dropped');
+    assert.deepStrictEqual(Object.keys(farmPathBag(runs[1])).sort(), Object.keys(runs[1].params).filter(k => k !== 'endDate').sort());
+  });
+
+  test('the snapshots undo it: params and vol go back, a vol edited meanwhile stays', async () => {
+    const { runs, summary } = await new FarmMcRunner({ n: 2, cfgTemplate: cfg(), mcConfig: withEnabled(RENT, PRICE) }).run();
+    const live = cfg();
+    // As in the app: the active scenario has been loaded (its typed params exist) before a replay.
+    const plain = runFarm(live).jobCost.farm.net;
+    const before = { params: snapshotParamStores(live), vol: snapshotFarmPriceVol(live) };
+    applyFarmPath(live, runs[0], summary.provenance.priceVolFilled);
+    runFarm(live);   // the rebuild loads it
+    const after = { params: snapshotParamStores(live), vol: snapshotFarmPriceVol(live) };
+    assert.strictEqual(before.vol, null);
+    restoreParamStores(live, before.params, after.params);
+    assert.ok(restoreFarmPriceVol(live, before.vol, after.vol));
+    assert.ok(!('priceVol' in live.farm.seasons[0]));
+    assert.strictEqual(runFarm(live).jobCost.farm.net, plain, 'back to the scenario\'s own season');
+
+    const edited = cfg();
+    applyFarmPath(edited, runs[0], summary.provenance.priceVolFilled);
+    const a = snapshotFarmPriceVol(edited);
+    edited.farm.seasons[0].priceVol = { CORN: 0.3 };
+    assert.ok(!restoreFarmPriceVol(edited, null, a));
+    assert.deepStrictEqual(edited.farm.seasons[0].priceVol, { CORN: 0.3 });
   });
 });

@@ -11,7 +11,7 @@
 import { DISTRIBUTION_TYPES }  from '../../simulation-framework/distributions.js';
 import { FarmScenario }        from '../../scenarios/farm-scenario.js';
 import { ScenarioSerializer }  from '../../scenarios/scenario-serializer.js';
-import { resolveRecordCenters } from '../../scenarios/scenario-param-apply.js';
+import { resolveRecordCenters, applyParamBagToConfig } from '../../scenarios/scenario-param-apply.js';
 import { scenarioParamValues } from '../param-schema-utils.js';
 import { ScenarioParamGenerator } from '../../scenarios/params/scenario-param-generator.js';
 import { McConfig, variablesMissingCenter } from '../monte-carlo/mc-config.js';
@@ -197,7 +197,7 @@ export class FarmMcRunner extends McRunner {
     const provenance = summarizeProvenance(variables, { ownParams, schemaDefaults: {}, who: 'FarmMcRunner' });
     // Design 134 §6: the harvested spreads are uncalibrated. Say which sampled rows use one.
     provenance.uncalibrated = variables.filter(v => v.enabled && v.harvested).map(v => v.paramKey);
-    // To replay a path: applyParamBagToConfig(withPriceVol(cfg, priceVolFilled), path.params).
+    // To replay a path: applyFarmPath(cfg, path, priceVolFilled).
     provenance.priceVolFilled = priceVolFilled;
     return {
       ctx: { cfgTemplate, base, variables, simStart, simEnd, scenarioKind: FarmMcRunner.scenarioKind },
@@ -266,4 +266,61 @@ export function summarizeFarmMetrics(runs) {
     out[k] = s;
   }
   return out;
+}
+
+// ─── Replaying one path on the live scenario (design 134 §17.12) ─────────────────
+
+/**
+ * The param bag that replays a path: its params without `endDate`, which every path carries
+ * (it is where the batch stops, `FarmMcRunner._prepare`) and which the scenario's own
+ * `simEnd` already says. Left in, a replay would write a Date into the scenario's params.
+ *
+ * @param {{ params: object }} run one path of `FarmMcRunner.run().runs`
+ */
+export function farmPathBag(run) {
+  const { endDate: _end, ...bag } = run?.params ?? {};
+  return bag;
+}
+
+/**
+ * Write one path onto a farm scenario so a rebuild runs that season: the path's param bag on
+ * both param stores (`applyParamBagToConfig`, as the worker builds a path), and the price
+ * volatility the batch filled in for a crop whose season sets none (`priceVolFilled`). A path
+ * is its bag plus that vol: a farm has no return paths and no sampler, so the sim's seed draws
+ * nothing. Mutates and returns `cfg`.
+ *
+ * @param {object} cfg the active farm scenario
+ * @param {{ params: object }} run one path
+ * @param {Record<string, number>} [priceVolFilled] `summary.provenance.priceVolFilled`
+ */
+export function applyFarmPath(cfg, run, priceVolFilled = {}) {
+  if (!cfg?.farm) return cfg;
+  if (Object.keys(priceVolFilled ?? {}).length && cfg.farm.seasons?.length) {
+    const s0 = cfg.farm.seasons[0];
+    s0.priceVol = { ...(s0.priceVol ?? {}), ...priceVolFilled };
+  }
+  return applyParamBagToConfig(cfg, farmPathBag(run));
+}
+
+/** The first season's `priceVol`, as a replay may change it (a copy, or null when unset). */
+export function snapshotFarmPriceVol(cfg) {
+  const v = cfg?.farm?.seasons?.[0]?.priceVol;
+  return v == null ? null : { ...v };
+}
+
+/**
+ * Undo a replay's price volatility: put `before` back, unless the vol has been edited since the
+ * replay wrote it (`after`), in which case the edit stays, as `restoreParamStores` keeps an
+ * edited param. Mutates `cfg`.
+ *
+ * @returns {boolean} true when the vol was put back
+ */
+export function restoreFarmPriceVol(cfg, before, after) {
+  const s0 = cfg?.farm?.seasons?.[0];
+  if (!s0) return false;
+  const now = s0.priceVol == null ? null : s0.priceVol;
+  if (JSON.stringify(now) !== JSON.stringify(after) || JSON.stringify(now) === JSON.stringify(before)) return false;
+  if (before == null) delete s0.priceVol;
+  else s0.priceVol = { ...before };
+  return true;
 }

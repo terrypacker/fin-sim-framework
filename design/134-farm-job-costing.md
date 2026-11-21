@@ -1,6 +1,6 @@
 # 134 — Farm job costing: a row-crop farm as a FinSim scenario
 
-**Status:** rev 31 (21 Nov 2026): the Field P&L draws what the grain is worth on each date, against what it must earn (§17.11). Rev 30 (20 Nov 2026): the machine labor wage is a season lever, and the Field P&L draws where the grain is (§17.10). Rev 29 (20 Nov 2026): owner answers on the revised sheet; machinery ownership rates are costing only (§17.9). Rev 28 (20 Nov 2026): phase 5 step 5c built, the revised Admin sheet: per-crop operations, a crew on an operation, actual fuel, irrigation and machinery ownership rates (§17.9). Rev 27 (20 Nov 2026): §11 lists every open and declined owner question with its reason (new Q34–Q40). Rev 26 (20 Nov 2026): phase 5 step 5b built, fuel, machine labor and trucking computed from the operations' actual rates (§17.8). Rev 25: phase 5 step 5a built, the importer of the owners' own workbook layout, which replaces the proposed template; the 2020 ledger layout is unsupported (§17.7). Rev 24 (20 Nov 2026): owner answers from the 2026 workbook review (§17.6): Q22a and Q27 closed as declined, Q23a answered (not all nitrogen), and computed operation costs planned with phase 5, with owner questions Q23b and Q33. Rev 23 (20 Nov 2026): phase 8 steps 8a and 8b built: the price-history module, this season's real prices with its marketing windows on the Field P&L charts, a farm file opening as a farm, and the demo's crop year (§17.5). Rev 20: phase 8, price history and marketing windows, planned (§17.5), with owner question Q32. Rev 19 (20 Nov 2026): phases 5 (the yearly workbook importer) and 6 (in-app record editors) planned (§17); reconciliation moves to phase 7; the panel charts built (§17.4). Rev 18 (19 Nov 2026): **phase 4 COMPLETE** (§16) bar the export's land-and-debt section (Q22a): the export and import (4a–4c), a farm path per household year (4d), §199A (4e), the Nebraska community-college credit (4f), and the NOL, §461(l), the farming-loss carryback and §1301 averaging (4g, §16.10–16.11). Rev 17: phase 4 started, what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
+**Status:** rev 32 (21 Nov 2026): Farm MC Results, the batch's paths and Replay onto the scenario (§17.12). Rev 31 (21 Nov 2026): the Field P&L draws what the grain is worth on each date, against what it must earn (§17.11). Rev 30 (20 Nov 2026): the machine labor wage is a season lever, and the Field P&L draws where the grain is (§17.10). Rev 29 (20 Nov 2026): owner answers on the revised sheet; machinery ownership rates are costing only (§17.9). Rev 28 (20 Nov 2026): phase 5 step 5c built, the revised Admin sheet: per-crop operations, a crew on an operation, actual fuel, irrigation and machinery ownership rates (§17.9). Rev 27 (20 Nov 2026): §11 lists every open and declined owner question with its reason (new Q34–Q40). Rev 26 (20 Nov 2026): phase 5 step 5b built, fuel, machine labor and trucking computed from the operations' actual rates (§17.8). Rev 25: phase 5 step 5a built, the importer of the owners' own workbook layout, which replaces the proposed template; the 2020 ledger layout is unsupported (§17.7). Rev 24 (20 Nov 2026): owner answers from the 2026 workbook review (§17.6): Q22a and Q27 closed as declined, Q23a answered (not all nitrogen), and computed operation costs planned with phase 5, with owner questions Q23b and Q33. Rev 23 (20 Nov 2026): phase 8 steps 8a and 8b built: the price-history module, this season's real prices with its marketing windows on the Field P&L charts, a farm file opening as a farm, and the demo's crop year (§17.5). Rev 20: phase 8, price history and marketing windows, planned (§17.5), with owner question Q32. Rev 19 (20 Nov 2026): phases 5 (the yearly workbook importer) and 6 (in-app record editors) planned (§17); reconciliation moves to phase 7; the panel charts built (§17.4). Rev 18 (19 Nov 2026): **phase 4 COMPLETE** (§16) bar the export's land-and-debt section (Q22a): the export and import (4a–4c), a farm path per household year (4d), §199A (4e), the Nebraska community-college credit (4f), and the NOL, §461(l), the farming-loss carryback and §1301 averaging (4g, §16.10–16.11). Rev 17: phase 4 started, what the years after the export are (§16.1), its steps, and owner questions Q29–Q31. Rev 16: **phase 3 COMPLETE** (§15): revenue protection, ARC-County, the §451(f) election and Schedule F lines 4a–6d, and the programs' Field P&L lines. **phase 1 BUILT** (§12): the acceptance import passes
 (§12.4) and the Field P&L panel is in the workbench (§12.5). **Phase 2 started** (§13): step 2a,
 the scenario-agnostic MC path and a farm batch on it, steps 2b–2d (realized yield, price paths, multiplier levers and the contracted share), 2e (calibration from USDA NASS, §13.8) and 2f (the Farm MC panel, §13.7) are built: **phase 2 is complete**. Owner questions Q1–Q20 and Q22–Q25 are answered (§3, §14); Q21, Q26 and the follow-ups Q22a,
 Q23a and Q25a (§14) are open. §7 records what the primary sources on disk decide. §8 is the household
@@ -2061,3 +2061,39 @@ short it ends.
 line (cash out against cash in) belongs to the cash report and is not drawn. Grain is marked
 at the cash price, never at a futures price less a basis. A planned sale with its own price is
 still marked at the cash price until it moves, as the grain chart counts it as unpriced.
+
+### 17.12 Farm MC Results: the paths, and Replay (built, rev 32)
+
+A farm batch said how often each field loses money but showed none of the seasons behind the
+number, and none could be studied. The retirement batch has the two halves this needed: MC
+Results for the distribution and MC Runs for the paths, with Replay. They are not reused.
+Their sections are a retirement plan's (success rate, terminal value, return paths), and §4
+already gave the farm its own results view. What is reused is Replay itself: the param bag
+applied as a worker applies it (`applyParamBagToConfig`), the param stores snapshotted
+before and after (`snapshotParamStores`), and Clear putting back only what is still the
+replay's (`restoreParamStores`).
+
+**Two panels.** Farm MC sets up and runs the batch: paths, Run, the variables. Farm MC Results
+opens when the batch finishes and holds what Farm MC showed (the cash fan, the net histogram,
+the P(loss) table) and the paths:
+
+- the representative paths by the scope's net: worst, P10, median, P90 and best. Each is the
+  real path at that rank, so it can be replayed;
+- every path, sortable, or the losing ones only;
+- for a path, what it drew: each sampled key that varies across the batch, ranked by its
+  distance from the batch median in the batch's standard deviation.
+
+The batch lives in a store on the workbench runtime, not in a panel, because a replay rebuilds
+the scenario. The household carries its batch across a rebuild by hand (`_mcResultCarry`).
+
+**A path is its bag and the price vol.** A farm has no return paths and no sampler, so the
+sim's seed draws nothing, and no seed is pinned. What a batch adds beyond the bag is the
+calibrated `priceVol` it fills in for a crop whose season sets none (§13.8). `applyFarmPath`
+writes both, and drops the bag's `endDate`, which the scenario's `simEnd` already says.
+Replay rebuilds, runs the season to its end and opens the Field P&L, so the table, the
+breakevens and the grain and value charts (§17.10, §17.11) are that season's. Clear restores
+the params and the vol, and keeps either one if it was edited while the replay was in force.
+A batch run on another scenario cannot be replayed onto this one.
+
+**Not built.** A baseline batch and paired comparison (design 100) for the farm, and a path
+replayed at the Monte Carlo's own settings beyond its draws: the farm has none.

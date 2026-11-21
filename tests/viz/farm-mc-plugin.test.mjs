@@ -35,11 +35,15 @@ beforeAll(() => {
   }
 });
 
-const RUNTIME = { bus: { subscribe: () => () => {} } };
+/** A runtime per panel: the farm MC store lives on it, and `published` records the bus. */
+const runtime = () => {
+  const published = [];
+  return { published, bus: { subscribe: () => () => {}, publish: (m) => published.push(m) } };
+};
 const KEY = 'farm.season.s2027.nitrogenMultiplier';
 
-function mount(cfg = FarmScenario.buildDefaultConfig()) {
-  const plugin = new FarmMcPlugin(RUNTIME);
+function mount(cfg = FarmScenario.buildDefaultConfig(), rt = runtime()) {
+  const plugin = new FarmMcPlugin(rt);
   plugin.setServices({ schemaRegistry: { formatAmount: (n) => `$${Math.round(n)}` } });
   plugin.setConfig(cfg);
   plugin._parallel = false;
@@ -65,7 +69,8 @@ test('registered as a panel and opened by the Farm view', () => {
 test('a household plan says it has no farm records', () => {
   const p = mount({ persons: [] });
   assert.match(q(p, 'placeholder').textContent, /no farm records/);
-  assert.equal(q(p, 'grid').style.display, 'none');
+  assert.equal(q(p, 'vars-box').style.display, 'none');
+  assert.equal(q(p, 'open').style.display, 'none');
   p.unmount();
 });
 
@@ -79,8 +84,9 @@ test('the variable table lists the catalog, all off, and warns that nothing is s
   p.unmount();
 });
 
-test('Run uses the typed switches and spreads, and shows the batch\'s summary', async () => {
-  const p = await quiet(() => mount());
+test('Run uses the typed switches and spreads, stores the batch and opens Farm MC Results', async () => {
+  const rt = runtime();
+  const p = await quiet(() => mount(undefined, rt));
   p._n = 6;
   const tr = q(p, 'var-rows').querySelector(`tr[data-key="${KEY}"]`);
   const box = tr.querySelector('input[type="checkbox"]'); box.checked = true; fire(box, 'change');
@@ -93,11 +99,11 @@ test('Run uses the typed switches and spreads, and shows the batch\'s summary', 
   const { summary } = await quiet(() => new FarmMcRunner({
     n: 6, cfgTemplate: FarmScenario.buildDefaultConfig(), mcConfig: m, parallel: false,
   }).run());
-  assert.deepEqual(p._result.summary.metrics, summary.metrics, 'the panel ran the same batch');
-  const first = [...q(p, 'rows').querySelectorAll('tr')][0];
-  assert.match(first.textContent, /Whole farm/);
-  assert.ok(first.textContent.includes(`$${Math.round(summary.metrics['farm.net.custom'].p50)}`));
-  assert.match(q(p, 'status').textContent, /6 paths/);
+  assert.deepEqual(rt.farmMc.result.summary.metrics, summary.metrics, 'the panel ran the same batch');
+  assert.ok(rt.farmMc.result.labels[KEY], 'each variable\'s label goes with the batch');
+  assert.deepEqual(rt.published.at(-1), { type: 'workbench.panel.open', id: 'farm-mc-results' });
+  assert.match(q(p, 'status').textContent, /last batch: 6 paths/);
+  assert.equal(q(p, 'open').style.display, '');
   p.unmount();
 });
 
@@ -183,20 +189,12 @@ test('every path carries its monthly cash series; the fan and histogram are take
   }
 });
 
-test('the charts appear after a run with a scope per operator; the run bar uses the app\'s controls', async () => {
+test('the run bar uses the app\'s controls; the results are another panel\'s', () => {
   const p = mount();
-  assert.equal(q(p, 'charts').style.display, 'none');
   assert.ok(q(p, 'run').classList.contains('btn') && q(p, 'run').classList.contains('btn-primary'));
   assert.ok(q(p, 'n').classList.contains('mc-iters-input'));
-  p._n = 6;
-  await quiet(() => p.run());
-  assert.equal(q(p, 'charts').style.display, '');
-  const scopes = [...q(p, 'scope').querySelectorAll('button')].map(b => b.dataset.v);
-  assert.equal(scopes[0], 'farm');
-  assert.ok(scopes.length > 1);
-  fire(q(p, 'scope').querySelector(`button[data-v="${scopes[1]}"]`), 'click');
-  assert.ok(q(p, 'scope').querySelector(`button[data-v="${scopes[1]}"]`).classList.contains('on'));
-  assert.match(q(p, 'hist-label').textContent, /6 paths/);
+  assert.equal(q(p, 'charts'), null);
+  assert.equal(q(p, 'grid'), null);
   p.unmount();
 });
 

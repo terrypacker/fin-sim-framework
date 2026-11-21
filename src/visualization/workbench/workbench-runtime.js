@@ -30,6 +30,15 @@ export const WB_EVENTS = {
   // today the `?` next to a param label or a param group header. Payload is exactly one
   // of { param } | { group } | { topic }.
   HELP_OPEN:                  'workbench.help.open',
+  // A panel asks for another panel to be shown. Payload: { id } (a plugin id). The Farm MC
+  // panel opens Farm MC Results when its batch finishes.
+  PANEL_OPEN:                 'workbench.panel.open',
+  // Replay one farm Monte Carlo path as the live scenario (design 134 §17.12). Payload:
+  // { run, index, priceVolFilled, label }. WorkbenchApp writes the path onto the scenario,
+  // rebuilds, runs the season and opens the Field P&L; the farm MC store's `replay` says so.
+  FARM_MC_REPLAY:             'workbench.farm.mc.replay',
+  // Put back what a farm replay changed and rebuild. No payload.
+  FARM_MC_REPLAY_CLEAR:       'workbench.farm.mc.replay.clear',
 };
 
 /**

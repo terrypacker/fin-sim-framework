@@ -33,6 +33,8 @@ import { ScenarioLoader }             from '../scenarios/scenario-loader.js';
 import { applyParamBagToConfig, snapshotParamStores, restoreParamStores }
   from '../scenarios/scenario-param-apply.js';
 import { pinnedHistorySpan } from '../finance/economic-regimes/bootstrap-window.js';
+import { applyFarmPath, snapshotFarmPriceVol, restoreFarmPriceVol } from '../finance/farm/farm-mc.js';
+import { farmMcStore } from '../visualization/workbench/plugins/finance/farm-mc-store.js';
 import { ScenarioSerializer }         from '../scenarios/scenario-serializer.js';
 import { ParamFieldLinks }            from '../visualization/scenario/param-field-links.js';
 import { ChartController }            from '../visualization/chart/chart-controller.js';
@@ -260,6 +262,15 @@ export class WorkbenchApp extends BaseComponent {
     this._wbShell.runtime.bus.subscribe(WB_EVENTS.FIELD_HISTORY_OPEN, ({ path }) => {
       if (path) this._statePanelView.openFieldHistory(path);
     });
+
+    // Any panel can ask for another to be shown (the Farm MC panel opens its results).
+    this._wbShell.runtime.bus.subscribe(WB_EVENTS.PANEL_OPEN, ({ id }) => {
+      if (id) this._wbShell.activatePlugin(id);
+    });
+
+    // Farm MC Results replays a path, and its badge clears it (design 134 §17.12).
+    this._wbShell.runtime.bus.subscribe(WB_EVENTS.FARM_MC_REPLAY, (msg) => this._replayFarmPath(msg));
+    this._wbShell.runtime.bus.subscribe(WB_EVENTS.FARM_MC_REPLAY_CLEAR, () => this.clearFarmReplay());
 
     // Show action detail when a row in the cross-action-query panel is clicked.
     this._wbShell.runtime.bus.subscribe(WB_EVENTS.ACTION_ENTRY_OPEN, ({ entry }) => {
@@ -1498,6 +1509,64 @@ export class WorkbenchApp extends BaseComponent {
     // Taken after the load, so the comparison on Clear sees what the loader made of the bag.
     if (this._replaySeed && active) this._replaySeed.after = snapshotParamStores(active);
     this._wbShell?.activatePlugin('timeline');
+  }
+
+  /**
+   * Replay one farm Monte Carlo path as the live scenario (design 134 §17.12): write the path
+   * onto the active farm (`applyFarmPath`: its param bag, and the price vol the batch filled
+   * in), rebuild, run the season to its end, and open the Field P&L, whose tables and charts
+   * are then that season's.
+   *
+   * Undone by `clearFarmReplay`, as the household replay is by `clearReplaySeed`: the param
+   * stores and the vol are snapshotted before and after, and a replay of a replay keeps the
+   * plan's values from before the first. No seed is pinned: a farm path draws nothing from it.
+   *
+   * @param {{ run: object, index: number, priceVolFilled?: object, label?: string }} msg
+   */
+  _replayFarmPath({ run, index, priceVolFilled = {}, label = null } = {}) {
+    const active = ServiceRegistry.getInstance().scenarioService.getActive();
+    if (!active?.farm || !run) return;
+    const id = active.id ?? null;
+    const prior = this._farmReplay?.scenarioId === id ? this._farmReplay : null;
+    const before = prior?.before ?? { params: snapshotParamStores(active), priceVol: snapshotFarmPriceVol(active) };
+    applyFarmPath(active, run, priceVolFilled);
+    this.destroyScenario();
+    this.initScenario();
+    // Taken after the load, so the comparison on Clear sees what the loader made of the bag.
+    this._farmReplay = {
+      scenarioId: id, before,
+      after: { params: snapshotParamStores(active), priceVol: snapshotFarmPriceVol(active) },
+    };
+    this._runToEnd();
+    farmMcStore(this._wbShell?.runtime).setReplay({ index, seed: run.seed ?? null, label, scenarioId: id });
+    this._wbShell?.activatePlugin('field-pnl');
+  }
+
+  /**
+   * Put back what a farm replay changed (a param or vol edited since stays) and rebuild.
+   * @returns {boolean} true if a replay was in force and the scenario was rebuilt.
+   */
+  clearFarmReplay() {
+    const store = farmMcStore(this._wbShell?.runtime);
+    const r = this._farmReplay;
+    this._farmReplay = null;
+    store.setReplay(null);
+    if (!r) return false;
+    const active = ServiceRegistry.getInstance().scenarioService.getActive();
+    if (!active || (active.id ?? null) !== r.scenarioId) return false;
+    restoreParamStores(active, r.before.params, r.after.params);
+    restoreFarmPriceVol(active, r.before.priceVol, r.after.priceVol);
+    this.destroyScenario();
+    this.initScenario();
+    this._runToEnd();
+    return true;
+  }
+
+  /** Step the live run to its end and put the slider there (a farm season is a few hundred events). */
+  _runToEnd() {
+    if (!this.timeControls) return;
+    this.timeControls.stepTo(1);
+    if (this.timeControls.timeSlider) this.timeControls.timeSlider.value = 100;
   }
 
   /**

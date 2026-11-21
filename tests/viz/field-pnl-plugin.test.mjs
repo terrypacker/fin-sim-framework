@@ -68,7 +68,7 @@ const close = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-6, `${msg}: ${a} vs 
 
 test('registered as a panel and opened by the Farm view', () => {
   assert.ok(FINANCE_PLUGINS.some(p => p.id === 'field-pnl' && p.component === FieldPnlPlugin));
-  assert.deepEqual(FINANCE_VIEW_TEMPLATES.Farm.center.tabs, ['field-pnl', 'farm-mc', 'timeline']);
+  assert.deepEqual(FINANCE_VIEW_TEMPLATES.Farm.center.tabs, ['field-pnl', 'farm-mc', 'farm-mc-results', 'timeline']);
   assert.ok(FINANCE_VIEW_TEMPLATES.Everything.center.tabs.includes('field-pnl'));
 });
 

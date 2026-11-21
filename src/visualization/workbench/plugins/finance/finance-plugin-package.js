@@ -36,6 +36,7 @@ import { SecuritiesPlugin }        from './securities-plugin.js';
 import { BondsPlugin }             from './bonds-plugin.js';
 import { FieldPnlPlugin }          from './field-pnl-plugin.js';
 import { FarmMcPlugin }            from './farm-mc-plugin.js';
+import { FarmMcResultsPlugin }     from './farm-mc-results-plugin.js';
 import { SpendingPlugin }          from './spending-plugin.js';
 import { LiquidityPoolsPlugin }    from './liquidity-pools-plugin.js';
 import { PaychequePlugin }         from './paycheque-plugin.js';
@@ -50,7 +51,7 @@ export { ScenarioPlugin, ParametersPlugin, ConfigGraphPlugin, ConfigListPlugin, 
          ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin,
          JournalReportPlugin, ScenarioComparePlugin,
          DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, HoldingsPlugin,
-         AllocationPlugin, SecuritiesPlugin, BondsPlugin, FieldPnlPlugin, FarmMcPlugin, SpendingPlugin, LiquidityPoolsPlugin, PaychequePlugin, MpcCockpitPlugin, HelpPlugin };
+         AllocationPlugin, SecuritiesPlugin, BondsPlugin, FieldPnlPlugin, FarmMcPlugin, FarmMcResultsPlugin, SpendingPlugin, LiquidityPoolsPlugin, PaychequePlugin, MpcCockpitPlugin, HelpPlugin };
 
 /**
  * All finance plugin descriptors — pass directly to WorkbenchShell `plugins` option.
@@ -77,6 +78,7 @@ export const FINANCE_PLUGINS = [
   { id: 'spending',     title: 'Spending',      component: SpendingPlugin,    category: C.PORTFOLIO },
   { id: 'field-pnl',    title: 'Field P&L',     component: FieldPnlPlugin,    category: C.ANALYSIS },
   { id: 'farm-mc',      title: 'Farm MC',       component: FarmMcPlugin,      category: C.ANALYSIS },
+  { id: 'farm-mc-results', title: 'Farm MC Results', component: FarmMcResultsPlugin, category: C.ANALYSIS },
   { id: 'pools',        title: 'Liquidity Pools', component: LiquidityPoolsPlugin, category: C.PORTFOLIO },
   { id: 'paycheque',    title: 'Paycheque',     component: PaychequePlugin,   category: C.PORTFOLIO },
   { id: 'mc-runs',      title: 'MC Runs',       component: McRunsPlugin,      category: C.STUDIES },
@@ -105,7 +107,7 @@ export const FINANCE_DEFAULT_LAYOUT = {
     active: 'scenario',
   },
   center: {
-    tabs: ['config-graph', 'parameters', 'timeline', 'chart', 'allocation', 'securities', 'bonds', 'field-pnl', 'farm-mc', 'spending', 'pools', 'paycheque', 'holdings', 'mpc-cockpit', 'mc-results', 'opt-results', 'dg-results'],
+    tabs: ['config-graph', 'parameters', 'timeline', 'chart', 'allocation', 'securities', 'bonds', 'field-pnl', 'farm-mc', 'farm-mc-results', 'spending', 'pools', 'paycheque', 'holdings', 'mpc-cockpit', 'mc-results', 'opt-results', 'dg-results'],
     active: 'config-graph',
   },
   right: {
@@ -186,7 +188,7 @@ export const FINANCE_VIEW_TEMPLATES = {
   Farm: {
     sizes: [1, 4, 1],   // the P&L is wide, and its answer (the breakevens) is on the right
     left:   { tabs: ['scenario', 'parameters'],                        active: 'scenario' },
-    center: { tabs: ['field-pnl', 'farm-mc', 'timeline'],              active: 'field-pnl' },
+    center: { tabs: ['field-pnl', 'farm-mc', 'farm-mc-results', 'timeline'], active: 'field-pnl' },
     right:  { tabs: ['help', 'state-panel'],                           active: 'help' },
     bottom: { tabs: ['journal-report'],                                active: 'journal-report' },
     bottomSize: 110, bottomCollapsed: true, ...CENTER_SPLIT_DEFAULTS,

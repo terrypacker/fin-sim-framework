@@ -196,3 +196,13 @@
 .fpl-crop-chart:last-child .fpl-chart { height: 170px; }
 /* The grain chart has a legend row above its plot. */
 .fpl-crop-chart .fpl-chart.fpl-grain-chart { height: 180px; }
+
+/* ── Farm MC Results (design 134 §17.12) ── */
+.fmc-plugin .mc-replay-badge { margin: 6px 10px 0; }
+.fmr-paths { padding-top: 6px; }
+.fmr-paths .fmc-chart-head { padding: 0 10px 4px; }
+.fmr-sort { cursor: pointer; user-select: none; }
+.fmr-sort[data-dir="asc"]::after  { content: ' ▲'; }
+.fmr-sort[data-dir="desc"]::after { content: ' ▼'; }
+.fmr-path-grid tbody[data-fmr="rep-rows"] tr:last-child td { border-bottom: 1px solid var(--border-hi); }
+.fmr-drivers { margin: 2px 0 6px 16px; width: auto; }
