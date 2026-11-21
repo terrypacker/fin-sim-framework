@@ -3,9 +3,11 @@ id: field-pnl
 kind: panel
 title: Field P&L
 panels: [field-pnl]
+params: [farmDemoCropYear]
 design: [134-farm-job-costing.md]
 sources: [src/finance/farm/farm-reports.js]
 stamps:
+  param:farmDemoCropYear: ff634f
   panel:field-pnl: 0930cc
   src/finance/farm/farm-reports.js: f76d31
 ---

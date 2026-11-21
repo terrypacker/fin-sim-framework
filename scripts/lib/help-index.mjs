@@ -58,7 +58,21 @@ export async function collectParams() {
     }
   }
 
-  return IntlRetirementScenario.buildFullParamSchema().map(p => ({
+  // The other scenario classes' OWN params (the farm's demo crop year, the single
+  // homeowners' wage): the Parameters panel shows them for a scenario of that class, so
+  // their `?` needs an entry here too. Appended after the retirement surface, first class
+  // wins on a shared key, and only keys that surface does not already have.
+  const seen  = new Set(IntlRetirementScenario.buildFullParamSchema().map(p => p.key));
+  const extra = [];
+  for (const cls of await otherScenarioClasses()) {
+    for (const p of cls.getParamSchema?.() ?? []) {
+      if (!p?.key || seen.has(p.key)) continue;
+      seen.add(p.key);
+      extra.push({ ...p, _scenario: cls.scenarioId() });
+    }
+  }
+
+  return [...IntlRetirementScenario.buildFullParamSchema(), ...extra].map(p => ({
     key:           p.key,
     label:         p.label ?? null,
     group:         p.group ?? null,
@@ -74,9 +88,62 @@ export async function collectParams() {
     opt:           Boolean(p.opt),
     node:          p.node ?? null,
     description:   p.description ?? '',
-    contributedBy: scenarioKeys.has(p.key) ? 'SCENARIO' : (owner.get(p.key) ?? null),
+    contributedBy: p._scenario ? `SCENARIO (${p._scenario})`
+      : scenarioKeys.has(p.key) ? 'SCENARIO' : (owner.get(p.key) ?? null),
   }));
 }
+
+/** Every registered scenario class but the retirement one, in a fixed order. */
+async function otherScenarioClasses() {
+  const mods = await Promise.all([
+    import(`${ROOT}/src/scenarios/us-single-homeowner-scenario.js`),
+    import(`${ROOT}/src/scenarios/au-single-homeowner-scenario.js`),
+    import(`${ROOT}/src/scenarios/farm-scenario.js`),
+  ]);
+  return [mods[0].UsSingleHomeownerScenario, mods[1].AuSingleHomeownerScenario, mods[2].FarmScenario];
+}
+
+/**
+ * The farm's generated record params (design 134 §5.1), one entry per TEMPLATE field:
+ * `farm.<kind>.<id>.<field>`, from `FARM_PARAM_TEMPLATES`.
+ *
+ * The other generated namespaces (`acct.`, `person.`, `job.`, …) need no entry of their
+ * own: their records have edit forms, and `nodes[]` files each template description under
+ * its form field, which is where `sweepRowHelp` sends one of those keys (design 111). A farm
+ * record has no edit form (its rows are edited in the farm tables), so without this list
+ * a farm key had nowhere to resolve and every `?` on a farm param opened "No parameter".
+ *
+ * `prefix` + `field` is the match: a key is this entry when it starts with the prefix, ends
+ * in `.field`, and the id between them has no dot (farm row ids may not, `validateFarm`).
+ */
+export async function collectRecordParams() {
+  const { FARM_PARAM_TEMPLATES, FARM_PARAM_TABLES } = await import(
+    `${ROOT}/src/scenarios/params/record-param-templates.js`);
+  const out = [];
+  for (const [kind, template] of Object.entries(FARM_PARAM_TEMPLATES)) {
+    const table = FARM_PARAM_TABLES[kind];
+    for (const t of template) {
+      if (!t?.field || t.hidden) continue;
+      out.push({
+        key:          `farm.${kind}.<id>.${t.field}`,
+        prefix:       `farm.${kind}.`,
+        field:        t.field,
+        record:       `cfg.farm.${table}`,
+        label:        t.label ?? null,
+        group:        t.group ?? `Farm · ${table}`,
+        type:         t.money ? 'Money' : (t.type ?? null),
+        defaultValue: t.blankValue ?? null,
+        options:      t.options ?? null,
+        mc:           Boolean(t.mc),
+        opt:          Boolean(t.opt),
+        conditional:  typeof t.appliesTo === 'function',
+        description:  t.description ?? '',
+      });
+    }
+  }
+  return out;
+}
+
 
 /* ─────────────────────────────── panels ──────────────────────────────── */
 
@@ -458,16 +525,17 @@ export async function collectTopics() {
 /** The whole tier-1 index. Deterministic: same tree in, byte-identical index out. */
 export async function buildHelpIndex() {
   const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
-  const [params, panels, actions, state, topics, nodes] = await Promise.all([
+  const [params, panels, actions, state, topics, nodes, recordParams] = await Promise.all([
     collectParams(), collectPanels(), collectActions(), collectState(), collectTopics(),
-    collectNodes(),
+    collectNodes(), collectRecordParams(),
   ]);
   const tools  = collectTools(pkg.scripts);
   const design = collectDesign();
 
   return {
     counts: {
-      params: params.length, panels: panels.length, actions: actions.length,
+      params: params.length, recordParams: recordParams.length,
+      panels: panels.length, actions: actions.length,
       tools: tools.length,
       // D6 counts ENTRY POINTS. A module under `scripts/` has no command line to declare,
       // so including it would put the target permanently out of reach.
@@ -479,7 +547,7 @@ export async function buildHelpIndex() {
       nodes: nodes.length,
       nodeFields: nodes.reduce((n, k) => n + k.fields.length, 0),
     },
-    params, panels, actions, tools, state, topics, design, nodes,
+    params, recordParams, panels, actions, tools, state, topics, design, nodes,
   };
 }
 

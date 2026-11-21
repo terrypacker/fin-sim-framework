@@ -238,6 +238,37 @@ test('HELP-P12: the group ? lists the group\'s params and the topics behind them
   assert.ok(body().querySelectorAll('a[data-help-topic]').length > 1);
 });
 
+test('HELP-P15: a generated per-record param\'s ? opens its words, not "No parameter"', async () => {
+  // The Parameters panel sends the raw generated key. A farm key resolves to its record
+  // template; an account or job key to the field on that record's edit form.
+  const cases = [
+    ['farm.plan.plan-north.expectedYield', 'Expected Yield'],
+    ['farm.season.s2027.rentMultiplier',   'Rent Multiplier'],
+    ['acct.anyAccount.minimumBalance',     null],
+    ['job.anyJob.monthlyWage',             null],
+  ];
+  for (const [key, title] of cases) {
+    const { runtime, body } = mountPanel();
+    runtime.bus.publish({ type: WB_EVENTS.HELP_OPEN, param: key });
+    await settle();
+    assert.ok(!body().querySelector('.help-empty'), `${key}: ${body().textContent.slice(0, 80)}`);
+    if (title) {
+      assert.equal(body().querySelector('.help-param-title').textContent, title);
+      assert.ok(body().textContent.includes(key), `${key}: the key clicked, not the pattern`);
+    }
+    document.body.innerHTML = '';
+  }
+});
+
+test('HELP-P16: a farm table\'s group ? lists its record params', async () => {
+  const { runtime, body } = mountPanel();
+  runtime.bus.publish({ type: WB_EVENTS.HELP_OPEN, group: 'Farm · cropPlans' });
+  await settle();
+  const links = body().querySelectorAll('.help-param-list a[data-help-param]');
+  assert.equal(links.length, INDEX.recordParams.filter(p => p.group === 'Farm · cropPlans').length);
+  assert.ok(links.length > 0);
+});
+
 /* ───────────────────────────── the missing index ─────────────────────────── */
 
 test('HELP-P13: with no index the panel says how to build one, rather than looking broken', async () => {

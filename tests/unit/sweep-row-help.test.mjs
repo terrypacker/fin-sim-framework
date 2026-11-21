@@ -24,7 +24,10 @@
 import { test, before } from 'node:test';
 import assert           from 'node:assert/strict';
 
-import { sweepRowHelp }            from '../../src/visualization/help/sweep-row-help.js';
+import { sweepRowHelp, matchRecordParam } from '../../src/visualization/help/sweep-row-help.js';
+import { ScenarioParamGenerator }  from '../../src/scenarios/params/scenario-param-generator.js';
+import { FARM_PARAM_TEMPLATES }    from '../../src/scenarios/params/record-param-templates.js';
+import { FarmScenario }            from '../../src/scenarios/farm-scenario.js';
 import { buildHelpIndex }          from '../../scripts/lib/help-index.mjs';
 import { IntlRetirementMcConfig }  from '../../src/finance/monte-carlo/intl-retirement-mc-config.js';
 import { buildOptVariables }       from '../../src/finance/optimization/intl-retirement-opt-config.js';
@@ -41,7 +44,8 @@ before(async () => { INDEX = await buildHelpIndex(); });
 
 /** Does the index hold what `ref` points at? The same lookups the Help panel paints from. */
 function landsOnSomething(ref) {
-  if (ref.param) return INDEX.params.some(p => p.key === ref.param);
+  if (ref.param) return INDEX.params.some(p => p.key === ref.param)
+    || matchRecordParam(ref.param, INDEX.recordParams) != null;
   if (ref.topic) return INDEX.topics.some(t => t.id === ref.topic);
   const node = INDEX.nodes.find(n => n.kind === ref.node);
   if (!node) return false;
@@ -117,4 +121,38 @@ test('SRH-4: an unknown key and a missing index resolve to nothing, not to a dea
   assert.equal(sweepRowHelp('noSuchLever', INDEX, ALIASES), null);
   assert.equal(sweepRowHelp('nope.x.y', INDEX, ALIASES), null);
   assert.equal(sweepRowHelp('inflationRate', null, ALIASES), null);
+});
+
+test('SRH-5: every param the Parameters panel lists has a ? that lands — reference plan and farm', () => {
+  // The panel's `?` sends the raw key, generated per-record keys included. Those used to
+  // open "No parameter …" for every record (acct., person., job., farm.), because only the
+  // MC/Opt rows were routed. The panel's list is the schema plus the generator's output.
+  const spec = { name: 'srh-5', simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd: new Date(Date.UTC(2034, 0, 1)) };
+  const plan = buildGoldenCfg(spec);
+  const farm = FarmScenario.buildDefaultConfig();
+  const keys = [
+    ...IntlRetirementScenario.buildFullParamSchema().map(p => p.key),
+    ...ScenarioParamGenerator.generate(plan).map(p => p.key),
+    ...FarmScenario.getParamSchema().map(p => p.key),
+    ...ScenarioParamGenerator.generate(farm).map(p => p.key),
+  ];
+  assert.ok(keys.some(k => k.startsWith('farm.')) && keys.some(k => k.startsWith('acct.')));
+  const homeless = keys.filter(k => { const h = sweepRowHelp(k, INDEX); return !h || !landsOnSomething(h.ref); });
+  assert.deepEqual(homeless, [], 'Parameters-panel params whose ? would open nothing');
+});
+
+test('SRH-6: every farm template field has a record-param entry, with its description verbatim', () => {
+  // The demo farm does not exercise every conditional field, so walk the templates too.
+  for (const [kind, template] of Object.entries(FARM_PARAM_TEMPLATES)) {
+    for (const t of template.filter(x => !x.hidden)) {
+      const key = `farm.${kind}.row-1.${t.field}`;
+      const hit = matchRecordParam(key, INDEX.recordParams);
+      assert.ok(hit, `${key} has no record-param entry`);
+      assert.equal(hit.description, t.description ?? '', `${key}: description must be the template's`);
+    }
+  }
+  // An id with a dot is not a farm row id, and a bare prefix is not a key.
+  assert.equal(matchRecordParam('farm.plan.a.b.expectedYield', INDEX.recordParams), null);
+  assert.equal(matchRecordParam('farm.plan..expectedYield', INDEX.recordParams), null);
 });

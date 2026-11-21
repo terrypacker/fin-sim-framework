@@ -30,10 +30,28 @@ import { ScenarioLoader } from '../../scenarios/scenario-loader.js';
  * fails when a lever either panel offers has nowhere to go.
  */
 
+/**
+ * The `index.recordParams` entry a generated key is an instance of, or null — how a farm
+ * key (`farm.plan.<id>.expectedYield`), whose record has no edit form, finds its words.
+ * A key matches when it starts with the entry's prefix, ends in `.field`, and the id
+ * between them is one dot-free segment (farm row ids may not contain a dot).
+ * @param {string} key
+ * @param {Array<{ prefix: string, field: string }>} [recordParams]
+ */
+export function matchRecordParam(key, recordParams) {
+  if (typeof key !== 'string') return null;
+  return (recordParams ?? []).find((p) => {
+    if (!key.startsWith(p.prefix) || !key.endsWith(`.${p.field}`)) return false;
+    const id = key.slice(p.prefix.length, key.length - p.field.length - 1);
+    return id.length > 0 && !id.includes('.');
+  }) ?? null;
+}
+
 /** Generated-key namespace → the edit form (`index.nodes[].kind`) that owns the field. */
 const NODE_KIND_BY_PREFIX = Object.freeze({
   acct:    'account',
   person:  'person',
+  job:     'job',             // `job.<id>.monthlyWage`, the Jobs table's levers (design 116)
   people:  'person',          // `people.<id>.lifeExpectancy`, the mortality rows
   prop:    'real-property',
   coll:    'collectible',
@@ -67,10 +85,15 @@ const TOPIC_BY_PREFIX = Object.freeze({
 export function sweepRowHelp(paramKey, index, aliases = new Map()) {
   if (!index || typeof paramKey !== 'string') return null;
 
-  const param = index.params?.find(p => p.key === paramKey);
-  if (param) return { ref: { param: paramKey }, description: param.description ?? null };
-
   const successor = aliases.get(paramKey);
+  const param = index.params?.find(p => p.key === paramKey)
+    ?? matchRecordParam(paramKey, index.recordParams);
+  // A key another scenario class declares (`primaryMonthlyWage`, the US single homeowner's)
+  // can also be a retirement LEGACY ALIAS. A sweep row is on the retirement plan, so there
+  // the alias wins; the Help panel's exact lookup still serves that class's own panel.
+  const otherClass = param?.contributedBy?.startsWith('SCENARIO (') && successor && successor !== paramKey;
+  if (param && !otherClass) return { ref: { param: paramKey }, description: param.description ?? null };
+
   if (successor && successor !== paramKey) return sweepRowHelp(successor, index, new Map());
 
   const prefix = paramKey.match(/^([A-Za-z]+)[.[]/)?.[1];

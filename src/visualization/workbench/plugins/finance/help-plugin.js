@@ -11,6 +11,7 @@
 import { WorkbenchComponent } from '../../component.js';
 import { WB_EVENTS }          from '../../workbench-runtime.js';
 import { loadHelpIndex }      from '../../../help/help-index-source.js';
+import { sweepRowHelp, matchRecordParam } from '../../../help/sweep-row-help.js';
 
 /**
  * Help — the in-app half of the design-108 help system (§8).
@@ -244,8 +245,19 @@ export class HelpPlugin extends WorkbenchComponent {
 
   /** The fix for the truncated tooltip: the whole description, with its tier-1 facts. */
   _paintParam(key) {
-    const p = this._param(key);
-    if (!p) return { crumb: 'Help', html: `<p class="help-empty">No parameter <code>${esc(key)}</code>.</p>` };
+    const record = this._param(key) ? null : matchRecordParam(key, this._index.recordParams);
+    const p = this._param(key) ?? record;
+    if (!p) {
+      // A generated per-record key (`acct.<id>.balance`, `job.<id>.monthlyWage`) has no
+      // schema entry: its words are the field on the record's edit form, or a concept
+      // topic. The MC and Optimize rows already route through this; the Parameters
+      // panel's `?` sends the raw key, so the route has to be taken here as well.
+      const ref = sweepRowHelp(key, this._index)?.ref;
+      if (ref?.node && ref.field) return this._paintNodeField(`${ref.node}.${ref.field}`);
+      if (ref?.node)              return this._paintNode(ref.node);
+      if (ref?.topic)             return this._paintTopic(ref.topic);
+      return { crumb: 'Help', html: `<p class="help-empty">No parameter <code>${esc(key)}</code>.</p>` };
+    }
 
     const facts = [
       ['Type',    p.type],
@@ -254,7 +266,8 @@ export class HelpPlugin extends WorkbenchComponent {
       (p.min != null || p.max != null) && ['Range', `${p.min ?? '−∞'} … ${p.max ?? '∞'}`],
       p.options?.length && ['One of', p.options.join(', ')],
       ['Sweepable', [p.mc && 'Monte Carlo', p.opt && 'optimizer'].filter(Boolean).join(', ') || 'no'],
-      ['Contributed by', p.contributedBy ?? '—'],
+      record ? ['One per row of', record.record] : ['Contributed by', p.contributedBy ?? '—'],
+      record?.conditional && ['Shown when', 'only on the rows it applies to'],
       p.visibleWhen && ['Shown when', p.visibleWhen],
     ].filter(Boolean);
 
@@ -263,7 +276,7 @@ export class HelpPlugin extends WorkbenchComponent {
       crumb: p.label ?? p.key,
       html: `
         <h3 class="help-param-title">${esc(p.label ?? p.key)}</h3>
-        <p class="help-param-key"><code>${esc(p.key)}</code>${p.group
+        <p class="help-param-key"><code>${esc(key)}</code>${p.group
           ? ` · <a href="#" data-help-group="${esc(p.group)}">${esc(p.group)}</a>` : ''}</p>
         <p class="help-param-desc">${esc(p.description || 'No description.')}</p>
         <dl class="help-facts">${facts
@@ -282,7 +295,10 @@ export class HelpPlugin extends WorkbenchComponent {
    * params reaches its five topics without anyone maintaining a group→topic table.
    */
   _paintGroup(group) {
-    const params = this._index.params.filter(p => p.group === group);
+    // A farm table's group ("Farm · cropPlans") holds record params, one entry per field;
+    // their pattern key (`farm.plan.<id>.expectedYield`) still opens through the matcher.
+    const params = [...this._index.params, ...(this._index.recordParams ?? [])]
+      .filter(p => p.group === group);
     if (!params.length) return { crumb: 'Help', html: `<p class="help-empty">No group <code>${esc(group)}</code>.</p>` };
 
     const topics = [...new Map(params

@@ -45,7 +45,8 @@ function renderParams(params) {
   }
 
   const out = [`## Parameters (${params.length})`, '',
-    'Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.',
+    'Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`, then',
+    'the other scenario classes\' own params (`via SCENARIO (<scenarioId>)`).',
     'A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,',
     '`opt` to the optimizer. `via` names the toolset that contributed it (`SCENARIO` = the',
     'scenario\'s own schema), which is where to go to change it.', ''];
@@ -63,6 +64,36 @@ function renderParams(params) {
       bits.push(`via ${p.contributedBy ?? '?'}`);
 
       out.push(`- **\`${p.key}\`** — ${esc(p.label ?? p.key)} · ${bits.join(' · ')}`);
+      if (p.description) out.push(`  ${esc(p.description)}`);
+    }
+    out.push('');
+  }
+  return out;
+}
+
+/**
+ * The farm's generated record params (design 134 §5.1): one line per template field, which
+ * every row of its table instances as `farm.<kind>.<rowId>.<field>`.
+ */
+function renderRecordParams(recordParams) {
+  const groups = new Map();
+  for (const p of recordParams ?? []) {
+    if (!groups.has(p.group)) groups.set(p.group, []);
+    groups.get(p.group).push(p);
+  }
+  const out = [`## Farm record parameters (${(recordParams ?? []).length})`, '',
+    'From `FARM_PARAM_TEMPLATES`. The Parameters panel lists one of these per row of the',
+    'named `cfg.farm` table, keyed `farm.<kind>.<rowId>.<field>`; **conditional** means only',
+    'the rows it applies to get one. Other records\' params (`acct.`, `person.`, `job.`, …)',
+    'are documented as the field on their edit form, under **Node types** below.', ''];
+  for (const [group, entries] of groups) {
+    out.push(`### ${group} (${entries.length}) · \`${entries[0].record}\``, '');
+    for (const p of entries) {
+      const bits = [`\`${p.type ?? '?'}\``, `default ${code(p.defaultValue)}`];
+      const sweep = [p.mc && 'mc', p.opt && 'opt'].filter(Boolean).join('+');
+      if (sweep)         bits.push(`sweep: ${sweep}`);
+      if (p.conditional) bits.push('conditional');
+      out.push(`- **\`${p.key}\`** — ${esc(p.label ?? p.field)} · ${bits.join(' · ')}`);
       if (p.description) out.push(`  ${esc(p.description)}`);
     }
     out.push('');
@@ -232,11 +263,13 @@ export function renderReferenceMarkdown(index) {
     'doc named in the relevant parameter description, or read the tier-2 topic under `help/`',
     'that cites it — the last section of this file lists every one.',
     '',
-    `${c.params} parameters · ${c.panels} panels · ${c.nodes} node types (${c.nodeFields} fields) · ${c.actions} action types · ${c.tools} tools · ${c.state} state field types · ${c.topics} topics · ${c.design} design docs`,
+    `${c.params} parameters · ${c.recordParams ?? 0} farm record parameters · ${c.panels} panels · ${c.nodes} node types (${c.nodeFields} fields) · ${c.actions} action types · ${c.tools} tools · ${c.state} state field types · ${c.topics} topics · ${c.design} design docs`,
     '',
     '---',
     '',
     ...renderParams(index.params),
+    '---', '',
+    ...renderRecordParams(index.recordParams),
     '---', '',
     ...renderPanels(index.panels),
     '---', '',

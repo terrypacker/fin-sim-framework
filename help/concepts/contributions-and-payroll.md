@@ -3,7 +3,7 @@ id: contributions-and-payroll
 kind: concept
 title: Contributions and Payroll
 panels: [paycheque]
-params: [k401DeferralPct, k401EmployerMatchPct, k401MatchTiers, k401NonElectivePct, k401AnnualCap, iraAnnualContribution, rothAnnualContribution, superGuaranteePct, superGuaranteeAnnualCap, superSalarySacrificePct, superPersonalDeductibleContribution, superNonConcessionalContribution, withholdingMethod]
+params: [k401DeferralPct, k401EmployerMatchPct, k401MatchTiers, k401NonElectivePct, k401AnnualCap, iraAnnualContribution, rothAnnualContribution, superGuaranteePct, superGuaranteeAnnualCap, superSalarySacrificePct, superPersonalDeductibleContribution, superNonConcessionalContribution, withholdingMethod, primaryMonthlyWage, primaryRetirementDate]
 design: [95-wage-logic-and-payroll-contributions.md]
 stamps:
   param:k401DeferralPct: 49b331
@@ -19,6 +19,8 @@ stamps:
   param:superPersonalDeductibleContribution: d0d910
   param:superNonConcessionalContribution: 7ef963
   param:withholdingMethod: ab93c2
+  param:primaryMonthlyWage: 6ad2d7
+  param:primaryRetirementDate: b67be0
   panel:paycheque: d4e25c
 ---
 

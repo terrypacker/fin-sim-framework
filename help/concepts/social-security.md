@@ -3,12 +3,13 @@ id: social-security
 kind: concept
 title: Social Security
 panels: [config-list, dg-config]
-params: []
+params: [socialSecurityMonthly]
 actions: [SS_ENTITLEMENT_APPLY, SS_INCOME_APPLY, SOCIAL_SECURITY_SURVIVOR_APPLY]
 tools: []
 design: [118-social-security-claiming.md, 30-decision-graph-analysis.md]
 sources: [src/finance/account-rules/us/us-social-security-rules.js, src/finance/handlers/monthly-social-security-handler.js]
 stamps:
+  param:socialSecurityMonthly: cce980
   panel:config-list: c29391
   panel:dg-config: 5927ca
   src/finance/account-rules/us/us-social-security-rules.js: 8f3b34

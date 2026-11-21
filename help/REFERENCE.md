@@ -9,13 +9,14 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-247 parameters · 37 panels · 13 node types (209 fields) · 187 action types · 104 tools · 369 state field types · 84 topics · 142 design docs
+251 parameters · 44 farm record parameters · 37 panels · 13 node types (209 fields) · 187 action types · 104 tools · 369 state field types · 84 topics · 142 design docs
 
 ---
 
-## Parameters (247)
+## Parameters (251)
 
-Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`.
+Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`, then
+the other scenario classes' own params (`via SCENARIO (<scenarioId>)`).
 A **sweep** column entry means the param is exposed to that engine: `mc` to Monte Carlo,
 `opt` to the optimizer. `via` names the toolset that contributed it (`SCENARIO` = the
 scenario's own schema), which is where to go to change it.
@@ -324,6 +325,11 @@ scenario's own schema), which is where to go to change it.
 - **`yieldCurveVol`** — Yield Curve Volatility · `Number` · default `0.01` · via ECONOMIC_REGIMES
   Annualized standard deviation (in rate units, e.g. 0.01 = 100 bps) of the stochastic level walk. Only used when Stochastic Yield Curve is on.
 
+### Farm (1)
+
+- **`farmDemoCropYear`** — Demo crop year · `Number` · default `2027` · range 1976…2027 · via SCENARIO (us-farm)
+  Crop year of the US Farm demo. The demo farm, its season window and its dated records move to this year, so the Field P&L charts read that year's published prices; the demo's illustrative costs do not change. Ignored by a farm loaded from a file.
+
 ### FX (8)
 
 - **`fxBasisMethod`** — §988 Lot Consumption Method · `Enum` · default `pro-rata` · one of `pro-rata`, `fifo` · via US_AU_CROSS_BORDER
@@ -342,6 +348,15 @@ scenario's own schema), which is where to go to change it.
   Annual cost of rolling a currency hedge, as a fraction of the hedged value: 0.025%, the midpoint of the 0.02–0.03% quoted for major developed-market currencies. The fee gap between a hedged fund and its unhedged twin is not included, because no security in the model carries a fee.
 - **`hedgeForeignCashRate`** — Hedge: Foreign Cash Rate · `Number` · default `0.045` · via ECONOMIC_REGIMES
   The foreign central-bank rate a currency-hedged fund pays away when the plan does not model that country's Prime (an AU-only plan has no US prime). A hedge earns the home policy rate less this one each year. Defaults to the US Prime default. Ignored where the foreign Prime is loaded.
+
+### Income (3)
+
+- **`primaryMonthlyWage`** — Monthly Salary · `Number` · default `10000` · sweep: mc+opt · via SCENARIO (us-single-homeowner)
+  Gross monthly salary, paid in USD for work performed in the US. Every payroll contribution below is a fraction of this.
+- **`primaryRetirementDate`** — Retirement Date · `Date` · default `Sat Jun 30 2046 19:00:00 GMT-0500 (Central Daylight Time)` · sweep: opt · via SCENARIO (us-single-homeowner)
+  Wages and every payroll contribution stop on this date.
+- **`socialSecurityMonthly`** — Social Security (monthly) · `Number` · default `2800` · sweep: opt · via SCENARIO (us-single-homeowner)
+  Monthly Social Security benefit, paid from the retirement date.
 
 ### Liquidity Pools (6)
 
@@ -582,6 +597,151 @@ scenario's own schema), which is where to go to change it.
   Override filing status auto-detection (true = single, false = MFJ)
 - **`usStateBracketIndexSpread`** — US State Bracket Indexation Spread · `Number` · default `0` · sweep: mc · via US_STATE_TAX
   Annual rate at which US STATE tax brackets and standard deductions are projected to rise past each state's last published table, expressed as a spread ADDED TO inflation (0 = track CPI, -0.03 against 3% inflation = frozen brackets, which is what HI and NE law actually says). Published years are always used as legislated.
+
+---
+
+## Farm record parameters (44)
+
+From `FARM_PARAM_TEMPLATES`. The Parameters panel lists one of these per row of the
+named `cfg.farm` table, keyed `farm.<kind>.<rowId>.<field>`; **conditional** means only
+the rows it applies to get one. Other records' params (`acct.`, `person.`, `job.`, …)
+are documented as the field on their edit form, under **Node types** below.
+
+### Farm · fields (2) · `cfg.farm.fields`
+
+- **`farm.field.<id>.rentPerAcre`** — Cash Rent per Acre · `Number` · default — · sweep: mc · conditional
+  Cash rent for this field in dollars per RENTED acre, paid in the spring and fall installments of the season calendar.
+- **`farm.field.<id>.propertyTax`** — Property Tax · `Number` · default — · conditional
+  This field's property tax for the year as billed, net of the credits on the statement, paid in two halves.
+
+### Farm · products (2) · `cfg.farm.products`
+
+- **`farm.product.<id>.unitPrice`** — Unit Price · `Number` · default — · sweep: mc
+  List price of one unit of this product before its discount. Every crop plan that prescribes it moves with it.
+- **`farm.product.<id>.discountPct`** — Discount · `Number` · default —
+  The discount taken off the unit price, as a fraction (0.08 = 8%).
+
+### Farm · operations (1) · `cfg.farm.operations`
+
+- **`farm.operation.<id>.customRatePerAcre`** — Custom Rate per Acre · `Number` · default — · sweep: mc
+  The custom-hire rate per acre per pass for this field operation. A costing rate for the operator's own machines: charged to each crop plan, never paid.
+
+### Farm · seasons (21) · `cfg.farm.seasons`
+
+- **`farm.season.<id>.yieldShock`** — Farm-wide Yield Shock · `Number` · default `0` · sweep: mc
+  The season's farm-wide yield deviation, as a fraction of expected yield (−0.2 = every field 20% short). 0 harvests the plan.
+- **`farm.season.<id>.irrigatedYieldShock`** — Irrigated Yield Shock · `Number` · default `0` · sweep: mc · conditional
+  The yield deviation every irrigated field shares and dry fields do not, as a fraction of expected yield (heat, pumping limits). 0 harvests the plan.
+- **`farm.season.<id>.irrigatedYieldBeta`** — Irrigated Yield Beta · `Number` · default `0.05` · conditional
+  How much of the farm-wide yield shock an irrigated field takes: 1 the whole shock, 0 none of it. Dry fields always take all of it. Blank is the NASS calibration (design 134 §13.8).
+- **`farm.season.<id>.laborPerHour`** — Machine Labor Wage · `Number` · default `0` · sweep: mc · conditional
+  The hourly wage of whoever runs the operator's own machines, in dollars. Each operation's hours (acres ÷ acres per hour × crew) are paid at it. 0 computes no machine labor.
+- **`farm.season.<id>.rentMultiplier`** — Rent Multiplier · `Number` · default `1` · sweep: mc
+  Multiplies cash rent on every rented field this season (1 = as authored, 1.2 = 20% more).
+- **`farm.season.<id>.customRateMultiplier`** — Custom Rate Multiplier · `Number` · default `1` · sweep: mc
+  Multiplies every field operation's custom-hire rate this season (1 = as authored, 1.2 = 20% more).
+- **`farm.season.<id>.machineryMultiplier`** — Machinery Multiplier · `Number` · default `1` · sweep: mc
+  Multiplies every operator's real machinery figure this season (1 = as authored, 1.2 = 20% more).
+- **`farm.season.<id>.irrigationMultiplier`** — Irrigation Multiplier · `Number` · default `1` · sweep: mc
+  Multiplies every crop plan's irrigation electricity this season (1 = as authored, 1.2 = 20% more).
+- **`farm.season.<id>.interestMultiplier`** — Interest Multiplier · `Number` · default `1` · sweep: mc · conditional
+  Multiplies interest on overhead rows marked variableRate this season (1 = as authored, 1.2 = 20% more).
+- **`farm.season.<id>.fuelMultiplier`** — Fuel Multiplier · `Number` · default `1` · sweep: mc · conditional
+  Multiplies the computed fuel of every operation done with the operator's own machines this season (1 = as authored, 1.2 = 20% more).
+- **`farm.season.<id>.seedMultiplier`** — Seed Price Multiplier · `Number` · default `1` · sweep: mc · conditional
+  Multiplies the price of every seed product this season (1 = as authored, 1.3 = 30% dearer).
+- **`farm.season.<id>.nitrogenMultiplier`** — Nitrogen Price Multiplier · `Number` · default `1` · sweep: mc · conditional
+  Multiplies the price of every nitrogen product this season (1 = as authored, 1.3 = 30% dearer).
+- **`farm.season.<id>.phosphatePotashMultiplier`** — Phosphate and potash Price Multiplier · `Number` · default `1` · sweep: mc · conditional
+  Multiplies the price of every phosphate and potash product this season (1 = as authored, 1.3 = 30% dearer).
+- **`farm.season.<id>.limeMultiplier`** — Lime Price Multiplier · `Number` · default `1` · sweep: mc · conditional
+  Multiplies the price of every lime product this season (1 = as authored, 1.3 = 30% dearer).
+- **`farm.season.<id>.otherFertilizerMultiplier`** — Other fertilizer Price Multiplier · `Number` · default `1` · sweep: mc · conditional
+  Multiplies the price of every other fertilizer product this season (1 = as authored, 1.3 = 30% dearer).
+- **`farm.season.<id>.herbicideMultiplier`** — Herbicide Price Multiplier · `Number` · default `1` · sweep: mc · conditional
+  Multiplies the price of every herbicide product this season (1 = as authored, 1.3 = 30% dearer).
+- **`farm.season.<id>.fungicideMultiplier`** — Fungicide Price Multiplier · `Number` · default `1` · sweep: mc · conditional
+  Multiplies the price of every fungicide product this season (1 = as authored, 1.3 = 30% dearer).
+- **`farm.season.<id>.insecticideMultiplier`** — Insecticide Price Multiplier · `Number` · default `1` · sweep: mc · conditional
+  Multiplies the price of every insecticide product this season (1 = as authored, 1.3 = 30% dearer).
+- **`farm.season.<id>.otherChemicalMultiplier`** — Other chemical Price Multiplier · `Number` · default `1` · sweep: mc · conditional
+  Multiplies the price of every other chemical product this season (1 = as authored, 1.3 = 30% dearer).
+- **`farm.season.<id>.suppliesMultiplier`** — Supplies Price Multiplier · `Number` · default `1` · sweep: mc · conditional
+  Multiplies the price of every supplies product this season (1 = as authored, 1.3 = 30% dearer).
+- **`farm.season.<id>.customApplicationMultiplier`** — Custom application Price Multiplier · `Number` · default `1` · sweep: mc · conditional
+  Multiplies the price of every custom application product this season (1 = as authored, 1.3 = 30% dearer).
+
+### Farm · cropPlans (5) · `cfg.farm.cropPlans`
+
+- **`farm.plan.<id>.expectedYield`** — Expected Yield · `Number` · default —
+  Expected yield of this crop plan in bushels (or tons) per planted acre.
+- **`farm.plan.<id>.yieldShock`** — Yield Shock · `Number` · default `0` · sweep: mc
+  This field's own yield deviation this season, as a fraction of expected yield, on top of the farm-wide shock. 0 harvests the plan.
+- **`farm.plan.<id>.insurancePremiumPerAcre`** — Insurance Premium per Acre · `Number` · default — · conditional
+  The farmer-paid crop insurance premium per planted acre.
+- **`farm.plan.<id>.irrigationElectricity`** — Irrigation Electricity · `Number` · default — · sweep: mc · conditional
+  This crop plan's metered irrigation electricity for the season, in dollars.
+- **`farm.plan.<id>.aphYield`** — Approved (APH) Yield · `Number` · default — · conditional
+  The approved yield on this field's crop insurance, in bushels per acre: the yield history the guarantee is built on. Blank uses the expected yield.
+
+### Farm · arcBase (1) · `cfg.farm.arcBase`
+
+- **`farm.arcBase.<id>.baseAcres`** — Base Acres · `Number` · default —
+  The FSA farm's base acres of this crop, on which ARC-County pays (85% of them are payment acres), whatever is planted.
+
+### Farm · arcCounties (1) · `cfg.farm.arcCounties`
+
+- **`farm.arcCounty.<id>.expectedYield`** — Expected County Yield · `Number` · default —
+  The county yield expected this season for this crop and practice, in bushels per planted acre. Blank uses the benchmark yield.
+
+### Farm · insurance (1) · `cfg.farm.insurance`
+
+- **`farm.insurance.<id>.coverageLevel`** — Coverage Level · `Number` · default — · sweep: opt
+  The share of the approved yield this policy insures, from 0.5 to 0.85 in steps of 0.05. A higher level pays sooner and costs more premium.
+
+### Farm · machinery (1) · `cfg.farm.machinery`
+
+- **`farm.machinery.<id>.amount`** — Machinery Cost · `Number` · default — · sweep: mc
+  The operator's real machinery cost for the year in dollars: ownership, repairs, fuel and any machine bought this year at its full price.
+
+### Farm · overhead (1) · `cfg.farm.overhead`
+
+- **`farm.overhead.<id>.amount`** — Amount · `Number` · default —
+  This overhead pool's amount for the year, allocated to its operator's crop plans by its basis.
+
+### Farm · contracts (1) · `cfg.farm.contracts`
+
+- **`farm.contract.<id>.shareOfExpected`** — Share of Expected Crop · `Number` · default — · sweep: mc+opt · conditional
+  This contract's bushels as a share of the operator's expected crop of it (0.4 = 40%). Fixed at plan time: a short crop leaves a shortfall to settle.
+
+### Farm · prices (2) · `cfg.farm.prices`
+
+- **`farm.price.<id>.price`** — Cash Price · `Number` · default —
+  The local cash price per bushel from this date until the next price row for the same crop.
+- **`farm.price.<id>.shock`** — Price Shock · `Number` · default `0` · sweep: mc
+  The standard-normal draw that moves the crop's price path over the interval ending at this row, scaled by the season's price volatility. 0 keeps the table.
+
+### Farm · storage (1) · `cfg.farm.storage`
+
+- **`farm.storage.<id>.costPerBuMonth`** — Storage per Bushel-Month · `Number` · default — · sweep: mc
+  The cost of holding one bushel of this crop for one month.
+
+### Farm · sales (2) · `cfg.farm.sales`
+
+- **`farm.sale.<id>.share`** — Share of Unpriced · `Number` · default — · sweep: opt
+  The share of the crop not under contract that this planned sale sells.
+- **`farm.sale.<id>.price`** — Sale Price · `Number` · default — · sweep: mc · conditional
+  The price per bushel this sale gets. Blank uses the cash price on the sale date.
+
+### Farm · otherIncome (1) · `cfg.farm.otherIncome`
+
+- **`farm.otherIncome.<id>.amount`** — Amount · `Number` · default —
+  The amount of this payment in dollars.
+
+### Farm · carryOut (1) · `cfg.farm.carryOut`
+
+- **`farm.carryOut.<id>.amount`** — Prepay Amount · `Number` · default — · sweep: opt
+  Next season's inputs prepaid this December, in dollars. §464(d) defers any part above half the year's other farm expenses.
 
 ---
 
@@ -2452,7 +2612,7 @@ what the in-app panel keys on.
 | [Company Equity](nodes/company.md) | node | 214 | 2 panels · design 49, 72, 88 |
 | [Graph](panels/config-graph.md) | panel | 197 | 1 panel |
 | [Nodes](panels/config-list.md) | panel | 173 | 1 panel |
-| [Contributions and Payroll](concepts/contributions-and-payroll.md) | concept | 242 | 1 panel · 13 params · design 95 |
+| [Contributions and Payroll](concepts/contributions-and-payroll.md) | concept | 242 | 1 panel · 15 params · design 95 |
 | [Cost Basis and Company Equity](concepts/cost-basis-and-equity.md) | concept | 333 | 2 panels · 3 params · design 94, 72 |
 | [Field × Action](panels/cross-action-query.md) | panel | 196 | 1 panel |
 | [Cross-Border Residency](concepts/cross-border-residency.md) | concept | 351 | 2 panels · 5 params · design 36, 52 |
@@ -2470,7 +2630,7 @@ what the in-app panel keys on.
 | [Farm MC](panels/farm-mc.md) | panel | 179 | 1 panel · design 134 |
 | [Farm MC Results](panels/farm-mc-results.md) | panel | 227 | 1 panel · design 134 |
 | [Farm Results into a Household Plan](workflows/farm-to-household.md) | workflow | 593 | 4 params · 2 tools · design 134 |
-| [Field P&L](panels/field-pnl.md) | panel | 229 | 1 panel · design 134 |
+| [Field P&L](panels/field-pnl.md) | panel | 229 | 1 panel · 1 param · design 134 |
 | [Funding and Instalments](concepts/funding-and-instalments.md) | concept | 248 | 2 panels · 3 params · design 107 |
 | [FX](concepts/fx.md) | concept | 390 | 2 panels · 6 params · design 47, 87, 122 |
 | [Handler](nodes/handler.md) | node | 208 | 2 panels · design 2 |
@@ -2510,7 +2670,7 @@ what the in-app panel keys on.
 | [Searching Pool Levers](concepts/searching-pool-levers.md) | concept | 399 | design 110, 97 |
 | [Securities](panels/securities.md) | panel | 212 | 1 panel · design 94 |
 | [Security](nodes/security.md) | node | 209 | 3 panels · design 94, 66, 93 |
-| [Social Security](concepts/social-security.md) | concept | 391 | 2 panels · 3 actions · design 118, 30 |
+| [Social Security](concepts/social-security.md) | concept | 391 | 2 panels · 1 param · 3 actions · design 118, 30 |
 | [Spending](panels/spending.md) | panel | 209 | 1 panel · design 89 |
 | [The Spending Rule](concepts/spending-rule.md) | concept | 296 | 1 panel · 17 params · design 89 |
 | [State](panels/state-panel.md) | panel | 181 | 1 panel |

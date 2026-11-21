@@ -44,16 +44,22 @@ test('HELP-1: every param in the live schema appears in the index, exactly once'
   const schema = IntlRetirementScenario.buildFullParamSchema();
   const index  = await collectParams();
 
-  assert.equal(index.length, schema.length,
-    'the index must neither drop nor invent a param');
-  assert.deepEqual(index.map(p => p.key), schema.map(p => p.key),
-    'and must preserve the schema order the UI groups by');
+  // The retirement surface first, in schema order; then the other scenario classes' own
+  // keys (the farm's demo crop year, the single homeowners'), which it does not have.
+  assert.deepEqual(index.slice(0, schema.length).map(p => p.key), schema.map(p => p.key),
+    'the index must neither drop nor reorder a retirement param');
+  const extra = index.slice(schema.length);
+  assert.ok(extra.some(p => p.key === 'farmDemoCropYear'), 'the farm scenario\'s own param');
+  for (const p of extra) {
+    assert.match(p.contributedBy, /^SCENARIO \(/, `${p.key} names its scenario class`);
+  }
   assert.equal(new Set(index.map(p => p.key)).size, index.length, 'keys are unique');
 });
 
 test('HELP-2: every param carries its description verbatim — the index never paraphrases', async () => {
   const byKey = new Map(IntlRetirementScenario.buildFullParamSchema().map(p => [p.key, p]));
   for (const p of await collectParams()) {
+    if (!byKey.has(p.key)) continue;   // another scenario class's own key: HELP-1 covers it
     assert.equal(p.description, byKey.get(p.key).description ?? '',
       `${p.key}: description must be the schema's, character for character`);
   }
