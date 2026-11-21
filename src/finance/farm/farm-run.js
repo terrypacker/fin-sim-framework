@@ -12,7 +12,7 @@ import { ServiceRegistry } from '../../services/service-registry.js';
 import { BaseScenario }    from '../../scenarios/base-scenario.js';
 import { ScenarioLoader }  from '../../scenarios/scenario-loader.js';
 import { normalizeFarm }   from './farm-records.js';
-import { farmLedger, farmGrainMoves, jobCostReport, cashReport } from './farm-reports.js';
+import { farmLedger, farmGrainMoves, farmGrainSales, jobCostReport, cashReport } from './farm-reports.js';
 
 /**
  * Run one farm season headlessly and build its reports (design 134). One implementation for
@@ -51,9 +51,10 @@ export function runFarm(cfg, { machineryBasis = 'CUSTOM', telemetry = 'journal' 
  * @param {object} cfg the farm scenario cfg; it is cloned, never mutated. The clone is a JSON
  *   round trip, as a saved scenario is: the workbench's live cfg carries class references
  *   (its scenario class) that `structuredClone` refuses.
- * @returns {{ farm: object, ledger: object[], grain: object[], pools: object, receivables: object }}
- *   what `jobCostReport` needs, at either machinery basis, and the grain moves
- *   (`farmGrainMoves`) for the grain chart
+ * @returns {{ farm: object, ledger: object[], grain: object[], grainSales: object[], pools: object,
+ *   receivables: object }} what `jobCostReport` needs, at either machinery basis, the grain
+ *   moves (`farmGrainMoves`) for the grain chart and what each move out fetched
+ *   (`farmGrainSales`) for the grain value chart
  */
 export function planFarm(cfg) {
   const registry = new ServiceRegistry();
@@ -70,6 +71,7 @@ export function planFarm(cfg) {
     farm:        normalizeFarm(cfg.farm),
     ledger:      farmLedger(sim.journal?.journal),
     grain:       farmGrainMoves(sim.journal?.journal),
+    grainSales:  farmGrainSales(sim.journal?.journal),
     pools:       sim.state.farm?.pools ?? {},
     receivables: sim.state.farm?.receivables ?? {},
   };

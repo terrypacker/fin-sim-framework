@@ -90,6 +90,39 @@ export function farmGrainMoves(journal) {
   return rows;
 }
 
+/**
+ * What the grain that left a pool fetched, from a sim journal: one row per contract delivery
+ * or planned sale that opened a receivable (`FARM_RECEIVABLE_OPEN`), in journal order. The
+ * amount is what the ledger books when it is paid, a contract shortfall's settlement included,
+ * so a contract short of all its bushels still has a row (with 0 bushels). It is paid on the
+ * date of the `GRAIN_SALES` posting that names its `receivableId`, if the run reached it.
+ *
+ * @param {object[]} journal `sim.journal.journal`
+ * @returns {object[]} `{ date, receivableId, sourceId, kind, operatorId, crop, cropYear, pool,
+ *   bushels, amount, paymentDate }`; `kind` is CONTRACT or SALE
+ */
+export function farmGrainSales(journal) {
+  const rows = [];
+  for (const e of journal ?? []) {
+    if (e?.action?.type !== 'FARM_RECEIVABLE_OPEN') continue;
+    const d = e.action.data ?? e.action;
+    rows.push({
+      date:         (e.date instanceof Date ? e.date.toISOString() : String(e.date)).slice(0, 10),
+      receivableId: d.receivableId,
+      sourceId:     orNull(d.sourceId),
+      kind:         d.kind,
+      operatorId:   d.operatorId,
+      crop:         d.crop,
+      cropYear:     d.cropYear,
+      pool:         d.pool,
+      bushels:      d.bushels,
+      amount:       d.amount,
+      paymentDate:  orNull(d.paymentDate),
+    });
+  }
+  return rows;
+}
+
 // ─── job-cost report ──────────────────────────────────────────────────────────────
 
 /**

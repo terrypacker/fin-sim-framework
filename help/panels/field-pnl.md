@@ -7,30 +7,28 @@ design: [134-farm-job-costing.md]
 sources: [src/finance/farm/farm-reports.js]
 stamps:
   panel:field-pnl: 0930cc
-  src/finance/farm/farm-reports.js: 1c2159
+  src/finance/farm/farm-reports.js: f76d31
 ---
 
-A farm season's profit and loss per field, with the price and yield that would make each
-field break even.
+A farm season's profit and loss per field, with the price and yield that break it even.
 
 Rows open operator (or crop), then field, then its lines, each naming its Schedule F line.
-**Direct** costs were posted to the field; **overhead** is the operator's cost spread by
-acres, owned acres or named fields. **Machinery** is custom rates or actual (machinery
-figure or ownership rates, computed fuel and labor); the switch moves the net and breakevens.
+**Direct** costs were posted to the field; **overhead** is the operator's, spread by acres,
+owned acres or named fields. **Machinery** is custom rates or actual; the switch moves the
+net and breakevens. *BE unpriced* is what the uncontracted bushels must fetch, red when above
+the expected price.
 
-*BE unpriced* is the price the uncontracted bushels must fetch, red when above the expected
-price, at the planned yield.
+**The price charts** set the cash price against the planned season's breakeven: contracts as
+diamonds, sales as triangles, today as a dot, real Nebraska months as white dots (green at or
+above breakeven). Click a row to chart it. **Demo crop year** under Parameters shows a past
+season.
 
-**The price charts**, one per crop, set the cash price against the planned season's
-breakeven: contracts as diamonds, planned sales as triangles, today's price as a dot. White
-dots are the real Nebraska monthly prices; a green month was at or above breakeven. Click a
-row to chart it (the footer is the whole farm). **Demo crop year** under Parameters shows a
-past season.
+**Where the grain is** stacks each crop's bushels: stored for a later contract (blue), stored
+unpriced (amber), delivered, sold. A field shows its operator's pool, since grain is pooled
+by operator and crop.
 
-**Where the grain is** charts each crop's bushels by date: in storage owed to a later
-contract (blue), in storage unpriced (amber), delivered, and sold. Hover a date for its
-moves. Grain is pooled by operator and crop, so a field shows its operator's pool.
+**What the grain is worth** stacks the same grain in dollars: paid, owed, stored at its
+contract price, and stored at that day's cash price, the only band the market moves. The
+dashed red line is what this season's grain must earn; carried-in grain is not held against it.
 
-Grain owed or in the bin counts at its contract or latest price: revenue, not yet cash.
-Mid-run the table is the season to date, with breakevens too low. Warnings name what the
-totals leave out.
+Grain owed or in the bin is revenue, not yet cash. Mid-run the table is the season to date.

@@ -65,6 +65,16 @@ import { categoryLabel, categoryLine } from '../../../../finance/farm/schedule-f
  * on each move's date, so storage is the area that rises at harvest and steps down at each
  * delivery out of it. Grain is pooled by operator and crop, so a field's scope shows its
  * operator's pool and says so.
+ *
+ * ─── the grain value chart ───────────────────────────────────────────────────────
+ *
+ * Under the grain charts, one chart per crop of WHAT THE GRAIN IS WORTH on each date
+ * (design 134 §17.11), stacked from the most certain dollars to the least: paid, delivered or
+ * sold but not yet paid, in storage at the price of the later contract that takes it, and in
+ * storage unpriced at that day's cash price. Only the top band moves with the market, so the
+ * chart steps on price dates as well as on moves and payments. A dashed line is what the
+ * pool's grain must earn: the cost of the operator's plans of the crop less their non-grain
+ * revenue.
  */
 export class FieldPnlPlugin extends WorkbenchComponent {
   constructor(runtime) {
@@ -86,6 +96,8 @@ export class FieldPnlPlugin extends WorkbenchComponent {
     this._chartCrops = '';                 // the crops the chart DOM was built for
     this._grainCharts = new Map();         // crop → ECharts instance (the grain chart)
     this._grainCrops  = '';
+    this._valueCharts = new Map();         // crop → ECharts instance (the grain value chart)
+    this._valueCrops  = '';
     this._ro      = null;
   }
 
@@ -127,6 +139,12 @@ export class FieldPnlPlugin extends WorkbenchComponent {
             <span class="mc-section-label" data-fpl="grain-label">Where the grain is</span>
           </div>
           <div data-fpl="grain-charts"></div>
+        </div>
+        <div class="fpl-chart-wrap" data-fpl="value-wrap" style="display:none">
+          <div class="fpl-chart-head">
+            <span class="mc-section-label" data-fpl="value-label">What the grain is worth</span>
+          </div>
+          <div data-fpl="value-charts"></div>
         </div>
         <table class="sec-grid fpl-split-off" data-fpl="grid" style="display:none">
           <thead><tr>
@@ -203,7 +221,9 @@ export class FieldPnlPlugin extends WorkbenchComponent {
 
   onAdopt() { this._resizeCharts(); }
 
-  _resizeCharts() { for (const c of [...this._charts.values(), ...this._grainCharts.values()]) c.resize(); }
+  _resizeCharts() {
+    for (const c of [...this._charts.values(), ...this._grainCharts.values(), ...this._valueCharts.values()]) c.resize();
+  }
 
   onUnmount() { this._disposeChart(); }
 
@@ -223,6 +243,9 @@ export class FieldPnlPlugin extends WorkbenchComponent {
     for (const c of this._grainCharts.values()) c.dispose();
     this._grainCharts.clear();
     this._grainCrops = '';
+    for (const c of this._valueCharts.values()) c.dispose();
+    this._valueCharts.clear();
+    this._valueCrops = '';
   }
 
   _bindSeg(name, apply) {
@@ -310,6 +333,7 @@ export class FieldPnlPlugin extends WorkbenchComponent {
       this._q('foot').innerHTML = '';
       this._q('chart-wrap').style.display = 'none';
       this._q('grain-wrap').style.display = 'none';
+      this._q('value-wrap').style.display = 'none';
       this._renderWarn([]);
       if (asof) asof.textContent = r.report ? `crop year ${r.report.cropYear}` : '—';
       return;
@@ -356,17 +380,23 @@ export class FieldPnlPlugin extends WorkbenchComponent {
     const b = this._machineryBasis;
     const d = this._plan.data;
     this._plan.reports[b] ??= jobCostReport(d.farm, d.ledger, { machineryBasis: b, pools: d.pools, receivables: d.receivables });
-    return { farm: d.farm, report: this._plan.reports[b], grain: d.grain ?? [], ledger: d.ledger };
+    return { farm: d.farm, report: this._plan.reports[b], grain: d.grain ?? [], grainSales: d.grainSales ?? [], ledger: d.ledger };
   }
 
   _renderChart(farm) {
     const wrap = this._q('chart-wrap');
     if (!wrap) return;
     const plan = this._planReport();
-    if (plan.reason) { wrap.style.display = 'none'; this._q('grain-wrap').style.display = 'none'; return; }
+    if (plan.reason) {
+      wrap.style.display = 'none';
+      this._q('grain-wrap').style.display = 'none';
+      this._q('value-wrap').style.display = 'none';
+      return;
+    }
     const now = this._sim?.currentDate ? this._sim.currentDate.toISOString().slice(0, 10) : null;
     const set = breakevenChartSet(plan.farm, plan.report, this._chartScope, now);
     this._renderGrain(farm, plan, now, set);
+    this._renderValue(farm, plan, now, set);
     if (!set.length) { wrap.style.display = 'none'; return; }
     wrap.style.display = '';
     const basis = this._machineryBasis === 'ACTUAL' ? 'actual machinery' : 'custom rates';
@@ -457,6 +487,55 @@ export class FieldPnlPlugin extends WorkbenchComponent {
         }
       }
       chart.setOption(grainChartOption(d, { colors, title: _cropLabel(d.crop), xLabels: i === set.length - 1 }), true);
+    });
+  }
+
+  /**
+   * The grain value charts, one per crop, under the grain charts and on the price charts'
+   * date range: what the PLANNED season's grain is worth on each date (`grainValueSet`).
+   */
+  _renderValue(farm, plan, now, priceSet) {
+    const wrap = this._q('value-wrap');
+    if (!wrap) return;
+    const set = grainValueSet(plan.farm, plan.grain, plan.grainSales, plan.ledger, plan.report, this._chartScope, now,
+      priceSet.length ? { start: priceSet[0].start, end: priceSet[0].end, crops: priceSet.map(d => d.crop) } : {});
+    if (!set.length) { wrap.style.display = 'none'; return; }
+    wrap.style.display = '';
+    const basis = this._machineryBasis === 'ACTUAL' ? 'actual machinery' : 'custom rates';
+    this._q('value-label').textContent =
+      `${this._scopeLabel(farm, this._chartScope)} — what the grain is worth (planned season, breakeven on ${basis})`;
+    const host = this._q('value-charts');
+    const key = set.map(d => d.crop).join('|');
+    if (key !== this._valueCrops) {
+      for (const c of this._valueCharts.values()) c.dispose();
+      this._valueCharts.clear();
+      host.innerHTML = set.map(d => `
+        <div class="fpl-crop-chart" data-crop="${_esc(d.crop)}">
+          <div class="fpl-chart fpl-grain-chart" data-fpl-value="${_esc(d.crop)}"></div>
+          <div class="bond-caption" data-fpl-value-caption="${_esc(d.crop)}"></div>
+        </div>`).join('');
+      this._valueCrops = key;
+    }
+    const date = (d) => this._fmtDate(d);
+    for (const d of set) {
+      host.querySelector(`[data-fpl-value-caption="${d.crop}"]`).textContent = grainValueCaption(d, {
+        date, label: _cropLabel(d.crop), poolOf: d.pooledFrom ? this._operatorName(farm, d.pooledFrom) : null,
+      });
+    }
+    if (!this._canvasAvailable()) return;
+    const colors = this._colors();
+    set.forEach((d, i) => {
+      const el = host.querySelector(`[data-fpl-value="${d.crop}"]`);
+      let chart = this._valueCharts.get(d.crop);
+      if (!chart) {
+        chart = echarts.init(el, null, { renderer: 'canvas' });
+        this._valueCharts.set(d.crop, chart);
+        if (typeof ResizeObserver === 'function') {
+          this._ro ??= new ResizeObserver(() => this._resizeCharts());
+          this._ro.observe(el);
+        }
+      }
+      chart.setOption(grainValueOption(d, { colors, title: _cropLabel(d.crop), xLabels: i === set.length - 1 }), true);
     });
   }
 
@@ -974,13 +1053,7 @@ export const GRAIN_BANDS = Object.freeze([
  * @returns {object|null} null when the scope moves none of that crop
  */
 export function grainChartData(farm, moves, ledger, scope, crop, now, win = {}) {
-  const plan = scope.kind === 'plan'
-    ? farm.cropPlans.find(p => p.id === scope.id) ?? null : null;
-  const planOp = plan ? farm.fields.find(f => f.id === plan.fieldId)?.operatorId ?? null : null;
-  const mine = (m) => m.crop === crop && (
-    scope.kind === 'operator' ? m.operatorId === scope.id
-      : scope.kind === 'plan' ? m.operatorId === planOp
-        : true);
+  const { mine, planOp } = _poolScope(farm, scope, crop);
   // Journal order within a day: harvest and carry-in come before the moves out of the pool.
   const ms = moves.filter(mine).map((m, i) => ({ ...m, i }))
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.i - b.i));
@@ -1028,7 +1101,7 @@ export function grainChartData(farm, moves, ledger, scope, crop, now, win = {}) 
     crop, start, end, now, nowInWindow: now != null && now >= start && now <= end,
     points,
     harvests,
-    pooledFrom: plan ? planOp : null,
+    pooledFrom: scope.kind === 'plan' ? planOp : null,
     harvested: ins('HARVEST'),
     carriedIn: ins('CARRY_IN'),
     harvestDay,
@@ -1040,6 +1113,23 @@ export function grainChartData(farm, moves, ledger, scope, crop, now, win = {}) 
     storageCost: (ledger ?? []).filter(r => r.category === 'STORAGE' && pools.has(String(r.jobId).replace(/^pool:/, '')))
       .reduce((s, r) => s + r.amount, 0),
   };
+}
+
+/**
+ * Which grain pools a scope sees for one crop: an operator's own, a field's operator's (grain
+ * is pooled by operator and crop, not tracked by field), or every operator's.
+ *
+ * @returns {{ mine: (r: { crop: string, operatorId: string }) => boolean, planOp: string|null }}
+ */
+function _poolScope(farm, scope, crop) {
+  const plan = scope.kind === 'plan'
+    ? farm.cropPlans.find(p => p.id === scope.id) ?? null : null;
+  const planOp = plan ? farm.fields.find(f => f.id === plan.fieldId)?.operatorId ?? null : null;
+  const mine = (m) => m.crop === crop && (
+    scope.kind === 'operator' ? m.operatorId === scope.id
+      : scope.kind === 'plan' ? m.operatorId === planOp
+        : true);
+  return { mine, planOp };
 }
 
 /** One day's moves for the tooltip: the harvest as one line, each move out on its own. */
@@ -1164,13 +1254,272 @@ export function grainChartOption(d, { colors, title = null, xLabels = true }) {
     },
     series: GRAIN_BANDS.map((b, i) => ({
       id: b.id, name: b.label, type: 'line', step: 'end', stack: 'grain', symbol: 'none',
-      lineStyle: { width: 1, color: fill[b.id] }, itemStyle: { color: fill[b.id] },
+      lineStyle: { width: _bandEmpty(d.points, b.id) ? 0 : 1, color: fill[b.id] }, itemStyle: { color: fill[b.id] },
       areaStyle: { color: fill[b.id], opacity: b.id.startsWith('bin') ? 0.55 : 0.18 },
       data: d.points.map(p => [ts(p.date), p[b.id]]),
       ...(i === 0 ? { markLine: { silent: true, symbol: 'none', data: marks } } : {}),
     })),
   };
 }
+
+// ─── The grain value chart ───────────────────────────────────────────────────────
+
+/** The value chart's bands, bottom to top: from the most certain dollars to the least. */
+export const GRAIN_VALUE_BANDS = Object.freeze([
+  { id: 'paid',          label: 'Paid' },
+  { id: 'owed',          label: 'Delivered or sold, not yet paid' },
+  { id: 'binContracted', label: 'In storage, contracted' },
+  { id: 'binUnpriced',   label: 'In storage, at the cash price' },
+]);
+
+/**
+ * What one crop's grain is worth through the season, for one scope (design 134 §17.11): after
+ * each day's moves, payments and price changes, in dollars.
+ *
+ * - **Paid** and **not yet paid**: what each contract delivery or planned sale fetched
+ *   (`farmGrainSales`, the amount the ledger books, a shortfall's settlement included), from
+ *   its date until it is paid (its `GRAIN_SALES` posting), then paid.
+ * - **In storage, contracted**: the bushels a later delivery out of the same pool takes, at
+ *   that contract's price, the deliveries taken in date order (the bushels match the grain
+ *   chart's contracted band).
+ * - **In storage, at the cash price**: the rest of the pool at the crop's realized cash price
+ *   on that date. It is the one band that moves with the market.
+ *
+ * `need` is what the pools' grain must earn: the total cost of the plans that harvest into them
+ * (the scope's operator's plans of the crop; a field's operator's, as the pool is) less their
+ * non-grain revenue. Storage cost is in it, so the bands are value, never net of storage.
+ * Carried-in grain is a past season's: it is in the bands, but `season` (the value of this crop
+ * year's grain alone) is what is held against `need`.
+ *
+ * @param {object} farm normalized farm
+ * @param {object[]} moves `farmGrainMoves` of the planned season
+ * @param {object[]} sales `farmGrainSales` of the planned season
+ * @param {object[]} ledger `farmLedger` of the planned season (the payment dates)
+ * @param {object} report `jobCostReport` of the planned season (the cost line)
+ * @param {{ kind: 'farm'|'operator'|'crop'|'plan', id?: string }} scope
+ * @param {string} crop
+ * @param {string|null} now `YYYY-MM-DD`
+ * @param {{ start?: string, end?: string }} [win] the date range; widened to every move and payment
+ * @returns {object|null} null when the scope moves none of that crop
+ */
+export function grainValueData(farm, moves, sales, ledger, report, scope, crop, now, win = {}) {
+  const { mine, planOp } = _poolScope(farm, scope, crop);
+  const y = farm.season.cropYear;
+  const ms = moves.filter(mine).map((m, i) => ({ ...m, i }))
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.i - b.i));
+  if (!ms.length) return null;
+  const paidOn = new Map(ledger.filter(r => r.receivableId && r.category === 'GRAIN_SALES').map(r => [r.receivableId, r.date]));
+  const ss = sales.filter(mine).map(x => ({ ...x, paidDate: paidOn.get(x.receivableId) ?? null }));
+  const contractPrice = new Map(farm.contracts.map(k => [k.id, k.price]));
+  const priceRows = farm.prices.filter(p => p.crop === crop).map(p => p.date);
+
+  const dated = [...ms.map(m => m.date), ...ss.map(x => x.date), ...ss.map(x => x.paidDate).filter(Boolean)].sort();
+  const first = dated[0], last = dated.at(-1);
+  const start = win.start && win.start < first ? win.start : _addDays(first, -31);
+  const end = win.end && win.end > last ? win.end : _addDays(last, 31);
+  const dates = [...new Set([start, ...dated, ...priceRows.filter(d => d > start && d < end), end])].sort();
+
+  const delivers = ms.filter(m => m.kind === 'DELIVER');
+  const valueOn = (day, keep) => {
+    let paid = 0, owed = 0;
+    for (const x of ss) {
+      if (!keep(x) || x.date > day) continue;
+      if (x.paidDate != null && x.paidDate <= day) paid += x.amount; else owed += x.amount;
+    }
+    const held = new Map();
+    for (const m of ms) if (keep(m) && m.date <= day) held.set(m.pool, (held.get(m.pool) ?? 0) + m.bushels);
+    let contracted = 0, contractedBu = 0, bin = 0;
+    for (const [pool, bu] of held) {
+      let left = Math.max(0, bu);
+      bin += left;
+      for (const m of delivers) {
+        if (m.pool !== pool || m.date <= day || left <= 0) continue;
+        const take = Math.min(left, -m.bushels);
+        contracted += take * (contractPrice.get(m.sourceId) ?? 0);
+        contractedBu += take;
+        left -= take;
+      }
+    }
+    const price = priceOn(farm.prices, crop, day, 'realized');
+    const unpricedBu = bin - contractedBu;
+    return { paid, owed, binContracted: contracted, binUnpriced: unpricedBu * (price ?? 0), unpricedBu, price };
+  };
+  const all = () => true;
+  const thisYear = (r) => r.cropYear === y;
+  const carried = ms.some(m => m.cropYear !== y);
+
+  const points = dates.map(day => {
+    const v = valueOn(day, all);
+    const total = v.paid + v.owed + v.binContracted + v.binUnpriced;
+    let season = total;
+    if (carried) { const t = valueOn(day, thisYear); season = t.paid + t.owed + t.binContracted + t.binUnpriced; }
+    return { date: day, ...v, total, season, events: _dayValueEvents(farm, ms, ss, day) };
+  });
+
+  const rows = report.plans.filter(p => p.planId && p.crop === crop && (
+    scope.kind === 'operator' ? p.operatorId === scope.id
+      : scope.kind === 'plan' ? p.operatorId === planOp
+        : true));
+  const need = rows.length ? rows.reduce((s, p) => s + p.totalCost - p.revenue.other, 0) : null;
+  const tail = points.at(-1);
+  const peak = points.reduce((a, p) => (p.total > a.total ? p : a), points[0]);
+  const peakUnpriced = points.reduce((a, p) => (p.binUnpriced > a.binUnpriced ? p : a), points[0]);
+  // The date from which this season's grain stays at or above what it must earn, to the end.
+  let coveredFrom = null;
+  if (need != null && tail.season >= need - 0.005) {
+    coveredFrom = tail.date;
+    for (let i = points.length - 1; i >= 0 && points[i].season >= need - 0.005; i--) coveredFrom = points[i].date;
+  }
+  const everCovered = need != null && points.some(p => p.season >= need - 0.005);
+  return {
+    crop, start, end, now, nowInWindow: now != null && now >= start && now <= end,
+    points,
+    harvests: [...new Set(ms.filter(m => m.kind === 'HARVEST').map(m => m.date))],
+    pooledFrom: scope.kind === 'plan' ? planOp : null,
+    need,
+    carriedIn: carried ? points.reduce((mx, p) => Math.max(mx, p.total - p.season), 0) : 0,
+    peak: { date: peak.date, total: peak.total },
+    peakUnpriced: { date: peakUnpriced.date, value: peakUnpriced.binUnpriced, share: peakUnpriced.total > 0 ? peakUnpriced.binUnpriced / peakUnpriced.total : 0 },
+    ending: { total: tail.total, season: tail.season, paid: tail.paid },
+    coveredFrom,
+    everCovered,
+  };
+}
+
+/** One day's events for the value tooltip: the moves out with what they fetched, payments and a new cash price. */
+function _dayValueEvents(farm, ms, ss, day) {
+  const name = (x) => (x.kind === 'CONTRACT'
+    ? farm.contracts.find(c => c.id === x.sourceId)?.name : farm.sales.find(c => c.id === x.sourceId)?.name) ?? x.sourceId ?? x.kind;
+  const lines = [];
+  const harvest = ms.filter(m => m.date === day && m.kind === 'HARVEST').reduce((s, m) => s + m.bushels, 0);
+  if (harvest > 0) lines.push({ kind: 'HARVEST', bushels: harvest, label: 'harvested' });
+  const carry = ms.filter(m => m.date === day && m.kind === 'CARRY_IN').reduce((s, m) => s + m.bushels, 0);
+  if (carry > 0) lines.push({ kind: 'CARRY_IN', bushels: carry, label: 'carried in' });
+  for (const x of ss) {
+    if (x.date === day) lines.push({ kind: x.kind, bushels: x.bushels, amount: x.amount, label: name(x), paidDate: x.paidDate });
+    if (x.paidDate === day) lines.push({ kind: 'PAID', amount: x.amount, label: name(x) });
+  }
+  return lines;
+}
+
+/**
+ * Every crop's value chart for one scope, on one date range (the price charts' when given), in
+ * the order `crops` lists them, then any other crop the scope moves.
+ */
+export function grainValueSet(farm, moves, sales, ledger, report, scope, now, { start, end, crops = [] } = {}) {
+  const plan = scope.kind === 'plan' ? farm.cropPlans.find(p => p.id === scope.id) : null;
+  const all = [...new Set([...crops, ...moves.map(m => m.crop)])]
+    .filter(c => (scope.kind === 'crop' ? c === scope.id : plan ? c === plan.crop : true));
+  const run = (win) => all.map(c => grainValueData(farm, moves, sales, ledger, report, scope, c, now, win)).filter(Boolean);
+  const first = run({ start, end });
+  if (!first.length) return [];
+  const s = first.map(d => d.start).sort()[0];
+  const e = first.map(d => d.end).sort().at(-1);
+  // Again on the shared range, so every chart's first and last points are valued on its dates.
+  return first.every(d => d.start === s && d.end === e) ? first : run({ start: s, end: e });
+}
+
+/** The sentence under a crop's value chart. */
+export function grainValueCaption(d, { date = (x) => x, label = null, poolOf = null } = {}) {
+  const parts = [];
+  const head = label ? `${label}: ` : '';
+  parts.push(`${head}worth up to ${_money0(d.peak.total)} on ${date(d.peak.date)}; ${_money0(d.ending.total)} at the end of the run, ${_money0(d.ending.paid)} of it paid.`);
+  if (d.peakUnpriced.value > 0.5) {
+    parts.push(`Up to ${_money0(d.peakUnpriced.value)} (${(100 * d.peakUnpriced.share).toFixed(0)}%) rides on the cash price, on ${date(d.peakUnpriced.date)}.`);
+  } else {
+    parts.push('None of it rides on the cash price.');
+  }
+  if (d.need != null) {
+    const what = `the ${_money0(d.need)} this season's grain must earn`;
+    if (d.coveredFrom) parts.push(`It covers ${what} from ${date(d.coveredFrom)}.`);
+    else if (d.everCovered) parts.push(`It reaches ${what} but falls below it again; ${_money0(d.need - d.ending.season)} short at the end.`);
+    else parts.push(`It never reaches ${what}: ${_money0(d.need - d.ending.season)} short at the end.`);
+  }
+  if (d.carriedIn > 0.5) parts.push(`Includes up to ${_money0(d.carriedIn)} of grain carried in from the year before, not held against this season's cost.`);
+  if (poolOf) parts.push(`This is ${poolOf}'s whole pool of the crop and the cost of all its fields of it.`);
+  return parts.join(' ');
+}
+
+/** ECharts option for a crop's value chart: the bands stacked as steps, the cost line dashed. */
+export function grainValueOption(d, { colors, title = null, xLabels = true }) {
+  const ts = (iso) => Date.parse(`${iso}T00:00:00Z`);
+  const fill = { paid: colors.green, owed: colors.dim, binContracted: colors.price, binUnpriced: colors.amber };
+  const byTs = new Map(d.points.map(p => [ts(p.date), p]));
+  const marks = d.harvests.map(h => ({ xAxis: ts(h), name: 'harvest',
+    lineStyle: { color: colors.muted, type: 'dashed', width: 1 },
+    label: { formatter: 'harvest', color: colors.muted, fontSize: 9, position: 'end' } }));
+  if (d.nowInWindow) {
+    marks.push({ xAxis: ts(d.now), name: 'now', lineStyle: { color: colors.amber, type: 'solid', width: 1 },
+      label: { formatter: 'now', color: colors.amber, fontSize: 10, position: 'end' } });
+  }
+  if (d.need != null && d.need > 0) {
+    marks.push({ yAxis: d.need, name: 'must earn', lineStyle: { color: colors.red, type: 'dashed', width: 1.5 },
+      label: { formatter: `must earn ${_moneyK(d.need)}`, color: colors.red, fontSize: 9, position: 'insideStartTop' } });
+  }
+  return {
+    backgroundColor: 'transparent',
+    animation: false,
+    // The price and grain charts' fixed left margin, so all three line up on the date axis.
+    grid: { top: 34, right: 24, bottom: xLabels ? 24 : 8, left: 64, containLabel: false },
+    ...(title ? { title: { text: title, left: 4, top: 0, textStyle: { color: colors.dim, fontSize: 10, fontWeight: 600, fontFamily: 'monospace' } } } : {}),
+    legend: { top: 0, right: 24, itemWidth: 10, itemHeight: 8, textStyle: { color: colors.dim, fontSize: 9, fontFamily: 'monospace' },
+      data: GRAIN_VALUE_BANDS.map(b => b.label) },
+    xAxis: {
+      type: 'time', min: ts(d.start), max: ts(d.end),
+      axisLabel: { show: xLabels, color: colors.dim, fontSize: 10, fontFamily: 'monospace' },
+      splitLine: { show: false }, axisLine: { lineStyle: { color: colors.border } },
+    },
+    yAxis: {
+      type: 'value', min: 0,
+      axisLabel: { color: colors.dim, fontSize: 10, fontFamily: 'monospace', formatter: _moneyK },
+      splitLine: { lineStyle: { color: colors.border } },
+    },
+    tooltip: {
+      trigger: 'axis', backgroundColor: colors.panel, borderColor: colors.borderHi, borderWidth: 1,
+      textStyle: { color: colors.text, fontSize: 10, fontFamily: 'monospace' },
+      formatter: (ps) => {
+        const p = byTs.get(ps[0]?.value?.[0]);
+        if (!p) return '';
+        const rows = GRAIN_VALUE_BANDS.map(b => `${b.label}: <b>${_money0(p[b.id])}</b>`
+          + (b.id === 'binUnpriced' && p.unpricedBu > 0.5 ? ` (${Math.round(p.unpricedBu).toLocaleString()} bu at ${_perBu(p.price)})` : ''));
+        rows.push(`Total: <b>${_money0(p.total)}</b>`);
+        if (d.need != null) {
+          const gap = p.season - d.need;
+          rows.push(`${_money0(Math.abs(gap))} ${gap >= 0 ? 'above' : 'below'} what this season's grain must earn`);
+        }
+        const ev = p.events.map(e => {
+          if (e.kind === 'HARVEST' || e.kind === 'CARRY_IN') return `+${Math.round(e.bushels).toLocaleString()} bu ${e.label}`;
+          if (e.kind === 'PAID') return `paid: ${_esc(e.label)} ${_money0(e.amount)}`;
+          return `${_esc(e.label)}: ${Math.round(e.bushels).toLocaleString()} bu for ${_money0(e.amount)}`
+            + (e.paidDate && e.paidDate !== p.date ? `, paid ${e.paidDate}` : e.paidDate ? '' : ', not paid in the run');
+        });
+        return [`<b>${p.date}</b>`, ...rows,
+          ...(ev.length ? [`<span style="color:${colors.muted}">that day</span>`, ...ev] : [])].join('<br/>');
+      },
+    },
+    series: [
+      ...GRAIN_VALUE_BANDS.map((b, i) => ({
+        id: b.id, name: b.label, type: 'line', step: 'end', stack: 'value', symbol: 'none',
+        lineStyle: { width: _bandEmpty(d.points, b.id) ? 0 : 1, color: fill[b.id] }, itemStyle: { color: fill[b.id] },
+        areaStyle: { color: fill[b.id], opacity: b.id.startsWith('bin') ? 0.55 : 0.3 },
+        data: d.points.map(p => [ts(p.date), p[b.id]]),
+        ...(i === 0 ? { markLine: { silent: true, symbol: 'none', data: marks } } : {}),
+      })),
+      // An unseen point at the cost line, so the auto-scaled axis keeps the line in view (a
+      // markLine is not in the axis extent; a fixed max gave a crowded top tick).
+      ...(d.need > 0 ? [{ id: 'needExtent', type: 'line', silent: true, symbol: 'none', tooltip: { show: false },
+        lineStyle: { opacity: 0 }, data: [[ts(d.start), d.need]] }] : []),
+    ],
+  };
+}
+
+const _moneyK = (v) => (Math.abs(v) >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : Math.abs(v) >= 1000 ? `$${Math.round(v / 1000)}k` : `$${Math.round(v)}`);
+
+/**
+ * A stacked band that is zero on every date draws no outline: its line would run along the top
+ * of the bands under it and tint that edge (and every jump in it) with the empty band's colour.
+ */
+const _bandEmpty = (points, id) => points.every(p => Math.abs(p[id]) < 0.005);
 
 const _money0 = (n) => `$${Math.round(n).toLocaleString()}`;
 

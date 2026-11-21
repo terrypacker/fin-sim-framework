@@ -22,12 +22,14 @@ import v8 from 'node:v8';
 import * as echarts from 'echarts';
 import { FieldPnlPlugin, fieldPnlGroups, fieldPnlLines, fieldPnlCsv, FIELD_PNL_CSV_COLUMNS,
   breakevenChartData, breakevenChartSet, breakevenCaption, breakevenChartOption,
-  grainChartData, grainChartSet, grainCaption, grainChartOption, GRAIN_BANDS }
+  grainChartData, grainChartSet, grainCaption, grainChartOption, GRAIN_BANDS,
+  grainValueData, grainValueSet, grainValueCaption, grainValueOption, GRAIN_VALUE_BANDS }
   from '../../src/visualization/workbench/plugins/finance/field-pnl-plugin.js';
 import { sumPlanRows } from '../../src/finance/farm/farm-reports.js';
 import { FarmScenario } from '../../src/scenarios/farm-scenario.js';
 import { runFarm, planFarm } from '../../src/finance/farm/farm-run.js';
-import { farmGrainMoves } from '../../src/finance/farm/farm-reports.js';
+import { farmGrainMoves, farmGrainSales } from '../../src/finance/farm/farm-reports.js';
+import { priceOn } from '../../src/finance/farm/farm-records.js';
 import { compileFarmEvents } from '../../src/finance/farm/farm-postings.js';
 import { FINANCE_PLUGINS, FINANCE_VIEW_TEMPLATES }
   from '../../src/visualization/workbench/plugins/finance/finance-plugin-package.js';
@@ -428,6 +430,141 @@ describe('the grain chart', () => {
       const caps = [...p.el.querySelectorAll('[data-fpl-grain-caption]')].map(e => e.textContent);
       assert.equal(caps.length, 2);
       assert.ok(caps.every(c => /harvested/.test(c)));
+    } finally { p.unmount(); }
+  });
+});
+
+// ─── What the grain is worth (design 134 §17.11) ──────────────────────────────────
+
+describe('the grain value chart', () => {
+  const moves = () => farmGrainMoves(RUN.sim.journal.journal);
+  const sales = () => farmGrainSales(RUN.sim.journal.journal);
+  const value = (scope, crop, now = null) => grainValueData(RUN.farm, moves(), sales(), RUN.ledger, RUN.jobCost, scope, crop, now);
+  const ts = (iso) => Date.parse(`${iso}T00:00:00Z`);
+
+  test('every move out opens one receivable at the amount its payment books', () => {
+    const ss = sales();
+    const out = moves().filter(m => m.kind === 'DELIVER' || m.kind === 'SELL');
+    assert.equal(ss.filter(x => x.bushels > 0).length, out.length);
+    const paid = RUN.ledger.filter(r => r.category === 'GRAIN_SALES' && r.receivableId);
+    assert.ok(paid.length > 0);
+    for (const r of paid) close(r.amount, ss.find(x => x.receivableId === r.receivableId).amount, r.receivableId);
+    const planned = quiet(() => planFarm(RUN.cfg));
+    assert.deepEqual(planned.grainSales, ss);
+  });
+
+  test('at the end of the run this season\'s grain is worth the report\'s grain revenue', () => {
+    for (const crop of ['CORN', 'SOYBEANS']) {
+      const d = value({ kind: 'farm' }, crop);
+      const rev = RUN.jobCost.plans.filter(p => p.crop === crop).reduce((s, p) => s + p.revenue.grain, 0);
+      close(d.ending.season, rev, crop);
+    }
+  });
+
+  test('contracted storage is valued at its contract, the rest at that day\'s cash price, in the grain chart\'s bushels', () => {
+    const d = value({ kind: 'farm' }, 'CORN');
+    const g = grainChartData(RUN.farm, moves(), RUN.ledger, { kind: 'farm' }, 'CORN', null);
+    for (const gp of g.points.slice(1, -1)) {
+      const vp = d.points.find(p => p.date === gp.date);
+      close(vp.unpricedBu, gp.binUnpriced, `unpriced bushels ${gp.date}`);
+      close(vp.binUnpriced, gp.binUnpriced * priceOn(RUN.farm.prices, 'CORN', gp.date, 'realized'), `cash value ${gp.date}`);
+    }
+    const y = RUN.farm.season.cropYear;
+    // On 1 Jan the old contract k-a-old owes 6,000 of the 9,000 bu carried in.
+    const jan = d.points.find(p => p.date === `${y}-01-01`);
+    const k = RUN.farm.contracts.find(c => c.id === 'k-a-old');
+    close(jan.binContracted, 6000 * k.price, 'the carry-in owed to k-a-old at its price');
+    assert.ok(d.carriedIn > 0);
+  });
+
+  test('the unpriced band steps on a price date with no move', () => {
+    const d = value({ kind: 'farm' }, 'CORN');
+    const moved = new Set(moves().map(m => m.date));
+    const step = d.points.find((p, i) => i > 0 && !moved.has(p.date) && p.unpricedBu > 0
+      && p.price !== d.points[i - 1].price);
+    assert.ok(step, 'a cash price change re-values the stored grain');
+  });
+
+  test('a receivable is owed from its move until it is paid, then paid', () => {
+    const d = value({ kind: 'farm' }, 'CORN');
+    const x = sales().find(r => r.crop === 'CORN' && r.paymentDate > r.date);
+    assert.ok(x, 'the default farm has a corn move paid after its date');
+    const before = d.points.filter(p => p.date >= x.date && p.date < x.paymentDate);
+    assert.ok(before.length && before.every(p => p.owed >= x.amount - 1e-6));
+    assert.ok(d.points.find(p => p.date === x.paymentDate).paid >= x.amount - 1e-6);
+    assert.ok(d.points.at(-1).owed < 1e-6, 'all paid by the end');
+  });
+
+  test('the cost line is the pool\'s plans\' cost less their other revenue; a field shows its operator\'s', () => {
+    const plan = RUN.farm.cropPlans.find(p => p.id === 'p-b-river');
+    const op = value({ kind: 'operator', id: 'opB' }, plan.crop);
+    const rows = RUN.jobCost.plans.filter(p => p.planId && p.operatorId === 'opB' && p.crop === plan.crop);
+    close(op.need, rows.reduce((s, p) => s + p.totalCost - p.revenue.other, 0), 'opB');
+    const set = grainValueSet(RUN.farm, moves(), sales(), RUN.ledger, RUN.jobCost, { kind: 'plan', id: plan.id }, null);
+    assert.deepEqual(set.map(v => v.crop), [plan.crop]);
+    assert.equal(set[0].pooledFrom, 'opB');
+    assert.equal(set[0].need, op.need);
+    assert.deepEqual(set[0].points.map(p => p.total), op.points.map(p => p.total));
+    assert.match(grainValueCaption(set[0], { poolOf: 'Operator B' }), /Operator B's whole pool/);
+  });
+
+  test('the caption gives the peak, the share on the cash price and when the grain covers its cost', () => {
+    const d = value({ kind: 'farm' }, 'CORN');
+    const cap = grainValueCaption(d, { label: 'Corn' });
+    assert.match(cap, /^Corn: worth up to \$/);
+    assert.match(cap, /rides on the cash price/);
+    assert.match(cap, /It covers the \$[\d,]+ this season's grain must earn from/);
+    assert.match(cap, /carried in from the year before/);
+    const short = { ...d, coveredFrom: null, everCovered: false, need: d.ending.season + 1000 };
+    assert.match(grainValueCaption(short), /never reaches .*\$1,000 short at the end/);
+  });
+
+  test('the set shares one date range; the option stacks four bands with the cost line and RENDERS', () => {
+    const set = grainValueSet(RUN.farm, moves(), sales(), RUN.ledger, RUN.jobCost, { kind: 'farm' }, null);
+    assert.equal(new Set(set.map(v => `${v.start}|${v.end}`)).size, 1);
+    const d = value({ kind: 'farm' }, 'CORN', `${RUN.farm.season.cropYear}-11-01`);
+    const opt = grainValueOption(d, { colors: COLORS, title: 'Corn' });
+    assert.deepEqual(opt.series.map(s => s.id), [...GRAIN_VALUE_BANDS.map(b => b.id), 'needExtent']);
+    assert.ok(opt.series.slice(0, -1).every(s => s.stack === 'value' && s.step === 'end'));
+    const mk = opt.series[0].markLine.data;
+    assert.ok(mk.some(m => m.name === 'must earn' && m.yAxis === d.need) && mk.some(m => m.name === 'now'));
+    const chart = echarts.init(null, null, { renderer: 'svg', ssr: true, width: 800, height: 240 });
+    try { chart.setOption(opt); assert.ok(chart.renderToSVGString().includes('<path')); } finally { chart.dispose(); }
+  });
+
+  test('a band that is zero all season draws no outline, in both charts', () => {
+    const width = (opt, id) => opt.series.find(s => s.id === id).lineStyle.width;
+    const v = value({ kind: 'farm' }, 'CORN');
+    const vEmpty = { ...v, points: v.points.map(p => ({ ...p, binUnpriced: 0 })) };
+    assert.equal(width(grainValueOption(vEmpty, { colors: COLORS }), 'binUnpriced'), 0);
+    assert.equal(width(grainValueOption(v, { colors: COLORS }), 'binUnpriced'), 1);
+    const g = grainChartData(RUN.farm, moves(), RUN.ledger, { kind: 'farm' }, 'CORN', null);
+    const gEmpty = { ...g, points: g.points.map(p => ({ ...p, sold: 0 })) };
+    assert.equal(width(grainChartOption(gEmpty, { colors: COLORS }), 'sold'), 0);
+    assert.equal(width(grainChartOption(g, { colors: COLORS }), 'binContracted'), 1);
+  });
+
+  test('the tooltip gives each band, the cash price and the day\'s moves and payments', () => {
+    const d = value({ kind: 'farm' }, 'CORN');
+    const opt = grainValueOption(d, { colors: COLORS });
+    const day = d.points.find(p => p.events.some(e => e.kind === 'CONTRACT' || e.kind === 'SALE') && p.unpricedBu > 0);
+    const tip = opt.tooltip.formatter([{ value: [ts(day.date), 0] }]);
+    for (const b of GRAIN_VALUE_BANDS) assert.ok(tip.includes(b.label), b.label);
+    assert.ok(tip.includes(`at $${day.price.toFixed(2)}`), 'the cash price');
+    assert.match(tip, /must earn/);
+    assert.match(tip, /bu for \$/);
+    const payDay = d.points.find(p => p.events.some(e => e.kind === 'PAID'));
+    assert.match(opt.tooltip.formatter([{ value: [ts(payDay.date), 0] }]), /paid: /);
+  });
+
+  test('the panel draws the value section with a caption per crop', () => {
+    const p = mount();
+    try {
+      assert.equal(q(p, 'value-wrap').style.display, '');
+      assert.match(q(p, 'value-label').textContent, /what the grain is worth/);
+      const caps = [...p.el.querySelectorAll('[data-fpl-value-caption]')].map(e => e.textContent);
+      assert.equal(caps.length, 2);
+      assert.ok(caps.every(c => /worth up to/.test(c)));
     } finally { p.unmount(); }
   });
 });
