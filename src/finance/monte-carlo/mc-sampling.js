@@ -96,6 +96,12 @@ export function createMcSampler({ mix = false, baseCurrency = 'USD' } = {}) {
       // currency. `priceLevel` above stays: it is the residence basket the trough metric
       // is defined in, a different question.
       rates:         realRatesOf(state),
+      // Lifetime REAL consumption so far (base-year USD, realized EXPENSE_DEBITs only —
+      // AccumulateConsumptionReducer). Differencing consecutive yearly samples gives the
+      // household's real spending in each year, which is what a consumption-utility
+      // scorecard needs per path; a lifetime total cannot tell a smooth path from a
+      // feast-then-famine one. A plain number read off state, so the sampler stays inert.
+      consumption:   state.cumulativeConsumption ?? 0,
     };
     if (!mix) return point;
 
@@ -138,6 +144,7 @@ export function extractYearlyTimeSeries(sim) {
       houseValueUsd: sample.houseValueUsd,
       priceLevel:    sample.priceLevel,
       rates:         sample.rates,
+      consumption:   sample.consumption,
       ...(sample.mix ? { grossAssetsUsd: sample.grossAssetsUsd, mix: sample.mix } : {}),
     }));
 }

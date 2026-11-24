@@ -53,6 +53,13 @@
  *                       cube reads `stateDiff`, so it forces FULL telemetry, measured at
  *                       ~7.5x (design 89 §20). Budget for it before enabling it on a grid.
  *
+ *   --consumption       also record each path's REAL spending per calendar year (base-year
+ *                       USD, realized living expenses) as `realSpend`, plus the arm's
+ *                       `realSpendYears`, `deficit` and `deficitMonths`. Free at the default
+ *                       telemetry: it differences the cumulative-consumption reading the
+ *                       yearly sampler already takes. What a consumption-utility (CRRA)
+ *                       scorecard needs, since a lifetime total hides how uneven it was.
+ *
  *   --mix               also record the per-year ASSET MIX on every path (design 82 §8),
  *                       so `mc-report.mjs` can report mix bands, threshold probabilities
  *                       and the mix conditioned on failure. Off by default: it builds an
@@ -132,6 +139,7 @@ const opts = parseFlags(argv, {
   noRecentre: { type: 'flag', help: 'skip the check that MC centers match the scenario' },
   mix:      { type: 'flag', help: 'also record the per-year asset mix' },
   spending: { type: 'flag', help: 'also record classified spending — forces FULL telemetry, ~7.5x' },
+  consumption: { type: 'flag', help: 'also record each path\'s real spending per calendar year (free)' },
   equityStarts: { type: 'string', default: null, choices: ['random', 'rolling'],
     help: 'historical bootstrap start years: rolling = path i opens with the window\'s i-th year (design 133 §4.3)' },
 });
@@ -154,6 +162,7 @@ if (shockWindow && !shock) { console.error('--shock-window needs --shock'); proc
 const recentre = !opts.noRecentre;
 const mix = opts.mix;
 const spending = opts.spending;
+const consumption = opts.consumption;
 // Design 133 §4.3 — a param like any other, set on every arm so the arms stay paired.
 const equityStarts = opts.equityStarts ? opts.equityStarts.toUpperCase() : null;
 
@@ -198,6 +207,7 @@ function describeRisk() {
   if (equityStarts === 'ROLLING') parts.push('rolling historical start years (one per path, in turn)');
   if (mix) parts.push('recording asset mix');
   if (spending) parts.push('recording classified spending (FULL telemetry, ~7.5x)');
+  if (consumption) parts.push('recording real spending per year');
   if (!recentre) parts.push('** CENTER CHECK SKIPPED **');
   return parts.join(' + ');
 }
@@ -242,8 +252,8 @@ for (const [order, key] of armKeys.entries()) {
   if (planPaths && !shock && hasRandomArrival(shocks)) {
     console.log(`** ${key}: a random-arrival shock on top of stochastic paths double-counts the downside`);
   }
-  const { rows, mixSeries, spendingRuns, pathShape, provenance, sequenceRisk, summary, ms } =
-    await runArm({ cfg, n, mcConfig, shocks, mix, spending });
+  const { rows, realSpendYears, mixSeries, spendingRuns, pathShape, provenance, sequenceRisk, summary, ms } =
+    await runArm({ cfg, n, mcConfig, shocks, mix, spending, consumption });
   // A path that THREW is excluded from `rows` by the runner (#792). `n` stays the paths
   // ASKED for — mc-report pairs arms on it — so the dropped seeds travel beside it, or a
   // report reads 199 rows as a 200-path arm and cannot tell a path went missing.
@@ -278,7 +288,8 @@ for (const [order, key] of armKeys.entries()) {
   writeFileSync(join(outDir, `${key}.json`), serializeArm({
     arm: key, order, n, source: base.source, synthetic: base.synthetic,
     samplerCadence: MC_SAMPLER_CADENCE,
-    riskModel: armRisk, levers, recentred, provenance, pathShape, erroredRuns, rows,
+    riskModel: armRisk, levers, recentred, provenance, pathShape, erroredRuns,
+    ...(realSpendYears ? { realSpendYears } : {}), rows,
   }, mixSeries, spendingRuns));
 
   const extras = pathShape?.medianHouseCagr != null

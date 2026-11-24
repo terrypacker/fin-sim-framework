@@ -1687,6 +1687,7 @@ docblock, not re-authored here. Arguments come from each script's declarative
     - `--no-recentre` (flag) — skip the check that MC centers match the scenario
     - `--mix` (flag) — also record the per-year asset mix
     - `--spending` (flag) — also record classified spending — forces FULL telemetry, ~7.5x
+    - `--consumption` (flag) — also record each path's real spending per calendar year (free)
     - `--equity-starts` (string, one of random|rolling) — historical bootstrap start years: rolling = path i opens with the window's i-th year (design 133 §4.3)
 - **`scripts/montecarlo/mc-trace.mjs`**
   replay ONE Monte Carlo path of one arm with the journal on

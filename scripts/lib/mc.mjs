@@ -252,6 +252,26 @@ export function buildArmPathSim({ cfg, mcConfig, shocks, seed, telemetry = 'jour
 }
 
 /**
+ * Real spending per calendar year from a path's yearly samples. Each sample carries
+ * lifetime real consumption up to that year's boundary, so year t's spending is the
+ * difference from the previous sample; the first year is the (usually partial) stretch
+ * from simStart. Rounded to whole base-year dollars. The entries sum to the path's
+ * final `cumulativeConsumption`.
+ * @param {Array<{consumption?: number}>} timeSeries
+ * @returns {number[]}
+ */
+export function consumptionByYear(timeSeries) {
+  const out = []; let prev = 0;
+  for (const p of timeSeries ?? []) { const c = p.consumption ?? prev; out.push(Math.round(c - prev)); prev = c; }
+  return out;
+}
+
+/** The calendar years `consumptionByYear` reports, in order. */
+export function consumptionYears(timeSeries) {
+  return (timeSeries ?? []).map(p => (p.date instanceof Date ? p.date : new Date(p.date)).getUTCFullYear());
+}
+
+/**
  * Run one arm and reduce each iteration to a comparable row.
  *
  * `seed` is carried on every row because it is the pairing key across arms — drop
@@ -263,7 +283,7 @@ export function buildArmPathSim({ cfg, mcConfig, shocks, seed, telemetry = 'jour
  * the arm; that is the same minutes-vs-milliseconds split the whole run/report
  * separation exists for.
  */
-export async function runArm({ cfg, n, mcConfig, shocks, mix = false, spending = false }) {
+export async function runArm({ cfg, n, mcConfig, shocks, mix = false, spending = false, consumption = false }) {
   const runner = new IntlRetirementMcRunner({
     n, mcConfig, cfgTemplate: cfg, mix, spending,
     simStart: new Date(cfg.simStart), simEnd: new Date(cfg.simEnd),
@@ -337,6 +357,10 @@ export async function runArm({ cfg, n, mcConfig, shocks, mix = false, spending =
     // Design 133 §4.3 — the historical year a pinned or rolling path opened with, and its
     // real terminal net worth; absent otherwise, so an unpinned arm file is unchanged.
     ...startYearFields(r),
+    // Opt-in (`consumption: true`): this path's REAL spending per calendar year, base-year
+    // USD, from the sampler's cumulative-consumption reading (see consumptionByYear).
+    ...(consumption ? { realSpend: consumptionByYear(r.timeSeries), deficit: Math.round(r.cumulativeDeficit ?? 0),
+      deficitMonths: r.deficitMonths ?? 0 } : {}),
   }));
 
   // Per-path mix matrix (design 82 §8.1). `failed` travels with each path because
@@ -355,6 +379,8 @@ export async function runArm({ cfg, n, mcConfig, shocks, mix = false, spending =
 
   return {
     rows,
+    // The calendar year each `realSpend` entry belongs to (identical on every path).
+    ...(consumption ? { realSpendYears: consumptionYears(runs[0]?.timeSeries) } : {}),
     mixSeries,
     spendingRuns,
     pathShape:  summary?.pathShape ?? null,
