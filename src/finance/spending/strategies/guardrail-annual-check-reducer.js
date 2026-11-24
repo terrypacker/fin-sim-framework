@@ -12,6 +12,15 @@ import { Reducer, PRIORITY }              from '../../../simulation-framework/re
 import { computeGuardrailPortfolioValue } from '../guardrail-portfolio-value.js';
 
 /**
+ * The shortest gap between two checks. Guyton-Klinger is an ANNUAL rule, but the reducer
+ * listens to both countries' period advances, and a plan with both toolsets fires both:
+ * US on 1 Jan and AU on 1 Jul. Before this gate such a plan checked, and could cut or
+ * raise, twice a year, so its guardrail stepped twice as fast as a US-only plan's. Eleven
+ * months rather than twelve so an annual cadence never misses a year to day-count drift.
+ */
+export const GUARDRAIL_MIN_CHECK_GAP_MS = 335 * 24 * 3600 * 1000;
+
+/**
  * GuardrailAnnualCheckReducer — Guyton-Klinger Guardrail annual withdrawal-rate check.
  *
  * Runs at PRE_PROCESS + 3 on each annual period advance, after:
@@ -25,7 +34,9 @@ import { computeGuardrailPortfolioValue } from '../guardrail-portfolio-value.js'
  *   currentRate = annualSpending / portfolioValue
  *
  * and fires GUARDRAIL_ADJUST_APPLY via state.next if the rate drifts outside
- * the configured bands:
+ * the configured bands. It checks at most once a year (GUARDRAIL_MIN_CHECK_GAP_MS): the first
+ * period advance after the last check runs it and stamps `state.guardrail.lastCheckDate`.
+ * A single-country plan, which has one advance a year, is unaffected by the gate:
  *
  *   Cut  — currentRate > initialRate * (1 + cutThreshold)  → discretionary *= (1 - cutPct)
  *   Raise — currentRate < initialRate * (1 - raiseThreshold) → discretionary *= (1 + raisePct)
@@ -58,12 +69,23 @@ export class GuardrailAnnualCheckReducer extends Reducer {
     this.baseCurrency       = baseCurrency;
   }
 
-  reduce(state, action) {
+  reduce(state, action, tickDate) {
     const initialRate = state.guardrail?.initialWithdrawalRate;
     if (!initialRate || !state.expenses) return this.newState(state);
 
+    // The tick date is the reducer's third argument; a period-advance action carries none.
+    const when      = tickDate ?? action.date ?? null;
+    const whenMs    = when != null ? new Date(when).getTime() : null;
+    const lastMs    = state.guardrail.lastCheckDate != null ? new Date(state.guardrail.lastCheckDate).getTime() : null;
+    if (whenMs != null && lastMs != null && whenMs - lastMs < GUARDRAIL_MIN_CHECK_GAP_MS) {
+      return this.newState(state);
+    }
+    const stamped = whenMs != null
+      ? { guardrail: { ...state.guardrail, lastCheckDate: new Date(whenMs) } }
+      : {};
+
     const portfolioValue = computeGuardrailPortfolioValue(state, this.baseCurrency);
-    if (!portfolioValue) return this.newState(state);
+    if (!portfolioValue) return this.newState(state, stamped);
 
     const annualSpending = (state.expenses.essential + state.expenses.discretionary) * 12;
     const currentRate    = annualSpending / portfolioValue;
@@ -82,11 +104,11 @@ export class GuardrailAnnualCheckReducer extends Reducer {
       cause      = 'raise';
     }
 
-    if (multiplier == null) return this.newState(state);
+    if (multiplier == null) return this.newState(state, stamped);
 
     const date = action.date ?? null;
 
-    return this.newState(state, {}, [
+    return this.newState(state, stamped, [
       { type: 'GUARDRAIL_ADJUST_APPLY', multiplier, cause, date },
     ]);
   }

@@ -25,6 +25,9 @@ import assert   from 'node:assert/strict';
 import { GuardrailBaselineApplyReducer } from '../../src/finance/spending/strategies/guardrail-baseline-apply-reducer.js';
 import { GuardrailAdjustApplyReducer }   from '../../src/finance/spending/strategies/guardrail-adjust-apply-reducer.js';
 import { GuardrailAnnualCheckReducer }   from '../../src/finance/spending/strategies/guardrail-annual-check-reducer.js';
+import { ServiceRegistry } from '../../src/services/service-registry.js';
+import { ScenarioLoader }  from '../../src/scenarios/scenario-loader.js';
+import { BaseScenario }    from '../../src/index.js';
 import { RetirementDateHandler }         from '../../src/finance/spending/strategies/retirement-date-handler.js';
 
 const US_ADV = { type: 'US_PERIOD_ADVANCE' };
@@ -214,4 +217,62 @@ test('SPEND-GR-14: RetirementDateHandler uses state.monthlyExpenses for annualSp
   const actions = retHandler.call({ state, date: new Date() });
   assert.ok(Math.abs(actions[0].annualSpending - 96_000) < 0.01);
   assert.ok(Math.abs(actions[0].initialWithdrawalRate - 0.12) < 1e-10);
+});
+
+// ── once a year (both countries' period advances reach the check) ──────────────────────────
+
+test('SPEND-GR-15: a second advance inside the year does not check again', () => {
+  // Out of band both times (rate 0.15 > cut band 0.144). The July advance six months after a
+  // January check must not cut a second time; the next January must.
+  const jan = checkReducer.reduce(stateWithBaseline({ portfolioBalance: 800_000 }), US_ADV, new Date('2030-01-01'));
+  assert.strictEqual(jan.next.filter(a => a.type === 'GUARDRAIL_ADJUST_APPLY').length, 1);
+  assert.strictEqual(new Date(jan.guardrail.lastCheckDate).toISOString().slice(0, 10), '2030-01-01');
+  const { next: _n, ...afterJan } = jan;
+  const jul = checkReducer.reduce(afterJan, { type: 'AU_PERIOD_ADVANCE' }, new Date('2030-07-01'));
+  assert.strictEqual((jul.next ?? []).filter(a => a.type === 'GUARDRAIL_ADJUST_APPLY').length, 0);
+  assert.strictEqual(new Date(jul.guardrail.lastCheckDate).toISOString().slice(0, 10), '2030-01-01');
+  const jan2 = checkReducer.reduce(afterJan, US_ADV, new Date('2031-01-01'));
+  assert.strictEqual(jan2.next.filter(a => a.type === 'GUARDRAIL_ADJUST_APPLY').length, 1);
+});
+
+test('SPEND-GR-16: an in-band check is still stamped, so it counts as the year\'s check', () => {
+  const s = checkReducer.reduce(stateWithBaseline({ portfolioBalance: 1_000_000 }), US_ADV, new Date('2030-01-01'));
+  assert.strictEqual((s.next ?? []).length, 0);
+  assert.strictEqual(new Date(s.guardrail.lastCheckDate).toISOString().slice(0, 10), '2030-01-01');
+});
+
+function runGuardrailPlan(toolsets) {
+  ServiceRegistry.resetAll();
+  const services = ServiceRegistry.getInstance();
+  const cfg = { toolsets, simStart: '2020-03-01', simEnd: '2025-01-01',
+    parameters: { monthlyExpenses: 2000, exchangeRateUsdToAud: 1.55, spendingStrategy: ['GUARDRAIL'] },
+    persons: [{ __type: 'Person', id: 'primary', name: 'P', birthDate: '1960-01-15', citizen: ['US'],
+      lifeExpectancy: 95, monthlyWage: 0, retirementDate: '2019-01-01', socialSecurityMonthly: 0 }],
+    accounts: [{ __type: 'SavingsAccount', id: 'us-savings', name: 'US', role: 'us-savings', stateKey: 'usSavingsAccount',
+      initialValue: 1e6, ownershipType: 'sole', ownerId: 'primary', minimumBalance: 0, country: 'US',
+      currency: { code: 'USD', symbol: '$' }, drawdownPriority: 1 }] };
+  if (toolsets.includes('AU_RETIREMENT')) cfg.accounts.push({ __type: 'SavingsAccount', id: 'au-savings', name: 'AU',
+    role: 'au-savings', stateKey: 'auSavingsAccount', initialValue: 0, ownershipType: 'sole', ownerId: 'primary',
+    minimumBalance: 0, country: 'AU', currency: { code: 'AUD', symbol: '$' } });
+  const sc = new BaseScenario({ context: services.simulationContext, simStart: new Date(cfg.simStart), simEnd: new Date(cfg.simEnd) });
+  sc.buildSim();
+  new ScenarioLoader().load(structuredClone(cfg), services);
+  const checks = new Set();
+  for (let y = 2020; y <= 2024; y++) for (const m of [0, 6]) {
+    const d = new Date(Date.UTC(y, m, 2));
+    if (d < new Date(cfg.simStart)) continue;
+    sc.sim.stepTo(d);
+    const last = sc.sim.state.guardrail?.lastCheckDate;
+    if (last) checks.add(new Date(last).toISOString().slice(0, 10));
+  }
+  return [...checks];
+}
+
+test('SPEND-GR-17: a two-country plan checks once a year, like a US-only plan', () => {
+  // Both toolsets fire AU_PERIOD_ADVANCE (1 Jul) and US_PERIOD_ADVANCE (1 Jan); before the gate the
+  // guardrail checked on both. The first advance after the start is 1 Jul 2020, so it keeps July.
+  assert.deepStrictEqual(runGuardrailPlan(['US_RETIREMENT', 'AU_RETIREMENT', 'US_AU_CROSS_BORDER']),
+    ['2020-07-01', '2021-07-01', '2022-07-01', '2023-07-01', '2024-07-01']);
+  assert.deepStrictEqual(runGuardrailPlan(['US_RETIREMENT']),
+    ['2021-01-01', '2022-01-01', '2023-01-01', '2024-01-01']);
 });
