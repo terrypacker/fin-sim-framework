@@ -18,6 +18,7 @@
  *        retired at the start and the baseline was dated today.
  * CTX-2  GUARDRAIL, retired before the plan starts: the baseline is captured at the start and
  *        dated the plan start.
+ * CTX-2b the sim-start baseline FX-converts a foreign balance, as the annual check does.
  * CTX-3  a late-life care window that begins before the plan ends still runs when the death
  *        falls after the end.
  */
@@ -28,6 +29,7 @@ import assert   from 'node:assert/strict';
 import { ServiceRegistry } from '../../src/services/service-registry.js';
 import { ScenarioLoader }  from '../../src/scenarios/scenario-loader.js';
 import { BaseScenario }    from '../../src/index.js';
+import { computeGuardrailPortfolioValue } from '../../src/finance/spending/guardrail-portfolio-value.js';
 
 beforeEach(() => ServiceRegistry.resetAll());
 
@@ -93,6 +95,23 @@ test('CTX-2: retired before the plan starts: baseline at the start, dated the st
     retirementDate: '2019-01-01', parameters: { spendingStrategy: ['GUARDRAIL'] } }));
   assert.ok(sim.state.guardrail.initialWithdrawalRate > 0);
   assert.equal(iso(sim.state.guardrail.baselineDate), '2020-01-01');
+});
+
+test('CTX-2b: the sim-start baseline values a foreign balance the way the annual check does', () => {
+  // A retired household with an AUD drawdown account. The compile-time pre-population used to
+  // sum balances at face (A\$310k counted as US\$310k), so the baseline portfolio disagreed with
+  // the one GuardrailAnnualCheckReducer measures every year after: at 1.55 it read \$1.31M where
+  // the check reads \$1.20M, and the cut band sat ~9% too low until something re-baselined.
+  const cfg = makeConfig({ simStart: '2020-01-01', simEnd: '2022-01-01',
+    retirementDate: '2019-01-01', parameters: { spendingStrategy: ['GUARDRAIL'] } });
+  const au = cfg.accounts.find(a => a.id === 'au-savings');
+  au.initialValue = 310_000; au.drawdownPriority = 2;
+  const sim = loadScenario(cfg);
+  const g = sim.state.guardrail;
+  assert.ok(Math.abs(g.portfolioValue - 1_200_000) < 1, `baseline portfolio ${g.portfolioValue}`);
+  assert.ok(Math.abs(g.portfolioValue - computeGuardrailPortfolioValue(sim.state, 'USD')) < 1,
+    'pre-population and live valuation agree at the start');
+  assert.ok(Math.abs(g.initialWithdrawalRate - 24_000 / 1_200_000) < 1e-12);
 });
 
 test('CTX-3: late-life care that starts inside the run still runs when the death is after it', () => {

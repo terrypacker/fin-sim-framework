@@ -101,6 +101,7 @@ import { assertInterestBearingHoldings } from '../../finance/holdings/default-al
 import { marketReturnFor }                    from './economic-regimes-toolset.js';
 import { saleDateToUtc } from '../year-date-migration.js';
 import { lastWorkDate }                 from '../../finance/payroll/employment.js';
+import { toBaseCurrency, currencyOf }   from '../../finance/fx/to-base-currency.js';
 
 /**
  * Design 99 — a handler's market rate of last resort: its market's total and yield, from
@@ -718,8 +719,18 @@ export const US_RETIREMENT = {
         return end && new Date(end) <= simStart;
       });
       if (anyRetired) {
+        // Valued the way GuardrailAnnualCheckReducer and RetirementDateHandler value it
+        // (computeGuardrailPortfolioValue: each balance FX-converted into the guardrail's base
+        // currency). Summing `a.balance` at face added an AUD super or savings balance as if it
+        // were USD: on a real US→AU plan that overstated the baseline portfolio by 5% and so
+        // set the cut band 5% too low until a later retirement re-baselined it. The rate is the
+        // scenario's USD→AUD anchor, which is what `effectiveExchangeRates.USD_AUD` holds at
+        // the plan start; no anchor (a single-country plan) converts nothing, as at runtime.
+        const baseCurrency     = p.guardrailBaseCurrency ?? 'USD';
+        const fxAtStart        = { effectiveExchangeRates: p.exchangeRateUsdToAud ? { USD_AUD: p.exchangeRateUsdToAud } : {} };
         const drawdownAccounts = context.accounts.filter(a => a.drawdownPriority != null);
-        const portfolioValue   = drawdownAccounts.reduce((sum, a) => sum + (a.balance ?? 0), 0);
+        const portfolioValue   = drawdownAccounts.reduce((sum, a) =>
+          sum + toBaseCurrency(a.balance ?? 0, currencyOf(a, baseCurrency), baseCurrency, fxAtStart), 0);
         const annualSpending   = monthlyExpenses * 12;
         patches.guardrail = {
           initialWithdrawalRate:       portfolioValue > 0 ? annualSpending / portfolioValue : 0,
