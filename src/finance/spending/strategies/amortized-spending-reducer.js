@@ -9,7 +9,7 @@
  */
 
 import { Reducer, PRIORITY }              from '../../../simulation-framework/reducers.js';
-import { computeGuardrailPortfolioValue } from '../guardrail-portfolio-value.js';
+import { computeGuardrailPortfolioValue, usdToExpenseUnits } from '../guardrail-portfolio-value.js';
 import { monthIndex, claimMonthOf, ownFactor } from '../../account-rules/us/us-social-security-rules.js';
 
 const MS_PER_YEAR = 365.25 * 24 * 3600 * 1000;
@@ -51,26 +51,8 @@ export function socialSecurityPv(state, dateMs, horizonYears, r) {
   return pv;
 }
 
-/**
- * Convert a USD amount (at spot) into the units `state.expenses` is denominated in.
- *
- * Mirrors MonthlyExpensesHandler: under RESIDENCE the authored figure is base-currency
- * USD that the handler re-bases into the residence currency at the ANCHOR rate
- * (`expenseRebaseRates` / `baseExchangeRates`), never spot. So a dollar of portfolio buys
- *   USD resident:  1 expense unit;
- *   AU resident:   spot / anchor expense units (convert to AUD at spot, re-base at anchor).
- * An explicit USD or AUD expense currency is plain spot conversion.
- */
-export function usdToExpenseUnits(usd, state, expensesCurrency = 'RESIDENCE', primaryPersonKey = null) {
-  const spot   = state.effectiveExchangeRates?.USD_AUD;
-  const anchor = state.expenseRebaseRates?.USD_AUD ?? state.baseExchangeRates?.USD_AUD;
-  if (expensesCurrency === 'AUD') return Number.isFinite(spot) ? usd * spot : usd;
-  if (expensesCurrency === 'USD') return usd;
-  const key = primaryPersonKey ?? Object.keys(state.people ?? {})[0];
-  const isAu = state.people?.[key]?.residency === 'AU';
-  if (!isAu || !Number.isFinite(spot) || !Number.isFinite(anchor) || anchor <= 0) return usd;
-  return usd * spot / anchor;
-}
+// Shared with the guardrail (one conversion for every spending-to-portfolio ratio).
+export { usdToExpenseUnits };
 
 /**
  * AmortizedSpendingReducer — the AMORTIZED ("spend it down") spending strategy.

@@ -9,7 +9,7 @@
  */
 
 import { Reducer, PRIORITY }              from '../../../simulation-framework/reducers.js';
-import { computeGuardrailPortfolioValue } from '../guardrail-portfolio-value.js';
+import { guardrailPortfolioInExpenseUnits } from '../guardrail-portfolio-value.js';
 
 /**
  * The shortest gap between two checks. Guyton-Klinger is an ANNUAL rule, but the reducer
@@ -46,7 +46,9 @@ export const GUARDRAIL_MIN_CHECK_GAP_MS = 335 * 24 * 3600 * 1000;
  * @param {number} [opts.raiseThreshold=0.20] Rate below initial (fraction) that triggers a raise
  * @param {number} [opts.cutPct=0.10]         Fraction of discretionary to cut (0.10 = 10%)
  * @param {number} [opts.raisePct=0.10]       Fraction to raise discretionary (0.10 = 10%)
- * @param {string} [opts.baseCurrency='USD']  Currency for portfolio FX conversion
+ * @param {string} [opts.baseCurrency='USD']  Kept for the config surface; the rate is currency-free
+ * @param {string} [opts.expensesCurrency='RESIDENCE']  Units of state.expenses (see
+ *                 guardrailPortfolioInExpenseUnits): the portfolio is converted into them.
  */
 export class GuardrailAnnualCheckReducer extends Reducer {
   static description = 'Annual Guyton-Klinger check: cuts or raises discretionary spending when withdrawal rate drifts outside configured bands.';
@@ -59,6 +61,7 @@ export class GuardrailAnnualCheckReducer extends Reducer {
     cutPct         = 0.10,
     raisePct       = 0.10,
     baseCurrency   = 'USD',
+    expensesCurrency = 'RESIDENCE',
   } = {}) {
     super('Guardrail Annual Check', PRIORITY.PRE_PROCESS + 3);
     this.reducedActionTypes = ['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE'];
@@ -67,6 +70,7 @@ export class GuardrailAnnualCheckReducer extends Reducer {
     this.cutPct             = cutPct;
     this.raisePct           = raisePct;
     this.baseCurrency       = baseCurrency;
+    this.expensesCurrency   = expensesCurrency;
   }
 
   reduce(state, action, tickDate) {
@@ -84,7 +88,7 @@ export class GuardrailAnnualCheckReducer extends Reducer {
       ? { guardrail: { ...state.guardrail, lastCheckDate: new Date(whenMs) } }
       : {};
 
-    const portfolioValue = computeGuardrailPortfolioValue(state, this.baseCurrency);
+    const portfolioValue = guardrailPortfolioInExpenseUnits(state, this.expensesCurrency);
     if (!portfolioValue) return this.newState(state, stamped);
 
     const annualSpending = (state.expenses.essential + state.expenses.discretionary) * 12;

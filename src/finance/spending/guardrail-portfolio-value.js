@@ -50,3 +50,39 @@ export function computeGuardrailPortfolioValue(state, baseCurrency = 'USD') {
   }
   return total;
 }
+
+/**
+ * Convert a USD amount (at spot) into the units `state.expenses` / `state.monthlyExpenses`
+ * are denominated in, so a spending-to-portfolio ratio compares like with like.
+ *
+ * Mirrors MonthlyExpensesHandler: under RESIDENCE the authored figure is base-currency USD
+ * that the handler re-bases into the residence currency at the ANCHOR rate
+ * (`expenseRebaseRates` / `baseExchangeRates`), never spot. So a dollar of portfolio buys
+ *   USD resident:  1 expense unit;
+ *   AU resident:   spot / anchor expense units (convert to AUD at spot, re-base at anchor).
+ * An explicit USD or AUD expense currency is plain spot conversion. Without the rates (a
+ * single-country plan) nothing is converted.
+ */
+export function usdToExpenseUnits(usd, state, expensesCurrency = 'RESIDENCE', primaryPersonKey = null) {
+  const spot   = state.effectiveExchangeRates?.USD_AUD;
+  const anchor = state.expenseRebaseRates?.USD_AUD ?? state.baseExchangeRates?.USD_AUD;
+  if (expensesCurrency === 'AUD') return Number.isFinite(spot) ? usd * spot : usd;
+  if (expensesCurrency === 'USD') return usd;
+  const key  = primaryPersonKey ?? Object.keys(state.people ?? {})[0];
+  const isAu = state.people?.[key]?.residency === 'AU';
+  if (!isAu || !Number.isFinite(spot) || !Number.isFinite(anchor) || anchor <= 0) return usd;
+  return usd * spot / anchor;
+}
+
+/**
+ * The guardrail portfolio in the expense figure's units: the denominator of every guardrail
+ * withdrawal rate (baseline and annual check alike).
+ *
+ * Dividing `monthlyExpenses` by a spot-USD portfolio mixed units once an AU resident's expense
+ * figure was re-based at the anchor: the rate then moved with the exchange rate though nothing
+ * real had changed, so a currency swing alone could cut or raise spending. Here the ratio is
+ * currency-free, so `guardrailBaseCurrency` no longer affects it.
+ */
+export function guardrailPortfolioInExpenseUnits(state, expensesCurrency = 'RESIDENCE') {
+  return usdToExpenseUnits(computeGuardrailPortfolioValue(state, 'USD'), state, expensesCurrency);
+}

@@ -9,7 +9,7 @@
  */
 
 import { HandlerEntry }                   from '../../../simulation-framework/handlers.js';
-import { computeGuardrailPortfolioValue } from '../guardrail-portfolio-value.js';
+import { computeGuardrailPortfolioValue, guardrailPortfolioInExpenseUnits } from '../guardrail-portfolio-value.js';
 
 /**
  * RetirementDateHandler — handles RETIREMENT_DATE_REACHED one-off events.
@@ -33,9 +33,10 @@ export class RetirementDateHandler extends HandlerEntry {
   static type        = 'RetirementDateHandler';
   static eventType   = 'RETIREMENT_DATE_REACHED';
 
-  constructor({ baseCurrency = 'USD' } = {}) {
+  constructor({ baseCurrency = 'USD', expensesCurrency = 'RESIDENCE' } = {}) {
     super(null, 'Retirement Date (Guardrail Baseline)');
     this.baseCurrency          = baseCurrency;
+    this.expensesCurrency      = expensesCurrency;
     this.generatedActionTypes  = ['GUARDRAIL_BASELINE_APPLY'];
   }
 
@@ -44,7 +45,10 @@ export class RetirementDateHandler extends HandlerEntry {
     if (!portfolioValue) return [];
 
     const annualSpending        = (state.monthlyExpenses ?? 0) * 12;
-    const initialWithdrawalRate = portfolioValue > 0 ? annualSpending / portfolioValue : 0;
+    // The RATE divides by the portfolio in the expense figure's units (the annual check does the
+    // same); `portfolioValue` stays in baseCurrency as the reported baseline.
+    const inExpenseUnits        = guardrailPortfolioInExpenseUnits(state, this.expensesCurrency);
+    const initialWithdrawalRate = inExpenseUnits > 0 ? annualSpending / inExpenseUnits : 0;
 
     return [{
       type: 'GUARDRAIL_BASELINE_APPLY',

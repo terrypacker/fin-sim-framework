@@ -168,3 +168,57 @@ test('SPEND-GR-FX-7: GuardrailAnnualCheckReducer uses FX-converted portfolio for
   assert.strictEqual((next.next ?? []).length, 1);
   assert.strictEqual(next.next[0].cause, 'cut');
 });
+
+// ── the rate compares like with like (study flag F8) ─────────────────────────────────────────
+//
+// An AU resident's expense figure (RESIDENCE) is re-based into AUD at the ANCHOR rate, so the
+// rate's numerator is anchor-denominated. Dividing it by a SPOT-USD portfolio made the rate move
+// with the exchange rate though nothing real changed: an A$ portfolio funding A$ spending read as
+// richer when the AUD rose, and the guardrail raised spending on a currency move alone.
+
+function auResident({ audBalance = 1_550_000, spot, anchor = 1.55, monthly = 5_000, guardrail } = {}) {
+  return {
+    expenses: { essential: monthly / 2, discretionary: monthly / 2 },
+    monthlyExpenses: monthly,
+    people: { primary: { residency: 'AU' } },
+    effectiveExchangeRates: { USD_AUD: spot },
+    baseExchangeRates:      { USD_AUD: anchor },
+    auSuper: { stateKey: 'auSuper', balance: audBalance, currency: AUD_DESC, drawdownPriority: 1 },
+    ...(guardrail ? { guardrail } : {}),
+  };
+}
+
+test('SPEND-GR-FX-10: an AU resident\'s A$ portfolio gives the same rate at any spot rate', () => {
+  // A$1.55M funding A$-priced spending: 60,000 a year in anchor units over A$1.55M / 1.55 = 1.0M.
+  // The AUD rising to 1.20 changes nothing real. Before: 1.55M / 1.20 = $1.29M ⇒ rate 0.0465,
+  // below the raise band 0.048, so the guardrail raised spending. Now: no action.
+  const r = new GuardrailAnnualCheckReducer();
+  const guardrail = { initialWithdrawalRate: 0.06, currentAdjustmentMultiplier: 1 };
+  for (const spot of [1.55, 1.20, 1.90]) {
+    const next = r.reduce(auResident({ spot, guardrail }), { type: 'AU_PERIOD_ADVANCE' }, new Date('2035-07-01'));
+    assert.strictEqual((next.next ?? []).filter(a => a.type === 'GUARDRAIL_ADJUST_APPLY').length, 0, `spot ${spot}`);
+  }
+});
+
+test('SPEND-GR-FX-11: the retirement baseline rate is spot-free for an AU resident too', () => {
+  const h = new RetirementDateHandler();
+  const rates = [1.55, 1.20].map(spot =>
+    h.call({ state: auResident({ spot }), date: new Date('2035-07-01') })[0].initialWithdrawalRate);
+  assert.ok(Math.abs(rates[0] - 0.06) < 1e-12, `rate ${rates[0]}`);
+  assert.ok(Math.abs(rates[1] - 0.06) < 1e-12, `rate ${rates[1]}`);
+});
+
+test('SPEND-GR-FX-12: a US resident and an explicit expense currency still convert at spot', () => {
+  const r = new GuardrailAnnualCheckReducer();
+  const us = { ...auResident({ spot: 1.20 }), people: { primary: { residency: 'US' } } };
+  // US resident, A$1.55M at spot 1.20 = $1.2917M; 60,000 / 1.2917M = 0.04645 < 0.048 ⇒ raise.
+  const raised = r.reduce({ ...us, guardrail: { initialWithdrawalRate: 0.06, currentAdjustmentMultiplier: 1 } },
+    { type: 'US_PERIOD_ADVANCE' }, new Date('2035-01-01'));
+  assert.strictEqual(raised.next.filter(a => a.type === 'GUARDRAIL_ADJUST_APPLY')[0]?.cause, 'raise');
+  // An explicit AUD expense figure: 60,000 A$ over A$1.55M = 0.0387, whatever the spot.
+
+  const h   = new RetirementDateHandler({ expensesCurrency: 'AUD' });
+  const rate = h.call({ state: auResident({ spot: 1.20 }), date: new Date('2035-07-01') })[0].initialWithdrawalRate;
+  assert.ok(Math.abs(rate - 60_000 / 1_550_000) < 1e-12, `rate ${rate}`);
+
+});

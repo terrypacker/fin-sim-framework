@@ -102,6 +102,7 @@ import { marketReturnFor }                    from './economic-regimes-toolset.j
 import { saleDateToUtc } from '../year-date-migration.js';
 import { lastWorkDate }                 from '../../finance/payroll/employment.js';
 import { toBaseCurrency, currencyOf }   from '../../finance/fx/to-base-currency.js';
+import { usdToExpenseUnits }           from '../../finance/spending/guardrail-portfolio-value.js';
 
 /**
  * Design 99 — a handler's market rate of last resort: its market's total and yield, from
@@ -733,8 +734,19 @@ export const US_RETIREMENT = {
         const portfolioValue   = drawdownAccounts.reduce((sum, a) =>
           sum + toBaseCurrency(a.balance ?? 0, currencyOf(a, baseCurrency), baseCurrency, fxAtStart), 0);
         const annualSpending   = monthlyExpenses * 12;
+        // The rate divides by the portfolio in the expense figure's units, as the annual check
+        // and the retirement-date handler do (guardrailPortfolioInExpenseUnits). At the start
+        // spot = anchor, so under RESIDENCE the factor is 1; an explicit AUD figure converts.
+        const usdAtStart       = drawdownAccounts.reduce((sum, a) =>
+          sum + toBaseCurrency(a.balance ?? 0, currencyOf(a, 'USD'), 'USD', fxAtStart), 0);
+        const startPrimary     = context.people[0];
+        const inExpenseUnits   = usdToExpenseUnits(usdAtStart, {
+          effectiveExchangeRates: fxAtStart.effectiveExchangeRates,
+          baseExchangeRates:      fxAtStart.effectiveExchangeRates,
+          people: startPrimary ? { [startPrimary.id ?? 'primary']: { residency: startPrimary.residency ?? 'US' } } : {},
+        }, p.monthlyExpensesCurrency ?? 'RESIDENCE');
         patches.guardrail = {
-          initialWithdrawalRate:       portfolioValue > 0 ? annualSpending / portfolioValue : 0,
+          initialWithdrawalRate:       inExpenseUnits > 0 ? annualSpending / inExpenseUnits : 0,
           portfolioValue,
           annualSpending,
           baselineDate:                simStart,
@@ -1450,6 +1462,7 @@ export const US_RETIREMENT = {
       if (retDateEvents.length > 0) {
         const retH = new RetirementDateHandler({
           baseCurrency: p.guardrailBaseCurrency ?? 'USD',
+          expensesCurrency: p.monthlyExpensesCurrency ?? 'RESIDENCE',
         });
         for (const evt of retDateEvents) retH.handledEvents.push(evt);
         handlers.push(retH);

@@ -105,6 +105,7 @@ export const SPENDING_STRATEGY_REGISTRY = {
         cutPct:         context.parameters.guardrailCutPct         ?? 0.10,
         raisePct:       context.parameters.guardrailRaisePct       ?? 0.10,
         baseCurrency:   context.parameters.guardrailBaseCurrency   ?? 'USD',
+        expensesCurrency: context.parameters.monthlyExpensesCurrency ?? 'RESIDENCE',
       }),
     ],
     paramSchema: () => [
@@ -140,7 +141,7 @@ export const SPENDING_STRATEGY_REGISTRY = {
         key: 'guardrailBaseCurrency', label: 'Guardrail Base Currency',
         type: 'Text', group: 'Spending', mc: false, opt: false,
         defaultValue: 'USD',
-        description: 'Currency to use when summing multi-currency portfolio values for the Guardrail check',
+        description: 'Currency the Guardrail reports its baseline portfolio value in. The withdrawal rate itself does not depend on it: the portfolio is converted into the units the monthly expense figure is paid in',
         visibleWhen: { param: 'spendingStrategy', includes: 'GUARDRAIL' },
       },
     ],

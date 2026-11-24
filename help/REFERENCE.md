@@ -505,7 +505,7 @@ scenario's own schema), which is where to go to change it.
 - **`expenseEvents`** — One-Off Expense Events · `ExpenseEventList` · default `` · conditional · via US_RETIREMENT
   List of dated one-off expenses: [{ date, amount, currency, category, fundFrom, personId, propertyKey, capitalize }]. `currency` defaults to the linked property's, else the household expense currency — set it explicitly for a cost that is genuinely denominated in one currency (design 86 §8). `fundFrom` is a state key debited DIRECTLY, taking only what is above that account's minimumBalance, with any remainder falling through to the residence-appropriate savings account; omit it for the residency default. It is the way to draw an out-of-queue account such as an offset WITHOUT giving that account a drawdownPriority, which would drain it against all spending. `propertyKey` + `capitalize` (0-1) add that fraction of the cost to the property's capitalizedImprovements, reducing the eventual capital gain the way capitalizeRepairs does.
 - **`guardrailBaseCurrency`** — Guardrail Base Currency · `Text` · default `USD` · conditional · via US_RETIREMENT
-  Currency to use when summing multi-currency portfolio values for the Guardrail check
+  Currency the Guardrail reports its baseline portfolio value in. The withdrawal rate itself does not depend on it: the portfolio is converted into the units the monthly expense figure is paid in
 - **`guardrailCutPct`** — Guardrail Cut % · `Number` · default `0.1` · sweep: opt · conditional · via US_RETIREMENT
   Fraction of discretionary spending to cut when the cut threshold is breached (0.10 = 10%)
 - **`guardrailCutThreshold`** — Guardrail Cut Threshold · `Number` · default `0.2` · sweep: opt · conditional · via US_RETIREMENT

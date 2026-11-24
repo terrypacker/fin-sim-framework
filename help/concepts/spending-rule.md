@@ -16,7 +16,7 @@ stamps:
   param:guardrailRaiseThreshold: 8afeb1
   param:guardrailCutPct: 661c8b
   param:guardrailRaisePct: 206297
-  param:guardrailBaseCurrency: d52a28
+  param:guardrailBaseCurrency: 54a932
   param:expenseEvents: 116819
   param:spendingAgeBands: c02dd1
   param:ageBandSpendingSlice: f610c6

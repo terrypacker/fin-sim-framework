@@ -869,6 +869,7 @@ export const AU_RETIREMENT = {
         if (retDateEvents.length > 0) {
           const retH = new RetirementDateHandler({
             baseCurrency: p.guardrailBaseCurrency ?? 'AUD',
+            expensesCurrency: p.monthlyExpensesCurrency ?? 'RESIDENCE',
           });
           for (const evt of retDateEvents) retH.handledEvents.push(evt);
           handlers.push(retH);
