@@ -187,6 +187,8 @@ export const COVERED = [
   'LateLifeCareApplyReducer', 'RegimeAwareSpendingReducer',
   // EXPLICIT_BANDS strategy (design 38 §6.1) — spending-explicit-bands.test.mjs
   'ExplicitBandsSpendingReducer',
+  // AMORTIZED strategy (spend down to zero at the plan end) — spending-amortized.test.mjs
+  'AmortizedSpendingReducer',
 
   // I — tax / period (reducer-postconditions-tax.test.mjs)
   'DynamicTaxReducer', 'UsPeriodAdvanceReducer', 'AuPeriodAdvanceReducer',

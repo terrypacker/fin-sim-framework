@@ -9,11 +9,11 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-251 parameters · 44 farm record parameters · 37 panels · 13 node types (209 fields) · 187 action types · 104 tools · 369 state field types · 84 topics · 142 design docs
+253 parameters · 44 farm record parameters · 37 panels · 13 node types (209 fields) · 187 action types · 104 tools · 369 state field types · 84 topics · 142 design docs
 
 ---
 
-## Parameters (251)
+## Parameters (253)
 
 Every configurable parameter, from `IntlRetirementScenario.buildFullParamSchema()`, then
 the other scenario classes' own params (`via SCENARIO (<scenarioId>)`).
@@ -454,12 +454,16 @@ scenario's own schema), which is where to go to change it.
 - **`rothConversionStartYear`** — Roth Conversion Start Year · `Number` · default — · sweep: opt · via US_ROTH_CONVERSION
   First year to convert; null = primary person's retirement year
 
-### Spending (41)
+### Spending (43)
 
 - **`ageBandDeclineRate`** — Age-Band Decline Rate · `Number` · default — · sweep: mc+opt · conditional · via US_RETIREMENT
   Convenience: a single real %/yr decline anchored at the primary person's retirement age. When set, overrides Spending Age Bands with a synthesized one-band glide (e.g. -0.01 = Blanchett's ~1%/yr smile)
 - **`ageBandSpendingSlice`** — Age-Band Spending Slice · `Enum` · default `discretionary` · one of `discretionary`, `both` · sweep: opt · conditional · via US_RETIREMENT
   Which expense slice the age factor bends: 'discretionary' (default) or 'both'
+- **`amortizeRealRate`** — Amortized Real Return · `Number` · default `0.03` · sweep: opt · conditional · via US_RETIREMENT
+  Real return the AMORTIZED rule assumes when it sizes each year's spend to run the portfolio plus remaining Social Security to zero at the plan end (0.03 = 3%). Higher spends more early.
+- **`amortizeSmoothing`** — Amortized Smoothing · `Number` · default `0` · sweep: opt · conditional · via US_RETIREMENT
+  Weight the AMORTIZED rule keeps on last period's spend, 0 to 0.99 (0 = follow the portfolio fully; 0.5 = move halfway to the new level each check). Never takes spending below the essential slice.
 - **`crossBorderDrawdown`** — Cross-Border Drawdown · `Enum` · default `AUTO` · one of `AUTO`, `LOCAL_FIRST`, `GLOBAL` · sweep: opt · via SCENARIO
   How the non-residence country's accounts are ordered for drawdown. AUTO follows the strategy (TAX_EFFICIENT is global, others residence-first). LOCAL_FIRST drains the current residence country first. GLOBAL lets both countries' accounts compete in one drawdownPriority order — pair with CUSTOM to force a hand-authored cross-border order.
 - **`crraGamma`** — CRRA Risk Aversion (γ) · `Number` · default `1.5` · via US_RETIREMENT
@@ -534,8 +538,8 @@ scenario's own schema), which is where to go to change it.
   Age-band table for the retirement spending smile: each band is { startAge, multiplier, annualRealDrift }; multiplier is the relative step entering the band, annualRealDrift the within-band real glide
 - **`spendingExpenseBands`** — Spending Expense Bands · `ExpenseBandList` · default `[object Object],[object Object],[object Object]` · conditional · via US_RETIREMENT
   Absolute monthly spend per age band: each band is { startAge, monthlyAmount } in base-year currency; compounded to nominal by the residence price level at band transitions. The lever for "optimal monthly expense amount per age band" (design 38 §6.1).
-- **`spendingStrategy`** — Spending Strategy · `EnumMulti` · default `FIXED` · one of `FIXED`, `REGIME_AWARE`, `GUARDRAIL`, `EXPENSE_EVENTS`, `AGE_BANDED`, `EXPLICIT_BANDS` · sweep: opt · via US_RETIREMENT
-  Active spending strategies; FIXED = inflation-adjusted scalar (default), REGIME_AWARE = cut discretionary under economic-stress regimes, GUARDRAIL = Guyton-Klinger withdrawal-rate bands, EXPENSE_EVENTS = dated one-off expenses in a chosen currency, optionally funded from a nominated account (design 86 G8/G9; supersedes HEALTHCARE, which is now the `healthcare` category), AGE_BANDED = age-driven real spending smile (go-go/slow-go/no-go), EXPLICIT_BANDS = absolute monthly amount per age band (design 38 §6.1)
+- **`spendingStrategy`** — Spending Strategy · `EnumMulti` · default `FIXED` · one of `FIXED`, `REGIME_AWARE`, `GUARDRAIL`, `EXPENSE_EVENTS`, `AGE_BANDED`, `EXPLICIT_BANDS`, `AMORTIZED` · sweep: opt · via US_RETIREMENT
+  Active spending strategies; FIXED = inflation-adjusted scalar (default), REGIME_AWARE = cut discretionary under economic-stress regimes, GUARDRAIL = Guyton-Klinger withdrawal-rate bands, EXPENSE_EVENTS = dated one-off expenses in a chosen currency, optionally funded from a nominated account (design 86 G8/G9; supersedes HEALTHCARE, which is now the `healthcare` category), AGE_BANDED = age-driven real spending smile (go-go/slow-go/no-go), EXPLICIT_BANDS = absolute monthly amount per age band (design 38 §6.1), AMORTIZED = each year spend what runs the portfolio plus remaining Social Security to zero at the plan end, never below the essential slice
 - **`withinTierDraw`** — Within-Tier Draw · `Enum` · default `SEQUENTIAL` · one of `SEQUENTIAL`, `EQUAL`, `PROPORTIONAL` · sweep: opt · via SCENARIO
   How accounts sharing one drawdown tier (equal priority) split a withdrawal. SEQUENTIAL drains one member fully before the next (default). EQUAL splits the tier's draw evenly across members (residual redistributes when one is capped). PROPORTIONAL splits by each member's available balance — e.g. draw two Roths together pro-rata.
 
@@ -2673,7 +2677,7 @@ what the in-app panel keys on.
 | [Security](nodes/security.md) | node | 209 | 3 panels · design 94, 66, 93 |
 | [Social Security](concepts/social-security.md) | concept | 391 | 2 panels · 1 param · 3 actions · design 118, 30 |
 | [Spending](panels/spending.md) | panel | 209 | 1 panel · design 89 |
-| [The Spending Rule](concepts/spending-rule.md) | concept | 296 | 1 panel · 17 params · design 89 |
+| [The Spending Rule](concepts/spending-rule.md) | concept | 372 | 1 panel · 19 params · design 89 |
 | [State](panels/state-panel.md) | panel | 181 | 1 panel |
 | [Stochastic Return Paths](concepts/stochastic-return-paths.md) | concept | 400 | 2 panels · 23 params · design 74, 90, 102, 121, 129, 131, 133 |
 | [Superannuation Access](concepts/superannuation.md) | concept | 399 | 1 panel · 4 actions · design 119, 77 |

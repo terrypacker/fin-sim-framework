@@ -3,14 +3,14 @@ id: spending-rule
 kind: concept
 title: The Spending Rule
 panels: [spending]
-params: [monthlyExpenses, monthlyExpensesCurrency, inflationAdjust, discretionarySharePct, spendingStrategy, regimeAwareCutPct, guardrailCutThreshold, guardrailRaiseThreshold, guardrailCutPct, guardrailRaisePct, guardrailBaseCurrency, expenseEvents, spendingAgeBands, ageBandSpendingSlice, ageBandDeclineRate, spendingExpenseBands, crraGamma]
+params: [monthlyExpenses, monthlyExpensesCurrency, inflationAdjust, discretionarySharePct, spendingStrategy, regimeAwareCutPct, guardrailCutThreshold, guardrailRaiseThreshold, guardrailCutPct, guardrailRaisePct, guardrailBaseCurrency, expenseEvents, spendingAgeBands, ageBandSpendingSlice, ageBandDeclineRate, spendingExpenseBands, amortizeRealRate, amortizeSmoothing, crraGamma]
 design: [89-spending-over-time-reporting.md]
 stamps:
   param:monthlyExpenses: 82af26
   param:monthlyExpensesCurrency: 04de33
   param:inflationAdjust: 652e8c
   param:discretionarySharePct: 157c12
-  param:spendingStrategy: 8fe45f
+  param:spendingStrategy: 9fef6d
   param:regimeAwareCutPct: 71385d
   param:guardrailCutThreshold: 38a17f
   param:guardrailRaiseThreshold: 8afeb1
@@ -22,6 +22,8 @@ stamps:
   param:ageBandSpendingSlice: f610c6
   param:ageBandDeclineRate: 8017cb
   param:spendingExpenseBands: 52e666
+  param:amortizeRealRate: 4f4c03
+  param:amortizeSmoothing: 674879
   param:crraGamma: af8fb9
   panel:spending: 157a8d
 ---
@@ -39,7 +41,7 @@ much of the monthly figure is treated as optional, and that fraction is what eve
 adaptive rule actually operates on. Set it to zero and the adaptive strategies have
 nothing to work with; the plan will fail rather than flex.
 
-Three kinds of adaptation, in rising order of how much they assume:
+Four kinds of adaptation, in rising order of how much they assume:
 
 - **Age bands** — spending is not flat across retirement. A multiplier per band with
   a drift inside it models the go-go/slow-go shape, and you choose whether it bends
@@ -49,6 +51,12 @@ Three kinds of adaptation, in rising order of how much they assume:
   regime is running.
 - **Guardrails** — the Guyton-Klinger rule: when the withdrawal rate drifts far
   enough above or below where it started, spending steps down or up.
+- **Amortized** — spend it down: each check sets spending to what would run the
+  portfolio, plus the Social Security still to come, to zero at the plan end if
+  markets earn the assumed real return. It re-solves from the money actually there,
+  so gains get spent rather than banked, and the essential part is never cut. Its
+  weakness is the mirror of that: spending follows the markets, so smoothing trades
+  some of that responsiveness for steadier years.
 
 A caution the reports exist for. Under any adaptive rule a plan almost always
 "survives", because the rule is allowed to shrink what it promised. Read what was

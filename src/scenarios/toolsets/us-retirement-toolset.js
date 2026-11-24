@@ -477,15 +477,16 @@ export const US_RETIREMENT = {
       {
         key: 'spendingStrategy', label: 'Spending Strategy',
         type: 'EnumMulti', group: 'Spending', mc: false, opt: true,
-        options: ['FIXED', 'REGIME_AWARE', 'GUARDRAIL', 'EXPENSE_EVENTS', 'AGE_BANDED', 'EXPLICIT_BANDS'],
+        options: ['FIXED', 'REGIME_AWARE', 'GUARDRAIL', 'EXPENSE_EVENTS', 'AGE_BANDED', 'EXPLICIT_BANDS', 'AMORTIZED'],
         defaultValue: ['FIXED'],
-        description: 'Active spending strategies; FIXED = inflation-adjusted scalar (default), REGIME_AWARE = cut discretionary under economic-stress regimes, GUARDRAIL = Guyton-Klinger withdrawal-rate bands, EXPENSE_EVENTS = dated one-off expenses in a chosen currency, optionally funded from a nominated account (design 86 G8/G9; supersedes HEALTHCARE, which is now the `healthcare` category), AGE_BANDED = age-driven real spending smile (go-go/slow-go/no-go), EXPLICIT_BANDS = absolute monthly amount per age band (design 38 §6.1)',
+        description: 'Active spending strategies; FIXED = inflation-adjusted scalar (default), REGIME_AWARE = cut discretionary under economic-stress regimes, GUARDRAIL = Guyton-Klinger withdrawal-rate bands, EXPENSE_EVENTS = dated one-off expenses in a chosen currency, optionally funded from a nominated account (design 86 G8/G9; supersedes HEALTHCARE, which is now the `healthcare` category), AGE_BANDED = age-driven real spending smile (go-go/slow-go/no-go), EXPLICIT_BANDS = absolute monthly amount per age band (design 38 §6.1), AMORTIZED = each year spend what runs the portfolio plus remaining Social Security to zero at the plan end, never below the essential slice',
       },
       ...SPENDING_STRATEGY_REGISTRY.REGIME_AWARE.paramSchema(),
       ...SPENDING_STRATEGY_REGISTRY.GUARDRAIL.paramSchema(),
       ...SPENDING_STRATEGY_REGISTRY.EXPENSE_EVENTS.paramSchema(),
       ...SPENDING_STRATEGY_REGISTRY.AGE_BANDED.paramSchema(),
       ...SPENDING_STRATEGY_REGISTRY.EXPLICIT_BANDS.paramSchema(),
+      ...SPENDING_STRATEGY_REGISTRY.AMORTIZED.paramSchema(),
       {
         key: 'crraGamma', label: 'CRRA Risk Aversion (γ)',
         type: 'Number', group: 'Spending', mc: false, opt: false,

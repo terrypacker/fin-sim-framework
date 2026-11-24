@@ -355,6 +355,7 @@ I3/I4/I5 applies here.
 | `SpendingStrategyApplyReducer` | ✅ |
 | `AgeBandedSpendingReducer` | ✅ |
 | `ExplicitBandsSpendingReducer` | ✅ |
+| `AmortizedSpendingReducer` | ✅ `spending-amortized.test.mjs` (target = resources / annuity due; essential floor; SS present value; anchor re-base; smoothing; end-to-end run-down) |
 | `GuardrailBaselineApply` / `GuardrailAnnualCheck` / `GuardrailAdjustApply` | ✅ |
 | `HealthcareExpenseApplyReducer` | ✅ (I9 monotonic accumulator) |
 | `LateLifeCareApplyReducer` | ✅ (apply/revert round-trip) |

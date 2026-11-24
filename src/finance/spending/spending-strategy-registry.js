@@ -15,6 +15,7 @@ import { GuardrailAnnualCheckReducer }     from './strategies/guardrail-annual-c
 import { ExpenseEventApplyReducer }        from './strategies/expense-event-apply-reducer.js';
 import { AgeBandedSpendingReducer, DEFAULT_AGE_BANDS } from './strategies/age-banded-spending-reducer.js';
 import { ExplicitBandsSpendingReducer, DEFAULT_EXPENSE_BANDS } from './strategies/explicit-bands-spending-reducer.js';
+import { AmortizedSpendingReducer } from './strategies/amortized-spending-reducer.js';
 import { lastWorkDate } from '../payroll/employment.js';
 
 /**
@@ -141,6 +142,37 @@ export const SPENDING_STRATEGY_REGISTRY = {
         defaultValue: 'USD',
         description: 'Currency to use when summing multi-currency portfolio values for the Guardrail check',
         visibleWhen: { param: 'spendingStrategy', includes: 'GUARDRAIL' },
+      },
+    ],
+  },
+
+  // Spend-it-down rule: re-solves each period for the spend that runs the portfolio plus
+  // remaining Social Security to zero at the plan end, floored at the essential slice.
+  // The horizon is the sim end (`context.endDate`; `simEnd` is not a context field).
+  AMORTIZED: {
+    reducers: (context) => [
+      new AmortizedSpendingReducer({
+        horizonEnd:       context.endDate ?? null,
+        realRate:         context.parameters.amortizeRealRate  ?? 0.03,
+        smoothing:        context.parameters.amortizeSmoothing ?? 0,
+        expensesCurrency: context.parameters.monthlyExpensesCurrency ?? 'RESIDENCE',
+        baseCurrency:     context.parameters.guardrailBaseCurrency   ?? 'USD',
+      }),
+    ],
+    paramSchema: () => [
+      {
+        key: 'amortizeRealRate', label: 'Amortized Real Return',
+        type: 'Number', group: 'Spending', mc: false, opt: true,
+        defaultValue: 0.03,
+        description: 'Real return the AMORTIZED rule assumes when it sizes each year\'s spend to run the portfolio plus remaining Social Security to zero at the plan end (0.03 = 3%). Higher spends more early.',
+        visibleWhen: { param: 'spendingStrategy', includes: 'AMORTIZED' },
+      },
+      {
+        key: 'amortizeSmoothing', label: 'Amortized Smoothing',
+        type: 'Number', group: 'Spending', mc: false, opt: true,
+        defaultValue: 0,
+        description: 'Weight the AMORTIZED rule keeps on last period\'s spend, 0 to 0.99 (0 = follow the portfolio fully; 0.5 = move halfway to the new level each check). Never takes spending below the essential slice.',
+        visibleWhen: { param: 'spendingStrategy', includes: 'AMORTIZED' },
       },
     ],
   },
