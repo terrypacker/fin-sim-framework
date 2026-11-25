@@ -691,7 +691,15 @@ const CASH_LIKE_TYPES = new Set([ACCOUNT_TYPE.CHECKING, ACCOUNT_TYPE.SAVINGS, AC
 
 /** Is every claim of this pool inside the rebalanceable (holdings-bearing) book? */
 function isPortfolioPool(pool, byKey) {
-  return pool.claims.every(c => byKey.get(c.key)?.type === ACCOUNT_TYPE.BROKERAGE);
+  // In-portfolio means the REBALANCER can realise the edge, so at least one claim has to be an
+  // account it trades. A pool made only of hold-only (`rebalanceExcluded`) brokerage accounts is
+  // outside the book: an edge into or out of it classified REBALANCE was planned as a target-mix
+  // shift that no reducer ever executed, so it moved nothing, silently (found when a Hold-only
+  // TIPS ladder's maturity sweep to equity fired every period and never left the ladder).
+  // "At least one", not "every": a buffer that also claims a hold-only TreasuryDirect I bond is
+  // still traded through its other claims and stays in-portfolio, as before.
+  return pool.claims.every(c => byKey.get(c.key)?.type === ACCOUNT_TYPE.BROKERAGE)
+    && pool.claims.some(c => byKey.get(c.key)?.rebalanceExcluded !== true);
 }
 
 /**

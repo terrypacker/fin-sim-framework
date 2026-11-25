@@ -1070,6 +1070,30 @@ test('POOL-10c: executors are classified by where the two ends live', () => {
   assert.equal(g.flows.find(f => f.id === 'g2c').executor, FLOW_EXECUTOR.TRANSFER);
 });
 
+test('POOL-10d: a pool made only of hold-only accounts is outside the book ⇒ its edges TRANSFER', () => {
+  // The rebalancer never trades a `rebalanceExcluded` account, so an edge out of such a pool
+  // classified REBALANCE was a target-mix shift nothing executed: it fired and moved nothing.
+  const accounts = [...ACCOUNTS,
+    { stateKey: 'ladderAccount', type: ACCOUNT_TYPE.BROKERAGE, rebalanceExcluded: true },
+    { stateKey: 'sweepAccount',  type: ACCOUNT_TYPE.BROKERAGE },
+    { stateKey: 'tdAccount',     type: ACCOUNT_TYPE.BROKERAGE, rebalanceExcluded: true }];
+  const g = normalizeLiquidityGraph({
+    pools: [
+      { id: 'ladder',  claims: [{ key: 'ladderAccount', sleeves: ['CASH'] }] },
+      { id: 'sweep',   claims: [{ key: 'sweepAccount',  sleeves: ['EQUITY'] }] },
+      // A buffer that ALSO claims a hold-only account is still traded through its other claim.
+      { id: 'reserve', spendOrder: 10, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }, { key: 'tdAccount', sleeves: ['BOND'] }], target: 4 },
+      { id: 'growth',  spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [
+      { id: 'l2s', from: 'ladder', to: 'sweep', amount: { fractionOfSource: 1 } },
+      { id: 'g2r', from: 'growth', to: 'reserve', gate: { sourceDrawdownUnder: 0.2 } },
+    ],
+  }, accounts);
+  assert.equal(g.flows.find(f => f.id === 'l2s').executor, FLOW_EXECUTOR.TRANSFER);
+  assert.equal(g.flows.find(f => f.id === 'g2r').executor, FLOW_EXECUTOR.REBALANCE);
+});
+
 // ─── POOL-1 / POOL-11: identity, and the round trip through a real load ────────────
 
 test('POOL-1: no graph ⇒ the state key is absent (absent is absent)', () => {
@@ -2547,7 +2571,7 @@ test('POOL-HELD-3: a hold-only account is never traded, and its holdings still f
   const graph = normalizeLiquidityGraph({
     pools: [
       { id: 'buffer', spendOrder: 10, target: { mode: 'AMOUNT', value: 100_000 },
-        claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }, { key: 'tdAccount', sleeves: ['BOND'] }] },
+        claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }, { key: 'tdAccount', sleeves: ['BOND'] }], target: 4 },
       { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
     ],
   }, [...ACCOUNTS, { stateKey: 'tdAccount', type: ACCOUNT_TYPE.BROKERAGE }]);
