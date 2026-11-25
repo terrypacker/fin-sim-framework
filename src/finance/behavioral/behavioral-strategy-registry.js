@@ -491,6 +491,13 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
       if (!accts.length && roles != null) {
         accts = (context.accounts ?? []).filter(a => a.role === ACCOUNT_ROLES.US_STOCK);
       }
+      // A hold-only account (`rebalanceExcluded`) is never re-laddered, for the reason the
+      // rebalancer skips it: its bonds are held as bought. Re-materializing would replace an
+      // authored held-to-maturity ladder with N equal rungs of this ladder's spacing — found
+      // when a study's Hold-only account of eight proposed TIPS could not coexist with the
+      // plan's own rolling ladder. Filtered AFTER the back-compat fallback, so a hold-only
+      // account can never be laddered by falling back to it either.
+      accts = accts.filter(a => a.rebalanceExcluded !== true);
       if (!accts.length) return []; // no account to ladder ⇒ inert
       return accts.map(acct => new BondLadderReducer({
         stateKey:        acct.stateKey,

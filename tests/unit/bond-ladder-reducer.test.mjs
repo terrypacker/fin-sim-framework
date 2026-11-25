@@ -483,6 +483,17 @@ describe('BOND_LADDER account resolution — every matching account, not the fir
     assert.equal(reducers.length, 5);
   });
 
+  test('a Hold-only account (rebalanceExcluded) is never laddered, under any role selection', () => {
+    // Its bonds are held as bought: re-materializing would re-cut an authored held-to-maturity
+    // ladder into this ladder's rungs.
+    const withHold = [...ACCOUNTS, { stateKey: 'tipsLadder', role: 'us-stock', rebalanceExcluded: true }];
+    for (const role of ['us-stock', 'ALL', 'roth-ira']) {
+      const keys = entry.reducers({ parameters: { bondLadderRole: role }, accounts: withHold }).map(r => r.stateKey);
+      assert.ok(!keys.includes('tipsLadder'), `role ${role}: ${keys}`);
+      assert.ok(keys.includes('sharedBrokerage'), 'the other accounts of the role are still laddered');
+    }
+  });
+
   test('an EMPTY selection is the same as absent — the documented default role', () => {
     const reducers = entry.reducers({ parameters: { bondLadderRole: [] }, accounts: ACCOUNTS });
     assert.deepEqual(reducers.map(r => r.stateKey), ['usStockAccount', 'sharedBrokerage', 'treasuryDirect']);

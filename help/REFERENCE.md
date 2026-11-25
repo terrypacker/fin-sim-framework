@@ -929,7 +929,7 @@ Explained in [`help/nodes`](nodes/account.md). 7 field(s) described by a record 
 - **`isTransactionAccount`** — Transaction Account · `checkbox` · param
   When on, this is the cash account that expenses debit and cross-border transfers replenish for its country of residence. Flag exactly one account per country.
 - **`rebalanceExcluded`** — Hold Only (never rebalance) · `checkbox` · topic
-  Keeps the rebalancer away from this account: it is left out of the book being balanced, and nothing in it is bought or sold to fix the mix. Its holdings still count toward any pool that claims them, and spending can still draw on it. Use it for money that cannot be traded at will, such as a TreasuryDirect account, whose I bonds cannot be cashed in their first year.
+  Keeps the rebalancer away from this account: it is left out of the book being balanced, and nothing in it is bought or sold to fix the mix. Its holdings still count toward any pool that claims them, and spending can still draw on it. The bond ladder leaves it alone too: bonds entered here are held as entered. Use it for money that cannot be traded at will, such as TreasuryDirect I bonds.
 - **`reinvestDividends`** — Reinvest Dividends · `select` · param
   When on, this account's dividends buy more of its holdings; when off, they are paid out as cash to the country's transaction account. Leave unset to follow the plan-wide Reinvest Dividends default.
 - **`fxBasisRate`** — §988 FX Basis · `number` · topic
