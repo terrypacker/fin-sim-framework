@@ -119,7 +119,7 @@ import { AddRegimeReducer }              from '../finance/economic-regimes/add-r
 import { RemoveRegimeReducer }           from '../finance/economic-regimes/remove-regime-reducer.js';
 import { RevalueAssetReducer }           from '../finance/economic-regimes/revalue-asset-reducer.js';
 import { BondPriceAdjustReducer }        from '../finance/economic-regimes/bond-price-adjust-reducer.js';
-import { BondMaturityReducer }           from '../finance/economic-regimes/bond-maturity-reducer.js';
+import { BondMaturityReducer, BondMaturityHandler } from '../finance/economic-regimes/bond-maturity-reducer.js';
 import { YieldCurveReducer }             from '../finance/economic-regimes/yield-curve-reducer.js';
 import { YieldCurveStepReducer }         from '../finance/economic-regimes/yield-curve-step-reducer.js';
 import { YieldCurveTickHandler }         from '../finance/economic-regimes/yield-curve-tick-handler.js';
@@ -359,7 +359,7 @@ const _ALL_CLASSES = [
   EquityReturnReducer, EquityReturnStepReducer, MarketIndexReducer, PropertyReturnStepReducer,
   // Design 127 — a MONTHLY graph's month-end index step and 1 January carrier; design 120's
   // hedge stamp, which a monthly graph schedules every month-end.
-  MarketIndexStepHandler, EquityYearOpenHandler, HedgeYearEndHandler, HedgeYearEndReducer,
+  MarketIndexStepHandler, EquityYearOpenHandler, HedgeYearEndHandler, HedgeYearEndReducer, BondMaturityHandler,
   // Asset appreciation (design 28)
   AssetAppreciationHandler, AssetAppreciateReducer,
 ];

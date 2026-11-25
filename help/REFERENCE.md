@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-253 parameters · 44 farm record parameters · 37 panels · 13 node types (209 fields) · 187 action types · 104 tools · 369 state field types · 84 topics · 142 design docs
+253 parameters · 44 farm record parameters · 37 panels · 13 node types (209 fields) · 188 action types · 104 tools · 369 state field types · 84 topics · 142 design docs
 
 ---
 
@@ -2011,7 +2011,7 @@ docblock, not re-authored here. Arguments come from each script's declarative
 
 ---
 
-## Journal action types (187)
+## Journal action types (188)
 
 Every action a toolset declares, with its payload shape. A type declared by more than
 one toolset is one row: the toolsets compose into a single run, so it is one action in
@@ -2063,6 +2063,7 @@ the journal. Reducers that CONSUME each type are deliberately not listed — see
 | `BOND_COUPON_APPLY` | amount: currency(USD), federalTaxableAmount: currency(USD), stateTaxableAmount: currency(USD), stateKey: text, residency: text | US_BROKERAGE |
 | `BOND_COUPON_CASH_APPLY` | amount: currency(USD), federalTaxableAmount: currency(USD), stateTaxableAmount: currency(USD), stateKey: text, residency: text | US_BROKERAGE |
 | `BOND_COUPON_TAX` | amount: currency(USD), federalTaxableAmount: currency(USD), stateTaxableAmount: currency(USD), residency: text, stateKey: text | US_BROKERAGE |
+| `BOND_MATURITY_APPLY` | — | ECONOMIC_REGIMES |
 | `BOND_SLEEVE_COUPON_APPLY` | amount: currency(USD), federalTaxableAmount: currency(USD), stateTaxableAmount: currency(USD), stateKey: text, taxMode: text, residency: text | US_RETIREMENT |
 | `BONUS_APPLY` | amount: currency(USD), residency: text, personKey: text | US_INCOME |
 | `BONUS_TAX` | amount: currency(USD), residency: text, personKey: text | US_INCOME |

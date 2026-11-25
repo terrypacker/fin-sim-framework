@@ -95,6 +95,7 @@ export const COVERED = [
   'BOND_ACCRETION_APPLY',
   'BOND_COUPON_CASH_APPLY',
   'BOND_COUPON_TAX',
+  'BOND_MATURITY_APPLY',      // issue #799 — dated maturity wake (bond-par-conservation, tips-ladder-conservation)
   'BOND_SLEEVE_COUPON_APPLY',
   'CASH_SLEEVE_INTEREST_APPLY',
   'CHANGE_RESIDENCY_APPLY',

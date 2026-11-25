@@ -9,6 +9,8 @@
  */
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
+import { HandlerEntry }       from '../../simulation-framework/handlers.js';
+import { OneOffEvent }        from '../../simulation-framework/events/one-off-event.js';
 import { ALLOCATION }         from '../holdings/allocation.js';
 import { resolveYield, tipsRealYield } from './yield-curve.js';
 import { _syncBalance }       from '../holdings/holding-reducers.js';
@@ -17,19 +19,37 @@ import { unitiseBond, redemptionValue, instrumentOf } from '../holdings/holding-
 import { ACCOUNT_ROLES }      from '../state/account-roles.js';
 
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
+const DAY_MS  = 24 * 60 * 60 * 1000;
+
+/**
+ * Issue #799 — the same-date order of the `BOND_MATURITY` wake. After the period advance
+ * (−1), the year-open draw (−0.9) and the month-end growth, dividend and accretion bands
+ * (−0.5, −0.4, −0.3), so a bond maturing on a month-end takes that month's indexation first.
+ * Before everything at order 0, so the redeemed cash is there for the same day's spending,
+ * paycheck and rebalance.
+ */
+export const BOND_MATURITY_ORDER = -0.2;
+
+/** The dated maturity wake (issue #799). */
+export const BOND_MATURITY_EVENT = 'BOND_MATURITY';
 
 /**
  * BondMaturityReducer — redeems individual bonds that have reached maturity
  * (design 66 §G4, the §3 fund-vs-individual identity decision made concrete).
  *
  * An *individual bond* is a BOND holding with a non-null `maturityDate`; a bond
- * *fund* (maturityDate null) is perpetual and is never touched here. Fires on
- * every period-advance at PRE_PROCESS + 3 — AFTER BondPriceAdjustReducer
- * (PRE_PROCESS + 2) has run its final pull-to-par mark, so the redeemed price has
- * already converged to par.
+ * *fund* (maturityDate null) is perpetual and is never touched here.
  *
- * For each BOND holding whose `maturityDate <= asOf` (asOf = the advancing
- * country's period start), one of two things happens:
+ * **When (issue #799).** A bond redeems ON its maturity date. `BondMaturityHandler` keeps
+ * one `BOND_MATURITY` wake in the queue, dated at the earliest maturity still ahead, and
+ * this reducer redeems on its `BOND_MATURITY_APPLY` with asOf = that date. Before #799 the
+ * only trigger was the period advance, so a 15 Jan maturity paid on 1 Jul in a two-country
+ * plan, and up to a year late in a single-country one, accruing coupon and indexation all
+ * the while. The period advances are still reduced, at PRE_PROCESS + 3 (after
+ * BondPriceAdjustReducer's mark), as a backstop for a lot the wake has not seen yet (see
+ * `nextBondMaturityWakeMs`); with the wake running they normally find nothing.
+ *
+ * For each BOND holding whose `maturityDate <= asOf`, one of two things happens:
  *
  *  - **Redeem to cash (default).** The bond is redeemed at par: the holding is
  *    converted *in place* (same id) to a CASH holding of `marketValue = costBasis
@@ -95,13 +115,12 @@ export class BondMaturityReducer extends Reducer {
   constructor({ inflationExpectation = null } = {}) {
     super('Bond Maturity', PRIORITY.PRE_PROCESS + 3);
     this.inflationExpectation = inflationExpectation;
-    this.reducedActionTypes = ['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE'];
+    this.reducedActionTypes = ['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE', 'BOND_MATURITY_APPLY'];
     this.generatedActionTypes = ['SUPER_CAPITAL_GAIN'];
   }
 
-  reduce(state, action) {
-    const cc     = action?.type === 'AU_PERIOD_ADVANCE' ? 'AU' : 'US';
-    const asOfMs = state.currentPeriods?.[cc]?.startMs ?? null;
+  reduce(state, action, currentDate) {
+    const asOfMs = asOfFor(state, action, currentDate);
     if (asOfMs == null) return this.newState(state);
 
     const effectiveRates = state.effectiveInterestRates ?? {};
@@ -157,6 +176,140 @@ export class BondMaturityReducer extends Reducer {
     }
 
     return this.newState(state, accountUpdates, s988Actions);
+  }
+}
+
+/**
+ * The instant a maturity check is made as of: the wake's own date for
+ * `BOND_MATURITY_APPLY`, else the advancing country's period start.
+ */
+function asOfFor(state, action, currentDate) {
+  if (action?.type === 'BOND_MATURITY_APPLY') {
+    const when = currentDate ?? action?.date ?? null;
+    const ms   = when == null ? NaN : new Date(when).getTime();
+    return Number.isFinite(ms) ? ms : null;
+  }
+  const cc = action?.type === 'AU_PERIOD_ADVANCE' ? 'AU' : 'US';
+  return state.currentPeriods?.[cc]?.startMs ?? null;
+}
+
+function toMs(d) {
+  if (d == null) return null;
+  const ms = d instanceof Date ? d.getTime() : new Date(d).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/**
+ * A rolling rung's re-issue term in ms (design 66 §G8): `rollTermYears` when the ladder
+ * stamped one, else the rung's own original term, else its `duration` (5y default).
+ */
+function rollTermMs(h, inst, matMs) {
+  if (h.rollTermYears != null) return h.rollTermYears * YEAR_MS;
+  const purchaseMs = toMs(h.purchaseDate);
+  if (purchaseMs != null && matMs > purchaseMs) return matMs - purchaseMs;
+  return (inst.duration ?? 5) * YEAR_MS;
+}
+
+/**
+ * Issue #799 — when the next `BOND_MATURITY` wake should fire, given the state at `nowMs`.
+ *
+ * The earliest of:
+ *  - the earliest maturity strictly after `nowMs` among the BOND lots held now;
+ *  - the re-issued maturity of a rung that matures at `nowMs` and rolls (the handler runs
+ *    before the roll, so the rolled lot is not in `state` yet);
+ *  - the first of next month (UTC).
+ *
+ * The month fallback is DISCOVERY: a lot bought later — a rebalance buy, a ladder build —
+ * is not in this state, and the wake would otherwise sleep past it. With it, such a lot
+ * pays at most a month late, and only when it was bought in the month it matures. It also
+ * keeps a plan that holds no bonds yet polling, so its first purchase is found.
+ *
+ * @returns {number} epoch ms, always > nowMs
+ */
+export function nextBondMaturityWakeMs(state, nowMs) {
+  const now  = new Date(nowMs);
+  let next   = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1);
+  const securities = state?.securities ?? null;
+  for (const key of Object.keys(state ?? {})) {
+    const account = state[key];
+    if (!account || !Array.isArray(account.holdings)) continue;
+    for (const h of account.holdings) {
+      if (!h || h.allocation !== ALLOCATION.BOND) continue;
+      const inst  = instrumentOf(h, securities);
+      const matMs = toMs(inst?.maturityDate);
+      if (matMs == null) continue;
+      let at = matMs;
+      if (matMs <= nowMs) {
+        if (!h.rollAtMaturity || (h.marketValue ?? 0) <= 0.005) continue;
+        at = matMs + rollTermMs(h, inst, matMs);
+      }
+      // The queue runs on UTC days (`sim.normalizeDate` floors a date to midnight), and a
+      // rung's maturity is often not a midnight: ladder terms are 365.25-day years. Waking
+      // on the floored day would find the bond not yet matured and re-arm the same day
+      // forever, so wake on the first midnight at or after the maturity instant.
+      at = Math.ceil(at / DAY_MS) * DAY_MS;
+      if (at > nowMs && at < next) next = at;
+    }
+  }
+  return next;
+}
+
+/**
+ * The first `BOND_MATURITY` wake, at the run start (issue #799). Its handler redeems
+ * anything already matured and schedules the next wake; every wake after it is scheduled
+ * by the one before, from state, so the chain lives in the queue and survives a snapshot.
+ */
+export function buildBondMaturitySeed(startDate) {
+  return new OneOffEvent({
+    name:    'Bond Maturity',
+    type:    BOND_MATURITY_EVENT,
+    date:    new Date(startDate),
+    order:   BOND_MATURITY_ORDER,
+    enabled: true,
+    color:   '#5C6BC0',
+  });
+}
+
+/**
+ * Fires on a `BOND_MATURITY` wake: schedules the next wake, then emits
+ * `BOND_MATURITY_APPLY` so BondMaturityReducer redeems or rolls whatever matured today.
+ */
+export class BondMaturityHandler extends HandlerEntry {
+  static type        = 'BondMaturityHandler';
+  static eventType   = BOND_MATURITY_EVENT;
+  static description = 'Redeems individual bonds on their maturity date (issue #799): emits BOND_MATURITY_APPLY and schedules the next wake at the earliest maturity ahead, or the first of next month.';
+
+  constructor() {
+    super(null, 'Bond Maturity');
+    this.generatedActionTypes = ['BOND_MATURITY_APPLY'];
+  }
+
+  static fromJSON(d) {
+    const h = new this();
+    h.id = d.id;
+    return h;
+  }
+
+  call({ sim, state, date }) {
+    const nowMs = new Date(date).getTime();
+    if (sim && Number.isFinite(nowMs)) {
+      const nextMs = nextBondMaturityWakeMs(state, nowMs);
+      const endMs  = sim.simEnd ? new Date(sim.simEnd).getTime() : Infinity;
+      if (nextMs <= endMs) {
+        sim.schedule({
+          type:  BOND_MATURITY_EVENT,
+          name:  'Bond Maturity',
+          date:  new Date(nextMs),
+          order: BOND_MATURITY_ORDER,
+        });
+      }
+    }
+    const securities = state?.securities ?? null;
+    const anyMatured = Object.keys(state ?? {}).some(k => {
+      const hs = state[k]?.holdings;
+      return Array.isArray(hs) && hs.some(h => isMatured(h, instrumentOf(h, securities), nowMs));
+    });
+    return anyMatured ? [{ type: 'BOND_MATURITY_APPLY' }] : [];
   }
 }
 
@@ -224,20 +377,14 @@ function redeem(h, inst, asOfMs, effectiveRates, yieldCurve = {}, spot = null, s
     // of field that stops being inert when someone later reads it. Dropped rather than
     // nulled, so a bond that never had one does not gain a key (design 93 §5a).
     const { cpiIndexRatio: _stale, ...rolling } = h;
-    const matMs      = inst.maturityDate instanceof Date ? inst.maturityDate.getTime() : new Date(inst.maturityDate).getTime();
-    const purchaseMs = h.purchaseDate
-      ? (h.purchaseDate instanceof Date ? h.purchaseDate.getTime() : new Date(h.purchaseDate).getTime())
-      : null;
+    const matMs      = toMs(inst.maturityDate);
     // design 66 §G8 — roll target term. A ladder rung carries `rollTermYears` (the
     // ladder length): every rung rolls into a bond of that SAME fixed term, so a
     // maturing near rung becomes the new far rung and the {1,2,…,N} spacing self-
     // perpetuates. Without it (a lone bond) fall back to the rung's OWN original term
     // (`maturityDate − purchaseDate`) — the back-compatible constant-maturity roll.
-    const termMs   = (h.rollTermYears != null)
-      ? (h.rollTermYears * YEAR_MS)
-      : (purchaseMs != null && matMs > purchaseMs)
-        ? (matMs - purchaseMs)
-        : ((inst.duration ?? 5) * YEAR_MS);
+    // Shared with `nextBondMaturityWakeMs`, which schedules the rolled rung's wake.
+    const termMs   = rollTermMs(h, inst, matMs);
     // design 67 — re-lock at the yield for the ROLL TERM's tenor (not a flat 5y proxy),
     // so a rung rolling into an N-year ladder bond earns the curve's N-year term premium.
     // resolveYield returns null when the anchor is absent ⇒ keep the prior couponRate.
@@ -336,7 +483,9 @@ function redeem(h, inst, asOfMs, effectiveRates, yieldCurve = {}, spot = null, s
     allocation:     ALLOCATION.CASH,
     marketValue:    par,
     costBasis:      par,
-    purchaseDate:   new Date(asOfMs),
+    // Issue #799 — the cash came back on the maturity date, which is the asOf whenever the
+    // dated wake redeemed it; a period-advance backstop catch still dates it there.
+    purchaseDate:   new Date(toMs(inst.maturityDate) ?? asOfMs),
     rateKey:        null,
     couponRate:     null,
     duration:       null,

@@ -94,7 +94,7 @@ import { isDrawdownAccessible, computeNetLiquidity, deriveNetLiquidity } from '.
 import { computeNetWorth, computeNetWorthInclSpeculative, computeMsbsUnfundedBenefit, deriveNetWorth } from './finance/derived-metrics/net-worth.js';
 import { computeOffsetCapacity, deriveOffsetCapacity } from './finance/derived-metrics/offset-capacity.js';
 import { AddRegimeReducer } from './finance/economic-regimes/add-regime-reducer.js';
-import { BondMaturityReducer } from './finance/economic-regimes/bond-maturity-reducer.js';
+import { BondMaturityReducer, BondMaturityHandler, nextBondMaturityWakeMs, BOND_MATURITY_ORDER } from './finance/economic-regimes/bond-maturity-reducer.js';
 import { BondPriceAdjustReducer } from './finance/economic-regimes/bond-price-adjust-reducer.js';
 import { BOND_YEAR_MS, yearsToMaturity, couponlessYield } from './finance/economic-regimes/couponless-yield.js';
 import { EconomicRecoveryTickHandler } from './finance/economic-regimes/economic-recovery-tick-handler.js';
@@ -1033,6 +1033,9 @@ export const Finance = {
   deriveOffsetCapacity,
   AddRegimeReducer,
   BondMaturityReducer,
+  BondMaturityHandler,
+  nextBondMaturityWakeMs,
+  BOND_MATURITY_ORDER,
   BondPriceAdjustReducer,
   BOND_YEAR_MS,
   yearsToMaturity,

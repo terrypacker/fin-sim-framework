@@ -24,7 +24,7 @@ import { AddRegimeReducer }               from '../../finance/economic-regimes/a
 import { RemoveRegimeReducer }            from '../../finance/economic-regimes/remove-regime-reducer.js';
 import { RevalueAssetReducer }            from '../../finance/economic-regimes/revalue-asset-reducer.js';
 import { BondPriceAdjustReducer }         from '../../finance/economic-regimes/bond-price-adjust-reducer.js';
-import { BondMaturityReducer }            from '../../finance/economic-regimes/bond-maturity-reducer.js';
+import { BondMaturityReducer, BondMaturityHandler, buildBondMaturitySeed } from '../../finance/economic-regimes/bond-maturity-reducer.js';
 import { YieldCurveReducer }              from '../../finance/economic-regimes/yield-curve-reducer.js';
 import { YieldCurveStepReducer }          from '../../finance/economic-regimes/yield-curve-step-reducer.js';
 import { YieldCurveTickHandler }          from '../../finance/economic-regimes/yield-curve-tick-handler.js';
@@ -785,7 +785,7 @@ export const ECONOMIC_REGIMES = {
   dependencies: [],
 
   types: {
-    handlers: [EconomicShockHandler, EconomicRecoveryTickHandler, YieldCurveTickHandler, EquityReturnTickHandler, PropertyReturnTickHandler, InflationTickHandler, FxTickHandler, HedgeYearEndHandler, MarketIndexStepHandler, EquityYearOpenHandler],
+    handlers: [EconomicShockHandler, EconomicRecoveryTickHandler, YieldCurveTickHandler, EquityReturnTickHandler, PropertyReturnTickHandler, InflationTickHandler, FxTickHandler, HedgeYearEndHandler, MarketIndexStepHandler, EquityYearOpenHandler, BondMaturityHandler],
     reducers: [HedgeYearEndReducer, FxRefreshReducer, FxProcessReducer, FxStepApplyReducer, FxPppReducer, RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer, YieldCurveReducer, YieldCurveStepReducer, EquityReturnReducer, EquityReturnStepReducer, PropertyReturnStepReducer, InflationStepReducer, InflationPathReducer, BondPriceAdjustReducer, BondMaturityReducer],
     actions: [
       { type: 'ADD_REGIME_APPLY',    fields: { regime: ValueType.any() } },
@@ -819,6 +819,8 @@ export const ECONOMIC_REGIMES = {
       { type: 'HEDGE_YEAR_END_APPLY', fields: { rates: ValueType.any(), distRates: ValueType.any(), carriedLoss: ValueType.any() } },
       // Design 127 §4.2 — one sub-annual step of the market index.
       { type: 'MARKET_INDEX_STEP_APPLY', fields: { periodsPerYear: ValueType.number() } },
+      // Issue #799 — the dated maturity wake; the reducer reads the date, the action carries nothing.
+      { type: 'BOND_MATURITY_APPLY', fields: {} },
       // ── Behavioral strategy action types (design/29) ──────────────────────
       {
         type: 'STOCK_HARVEST_APPLY',
@@ -2030,6 +2032,9 @@ export const ECONOMIC_REGIMES = {
     if (isMonthlyEarnings(p)) events.push(buildMarketIndexStepSeries());
     // Design 127 §4.1 — and the year's equity draw is folded on 1 January in every plan.
     if (isMonthlyEarnings(p) && p.equityReturnStochastic) events.push(buildEquityYearOpenSeries());
+    // Issue #799 — bonds redeem on their maturity date. The seed fires at the start and each
+    // wake schedules the next from state, so the chain needs no compile-time bond list.
+    if (context.startDate) events.push(buildBondMaturitySeed(context.startDate));
 
     return events;
   },
@@ -2140,6 +2145,7 @@ export const ECONOMIC_REGIMES = {
       // Design 127 §4.1, §4.2 — MONTHLY earnings only.
       ...(isMonthlyEarnings(p) ? [new MarketIndexStepHandler()] : []),
       ...(isMonthlyEarnings(p) && p.equityReturnStochastic ? [new EquityYearOpenHandler()] : []),
+      new BondMaturityHandler(),
       ...behavioralHandlers,
     ];
   },
